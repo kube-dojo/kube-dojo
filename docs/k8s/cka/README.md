@@ -54,6 +54,8 @@ The CKA is a **hands-on, performance-based exam** that validates your skills in 
 - 2.5 Resource Management - Requests, limits, quotas
 - 2.6 Scheduling - Node selection, affinity
 - 2.7 ConfigMaps & Secrets - Configuration
+- 2.8 Scheduler & Pod Lifecycle Theory
+- 2.9 Autoscaling - HPA, VPA, metrics-server
 - Part 2 Cumulative Quiz
 
 ### Part 3: Services & Networking (8 modules)
