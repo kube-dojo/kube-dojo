@@ -20,3 +20,4 @@ tmp/
 temp/
 .venv/
 site/
+.mcp/servers/message-broker/
