@@ -147,6 +147,16 @@ spec:
 | `maxSurge` | Extra pods allowed during update | `1` or `25%` |
 | `maxUnavailable` | Pods that can be down during update | `0` or `25%` |
 
+> **New in K8s 1.35: StatefulSet MaxUnavailable (Beta)**
+>
+> StatefulSets now support `maxUnavailable` in their `updateStrategy`, enabling parallel pod updates instead of sequential one-at-a-time. This can make StatefulSet updates **up to 60% faster** — critical for database clusters and stateful workloads:
+> ```yaml
+> updateStrategy:
+>   type: RollingUpdate
+>   rollingUpdate:
+>     maxUnavailable: 2  # Update 2 pods at a time instead of 1
+> ```
+
 ### Strategy Types
 
 ```yaml

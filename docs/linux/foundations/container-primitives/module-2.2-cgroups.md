@@ -82,6 +82,10 @@ When a pod is evicted for memory pressure or your application is mysteriously sl
 
 ## cgroups v1 vs v2
 
+> **Critical: Kubernetes 1.35+ Requires cgroup v2**
+>
+> Starting with Kubernetes 1.35 (December 2025), cgroup v1 support is **disabled by default**. The kubelet will fail to start on cgroup v1 nodes. If you're running Kubernetes, you must be on cgroup v2. Check with: `stat -fc %T /sys/fs/cgroup` — must return `cgroup2fs`. Affected OS versions: CentOS 7, RHEL 7, Ubuntu 18.04.
+
 ### The Problem with v1
 
 cgroups v1 had separate hierarchies per controller:

@@ -395,6 +395,8 @@ echo $TOKEN | cut -d. -f2 | base64 -d 2>/dev/null | jq .
 
 - **Some controllers need API access**—operators, admission webhooks, and Kubernetes-aware apps. These legitimately need mounted tokens with appropriate RBAC.
 
+- **PodCertificateRequests (Beta in K8s 1.35)** enable native workload identity with automated certificate rotation. The kubelet generates keys and requests X.509 certificates via `PodCertificateRequest` objects, enabling pure mTLS flows without bearer tokens. This is the future of pod-to-pod authentication in Kubernetes.
+
 ---
 
 ## Common Mistakes

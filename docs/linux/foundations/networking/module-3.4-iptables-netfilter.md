@@ -26,13 +26,13 @@ When services don't work, pods can't communicate, or traffic doesn't flow as exp
 
 ## Did You Know?
 
-- **A busy Kubernetes node can have 10,000+ iptables rules** — Each service creates multiple rules. This is why kube-proxy has IPVS mode for large clusters (better performance).
+- **A busy Kubernetes node can have 10,000+ iptables rules** — Each service creates multiple rules. Kubernetes 1.35 deprecated IPVS mode in kube-proxy and is moving toward **nftables** as the recommended backend for better performance at scale.
 
 - **iptables is just the CLI** — The actual packet filtering happens in the kernel's netfilter subsystem. iptables is the user-space tool to configure it.
 
-- **iptables dates back to 2001** (Linux 2.4). Its predecessor, ipchains (2.2), was even simpler. Modern systems are moving to nftables, but iptables is still dominant.
+- **nftables is replacing iptables** — Modern Linux distributions (RHEL 9+, Debian 11+) ship nftables by default. Kubernetes 1.35 deprecated IPVS mode in kube-proxy and recommends nftables. The `nft` command replaces `iptables` with a cleaner syntax and better performance.
 
-- **Every Kubernetes service creates at least 5 iptables rules** — For the KUBE-SERVICES chain, plus per-endpoint rules. With 100 services × 3 endpoints each, that's 1500+ rules.
+- **Every Kubernetes service creates at least 5 iptables rules** — For the KUBE-SERVICES chain, plus per-endpoint rules. With 100 services x 3 endpoints each, that's 1500+ rules — one reason the ecosystem is moving to nftables.
 
 ---
 

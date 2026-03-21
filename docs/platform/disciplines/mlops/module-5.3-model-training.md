@@ -24,6 +24,7 @@ Experiment tracking isn't just nice-to-have—it's the difference between scient
 - **Weights & Biases found that teams using experiment tracking** ship models 2x faster because they don't repeat failed experiments
 - **Hyperparameter optimization can improve model performance by 10-50%** but manual tuning rarely explores the full space
 - **Random search beats grid search** for hyperparameter optimization in most cases—and this was only proven through systematic experimentation
+- **Kubernetes 1.35 introduced native Gang Scheduling** (alpha) — ensuring all pods in an ML training job are scheduled together or not at all, eliminating the deadlock problem where partial pod groups hold resources while waiting for the rest
 
 ## The Experiment Tracking Problem
 

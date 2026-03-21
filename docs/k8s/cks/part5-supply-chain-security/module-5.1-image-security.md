@@ -446,6 +446,8 @@ grep "^ENTRYPOINT\|^CMD" Dockerfile
 
 - **Alpine uses musl libc** instead of glibc. Some applications may have compatibility issues, particularly those using DNS resolution or certain threading patterns.
 
+- **K8s 1.35: Image pull credentials now verified for every pod** (KubeletEnsureSecretPulledImages, enabled by default). Even if an image is cached locally, the kubelet re-validates pull credentials. This prevents unauthorized pods from using cached images they shouldn't have access to. Configure via `imagePullCredentialsVerificationPolicy`: `AlwaysVerify` (default), `NeverVerify`, or `NeverVerifyAllowlistedImages`.
+
 ---
 
 ## Common Mistakes
