@@ -310,7 +310,17 @@ kubectl get pods -w
 # 8. Verify data survived the upgrade
 kubectl exec -it exercise-etcd-0 -- etcdctl get /test/key
 
-# 9. Cleanup
+# 9. Troubleshooting Challenge: The Illegal Jump
+# Try an unsupported version skip (3.6.0 → 3.8.0) — this SHOULD fail
+kubectl patch etcdcluster exercise-etcd --type merge -p '{"spec":{"version":"3.8.0"}}'
+
+# Check the status — look for validation error
+kubectl describe etcdcluster exercise-etcd | grep -A5 "Warning"
+
+# Check operator logs for the rejection reason
+kubectl logs -n etcd-operator-system deploy/etcd-operator-controller-manager | grep -i "unsupported\|validation\|upgrade"
+
+# 10. Cleanup
 kubectl delete etcdcluster exercise-etcd
 kubectl delete -f https://github.com/etcd-io/etcd-operator/releases/download/v0.2.0/install.yaml
 ```
