@@ -1,4 +1,4 @@
-"""Prompt building for Gemini and Claude interactions."""
+"""Prompt building for Gemini and Claude interactions — KubeDojo edition."""
 
 
 def build_gemini_prompt(msg: dict, stdout_only: bool, output_path: str | None,
@@ -31,27 +31,26 @@ def _build_full_execution_prompt(msg: dict, delimiters: str | None) -> str:
 
     return f"""ROLE: You are a SILENT EXECUTION AGENT with FULL read-write access.
 
+CONTEXT: KubeDojo is a free, open-source Kubernetes curriculum (311+ modules covering
+CKA, CKAD, CKS, KCNA, KCSA certifications + Platform Engineering, Linux, IaC tracks).
+Modules live in docs/ and follow strict quality standards (see CLAUDE.md).
+
 TOOLS YOU MUST USE (not simulate):
-- run_shell_command: scripts/audit_module.sh, .venv/bin/python scripts/*.py, grep, wc
+- run_shell_command: grep, cat, wc, git commands
 - read_file / write_file: Read content, apply fixes directly
 
 SILENCE PROTOCOL (CRITICAL):
 - DO NOT narrate. DO NOT say "I will..." or "Let me..." or "First, I need to..."
 - DO NOT describe what you are about to do. Just invoke the tool.
-- Between tool calls, emit ZERO text. No commentary. No summaries. No reasoning.
+- Between tool calls, emit ZERO text. No commentary. No summaries.
 - {delimiter_instruction}
-- Every word you write that is NOT a tool call or the final delimited output is a WASTED TOKEN that risks timeout.
-
-PRIVATE SCRATCHPAD (allowed):
-- If you need to reason through complex logic (case endings, dates, IPA), use XML comments: <!-- thinking: your reasoning here -->
-- Scratchpad comments do NOT count as narration — they are your private workspace.
-- Keep scratchpad brief. Do NOT use it for narration or status updates.
+- Every word you write that is NOT a tool call or the final delimited output is a WASTED TOKEN.
 
 RULES:
 1. NO MESSAGES. Never use send_message, message broker, or any communication tool.
-2. NO EXPLORATION. Do not check GitHub, inbox, or broker. Stay on task.
+2. NO EXPLORATION beyond what the task requires.
 3. NO DELEGATION. Never say "Claude should..." or request skills/commands.
-4. NO SIMULATION. You MUST run_shell_command for every check. Never "remember" file contents — always read from disk. If you skip a bash command and guess the result, the review is INVALID.
+4. NO SIMULATION. You MUST run_shell_command for every check. Never guess file contents.
 5. ALWAYS FINISH. Always produce output between the required delimiters, even on errors.
 
 TASK:
@@ -70,11 +69,11 @@ def _build_orchestrated_prompt(msg: dict, output_path: str | None) -> str:
 - Write your COMPLETE output to: {output_path}
 - That's it. Nothing else."""
     else:
-        output_instruction = """1. OUTPUT ONLY TEXT. Your ONLY job is to read input files and produce text output between delimiters.
-2. DO NOT WRITE OR EDIT ANY FILES. You must not use any tool that creates, modifies, or deletes files."""
+        output_instruction = """1. OUTPUT ONLY TEXT. Your ONLY job is to read input files and produce text output.
+2. DO NOT WRITE OR EDIT ANY FILES."""
         success_instruction = """- Read the task content provided below
 - Think about the content
-- Output your result as plain text between the delimiters specified in the task
+- Output your result as plain text
 - That's it. Nothing else. Just text output."""
 
     prompt = f"""ROLE: You are a TEXT GENERATOR executing a specific task. You produce text output. That's it.
@@ -83,14 +82,12 @@ ABSOLUTE RULES — VIOLATION OF ANY RULE MEANS TASK FAILURE:
 
 {output_instruction}
 3. DO NOT SEND MESSAGES. Do not use send_message, message broker, MCP tools, or any communication tool.
-4. DO NOT RUN SHELL COMMANDS that modify state. You may read files (cat, head) but NEVER run commands that write, move, delete, or execute scripts (no sed -i, no python scripts, no git, no audit_module.sh).
-5. DO NOT TAKE INITIATIVE. Do not explore the codebase beyond what the task requires. Do not check GitHub issues, status files, inbox, or broker messages. Do not make strategic decisions.
-6. DO NOT DELEGATE. Do not say "Claude should...", "please run...", or request any skills/commands.
+4. DO NOT RUN SHELL COMMANDS that modify state. You may read files (cat, head) but NEVER write, move, delete, or execute scripts.
+5. DO NOT TAKE INITIATIVE. Do not explore beyond what the task requires.
+6. DO NOT DELEGATE. Do not say "Claude should..." or request any skills/commands.
 
 HOW TO SUCCEED:
 {success_instruction}
-
-IF YOU ARE TEMPTED TO DO ANYTHING OTHER THAN WHAT'S DESCRIBED ABOVE: DON'T. Complete the task and stop.
 
 TASK:
 {msg['content']}
@@ -105,7 +102,15 @@ ATTACHED DATA:
 
 def _build_standard_prompt(msg: dict) -> str:
     """Build STANDARD collaborative prompt for general communication."""
-    prompt = f"""You are Gemini, participating in a collaboration with Claude.
+    prompt = f"""You are Gemini, collaborating with Claude on the KubeDojo project.
+
+PROJECT CONTEXT:
+KubeDojo is a free, open-source Kubernetes curriculum with 311+ modules:
+- Certification tracks: CKA, CKAD, CKS, KCNA, KCSA (exam-aligned, K8s 1.35+)
+- Platform Engineering: SRE, GitOps, DevSecOps, MLOps (102 modules)
+- Deep Dives: Linux (28 modules), IaC (12 modules)
+- Quality standard: Every module has theory, hands-on exercises, quizzes, "Did You Know?" facts
+
 This is a message from Claude to you:
 
 ---
@@ -124,13 +129,21 @@ REVIEW PROTOCOL (mandatory for all review requests):
 - You MUST read every referenced file COMPLETELY before writing your review. Use read_file or cat — do not skim.
 - For EVERY issue you report, cite the exact content from the file (quote the line, value, or field).
 - If you cannot cite evidence from the actual file, do NOT report the issue — you may be hallucinating.
-- Do NOT invent examples that are not in the files. Only critique what actually exists.
-- Before critiquing a vocabulary list, activity list, or similar: list ALL items you found in the file first, THEN review each one.
-- If a file has 25 vocabulary entries, your review must reference the actual 25 entries, not imagined ones.
 
-Please respond appropriately. If this is a request, fulfill it.
-If Claude asked for feedback, provide your honest assessment.
-Format your response clearly.
+KUBEDOJO-SPECIFIC REVIEW CRITERIA:
+- Technical accuracy: Are K8s commands correct and runnable? Are version numbers accurate?
+- Exam alignment: Does the content match the current CNCF exam curriculum?
+- Completeness: Are acceptance criteria thorough? Any edge cases missed?
+- Scope: Is the change appropriately sized? Not too broad, not too narrow?
+- Dependencies: Are cross-module or cross-track impacts identified?
+- Junior-friendly: Would a beginner understand this? Is the "why" explained, not just the "what"?
+
+Please respond with:
+1. A clear verdict (APPROVE / NEEDS CHANGES / REJECT)
+2. Specific, actionable feedback for any issues found
+3. Keep it concise — focus on what needs changing, not what's already good
+
+Format your response clearly with markdown.
 """
     return prompt
 
@@ -138,6 +151,8 @@ Format your response clearly.
 def build_claude_prompt(msg: dict) -> str:
     """Build prompt for Claude invocation."""
     prompt = f"""You are Claude, receiving a message from {msg['from'].title()} via the message broker.
+
+PROJECT: KubeDojo — free, open-source Kubernetes curriculum (311+ modules).
 
 ---
 Task ID: {msg['task_id'] or 'none'}

@@ -16,7 +16,7 @@ GEMINI_CLI = shutil.which("gemini") or "gemini"
 # Set GEMINI_SESSION so .bashrc disables hostile aliases (eza, bat, zoxide)
 _PARENT_ENV = os.environ.copy()
 _PARENT_ENV["GEMINI_SESSION"] = "1"
-_PARENT_ENV["LEARN_UKRAINIAN_PIPELINE"] = "1"  # Suppress inbox hooks during pipeline runs
+_PARENT_ENV["KUBEDOJO_PIPELINE"] = "1"  # Suppress inbox hooks during pipeline runs
 
 # Model availability cache: {model: (available: bool, timestamp: float)}
 # Avoids burning API quota on repeated checks within the same session.
