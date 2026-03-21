@@ -30,10 +30,13 @@ The CKAD exam tests:
 
 The **Ingress Controller** is a pod that watches Ingress resources and configures routing. Common controllers:
 
-- **NGINX Ingress Controller** (most common)
-- **Traefik**
-- **HAProxy**
-- **Contour**
+- **Envoy Gateway** (reference Gateway API implementation)
+- **Traefik** (supports both Ingress and Gateway API)
+- **Kong** (supports both Ingress and Gateway API)
+- **Cilium** (CNI with built-in Ingress and Gateway API support)
+- **NGINX Gateway Fabric** (successor to ingress-nginx)
+
+> **Note**: The popular **ingress-nginx** controller was retired on March 31, 2026 and no longer receives updates. For new deployments, use **Gateway API** (see CKA Module 3.5) with one of the controllers above.
 
 **Important**: Ingress resources do nothing without a controller!
 

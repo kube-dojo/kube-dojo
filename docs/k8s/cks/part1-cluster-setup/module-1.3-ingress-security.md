@@ -14,6 +14,8 @@ Ingress is where your cluster meets the internet. It's the front door—and atta
 
 CKS tests your ability to harden ingress configurations beyond basic functionality.
 
+> **Security Note**: The ingress-nginx controller was retired on March 31, 2026 and no longer receives security patches. If your clusters still use ingress-nginx, this is a **critical security risk**. Migrate to a maintained controller (Envoy Gateway, Traefik, Cilium, NGINX Gateway Fabric) and consider adopting Gateway API for new deployments. The security principles in this module apply equally to Ingress and Gateway API configurations.
+
 ---
 
 ## Ingress Attack Surface

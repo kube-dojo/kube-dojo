@@ -1,6 +1,6 @@
 # Module 3.5: Gateway API
 
-> **Complexity**: `[MEDIUM]` - New CKA 2025 topic
+> **Complexity**: `[MEDIUM]` - CKA exam topic
 >
 > **Time to Complete**: 45-55 minutes
 >
@@ -10,9 +10,11 @@
 
 ## Why This Module Matters
 
-Gateway API is the **next generation of Kubernetes networking**. It addresses limitations of Ingress by providing richer routing capabilities, role-oriented design, and support for protocols beyond HTTP. The CKA 2025 exam now includes Gateway API, making this essential knowledge.
+Gateway API is the **current standard for Kubernetes networking**. It addresses limitations of Ingress by providing richer routing capabilities, role-oriented design, and support for protocols beyond HTTP. The CKA exam includes Gateway API as a core competency: "Use the Gateway API to manage Ingress traffic."
 
-While Ingress will remain supported, Gateway API is the future. Understanding it now prepares you for modern Kubernetes deployments and the exam.
+With the **ingress-nginx controller retired** (March 31, 2026) and Gateway API GA since October 2023, Gateway API is the recommended approach for all new deployments. Every major ingress controller now supports it: Envoy Gateway, Istio, Cilium, Traefik, Kong, and NGINX Gateway Fabric.
+
+> **Migration Note**: If you're managing existing Ingress resources, the **Ingress2Gateway 1.0** tool (released March 2026) converts Ingress resources and 30+ ingress-nginx annotations to Gateway API equivalents. See the [official migration guide](https://gateway-api.sigs.k8s.io/guides/getting-started/migrating-from-ingress/).
 
 > **The Airport Analogy**
 >
@@ -33,11 +35,13 @@ By the end of this module, you'll be able to:
 
 ## Did You Know?
 
-- **Gateway API is the official successor**: The Kubernetes SIG Network designed Gateway API specifically to replace Ingress limitations while maintaining compatibility.
+- **Gateway API is the official standard**: The Kubernetes SIG Network designed Gateway API to replace Ingress limitations. With ingress-nginx retired and all major controllers supporting Gateway API, it's the production standard.
 
 - **Multi-protocol support**: Unlike Ingress (HTTP only), Gateway API supports TCP, UDP, TLS, and gRPC natively.
 
 - **Role-oriented design**: Gateway API separates concerns between infrastructure providers, cluster operators, and application developers.
+
+- **Ingress2Gateway 1.0**: Released March 2026, this official migration tool converts Ingress resources (including 30+ ingress-nginx annotations) to Gateway API. Supports output for Envoy Gateway, kgateway, and others.
 
 ---
 

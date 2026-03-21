@@ -14,6 +14,12 @@ While Services expose applications to the network, Ingress provides **HTTP/HTTPS
 
 The CKA exam tests Ingress creation, path routing, and understanding how Ingress connects to Services. You'll need to create Ingress resources quickly and debug routing issues.
 
+> **Important: Ingress-NGINX Controller Retirement**
+>
+> The popular **ingress-nginx controller** reached end-of-life on **March 31, 2026**. After this date, it receives no releases, bug fixes, or security patches. However, the **Ingress API itself** (`networking.k8s.io/v1`) is **NOT deprecated** and remains fully supported in Kubernetes. You should learn Ingress (it's still on the exam and widely deployed) but use **Gateway API** (Module 3.5) for new deployments. Alternative controllers that support both Ingress and Gateway API include **Envoy Gateway**, **Traefik**, **Kong**, **Cilium**, and **NGINX Gateway Fabric**.
+>
+> If you're migrating from ingress-nginx, use the **Ingress2Gateway 1.0** tool to convert Ingress resources to Gateway API resources: `kubectl krew install ingress2gateway`
+
 > **The Hotel Reception Analogy**
 >
 > Think of Ingress as a hotel reception desk. Guests (HTTP requests) arrive at the main entrance (single IP). The receptionist (Ingress controller) asks where they want to go—Room 101 (path `/api`) goes to the API service, Room 202 (path `/web`) goes to the web service. One entry point, intelligent routing inside.
@@ -33,11 +39,13 @@ By the end of this module, you'll be able to:
 
 ## Did You Know?
 
-- **Ingress requires a controller**: The Ingress resource does nothing by itself. You need an Ingress controller (like nginx, traefik, or haproxy) to actually route traffic.
+- **Ingress requires a controller**: The Ingress resource does nothing by itself. You need an Ingress controller (like Envoy Gateway, Traefik, or Kong) to actually route traffic.
 
-- **Ingress is being complemented by Gateway API**: Gateway API (covered in Module 3.5) is the successor to Ingress, offering more features and flexibility. However, Ingress remains widely used.
+- **Gateway API is the recommended successor**: Gateway API (covered in Module 3.5) is now GA and the recommended standard for new deployments. Ingress remains supported and widely deployed, but new projects should prefer Gateway API.
 
 - **One Ingress, many services**: A single Ingress resource can route to dozens of backend services based on paths and hostnames.
+
+- **Ingress-NGINX is retired**: The once-dominant ingress-nginx controller reached end-of-life on March 31, 2026. The Ingress2Gateway 1.0 tool helps migrate existing Ingress resources to Gateway API.
 
 ---
 
