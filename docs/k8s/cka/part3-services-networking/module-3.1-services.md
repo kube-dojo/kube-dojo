@@ -35,7 +35,7 @@ By the end of this module, you'll be able to:
 
 - **Services predate Pods**: The concept of stable service IPs was designed before pods existed in Kubernetes. The founders knew ephemeral pods needed stable endpoints.
 
-- **Virtual IPs are magic**: ClusterIP addresses don't exist on any network interface. They're "virtual" IPs that kube-proxy intercepts and routes using iptables or IPVS rules.
+- **Virtual IPs are magic**: ClusterIP addresses don't exist on any network interface. They're "virtual" IPs that kube-proxy intercepts and routes using iptables or nftables rules. (Note: IPVS mode was deprecated in K8s 1.35 — nftables is the recommended replacement.)
 
 - **NodePort range is configurable**: The default 30000-32767 range can be changed with the `--service-node-port-range` flag on the API server, though most clusters stick with defaults.
 
@@ -105,7 +105,7 @@ By the end of this module, you'll be able to:
 │   2. kube-proxy (on each node) intercepts                      │
 │                         │                                       │
 │                         ▼                                       │
-│   3. kube-proxy uses iptables/IPVS rules                       │
+│   3. kube-proxy uses iptables/nftables rules                   │
 │                         │                                       │
 │                         ▼                                       │
 │   4. Request forwarded to one of the pod IPs                   │
@@ -606,6 +606,32 @@ spec:
 | Shopping cart in pod memory | Yes (but better: use Redis) |
 | WebSocket connections | Yes |
 | Authentication sessions in memory | Yes (but better: external store) |
+
+---
+
+## Traffic Distribution (K8s 1.35+)
+
+Kubernetes 1.35 graduated **PreferSameNode** traffic distribution to GA, giving you fine-grained control over where service traffic is routed:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: latency-sensitive
+spec:
+  selector:
+    app: cache
+  ports:
+  - port: 6379
+  trafficDistribution: PreferSameNode  # Route to local node first
+```
+
+| Value | Behavior |
+|-------|----------|
+| `PreferSameNode` | Strictly prefer endpoints on the same node, fall back to remote |
+| `PreferSameZone` | Prefer endpoints in the same availability zone (renamed from PreferClose) |
+
+This is particularly useful for latency-sensitive workloads like caches, sidecars, and node-local services.
 
 ---
 
