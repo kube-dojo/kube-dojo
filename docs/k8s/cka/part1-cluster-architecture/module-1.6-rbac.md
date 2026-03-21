@@ -598,6 +598,21 @@ kubectl create clusterrolebinding dashboard-pod-list \
 | Forgetting ServiceAccount namespace | Binding doesn't work | Use `namespace:name` format |
 | Using Role for cluster resources | Can't access nodes, PVs | Use ClusterRole for cluster-scoped resources |
 | Empty apiGroup not quoted | YAML error | Use `apiGroups: [""]` with quotes |
+| Missing `create` verb on exec/attach subresources | `kubectl exec` silently fails (K8s 1.35+) | Add `create` verb to `pods/exec`, `pods/attach`, `pods/portforward` — see note below |
+
+> **K8s 1.35 Breaking Change: WebSocket Streaming RBAC**
+>
+> Starting in Kubernetes 1.35, `kubectl exec`, `attach`, and `port-forward` use WebSocket connections that require the **`create`** verb on the relevant subresource (e.g., `pods/exec`). Previously, only `get` was needed. Existing RBAC policies that grant `get pods/exec` will **silently fail** — commands hang or return permission errors. Audit your ClusterRoles and Roles:
+>
+> ```yaml
+> # OLD (broken in 1.35+):
+> - resources: ["pods/exec"]
+>   verbs: ["get"]
+>
+> # FIXED:
+> - resources: ["pods/exec", "pods/attach", "pods/portforward"]
+>   verbs: ["get", "create"]
+> ```
 
 ---
 

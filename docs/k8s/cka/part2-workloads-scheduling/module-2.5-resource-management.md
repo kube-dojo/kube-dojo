@@ -32,6 +32,13 @@ By the end of this module, you'll be able to:
 - Understand how limits enforce boundaries
 - Work with QoS classes
 - Use LimitRanges and ResourceQuotas
+- Resize pod resources in-place (K8s 1.35+)
+
+---
+
+## Did You Know?
+
+- **In-Place Pod Resize is now GA**: As of Kubernetes 1.35, you can change CPU and memory requests/limits on running pods **without restarting them**. This feature was alpha since K8s 1.27 and took 3 years to stabilize. Use `kubectl patch` to resize a running pod — no downtime required.
 
 ---
 
@@ -500,6 +507,74 @@ kubectl describe node <node-name> | grep -A10 "Allocatable"
 # Node resource usage summary
 kubectl describe node <node-name> | grep -A10 "Allocated resources"
 ```
+
+---
+
+## Part 9: In-Place Pod Resource Resize (K8s 1.35+)
+
+Starting with Kubernetes 1.35, you can **resize CPU and memory** on running pods without restarting them. This graduated to GA after 3 years of development.
+
+### 9.1 Resize a Running Pod
+
+```bash
+# Check current resources
+k get pod nginx -o jsonpath='{.spec.containers[0].resources}'
+
+# Resize CPU and memory without restart
+k patch pod nginx --subresource resize --patch '
+{
+  "spec": {
+    "containers": [{
+      "name": "nginx",
+      "resources": {
+        "requests": {"cpu": "200m", "memory": "256Mi"},
+        "limits": {"cpu": "500m", "memory": "512Mi"}
+      }
+    }]
+  }
+}'
+
+# Verify the resize was applied
+k get pod nginx -o jsonpath='{.status.resize}'
+# Expected: "" (empty means resize completed)
+# If "InProgress": resize is being applied
+# If "Infeasible": node doesn't have enough resources
+```
+
+### 9.2 Resize Policy
+
+Containers can specify a `resizePolicy` to control whether resizes require a restart:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: resize-demo
+spec:
+  containers:
+  - name: app
+    image: nginx
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+    resizePolicy:
+    - resourceName: cpu
+      restartPolicy: NotRequired    # CPU changes apply live
+    - resourceName: memory
+      restartPolicy: RestartContainer # Memory changes restart container
+```
+
+> **When to Use In-Place Resize**
+>
+> - **Vertical scaling without downtime**: Scale up during traffic spikes, scale down after
+> - **Right-sizing**: Adjust resources based on observed usage without redeploying
+> - **Cost optimization**: Reduce over-provisioned resources on running workloads
+>
+> For automated resizing, use the **Vertical Pod Autoscaler (VPA)** which can now leverage in-place resize.
 
 ---
 

@@ -156,14 +156,34 @@ EOF
 sudo sysctl --system
 ```
 
-### 1.6 Install containerd
+### 1.6 Verify cgroup v2
 
-Kubernetes needs a container runtime. containerd is the standard:
+**Starting with Kubernetes 1.35, cgroup v1 support is disabled by default.** Your nodes must run cgroup v2 or the kubelet will fail to start.
 
 ```bash
-# Install containerd
+# Check cgroup version (must show "cgroup2fs")
+stat -fc %T /sys/fs/cgroup
+# Expected output: cgroup2fs
+
+# If it shows "tmpfs", you're on cgroup v1 — you need a newer OS
+# Affected: CentOS 7, RHEL 7, Ubuntu 18.04
+# Supported: Ubuntu 22.04+, Debian 12+, RHEL 9+, Rocky 9+
+```
+
+> **Breaking Change Alert**: If `stat -fc %T /sys/fs/cgroup` returns `tmpfs` instead of `cgroup2fs`, upgrade your OS before proceeding. Kubernetes 1.35 will not start on cgroup v1 nodes.
+
+### 1.7 Install containerd
+
+Kubernetes needs a container runtime. **containerd 2.0+** is required (1.35 is the last version supporting containerd 1.x):
+
+```bash
+# Install containerd (ensure version 2.0+)
 sudo apt-get update
 sudo apt-get install -y containerd
+
+# Verify version
+containerd --version
+# Should be 2.0.0 or later
 
 # Create default config
 sudo mkdir -p /etc/containerd
@@ -181,7 +201,11 @@ sudo systemctl enable containerd
 >
 > If you skip setting `SystemdCgroup = true`, you'll get cryptic errors later. The kubelet and containerd must agree on the cgroup driver. Modern systems use systemd. Don't miss this step.
 
-### 1.7 Install kubeadm, kubelet, kubectl
+> **Gotcha: containerd 2.0 and old images**
+>
+> containerd 2.0 removes support for Docker Schema 1 images. If you have very old images (pushed 5+ years ago), they will fail to pull. Rebuild or re-push them with a modern Docker/buildkit.
+
+### 1.8 Install kubeadm, kubelet, kubectl
 
 ```bash
 # Install dependencies
@@ -202,7 +226,7 @@ sudo apt-get install -y kubelet kubeadm kubectl
 sudo apt-mark hold kubelet kubeadm kubectl
 ```
 
-### 1.8 Verify Setup
+### 1.9 Verify Setup
 
 Run on each node:
 
