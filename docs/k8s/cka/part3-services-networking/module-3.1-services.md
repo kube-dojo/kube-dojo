@@ -628,8 +628,8 @@ spec:
 
 | Value | Behavior |
 |-------|----------|
-| `PreferSameNode` | Strictly prefer endpoints on the same node, fall back to remote |
-| `PreferSameZone` | Prefer endpoints in the same availability zone (renamed from PreferClose) |
+| `PreferSameNode` | Strictly prefer endpoints on the same node, fall back to remote (GA in 1.35) |
+| `PreferClose` | Prefer endpoints topologically close — same zone when using topology-aware routing |
 
 This is particularly useful for latency-sensitive workloads like caches, sidecars, and node-local services.
 
