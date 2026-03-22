@@ -50,19 +50,19 @@ The LFCS is a **performance-based (hands-on) exam** that validates practical Lin
 
 ### Domain 2: Operation of Running Systems (25%)
 
-**Coverage: Partial** — Process management and systemd are covered. Boot process and kernel modules need supplementation.
+**Coverage: Good** — Process management, systemd, boot process, and kernel modules are covered.
 
 | LFCS Topic | KubeDojo Module | Status |
 |-----------|-----------------|--------|
 | Boot, reboot, shut down safely | [1.2 Processes & systemd](../../linux/foundations/system-essentials/module-1.2-processes-systemd.md) | Partial |
 | Boot into different targets (runlevels) | [1.2 Processes & systemd](../../linux/foundations/system-essentials/module-1.2-processes-systemd.md) | Partial |
-| Install, configure, troubleshoot bootloaders | — | Gap |
+| Install, configure, troubleshoot bootloaders | [1.2 Processes & systemd](../../linux/foundations/system-essentials/module-1.2-processes-systemd.md) | Covered |
 | Manage processes (ps, top, kill, nice) | [1.2 Processes & systemd](../../linux/foundations/system-essentials/module-1.2-processes-systemd.md) | Covered |
 | Manage startup services (systemctl) | [1.2 Processes & systemd](../../linux/foundations/system-essentials/module-1.2-processes-systemd.md) | Covered |
 | Diagnose and manage processes | [6.3 Process Debugging](../../linux/operations/troubleshooting/module-6.3-process-debugging.md) | Covered |
 | Locate and analyze system log files | [6.2 Log Analysis](../../linux/operations/troubleshooting/module-6.2-log-analysis.md) | Covered |
 | Schedule tasks (cron, at) | [7.4 DevOps Automation](../../linux/operations/shell-scripting/module-7.4-devops-automation.md) | Partial |
-| Verify system integrity | — | Gap |
+| Verify system integrity | [4.1 Kernel Hardening](../../linux/security/hardening/module-4.1-kernel-hardening.md) | Covered |
 | List and load kernel modules | [1.1 Kernel Architecture](../../linux/foundations/system-essentials/module-1.1-kernel-architecture.md) | Partial |
 
 ### Domain 3: User and Group Management (10%)
@@ -75,7 +75,7 @@ The LFCS is a **performance-based (hands-on) exam** that validates practical Lin
 | Manage user/group properties | [1.4 Users & Permissions](../../linux/foundations/system-essentials/module-1.4-users-permissions.md) | Covered |
 | Configure user resource limits | [2.2 Control Groups](../../linux/foundations/container-primitives/module-2.2-cgroups.md) | Partial |
 | Manage user privileges (sudo) | [1.4 Users & Permissions](../../linux/foundations/system-essentials/module-1.4-users-permissions.md) | Covered |
-| Configure PAM | — | Gap |
+| Configure PAM | [1.4 Users & Permissions](../../linux/foundations/system-essentials/module-1.4-users-permissions.md) | Covered |
 
 ### Domain 4: Networking (25%)
 
@@ -95,7 +95,7 @@ The LFCS is a **performance-based (hands-on) exam** that validates practical Lin
 
 ### Domain 5: Storage Management (20%)
 
-**Coverage: Gap** — This is our biggest gap. Filesystem hierarchy is covered, but LVM, NFS, swap, and automount are not.
+**Coverage: Good** — Covered by our dedicated Storage Management module plus existing filesystem and I/O modules.
 
 | LFCS Topic | KubeDojo Module | Status |
 |-----------|-----------------|--------|
@@ -103,7 +103,7 @@ The LFCS is a **performance-based (hands-on) exam** that validates practical Lin
 | Create/configure file systems (ext4, xfs) | [**8.1 Storage Management**](../../linux/operations/module-8.1-storage-management.md) | **New** |
 | Mount filesystems at boot (fstab) | [**8.1 Storage Management**](../../linux/operations/module-8.1-storage-management.md) | **New** |
 | Configure and manage LVM | [**8.1 Storage Management**](../../linux/operations/module-8.1-storage-management.md) | **New** |
-| Create and manage RAID (mdadm) | — | Gap |
+| Create and manage RAID (mdadm) | [**8.1 Storage Management**](../../linux/operations/module-8.1-storage-management.md) | Covered |
 | Configure NFS server/client | [**8.1 Storage Management**](../../linux/operations/module-8.1-storage-management.md) | **New** |
 | Configure swap space | [**8.1 Storage Management**](../../linux/operations/module-8.1-storage-management.md) | **New** |
 | Manage automount (autofs) | [**8.1 Storage Management**](../../linux/operations/module-8.1-storage-management.md) | **New** |
@@ -171,18 +171,18 @@ Just like CKA/CKAD, you get a terminal and must complete tasks. No multiple choi
 
 ---
 
-## Remaining Gaps
+## Previously Identified Gaps (Now Covered)
 
-These LFCS topics are NOT yet covered in KubeDojo and would need self-study:
+These LFCS topics were previously gaps in KubeDojo but are now covered:
 
-| Topic | Notes |
-|-------|-------|
-| Bootloader (GRUB2) installation/troubleshooting | Rarely needed in cloud/container environments |
-| RAID management (mdadm) | Increasingly handled by cloud providers |
-| PAM configuration | Niche but can appear on exam |
-| System integrity verification (AIDE, rpm -V) | Study the man pages |
+| Topic | Covered In |
+|-------|------------|
+| Bootloader (GRUB2) installation/troubleshooting | [1.2 Processes & systemd](../../linux/foundations/system-essentials/module-1.2-processes-systemd.md) |
+| RAID management (mdadm) | [8.1 Storage Management](../../linux/operations/module-8.1-storage-management.md) |
+| PAM configuration | [1.4 Users & Permissions](../../linux/foundations/system-essentials/module-1.4-users-permissions.md) |
+| System integrity verification (AIDE, rpm -V) | [4.1 Kernel Hardening](../../linux/security/hardening/module-4.1-kernel-hardening.md) |
 
-These gaps represent edge topics. Focus your time on the high-weight domains (Networking 25%, Operations 25%, Storage 20%) first.
+Focus your time on the high-weight domains (Networking 25%, Operations 25%, Storage 20%) first.
 
 ---
 

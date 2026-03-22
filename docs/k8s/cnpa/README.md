@@ -311,11 +311,11 @@ Week 6: Measuring & Review (8% + exam prep)
 
 ## Gap Analysis
 
-Our Platform Engineering track covers ~80%+ of the CNPA curriculum. Remaining minor gaps:
+Our Platform Engineering track covers ~85%+ of the CNPA curriculum. Remaining minor gaps:
 
 | Topic | Status | Notes |
 |-------|--------|-------|
-| DORA metrics implementation | Minor gap | SRE modules cover SLOs/error budgets; DORA metrics (deployment frequency, lead time, MTTR, change failure rate) discussed conceptually but no dedicated DORA module |
+| DORA metrics implementation | Covered | DORA metrics (deployment frequency, lead time, MTTR, change failure rate) now covered in the SRE discipline modules alongside SLOs and error budgets |
 | DevOps culture & history | Minor gap | Platform Eng modules assume DevOps context; KCNA cloud-native modules provide additional background |
 | Application environment lifecycle | Covered | Spread across GitOps environment promotion and IaC modules |
 

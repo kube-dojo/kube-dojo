@@ -14,7 +14,7 @@ The PCA (Prometheus Certified Associate) validates your understanding of Prometh
 
 ## PCA-Specific Modules
 
-These modules fill the gaps between KubeDojo's existing observability modules and the PCA exam requirements:
+These modules cover the areas between KubeDojo's existing observability modules and the PCA exam requirements:
 
 | # | Module | Topic | Domains Covered |
 |---|--------|-------|-----------------|

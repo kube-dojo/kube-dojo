@@ -14,7 +14,7 @@ The CBA (Certified Backstage Associate) validates your understanding of Backstag
 
 ## CBA-Specific Modules
 
-These modules fill the gaps between KubeDojo's existing Backstage toolkit module and the CBA exam requirements:
+These modules cover the areas between KubeDojo's existing Backstage toolkit module and the CBA exam requirements:
 
 | # | Module | Topic | Domains Covered |
 |---|--------|-------|-----------------|

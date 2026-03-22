@@ -253,13 +253,13 @@ Week 11-12: Architecture & Practice (15%)
 
 ## Gap Analysis
 
-Our Platform Engineering track covers ~95% of the CNPE curriculum. Remaining minor gaps:
+Our Platform Engineering track covers ~95%+ of the CNPE curriculum. Remaining minor gaps:
 
 | Topic | Status | Notes |
 |-------|--------|-------|
 | Argo Events (event-driven automation) | Covered | See [Argo Events](../capa/module-2-argo-events.md) in the CAPA track — EventSource, Sensor, EventBus, Triggers |
-| DORA metrics implementation | Minor gap | SRE modules cover theory (SLOs, error budgets); tooling implementation (e.g., Backstage DORA plugin) is not covered in depth |
-| Hierarchical Namespaces | Not covered | Niche multi-tenancy topic, unlikely to be exam-critical |
+| DORA metrics implementation | Covered | DORA metrics now covered in the SRE discipline modules; SLOs and error budgets provide the measurement framework |
+| Hierarchical Namespaces | Minor gap (niche topic) | Niche multi-tenancy topic, unlikely to be exam-critical; vCluster module covers multi-tenancy alternatives |
 
 These gaps are minor. The 60+ modules mapped above provide comprehensive CNPE preparation.
 

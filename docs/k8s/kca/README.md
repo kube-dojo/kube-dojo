@@ -14,7 +14,7 @@ The KCA (Kyverno Certified Associate) validates your ability to use Kyverno for 
 
 ## KCA-Specific Modules
 
-These modules fill the gaps between KubeDojo's existing Kyverno toolkit module and the KCA exam requirements:
+These modules cover the areas between KubeDojo's existing Kyverno toolkit module and the KCA exam requirements:
 
 | # | Module | Topic | Domains Covered |
 |---|--------|-------|-----------------|

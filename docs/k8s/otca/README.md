@@ -14,7 +14,7 @@ The OTCA (OpenTelemetry Certified Associate) validates your understanding of Ope
 
 ## OTCA-Specific Modules
 
-These modules fill the gaps between KubeDojo's existing observability modules and the OTCA exam requirements:
+These modules cover the areas between KubeDojo's existing observability modules and the OTCA exam requirements:
 
 | # | Module | Topic | Domains Covered |
 |---|--------|-------|-----------------|

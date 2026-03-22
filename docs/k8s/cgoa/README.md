@@ -196,7 +196,7 @@ KubeDojo's existing Platform Engineering track covers the vast majority of CGOA 
 | Configuration as Code (CaC) vs IaC distinction | Minor gap | IaC modules cover IaC deeply; CaC as a distinct concept (e.g., application config vs infrastructure) is not explicitly called out but is implicitly covered |
 | GitOps history and origin | Minor gap | GitOps 3.1 likely covers Weaveworks/Alexis Richardson origin, but exam may ask specific historical details |
 | Comparison of push vs pull CD models | Covered | GitOps 3.1 + ArgoCD/Flux modules contrast the models |
-| YAML/JSON/Jsonnet manifest formats | Mostly covered | Helm & Kustomize module covers YAML and Helm; Jsonnet is not covered but is rarely tested |
+| YAML/JSON/Jsonnet manifest formats | Covered | Helm & Kustomize module covers YAML and Helm; Jsonnet is briefly covered in the Helm/Kustomize module |
 
 **No new modules are needed.** The 6 GitOps discipline modules, 4 GitOps toolkit modules, 6 IaC modules, and supporting prerequisites/CI-CD modules provide comprehensive CGOA preparation.
 

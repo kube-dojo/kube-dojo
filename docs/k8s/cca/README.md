@@ -6,7 +6,7 @@
 
 The CCA (Cilium Certified Associate) validates foundational knowledge of Cilium, eBPF-based networking, network policy, observability, and multi-cluster connectivity. It's a **theory exam** with multiple-choice questions -- no hands-on tasks, but deep understanding of Cilium concepts is essential.
 
-**KubeDojo covers ~70% of CCA topics** through our existing Platform Engineering toolkit modules. This page maps CCA domains to existing modules plus one new gap-filling module.
+**KubeDojo covers ~90%+ of CCA topics** through our existing Platform Engineering toolkit modules plus a dedicated advanced Cilium module. This page maps CCA domains to existing modules.
 
 > **Cilium is now the default CNI** for GKE, EKS, and AKS. Understanding Cilium isn't just exam prep -- it's a core skill for any Kubernetes engineer.
 
@@ -18,7 +18,7 @@ The CCA (Cilium Certified Associate) validates foundational knowledge of Cilium,
 |--------|--------|-------------------|--------|
 | Architecture | 20% | Partial -- deepened in Module 1 | Covered |
 | Network Policy | 18% | Partial -- deepened in Module 1 | Covered |
-| Service Mesh | 16% | Partial (Gateway API mentioned in existing modules) | Partial |
+| Service Mesh | 16% | Good (Gateway API covered in Module 1) | Covered |
 | Observability | 10% | Good (Hubble module) | Covered |
 | Installation & Configuration | 10% | Partial -- deepened in Module 1 | Covered |
 | Cluster Mesh | 10% | GAP -- covered in Module 1 | Covered |
@@ -80,7 +80,7 @@ The CCA (Cilium Certified Associate) validates foundational knowledge of Cilium,
 | [Cilium Toolkit](../../platform/toolkits/networking/module-5.1-cilium.md#part-8-transparent-encryption-with-wireguard) | WireGuard encryption, kube-proxy replacement | Partial |
 | [SPIFFE/SPIRE](../../platform/toolkits/security-tools/module-4.8-spiffe-spire.md) | Workload identity, mTLS concepts | Supporting |
 
-> **Gap note**: Cilium-specific Gateway API configuration (HTTPRoute, GRPCRoute with Cilium as the Gateway controller) is not deeply covered. Review [Cilium Gateway API docs](https://docs.cilium.io/en/stable/network/servicemesh/gateway-api/) for exam prep.
+> Cilium-specific Gateway API configuration (HTTPRoute, GRPCRoute with Cilium as the Gateway controller) is now covered in [CCA Module 1](module-1-advanced-cilium.md). For additional depth, see the [Cilium Gateway API docs](https://docs.cilium.io/en/stable/network/servicemesh/gateway-api/).
 
 ---
 
@@ -221,12 +221,12 @@ Week 4: Cluster Mesh + BGP + Review (16%)
 
 | Topic | Status | Notes |
 |-------|--------|-------|
-| Cilium Gateway API (HTTPRoute, GRPCRoute) | Partial | Service Mesh module covers Gateway API generically; Cilium-specific config not covered in depth |
-| Cilium Bandwidth Manager | Not covered | Niche topic, low exam weight |
-| Cilium Egress Gateway | Not covered | Advanced feature, unlikely to be heavily tested |
-| CiliumL2AnnouncementPolicy | Not covered | Layer 2 advertisement; rare in exam |
+| Cilium Gateway API (HTTPRoute, GRPCRoute) | Covered | Covered in [CCA Module 1](module-1-advanced-cilium.md) alongside the Service Mesh module |
+| Cilium Bandwidth Manager | Covered | Covered in [CCA Module 1](module-1-advanced-cilium.md); niche topic, low exam weight |
+| Cilium Egress Gateway | Covered | Covered in [CCA Module 1](module-1-advanced-cilium.md); advanced feature, unlikely to be heavily tested |
+| CiliumL2AnnouncementPolicy | Covered | Covered in [CCA Module 1](module-1-advanced-cilium.md); Layer 2 advertisement, rare in exam |
 
-These gaps are minor. The existing toolkit modules plus CCA Module 1 provide solid CCA preparation.
+The existing toolkit modules plus CCA Module 1 provide comprehensive CCA preparation.
 
 ---
 

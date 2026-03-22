@@ -25,7 +25,7 @@ The CAPA (Certified Argo Project Associate) validates knowledge of the four Argo
 
 ## CAPA-Specific Modules
 
-These modules fill the gaps between KubeDojo's existing Platform Engineering content and the CAPA exam requirements:
+These modules cover the areas between KubeDojo's existing Platform Engineering content and the CAPA exam requirements:
 
 | # | Module | Topic | Relevance |
 |---|--------|-------|-----------|
