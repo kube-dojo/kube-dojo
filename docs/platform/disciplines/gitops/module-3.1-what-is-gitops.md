@@ -54,11 +54,17 @@ They called this approach **GitOps**.
 > "GitOps is a way of implementing Continuous Deployment for cloud native applications."
 > — Weaveworks, 2017
 
-### 2021: OpenGitOps
+### The Evolution: From Blog Post to Industry Standard
 
-GitOps grew beyond Weaveworks. The CNCF formed the OpenGitOps working group to standardize the principles.
+The history of GitOps follows a clear arc:
 
-The result: Four core principles that define what GitOps is (and isn't).
+- **2017**: Alexis Richardson (Weaveworks CEO) publishes "GitOps - Operations by Pull Request," coining the term. The core idea: combine Infrastructure as Code with pull-based delivery, using Git as the single source of truth.
+- **2018-2020**: Flux and ArgoCD emerge as the dominant GitOps operators. The community debates what "counts" as GitOps versus just "using Git for config."
+- **2021**: The CNCF forms the **OpenGitOps working group** to create a vendor-neutral definition. This was critical because "GitOps" was becoming a marketing buzzword applied to any tool that touched Git.
+- **2021**: OpenGitOps publishes the four core principles (below), giving the community a clear standard. GitOps becomes a CNCF Sandbox project.
+- **2023+**: GitOps matures beyond Kubernetes. Teams apply the principles to infrastructure (Terraform + GitOps), databases, and even network configuration.
+
+The key insight that made GitOps stick: it wasn't just "store config in Git" (people had done that for years). It was the **pull model with continuous reconciliation** that made it fundamentally different from traditional CI/CD.
 
 ---
 

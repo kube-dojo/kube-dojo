@@ -1111,16 +1111,9 @@ kubectl delete namespace istio-system
 
 ---
 
-## Next Steps
+## Next Module
 
-You've now covered the core ICA domains:
-- **Module 1**: Installation, profiles, sidecar injection, architecture (20%)
-- **Module 2**: Traffic management, fault injection, resilience (35% + 10%)
-- **Module 3**: Security, authorization, troubleshooting (15% + 10%)
-
-For the remaining **Observability (10%)**, review the existing KubeDojo modules:
-- [Observability Theory](../../platform/foundations/observability-theory/) — Metrics, logs, traces fundamentals
-- [Observability Tools](../../platform/toolkits/observability/) — Prometheus, Grafana, Jaeger (all integrate with Istio)
+Continue to [Module 4: Istio Observability](module-4-istio-observability.md) to learn about Istio metrics, distributed tracing, access logging, and dashboards with Kiali and Grafana. Observability is **10% of the ICA exam**.
 
 ### Final Exam Prep Checklist
 

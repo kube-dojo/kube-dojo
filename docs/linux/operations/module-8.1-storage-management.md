@@ -479,6 +479,109 @@ sudo sysctl -p /etc/sysctl.d/99-swap.conf
 
 ---
 
+## RAID Management
+
+RAID (Redundant Array of Independent Disks) combines multiple physical disks into a single logical unit for redundancy, performance, or both. On Linux, software RAID is managed with `mdadm`.
+
+### RAID Levels Quick Reference
+
+| Level | Minimum Disks | Redundancy | Use Case |
+|-------|--------------|------------|----------|
+| RAID 0 | 2 | None (striping only) | Performance, no data protection |
+| RAID 1 | 2 | Mirror (50% capacity) | Boot drives, critical data |
+| RAID 5 | 3 | Single parity (1 disk can fail) | General purpose, good balance |
+| RAID 10 | 4 | Mirror + stripe | Databases, high performance + safety |
+
+### Creating RAID Arrays
+
+```bash
+# Install mdadm
+sudo apt install -y mdadm   # Debian/Ubuntu
+sudo dnf install -y mdadm   # RHEL/Rocky
+
+# Create RAID 1 (mirror) from two disks
+sudo mdadm --create /dev/md0 --level=1 --raid-devices=2 /dev/sdb /dev/sdc
+
+# Create RAID 5 (parity) from three disks
+sudo mdadm --create /dev/md1 --level=5 --raid-devices=3 /dev/sdd /dev/sde /dev/sdf
+
+# Create RAID 10 (mirror + stripe) from four disks
+sudo mdadm --create /dev/md2 --level=10 --raid-devices=4 /dev/sdg /dev/sdh /dev/sdi /dev/sdj
+
+# Watch the initial sync progress
+cat /proc/mdstat
+```
+
+### Saving RAID Configuration
+
+```bash
+# Scan and save to config (CRITICAL — without this, array won't reassemble on boot)
+sudo mdadm --detail --scan | sudo tee -a /etc/mdadm/mdadm.conf
+
+# On RHEL/Rocky the path is /etc/mdadm.conf
+sudo mdadm --detail --scan | sudo tee -a /etc/mdadm.conf
+
+# Update initramfs so the array is available at boot
+sudo update-initramfs -u   # Debian/Ubuntu
+sudo dracut --force        # RHEL/Rocky
+```
+
+### Using the RAID Array
+
+```bash
+# Create filesystem on the array
+sudo mkfs.ext4 /dev/md0
+
+# Mount it
+sudo mkdir -p /mnt/raid
+sudo mount /dev/md0 /mnt/raid
+
+# Add to fstab for persistent mount
+echo "UUID=$(blkid -s UUID -o value /dev/md0)  /mnt/raid  ext4  defaults  0  2" | sudo tee -a /etc/fstab
+```
+
+### Monitoring and Status
+
+```bash
+# Check status of all arrays
+cat /proc/mdstat
+
+# Detailed info for a specific array
+sudo mdadm --detail /dev/md0
+# Shows state, active devices, rebuild progress, etc.
+
+# Check individual disk status
+sudo mdadm --examine /dev/sdb
+
+# Enable email alerts for failures (set MAILADDR in mdadm.conf)
+# Then start the monitor
+sudo mdadm --monitor --daemonise --mail=admin@example.com /dev/md0
+```
+
+### Recovery — Replacing a Failed Disk
+
+```bash
+# 1. Identify the failed disk
+sudo mdadm --detail /dev/md0
+# Look for "faulty" or "removed" state
+
+# 2. Mark the failed disk (if not already marked)
+sudo mdadm /dev/md0 --fail /dev/sdb
+
+# 3. Remove the failed disk
+sudo mdadm /dev/md0 --remove /dev/sdb
+
+# 4. Add replacement disk
+sudo mdadm /dev/md0 --add /dev/sdk
+
+# 5. Watch rebuild progress
+watch cat /proc/mdstat
+```
+
+> **Exam tip**: The LFCS may ask you to create a RAID array, add it to the config, and verify it survives a reboot. Always remember: `mdadm --detail --scan >> /etc/mdadm/mdadm.conf` and `update-initramfs -u`.
+
+---
+
 ## Automount with autofs
 
 Autofs mounts filesystems on demand (when accessed) and unmounts them after a timeout. This is useful for NFS shares that aren't always needed.

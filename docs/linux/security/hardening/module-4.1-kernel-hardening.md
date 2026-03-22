@@ -231,6 +231,62 @@ fs.file-max = 2097152
 
 ---
 
+## System Integrity Verification
+
+Beyond runtime kernel settings, you need to verify that system files haven't been tampered with. AIDE (Advanced Intrusion Detection Environment) and `rpm -V` detect unauthorized changes to critical files.
+
+### AIDE (Advanced Intrusion Detection Environment)
+
+AIDE creates a database of file checksums, permissions, and timestamps, then compares the current state against that baseline.
+
+```bash
+# Install AIDE
+sudo apt install -y aide      # Debian/Ubuntu
+sudo dnf install -y aide       # RHEL/Rocky
+
+# Initialize the database (takes a few minutes — scans all configured paths)
+sudo aideinit                  # Debian/Ubuntu
+sudo aide --init               # RHEL/Rocky
+
+# The new database is created at /var/lib/aide/aide.db.new
+# Move it into place as the reference baseline
+sudo cp /var/lib/aide/aide.db.new /var/lib/aide/aide.db
+
+# Check system integrity against the baseline
+sudo aide --check
+# Output shows any files that changed: added, removed, or modified
+
+# After legitimate changes (patching, config updates), update the baseline
+sudo aide --update
+sudo cp /var/lib/aide/aide.db.new /var/lib/aide/aide.db
+```
+
+### Package Verification with rpm -V
+
+On RPM-based systems (RHEL, Rocky, Fedora), you can verify installed packages against their original checksums:
+
+```bash
+# Verify a specific package
+rpm -V openssh-server
+# No output = everything matches
+# Output shows what changed:
+#   S = file Size differs
+#   5 = MD5 checksum differs
+#   T = modification Time differs
+#   c = config file
+
+# Verify ALL installed packages (takes time)
+rpm -Va
+
+# Example output:
+# S.5....T.  c /etc/ssh/sshd_config    ← config was modified (expected)
+# ..5....T.    /usr/bin/ssh             ← binary changed (suspicious!)
+```
+
+> **Exam tip**: AIDE questions on the LFCS typically involve initializing a baseline and running a check. Remember the workflow: `aide --init`, move the database, then `aide --check`. On RPM systems, `rpm -V` is a quick way to verify individual packages.
+
+---
+
 ## Kubernetes Node Hardening
 
 ### Required for Kubernetes

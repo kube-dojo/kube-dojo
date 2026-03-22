@@ -400,6 +400,59 @@ alerts:
 
 ---
 
+## DORA Metrics: Measuring Delivery Performance
+
+While SLOs measure **service reliability**, DORA metrics measure **delivery performance** — how effectively your team ships software. Developed by the DevOps Research and Assessment (DORA) team (now part of Google Cloud), these four key metrics distinguish elite performers from the rest.
+
+### The Four Key Metrics
+
+| Metric | What It Measures | Elite Performance | Low Performance |
+|--------|------------------|-------------------|-----------------|
+| **Deployment Frequency** | How often you deploy to production | On-demand (multiple/day) | Monthly or less |
+| **Lead Time for Changes** | Time from commit to production | Less than 1 hour | More than 6 months |
+| **Change Failure Rate** | % of deployments causing failures | 0-15% | 46-60% |
+| **Mean Time to Recovery (MTTR)** | How fast you restore service | Less than 1 hour | More than 6 months |
+
+### How SLOs and DORA Metrics Connect
+
+SLOs and DORA metrics are complementary lenses on the same system:
+
+- **Deployment Frequency** is enabled by **error budgets** — teams with budget remaining can deploy confidently
+- **Lead Time** improves when platforms reduce toil and friction (see [Module 1.4: Toil](module-1.4-toil-automation.md))
+- **Change Failure Rate** directly consumes your **error budget** — every failed deployment burns SLO margin
+- **MTTR** maps to how fast you detect (via SLO-based alerting) and recover from incidents
+
+### Measuring DORA Metrics
+
+Start with what you have — most CI/CD systems already capture the raw data:
+
+```yaml
+dora_metrics:
+  deployment_frequency:
+    source: "CI/CD pipeline logs"
+    query: "Count of successful production deployments per day"
+
+  lead_time_for_changes:
+    source: "Git + CI/CD timestamps"
+    query: "Time from first commit to production deploy (median)"
+
+  change_failure_rate:
+    source: "Deployments + incident tracking"
+    query: "Deployments causing incidents / Total deployments"
+
+  mean_time_to_recovery:
+    source: "Incident tracking system"
+    query: "Median time from incident start to resolution"
+```
+
+### DORA and Platform Maturity
+
+DORA metrics are a leading indicator of platform engineering maturity. Teams using well-built internal platforms consistently score higher across all four metrics because the platform removes friction from the delivery pipeline. If your DORA numbers are stagnant, it often signals that toil, manual processes, or missing self-service capabilities are the bottleneck — not the developers themselves.
+
+> **Further reading**: The annual *Accelerate State of DevOps Report* (dora.dev) provides updated benchmarks and research.
+
+---
+
 ## Implementing SLOs in Kubernetes
 
 ### Using Prometheus for SLIs

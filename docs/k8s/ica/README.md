@@ -47,7 +47,7 @@ Pass 3 (90-120 min): Complex tasks — multi-step traffic management, debugging
 | Traffic Management | 35% | [Module 2](module-2-istio-traffic-management.md) | New |
 | Resilience and Fault Injection | 10% | [Module 2](module-2-istio-traffic-management.md) (included) | New |
 | Security | 15% | [Module 3](module-3-istio-security-troubleshooting.md) | New |
-| Observability | 10% | Existing modules (see below) | Covered |
+| Observability | 10% | [Module 4](module-4-istio-observability.md) | New |
 | Troubleshooting | 10% | [Module 3](module-3-istio-security-troubleshooting.md) (included) | New |
 
 ### Domain Weight Visualization
@@ -91,12 +91,13 @@ Follow these in order:
 | 1 | [Installation & Architecture](module-1-istio-installation-architecture.md) | Installation, Upgrade & Configuration (20%) | 50-60 min |
 | 2 | [Traffic Management](module-2-istio-traffic-management.md) | Traffic Management (35%) + Resilience (10%) | 60-75 min |
 | 3 | [Security & Troubleshooting](module-3-istio-security-troubleshooting.md) | Security (15%) + Troubleshooting (10%) | 50-60 min |
+| 4 | [Observability](module-4-istio-observability.md) | Observability (10%) | 40-50 min |
 
 ### Step 3: Cross-Reference Modules
 
 These existing KubeDojo modules cover ICA-relevant topics:
 
-**Observability (10% of exam):**
+**Observability (deeper dives):**
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|

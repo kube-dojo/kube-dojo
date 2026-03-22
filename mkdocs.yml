@@ -373,6 +373,7 @@ nav:
     - k8s/ica/module-1-istio-installation-architecture.md
     - k8s/ica/module-2-istio-traffic-management.md
     - k8s/ica/module-3-istio-security-troubleshooting.md
+    - k8s/ica/module-4-istio-observability.md
   - CCA:
     - k8s/cca/README.md
     - k8s/cca/module-1-advanced-cilium.md

@@ -244,6 +244,39 @@ HYBRID APPROACH (Common in practice)
 └─────────────────────────────────────────────────────────┘
 ```
 
+### 2.3 Configuration as Code (CaC) vs Infrastructure as Code (IaC)
+
+You will sometimes see the term **Configuration as Code (CaC)** alongside IaC. They are related but distinct practices:
+
+```
+CaC vs IaC
+═══════════════════════════════════════════════════════════════
+
+INFRASTRUCTURE AS CODE (IaC)
+─────────────────────────────────────────────────────────────
+Manages: Servers, networks, databases, load balancers, DNS
+Tools:   Terraform, Pulumi, CloudFormation, Crossplane
+Scope:   "The platform your applications run on"
+Example: Provisioning an EKS cluster with 3 node groups
+
+CONFIGURATION AS CODE (CaC)
+─────────────────────────────────────────────────────────────
+Manages: Application settings, feature flags, runtime config
+Tools:   Ansible (config), ConfigMaps, Consul, LaunchDarkly
+Scope:   "How your applications behave at runtime"
+Example: Setting log levels, enabling a feature flag, tuning
+         connection pool sizes
+
+KEY DISTINCTION
+─────────────────────────────────────────────────────────────
+IaC answers:  "What infrastructure exists?"
+CaC answers:  "How is the software on that infrastructure configured?"
+
+In practice, they overlap. A Kubernetes ConfigMap is CaC (app
+settings), but the cluster it lives on is IaC. Both should be
+version-controlled, reviewed, and tested.
+```
+
 ---
 
 ## Part 3: State Management Concepts

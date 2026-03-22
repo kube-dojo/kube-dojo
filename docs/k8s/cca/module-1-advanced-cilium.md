@@ -506,7 +506,164 @@ cilium bgp routes advertised ipv4 unicast
 
 ---
 
-## Part 5: Cilium CLI Deep Dive
+## Part 5: Gateway API, Bandwidth Manager, Egress Gateway, and L2 Announcements
+
+These four features extend Cilium beyond basic CNI duties. The CCA expects you to know the CRDs and when to use each.
+
+### Cilium Gateway API
+
+Cilium natively implements the Kubernetes Gateway API, replacing the need for a separate ingress controller. It uses Envoy under the hood, managed entirely by the Cilium agent.
+
+```yaml
+# Gateway: the listener that accepts traffic
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: cilium-gw
+  namespace: production
+spec:
+  gatewayClassName: cilium    # Cilium's built-in GatewayClass
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 80
+    allowedRoutes:
+      namespaces:
+        from: Same
+---
+# HTTPRoute: route HTTP traffic to backends
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: app-routes
+  namespace: production
+spec:
+  parentRefs:
+  - name: cilium-gw
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /api
+    backendRefs:
+    - name: api-service
+      port: 8080
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    backendRefs:
+    - name: frontend-service
+      port: 3000
+---
+# GRPCRoute: route gRPC traffic to backends
+apiVersion: gateway.networking.k8s.io/v1
+kind: GRPCRoute
+metadata:
+  name: grpc-routes
+  namespace: production
+spec:
+  parentRefs:
+  - name: cilium-gw
+  rules:
+  - matches:
+    - method:
+        service: payments.PaymentService
+    backendRefs:
+    - name: payment-grpc
+      port: 9090
+```
+
+**Why this matters**: Gateway API is the successor to Ingress. Cilium's implementation means no separate NGINX or Envoy Gateway deployment -- the same agent that enforces network policy also handles north-south traffic routing.
+
+### Bandwidth Manager
+
+CiliumBandwidthPolicy lets you enforce rate limits on pod traffic using the eBPF EDT (Earliest Departure Time) scheduler. This replaces the old `kubernetes.io/egress-bandwidth` annotation approach with a cluster-wide CRD.
+
+```yaml
+apiVersion: cilium.io/v2
+kind: CiliumBandwidthPolicy
+metadata:
+  name: rate-limit-batch-jobs
+spec:
+  endpointSelector:
+    matchLabels:
+      workload-type: batch
+  egress:
+    rate: "50M"     # 50 Mbit/s egress cap
+    burst: "10M"    # Allow short bursts up to 10 Mbit above rate
+```
+
+**Use cases**: Prevent batch jobs or log shippers from saturating node bandwidth and starving latency-sensitive services. The eBPF-based approach is more efficient than traditional Linux `tc` shaping because it avoids queuing overhead -- packets are scheduled with precise departure timestamps.
+
+### Egress Gateway
+
+CiliumEgressGatewayPolicy routes outbound traffic from selected pods through dedicated gateway nodes. External services see a predictable source IP (the gateway node's IP) instead of whichever node the pod happens to run on.
+
+```yaml
+apiVersion: cilium.io/v2
+kind: CiliumEgressGatewayPolicy
+metadata:
+  name: db-egress-via-gateway
+spec:
+  selectors:
+  - podSelector:
+      matchLabels:
+        app: backend
+        needs-stable-ip: "true"
+  destinationCIDRs:
+  - "10.200.0.0/16"       # External database subnet
+  egressGateway:
+    nodeSelector:
+      matchLabels:
+        role: egress-gateway   # Dedicated gateway nodes
+    egressIP: "192.168.1.50"   # Stable SNAT IP
+```
+
+**Why you need this**: Many external firewalls, databases, and SaaS APIs allowlist traffic by source IP. Without an egress gateway, pod traffic exits from whatever node the pod runs on, and the source IP changes if the pod gets rescheduled. The egress gateway ensures a stable, predictable source IP regardless of pod placement.
+
+### CiliumL2AnnouncementPolicy
+
+CiliumL2AnnouncementPolicy provides Layer 2 service announcement for LoadBalancer-type services -- similar to MetalLB's L2 mode but built natively into Cilium. One node responds to ARP requests for the service VIP, attracting traffic to itself and then forwarding it to the correct backend.
+
+```yaml
+apiVersion: cilium.io/v2alpha1
+kind: CiliumL2AnnouncementPolicy
+metadata:
+  name: l2-services
+spec:
+  serviceSelector:
+    matchLabels:
+      l2-announce: "true"
+  nodeSelector:
+    matchLabels:
+      node.kubernetes.io/role: worker
+  interfaces:
+  - eth0
+  externalIPs: true
+  loadBalancerIPs: true
+---
+# A service that uses L2 announcement
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  labels:
+    l2-announce: "true"
+spec:
+  type: LoadBalancer
+  selector:
+    app: web
+  ports:
+  - port: 80
+    targetPort: 8080
+```
+
+**When to use**: Bare-metal clusters without a cloud load balancer. CiliumL2AnnouncementPolicy eliminates the need for a separate MetalLB deployment. One node becomes the "leader" for each VIP and answers ARP queries. If that node fails, another takes over. The limitation is the same as any L2 approach: all traffic for a VIP funnels through a single node, so it does not scale horizontally for high-bandwidth services. For that, use BGP.
+
+---
+
+## Part 6: Cilium CLI Deep Dive
 
 The CCA tests your knowledge of Cilium CLI commands. Here's what you need to know.
 

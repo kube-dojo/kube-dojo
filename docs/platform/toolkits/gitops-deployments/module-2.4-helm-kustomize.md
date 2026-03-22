@@ -56,6 +56,12 @@ Helm packages applications as charts with templates. Kustomize overlays modifica
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+### A Note on Jsonnet
+
+Beyond Helm and Kustomize, **Jsonnet** is a data templating language that some teams use to generate Kubernetes manifests. Grafana Labs uses Jsonnet extensively for their Kubernetes deployments, and you will find it referenced in the CGOA exam. Jsonnet treats configuration as programmable data rather than text templates -- you write functions and objects that evaluate to JSON/YAML.
+
+In practice, Jsonnet has a smaller community than Helm or Kustomize, and most organizations choose one of the two dominant tools. However, if you encounter a project using Jsonnet (or its Kubernetes-specific library **Tanka**), understand that it solves the same problem -- reducing YAML duplication -- with a different paradigm: a full programming language for configuration rather than templates (Helm) or patches (Kustomize).
+
 ## Helm Fundamentals
 
 ### Chart Structure

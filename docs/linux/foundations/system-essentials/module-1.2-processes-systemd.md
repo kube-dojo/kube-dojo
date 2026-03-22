@@ -437,6 +437,80 @@ sudo systemctl daemon-reload
 
 ---
 
+## Bootloader (GRUB2)
+
+GRUB2 (GRand Unified Bootloader) is the first software that runs when a Linux system boots. It loads the kernel and initial ramdisk (initrd) into memory. Knowing GRUB2 is essential for the LFCS — you may need to change kernel parameters, recover a broken system, or install GRUB on a new disk.
+
+### How the Boot Process Works
+
+```
+BIOS/UEFI → GRUB2 → Kernel + initrd → systemd (PID 1)
+```
+
+### GRUB2 Configuration
+
+```bash
+# The main config file is generated — NEVER edit it directly
+# /boot/grub/grub.cfg (Debian/Ubuntu)
+# /boot/grub2/grub.cfg (RHEL/Rocky)
+
+# Instead, edit the defaults file:
+sudo vi /etc/default/grub
+```
+
+Key settings in `/etc/default/grub`:
+
+```bash
+GRUB_TIMEOUT=5                          # Seconds to wait at boot menu
+GRUB_DEFAULT=0                          # Boot first entry by default
+GRUB_CMDLINE_LINUX_DEFAULT="quiet"      # Kernel params for default entry
+GRUB_CMDLINE_LINUX=""                   # Kernel params for ALL entries
+GRUB_DISABLE_RECOVERY="false"           # Show recovery mode entries
+```
+
+### Regenerating GRUB Config
+
+```bash
+# After editing /etc/default/grub, regenerate the config:
+sudo update-grub                        # Debian/Ubuntu
+sudo grub2-mkconfig -o /boot/grub2/grub.cfg   # RHEL/Rocky
+
+# Install GRUB to a disk (e.g., after replacing boot disk)
+sudo grub-install /dev/sda              # Debian/Ubuntu (BIOS)
+sudo grub2-install /dev/sda             # RHEL/Rocky (BIOS)
+```
+
+### Editing Kernel Parameters at Boot
+
+Sometimes you need to change kernel parameters at boot time — for example, to boot into single-user mode or troubleshoot a broken system:
+
+1. Reboot the system and hold **Shift** (BIOS) or press **Esc** (UEFI) to show the GRUB menu
+2. Select the kernel entry and press **e** to edit
+3. Find the line starting with `linux` and append parameters at the end:
+   - `single` or `1` — Boot into single-user/rescue mode
+   - `systemd.unit=rescue.target` — systemd rescue mode
+   - `systemd.unit=emergency.target` — Emergency shell (minimal)
+   - `rd.break` — Break into initramfs before root is mounted (for password reset)
+4. Press **Ctrl+X** or **F10** to boot with the modified parameters
+
+### Rescue Mode and Password Recovery
+
+```bash
+# If you've lost the root password:
+# 1. Boot with rd.break (edit GRUB line as above)
+# 2. At the initramfs prompt:
+mount -o remount,rw /sysroot
+chroot /sysroot
+passwd root
+touch /.autorelabel    # Required on SELinux systems
+exit
+reboot
+```
+
+> **Exam tip**: The LFCS may ask you to change the default kernel parameters or recover a system with a lost root password. Memorize the GRUB edit workflow and the `rd.break` method.
+
+---
+
 ## Viewing Processes
 
 ### ps Command

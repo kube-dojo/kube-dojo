@@ -35,6 +35,26 @@ After this module, you'll understand:
 
 ## The Origin Story
 
+### DevOps Origins
+
+Before we can understand Platform Engineering, we need to understand what it evolved *from*.
+
+**The birth of DevOps** traces back to **Patrick Debois** in 2009. Frustrated by the wall between developers and operations, Debois organized the first **DevOpsDays** conference in Ghent, Belgium. The term "DevOps" — a portmanteau of Development and Operations — stuck, and a movement was born.
+
+In **2013**, Gene Kim, Kevin Behr, and George Spafford published **"The Phoenix Project"**, a novel that dramatized the pain of siloed IT and the transformation DevOps could bring. It became required reading in engineering organizations worldwide and brought DevOps principles to mainstream tech leadership.
+
+The **CALMS framework** emerged as a way to evaluate DevOps adoption:
+
+| Pillar | Meaning | Example |
+|--------|---------|---------|
+| **C**ulture | Shared responsibility, blameless collaboration | Joint on-call between dev and ops |
+| **A**utomation | Eliminate manual, error-prone processes | CI/CD pipelines, Infrastructure as Code |
+| **L**ean | Reduce waste, small batch sizes, fast feedback | Continuous delivery, WIP limits |
+| **M**easurement | Data-driven decisions (see DORA metrics) | Deployment frequency, lead time tracking |
+| **S**haring | Knowledge sharing, transparency, feedback loops | Blameless postmortems, internal tech talks |
+
+DevOps was transformative — it broke down silos, accelerated delivery, and introduced practices like CI/CD and Infrastructure as Code that are now industry standard. But as we will see, the "everyone owns everything" philosophy created new problems that Platform Engineering would eventually address.
+
 ### DevOps: The Promise
 
 In the 2000s, development and operations were separate silos:

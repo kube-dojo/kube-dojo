@@ -340,6 +340,104 @@ sudo -l
 
 ---
 
+## PAM Configuration
+
+PAM (Pluggable Authentication Modules) is the framework Linux uses for authentication. Every time someone logs in, runs `sudo`, or changes a password, PAM modules handle it. Understanding PAM is essential for password policies and account lockout on the LFCS.
+
+### How PAM Works
+
+```
+User action (login, sudo, su)
+        │
+        ▼
+  /etc/pam.d/<service>        ← per-application PAM config
+        │
+        ▼
+  PAM modules execute in order
+  (pam_unix, pam_faillock, pam_limits, ...)
+        │
+        ▼
+  Allow or deny access
+```
+
+### /etc/pam.d/ Structure
+
+Each service has its own config file in `/etc/pam.d/`:
+
+```bash
+ls /etc/pam.d/
+# common-auth  common-password  login  sshd  sudo  su  ...
+
+# Each file has lines in this format:
+# <type>  <control>  <module>  [arguments]
+```
+
+| Type | Purpose |
+|------|---------|
+| auth | Verify identity (password, key, biometric) |
+| account | Check if access is allowed (expiry, time, host) |
+| password | Manage password changes (complexity, history) |
+| session | Setup/teardown after auth (limits, env, logging) |
+
+### Common PAM Modules
+
+| Module | Purpose |
+|--------|---------|
+| pam_unix | Traditional password authentication (/etc/shadow) |
+| pam_faillock | Lock accounts after failed login attempts (replaces pam_tally2) |
+| pam_limits | Enforce resource limits from /etc/security/limits.conf |
+| pam_pwquality | Enforce password complexity rules |
+| pam_securetty | Restrict root login to specific terminals |
+
+### Password Policy with pam_pwquality
+
+```bash
+# Install (if not present)
+sudo apt install -y libpam-pwquality
+
+# Edit password rules
+sudo vi /etc/security/pwquality.conf
+```
+
+```
+# /etc/security/pwquality.conf
+minlen = 12          # Minimum password length
+dcredit = -1         # Require at least 1 digit
+ucredit = -1         # Require at least 1 uppercase
+lcredit = -1         # Require at least 1 lowercase
+ocredit = -1         # Require at least 1 special character
+maxrepeat = 3        # No more than 3 consecutive identical characters
+```
+
+### Account Lockout with pam_faillock
+
+```bash
+# Add to /etc/pam.d/common-auth (Debian/Ubuntu) or /etc/pam.d/system-auth (RHEL)
+# Lock account after 5 failed attempts for 900 seconds (15 min)
+auth    required    pam_faillock.so preauth deny=5 unlock_time=900
+auth    required    pam_faillock.so authfail deny=5 unlock_time=900
+
+# View failed attempts
+faillock --user username
+
+# Unlock a locked account
+sudo faillock --user username --reset
+```
+
+### Resource Limits with pam_limits
+
+```bash
+# /etc/security/limits.conf
+# <domain>  <type>  <item>       <value>
+*           soft    nofile       65536
+*           hard    nofile       131072
+@developers soft    nproc        4096
+```
+
+> **Exam tip**: PAM questions on the LFCS often involve setting password policies or locking accounts after failed logins. Know pam_pwquality for complexity and pam_faillock for lockout.
+
+---
+
 ## Container Security Context
 
 ### Why This Matters for Kubernetes
