@@ -508,31 +508,31 @@ kube-hunter --report yaml
 ## Quiz
 
 1. **What does STRIDE stand for?**
-   <details>
+   <details markdown="1">
    <summary>Answer</summary>
    Spoofing, Tampering, Repudiation, Information Disclosure, Denial of Service, and Elevation of Privilege. It's a threat modeling framework that categorizes common security threats to help systematically identify potential attacks.
    </details>
 
 2. **What's the difference between vulnerability assessment and penetration testing?**
-   <details>
+   <details markdown="1">
    <summary>Answer</summary>
    Vulnerability assessment uses automated tools to identify known vulnerabilities without exploiting them. Penetration testing actively attempts to exploit vulnerabilities to demonstrate real-world impact. Vulnerability assessment is broader but shallower; penetration testing is deeper but more focused.
    </details>
 
 3. **Why is threat modeling done at design time?**
-   <details>
+   <details markdown="1">
    <summary>Answer</summary>
    It's cheaper and easier to address security issues during design than after deployment. Threat modeling identifies attack paths early when changes are less costly. It also ensures security is considered from the start rather than bolted on afterward.
    </details>
 
 4. **What makes a finding "Critical" vs "High"?**
-   <details>
+   <details markdown="1">
    <summary>Answer</summary>
    Risk = Likelihood × Impact. Critical findings have both high likelihood and high impact—they're easily exploitable and would cause significant damage. High findings may have slightly lower likelihood or impact but still require urgent attention.
    </details>
 
 5. **What evidence do auditors typically need?**
-   <details>
+   <details markdown="1">
    <summary>Answer</summary>
    Configuration exports (RBAC, policies), audit logs showing security controls working, scan reports (vulnerability, compliance), documentation (policies, procedures), and sometimes interviews with personnel. Evidence should demonstrate that controls exist and are effective over time.
    </details>
@@ -561,7 +561,7 @@ kube-hunter --report yaml
 
 **Apply STRIDE to each component:**
 
-<details>
+<details markdown="1">
 <summary>Threat Model</summary>
 
 **INGRESS:**

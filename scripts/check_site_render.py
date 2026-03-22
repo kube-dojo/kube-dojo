@@ -73,8 +73,11 @@ def check_page_renders(filepath: str, url_path: str) -> dict:
     stats = {"tables": 0, "raw_tables": 0, "sidebar": 0, "toc": 0, "broken_links": 0}
     page_id = filepath
 
-    # 1. Check for raw markdown tables rendered as text (pipe chars outside <table> tags)
-    raw_table_lines = re.findall(r'(?<!</td>)\|\s*---', html)
+    # 1. Check for raw markdown tables rendered as text (pipe chars outside <table> and <code> tags)
+    # First strip all code blocks from the HTML to avoid false positives
+    html_no_code = re.sub(r'<code[^>]*>.*?</code>', '', html, flags=re.DOTALL)
+    html_no_code = re.sub(r'<pre[^>]*>.*?</pre>', '', html_no_code, flags=re.DOTALL)
+    raw_table_lines = re.findall(r'(?<!</td>)\|\s*---', html_no_code)
     stats["raw_tables"] = len(raw_table_lines)
     if raw_table_lines:
         error(f"{page_id}: {len(raw_table_lines)} raw markdown table(s) not rendering as HTML")

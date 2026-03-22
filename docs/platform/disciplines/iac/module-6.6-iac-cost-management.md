@@ -223,7 +223,7 @@ jobs:
 |---------|----------|-----|------|
 | terraform/production | $221.07 | $952.24 | +$731.17 |
 
-<details>
+<details markdown="1">
 <summary>Cost breakdown</summary>
 
 ### terraform/production
@@ -937,7 +937,7 @@ deny[msg] {
 
 ## Quiz
 
-<details>
+<details markdown="1">
 <summary>1. What is Infracost and how does it help with IaC cost management?</summary>
 
 **Answer**: Infracost is a tool that provides cost estimates for Terraform configurations before deployment. It:
@@ -949,7 +949,7 @@ deny[msg] {
 - Enables "shift-left" cost awareness
 </details>
 
-<details>
+<details markdown="1">
 <summary>2. Calculate the monthly cost savings if you switch 10 t3.medium instances from on-demand to Reserved Instances (3-year, no upfront), given that on-demand is $0.0416/hour and RI is $0.0243/hour.</summary>
 
 **Answer**:
@@ -961,7 +961,7 @@ deny[msg] {
 - Percentage savings: 41.6%
 </details>
 
-<details>
+<details markdown="1">
 <summary>3. What are the essential cost allocation tags every resource should have?</summary>
 
 **Answer**: Essential tags for cost allocation:
@@ -975,7 +975,7 @@ Optional but useful:
 - Application, Service, Owner (individual), Compliance, DataClass
 </details>
 
-<details>
+<details markdown="1">
 <summary>4. Why is it important to have different resource sizes for dev/staging vs production?</summary>
 
 **Answer**:
@@ -986,7 +986,7 @@ Optional but useful:
 - **Best practice**: Document performance differences, test performance-critical changes in staging with production-like resources
 </details>
 
-<details>
+<details markdown="1">
 <summary>5. How can Terraform validation rules help prevent cost overruns?</summary>
 
 **Answer**: Validation rules can:
@@ -1006,7 +1006,7 @@ validation {
 ```
 </details>
 
-<details>
+<details markdown="1">
 <summary>6. What's the difference between budget alerts on "actual" vs "forecasted" spend?</summary>
 
 **Answer**:
@@ -1022,7 +1022,7 @@ validation {
 Best practice: Use both - forecasted at 100% (early warning) and actual at 80%, 90%, 100% (confirmation).
 </details>
 
-<details>
+<details markdown="1">
 <summary>7. A PR introduces 5 new c5.xlarge instances in production. Infracost shows a $547/month increase. Should the PR be auto-approved?</summary>
 
 **Answer**: Depends on the organization's policy, but generally:
@@ -1041,7 +1041,7 @@ Questions to ask:
 Even if under threshold, large changes warrant review.
 </details>
 
-<details>
+<details markdown="1">
 <summary>8. How can you implement chargebacks to teams based on their infrastructure usage?</summary>
 
 **Answer**: Chargeback implementation:

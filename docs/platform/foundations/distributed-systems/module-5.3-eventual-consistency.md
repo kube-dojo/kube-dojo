@@ -891,7 +891,7 @@ LIMITATIONS
 ## Quiz
 
 1. **What does "eventual consistency" actually guarantee?**
-   <details>
+   <details markdown="1">
    <summary>Answer</summary>
 
    Eventual consistency guarantees:
@@ -908,7 +908,7 @@ LIMITATIONS
    </details>
 
 2. **How do version vectors help with conflict detection?**
-   <details>
+   <details markdown="1">
    <summary>Answer</summary>
 
    Version vectors track causality instead of wall-clock time:
@@ -935,7 +935,7 @@ LIMITATIONS
    </details>
 
 3. **What is a CRDT and why does it eliminate conflicts?**
-   <details>
+   <details markdown="1">
    <summary>Answer</summary>
 
    **CRDT** (Conflict-free Replicated Data Type) is a data structure designed so that concurrent operations always merge deterministically.
@@ -960,7 +960,7 @@ LIMITATIONS
    </details>
 
 4. **When should you use eventual consistency vs strong consistency?**
-   <details>
+   <details markdown="1">
    <summary>Answer</summary>
 
    **Use eventual consistency when**:
@@ -983,7 +983,7 @@ LIMITATIONS
    </details>
 
 5. **A system uses N=5 replicas. Calculate the minimum W and R values needed for: (a) strong consistency, (b) fast writes with strong reads, (c) maximum availability.**
-   <details>
+   <details markdown="1">
    <summary>Answer</summary>
 
    **Quorum rule for strong consistency**: W + R > N
@@ -1007,17 +1007,19 @@ LIMITATIONS
    - Fastest but may read stale data
    - Use case: Caching, metrics, non-critical data
 
-   **Trade-off matrix:**
-   | Config | Write Latency | Read Latency | Consistency | Availability |
-   |--------|---------------|--------------|-------------|--------------|
-   | W=3,R=3 | Medium | Medium | Strong | Medium |
-   | W=1,R=5 | Low | High | Strong | Low (reads) |
-   | W=5,R=1 | High | Low | Strong | Low (writes) |
-   | W=1,R=1 | Low | Low | Eventual | High |
-   </details>
+</details>
+
+**Trade-off matrix:**
+
+| Config | Write Latency | Read Latency | Consistency | Availability |
+|--------|---------------|--------------|-------------|--------------|
+| W=3,R=3 | Medium | Medium | Strong | Medium |
+| W=1,R=5 | Low | High | Strong | Low (reads) |
+| W=5,R=1 | High | Low | Strong | Low (writes) |
+| W=1,R=1 | Low | Low | Eventual | High |
 
 6. **A social media platform stores user posts with eventual consistency. User A posts "Hello", then immediately comments "First!". Another user B sees "First!" but not "Hello". What consistency property is violated? How would you fix it?**
-   <details>
+   <details markdown="1">
    <summary>Answer</summary>
 
    **Violated property: Causal consistency**
@@ -1055,7 +1057,7 @@ LIMITATIONS
    </details>
 
 7. **You're implementing a collaborative document editor. User A inserts "Hello" at position 0. User B inserts "World" at position 0 (concurrently, before seeing A's edit). After sync, what are the possible results? How do CRDTs or OT handle this?**
-   <details>
+   <details markdown="1">
    <summary>Answer</summary>
 
    **Possible results without proper handling:**
@@ -1105,7 +1107,7 @@ LIMITATIONS
    Node B: {A: 8,  B: 3, C: 5}
    Node C: {A: 10, B: 2, C: 7}
    ```
-   <details>
+   <details markdown="1">
    <summary>Answer</summary>
 
    **Current total count at each node:**
