@@ -813,7 +813,7 @@ spec:
 ### Question 1
 What is the role of the Cilium Operator, and what happens if it goes down?
 
-<details>
+<details markdown="1">
 <summary>Show Answer</summary>
 
 The Cilium Operator handles **cluster-wide coordination tasks**:
@@ -834,7 +834,7 @@ This is a key distinction: the agent is the data plane, the operator is control 
 ### Question 2
 Explain the three policy enforcement modes and when you would use each.
 
-<details>
+<details markdown="1">
 <summary>Show Answer</summary>
 
 | Mode | Behavior | Use Case |
@@ -850,7 +850,7 @@ Example scenario: You switch to `always` mode. Immediately, all pods lose DNS re
 ### Question 3
 What are three features CiliumNetworkPolicy supports that standard Kubernetes NetworkPolicy does not?
 
-<details>
+<details markdown="1">
 <summary>Show Answer</summary>
 
 1. **L7 HTTP filtering** -- match on HTTP method, path, and headers (e.g., allow GET /api/products but deny DELETE /api/products)
@@ -867,7 +867,7 @@ What are three features CiliumNetworkPolicy supports that standard Kubernetes Ne
 ### Question 4
 What are the requirements for connecting two clusters with Cluster Mesh?
 
-<details>
+<details markdown="1">
 <summary>Show Answer</summary>
 
 1. **Shared CA certificate** -- both clusters must trust the same certificate authority for mTLS between ClusterMesh API servers and agents
@@ -881,7 +881,7 @@ What are the requirements for connecting two clusters with Cluster Mesh?
 ### Question 5
 A service in Cluster A has `service.cilium.io/affinity: "local"`. When does traffic go to Cluster B?
 
-<details>
+<details markdown="1">
 <summary>Show Answer</summary>
 
 With `local` affinity, traffic is routed to endpoints in the **local cluster** (Cluster A) whenever local endpoints are available.
@@ -897,7 +897,7 @@ This is the most common production configuration for Cluster Mesh because it min
 ### Question 6
 What does `exportPodCIDR: true` do in a CiliumBGPPeeringPolicy?
 
-<details>
+<details markdown="1">
 <summary>Show Answer</summary>
 
 `exportPodCIDR: true` causes the Cilium agent on each node to advertise its **pod CIDR range** to the BGP peer (typically an external router).
@@ -911,7 +911,7 @@ This makes pod IPs directly routable from outside the cluster, eliminating the n
 ### Question 7
 You apply a CiliumNetworkPolicy with an L7 HTTP rule allowing only `GET /api/v1/users`. A pod tries to `POST /api/v1/users`. What happens at the network level?
 
-<details>
+<details markdown="1">
 <summary>Show Answer</summary>
 
 The POST request is **denied at the network layer by Cilium's eBPF proxy**.
@@ -931,7 +931,7 @@ Key point: L7 policies work by inserting an Envoy proxy into the data path. The 
 ### Question 8
 How does Cilium's identity-based policy enforcement achieve O(1) lookup time?
 
-<details>
+<details markdown="1">
 <summary>Show Answer</summary>
 
 Cilium stores policy decisions in **eBPF hash maps** in the Linux kernel.
