@@ -82,9 +82,16 @@ No paywalls. No upsells. Theory-first.
     │       ├── security/     │   │       │  PRACTITIONER   │
     │       │  Hardening      │   │       ├── CKAD          │
     │       │                 │   │       ├── CKA           │
-    │       └── operations/   │   │       └── CKS           │
-    │          Perf · Debug   │   │                         │
-    │          Shell Scripts  │   │                         │
+    │       └── operations/   │   │       ├── CKS           │
+    │          Perf · Debug   │   │       │                 │
+    │          Shell Scripts  │   │       │  SPECIALIST     │
+    │                         │   │       ├── CNPE          │
+    │                         │   │       │                 │
+    │                         │   │       │  TOOL CERTS     │
+    │                         │   │       ├── CBA  (Backstage)
+    │                         │   │       ├── OTCA (OTel)   │
+    │                         │   │       ├── KCA  (Kyverno)│
+    │                         │   │       └── CAPA (Argo)   │
     │                         │   │                         │
     └────────────┬────────────┘   └────────────┬────────────┘
                  │                             │
@@ -102,11 +109,12 @@ No paywalls. No upsells. Theory-first.
     │       │                                                 │
     │       ├── disciplines/         Applied practices        │
     │       │   SRE · Platform Engineering · GitOps ·         │
-    │       │   DevSecOps · MLOps · AIOps                     │
+    │       │   DevSecOps · MLOps · AIOps · IaC              │
     │       │                                                 │
     │       └── toolkits/            Current tools (evolving) │
     │           Prometheus · ArgoCD · Vault · Backstage ·     │
-    │           Kubeflow · and more...                        │
+    │           Kyverno · Cilium · Kubeflow · OpenCost ·     │
+    │           Rook/Ceph · MetalLB · SPIFFE · and more...   │
     │                                                         │
     └─────────────────────────────────────────────────────────┘
 
@@ -119,10 +127,20 @@ No paywalls. No upsells. Theory-first.
 
 | Track | Modules | Status |
 |-------|---------|--------|
-| [Prerequisites](docs/prerequisites/) | 23 | ✅ Complete |
-| [Kubernetes Certifications](docs/k8s/) | 142 | ✅ Complete |
-| [Linux Deep Dive](docs/linux/) | 28 | ✅ Complete |
-| [Platform Engineering](docs/platform/) | 83 | ✅ Complete |
+| [Prerequisites](prerequisites/README.md) | 23 | ✅ Complete |
+| [CKA](k8s/cka/README.md) | 41 | ✅ Complete (K8s 1.35) |
+| [CKAD](k8s/ckad/README.md) | 24 | ✅ Complete (K8s 1.35) |
+| [CKS](k8s/cks/README.md) | 30 | ✅ Complete (K8s 1.34) |
+| [KCNA](k8s/kcna/README.md) | 25 | ✅ Complete |
+| [KCSA](k8s/kcsa/README.md) | 26 | ✅ Complete |
+| [CNPE](k8s/cnpe/README.md) | Learning Path | ✅ Maps 60+ modules |
+| [CBA](k8s/cba/README.md) | Learning Path | ✅ Backstage cert prep |
+| [OTCA](k8s/otca/README.md) | Learning Path | ✅ OpenTelemetry cert prep |
+| [KCA](k8s/kca/README.md) | Learning Path | ✅ Kyverno cert prep |
+| [CAPA](k8s/capa/README.md) | Learning Path | ✅ Argo Project cert prep |
+| [Linux Deep Dive](linux/README.md) | 28 | ✅ Complete |
+| [Platform Engineering](platform/README.md) | 154 | ✅ Complete |
+| **Total** | **351+** | |
 
 ---
 
@@ -130,10 +148,15 @@ No paywalls. No upsells. Theory-first.
 
 | You are... | Start here |
 |------------|------------|
-| New to containers/K8s | [Prerequisites](docs/prerequisites/) |
-| Want deep Linux knowledge | [Linux Deep Dive](docs/linux/) |
-| Want certifications | [KCNA](docs/k8s/kcna/) (entry) or [CKA](docs/k8s/cka/) (admin) |
-| Already certified | [Platform Engineering](docs/platform/) |
+| New to containers/K8s | [Prerequisites](prerequisites/README.md) |
+| Want deep Linux knowledge | [Linux Deep Dive](linux/README.md) |
+| Want K8s admin certification | [CKA](k8s/cka/README.md) |
+| Want K8s developer certification | [CKAD](k8s/ckad/README.md) |
+| Want K8s security certification | [CKS](k8s/cks/README.md) |
+| Entry-level K8s cert | [KCNA](k8s/kcna/README.md) (general) or [KCSA](k8s/kcsa/README.md) (security) |
+| Platform engineer | [CNPE Learning Path](k8s/cnpe/README.md) |
+| Backstage / OTel / Kyverno / Argo cert | [CBA](k8s/cba/README.md) · [OTCA](k8s/otca/README.md) · [KCA](k8s/kca/README.md) · [CAPA](k8s/capa/README.md) |
+| Already certified, want depth | [Platform Engineering](platform/README.md) |
 
 ---
 
