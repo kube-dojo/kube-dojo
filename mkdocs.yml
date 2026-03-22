@@ -135,6 +135,9 @@ nav:
       - linux/operations/shell-scripting/module-7.2-text-processing.md
       - linux/operations/shell-scripting/module-7.3-practical-scripts.md
       - linux/operations/shell-scripting/module-7.4-devops-automation.md
+    - System Administration:
+      - linux/operations/module-8.1-storage-management.md
+      - linux/operations/module-8.2-network-administration.md
 - Certifications:
   - k8s/README.md
   - KCNA:
@@ -361,6 +364,28 @@ nav:
     - k8s/capa/README.md
     - k8s/capa/module-1-advanced-argo-workflows.md
     - k8s/capa/module-2-argo-events.md
+  - PCA:
+    - k8s/pca/README.md
+    - k8s/pca/module-1-promql-deep-dive.md
+    - k8s/pca/module-2-instrumentation-alerting.md
+  - ICA:
+    - k8s/ica/README.md
+    - k8s/ica/module-1-istio-installation-architecture.md
+    - k8s/ica/module-2-istio-traffic-management.md
+    - k8s/ica/module-3-istio-security-troubleshooting.md
+  - CCA:
+    - k8s/cca/README.md
+    - k8s/cca/module-1-advanced-cilium.md
+  - CGOA:
+    - k8s/cgoa/README.md
+  - CNPA:
+    - k8s/cnpa/README.md
+  - LFCS:
+    - k8s/lfcs/README.md
+  - FinOps:
+    - k8s/finops/README.md
+    - k8s/finops/module-1-finops-fundamentals.md
+    - k8s/finops/module-2-finops-practice.md
 - Platform Engineering:
   - platform/README.md
   - Foundations:
