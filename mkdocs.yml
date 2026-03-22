@@ -23,10 +23,10 @@ theme:
         name: Switch to dark mode
   features:
     - navigation.tabs
-    - navigation.sections
     - navigation.indexes
     - navigation.top
     - navigation.path
+    - navigation.tracking
     - search.suggest
     - search.highlight
     - content.code.copy
@@ -158,27 +158,27 @@ nav:
         - k8s/kcna/part1-kubernetes-fundamentals/module-1.3-control-plane.md
         - k8s/kcna/part1-kubernetes-fundamentals/module-1.4-node-components.md
         - k8s/kcna/part1-kubernetes-fundamentals/module-1.5-pods.md
-      - k8s/kcna/part1-kubernetes-fundamentals/module-1.6-workload-resources.md
-      - k8s/kcna/part1-kubernetes-fundamentals/module-1.7-services.md
-      - k8s/kcna/part1-kubernetes-fundamentals/module-1.8-namespaces-labels.md
-      - k8s/kcna/part1-kubernetes-fundamentals/module-1.9-debugging-basics.md
-    - "Part 2: Container Orchestration":
-      - k8s/kcna/part2-container-orchestration/module-2.1-scheduling.md
-      - k8s/kcna/part2-container-orchestration/module-2.2-scaling.md
-      - k8s/kcna/part2-container-orchestration/module-2.3-storage.md
-      - k8s/kcna/part2-container-orchestration/module-2.4-configuration.md
+        - k8s/kcna/part1-kubernetes-fundamentals/module-1.6-workload-resources.md
+        - k8s/kcna/part1-kubernetes-fundamentals/module-1.7-services.md
+        - k8s/kcna/part1-kubernetes-fundamentals/module-1.8-namespaces-labels.md
+        - k8s/kcna/part1-kubernetes-fundamentals/module-1.9-debugging-basics.md
+      - "Part 2: Container Orchestration":
+        - k8s/kcna/part2-container-orchestration/module-2.1-scheduling.md
+        - k8s/kcna/part2-container-orchestration/module-2.2-scaling.md
+        - k8s/kcna/part2-container-orchestration/module-2.3-storage.md
+        - k8s/kcna/part2-container-orchestration/module-2.4-configuration.md
       - "Part 3: Cloud Native Architecture":
         - k8s/kcna/part3-cloud-native-architecture/module-3.1-cloud-native-principles.md
-      - k8s/kcna/part3-cloud-native-architecture/module-3.2-cncf-ecosystem.md
-      - k8s/kcna/part3-cloud-native-architecture/module-3.3-patterns.md
-      - k8s/kcna/part3-cloud-native-architecture/module-3.4-observability-fundamentals.md
-      - k8s/kcna/part3-cloud-native-architecture/module-3.5-observability-tools.md
-      - k8s/kcna/part3-cloud-native-architecture/module-3.6-security-basics.md
-      - k8s/kcna/part3-cloud-native-architecture/module-3.7-community-collaboration.md
-    - "Part 4: Application Delivery":
-      - k8s/kcna/part4-application-delivery/module-4.1-ci-cd.md
-      - k8s/kcna/part4-application-delivery/module-4.2-application-packaging.md
-      - k8s/kcna/part4-application-delivery/module-4.3-release-strategies.md
+        - k8s/kcna/part3-cloud-native-architecture/module-3.2-cncf-ecosystem.md
+        - k8s/kcna/part3-cloud-native-architecture/module-3.3-patterns.md
+        - k8s/kcna/part3-cloud-native-architecture/module-3.4-observability-fundamentals.md
+        - k8s/kcna/part3-cloud-native-architecture/module-3.5-observability-tools.md
+        - k8s/kcna/part3-cloud-native-architecture/module-3.6-security-basics.md
+        - k8s/kcna/part3-cloud-native-architecture/module-3.7-community-collaboration.md
+      - "Part 4: Application Delivery":
+        - k8s/kcna/part4-application-delivery/module-4.1-ci-cd.md
+        - k8s/kcna/part4-application-delivery/module-4.2-application-packaging.md
+        - k8s/kcna/part4-application-delivery/module-4.3-release-strategies.md
     - KCSA:
       - k8s/kcsa/README.md
       - "Part 0: Introduction":
