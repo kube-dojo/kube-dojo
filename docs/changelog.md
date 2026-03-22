@@ -47,7 +47,7 @@ KubeDojo is now fully aligned with **Kubernetes 1.35** (released December 2025):
 
 ### CKS Exam Alignment
 
-Updated for the October 2024 CKS overhaul:
+Verified our CKS modules against the CNCF's October 2024 exam overhaul and filled identified gaps:
 - Added **Cilium Pod-to-Pod encryption** (WireGuard/IPsec) to Network Policies module
 - Added **KubeLinter** section to Static Analysis module
 - Updated CKS prerequisite: CKA no longer needs to be active — just passed at any point
