@@ -222,6 +222,14 @@ nav:
         - k8s/kcsa/part6-compliance/module-6.3-security-assessments.md
     - CNPE:
       - k8s/cnpe/README.md
+    - CBA:
+      - k8s/cba/README.md
+    - OTCA:
+      - k8s/otca/README.md
+    - KCA:
+      - k8s/kca/README.md
+    - CAPA:
+      - k8s/capa/README.md
     - CKAD:
       - k8s/ckad/README.md
       - "Part 0: Environment":
