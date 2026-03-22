@@ -98,4 +98,4 @@ This update was produced through a novel **multi-AI collaboration**:
 
 ## December 2025 — Initial Release
 
-KubeDojo launched with 311 modules covering all 5 Kubestronaut certifications plus Platform Engineering, Linux, and IaC deep dives. See the [full project history](https://github.com/krisztiankoos/kubedojo/commits/main) for details.
+KubeDojo launched with 311 modules covering all 5 Kubestronaut certifications plus Platform Engineering, Linux, and IaC deep dives. See the [full project history](https://github.com/kube-dojo/kube-dojo.github.io/commits/main) for details.

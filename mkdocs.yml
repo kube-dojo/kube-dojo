@@ -1,8 +1,8 @@
 site_name: KubeDojo
 site_description: Free, comprehensive cloud native education
-site_url: https://krisztiankoos.github.io/kubedojo/
-repo_url: https://github.com/krisztiankoos/kubedojo
-repo_name: krisztiankoos/kubedojo
+site_url: https://kube-dojo.github.io/
+repo_url: https://github.com/kube-dojo/kube-dojo.github.io
+repo_name: kube-dojo/kube-dojo.github.io
 docs_dir: docs
 theme:
   name: material

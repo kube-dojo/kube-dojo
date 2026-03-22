@@ -11,7 +11,7 @@
 
 **IaC Deep Dive Track** - ✅ COMPLETE! 12 modules covering IaC discipline (fundamentals, testing, security, scale, drift, cost) and toolkit (Terraform, OpenTofu, Pulumi, Ansible, CloudFormation, Bicep).
 
-**Website:** ✅ Live at https://krisztiankoos.github.io/kubedojo/
+**Website:** ✅ Live at https://kube-dojo.github.io/
 
 **Status:** All planned content complete! 🎉
 

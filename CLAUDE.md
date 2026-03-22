@@ -132,6 +132,6 @@ Platform modules include additional sections:
 
 ## Links
 
-- **Repo**: https://github.com/krisztiankoos/kubedojo
+- **Repo**: https://github.com/kube-dojo/kube-dojo.github.io
 - **CNCF Curriculum**: https://github.com/cncf/curriculum
 - **CKA Program Changes**: https://training.linuxfoundation.org/certified-kubernetes-administrator-cka-program-changes/
