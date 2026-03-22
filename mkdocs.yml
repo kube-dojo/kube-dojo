@@ -224,12 +224,21 @@ nav:
       - k8s/cnpe/README.md
     - CBA:
       - k8s/cba/README.md
+      - k8s/cba/module-1-backstage-dev-workflow.md
+      - k8s/cba/module-2-backstage-plugin-development.md
+      - k8s/cba/module-3-backstage-catalog-infrastructure.md
     - OTCA:
       - k8s/otca/README.md
+      - k8s/otca/module-1-otel-sdk-deep-dive.md
+      - k8s/otca/module-2-otel-collector-advanced.md
     - KCA:
       - k8s/kca/README.md
+      - k8s/kca/module-1-advanced-kyverno-policies.md
+      - k8s/kca/module-2-kyverno-operations-cli.md
     - CAPA:
       - k8s/capa/README.md
+      - k8s/capa/module-1-advanced-argo-workflows.md
+      - k8s/capa/module-2-argo-events.md
     - CKAD:
       - k8s/ckad/README.md
       - "Part 0: Environment":
