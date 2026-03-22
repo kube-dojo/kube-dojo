@@ -6,7 +6,7 @@ Kubernetes certifications. Platform engineering. SRE. DevSecOps. MLOps.
 
 No paywalls. No upsells. Theory-first.
 
-> **March 2026 Update**: 18 new modules added — FinOps, Kyverno, Chaos Engineering, GPU Scheduling, Cluster API, vCluster, and more. Full K8s 1.35 support. Every module quality-reviewed. [See what's new &rarr;](changelog.md)
+> **March 2026 Update**: Now covering **21 certifications** including PCA, ICA, CCA, CGOA, LFCS, and FinOps. 40+ new modules, K8s 1.35 support, every module quality-reviewed. [See what's new &rarr;](changelog.md)
 
 ---
 
@@ -88,10 +88,18 @@ No paywalls. No upsells. Theory-first.
     │                         │   │       ├── CNPE          │
     │                         │   │       │                 │
     │                         │   │       │  TOOL CERTS     │
+    │                         │   │       ├── PCA  (Prometheus)
+    │                         │   │       ├── ICA  (Istio)  │
+    │                         │   │       ├── CCA  (Cilium) │
     │                         │   │       ├── CBA  (Backstage)
     │                         │   │       ├── OTCA (OTel)   │
     │                         │   │       ├── KCA  (Kyverno)│
-    │                         │   │       └── CAPA (Argo)   │
+    │                         │   │       ├── CAPA (Argo)   │
+    │                         │   │       ├── CGOA (GitOps) │
+    │                         │   │       │                 │
+    │                         │   │       │  OTHER          │
+    │  + LFCS (Linux Sysadmin)│   │       ├── CNPA (Platform)
+    │                         │   │       └── FinOps        │
     │                         │   │                         │
     └────────────┬────────────┘   └────────────┬────────────┘
                  │                             │
@@ -138,9 +146,16 @@ No paywalls. No upsells. Theory-first.
 | [OTCA](k8s/otca/README.md) | Learning Path | ✅ OpenTelemetry cert prep |
 | [KCA](k8s/kca/README.md) | Learning Path | ✅ Kyverno cert prep |
 | [CAPA](k8s/capa/README.md) | Learning Path | ✅ Argo Project cert prep |
-| [Linux Deep Dive](linux/README.md) | 28 | ✅ Complete |
+| [PCA](k8s/pca/README.md) | Learning Path | ✅ Prometheus cert prep |
+| [ICA](k8s/ica/README.md) | Learning Path | ✅ Istio cert prep |
+| [CCA](k8s/cca/README.md) | Learning Path | ✅ Cilium cert prep |
+| [CGOA](k8s/cgoa/README.md) | Learning Path | ✅ GitOps cert prep |
+| [CNPA](k8s/cnpa/README.md) | Learning Path | ✅ Platform Associate prep |
+| [LFCS](k8s/lfcs/README.md) | Learning Path | ✅ Linux Sysadmin cert prep |
+| [FinOps](k8s/finops/README.md) | Learning Path | ✅ FinOps Practitioner prep |
+| [Linux Deep Dive](linux/README.md) | 30 | ✅ Complete |
 | [Platform Engineering](platform/README.md) | 154 | ✅ Complete |
-| **Total** | **351+** | |
+| **Total** | **370+** | |
 
 ---
 
@@ -155,7 +170,13 @@ No paywalls. No upsells. Theory-first.
 | Want K8s security certification | [CKS](k8s/cks/README.md) |
 | Entry-level K8s cert | [KCNA](k8s/kcna/README.md) (general) or [KCSA](k8s/kcsa/README.md) (security) |
 | Platform engineer | [CNPE Learning Path](k8s/cnpe/README.md) |
+| Prometheus cert | [PCA](k8s/pca/README.md) |
+| Istio / Service Mesh cert | [ICA](k8s/ica/README.md) |
+| Cilium / Networking cert | [CCA](k8s/cca/README.md) |
+| GitOps cert | [CGOA](k8s/cgoa/README.md) |
 | Backstage / OTel / Kyverno / Argo cert | [CBA](k8s/cba/README.md) · [OTCA](k8s/otca/README.md) · [KCA](k8s/kca/README.md) · [CAPA](k8s/capa/README.md) |
+| Linux sysadmin cert | [LFCS](k8s/lfcs/README.md) |
+| Cloud cost management | [FinOps](k8s/finops/README.md) |
 | Already certified, want depth | [Platform Engineering](platform/README.md) |
 
 ---

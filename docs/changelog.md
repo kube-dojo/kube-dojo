@@ -1,8 +1,19 @@
 # Changelog
 
-## March 2026 — Ecosystem Update + Quality Review
+## March 2026 — Ecosystem Update + Quality Review + 21 Certifications
 
-**The biggest update since KubeDojo launched.** 18 new modules, 30+ modules updated, and every single module reviewed for quality.
+**The biggest update since KubeDojo launched.** 40+ new modules, 30+ updated, every module quality-reviewed, and coverage expanded to 21 certifications.
+
+### 21 Certification Tracks
+
+KubeDojo now covers every cloud-native certification on the Linux Foundation catalog:
+
+| Tier | Certifications |
+|------|---------------|
+| **K8s Core** | [KCNA](k8s/kcna/README.md), [KCSA](k8s/kcsa/README.md), [CKA](k8s/cka/README.md), [CKAD](k8s/ckad/README.md), [CKS](k8s/cks/README.md) |
+| **Specialist** | [CNPE](k8s/cnpe/README.md), [CNPA](k8s/cnpa/README.md) |
+| **Tool-Specific** | [PCA](k8s/pca/README.md), [ICA](k8s/ica/README.md), [CCA](k8s/cca/README.md), [CBA](k8s/cba/README.md), [OTCA](k8s/otca/README.md), [KCA](k8s/kca/README.md), [CAPA](k8s/capa/README.md), [CGOA](k8s/cgoa/README.md) |
+| **Other** | [LFCS](k8s/lfcs/README.md), [FinOps](k8s/finops/README.md) |
 
 ### Kubernetes 1.35 "Timbernetes" Support
 
