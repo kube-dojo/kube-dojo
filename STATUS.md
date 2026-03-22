@@ -105,15 +105,17 @@ All completed modules meet this standard.
 | Platform | ✅ Complete | 122 |
 | Linux | ✅ Complete | 28 |
 | IaC | ✅ Complete | 12 |
-| **Completed** | | **328** |
-| **Total** | | **328** |
+| CNPE | ✅ Complete | 1 (learning path) |
+| **Completed** | | **329** |
+| **Total** | | **329** |
 
-## Current Work: Ecosystem Update + Gap Fill (March 2026) — Complete
-All ecosystem update issues closed. 15 new modules added filling K8s ecosystem gaps.
+## Current Work: All planned work complete!
+Ecosystem update (7 issues), gap fill (13 issues), and CNPE mapping done. 328 modules total.
 
 ## Next Steps
-- P7: CNPE certification mapping (#68 — map existing Platform modules to CNPE domains)
 - Ongoing: Keep curriculum aligned with K8s releases and CNCF cert changes
+- Community: Accept contributions, respond to issues
+- Consider: CNPA (associate) learning path, CKNE (networking) when curriculum published
 
 ## Blockers
 None
@@ -123,7 +125,7 @@ None
 |---|-------|--------|
 | #14 | Curriculum Monitoring & Official Sources | 📋 Open |
 | #15 | Practice Environment & Exercise Approach | 📋 Open |
-| #68 | P7: CNPE/CKNE Certifications | 📋 Open |
+| #68 | P7: CNPE Certification Mapping | ✅ Closed (60+ modules mapped) |
 
 ### Recently Closed
 | # | Issue | Status |
