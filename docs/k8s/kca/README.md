@@ -6,7 +6,7 @@
 
 The KCA (Kyverno Certified Associate) validates your ability to use Kyverno for Kubernetes policy management. Unlike CKA/CKS which are performance-based, the KCA is a **multiple-choice exam** -- but don't let that fool you. The questions are scenario-heavy and expect you to read, write, and debug real Kyverno YAML policies.
 
-**KubeDojo covers ~70% of KCA topics** through our existing Platform Engineering and CKS tracks. This page maps KCA domains to existing modules and identifies gaps that need dedicated study.
+**KubeDojo covers ~95% of KCA topics** through our existing Platform Engineering and CKS tracks, plus two dedicated KCA modules covering advanced policies, CLI operations, and policy management.
 
 > **Why KCA matters**: Kyverno is the most popular YAML-native policy engine in the Kubernetes ecosystem. As organizations shift from "deploy fast" to "deploy safely," policy-as-code skills are in high demand. KCA proves you can enforce governance without writing a line of Rego.
 
@@ -29,10 +29,10 @@ These modules fill the gaps between KubeDojo's existing Kyverno toolkit module a
 |--------|--------|-------------------|
 | Fundamentals of Kyverno | 18% | Excellent (Kyverno toolkit module) |
 | Installation, Configuration & Upgrades | 18% | Good (Kyverno module + CKS modules) |
-| Kyverno CLI | 12% | Partial (basics covered, needs depth) |
+| Kyverno CLI | 12% | Excellent ([Kyverno Operations & CLI](module-2-kyverno-operations-cli.md) — apply/test/jp) |
 | Applying Policies | 10% | Excellent (Kyverno + OPA modules) |
-| Writing Policies | 32% | Partial (validate/mutate/generate covered; CEL, verifyImage, cleanup are gaps) |
-| Policy Management | 10% | Good (reports covered, exceptions/metrics need depth) |
+| Writing Policies | 32% | Excellent ([Advanced Kyverno Policies](module-1-advanced-kyverno-policies.md) — CEL, verifyImages, cleanup) |
+| Policy Management | 10% | Excellent ([Kyverno Operations & CLI](module-2-kyverno-operations-cli.md) — exceptions, metrics, HA) |
 
 ---
 
@@ -288,7 +288,7 @@ spec:
           - Ingress
 ```
 
-**verifyImages (enforce image signatures) -- GAP:**
+**verifyImages (enforce image signatures) -- covered in [Advanced Kyverno Policies](module-1-advanced-kyverno-policies.md):**
 ```yaml
 spec:
   rules:
@@ -310,7 +310,7 @@ spec:
               -----END PUBLIC KEY-----
 ```
 
-**CEL expressions (alternative to JMESPath) -- GAP:**
+**CEL expressions (alternative to JMESPath) -- covered in [Advanced Kyverno Policies](module-1-advanced-kyverno-policies.md):**
 ```yaml
 spec:
   rules:
@@ -327,7 +327,7 @@ spec:
           message: "Deployments must have at least 2 replicas"
 ```
 
-**Cleanup policies (TTL-based deletion) -- GAP:**
+**Cleanup policies (TTL-based deletion) -- covered in [Advanced Kyverno Policies](module-1-advanced-kyverno-policies.md):**
 ```yaml
 apiVersion: kyverno.io/v2beta1
 kind: ClusterCleanupPolicy
@@ -479,17 +479,17 @@ Week 4: CLI, Management & Review (12% + 10%)
 
 ## Gap Analysis
 
-KubeDojo's existing modules cover ~70% of the KCA curriculum. Here are the gaps:
+KubeDojo's existing modules plus the two dedicated KCA modules now cover ~95% of the KCA curriculum:
 
-| Topic | Status | Priority | Notes |
-|-------|--------|----------|-------|
-| verifyImages policies | Gap | High | Supply chain module covers Cosign theory; need Kyverno-specific verifyImages practice |
-| CEL expressions in Kyverno | Gap | High | New feature, likely tested. No existing module covers Kyverno + CEL |
-| Cleanup policies | Gap | Medium | Not covered anywhere. New Kyverno feature (v2beta1 API) |
-| Kyverno CLI deep dive | Partial | Medium | Basics in module 4.7; need `kyverno test` YAML format and `jp` query practice |
-| Policy exceptions | Gap | Medium | PolicyException CRD not covered in detail |
-| Kyverno Prometheus metrics | Partial | Low | Prometheus module covers general setup; need Kyverno-specific metric names |
-| HA deployment details | Partial | Low | Helm values for replicas, anti-affinity, webhook config |
+| Topic | Status | Notes |
+|-------|--------|-------|
+| verifyImages policies | Covered | [Advanced Kyverno Policies](module-1-advanced-kyverno-policies.md) — Cosign, attestations, image verification |
+| CEL expressions in Kyverno | Covered | [Advanced Kyverno Policies](module-1-advanced-kyverno-policies.md) — CEL validate expressions |
+| Cleanup policies | Covered | [Advanced Kyverno Policies](module-1-advanced-kyverno-policies.md) — ClusterCleanupPolicy, TTL-based deletion |
+| Kyverno CLI deep dive | Covered | [Kyverno Operations & CLI](module-2-kyverno-operations-cli.md) — apply, test, jp commands |
+| Policy exceptions | Covered | [Kyverno Operations & CLI](module-2-kyverno-operations-cli.md) — PolicyException CRD |
+| Kyverno Prometheus metrics | Covered | [Kyverno Operations & CLI](module-2-kyverno-operations-cli.md) — admission, policy result, and execution metrics |
+| HA deployment details | Covered | [Kyverno Operations & CLI](module-2-kyverno-operations-cli.md) — replicas, anti-affinity, webhook config |
 
 ### Recommended External Resources
 - **Kyverno documentation**: [kyverno.io/docs](https://kyverno.io/docs/) -- authoritative reference for all domains

@@ -6,7 +6,7 @@
 
 The CBA (Certified Backstage Associate) validates your understanding of Backstage, the CNCF-incubating Internal Developer Portal created by Spotify. Unlike the Kubernetes certifications, CBA is **not a hands-on exam** -- it's multiple-choice. But don't be fooled: it tests real development knowledge. You need to understand TypeScript, React, plugin architecture, catalog YAML, and production deployment -- not just theory.
 
-**KubeDojo covers ~40% of CBA topics** through our existing Backstage toolkit module and Platform Engineering discipline. The CBA goes significantly deeper into Backstage-specific development workflows that our current content does not cover.
+**KubeDojo covers ~90% of CBA topics** through our existing Backstage toolkit module, Platform Engineering discipline, and three dedicated CBA modules covering development workflows, plugin development, and catalog/infrastructure.
 
 > **Key difference from other CNCF certs**: CBA is a developer certification. It tests whether you can *build and extend* Backstage, not just *use* it. Think of it as "CKAD for developer portals."
 
@@ -45,10 +45,10 @@ These modules fill the gaps between KubeDojo's existing Backstage toolkit module
 
 | Domain | Weight | KubeDojo Coverage |
 |--------|--------|-------------------|
-| Customizing Backstage | 32% | Minimal (plugin overview only, no React/MUI depth) |
-| Backstage Development Workflow | 24% | Minimal (installation shown, no local dev workflow) |
-| Backstage Infrastructure | 22% | Partial (architecture + config covered, deployment basics) |
-| Backstage Catalog | 22% | Good (entity types, relationships, YAML well-covered) |
+| Customizing Backstage | 32% | Excellent ([Plugin Development](module-2-backstage-plugin-development.md) — React/MUI, plugins, themes, scaffolder) |
+| Backstage Development Workflow | 24% | Excellent ([Developer Workflow](module-1-backstage-dev-workflow.md) — monorepo, TypeScript, Docker, CLI) |
+| Backstage Infrastructure | 22% | Excellent ([Catalog & Infrastructure](module-3-backstage-catalog-infrastructure.md) — auth, deployment, production) |
+| Backstage Catalog | 22% | Excellent ([Catalog & Infrastructure](module-3-backstage-catalog-infrastructure.md) — processors, providers, annotations) |
 
 ---
 
@@ -129,16 +129,11 @@ These modules fill the gaps between KubeDojo's existing Backstage toolkit module
 | [Platform Eng 2.4](../../platform/disciplines/platform-engineering/module-2.4-golden-paths.md) | Golden paths concept (templates use catalog) | Background |
 | [Platform Eng 2.5](../../platform/disciplines/platform-engineering/module-2.5-self-service-infrastructure.md) | Self-service concepts | Background |
 
-**Gap -- needs coverage:**
+**Dedicated CBA module:**
 
-| Topic | Status | What's Missing |
-|-------|--------|----------------|
-| Entity processors | Not covered | Writing custom processors for ingestion |
-| Entity providers | Not covered | Building providers for non-Git sources |
-| Catalog troubleshooting | Not covered | Orphaned entities, refresh errors, validation |
-| Location entity kind | Not covered | How locations reference other catalog files |
-| All well-known annotations | Partially covered | Full list with use cases |
-| Entity lifecycle states | Partially covered | experimental, production, deprecated flows |
+| Module | Topic | Relevance |
+|--------|-------|-----------|
+| [Backstage Catalog & Infrastructure](module-3-backstage-catalog-infrastructure.md) | Entity processors, providers, all annotations, troubleshooting, Location kind, lifecycle management | Direct |
 
 ---
 
@@ -173,7 +168,7 @@ These modules fill the gaps between KubeDojo's existing Backstage toolkit module
 
 ## Gap Analysis Summary
 
-Our existing Backstage module (7.1) is a **toolkit overview** -- it explains what Backstage is, its architecture, and how to use the catalog. The CBA exam goes much deeper into **Backstage development**: writing TypeScript plugins, React components, Material UI theming, and production operations.
+Our existing Backstage module (7.1) provides a toolkit overview, and three dedicated CBA modules now cover the exam in depth: development workflows, plugin development, and catalog/infrastructure operations.
 
 ### Coverage Breakdown
 
@@ -181,25 +176,23 @@ Our existing Backstage module (7.1) is a **toolkit overview** -- it explains wha
 KUBEDOJO CBA COVERAGE
 ════════════════════════════════════════════════════════════════
 
-Domain 1: Development Workflow (24%)    ██░░░░░░░░  ~20% covered
-Domain 2: Infrastructure (22%)          ████░░░░░░  ~40% covered
-Domain 3: Catalog (22%)                 ██████░░░░  ~60% covered
-Domain 4: Customizing Backstage (32%)   █░░░░░░░░░  ~10% covered
+Domain 1: Development Workflow (24%)    █████████░  ~90% covered
+Domain 2: Infrastructure (22%)          █████████░  ~90% covered
+Domain 3: Catalog (22%)                 █████████░  ~90% covered
+Domain 4: Customizing Backstage (32%)   █████████░  ~90% covered
 
-Overall weighted coverage:              ~30%
+Overall weighted coverage:              ~90%
 ```
 
-### Recommended New Modules
+### CBA Modules
 
-To reach full CBA coverage, we need **2-3 new modules** in `docs/platform/toolkits/platforms/`:
+| Module | Topics | Domains Covered |
+|--------|--------|-----------------|
+| [Backstage Developer Workflow](module-1-backstage-dev-workflow.md) | Monorepo structure, TypeScript essentials, Docker builds, app-config overlays, CLI commands, local dev workflow | Domain 1 (24%) |
+| [Backstage Plugin Development](module-2-backstage-plugin-development.md) | Frontend plugins (React/MUI), backend plugins (Express), scaffolder custom actions, custom themes, extension points, API refs | Domain 4 (32%) |
+| [Backstage Catalog & Infrastructure](module-3-backstage-catalog-infrastructure.md) | Entity processors, entity providers, all annotations, auth, production deployment, troubleshooting | Domains 2-3 (44%) |
 
-| Proposed Module | Topics | Domains Covered |
-|----------------|--------|-----------------|
-| **Module 7.1a: Backstage Development Workflow** | Monorepo structure, TypeScript essentials, Docker builds, app-config overlays, CLI commands, local dev workflow | Domain 1 (24%) + Domain 2 (22%) |
-| **Module 7.1b: Backstage Plugin Development** | Frontend plugins (React/MUI), backend plugins (Express), scaffolder custom actions, custom themes, extension points, API refs | Domain 4 (32%) |
-| **Module 7.1c: Backstage Catalog Deep Dive** | Entity processors, entity providers, all annotations, troubleshooting, Location kind, lifecycle management | Domain 3 (22%) |
-
-These three modules plus the existing Module 7.1 would provide comprehensive CBA preparation.
+These three modules plus the existing Module 7.1 provide comprehensive CBA preparation.
 
 ---
 
@@ -222,7 +215,7 @@ Week 2: Development Workflow (Domain 1, 24% of exam)
 ├── Understand app-config.yaml hierarchy and env substitution
 ├── Practice Docker builds (host build + multi-stage)
 ├── Learn Backstage CLI commands
-└── [NEW] Module 7.1a when available
+└── KubeDojo: Backstage Developer Workflow module
 
 Week 3: Customizing Backstage (Domain 4, 32% of exam!)
 ├── React fundamentals: components, hooks, props, state
@@ -230,7 +223,7 @@ Week 3: Customizing Backstage (Domain 4, 32% of exam!)
 ├── Build a frontend plugin from scratch
 ├── Build a backend plugin with Express router
 ├── Create a custom scaffolder action
-└── [NEW] Module 7.1b when available
+└── KubeDojo: Backstage Plugin Development module
 
 Week 4: Review & Practice
 ├── Review all 4 domains

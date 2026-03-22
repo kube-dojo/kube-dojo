@@ -6,7 +6,7 @@
 
 The CAPA (Certified Argo Project Associate) validates knowledge of the four Argo projects: Argo Workflows, Argo CD, Argo Rollouts, and Argo Events. It's a **theory exam** — multiple-choice questions testing your understanding of Argo concepts, architecture, and usage patterns.
 
-**KubeDojo covers ~80% of CAPA topics** through existing Platform Engineering toolkit and discipline modules. This page maps CAPA domains to existing modules so you can prepare efficiently.
+**KubeDojo covers ~95% of CAPA topics** through existing Platform Engineering toolkit and discipline modules, plus two dedicated CAPA modules covering advanced Argo Workflows and Argo Events.
 
 > **The Argo project is the second-most popular CNCF graduated project** after Kubernetes itself. Over 300 organizations use Argo in production, including Intuit (its creator), Tesla, Google, Red Hat, and GitHub. Understanding the full Argo ecosystem — not just ArgoCD — is increasingly a baseline skill for Kubernetes platform teams.
 
@@ -16,10 +16,10 @@ The CAPA (Certified Argo Project Associate) validates knowledge of the four Argo
 
 | Domain | Weight | KubeDojo Coverage |
 |--------|--------|-------------------|
-| Argo Workflows | 36% | Good (1 toolkit module, needs depth on template types and artifacts) |
+| Argo Workflows | 36% | Excellent (toolkit module + [Advanced Argo Workflows](module-1-advanced-argo-workflows.md)) |
 | Argo CD | 34% | Excellent (1 toolkit + 6 discipline modules) |
 | Argo Rollouts | 18% | Excellent (1 dedicated toolkit module) |
-| Argo Events | 12% | Gap (no existing module) |
+| Argo Events | 12% | Excellent ([Argo Events](module-2-argo-events.md)) |
 
 ---
 
@@ -342,16 +342,18 @@ Week 6: Argo Events (12%) + Review
 
 ## Gap Analysis
 
-KubeDojo's existing modules cover ~80% of the CAPA curriculum. Known gaps:
+KubeDojo's existing modules plus the two dedicated CAPA modules now cover ~95% of the CAPA curriculum:
 
 | Topic | Domain | Weight Impact | Status | Notes |
 |-------|--------|---------------|--------|-------|
-| Argo Events | Domain 4 | 12% | Not covered | No existing module; use official docs |
-| Argo Workflows template types (all 7) | Domain 1 | Part of 36% | Partially covered | Existing module covers container, script, DAG, steps; needs resource, suspend, HTTP |
-| Argo Workflows artifacts | Domain 1 | Part of 36% | Partially covered | Existing module mentions artifacts; needs deeper S3/MinIO configuration |
-| CronWorkflow | Domain 1 | Part of 36% | Partially covered | Brief mention in existing module; supplement with docs |
+| Argo Events | Domain 4 | 12% | Covered | [Argo Events](module-2-argo-events.md) — EventSource, Sensor, EventBus, Triggers |
+| Argo Workflows template types (all 7) | Domain 1 | Part of 36% | Covered | [Advanced Argo Workflows](module-1-advanced-argo-workflows.md) — all 7 template types |
+| Argo Workflows artifacts | Domain 1 | Part of 36% | Covered | [Advanced Argo Workflows](module-1-advanced-argo-workflows.md) — S3/MinIO artifact configuration |
+| CronWorkflow | Domain 1 | Part of 36% | Covered | [Advanced Argo Workflows](module-1-advanced-argo-workflows.md) — scheduling, concurrency policies |
+| Exit handlers / lifecycle hooks | Domain 1 | Part of 36% | Covered | [Advanced Argo Workflows](module-1-advanced-argo-workflows.md) |
+| Synchronization / memoization | Domain 1 | Part of 36% | Covered | [Advanced Argo Workflows](module-1-advanced-argo-workflows.md) |
 
-The Argo CD and Argo Rollouts domains are fully covered by existing KubeDojo modules. For Argo Workflows depth and Argo Events, supplement with the official Argo documentation linked above.
+All four Argo domains are now fully covered by existing KubeDojo modules.
 
 ---
 

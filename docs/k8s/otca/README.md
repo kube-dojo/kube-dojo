@@ -6,7 +6,7 @@
 
 The OTCA (OpenTelemetry Certified Associate) validates your understanding of OpenTelemetry concepts, architecture, and the OTel ecosystem. Unlike CKA/CKS, this is a **knowledge-based exam** — multiple-choice questions, not hands-on tasks. But don't let that fool you: Domain 2 (API & SDK) is 46% of the exam and requires deep understanding of TracerProviders, MeterProviders, span processors, sampling strategies, and context propagation internals.
 
-**KubeDojo covers ~55% of OTCA topics** through existing observability modules. The remaining 45% — particularly SDK pipeline internals and advanced Collector configuration — requires dedicated OTCA modules (planned).
+**KubeDojo covers ~90% of OTCA topics** through existing observability modules plus two dedicated OTCA modules covering SDK pipeline internals and advanced Collector configuration.
 
 > **OpenTelemetry is the second most active CNCF project** after Kubernetes. If you work with observability in any capacity, OTCA validates the skill that matters most: understanding the universal telemetry standard.
 
@@ -28,8 +28,8 @@ These modules fill the gaps between KubeDojo's existing observability modules an
 | Domain | Weight | KubeDojo Coverage |
 |--------|--------|-------------------|
 | Fundamentals of Observability | 18% | Excellent (4 foundation modules) |
-| OTel API and SDK | 46% | Partial (overview exists, need SDK depth) |
-| OTel Collector | 26% | Partial (overview exists, need pipeline depth) |
+| OTel API and SDK | 46% | Excellent ([OTel SDK Deep Dive](module-1-otel-sdk-deep-dive.md) + overview module) |
+| OTel Collector | 26% | Excellent ([OTel Collector Advanced](module-2-otel-collector-advanced.md) + overview module) |
 | Ecosystem | 10% | Good (covered across multiple modules) |
 
 ---
@@ -61,10 +61,10 @@ These modules fill the gaps between KubeDojo's existing observability modules an
 | [Tracing](../../platform/toolkits/observability/module-1.5-tracing.md) | Distributed tracing concepts, Jaeger/Tempo | Direct |
 | [Prometheus](../../platform/toolkits/observability/module-1.1-prometheus.md) | Metrics fundamentals, metric types, PromQL | Partial |
 
-### Key Exam Topics Not Yet Covered
-- **Semantic conventions** — OTel's standardized attribute naming (`http.request.method`, `service.name`, `db.system`)
-- **Signal relationships** — How traces link to metrics via exemplars, how logs correlate with trace context
-- **Resource vs. attribute semantics** — Resource describes the entity, attributes describe the event
+### Key Exam Topics — Additional Study
+- **Semantic conventions** — Covered in [OTel SDK Deep Dive](module-1-otel-sdk-deep-dive.md); supplement with the [official semconv reference](https://opentelemetry.io/docs/specs/semconv/)
+- **Signal relationships** — Exemplars linking metrics to traces are covered in [OTel SDK Deep Dive](module-1-otel-sdk-deep-dive.md)
+- **Resource vs. attribute semantics** — Resource describes the entity, attributes describe the event — covered in [OTel SDK Deep Dive](module-1-otel-sdk-deep-dive.md)
 
 ---
 
@@ -93,24 +93,17 @@ These modules fill the gaps between KubeDojo's existing observability modules an
 | [Observability 3.3](../../platform/foundations/observability-theory/module-3.3-instrumentation-principles.md) | Instrumentation theory and principles | Partial |
 | [OTel SDK Deep Dive](module-1-otel-sdk-deep-dive.md) | TracerProvider, MeterProvider, span processors, sampling, context propagation, metric instruments | Direct |
 
-### Key Exam Topics Not Yet Covered
+### Key Exam Topics — Now Covered
 
-This is where KubeDojo's biggest gap lies. The following require dedicated modules:
+All of the following are covered in the [OTel SDK Deep Dive](module-1-otel-sdk-deep-dive.md):
 
 - **TracerProvider pipeline**: `TracerProvider` -> `SpanProcessor` -> `SpanExporter` — how spans flow from creation to export
 - **MeterProvider pipeline**: `MeterProvider` -> `MetricReader` -> `MetricExporter` — push vs. pull metric export
 - **LoggerProvider pipeline**: `LoggerProvider` -> `LogRecordProcessor` -> `LogRecordExporter`
 - **Span processors**: `SimpleSpanProcessor` (sync, for debugging) vs. `BatchSpanProcessor` (async, for production) — know the trade-offs cold
-- **Sampling strategies**:
-  - `AlwaysOnSampler` / `AlwaysOffSampler` — trivial but tested
-  - `TraceIdRatioBasedSampler` — probabilistic head sampling
-  - `ParentBasedSampler` — respects upstream sampling decisions
-  - Head sampling vs. tail sampling — where each happens and why
+- **Sampling strategies**: `AlwaysOnSampler`, `AlwaysOffSampler`, `TraceIdRatioBasedSampler`, `ParentBasedSampler`, head vs. tail sampling
 - **Context propagation internals**: `TextMapPropagator`, `TextMapGetter/Setter`, injection/extraction, composite propagators
-- **Metric instruments in detail**:
-  - Synchronous: `Counter`, `UpDownCounter`, `Histogram`
-  - Asynchronous: `ObservableCounter`, `ObservableGauge`, `ObservableUpDownCounter`
-  - Aggregation temporality: cumulative vs. delta
+- **Metric instruments in detail**: Synchronous (Counter, UpDownCounter, Histogram) and Asynchronous (ObservableCounter, ObservableGauge, ObservableUpDownCounter), aggregation temporality
 - **Exemplars**: Linking metrics to trace samples
 - **Baggage**: Cross-cutting concerns propagated through context (not telemetry data itself)
 - **SDK configuration**: Environment variables (`OTEL_SERVICE_NAME`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_TRACES_SAMPLER`), programmatic vs. file-based config
@@ -137,49 +130,17 @@ This is where KubeDojo's biggest gap lies. The following require dedicated modul
 | [Tracing](../../platform/toolkits/observability/module-1.5-tracing.md) | Trace pipeline concepts | Partial |
 | [OTel Collector Advanced](module-2-otel-collector-advanced.md) | Pipeline configuration, deployment patterns, connectors, distributions, processors | Direct |
 
-### Key Exam Topics Not Yet Covered
+### Key Exam Topics — Now Covered
 
-- **Collector configuration deep dive**:
-  ```yaml
-  # Know this structure cold:
-  receivers:
-    otlp:
-      protocols:
-        grpc:
-          endpoint: 0.0.0.0:4317
-        http:
-          endpoint: 0.0.0.0:4318
-  processors:
-    batch:
-      timeout: 5s
-      send_batch_size: 1024
-    memory_limiter:
-      check_interval: 1s
-      limit_mib: 512
-    filter:
-      traces:
-        span:
-          - 'attributes["http.target"] == "/healthz"'
-  exporters:
-    otlp:
-      endpoint: tempo:4317
-    prometheus:
-      endpoint: 0.0.0.0:8889
-  service:
-    pipelines:
-      traces:
-        receivers: [otlp]
-        processors: [memory_limiter, batch]
-        exporters: [otlp]
-      metrics:
-        receivers: [otlp]
-        processors: [memory_limiter, batch]
-        exporters: [prometheus]
-  ```
+All of the following are covered in the [OTel Collector Advanced](module-2-otel-collector-advanced.md):
+
+- **Collector configuration deep dive**: Full pipeline YAML (receivers, processors, exporters, service.pipelines)
 - **Deployment patterns**: Agent (sidecar/DaemonSet) vs. Gateway (Deployment) — when to use each
-- **Collector distributions**: `otelcol` (core, ~20 components) vs. `otelcol-contrib` (200+ components) vs. custom builds with `ocb` (OpenTelemetry Collector Builder)
+- **Collector distributions**: `otelcol` (core) vs. `otelcol-contrib` (200+ components) vs. custom builds with `ocb` (OpenTelemetry Collector Builder)
 - **Key processors**: `batch`, `memory_limiter`, `filter`, `attributes`, `resource`, `tail_sampling`, `transform`
 - **Connector component**: Connects two pipelines (e.g., `spanmetrics` connector generates RED metrics from traces)
+- **OTLP protocol**: gRPC and HTTP/protobuf transports
+- **OTel Operator for Kubernetes**: Auto-instrumentation injection, Collector CRD management
 - **Health and observability**: Collector's own metrics, `zpages` extension, health check extension
 
 ---
@@ -203,13 +164,13 @@ This is where KubeDojo's biggest gap lies. The following require dedicated modul
 | [Tracing](../../platform/toolkits/observability/module-1.5-tracing.md) | Jaeger/Tempo as OTel trace backends | Partial |
 | [Continuous Profiling](../../platform/toolkits/observability/module-1.9-continuous-profiling.md) | Profiling signal (newest addition) | Partial |
 
-### Key Exam Topics Not Yet Covered
+### Key Exam Topics — Coverage Notes
 
-- **Signal maturity model**: Experimental -> Alpha -> Beta -> Stable — know which signals are at which level
-- **OTLP protocol details**: gRPC and HTTP/protobuf transports, OTLP/JSON for debugging
-- **OpenTelemetry Operator for Kubernetes**: Auto-instrumentation injection, Collector CRD management
-- **Community structure**: SIGs, language SIGs, Collector SIG, specification process
-- **Compatibility guarantees**: What "stable" means for API vs. SDK vs. Collector components
+- **OTLP protocol details** — Covered in [OTel Collector Advanced](module-2-otel-collector-advanced.md) (gRPC, HTTP/protobuf transports, OTLP/JSON)
+- **OpenTelemetry Operator for Kubernetes** — Covered in [OTel Collector Advanced](module-2-otel-collector-advanced.md) (auto-instrumentation injection, Collector CRD)
+- **Signal maturity model** — Supplement with the [OTel status page](https://opentelemetry.io/status/); traces/metrics/logs = stable, profiling = development
+- **Community structure** — SIGs, language SIGs, Collector SIG, specification process; review [OTel community docs](https://opentelemetry.io/community/)
+- **Compatibility guarantees** — What "stable" means for API vs. SDK vs. Collector components; review [OTel versioning spec](https://opentelemetry.io/docs/specs/otel/versioning-and-stability/)
 
 ---
 
@@ -265,26 +226,24 @@ Week 5: Ecosystem + Review (Domain 4 — 10%)
 
 ## Gap Analysis
 
-KubeDojo's existing observability modules provide a strong foundation for Domains 1 and 4, but significant gaps exist for Domains 2 and 3 which together represent **72% of the exam**.
+KubeDojo's observability modules plus the two dedicated OTCA modules now provide comprehensive coverage across all four domains.
 
 | Topic | Status | Notes |
 |-------|--------|-------|
 | Three pillars / observability theory | Covered | Existing foundation modules 3.1-3.4 |
-| Semantic conventions | Not covered | Need dedicated content on OTel semconv |
-| TracerProvider / MeterProvider pipelines | Not covered | Critical gap — 46% of exam |
-| Span processors (Simple vs. Batch) | Not covered | Must-know for Domain 2 |
-| Sampling strategies (head vs. tail) | Not covered | Must-know for Domain 2 |
-| Context propagation internals | Partially covered | Tracing module covers basics, need depth |
-| Metric instruments (sync vs. async) | Not covered | Counter, Histogram, Gauge details |
-| Exemplars | Not covered | Links metrics to traces |
-| Collector configuration deep dive | Partially covered | OTel module covers basics, need pipeline detail |
-| Collector deployment patterns | Partially covered | Agent vs. gateway trade-offs needed |
-| Collector connectors | Not covered | New component type (spanmetrics) |
-| OTLP protocol details | Not covered | gRPC vs. HTTP transports |
-| OTel Operator for Kubernetes | Not covered | Auto-instrumentation injection |
-| Signal maturity levels | Not covered | Which signals are stable/beta/experimental |
-
-**Planned**: Dedicated OTCA modules covering SDK pipelines (Domain 2) and advanced Collector configuration (Domain 3) to bring coverage to ~90%.
+| Semantic conventions | Covered | [OTel SDK Deep Dive](module-1-otel-sdk-deep-dive.md) |
+| TracerProvider / MeterProvider pipelines | Covered | [OTel SDK Deep Dive](module-1-otel-sdk-deep-dive.md) |
+| Span processors (Simple vs. Batch) | Covered | [OTel SDK Deep Dive](module-1-otel-sdk-deep-dive.md) |
+| Sampling strategies (head vs. tail) | Covered | [OTel SDK Deep Dive](module-1-otel-sdk-deep-dive.md) |
+| Context propagation internals | Covered | [OTel SDK Deep Dive](module-1-otel-sdk-deep-dive.md) |
+| Metric instruments (sync vs. async) | Covered | [OTel SDK Deep Dive](module-1-otel-sdk-deep-dive.md) |
+| Exemplars | Covered | [OTel SDK Deep Dive](module-1-otel-sdk-deep-dive.md) |
+| Collector configuration deep dive | Covered | [OTel Collector Advanced](module-2-otel-collector-advanced.md) |
+| Collector deployment patterns | Covered | [OTel Collector Advanced](module-2-otel-collector-advanced.md) |
+| Collector connectors | Covered | [OTel Collector Advanced](module-2-otel-collector-advanced.md) |
+| OTLP protocol details | Covered | [OTel Collector Advanced](module-2-otel-collector-advanced.md) |
+| OTel Operator for Kubernetes | Covered | [OTel Collector Advanced](module-2-otel-collector-advanced.md) |
+| Signal maturity levels | Minor gap | Review [OTel status page](https://opentelemetry.io/status/) for current signal maturity levels |
 
 ---
 
