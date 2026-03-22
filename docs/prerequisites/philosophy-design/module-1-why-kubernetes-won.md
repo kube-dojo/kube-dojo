@@ -10,7 +10,9 @@
 
 ## Why This Module Matters
 
-Before learning Kubernetes, you should understand *why* it exists and *why* it dominates. This isn't just history—it's context that will help you understand design decisions throughout your learning journey.
+It was 3 AM on Black Friday 2014. A developer at a fast-growing e-commerce startup stared at 47 terminal windows, each SSH'd into a different server. Their flash sale had gone viral — 10x the expected traffic. Docker containers were crashing faster than he could restart them. "Scale up server 23... no wait, 23 is full, try 31... 31 is down, when did that happen?" By 4 AM, the site was offline. By Monday, the CEO was asking why they'd lost $340,000 in sales.
+
+That developer's nightmare is exactly why Kubernetes exists. Not as an academic exercise, not as a Google vanity project — but because **manually managing containers at scale is a problem that will eat you alive.**
 
 Kubernetes didn't win by accident. Understanding the orchestration wars helps you appreciate why certain patterns exist and why alternatives failed.
 

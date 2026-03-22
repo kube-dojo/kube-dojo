@@ -10,7 +10,9 @@
 
 ## Why This Module Matters
 
-The declarative model is Kubernetes' most important design decision. Every Kubernetes concept—Deployments, Services, ConfigMaps—builds on this foundation.
+The on-call engineer at a SaaS company got paged at 2 AM — a critical pod was crash-looping. Half-asleep, she SSH'd into the node and manually restarted the container. Problem solved, back to sleep. Except Kubernetes immediately killed her manually-started container and replaced it with a new one — which also crash-looped. She restarted it again. Kubernetes killed it again. For 45 minutes, she fought the system, not realizing that **Kubernetes wasn't broken — she was thinking imperatively in a declarative world.**
+
+The moment she updated the Deployment YAML to fix the actual configuration issue and ran `kubectl apply`, the system healed itself in 12 seconds. That's the difference between imperative and declarative thinking — and it's the single most important concept in Kubernetes.
 
 If you understand declarative thinking, Kubernetes makes sense. If you don't, you'll fight the system instead of using it.
 

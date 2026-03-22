@@ -10,12 +10,9 @@
 
 ## Why This Module Matters
 
-KubeDojo is focused on Kubernetes certifications. That means we make deliberate choices about what to include and exclude. Understanding these choices helps you:
+Here's a secret that paid certification courses won't tell you: **you can waste 100+ hours studying topics that will never appear on the exam.** We've seen it happen — engineers spending weeks deep-diving into etcd internals or building custom CNI plugins, only to discover the CKA doesn't test any of it.
 
-1. Set realistic expectations
-2. Know where to look for topics we skip
-3. Understand our teaching philosophy
-4. Make informed decisions about your learning path
+KubeDojo is surgical about what we teach. Every module exists because it either appears on the exam or is essential for understanding something that does. This module tells you exactly what we skip and why — so you don't waste a single hour on the wrong thing.
 
 ---
 

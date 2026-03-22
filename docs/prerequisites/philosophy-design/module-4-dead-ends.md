@@ -10,12 +10,9 @@
 
 ## Why This Module Matters
 
-In technology, knowing what NOT to learn is as important as knowing what to learn. Time spent on deprecated, abandoned, or dying technologies is time wasted.
+In 2018, a Fortune 500 retailer bet $2.3 million on Apache Mesos as their container platform. They hired a team of 8 Mesos specialists, built custom frameworks, and deployed 200+ services. By 2020, Mesos was effectively dead — the Apache Foundation moved it to the attic. The entire platform had to be rebuilt on Kubernetes. Two years of work, discarded. The engineers' Mesos expertise? Worthless on the job market overnight.
 
-This module explains technologies that were once relevant but are now dead ends. Understanding *why* they failed helps you:
-1. Avoid wasting time on outdated approaches
-2. Recognize similar patterns in future technology choices
-3. Appreciate why Kubernetes does things the way it does
+In technology, knowing what **NOT** to learn is as important as knowing what to learn. This module is a tour of the technology graveyard — not to mock the dead, but to help you recognize the warning signs so you never bet your career on the next Mesos.
 
 ---
 
