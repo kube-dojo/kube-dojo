@@ -1,6 +1,6 @@
 # Networking Toolkit
 
-> **Toolkit Track** | 2 Modules | ~2 hours total
+> **Toolkit Track** | 5 Modules | ~4.5 hours total
 
 ## Overview
 
@@ -24,6 +24,10 @@ Before starting this toolkit:
 | 5.2 | [Service Mesh](module-5.2-service-mesh.md) | `[COMPLEX]` | 50-60 min |
 | 5.3 | [DNS Deep Dive](module-5.3-dns-deep-dive.md) | `[MEDIUM]` | 40 min |
 | 5.4 | [MetalLB](module-5.4-metallb.md) | `[MEDIUM]` | 35 min |
+| 5.5 | [Flannel](module-5.5-flannel.md) | `[MEDIUM]` | 45-50 min |
+| 5.6 | [Calico](module-5.6-calico.md) | `[COMPLEX]` | 55-65 min |
+| 5.7 | [kube-router](module-5.7-kube-router.md) | `[MEDIUM]` | 40-45 min |
+| 5.8 | [Multus](module-5.8-multus.md) | `[MEDIUM]` | 40-45 min |
 
 ## Learning Outcomes
 
@@ -34,6 +38,7 @@ After completing this toolkit, you will be able to:
 3. **Observe network traffic** — Hubble for flow visibility
 4. **Understand service mesh** — When to use Istio/Linkerd and when not to
 5. **Configure mTLS** — Zero-trust service-to-service communication
+6. **Deploy Calico** — BGP networking, policy tiers, WireGuard encryption, IPAM
 
 ## Tool Selection Guide
 
@@ -175,6 +180,7 @@ No traffic mgmt  Basic             Basic             Advanced
 |--------|--------------|
 | Cilium | Deploy CNI, implement network policies, use Hubble |
 | Service Mesh | Deploy Istio, enable mTLS, traffic routing |
+| Calico | Deploy Calico on kind, tiered policies, BGP peering |
 
 ## Related Tracks
 
