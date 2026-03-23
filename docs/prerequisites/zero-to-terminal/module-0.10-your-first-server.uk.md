@@ -63,19 +63,30 @@
 
 Цей варіант використовує **Docker** — інструмент, що запускає застосунки в ізольованих «контейнерах». Вам не потрібно глибоко розуміти Docker зараз (це тема Cloud Native 101). Наразі просто уявіть, що це спосіб запустити програму, не встановлюючи її на постійно на вашу машину.
 
-### Крок 1: Встановіть Docker
+### Крок 1: Встановіть середовище для контейнерів
 
-Якщо у вас ще не встановлений Docker:
+Вам потрібен інструмент для запуску контейнерів. Оберіть **будь-який** з цих — всі працюють однаково для нашої вправи:
 
-- **macOS**: Завантажте [Docker Desktop](https://www.docker.com/products/docker-desktop/) і встановіть
-- **Windows**: Завантажте [Docker Desktop](https://www.docker.com/products/docker-desktop/) і встановіть
+| Інструмент | Найкраще для | Ліцензія |
+|------------|-------------|----------|
+| [Docker Desktop](https://www.docker.com/products/docker-desktop/) | Найпопулярніший, найбільша спільнота | Безкоштовний для особистого використання |
+| [Podman Desktop](https://podman-desktop.io/) | Без демона, безпечніший за замовчуванням | Вільне ПЗ |
+| [Rancher Desktop](https://rancherdesktop.io/) | Включає K8s з коробки | Вільне ПЗ |
+
+- **macOS/Windows**: Завантажте та встановіть будь-який з наведених вище
 - **Linux**:
   ```bash
+  # Варіант A: Docker
   sudo apt update && sudo apt install docker.io -y
   sudo systemctl start docker
   sudo usermod -aG docker $USER
+
+  # Варіант B: Podman (без демона, без root)
+  sudo apt update && sudo apt install podman -y
   ```
-  (Вийдіть і зайдіть знову після виконання цих команд.)
+  (Якщо обрали Docker, вийдіть і зайдіть знову після команди usermod.)
+
+> **Примітка**: Якщо встановили Podman, команди ідентичні — просто пишіть `podman` замість `docker`. Можна навіть створити аліас: `alias docker=podman`
 
 Перевірте, що Docker працює:
 

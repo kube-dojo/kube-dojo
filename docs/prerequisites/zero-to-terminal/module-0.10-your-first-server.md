@@ -63,19 +63,30 @@ In our restaurant kitchen analogy: nginx is the **waiter**. It takes orders (HTT
 
 This option uses **Docker** -- a tool that runs applications in isolated "containers." You don't need to understand Docker deeply right now (that's what Cloud Native 101 is for). For now, just think of it as a way to run a program without installing it permanently on your machine.
 
-### Step 1: Install Docker
+### Step 1: Install a Container Runtime
 
-If you don't already have Docker installed:
+You need a tool to run containers. Pick **any one** of these — they all work the same way for our exercise:
 
-- **macOS**: Download [Docker Desktop](https://www.docker.com/products/docker-desktop/) and install it
-- **Windows**: Download [Docker Desktop](https://www.docker.com/products/docker-desktop/) and install it
+| Tool | Best for | License |
+|------|----------|---------|
+| [Docker Desktop](https://www.docker.com/products/docker-desktop/) | Most popular, biggest community | Free for personal/small business |
+| [Podman Desktop](https://podman-desktop.io/) | No daemon, rootless by default | Free and open source |
+| [Rancher Desktop](https://rancherdesktop.io/) | Includes K8s built-in | Free and open source |
+
+- **macOS/Windows**: Download and install any of the above
 - **Linux**:
   ```bash
+  # Option A: Docker
   sudo apt update && sudo apt install docker.io -y
   sudo systemctl start docker
   sudo usermod -aG docker $USER
+
+  # Option B: Podman (no daemon, no root needed)
+  sudo apt update && sudo apt install podman -y
   ```
-  (Log out and back in after running these commands.)
+  (If using Docker, log out and back in after the usermod command.)
+
+> **Note**: If you install Podman, the commands are identical — just type `podman` instead of `docker`. You can even alias it: `alias docker=podman`
 
 Verify Docker is working:
 
