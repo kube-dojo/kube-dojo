@@ -23,9 +23,9 @@ The KCNA is a **multiple-choice exam** (not hands-on) that validates foundationa
 | [Part 0](part0-introduction/) | Introduction | - | 2 |
 | [Part 1](part1-kubernetes-fundamentals/) | Kubernetes Fundamentals | 44% | 8 |
 | [Part 2](part2-container-orchestration/) | Container Orchestration | 28% | 4 |
-| [Part 3](part3-cloud-native-architecture/) | Cloud Native Architecture | 12% | 5 |
+| [Part 3](part3-cloud-native-architecture/) | Cloud Native Architecture | 12% | 8 |
 | [Part 4](part4-application-delivery/) | Application Delivery | 16% | 2 |
-| **Total** | | **100%** | **21** |
+| **Total** | | **100%** | **24** |
 
 ## Module Overview
 
@@ -49,7 +49,7 @@ The KCNA is a **multiple-choice exam** (not hands-on) that validates foundationa
 - [2.3 Storage](part2-container-orchestration/module-2.3-storage.md) - PV, PVC, StorageClass
 - [2.4 Configuration](part2-container-orchestration/module-2.4-configuration.md) - ConfigMaps and Secrets
 
-### Part 3: Cloud Native Architecture (5 modules) — 12%
+### Part 3: Cloud Native Architecture (8 modules) — 12%
 *Includes Observability (merged November 2025)*
 
 - [3.1 Cloud Native Principles](part3-cloud-native-architecture/module-3.1-cloud-native-principles.md) - 12-factor apps
@@ -57,6 +57,9 @@ The KCNA is a **multiple-choice exam** (not hands-on) that validates foundationa
 - [3.3 Cloud Native Patterns](part3-cloud-native-architecture/module-3.3-patterns.md) - Service mesh, GitOps
 - [3.4 Observability Fundamentals](part3-cloud-native-architecture/module-3.4-observability-fundamentals.md) - Metrics, logs, traces
 - [3.5 Observability Tools](part3-cloud-native-architecture/module-3.5-observability-tools.md) - Prometheus, Grafana, Jaeger
+- [3.8 AI/ML in Cloud Native](part3-cloud-native-architecture/module-3.8-ai-ml-cloud-native.md) - AI/LLM workloads, GPU scheduling, model serving
+- [3.9 WebAssembly](part3-cloud-native-architecture/module-3.9-webassembly.md) - Wasm as container alternative, WASI, SpinKube
+- [3.10 Green Computing & Sustainability](part3-cloud-native-architecture/module-3.10-green-computing.md) - Carbon-aware scheduling, resource efficiency
 
 ### Part 4: Application Delivery (2 modules) — 16%
 - [4.1 CI/CD Fundamentals](part4-application-delivery/module-4.1-ci-cd.md) - Pipelines and deployment
@@ -87,7 +90,7 @@ The November 2025 KCNA curriculum update introduced several emerging topics that
 - **WebAssembly (Wasm)** — Wasm as a lightweight alternative to containers, WASI, SpinKube
 - **Green Computing** — Carbon-aware scheduling, resource efficiency, sustainability in cloud native
 
-These topics represent a small percentage of questions but signal where the cloud native ecosystem is heading. KubeDojo does not yet have dedicated modules for these areas.
+These topics represent a small percentage of questions but signal where the cloud native ecosystem is heading. See Modules 3.8-3.10 above.
 
 ## Study Tips
 

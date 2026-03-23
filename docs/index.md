@@ -136,11 +136,11 @@ No paywalls. No upsells. Theory-first.
 | Track | Modules | Status |
 |-------|---------|--------|
 | [Zero to Terminal](prerequisites/zero-to-terminal/README.md) | 10 | ✅ Complete (absolute beginners) |
-| [Prerequisites](prerequisites/README.md) | 23 | ✅ Complete |
+| [Prerequisites](prerequisites/README.md) | 33 | ✅ Complete |
 | [CKA](k8s/cka/README.md) | 41 | ✅ Complete (K8s 1.35) |
 | [CKAD](k8s/ckad/README.md) | 24 | ✅ Complete (K8s 1.35) |
 | [CKS](k8s/cks/README.md) | 30 | ✅ Complete (K8s 1.34) |
-| [KCNA](k8s/kcna/README.md) | 25 | ✅ Complete |
+| [KCNA](k8s/kcna/README.md) | 28 | ✅ Complete |
 | [KCSA](k8s/kcsa/README.md) | 26 | ✅ Complete |
 | [CNPE](k8s/cnpe/README.md) | Learning Path | ✅ Maps 60+ modules |
 | [CBA](k8s/cba/README.md) | Learning Path | ✅ Backstage cert prep |
@@ -154,7 +154,7 @@ No paywalls. No upsells. Theory-first.
 | [CNPA](k8s/cnpa/README.md) | Learning Path | ✅ Platform Associate prep |
 | [LFCS](k8s/lfcs/README.md) | Learning Path | ✅ Linux Sysadmin cert prep |
 | [FinOps](k8s/finops/README.md) | Learning Path | ✅ FinOps Practitioner prep |
-| [Linux Deep Dive](linux/README.md) | 30 | ✅ Complete |
+| [Linux Deep Dive](linux/README.md) | 34 | ✅ Complete |
 | [Platform Engineering](platform/README.md) | 154 | ✅ Complete |
 | **Total** | **410+** | |
 

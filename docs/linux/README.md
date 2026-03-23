@@ -23,13 +23,16 @@ linux/
 ├── security/                 # Linux security
 │   └── hardening/               # sysctl, AppArmor, SELinux, seccomp
 │
+├── sysadmin/                # System administration
+│   └── sysadmin/                # Storage, networking, packages, scheduling
+│
 └── operations/               # SRE/DevOps skills
     ├── performance/             # USE method, CPU, memory, I/O
     ├── troubleshooting/         # Systematic debugging, logs, process, network
     └── shell-scripting/         # Bash, text processing, practical automation
 ```
 
-**Total: 28 modules**
+**Total: 34 modules**
 
 ---
 
@@ -70,6 +73,16 @@ linux/
 | [4.2 AppArmor Profiles](security/hardening/module-4.2-apparmor.md) | MAC, profile modes, K8s integration | 30-35 min |
 | [4.3 SELinux Contexts](security/hardening/module-4.3-selinux.md) | Policies, contexts, troubleshooting | 35-40 min |
 | [4.4 seccomp Profiles](security/hardening/module-4.4-seccomp.md) | System call filtering, custom profiles | 25-30 min |
+
+### Then: System Administration (4 modules)
+
+#### 8. System Administration
+| Module | Description | Time |
+|--------|-------------|------|
+| [8.1 Storage Management](operations/module-8.1-storage-management.md) | LVM, RAID, NFS | 30-35 min |
+| [8.2 Network Administration](operations/module-8.2-network-administration.md) | firewalld, bonding, chrony | 30-35 min |
+| [8.3 Package & User Management](operations/module-8.3-package-user-management.md) | apt/dnf, useradd/visudo | 25-30 min |
+| [8.4 Scheduling & Backups](operations/module-8.4-scheduling-backups.md) | cron, tar, rsync | 25-30 min |
 
 ### Then: Operations (12 modules)
 
@@ -150,6 +163,9 @@ After completing this track, you'll be ready for:
 
 ### Security
 - [ ] Hardening (4 modules)
+
+### System Administration
+- [ ] System Administration (4 modules)
 
 ### Operations
 - [ ] Performance (4 modules)
