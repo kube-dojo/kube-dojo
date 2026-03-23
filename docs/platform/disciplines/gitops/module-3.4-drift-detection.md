@@ -822,6 +822,12 @@ Document the drift response process:
 
 ---
 
+## Related Modules
+
+> **IaC Drift**: For IaC-specific drift remediation (Terraform state, CloudFormation drift), see [IaC Drift Remediation](../../disciplines/iac/module-6.5-drift-remediation.md).
+
+---
+
 ## Further Reading
 
 **Documentation**:

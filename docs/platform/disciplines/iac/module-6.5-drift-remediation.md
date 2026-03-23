@@ -1170,6 +1170,12 @@ chmod +x detect-drift.sh
 
 ---
 
+## Related Modules
+
+> **GitOps Drift**: For GitOps-specific drift detection (ArgoCD sync, Flux reconciliation), see [GitOps Drift Detection](../../disciplines/gitops/module-3.4-drift-detection.md).
+
+---
+
 ## Next Module
 
 Continue to [Module 6.6: IaC Cost Management](module-6.6-iac-cost-management.md) to learn how to estimate, track, and optimize infrastructure costs directly in your Terraform workflow.

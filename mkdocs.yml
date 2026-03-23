@@ -593,6 +593,7 @@ nav:
       - platform/toolkits/scaling-reliability/module-6.3-velero.md
       - platform/toolkits/scaling-reliability/module-6.4-finops-opencost.md
       - platform/toolkits/scaling-reliability/module-6.5-chaos-engineering.md
+      - platform/toolkits/scaling-reliability/module-6.6-knative.md
     - Platforms:
       - platform/toolkits/platforms/README.md
       - platform/toolkits/platforms/module-7.1-backstage.md
