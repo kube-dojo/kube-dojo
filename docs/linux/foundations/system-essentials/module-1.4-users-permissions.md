@@ -117,6 +117,44 @@ id ubuntu
 | 65534 | nobody | Minimal privilege user |
 | 1000+ | Regular | Human users |
 
+### Managing Users and Groups
+
+Now that you understand the concepts, here are the essential commands for managing users and groups. (For advanced options like password aging, account expiry, and skeleton directories, see Module 8.3.)
+
+```bash
+# Create a user with home directory and bash shell
+sudo useradd -m -s /bin/bash newuser
+
+# Set or change a user's password
+sudo passwd newuser
+
+# Add user to a supplementary group (without removing existing groups)
+sudo usermod -aG docker newuser
+
+# Change a user's default shell
+sudo usermod -s /bin/zsh newuser
+
+# Delete a user and their home directory
+sudo userdel -r newuser
+```
+
+```bash
+# Create a group
+sudo groupadd developers
+
+# Delete a group
+sudo groupdel developers
+
+# Check a user's UID, GID, and all group memberships
+id newuser
+# Output: uid=1001(newuser) gid=1001(newuser) groups=1001(newuser),998(docker)
+
+# List just group names
+groups newuser
+```
+
+> **Key flags to remember**: `useradd -m` creates the home directory, `-s` sets the shell, and `usermod -aG` **appends** to groups. Without `-a`, `usermod -G` **replaces** all supplementary groups — a common and dangerous mistake.
+
 ---
 
 ## File Permissions
