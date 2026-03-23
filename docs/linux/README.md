@@ -32,7 +32,7 @@ linux/
     └── shell-scripting/         # Bash, text processing, practical automation
 ```
 
-**Total: 34 modules**
+**Total: 32 modules**
 
 ---
 

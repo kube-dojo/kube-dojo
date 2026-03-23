@@ -154,8 +154,8 @@ No paywalls. No upsells. Theory-first.
 | [CNPA](k8s/cnpa/README.md) | Learning Path | ✅ Platform Associate prep |
 | [LFCS](k8s/lfcs/README.md) | Learning Path | ✅ Linux Sysadmin cert prep |
 | [FinOps](k8s/finops/README.md) | Learning Path | ✅ FinOps Practitioner prep |
-| [Linux Deep Dive](linux/README.md) | 34 | ✅ Complete |
-| [Platform Engineering](platform/README.md) | 154 | ✅ Complete |
+| [Linux Deep Dive](linux/README.md) | 32 | ✅ Complete |
+| [Platform Engineering](platform/README.md) | 159 | ✅ Complete |
 | **Total** | **410+** | |
 
 ---
