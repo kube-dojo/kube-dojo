@@ -6,7 +6,7 @@
 
 The CGOA (Certified GitOps Associate) validates your understanding of GitOps principles, patterns, and related practices. It's a **theory exam** — multiple-choice questions, no terminal access. Think of it as "KCNA for GitOps."
 
-**KubeDojo covers ~70%+ of CGOA topics** through our existing Platform Engineering track. This page maps CGOA domains to existing modules so you can prepare efficiently.
+**KubeDojo covers ~90%+ of CGOA topics** through our existing Platform Engineering track. This page maps CGOA domains to existing modules so you can prepare efficiently.
 
 > **Good news**: If you've already worked through our GitOps discipline and toolkits, you've covered the hardest parts. This exam tests understanding of concepts, not hands-on skills — but our hands-on modules give you the deep understanding that makes theory questions easy.
 

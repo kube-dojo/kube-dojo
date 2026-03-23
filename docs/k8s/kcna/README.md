@@ -79,6 +79,16 @@ The KCNA is a **multiple-choice exam** (not hands-on) that validates foundationa
 | Difficulty | Entry-level | Professional |
 | Kubernetes access | None | Full cluster |
 
+## Gap Analysis (Nov 2025 Update)
+
+The November 2025 KCNA curriculum update introduced several emerging topics that are minor exam areas but worth being aware of:
+
+- **AI/LLM Workloads on Kubernetes** — Running inference and training workloads, GPU scheduling, model serving
+- **WebAssembly (Wasm)** — Wasm as a lightweight alternative to containers, WASI, SpinKube
+- **Green Computing** — Carbon-aware scheduling, resource efficiency, sustainability in cloud native
+
+These topics represent a small percentage of questions but signal where the cloud native ecosystem is heading. KubeDojo does not yet have dedicated modules for these areas.
+
 ## Study Tips
 
 - **Understand, don't memorize** - The exam tests concepts

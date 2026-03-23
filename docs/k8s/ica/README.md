@@ -6,7 +6,7 @@
 
 The ICA (Istio Certified Associate) validates your ability to install, configure, and operate Istio service mesh in Kubernetes environments. It's a **hands-on exam** — you'll configure real Istio resources on live clusters, not answer multiple-choice questions.
 
-**KubeDojo covers ~70% of ICA topics** through existing modules plus this dedicated ICA track. This page maps ICA domains to all relevant content.
+**KubeDojo covers ~90%+ of ICA topics** through existing modules plus this dedicated ICA track with 4 modules covering all domains. This page maps ICA domains to all relevant content.
 
 > **Why ICA matters**: Istio is the most widely deployed service mesh. As microservice architectures grow, service mesh skills become essential for traffic management, security (mTLS), and observability. ICA proves you can actually do the work, not just talk about it.
 

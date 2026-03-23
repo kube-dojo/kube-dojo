@@ -79,7 +79,7 @@ The LFCS is a **performance-based (hands-on) exam** that validates practical Lin
 
 ### Domain 4: Networking (25%)
 
-**Coverage: Partial** — TCP/IP and DNS are solid. Firewall configuration, NAT, bonding are gaps.
+**Coverage: Good** — TCP/IP and DNS are solid. Firewall configuration, NAT, and bonding are now covered by module 8.2.
 
 | LFCS Topic | KubeDojo Module | Status |
 |-----------|-----------------|--------|
