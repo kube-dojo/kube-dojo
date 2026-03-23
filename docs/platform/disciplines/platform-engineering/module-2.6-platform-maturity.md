@@ -655,6 +655,116 @@ Overall: 2.3 → 3.75 (Strong Level 3, approaching Level 4)
 
 ---
 
+## Transitioning Between Maturity Levels
+
+Knowing your current level is step one. Knowing how to move up is where organizations get stuck. Each transition has specific readiness signals, common blockers, and realistic timelines.
+
+### Transition Readiness Checklist
+
+**Provisional (Level 1) to Operational (Level 2)**
+
+Timeline expectation: 3-6 months
+
+```
+Readiness signals (you're ready to move when):
+  ✓ A dedicated platform owner or team exists (even 1-2 people)
+  ✓ At least one workflow is documented end-to-end
+  ✓ One golden path exists and a pilot team is using it
+  ✓ Basic CI/CD pipeline runs without manual intervention
+  ✓ You can answer "how do we deploy?" without naming a specific person
+
+Common blockers at this transition:
+  ✗ No executive sponsor — platform work competes with feature work
+  ✗ Hero culture — "John is faster than any tool" resistance
+  ✗ Scope creep — trying to solve everything at once instead of one golden path
+  ✗ No time allocated — platform work treated as side project
+
+Key metrics indicating readiness:
+  • At least 2 teams use the golden path for new services
+  • "How do I deploy?" questions reduced by 50%
+  • Platform team spends <40% of time on firefighting
+```
+
+**Operational (Level 2) to Scalable (Level 3)**
+
+Timeline expectation: 6-12 months
+
+```
+Readiness signals (you're ready to move when):
+  ✓ >60% of teams voluntarily use the platform for standard workloads
+  ✓ Developer portal exists with a service catalog
+  ✓ Self-service works for the 3 most common provisioning requests
+  ✓ Platform SLOs are defined and tracked monthly
+  ✓ Support ticket volume is stable or declining (not growing with adoption)
+  ✓ New developers can deploy on their first week
+
+Common blockers at this transition:
+  ✗ Golden paths only cover one stack — teams with different needs bypass the platform
+  ✗ No migration path for existing services — only new services can adopt
+  ✗ Platform team is still reactive — backlog grows faster than capacity
+  ✗ Measurement gap — nobody tracks adoption or satisfaction systematically
+
+Key metrics indicating readiness:
+  • >80% of new services created via golden paths
+  • Time to first deploy < 1 day
+  • Support ticket volume decreasing month-over-month
+  • Platform NPS measured and trending positive (>+20)
+```
+
+**Scalable (Level 3) to Optimized (Level 4)**
+
+Timeline expectation: 9-18 months
+
+```
+Readiness signals (you're ready to move when):
+  ✓ >80% of all teams (not just new services) use the platform voluntarily
+  ✓ Platform ROI is quantifiable — you can state cost savings or velocity gains
+  ✓ Security and compliance policies are enforced via guardrails, not tickets
+  ✓ Platform improvements are prioritized by measured developer impact
+  ✓ Executive sponsor actively advocates for platform investment
+  ✓ Platform team operates as a product team with a roadmap and release cycle
+
+Common blockers at this transition:
+  ✗ ROI is assumed, not measured — leadership patience runs out
+  ✗ Legacy services remain off-platform — creates two worlds to support
+  ✗ Guardrails feel like gates — developers see the platform as bureaucracy
+  ✗ Organization structure hasn't evolved — one small team can't manage a strategic asset
+
+Key metrics indicating readiness:
+  • Platform ROI demonstrated in business terms (dollars saved, velocity gained)
+  • Security/compliance violations prevented proactively (not detected after the fact)
+  • Deployment frequency is continuous for platform-adopting teams
+  • Platform team spends >70% of time on improvements, <30% on support
+```
+
+### Transition Timeline Summary
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                 REALISTIC TRANSITION TIMELINES                    │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  Provisional ──(3-6 mo)──▶ Operational ──(6-12 mo)──▶ Scalable │
+│     Level 1                   Level 2                  Level 3   │
+│                                                          │       │
+│                                              (9-18 mo)   │       │
+│                                                          ▼       │
+│                                                      Optimized   │
+│                                                       Level 4    │
+│                                                                  │
+│  Total journey from Level 1 to Level 4: 18-36 months            │
+│  (Most organizations stabilize at Level 3, and that's fine)     │
+│                                                                  │
+│  WARNING: These timelines assume dedicated resources.            │
+│  Part-time platform work doubles or triples each estimate.      │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+> **Tip**: Don't treat these transitions as gates you pass through once. It's normal to slide back a level during periods of rapid growth or team turnover. Re-assess quarterly, and treat regression as a signal to reinvest — not as failure.
+
+---
+
 ## Anti-Patterns and Pitfalls
 
 ### Anti-Pattern 1: Maturity Theater

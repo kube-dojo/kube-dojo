@@ -452,6 +452,101 @@ We apologize for the inconvenience.
 - Acknowledge customer impact
 - Avoid blame or technical jargon
 
+### Communication Protocols for Major Incidents
+
+During a major incident, unstructured communication causes almost as much damage as the outage itself. These protocols keep everyone informed without overwhelming responders.
+
+**Communication Cadence by Severity:**
+
+| Severity | Internal Update Cadence | Status Page Cadence | Leadership Notification |
+|----------|------------------------|--------------------|-----------------------|
+| SEV-1 | Every 15 minutes | Every 15 minutes | Immediately, then every 30 min |
+| SEV-2 | Every 30 minutes | Every 30 minutes | Within 30 min, then hourly |
+| SEV-3 | Every 60 minutes | As status changes | Daily summary if prolonged |
+| SEV-4 | As status changes | Not required | Not required |
+
+Even if nothing has changed, post an update. Silence breeds anxiety and speculation.
+
+**Stakeholder Notification Tiers:**
+
+```
+Tier 1: Engineering (immediate)
+  └── On-call team, incident responders, relevant SMEs
+  └── Notified via: PagerDuty, incident Slack channel
+
+Tier 2: Engineering Management (within 15 min for SEV-1)
+  └── Engineering managers, directors of affected services
+  └── Notified via: Slack, email
+
+Tier 3: Executives (within 30 min for SEV-1)
+  └── VP Engineering, CTO, CEO (for customer-facing SEV-1)
+  └── Notified via: SMS, phone call, email
+  └── They need: impact scope, ETA, whether customers are affected
+
+Tier 4: Customers (within 30-60 min for SEV-1)
+  └── Via status page, in-app banner, email for affected accounts
+  └── They need: what's broken, workarounds, when it will be fixed
+```
+
+**Communication Templates:**
+
+Use these as starting points. The Comms Lead fills in the brackets and posts.
+
+```
+INITIAL NOTIFICATION (internal):
+"[SEVERITY] incident declared. [SERVICE] is [IMPACT DESCRIPTION].
+Approximately [NUMBER/PERCENTAGE] of users affected.
+IC: @[NAME] | Tech Lead: @[NAME] | Comms: @[NAME]
+Incident channel: #incident-[DATE]-[SHORT-NAME]
+Next update in [15/30] minutes."
+
+STATUS UPDATE (internal, use at each cadence interval):
+"Update [NUMBER] — [TIME]
+Current status: [investigating / identified / fix in progress / monitoring]
+What we know: [1-2 sentences]
+What we're doing: [current action]
+ETA to resolution: [estimate or 'unknown']
+Next update in [15/30] minutes."
+
+STATUS PAGE UPDATE (external, customer-facing):
+"We are aware of an issue affecting [SERVICE/FEATURE].
+Impact: [PLAIN-LANGUAGE DESCRIPTION of what users experience].
+Our team is actively working on a resolution.
+ETA: [estimate or 'We will provide an update by TIME'].
+We apologize for the inconvenience."
+
+RESOLUTION NOTIFICATION (external):
+"The issue affecting [SERVICE] has been resolved as of [TIME].
+Duration: [START] to [END].
+[Brief root cause in plain language, no internal jargon].
+[Any actions customers need to take, e.g., retry failed transactions].
+We apologize for the disruption and are taking steps to prevent recurrence."
+```
+
+**War Room / Bridge Call Protocols:**
+
+For SEV-1 incidents, a bridge call (video or voice) keeps responders aligned.
+
+| Rule | Why |
+|------|-----|
+| IC opens and runs the bridge | Single point of coordination |
+| Mute when not speaking | Reduce noise so updates are heard |
+| Tech Lead gives status every 15 min | Keeps IC informed without IC asking repeatedly |
+| Non-responders stay off the bridge | Too many people creates chaos (use the Slack channel instead) |
+| All decisions spoken aloud and typed in channel | Creates written record, avoids "I thought we said..." |
+| Handoff protocol when IC rotates | Outgoing IC summarizes state, incoming IC confirms |
+
+**Post-Incident Customer Communication:**
+
+After resolution, customers deserve a follow-up — especially for SEV-1 and SEV-2 incidents.
+
+- **Within 24 hours**: Post a brief summary on the status page explaining what happened and what you are doing to prevent recurrence.
+- **Within 3-5 business days**: For major incidents, send a detailed post-incident report to affected customers. Include root cause, timeline, impact scope, and concrete remediation steps.
+- **Tone**: Honest, accountable, specific. Avoid vague language like "an issue occurred." Instead: "A misconfigured database failover caused payment processing to fail for 45 minutes."
+- **Don't over-promise**: Say "we are implementing X and Y to reduce the likelihood of recurrence" rather than "this will never happen again."
+
+Customers remember how you communicated during an outage more than the outage itself. Transparent, timely communication builds trust even when things break.
+
 ---
 
 ## Runbooks and Playbooks
