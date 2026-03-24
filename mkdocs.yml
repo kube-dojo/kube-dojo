@@ -246,6 +246,32 @@ nav:
     - cloud/azure-essentials/module-10-monitor.md
     - cloud/azure-essentials/module-11-cicd.md
     - cloud/azure-essentials/module-12-bicep.md
+  - Architecture Patterns:
+    - cloud/architecture-patterns/README.md
+    - cloud/architecture-patterns/module-1-managed-vs-selfmanaged.md
+    - cloud/architecture-patterns/module-2-multi-cluster.md
+    - cloud/architecture-patterns/module-3-cloud-iam.md
+    - cloud/architecture-patterns/module-4-vpc-topologies.md
+  - AWS EKS Deep Dive:
+    - cloud/eks-deep-dive/README.md
+    - cloud/eks-deep-dive/module-1-eks-architecture.md
+    - cloud/eks-deep-dive/module-2-eks-networking.md
+    - cloud/eks-deep-dive/module-3-eks-identity.md
+    - cloud/eks-deep-dive/module-4-eks-storage.md
+    - cloud/eks-deep-dive/module-5-eks-production.md
+  - GCP GKE Deep Dive:
+    - cloud/gke-deep-dive/README.md
+    - cloud/gke-deep-dive/module-1-gke-architecture.md
+    - cloud/gke-deep-dive/module-2-gke-networking.md
+    - cloud/gke-deep-dive/module-3-gke-identity.md
+    - cloud/gke-deep-dive/module-4-gke-storage.md
+    - cloud/gke-deep-dive/module-5-gke-fleet.md
+  - Azure AKS Deep Dive:
+    - cloud/aks-deep-dive/README.md
+    - cloud/aks-deep-dive/module-1-aks-architecture.md
+    - cloud/aks-deep-dive/module-2-aks-networking.md
+    - cloud/aks-deep-dive/module-3-aks-identity.md
+    - cloud/aks-deep-dive/module-4-aks-production.md
 - Certifications:
   - k8s/README.md
   - Extending Kubernetes:
