@@ -25,6 +25,7 @@ theme:
   - navigation.top
   - navigation.path
   - navigation.tracking
+  - navigation.prune
   - search.suggest
   - search.highlight
   - content.code.copy
@@ -50,18 +51,25 @@ plugins:
       nav_translations:
         Home: Головна
         What's New: Що нового
-        Prerequisites: Передумови
+        Fundamentals: Основи
         Zero to Terminal: Від нуля до терміналу
         Philosophy & Design: Філософія та дизайн
         Cloud Native 101: Cloud Native 101
         Kubernetes Basics: Основи Kubernetes
         Modern DevOps: Сучасний DevOps
-        Linux: Linux
-        Foundations: Основи
-        Security: Безпека
-        Operations: Операції
+        Linux Deep Dive: Linux поглиблено
+        System Essentials: Системні основи
+        Container Primitives: Контейнерні примітиви
+        Networking: Мережі
+        Security Hardening: Зміцнення безпеки
+        Performance: Продуктивність
+        Troubleshooting: Усунення несправностей
+        Shell Scripting: Скриптування
+        System Administration: Системне адміністрування
+        Cloud: Хмарні технології
         Certifications: Сертифікації
         Platform Engineering: Платформна інженерія
+        Foundations: Основи
         Toolkits: Інструменти
         Disciplines: Дисципліни
 markdown_extensions:
@@ -96,7 +104,7 @@ copyright: MIT License - Free to use, share, and modify
 nav:
 - Home: index.md
 - What's New: changelog.md
-- Prerequisites:
+- Fundamentals:
   - prerequisites/README.md
   - Zero to Terminal:
     - prerequisites/zero-to-terminal/README.md
@@ -137,9 +145,8 @@ nav:
     - prerequisites/modern-devops/module-4-observability.md
     - prerequisites/modern-devops/module-5-platform-engineering.md
     - prerequisites/modern-devops/module-6-devsecops.md
-- Linux:
-  - linux/README.md
-  - Foundations:
+  - Linux Deep Dive:
+    - linux/README.md
     - System Essentials:
       - linux/foundations/system-essentials/README.md
       - linux/foundations/system-essentials/module-1.1-kernel-architecture.md
@@ -158,14 +165,12 @@ nav:
       - linux/foundations/networking/module-3.2-dns-linux.md
       - linux/foundations/networking/module-3.3-network-namespaces.md
       - linux/foundations/networking/module-3.4-iptables-netfilter.md
-  - Security:
-    - Hardening:
+    - Security Hardening:
       - linux/security/hardening/README.md
       - linux/security/hardening/module-4.1-kernel-hardening.md
       - linux/security/hardening/module-4.2-apparmor.md
       - linux/security/hardening/module-4.3-selinux.md
       - linux/security/hardening/module-4.4-seccomp.md
-  - Operations:
     - Performance:
       - linux/operations/performance/README.md
       - linux/operations/performance/module-5.1-use-method.md
@@ -189,6 +194,8 @@ nav:
       - linux/operations/module-8.2-network-administration.md
       - linux/operations/module-8.3-package-user-management.md
       - linux/operations/module-8.4-scheduling-backups.md
+- Cloud:
+  - cloud/README.md
 - Certifications:
   - k8s/README.md
   - KCNA:

@@ -50,7 +50,25 @@ No paywalls. No upsells. Theory-first.
 
 ---
 
-## Learning Path
+## Learning Paths
+
+**Choose your starting point based on your experience:**
+
+### Complete Beginner
+Fundamentals (Zero to Terminal → Cloud Native 101 → K8s Basics → Modern DevOps) → Linux Deep Dive → Cloud Essentials → Certifications (KCNA → CKA)
+
+### Know Linux, New to K8s
+Fundamentals (Cloud Native 101 → K8s Basics → Modern DevOps) → Certifications (KCNA → CKA → CKAD) → Cloud Deep Dive
+
+### K8s User Going Deep
+Certifications (CKA → CKS) → Cloud Deep Dive (your provider) → Platform Engineering → Extending K8s
+
+### Preparing for Certs
+Certifications (pick your exam) — each track is self-contained with exercises, quizzes, and practice drills
+
+---
+
+## Curriculum Map
 
 ```
                               KUBEDOJO
@@ -58,73 +76,47 @@ No paywalls. No upsells. Theory-first.
 
     ┌─────────────────────────────────────────────────────────┐
     │                                                         │
-    │   PREREQUISITES                        "Why Kubernetes?"│
-    │   └── docs/prerequisites/                               │
+    │   FUNDAMENTALS                                          │
+    │       ├── Zero to Terminal            10 modules        │
     │       ├── Philosophy & Design          4 modules        │
     │       ├── Cloud Native 101             5 modules        │
     │       ├── Kubernetes Basics            8 modules        │
-    │       └── Modern DevOps                6 modules        │
+    │       ├── Modern DevOps                6 modules        │
+    │       └── Linux Deep Dive             28 modules        │
     │                                                         │
     └────────────────────────┬────────────────────────────────┘
                              │
-              ┌──────────────┴──────────────┐
-              │                             │
-              ▼                             ▼
-    ┌─────────────────────────┐   ┌─────────────────────────┐
-    │                         │   │                         │
-    │   LINUX DEEP DIVE       │   │   CERTIFICATIONS        │
-    │   └── docs/linux/       │   │   └── docs/k8s/         │
-    │       │                 │   │       │                 │
-    │       ├── foundations/  │   │       │  ENTRY LEVEL    │
-    │       │  System · Cgroup│   │       ├── KCNA          │
-    │       │  Network        │   │       ├── KCSA          │
-    │       │                 │   │       │                 │
-    │       ├── security/     │   │       │  PRACTITIONER   │
-    │       │  Hardening      │   │       ├── CKAD          │
-    │       │                 │   │       ├── CKA           │
-    │       └── operations/   │   │       ├── CKS           │
-    │          Perf · Debug   │   │       │                 │
-    │          Shell Scripts  │   │       │  SPECIALIST     │
-    │                         │   │       ├── CNPE          │
-    │                         │   │       │                 │
-    │                         │   │       │  TOOL CERTS     │
-    │                         │   │       ├── PCA  (Prometheus)
-    │                         │   │       ├── ICA  (Istio)  │
-    │                         │   │       ├── CCA  (Cilium) │
-    │                         │   │       ├── CBA  (Backstage)
-    │                         │   │       ├── OTCA (OTel)   │
-    │                         │   │       ├── KCA  (Kyverno)│
-    │                         │   │       ├── CAPA (Argo)   │
-    │                         │   │       ├── CGOA (GitOps) │
-    │                         │   │       │                 │
-    │                         │   │       │  OTHER          │
-    │  + LFCS (Linux Sysadmin)│   │       ├── CNPA (Platform)
-    │                         │   │       └── FinOps        │
-    │                         │   │                         │
-    └────────────┬────────────┘   └────────────┬────────────┘
-                 │                             │
-                 └──────────────┬──────────────┘
-                                │
-                                ▼
-    ┌─────────────────────────────────────────────────────────┐
-    │                                                         │
-    │   PLATFORM ENGINEERING              Beyond Certifications│
-    │   └── docs/platform/                                    │
-    │       │                                                 │
-    │       ├── foundations/         Theory that doesn't change│
-    │       │   Systems Thinking · Reliability · Distributed  │
-    │       │   Systems · Observability Theory · Security     │
-    │       │                                                 │
-    │       ├── disciplines/         Applied practices        │
-    │       │   SRE · Platform Engineering · GitOps ·         │
-    │       │   DevSecOps · MLOps · AIOps · IaC              │
-    │       │                                                 │
-    │       └── toolkits/            Current tools (evolving) │
-    │           Prometheus · ArgoCD · Vault · Backstage ·     │
-    │           Kyverno · Cilium · Kubeflow · OpenCost ·     │
-    │           Rook/Ceph · MetalLB · SPIFFE · and more...   │
-    │                                                         │
-    └─────────────────────────────────────────────────────────┘
+           ┌─────────────────┼─────────────────┐
+           │                 │                 │
+           ▼                 ▼                 ▼
+    ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐
+    │              │  │              │  │                  │
+    │   CLOUD      │  │  CERTS       │  │  PLATFORM ENG    │
+    │              │  │              │  │                  │
+    │  Rosetta     │  │  KCNA  KCSA  │  │  Foundations     │
+    │  Stone       │  │  CKA   CKAD  │  │  · Systems       │
+    │              │  │  CKS   CNPE  │  │  · Reliability   │
+    │  AWS  GCP    │  │              │  │  · Security      │
+    │  Azure       │  │  Tool Certs  │  │  · Networking    │
+    │  Essentials  │  │  PCA ICA CCA │  │  · Leadership    │
+    │              │  │  + 8 more    │  │                  │
+    │  Deep Dive   │  │              │  │  Disciplines     │
+    │  EKS GKE AKS │  │  Extending   │  │  · SRE · GitOps  │
+    │              │  │  Kubernetes   │  │  · DevSecOps     │
+    │  Enterprise  │  │  (operators,  │  │  · MLOps · AIOps │
+    │  & Hybrid    │  │   webhooks)  │  │  · Release Eng   │
+    │              │  │              │  │  · Chaos Eng     │
+    │              │  │              │  │  · FinOps        │
+    │              │  │              │  │  · Data Eng      │
+    │              │  │              │  │  · AI Infra      │
+    │              │  │              │  │                  │
+    │              │  │              │  │  Toolkits (75+)  │
+    │              │  │              │  │  Prometheus ·    │
+    │              │  │              │  │  ArgoCD · Vault  │
+    │              │  │              │  │  Backstage ·     │
+    │              │  │              │  │  and more...     │
+    │              │  │              │  │                  │
+    └──────────────┘  └──────────────┘  └──────────────────┘
 
     ═══════════════════════════════════════════════════════════
 ```
