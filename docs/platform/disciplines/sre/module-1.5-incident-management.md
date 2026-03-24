@@ -7,7 +7,7 @@
 Before starting this module:
 - **Required**: [Module 1.1: What is SRE?](module-1.1-what-is-sre.md) — Understanding SRE fundamentals
 - **Required**: [Module 1.2: SLOs](module-1.2-slos.md) — Understanding service levels
-- **Recommended**: [Observability Theory Track](../../foundations/observability-theory/) — Monitoring and debugging
+- **Recommended**: [Observability Theory Track](../../foundations/observability-theory/README.md) — Monitoring and debugging
 
 ---
 

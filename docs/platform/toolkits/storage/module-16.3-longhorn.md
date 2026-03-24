@@ -8,8 +8,8 @@
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [Distributed Systems Foundation](../../foundations/distributed-systems/) - Replication, fault tolerance
-- [Reliability Engineering Foundation](../../foundations/reliability-engineering/) - Backup, disaster recovery
+- [Distributed Systems Foundation](../../foundations/distributed-systems/README.md) - Replication, fault tolerance
+- [Reliability Engineering Foundation](../../foundations/reliability-engineering/README.md) - Backup, disaster recovery
 - Kubernetes fundamentals (PVCs, StorageClasses, StatefulSets)
 - [Module 16.1: Rook/Ceph](module-16.1-rook-ceph.md) (recommended for comparison)
 - [Module 16.2: MinIO](module-16.2-minio.md) (recommended for backup target understanding)

@@ -17,7 +17,7 @@ Feature stores solve the most frustrating problem in ML: feature reuse. Data sci
 - Basic ML concepts
 - Python familiarity
 - Kubernetes fundamentals
-- [MLOps Discipline](../../disciplines/mlops/) recommended
+- [MLOps Discipline](../../disciplines/mlops/README.md) recommended
 
 ---
 

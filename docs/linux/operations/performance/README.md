@@ -28,8 +28,8 @@ Can't set proper resource limits without understanding what they measure.
 
 ## Prerequisites
 
-- [System Essentials](../../foundations/system-essentials/) — Processes and filesystems
-- [Container Primitives](../../foundations/container-primitives/) — cgroups and namespaces
+- [System Essentials](../../foundations/system-essentials/README.md) — Processes and filesystems
+- [Container Primitives](../../foundations/container-primitives/README.md) — cgroups and namespaces
 
 ## Key Takeaways
 
@@ -42,6 +42,6 @@ After completing this section, you'll understand:
 
 ## Related Sections
 
-- **Previous**: [Security Hardening](../../security/hardening/)
-- **Next**: [Troubleshooting](../troubleshooting/)
+- **Previous**: [Security Hardening](../../security/hardening/README.md)
+- **Next**: [Troubleshooting](../troubleshooting/README.md)
 - **CKA/CKAD**: Resource management, pod scheduling

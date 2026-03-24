@@ -264,7 +264,7 @@ If you can't meet these times, practice the drill sections in each module.
 
 When you score 20/28 or higher and complete the practical assessment:
 
-→ Continue to [Part 3: Services & Networking](../part3-services-networking/)
+→ Continue to [Part 3: Services & Networking](../part3-services-networking/README.md)
 
 This covers 20% of the exam and teaches how Pods communicate within and outside the cluster.
 

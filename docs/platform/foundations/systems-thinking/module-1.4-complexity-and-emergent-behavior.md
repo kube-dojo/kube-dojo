@@ -1161,10 +1161,10 @@ Congratulations! You've completed the Systems Thinking foundation.
 
 | Your Interest | Next Track |
 |---------------|------------|
-| Building reliable systems | [Reliability Engineering](../reliability-engineering/) |
-| Understanding system behavior | [Observability Theory](../observability-theory/) |
-| Operating in production | [SRE Discipline](../../disciplines/sre/) |
-| Designing for failure | [Distributed Systems](../distributed-systems/) |
+| Building reliable systems | [Reliability Engineering](../reliability-engineering/README.md) |
+| Understanding system behavior | [Observability Theory](../observability-theory/README.md) |
+| Operating in production | [SRE Discipline](../../disciplines/sre/README.md) |
+| Designing for failure | [Distributed Systems](../distributed-systems/README.md) |
 
 ---
 

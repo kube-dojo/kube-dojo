@@ -29,4 +29,4 @@ All modules include real, compilable Go code.
 
 - CKA certification or equivalent Kubernetes experience
 - Go programming (basic to intermediate)
-- [CKA Module 1.5: CRDs & Operators](/k8s/cka/part1-cluster-architecture/module-1.5-crds-operators/) is the intro — this goes much deeper
+- [CKA Module 1.5: CRDs & Operators](../cka/part1-cluster-architecture/module-1.5-crds-operators.md) is the intro — this goes much deeper

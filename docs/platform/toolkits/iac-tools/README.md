@@ -6,12 +6,12 @@
 
 The IaC Tools Toolkit covers the major infrastructure as code tools in depth. From HashiCorp's Terraform to OpenTofu, from Pulumi's programming language approach to Ansible's configuration management, from CloudFormation to Bicep—this toolkit gives you hands-on experience with the tools that define modern infrastructure.
 
-This toolkit applies concepts from [IaC Discipline](../../disciplines/iac/).
+This toolkit applies concepts from [IaC Discipline](../../disciplines/iac/README.md).
 
 ## Prerequisites
 
 Before starting this toolkit:
-- [IaC Discipline](../../disciplines/iac/) — IaC fundamentals, testing, security
+- [IaC Discipline](../../disciplines/iac/README.md) — IaC fundamentals, testing, security
 - [IaC Fundamentals](../../disciplines/iac/module-6.1-iac-fundamentals.md) — Core concepts (minimum)
 - Cloud provider account (AWS, Azure, or GCP for exercises)
 - Basic command-line experience
@@ -240,11 +240,11 @@ Module 7.10: Nitric
 
 ## Related Tracks
 
-- **Before**: [IaC Discipline](../../disciplines/iac/) — IaC fundamentals (essential)
-- **Related**: [GitOps & Deployments](../gitops-deployments/) — GitOps for infrastructure delivery
-- **Related**: [Security Tools](../security-tools/) — Security scanning for IaC
-- **Related**: [CI/CD Pipelines](../ci-cd-pipelines/) — IaC in pipelines
-- **Related**: [Platforms Toolkit](../platforms/) — Crossplane as Kubernetes-native IaC
+- **Before**: [IaC Discipline](../../disciplines/iac/README.md) — IaC fundamentals (essential)
+- **Related**: [GitOps & Deployments](../gitops-deployments/README.md) — GitOps for infrastructure delivery
+- **Related**: [Security Tools](../security-tools/README.md) — Security scanning for IaC
+- **Related**: [CI/CD Pipelines](../ci-cd-pipelines/README.md) — IaC in pipelines
+- **Related**: [Platforms Toolkit](../platforms/README.md) — Crossplane as Kubernetes-native IaC
 
 ---
 

@@ -77,10 +77,10 @@ Before starting ICA prep, ensure you have:
 
 | Prerequisite | Where to Learn |
 |-------------|----------------|
-| Kubernetes Services & Networking | [CKA Part 3](../cka/part3-services-networking/) |
+| Kubernetes Services & Networking | [CKA Part 3](../cka/part3-services-networking/README.md) |
 | Gateway API | [CKA Module 3.5](../cka/part3-services-networking/module-3.5-gateway-api.md) |
 | Service Mesh Concepts | [Platform Networking 5.2](../../platform/toolkits/networking/module-5.2-service-mesh.md) |
-| TLS/mTLS Fundamentals | [Security Principles](../../platform/foundations/security-principles/) |
+| TLS/mTLS Fundamentals | [Security Principles](../../platform/foundations/security-principles/README.md) |
 
 ### Step 2: ICA Modules (This Track)
 
@@ -101,8 +101,8 @@ These existing KubeDojo modules cover ICA-relevant topics:
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [Platform Observability Theory](../../platform/foundations/observability-theory/) | Metrics, logs, traces fundamentals | Background |
-| [Platform Observability Tools](../../platform/toolkits/observability/) | Prometheus, Grafana, Jaeger | Direct — Istio integrates with all three |
+| [Platform Observability Theory](../../platform/foundations/observability-theory/README.md) | Metrics, logs, traces fundamentals | Background |
+| [Platform Observability Tools](../../platform/toolkits/observability/README.md) | Prometheus, Grafana, Jaeger | Direct — Istio integrates with all three |
 
 **Service Mesh Foundations:**
 

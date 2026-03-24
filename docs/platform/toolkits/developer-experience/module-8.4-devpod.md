@@ -1001,7 +1001,7 @@ Use Kubernetes when:
 
 - **Next Module**: [Module 8.5: Gitpod & Codespaces](module-8.5-gitpod-codespaces.md) - Cloud alternatives
 - **Related**: [Module 8.3: Local Kubernetes](module-8.3-local-kubernetes.md) - Local K8s for DevPod
-- **Related**: [Platform Engineering](../../disciplines/platform-engineering/) - Building developer platforms
+- **Related**: [Platform Engineering](../../disciplines/platform-engineering/README.md) - Building developer platforms
 
 ---
 

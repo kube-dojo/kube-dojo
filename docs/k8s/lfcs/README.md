@@ -15,7 +15,7 @@ The LFCS is a **performance-based (hands-on) exam** that validates practical Lin
 | **Validity** | 3 years |
 | **Distribution** | Ubuntu 22.04 |
 
-> **Important**: This is NOT a Kubernetes certification. It lives under `docs/k8s/` for organizational purposes alongside other Linux Foundation certs, but the content maps entirely to our [Linux Deep Dive Track](../../linux/).
+> **Important**: This is NOT a Kubernetes certification. It lives under `docs/k8s/` for organizational purposes alongside other Linux Foundation certs, but the content maps entirely to our [Linux Deep Dive Track](../../linux/README.md).
 
 ---
 
@@ -150,7 +150,7 @@ Just like CKA/CKAD, you get a terminal and must complete tasks. No multiple choi
 
 ### Time Management
 - **2 hours** for all tasks
-- Use the [Three-Pass Strategy](../../prerequisites/philosophy-design/):
+- Use the [Three-Pass Strategy](../../prerequisites/philosophy-design/README.md):
   - **Pass 1**: Quick wins — file creation, user management, basic commands
   - **Pass 2**: Medium tasks — filesystem, systemd, networking config
   - **Pass 3**: Complex tasks — LVM, NFS, firewall rules
@@ -190,4 +190,4 @@ Focus your time on the high-weight domains (Networking 25%, Operations 25%, Stor
 
 - [LFCS Exam Curriculum (Linux Foundation)](https://training.linuxfoundation.org/certification/linux-foundation-certified-sysadmin-lfcs/)
 - [Ubuntu 22.04 Server Guide](https://ubuntu.com/server/docs)
-- [KubeDojo Linux Track](../../linux/) — Our primary content source
+- [KubeDojo Linux Track](../../linux/README.md) — Our primary content source

@@ -6,7 +6,7 @@
 
 Before starting this module:
 - [Module 1.1: Prometheus](module-1.1-prometheus.md)
-- [Observability Theory Track](../../foundations/observability-theory/)
+- [Observability Theory Track](../../foundations/observability-theory/README.md)
 - Basic understanding of distributed tracing
 - Familiarity with at least one programming language
 

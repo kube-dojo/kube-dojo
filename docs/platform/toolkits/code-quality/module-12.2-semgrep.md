@@ -9,7 +9,7 @@
 
 Before starting this module, you should have completed:
 - [Module 12.1: SonarQube](module-12.1-sonarqube.md) - Code quality fundamentals
-- [DevSecOps Discipline](../../disciplines/devsecops/) - Security integration concepts
+- [DevSecOps Discipline](../../disciplines/devsecops/README.md) - Security integration concepts
 - Basic regex understanding
 - Programming experience in at least one language
 

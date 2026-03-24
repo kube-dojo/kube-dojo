@@ -6,7 +6,7 @@
 
 Before starting this module:
 - **Required**: CI/CD Fundamentals — Understanding build pipelines, artifact promotion, and deployment automation
-- **Required**: [Kubernetes Deployments](../../../k8s/ckad/) — Working knowledge of Deployments, Services, and label selectors
+- **Required**: [Kubernetes Deployments](../../../k8s/ckad/README.md) — Working knowledge of Deployments, Services, and label selectors
 - **Recommended**: Basic understanding of load balancers and HTTP routing
 - **Recommended**: Familiarity with monitoring/observability concepts
 

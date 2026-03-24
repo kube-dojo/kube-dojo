@@ -8,7 +8,7 @@
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [GitOps Discipline](../../disciplines/gitops/) - Git-centric workflows
+- [GitOps Discipline](../../disciplines/gitops/README.md) - Git-centric workflows
 - Basic Git fundamentals (branches, remotes, hooks)
 - Container/Kubernetes basics
 - Understanding of why self-hosting matters

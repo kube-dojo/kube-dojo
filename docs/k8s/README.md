@@ -41,11 +41,11 @@
 
 | Cert | Name | Type | Modules | Curriculum |
 |------|------|------|---------|------------|
-| [KCNA](kcna/) | Kubernetes & Cloud Native Associate | Multiple choice | 21 | [Details](kcna/README.md) |
-| [KCSA](kcsa/) | Security Associate | Multiple choice | 25 | [Details](kcsa/README.md) |
-| [CKAD](ckad/) | Application Developer | Hands-on lab | 28 | [Details](ckad/) |
-| [CKA](cka/) | Administrator | Hands-on lab | 38 | [Details](cka/) |
-| [CKS](cks/) | Security Specialist | Hands-on lab | 30 | [Details](cks/) |
+| [KCNA](kcna/README.md) | Kubernetes & Cloud Native Associate | Multiple choice | 21 | [Details](kcna/README.md) |
+| [KCSA](kcsa/README.md) | Security Associate | Multiple choice | 25 | [Details](kcsa/README.md) |
+| [CKAD](ckad/README.md) | Application Developer | Hands-on lab | 28 | [Details](ckad/README.md) |
+| [CKA](cka/README.md) | Administrator | Hands-on lab | 38 | [Details](cka/README.md) |
+| [CKS](cks/README.md) | Security Specialist | Hands-on lab | 30 | [Details](cks/README.md) |
 | | **Total** | | **142** | |
 
 ---

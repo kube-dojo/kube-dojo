@@ -13,7 +13,7 @@
 - Policy testing and CI/CD integration
 
 **Prerequisites**:
-- [Security Principles Foundations](../../foundations/security-principles/)
+- [Security Principles Foundations](../../foundations/security-principles/README.md)
 - Kubernetes admission controllers concept
 - Basic programming logic
 

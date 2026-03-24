@@ -7,7 +7,7 @@
 Before starting this module:
 - **Required**: [Module 4.4: Supply Chain Security](module-4.4-supply-chain-security.md) — Securing the build
 - **Required**: Kubernetes basics (Pods, containers, namespaces)
-- **Recommended**: [Security Principles Track](../../foundations/security-principles/) — Defense in depth
+- **Recommended**: [Security Principles Track](../../foundations/security-principles/README.md) — Defense in depth
 - **Helpful**: Linux process and syscall concepts
 
 ---

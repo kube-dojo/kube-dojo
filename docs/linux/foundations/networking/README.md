@@ -26,8 +26,8 @@ Almost every Kubernetes issue eventually involves networking:
 
 ## Prerequisites
 
-- [System Essentials](../system-essentials/) — Processes, filesystem
-- [Container Primitives](../container-primitives/) — Namespaces concept
+- [System Essentials](../system-essentials/README.md) — Processes, filesystem
+- [Container Primitives](../container-primitives/README.md) — Namespaces concept
 
 ## Key Takeaways
 
@@ -40,6 +40,6 @@ After completing this section, you'll understand:
 
 ## Related Sections
 
-- **Previous**: [Container Primitives](../container-primitives/)
-- **Next**: [Security/Hardening](../../security/hardening/)
+- **Previous**: [Container Primitives](../container-primitives/README.md)
+- **Next**: [Security/Hardening](../../security/hardening/README.md)
 - **Applies to**: Every network-related Kubernetes concept

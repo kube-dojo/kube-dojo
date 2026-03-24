@@ -1051,10 +1051,10 @@ Congratulations! You've completed the Security Principles foundation. You now un
 
 | Your Interest | Next Track |
 |---------------|------------|
-| Security in practice | [DevSecOps Discipline](../../disciplines/devsecops/) |
-| Security tools | [Security Tools Toolkit](../../toolkits/security-tools/) |
-| Kubernetes security | [CKS Certification](../../../k8s/cks/) |
-| Foundations | [Distributed Systems](../distributed-systems/) |
+| Security in practice | [DevSecOps Discipline](../../disciplines/devsecops/README.md) |
+| Security tools | [Security Tools Toolkit](../../toolkits/security-tools/README.md) |
+| Kubernetes security | [CKS Certification](../../../k8s/cks/README.md) |
+| Foundations | [Distributed Systems](../distributed-systems/README.md) |
 
 ---
 

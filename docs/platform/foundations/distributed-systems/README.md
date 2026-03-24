@@ -97,8 +97,8 @@ Discipline    Engineering   Discipline
 
 ## Prerequisites
 
-- **Recommended**: [Systems Thinking Track](../systems-thinking/) — Understanding system interactions
-- **Recommended**: [Reliability Engineering Track](../reliability-engineering/) — Failure modes and resilience
+- **Recommended**: [Systems Thinking Track](../systems-thinking/README.md) — Understanding system interactions
+- **Recommended**: [Reliability Engineering Track](../reliability-engineering/README.md) — Failure modes and resilience
 - Helpful: Basic Kubernetes knowledge
 - Helpful: Some programming experience
 
@@ -110,10 +110,10 @@ After completing Distributed Systems, you're ready for:
 
 | Track | Why |
 |-------|-----|
-| [SRE Discipline](../../disciplines/sre/) | Apply distributed systems thinking to reliability |
-| [Platform Engineering Discipline](../../disciplines/platform-engineering/) | Build platforms on distributed foundations |
-| [GitOps Discipline](../../disciplines/gitops/) | Eventual consistency in practice |
-| [Observability Toolkit](../../toolkits/observability/) | Monitor distributed systems |
+| [SRE Discipline](../../disciplines/sre/README.md) | Apply distributed systems thinking to reliability |
+| [Platform Engineering Discipline](../../disciplines/platform-engineering/README.md) | Build platforms on distributed foundations |
+| [GitOps Discipline](../../disciplines/gitops/README.md) | Eventual consistency in practice |
+| [Observability Toolkit](../../toolkits/observability/README.md) | Monitor distributed systems |
 
 ---
 

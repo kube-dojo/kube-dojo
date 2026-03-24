@@ -4,7 +4,7 @@
 >
 > **Time to Complete**: 35-40 minutes
 >
-> **Prerequisites**: [Systems Thinking Track](../systems-thinking/) (recommended)
+> **Prerequisites**: [Systems Thinking Track](../systems-thinking/README.md) (recommended)
 >
 > **Track**: Foundations
 

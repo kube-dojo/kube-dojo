@@ -13,7 +13,7 @@ You trust your code. But do you trust your dependencies? Your base images? Your 
 - Secure artifact registries with Harbor
 
 **Prerequisites**:
-- [DevSecOps Discipline](../../disciplines/devsecops/)
+- [DevSecOps Discipline](../../disciplines/devsecops/README.md)
 - Container image basics
 - CI/CD pipeline concepts
 
@@ -722,7 +722,7 @@ cosign attest --predicate sbom.json --type cyclonedx ghcr.io/youruser/myapp:v1
 
 ## Next Module
 
-Continue to [Networking Toolkit](../networking/) to learn about Cilium and Service Mesh for Kubernetes networking and security.
+Continue to [Networking Toolkit](../networking/README.md) to learn about Cilium and Service Mesh for Kubernetes networking and security.
 
 ---
 

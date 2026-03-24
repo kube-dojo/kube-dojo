@@ -28,8 +28,8 @@ The shell is the universal interface to Linux systems.
 
 ## Prerequisites
 
-- [System Essentials](../../foundations/system-essentials/) — Basic Linux commands
-- [Troubleshooting](../troubleshooting/) — Commands you'll want to automate
+- [System Essentials](../../foundations/system-essentials/README.md) — Basic Linux commands
+- [Troubleshooting](../troubleshooting/README.md) — Commands you'll want to automate
 
 ## Key Takeaways
 
@@ -42,6 +42,6 @@ After completing this section, you'll be able to:
 
 ## Related Sections
 
-- **Previous**: [Troubleshooting](../troubleshooting/)
+- **Previous**: [Troubleshooting](../troubleshooting/README.md)
 - **CKA/CKAD**: Scripting for exam efficiency
 - **Platform**: Automation foundation for all disciplines

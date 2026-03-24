@@ -840,7 +840,7 @@ kind delete cluster --name finops-lab
 
 ## Next Module
 
-You have completed the Scaling and Reliability Toolkit. Continue to the [Platforms Toolkit](../platforms/) to learn about building internal developer platforms with Backstage, Crossplane, and more.
+You have completed the Scaling and Reliability Toolkit. Continue to the [Platforms Toolkit](../platforms/README.md) to learn about building internal developer platforms with Backstage, Crossplane, and more.
 
 **Related modules**:
 - [Module 6.1: Karpenter](module-6.1-karpenter.md) — Configure spot instances and node consolidation that directly reduce compute costs

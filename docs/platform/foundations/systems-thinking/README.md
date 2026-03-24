@@ -112,10 +112,10 @@ After completing Systems Thinking, you're ready for:
 
 | Track | Why |
 |-------|-----|
-| [Reliability Engineering](../reliability-engineering/) | Applies systems thinking to failure modes and redundancy |
-| [Observability Theory](../observability-theory/) | Understanding what to measure and why |
-| [SRE Discipline](../../disciplines/sre/) | Putting systems thinking into operational practice |
-| [Distributed Systems](../distributed-systems/) | Deep dive into CAP, consensus, and distributed patterns |
+| [Reliability Engineering](../reliability-engineering/README.md) | Applies systems thinking to failure modes and redundancy |
+| [Observability Theory](../observability-theory/README.md) | Understanding what to measure and why |
+| [SRE Discipline](../../disciplines/sre/README.md) | Putting systems thinking into operational practice |
+| [Distributed Systems](../distributed-systems/README.md) | Deep dive into CAP, consensus, and distributed patterns |
 
 ---
 

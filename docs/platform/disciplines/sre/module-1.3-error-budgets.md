@@ -6,7 +6,7 @@
 
 Before starting this module:
 - **Required**: [Module 1.2: Service Level Objectives](module-1.2-slos.md) — Understanding SLOs
-- **Required**: [Reliability Engineering Track](../../foundations/reliability-engineering/) — Reliability concepts
+- **Required**: [Reliability Engineering Track](../../foundations/reliability-engineering/README.md) — Reliability concepts
 - **Recommended**: Experience with software releases and deployment
 
 ---

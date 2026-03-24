@@ -15,7 +15,7 @@ SPIFFE (Secure Production Identity Framework for Everyone) is an open standard f
 - How SPIFFE compares to ServiceAccount tokens, cert-manager, and service mesh identity
 
 **Prerequisites**:
-- [Security Principles Foundations](../../foundations/security-principles/)
+- [Security Principles Foundations](../../foundations/security-principles/README.md)
 - Kubernetes security fundamentals (ServiceAccounts, RBAC)
 - TLS and mTLS basics (what certificates are, how mutual authentication works)
 - [Module 7.3: cert-manager](../platforms/module-7.3-cert-manager.md) (recommended)
@@ -371,7 +371,7 @@ No certificate files. No CA paths. No renewal cron jobs. SPIRE handles rotation,
 
 **When Istio is better**: You already run a service mesh and want identity, traffic management, and observability in one package. Istio actually uses SPIFFE IDs internally -- SPIRE can serve as a pluggable CA for Istio.
 
-> See [Module 5.2: Service Mesh](../networking/module-5.2-service-mesh.md) for how Istio handles identity through Envoy sidecars. See [Module 7.3: cert-manager](../platforms/module-7.3-cert-manager.md) for certificate lifecycle management. For CKS exam topics on workload identity, refer to the [CKS Security Track](../../../k8s/cks/).
+> See [Module 5.2: Service Mesh](../networking/module-5.2-service-mesh.md) for how Istio handles identity through Envoy sidecars. See [Module 7.3: cert-manager](../platforms/module-7.3-cert-manager.md) for certificate lifecycle management. For CKS exam topics on workload identity, refer to the [CKS Security Track](../../../k8s/cks/README.md).
 
 ---
 
@@ -568,13 +568,13 @@ Configure the SPIRE Server to use cert-manager as an upstream CA instead of the 
 - [CNCF SPIFFE Project Page](https://www.cncf.io/projects/spiffe/)
 - [Module 5.2: Service Mesh](../networking/module-5.2-service-mesh.md) -- Istio uses SPIFFE IDs internally
 - [Module 7.3: cert-manager](../platforms/module-7.3-cert-manager.md) -- Certificate lifecycle management
-- CKS Exam: [Workload Identity](../../../k8s/cks/) -- ServiceAccount tokens and identity concepts
+- CKS Exam: [Workload Identity](../../../k8s/cks/README.md) -- ServiceAccount tokens and identity concepts
 
 ---
 
 ## Next Module
 
-Return to the [Security Tools README](README.md) to review all security toolkit modules, or continue to the [Networking Toolkit](../networking/) for service mesh and Cilium.
+Return to the [Security Tools README](README.md) to review all security toolkit modules, or continue to the [Networking Toolkit](../networking/README.md) for service mesh and Cilium.
 
 ---
 

@@ -19,13 +19,13 @@ The KCSA is a **multiple-choice exam** (not hands-on) that validates foundationa
 
 | Part | Topic | Weight | Modules |
 |------|-------|--------|---------|
-| [Part 0](part0-introduction/) | Introduction | - | 2 |
-| [Part 1](part1-cloud-native-security/) | Overview of Cloud Native Security | 14% | 3 |
-| [Part 2](part2-cluster-component-security/) | Kubernetes Cluster Component Security | 22% | 4 |
-| [Part 3](part3-security-fundamentals/) | Kubernetes Security Fundamentals | 22% | 5 |
-| [Part 4](part4-threat-model/) | Kubernetes Threat Model | 16% | 4 |
-| [Part 5](part5-platform-security/) | Platform Security | 16% | 4 |
-| [Part 6](part6-compliance/) | Compliance and Security Frameworks | 10% | 3 |
+| [Part 0](part0-introduction/README.md) | Introduction | - | 2 |
+| [Part 1](part1-cloud-native-security/README.md) | Overview of Cloud Native Security | 14% | 3 |
+| [Part 2](part2-cluster-component-security/README.md) | Kubernetes Cluster Component Security | 22% | 4 |
+| [Part 3](part3-security-fundamentals/README.md) | Kubernetes Security Fundamentals | 22% | 5 |
+| [Part 4](part4-threat-model/README.md) | Kubernetes Threat Model | 16% | 4 |
+| [Part 5](part5-platform-security/README.md) | Platform Security | 16% | 4 |
+| [Part 6](part6-compliance/README.md) | Compliance and Security Frameworks | 10% | 3 |
 | **Total** | | **100%** | **25** |
 
 ## Module Overview

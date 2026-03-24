@@ -907,6 +907,6 @@ Quick links for review:
 
 ## Next Steps
 
-Continue to [Part 2: Workloads & Scheduling](../part2-workloads-scheduling/) - Learn how to deploy and manage applications.
+Continue to [Part 2: Workloads & Scheduling](../part2-workloads-scheduling/README.md) - Learn how to deploy and manage applications.
 
 This covers 15% of the exam and builds directly on what you've learned about cluster architecture.

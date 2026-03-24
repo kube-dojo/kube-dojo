@@ -1151,10 +1151,10 @@ Congratulations! You've completed the Reliability Engineering foundation. You no
 
 | Your Interest | Next Track |
 |---------------|------------|
-| Understanding what's happening | [Observability Theory](../observability-theory/) |
-| Operating reliable systems | [SRE Discipline](../../disciplines/sre/) |
-| Building secure systems | [Security Principles](../security-principles/) |
-| Distributed system challenges | [Distributed Systems](../distributed-systems/) |
+| Understanding what's happening | [Observability Theory](../observability-theory/README.md) |
+| Operating reliable systems | [SRE Discipline](../../disciplines/sre/README.md) |
+| Building secure systems | [Security Principles](../security-principles/README.md) |
+| Distributed system challenges | [Distributed Systems](../distributed-systems/README.md) |
 
 ---
 

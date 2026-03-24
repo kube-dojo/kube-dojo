@@ -26,9 +26,9 @@ Production issues don't come with error messages. Systematic debugging skills he
 
 ## Prerequisites
 
-- [Performance](../performance/) — USE method and metrics
-- [Networking](../../foundations/networking/) — TCP/IP and iptables
-- [Security Hardening](../../security/hardening/) — SELinux/AppArmor denials
+- [Performance](../performance/README.md) — USE method and metrics
+- [Networking](../../foundations/networking/README.md) — TCP/IP and iptables
+- [Security Hardening](../../security/hardening/README.md) — SELinux/AppArmor denials
 
 ## Key Takeaways
 
@@ -41,6 +41,6 @@ After completing this section, you'll understand:
 
 ## Related Sections
 
-- **Previous**: [Performance](../performance/)
-- **Next**: [Shell Scripting](../shell-scripting/)
+- **Previous**: [Performance](../performance/README.md)
+- **Next**: [Shell Scripting](../shell-scripting/README.md)
 - **CKA**: Cluster troubleshooting domain

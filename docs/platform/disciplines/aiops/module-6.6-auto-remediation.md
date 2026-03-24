@@ -1093,7 +1093,7 @@ Congratulations on completing the AIOps Discipline track. You now have the knowl
 6. Build safe auto-remediation with proper guardrails
 
 **Next Steps**:
-- [AIOps Tools Toolkit](../../toolkits/aiops-tools/) — Hands-on with Prophet, BigPanda, Datadog
+- [AIOps Tools Toolkit](../../toolkits/aiops-tools/README.md) — Hands-on with Prophet, BigPanda, Datadog
 - Apply these concepts in your organization
 - Start with anomaly detection and correlation (biggest immediate value)
 - Build auto-remediation gradually, with safety first

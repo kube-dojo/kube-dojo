@@ -109,8 +109,8 @@ Discipline     Toolkit        Systems
 
 ## Prerequisites
 
-- **Recommended**: [Systems Thinking Track](../systems-thinking/) — Understanding system interactions
-- **Recommended**: [Reliability Engineering Track](../reliability-engineering/) — Failure modes and defense
+- **Recommended**: [Systems Thinking Track](../systems-thinking/README.md) — Understanding system interactions
+- **Recommended**: [Reliability Engineering Track](../reliability-engineering/README.md) — Failure modes and defense
 - Helpful: Some experience with web applications or APIs
 - Helpful: Basic understanding of networking
 
@@ -122,10 +122,10 @@ After completing Security Principles, you're ready for:
 
 | Track | Why |
 |-------|-----|
-| [DevSecOps Discipline](../../disciplines/devsecops/) | Put security into practice in CI/CD |
-| [Security Tools Toolkit](../../toolkits/security-tools/) | Learn specific tools (Vault, OPA, Falco) |
-| [CKS Certification](../../../k8s/cks/) | Kubernetes security specialization |
-| [Distributed Systems](../distributed-systems/) | Security in distributed architectures |
+| [DevSecOps Discipline](../../disciplines/devsecops/README.md) | Put security into practice in CI/CD |
+| [Security Tools Toolkit](../../toolkits/security-tools/README.md) | Learn specific tools (Vault, OPA, Falco) |
+| [CKS Certification](../../../k8s/cks/README.md) | Kubernetes security specialization |
+| [Distributed Systems](../distributed-systems/README.md) | Security in distributed architectures |
 
 ---
 

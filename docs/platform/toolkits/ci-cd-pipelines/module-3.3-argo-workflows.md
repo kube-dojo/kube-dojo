@@ -7,7 +7,7 @@ The data science team lead stared at the Airflow logs in frustration. Their ML t
 ## Prerequisites
 
 Before starting this module:
-- [DevSecOps Discipline](../../disciplines/devsecops/) — CI/CD concepts
+- [DevSecOps Discipline](../../disciplines/devsecops/README.md) — CI/CD concepts
 - Kubernetes basics (Pods, Services)
 - Container fundamentals
 - DAG (Directed Acyclic Graph) concepts helpful
@@ -1642,7 +1642,7 @@ These tools provide different approaches to the same problem—choose based on y
 
 ## Next Steps
 
-Continue to [Security Tools Toolkit](../security-tools/) where we'll cover Vault, OPA, Falco, and supply chain security.
+Continue to [Security Tools Toolkit](../security-tools/README.md) where we'll cover Vault, OPA, Falco, and supply chain security.
 
 ---
 

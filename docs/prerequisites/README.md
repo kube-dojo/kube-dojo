@@ -8,7 +8,7 @@ These tracks build foundational knowledge before diving into certifications or a
 
 ## Tracks
 
-### [Philosophy & Design](philosophy-design/) — 4 modules
+### [Philosophy & Design](philosophy-design/README.md) — 4 modules
 *Why Kubernetes exists and how to think about it.*
 
 | Module | Topic |
@@ -18,7 +18,7 @@ These tracks build foundational knowledge before diving into certifications or a
 | 3 | [What We Don't Cover](philosophy-design/module-3-what-we-dont-cover.md) |
 | 4 | [Dead Ends - Technologies to Avoid](philosophy-design/module-4-dead-ends.md) |
 
-### [Cloud Native 101](cloud-native-101/) — 5 modules
+### [Cloud Native 101](cloud-native-101/README.md) — 5 modules
 *Containers, Docker, and the ecosystem.*
 
 | Module | Topic |
@@ -29,7 +29,7 @@ These tracks build foundational knowledge before diving into certifications or a
 | 4 | [Cloud Native Ecosystem](cloud-native-101/module-4-cloud-native-ecosystem.md) |
 | 5 | [Monolith to Microservices](cloud-native-101/module-5-monolith-to-microservices.md) |
 
-### [Kubernetes Basics](kubernetes-basics/) — 8 modules
+### [Kubernetes Basics](kubernetes-basics/README.md) — 8 modules
 *Hands-on fundamentals with kubectl.*
 
 | Module | Topic |
@@ -43,7 +43,7 @@ These tracks build foundational knowledge before diving into certifications or a
 | 7 | [Namespaces & Labels](kubernetes-basics/module-7-namespaces-labels.md) |
 | 8 | [YAML for Kubernetes](kubernetes-basics/module-8-yaml-kubernetes.md) |
 
-### [Modern DevOps Practices](modern-devops/) — 6 modules
+### [Modern DevOps Practices](modern-devops/README.md) — 6 modules
 *Infrastructure as Code, GitOps, and observability.*
 
 | Module | Topic |
@@ -73,5 +73,5 @@ Ready to continue? Choose your path:
 
 | Goal | Next Step |
 |------|-----------|
-| Get certified | [Kubernetes Certifications](../k8s/) |
-| Go deeper | [Platform Engineering](../platform/) |
+| Get certified | [Kubernetes Certifications](../k8s/README.md) |
+| Go deeper | [Platform Engineering](../platform/README.md) |

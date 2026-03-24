@@ -8,8 +8,8 @@
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [Distributed Systems Foundation](../../foundations/distributed-systems/) - Consensus, CAP theorem
-- [Reliability Engineering Foundation](../../foundations/reliability-engineering/) - SLOs, failure modes
+- [Distributed Systems Foundation](../../foundations/distributed-systems/README.md) - Consensus, CAP theorem
+- [Reliability Engineering Foundation](../../foundations/reliability-engineering/README.md) - SLOs, failure modes
 - Basic SQL and PostgreSQL familiarity
 - Kubernetes fundamentals (StatefulSets, PVCs)
 
@@ -940,8 +940,8 @@ When a node fails:
 ## Next Steps
 
 - **Next Module**: [Module 15.2: CloudNativePG](module-15.2-cloudnativepg.md) — PostgreSQL on Kubernetes with operators
-- **Related**: [Distributed Systems Foundation](../../foundations/distributed-systems/) — Deep dive on consensus
-- **Related**: [Observability Toolkit](../observability/) — Monitoring distributed databases
+- **Related**: [Distributed Systems Foundation](../../foundations/distributed-systems/README.md) — Deep dive on consensus
+- **Related**: [Observability Toolkit](../observability/README.md) — Monitoring distributed databases
 
 ---
 

@@ -866,4 +866,4 @@ With 30% of the CKA exam weight, troubleshooting is critical. Practice the drill
 
 ## Next Steps
 
-Continue to [Part 6: Mock Exams](../part6-mock-exams/) to test your knowledge with realistic exam scenarios.
+Continue to [Part 6: Mock Exams](../part6-mock-exams/README.md) to test your knowledge with realistic exam scenarios.

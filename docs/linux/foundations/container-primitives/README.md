@@ -32,7 +32,7 @@ Understanding container primitives lets you:
 
 ## Prerequisites
 
-- [System Essentials](../system-essentials/) — Kernel, processes, filesystem, permissions
+- [System Essentials](../system-essentials/README.md) — Kernel, processes, filesystem, permissions
 
 ## Key Takeaways
 
@@ -45,6 +45,6 @@ After completing this section, you'll understand:
 
 ## Related Sections
 
-- **Previous**: [System Essentials](../system-essentials/)
-- **Next**: [Networking](../networking/)
+- **Previous**: [System Essentials](../system-essentials/README.md)
+- **Next**: [Networking](../networking/README.md)
 - **Applies to**: Every container and Kubernetes concept

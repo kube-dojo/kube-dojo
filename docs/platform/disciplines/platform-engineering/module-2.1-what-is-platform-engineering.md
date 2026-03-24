@@ -5,8 +5,8 @@
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Systems Thinking Track](../../foundations/systems-thinking/) — Understanding complex systems
-- **Recommended**: [SRE Discipline](../sre/) — Operations perspective
+- **Required**: [Systems Thinking Track](../../foundations/systems-thinking/README.md) — Understanding complex systems
+- **Recommended**: [SRE Discipline](../sre/README.md) — Operations perspective
 - **Helpful**: Experience in a DevOps or infrastructure role
 
 ---

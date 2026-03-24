@@ -16,8 +16,8 @@ Cluster API (CAPI) brings the declarative, reconciliation-driven model of Kubern
 - Infrastructure provider landscape and GitOps integration
 
 **Prerequisites**:
-- [Kubernetes Fundamentals](../../../prerequisites/kubernetes-basics/)
-- [kubeadm cluster setup](../../../k8s/cka/) (understanding of cluster bootstrapping)
+- [Kubernetes Fundamentals](../../../prerequisites/kubernetes-basics/README.md)
+- [kubeadm cluster setup](../../../k8s/cka/README.md) (understanding of cluster bootstrapping)
 - Familiarity with Custom Resource Definitions (CRDs)
 
 ---
@@ -160,7 +160,7 @@ That is it. Dozens of underlying resources are created from one concise definiti
 | OpenStack | CAPO | OpenStack VMs | Stable |
 | Hetzner | CAPH | Hetzner Cloud + bare-metal | Community |
 
-> Cross-reference: For lightweight distributions that CAPI can bootstrap, see [K3s](../k8s-distributions/module-14.1-k3s.md), [Talos](../k8s-distributions/module-14.4-talos.md), and [k0s](../k8s-distributions/module-14.2-k0s.md). For understanding kubeadm (the default bootstrap provider), see the [CKA track](../../../k8s/cka/).
+> Cross-reference: For lightweight distributions that CAPI can bootstrap, see [K3s](../k8s-distributions/module-14.1-k3s.md), [Talos](../k8s-distributions/module-14.4-talos.md), and [k0s](../k8s-distributions/module-14.2-k0s.md). For understanding kubeadm (the default bootstrap provider), see the [CKA track](../../../k8s/cka/README.md).
 
 ---
 

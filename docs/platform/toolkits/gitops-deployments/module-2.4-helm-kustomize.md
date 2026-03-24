@@ -1466,7 +1466,7 @@ These tools form the foundation of modern Kubernetes deployment practices.
 
 ## Next Steps
 
-Continue to [CI/CD Pipelines Toolkit](../ci-cd-pipelines/) where we'll explore Dagger, Tekton, and Argo Workflows for building before deploying.
+Continue to [CI/CD Pipelines Toolkit](../ci-cd-pipelines/README.md) where we'll explore Dagger, Tekton, and Argo Workflows for building before deploying.
 
 ---
 

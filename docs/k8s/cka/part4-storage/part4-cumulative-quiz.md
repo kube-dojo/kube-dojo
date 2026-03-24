@@ -429,4 +429,4 @@ If you scored below 80%, review these modules:
 
 ## Next Part
 
-Proceed to [Part 5: Troubleshooting](../part5-troubleshooting/) to learn systematic approaches to diagnosing and fixing Kubernetes cluster problems.
+Proceed to [Part 5: Troubleshooting](../part5-troubleshooting/README.md) to learn systematic approaches to diagnosing and fixing Kubernetes cluster problems.

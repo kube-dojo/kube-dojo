@@ -28,8 +28,8 @@ CKS (Certified Kubernetes Security Specialist) specifically tests these topics.
 
 ## Prerequisites
 
-- [Container Primitives](../../foundations/container-primitives/) — Especially capabilities & LSMs
-- [Networking](../../foundations/networking/) — For network hardening
+- [Container Primitives](../../foundations/container-primitives/README.md) — Especially capabilities & LSMs
+- [Networking](../../foundations/networking/README.md) — For network hardening
 
 ## Key Takeaways
 
@@ -42,6 +42,6 @@ After completing this section, you'll understand:
 
 ## Related Sections
 
-- **Previous**: [Networking](../../foundations/networking/)
-- **Next**: [Operations/Performance](../../operations/performance/)
+- **Previous**: [Networking](../../foundations/networking/README.md)
+- **Next**: [Operations/Performance](../../operations/performance/README.md)
 - **CKS**: Directly tested in System Hardening domain

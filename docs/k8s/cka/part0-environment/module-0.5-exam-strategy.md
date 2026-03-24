@@ -804,6 +804,6 @@ You now have:
 - ✅ Knowledge of where to find documentation fast
 - ✅ A strategy to maximize your exam score
 
-**Next**: [Part 1: Cluster Architecture, Installation & Configuration](../part1-cluster-architecture/)
+**Next**: [Part 1: Cluster Architecture, Installation & Configuration](../part1-cluster-architecture/README.md)
 
 This is where the real Kubernetes learning begins.

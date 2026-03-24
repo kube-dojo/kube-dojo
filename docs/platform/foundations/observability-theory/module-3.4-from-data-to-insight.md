@@ -975,10 +975,10 @@ Congratulations! You've completed the Observability Theory foundation. You now u
 
 | Your Interest | Next Track |
 |---------------|------------|
-| Implementing observability | [Observability Toolkit](../../toolkits/observability/) |
-| Operating with observability | [SRE Discipline](../../disciplines/sre/) |
-| Security observability | [Security Principles](../security-principles/) |
-| Foundational concepts | [Distributed Systems](../distributed-systems/) |
+| Implementing observability | [Observability Toolkit](../../toolkits/observability/README.md) |
+| Operating with observability | [SRE Discipline](../../disciplines/sre/README.md) |
+| Security observability | [Security Principles](../security-principles/README.md) |
+| Foundational concepts | [Distributed Systems](../distributed-systems/README.md) |
 
 ---
 

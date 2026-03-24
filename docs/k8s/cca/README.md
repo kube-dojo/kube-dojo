@@ -41,7 +41,7 @@ The CCA (Cilium Certified Associate) validates foundational knowledge of Cilium,
 |--------|-------|-----------|
 | [Cilium Toolkit](../../platform/toolkits/networking/module-5.1-cilium.md) | Cilium overview, eBPF foundations, architecture diagram, identity-based security | Direct |
 | [CCA Module 1](module-1-advanced-cilium.md) | Agent, Operator, Hubble deep dive, IPAM modes (cluster-pool, kubernetes, multi-pool) | Direct |
-| [eBPF Foundations](../../platform/toolkits/networking/module-5.1-cilium.md#part-2-enter-ebpf---programming-the-unprogrammable) | eBPF verifier, program types, maps | Direct |
+| [eBPF Foundations](../../platform/toolkits/networking/module-5.1-cilium.md#part-2-enter-ebpf-programming-the-unprogrammable) | eBPF verifier, program types, maps | Direct |
 
 ---
 
@@ -58,9 +58,9 @@ The CCA (Cilium Certified Associate) validates foundational knowledge of Cilium,
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [Cilium Toolkit](../../platform/toolkits/networking/module-5.1-cilium.md#part-5-network-policies---from-basic-to-wow) | Standard NetworkPolicy, CiliumNetworkPolicy, L7 rules, DNS-based egress, cluster-wide policies | Direct |
+| [Cilium Toolkit](../../platform/toolkits/networking/module-5.1-cilium.md#part-5-network-policies-from-basic-to-wow) | Standard NetworkPolicy, CiliumNetworkPolicy, L7 rules, DNS-based egress, cluster-wide policies | Direct |
 | [CCA Module 1](module-1-advanced-cilium.md) | CiliumNetworkPolicy vs K8s NetworkPolicy comparison, policy enforcement modes, L7 HTTP-aware rules, entity-based policies | Direct |
-| [CKS Network Policies](../../k8s/cks/) | Standard K8s NetworkPolicy (baseline knowledge) | Supporting |
+| [CKS Network Policies](../cks/README.md) | Standard K8s NetworkPolicy (baseline knowledge) | Supporting |
 
 ---
 
@@ -97,7 +97,7 @@ The CCA (Cilium Certified Associate) validates foundational knowledge of Cilium,
 | Module | Topic | Relevance |
 |--------|-------|-----------|
 | [Hubble Toolkit](../../platform/toolkits/observability/module-1.7-hubble.md) | Hubble architecture, CLI usage, flow filtering, UI, Prometheus metrics, troubleshooting scenarios | Direct |
-| [Cilium Toolkit](../../platform/toolkits/networking/module-5.1-cilium.md#part-6-hubble---seeing-the-invisible) | Hubble CLI commands, output anatomy, debugging scenarios, metrics configuration | Direct |
+| [Cilium Toolkit](../../platform/toolkits/networking/module-5.1-cilium.md#part-6-hubble-seeing-the-invisible) | Hubble CLI commands, output anatomy, debugging scenarios, metrics configuration | Direct |
 
 ---
 
@@ -148,7 +148,7 @@ The CCA (Cilium Certified Associate) validates foundational knowledge of Cilium,
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [Cilium Toolkit](../../platform/toolkits/networking/module-5.1-cilium.md#part-2-enter-ebpf---programming-the-unprogrammable) | eBPF mental model, verifier, packet flow comparison, kernel programming | Direct |
+| [Cilium Toolkit](../../platform/toolkits/networking/module-5.1-cilium.md#part-2-enter-ebpf-programming-the-unprogrammable) | eBPF mental model, verifier, packet flow comparison, kernel programming | Direct |
 | [CCA Module 1](module-1-advanced-cilium.md) | eBPF in the context of Cilium architecture, dataplane | Supporting |
 
 ---

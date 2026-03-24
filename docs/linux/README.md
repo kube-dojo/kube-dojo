@@ -148,9 +148,9 @@ Start here if you're new to Linux or want to fill gaps in your knowledge.
 
 After completing this track, you'll be ready for:
 
-- **[Cloud Native 101](../prerequisites/cloud-native-101/)** — Apply Linux knowledge to cloud-native concepts
-- **[CKA/CKAD/CKS certifications](../k8s/)** — Linux knowledge is essential for these exams
-- **[Platform Engineering Track](../platform/)** — Build on the foundation
+- **[Cloud Native 101](../prerequisites/cloud-native-101/README.md)** — Apply Linux knowledge to cloud-native concepts
+- **[CKA/CKAD/CKS certifications](../k8s/README.md)** — Linux knowledge is essential for these exams
+- **[Platform Engineering Track](../platform/README.md)** — Build on the foundation
 
 ---
 

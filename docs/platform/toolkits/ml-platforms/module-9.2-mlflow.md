@@ -17,7 +17,7 @@ MLflow is the experiment tracking and model registry tool that data scientists a
 - Python basics
 - Basic ML concepts
 - Kubernetes fundamentals
-- [MLOps Discipline](../../disciplines/mlops/) recommended
+- [MLOps Discipline](../../disciplines/mlops/README.md) recommended
 
 ---
 

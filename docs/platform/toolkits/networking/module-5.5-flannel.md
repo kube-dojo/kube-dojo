@@ -59,7 +59,7 @@ This module will make sure you never burn three days on that problem. By the end
 
 **Prerequisites**:
 - Kubernetes networking basics (Pods, Services, CNI)
-- [Linux Networking fundamentals](../../../linux/networking/)
+- [Linux Networking fundamentals](../../../linux/networking/README.md)
 - Basic understanding of TCP/IP and Ethernet frames
 - A kind cluster for the hands-on exercise
 

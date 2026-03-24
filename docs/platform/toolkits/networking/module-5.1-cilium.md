@@ -34,7 +34,7 @@ Cilium changes everything. By the end of this module, when something drops packe
 
 **Prerequisites**:
 - Kubernetes networking basics (Services, Pods)
-- [Security Principles Foundations](../../foundations/security-principles/)
+- [Security Principles Foundations](../../foundations/security-principles/README.md)
 - A healthy frustration with iptables (optional but helps)
 
 ---

@@ -495,4 +495,4 @@ If you scored below 80%, review these modules:
 
 ## Next Part
 
-Proceed to [Part 4: Storage](../part4-storage/) to learn about PersistentVolumes, StorageClasses, and data management in Kubernetes.
+Proceed to [Part 4: Storage](../part4-storage/README.md) to learn about PersistentVolumes, StorageClasses, and data management in Kubernetes.

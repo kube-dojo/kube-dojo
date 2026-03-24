@@ -6,7 +6,7 @@
 
 The Developer Experience Toolkit covers tools that make daily Kubernetes work faster and more productive. k9s provides a terminal UI for rapid cluster navigation, Telepresence and Tilt enable local development against remote clusters, and local Kubernetes options (kind, minikube) give you disposable environments for testing.
 
-These tools apply concepts from [Platform Engineering Discipline](../../disciplines/platform-engineering/) to improve developer productivity.
+These tools apply concepts from [Platform Engineering Discipline](../../disciplines/platform-engineering/README.md) to improve developer productivity.
 
 ## Prerequisites
 
@@ -285,11 +285,11 @@ Best for           Debugging      Development      CI/CD
 
 ## Related Tracks
 
-- **Before**: [Platforms Toolkit](../platforms/) — Portal and infrastructure
-- **Applies**: [Platform Engineering Discipline](../../disciplines/platform-engineering/) — Developer experience concepts
-- **Related**: [IaC Discipline](../../disciplines/iac/) — Infrastructure provisioning patterns
-- **Related**: [CI/CD Pipelines Toolkit](../ci-cd-pipelines/) — Build and deploy automation
-- **Related**: [GitOps & Deployments Toolkit](../gitops-deployments/) — Deployment workflows
+- **Before**: [Platforms Toolkit](../platforms/README.md) — Portal and infrastructure
+- **Applies**: [Platform Engineering Discipline](../../disciplines/platform-engineering/README.md) — Developer experience concepts
+- **Related**: [IaC Discipline](../../disciplines/iac/README.md) — Infrastructure provisioning patterns
+- **Related**: [CI/CD Pipelines Toolkit](../ci-cd-pipelines/README.md) — Build and deploy automation
+- **Related**: [GitOps & Deployments Toolkit](../gitops-deployments/README.md) — Deployment workflows
 
 ---
 

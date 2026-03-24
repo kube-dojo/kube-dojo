@@ -8,7 +8,7 @@
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [CKA Part 3: Services & Networking](../cka/part3-services-networking/) — Kubernetes networking fundamentals
+- [CKA Part 3: Services & Networking](../cka/part3-services-networking/README.md) — Kubernetes networking fundamentals
 - [Service Mesh Concepts](../../platform/toolkits/networking/module-5.2-service-mesh.md) — Why service mesh exists
 - Basic understanding of proxies and TLS
 

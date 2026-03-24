@@ -1449,8 +1449,8 @@ az deployment sub create \
 
 You've completed the IaC Toolkit! Continue your learning:
 - [Module 6.1: IaC Fundamentals](../../disciplines/iac/module-6.1-iac-fundamentals.md) - Review core concepts
-- [Platform Engineering Track](../../disciplines/platform-engineering/) - Apply IaC in platform contexts
-- [GitOps Discipline](../../disciplines/gitops/) - Combine IaC with GitOps practices
+- [Platform Engineering Track](../../disciplines/platform-engineering/README.md) - Apply IaC in platform contexts
+- [GitOps Discipline](../../disciplines/gitops/README.md) - Combine IaC with GitOps practices
 
 ---
 

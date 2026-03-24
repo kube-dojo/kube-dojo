@@ -757,8 +757,8 @@ You've now completed all four ICA modules:
 - **Module 4**: Observability — metrics, tracing, logging, dashboards (10%)
 
 For deeper dives into the tools referenced here, see:
-- [Observability Theory](../../platform/foundations/observability-theory/) — Metrics, logs, traces fundamentals
-- [Observability Tools](../../platform/toolkits/observability/) — Prometheus, Grafana, Jaeger in depth
+- [Observability Theory](../../platform/foundations/observability-theory/README.md) — Metrics, logs, traces fundamentals
+- [Observability Tools](../../platform/toolkits/observability/README.md) — Prometheus, Grafana, Jaeger in depth
 
 ### Final Exam Prep Checklist
 

@@ -403,4 +403,4 @@ D) Only development environments
 
 ## Next Module
 
-Congratulations! You have completed Part 3: Cloud Native Architecture. Continue to [Part 4](../part4-kubernetes-fundamentals/) to dive into Kubernetes Fundamentals.
+Congratulations! You have completed Part 3: Cloud Native Architecture. Continue to [Part 4](../part4-kubernetes-fundamentals/README.md) to dive into Kubernetes Fundamentals.

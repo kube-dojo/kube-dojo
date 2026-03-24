@@ -14,7 +14,7 @@ Kyverno is a Kubernetes-native policy engine. Unlike OPA/Gatekeeper which uses R
 - When to choose Kyverno vs OPA/Gatekeeper
 
 **Prerequisites**:
-- [Security Principles Foundations](../../foundations/security-principles/)
+- [Security Principles Foundations](../../foundations/security-principles/README.md)
 - [Module 4.2: OPA & Gatekeeper](module-4.2-opa-gatekeeper.md) (recommended, not required)
 - Kubernetes admission controllers concept
 

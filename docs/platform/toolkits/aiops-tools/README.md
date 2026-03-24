@@ -6,13 +6,13 @@
 
 The AIOps Tools Toolkit covers practical implementations of AIOps capabilities—from open-source anomaly detection libraries to enterprise correlation platforms. You'll learn when to use Prophet vs. Isolation Forest, how commercial platforms like BigPanda and Moogsoft work, and how to build custom AIOps pipelines on Kubernetes.
 
-This toolkit applies concepts from [AIOps Discipline](../../disciplines/aiops/).
+This toolkit applies concepts from [AIOps Discipline](../../disciplines/aiops/README.md).
 
 ## Prerequisites
 
 Before starting this toolkit:
-- [AIOps Discipline](../../disciplines/aiops/) — Complete the conceptual foundation
-- [Observability Toolkit](../observability/) — Data collection layer
+- [AIOps Discipline](../../disciplines/aiops/README.md) — Complete the conceptual foundation
+- [Observability Toolkit](../observability/README.md) — Data collection layer
 - Python proficiency for anomaly detection exercises
 - Kubernetes basics for custom pipeline exercises
 
@@ -313,10 +313,10 @@ Auto-Remediation (Kubernetes operators)
 
 ## Related Tracks
 
-- **Before**: [AIOps Discipline](../../disciplines/aiops/) — Conceptual foundation
-- **Related**: [IaC Tools Toolkit](../iac-tools/) — Terraform modules for AIOps infrastructure
-- **Related**: [Observability Toolkit](../observability/) — Data collection layer
-- **Related**: [SRE Discipline](../../disciplines/sre/) — Operational practices
+- **Before**: [AIOps Discipline](../../disciplines/aiops/README.md) — Conceptual foundation
+- **Related**: [IaC Tools Toolkit](../iac-tools/README.md) — Terraform modules for AIOps infrastructure
+- **Related**: [Observability Toolkit](../observability/README.md) — Data collection layer
+- **Related**: [SRE Discipline](../../disciplines/sre/README.md) — Operational practices
 - **After**: Build production AIOps!
 
 ---

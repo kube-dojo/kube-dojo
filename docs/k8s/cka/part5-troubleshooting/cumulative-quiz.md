@@ -673,4 +673,4 @@ With Part 5 complete, you've covered:
 
 **Total: 38 modules covering 100% of CKA exam domains**
 
-Continue to [Part 6: Mock Exams](../part6-mock-exams/) for timed practice under exam conditions.
+Continue to [Part 6: Mock Exams](../part6-mock-exams/README.md) for timed practice under exam conditions.

@@ -6,7 +6,7 @@
 
 Before starting this module:
 - **Required**: [Module 1.1: What is SRE?](module-1.1-what-is-sre.md) — Understanding SRE fundamentals
-- **Recommended**: [Systems Thinking Track](../../foundations/systems-thinking/) — Understanding system leverage
+- **Recommended**: [Systems Thinking Track](../../foundations/systems-thinking/README.md) — Understanding system leverage
 - **Helpful**: Some experience with scripting or automation
 
 ---

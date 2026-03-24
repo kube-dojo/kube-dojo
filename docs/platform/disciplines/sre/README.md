@@ -140,9 +140,9 @@ Engineering   Discipline      Toolkit
 
 ## Prerequisites
 
-- **Required**: [Reliability Engineering Track](../../foundations/reliability-engineering/) — Failure modes and resilience
-- **Required**: [Systems Thinking Track](../../foundations/systems-thinking/) — Understanding system dynamics
-- **Recommended**: [Observability Theory Track](../../foundations/observability-theory/) — Metrics and monitoring
+- **Required**: [Reliability Engineering Track](../../foundations/reliability-engineering/README.md) — Failure modes and resilience
+- **Required**: [Systems Thinking Track](../../foundations/systems-thinking/README.md) — Understanding system dynamics
+- **Recommended**: [Observability Theory Track](../../foundations/observability-theory/README.md) — Metrics and monitoring
 - **Helpful**: Experience operating production systems
 - **Helpful**: Some Kubernetes experience
 
@@ -154,12 +154,12 @@ After completing the SRE Discipline, you're ready for:
 
 | Track | Why |
 |-------|-----|
-| [Platform Engineering Discipline](../platform-engineering/) | Build platforms using SRE principles |
-| [GitOps Discipline](../gitops/) | Declarative infrastructure operations |
-| [IaC Discipline](../iac/) | Infrastructure as Code for reliable provisioning |
-| [Observability Toolkit](../../toolkits/observability/) | Implement Prometheus, Grafana, OpenTelemetry |
-| [IaC Tools Toolkit](../../toolkits/iac-tools/) | Terraform, OpenTofu, Pulumi for automation |
-| [CKA Certification](../../../k8s/cka/) | Apply SRE to Kubernetes administration |
+| [Platform Engineering Discipline](../platform-engineering/README.md) | Build platforms using SRE principles |
+| [GitOps Discipline](../gitops/README.md) | Declarative infrastructure operations |
+| [IaC Discipline](../iac/README.md) | Infrastructure as Code for reliable provisioning |
+| [Observability Toolkit](../../toolkits/observability/README.md) | Implement Prometheus, Grafana, OpenTelemetry |
+| [IaC Tools Toolkit](../../toolkits/iac-tools/README.md) | Terraform, OpenTofu, Pulumi for automation |
+| [CKA Certification](../../../k8s/cka/README.md) | Apply SRE to Kubernetes administration |
 
 ---
 

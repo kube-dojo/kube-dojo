@@ -6,12 +6,12 @@
 
 The GitOps & Deployments Toolkit covers the essential tools for declarative, Git-driven Kubernetes deployments. These tools implement the GitOps methodology—using Git as the single source of truth for infrastructure and application configuration.
 
-This toolkit builds on the concepts from [GitOps Discipline](../../disciplines/gitops/) and shows you how to implement those principles with production-grade tools.
+This toolkit builds on the concepts from [GitOps Discipline](../../disciplines/gitops/README.md) and shows you how to implement those principles with production-grade tools.
 
 ## Prerequisites
 
 Before starting this toolkit:
-- [GitOps Discipline](../../disciplines/gitops/) — GitOps principles and practices
+- [GitOps Discipline](../../disciplines/gitops/README.md) — GitOps principles and practices
 - Basic Kubernetes knowledge (Deployments, Services)
 - Git fundamentals
 - kubectl experience
@@ -193,10 +193,10 @@ Breaking change in API                → Argo Rollouts canary
 
 ## Related Tracks
 
-- **Before**: [GitOps Discipline](../../disciplines/gitops/) — Why GitOps works
-- **Related**: [Observability Toolkit](../observability/) — Monitor deployments
-- **Related**: [IaC Tools](../iac-tools/) — Infrastructure delivery with GitOps
-- **After**: [CI/CD Pipelines Toolkit](../ci-cd-pipelines/) — Build before deploy
+- **Before**: [GitOps Discipline](../../disciplines/gitops/README.md) — Why GitOps works
+- **Related**: [Observability Toolkit](../observability/README.md) — Monitor deployments
+- **Related**: [IaC Tools](../iac-tools/README.md) — Infrastructure delivery with GitOps
+- **After**: [CI/CD Pipelines Toolkit](../ci-cd-pipelines/README.md) — Build before deploy
 
 ---
 

@@ -6,15 +6,15 @@
 
 The Source Control & Collaboration Toolkit goes beyond "just use GitHub." Modern platform engineering requires understanding the full landscape: GitLab's integrated DevOps platform, self-hosted alternatives for data sovereignty, and GitHub's advanced security features that most teams never enable.
 
-This toolkit applies concepts from [DevSecOps Discipline](../../disciplines/devsecops/) and [GitOps Discipline](../../disciplines/gitops/).
+This toolkit applies concepts from [DevSecOps Discipline](../../disciplines/devsecops/README.md) and [GitOps Discipline](../../disciplines/gitops/README.md).
 
 ## Prerequisites
 
 Before starting this toolkit:
 - Basic Git proficiency (commits, branches, merges)
 - Understanding of CI/CD concepts
-- [DevSecOps Discipline](../../disciplines/devsecops/) - Security integration
-- [GitOps Discipline](../../disciplines/gitops/) - Git-centric workflows
+- [DevSecOps Discipline](../../disciplines/devsecops/README.md) - Security integration
+- [GitOps Discipline](../../disciplines/gitops/README.md) - Git-centric workflows
 
 ## Modules
 
@@ -281,11 +281,11 @@ Note: Costs vary significantly by usage patterns and scale
 
 ## Related Tracks
 
-- **Before**: [DevSecOps Discipline](../../disciplines/devsecops/) — Security integration concepts
-- **Before**: [GitOps Discipline](../../disciplines/gitops/) — Git-centric workflows
-- **Related**: [CI/CD Pipelines Toolkit](../ci-cd-pipelines/) — Pipeline implementation
-- **Related**: [Code Quality Toolkit](../code-quality/) — Scanning and analysis tools
-- **After**: [Security Tools Toolkit](../security-tools/) — Runtime security
+- **Before**: [DevSecOps Discipline](../../disciplines/devsecops/README.md) — Security integration concepts
+- **Before**: [GitOps Discipline](../../disciplines/gitops/README.md) — Git-centric workflows
+- **Related**: [CI/CD Pipelines Toolkit](../ci-cd-pipelines/README.md) — Pipeline implementation
+- **Related**: [Code Quality Toolkit](../code-quality/README.md) — Scanning and analysis tools
+- **After**: [Security Tools Toolkit](../security-tools/README.md) — Runtime security
 
 ---
 

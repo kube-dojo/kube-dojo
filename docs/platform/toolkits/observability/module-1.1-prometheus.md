@@ -5,8 +5,8 @@
 ## Prerequisites
 
 Before starting this module:
-- [Observability Theory Track](../../foundations/observability-theory/)
-- [SRE Discipline](../../disciplines/sre/) (recommended)
+- [Observability Theory Track](../../foundations/observability-theory/README.md)
+- [SRE Discipline](../../disciplines/sre/README.md) (recommended)
 - Basic Kubernetes knowledge
 - Understanding of metrics concepts
 

@@ -1284,9 +1284,9 @@ AI infrastructure cost optimization is a multi-layered discipline: spot instance
 
 You have completed the AI/GPU Infrastructure discipline. From here:
 
-- **Build on this foundation** with the [Platform Engineering](../platform-engineering/) discipline for internal developer platforms
-- **Deepen your observability** with the [SRE](../sre/) discipline for GPU cluster reliability
-- **Explore MLOps** with the [MLOps](../mlops/) discipline for model lifecycle management
+- **Build on this foundation** with the [Platform Engineering](../platform-engineering/README.md) discipline for internal developer platforms
+- **Deepen your observability** with the [SRE](../sre/README.md) discipline for GPU cluster reliability
+- **Explore MLOps** with the [MLOps](../mlops/README.md) discipline for model lifecycle management
 - **Review** all modules in this discipline and build a production GPU platform integrating all six modules
 
 ---

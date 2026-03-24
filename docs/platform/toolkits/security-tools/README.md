@@ -6,13 +6,13 @@
 
 The Security Tools Toolkit covers the essential tools for securing Kubernetes clusters and workloads. From secrets management to runtime detection to supply chain integrity—these tools form the defense-in-depth security stack that production clusters require.
 
-This toolkit applies concepts from [Security Principles](../../foundations/security-principles/) and [DevSecOps Discipline](../../disciplines/devsecops/).
+This toolkit applies concepts from [Security Principles](../../foundations/security-principles/README.md) and [DevSecOps Discipline](../../disciplines/devsecops/README.md).
 
 ## Prerequisites
 
 Before starting this toolkit:
-- [DevSecOps Discipline](../../disciplines/devsecops/) — Security concepts and practices
-- [Security Principles Foundations](../../foundations/security-principles/)
+- [DevSecOps Discipline](../../disciplines/devsecops/README.md) — Security concepts and practices
+- [Security Principles Foundations](../../foundations/security-principles/README.md)
 - Kubernetes RBAC basics
 - Container fundamentals
 
@@ -227,11 +227,11 @@ Each module includes practical exercises:
 
 ## Related Tracks
 
-- **Before**: [DevSecOps Discipline](../../disciplines/devsecops/) — Security concepts
-- **Before**: [Security Principles](../../foundations/security-principles/) — Theory
-- **Related**: [GitOps & Deployments](../gitops-deployments/) — Secure deployments
-- **Related**: [IaC Tools](../iac-tools/) — IaC security scanning with Checkov, tfsec
-- **After**: [Networking Toolkit](../networking/) — Network security
+- **Before**: [DevSecOps Discipline](../../disciplines/devsecops/README.md) — Security concepts
+- **Before**: [Security Principles](../../foundations/security-principles/README.md) — Theory
+- **Related**: [GitOps & Deployments](../gitops-deployments/README.md) — Secure deployments
+- **Related**: [IaC Tools](../iac-tools/README.md) — IaC security scanning with Checkov, tfsec
+- **After**: [Networking Toolkit](../networking/README.md) — Network security
 
 ---
 

@@ -20,11 +20,11 @@ The KCNA is a **multiple-choice exam** (not hands-on) that validates foundationa
 
 | Part | Topic | Weight | Modules |
 |------|-------|--------|---------|
-| [Part 0](part0-introduction/) | Introduction | - | 2 |
-| [Part 1](part1-kubernetes-fundamentals/) | Kubernetes Fundamentals | 44% | 8 |
-| [Part 2](part2-container-orchestration/) | Container Orchestration | 28% | 4 |
-| [Part 3](part3-cloud-native-architecture/) | Cloud Native Architecture | 12% | 8 |
-| [Part 4](part4-application-delivery/) | Application Delivery | 16% | 2 |
+| [Part 0](part0-introduction/README.md) | Introduction | - | 2 |
+| [Part 1](part1-kubernetes-fundamentals/README.md) | Kubernetes Fundamentals | 44% | 8 |
+| [Part 2](part2-container-orchestration/README.md) | Container Orchestration | 28% | 4 |
+| [Part 3](part3-cloud-native-architecture/README.md) | Cloud Native Architecture | 12% | 8 |
+| [Part 4](part4-application-delivery/README.md) | Application Delivery | 16% | 2 |
 | **Total** | | **100%** | **24** |
 
 ## Module Overview

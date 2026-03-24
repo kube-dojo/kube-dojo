@@ -4,7 +4,7 @@
 >
 > **Time to Complete**: 30-35 minutes
 >
-> **Prerequisites**: [Reliability Engineering Track](../reliability-engineering/) (recommended)
+> **Prerequisites**: [Reliability Engineering Track](../reliability-engineering/README.md) (recommended)
 >
 > **Track**: Foundations
 

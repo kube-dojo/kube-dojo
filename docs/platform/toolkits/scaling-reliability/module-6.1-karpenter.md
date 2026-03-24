@@ -14,7 +14,7 @@ Cluster Autoscaler was fine. Karpenter is better. Instead of scaling node groups
 
 **Prerequisites**:
 - Kubernetes scheduling concepts
-- [SRE Discipline](../../disciplines/sre/) — Capacity planning basics
+- [SRE Discipline](../../disciplines/sre/README.md) — Capacity planning basics
 - Cloud provider fundamentals (EC2, instance types)
 
 ---

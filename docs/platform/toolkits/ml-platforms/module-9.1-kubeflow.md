@@ -17,7 +17,7 @@ Kubeflow brings machine learning workflows to Kubernetes. It's not a single tool
 - Kubernetes fundamentals
 - Basic ML concepts (training, inference)
 - Python familiarity
-- [MLOps Discipline](../../disciplines/mlops/) recommended
+- [MLOps Discipline](../../disciplines/mlops/README.md) recommended
 
 ---
 

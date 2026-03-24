@@ -8,8 +8,8 @@
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [DevSecOps Discipline](../../disciplines/devsecops/) - CI/CD and security concepts
-- [CI/CD Pipelines Toolkit](../ci-cd-pipelines/) - Pipeline implementation
+- [DevSecOps Discipline](../../disciplines/devsecops/README.md) - CI/CD and security concepts
+- [CI/CD Pipelines Toolkit](../ci-cd-pipelines/README.md) - Pipeline implementation
 - Experience with at least one programming language
 - Basic Docker knowledge
 

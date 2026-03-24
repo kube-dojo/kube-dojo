@@ -6,7 +6,7 @@
 
 The K8s Storage Deep Dive Toolkit covers software-defined storage solutions that run on Kubernetes itself. Instead of depending on cloud-provider storage or external SANs, these tools turn your cluster nodes into a distributed storage platform. This is essential for bare-metal deployments, multi-cloud portability, and use cases where you need full control over your data layer.
 
-This toolkit applies concepts from [Distributed Systems Foundation](../../foundations/distributed-systems/) and [Reliability Engineering Foundation](../../foundations/reliability-engineering/).
+This toolkit applies concepts from [Distributed Systems Foundation](../../foundations/distributed-systems/README.md) and [Reliability Engineering Foundation](../../foundations/reliability-engineering/README.md).
 
 ## Prerequisites
 
@@ -14,8 +14,8 @@ Before starting this toolkit:
 - Solid Kubernetes fundamentals (PersistentVolumes, PVCs, StorageClasses, CSI)
 - Understanding of StatefulSets and volume lifecycle
 - Basic Linux storage concepts (block devices, filesystems, object storage)
-- [Distributed Systems Foundation](../../foundations/distributed-systems/) - Replication, consistency
-- [Reliability Engineering Foundation](../../foundations/reliability-engineering/) - SLOs, failure modes
+- [Distributed Systems Foundation](../../foundations/distributed-systems/README.md) - Replication, consistency
+- [Reliability Engineering Foundation](../../foundations/reliability-engineering/README.md) - SLOs, failure modes
 
 ## Modules
 
@@ -192,11 +192,11 @@ CONVERGED STORAGE - ONE CLUSTER, THREE STORAGE TYPES
 
 ## Related Tracks
 
-- **Before**: [Distributed Systems Foundation](../../foundations/distributed-systems/) — Replication, consensus
-- **Before**: [Reliability Engineering Foundation](../../foundations/reliability-engineering/) — SLOs, failure modes
-- **Related**: [Cloud-Native Databases](../cloud-native-databases/) — Databases that run on this storage
-- **Related**: [Scaling & Reliability](../scaling-reliability/) — Velero for backup
-- **Related**: [Observability Toolkit](../observability/) — Storage monitoring
+- **Before**: [Distributed Systems Foundation](../../foundations/distributed-systems/README.md) — Replication, consensus
+- **Before**: [Reliability Engineering Foundation](../../foundations/reliability-engineering/README.md) — SLOs, failure modes
+- **Related**: [Cloud-Native Databases](../cloud-native-databases/README.md) — Databases that run on this storage
+- **Related**: [Scaling & Reliability](../scaling-reliability/README.md) — Velero for backup
+- **Related**: [Observability Toolkit](../observability/README.md) — Storage monitoring
 
 ---
 

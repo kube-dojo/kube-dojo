@@ -6,7 +6,7 @@
 
 Before starting this module:
 - [Prometheus Module](../../platform/toolkits/observability/module-1.1-prometheus.md) — architecture, pull model, basic PromQL
-- [Observability Theory](../../platform/foundations/observability-theory/) — metrics concepts
+- [Observability Theory](../../platform/foundations/observability-theory/README.md) — metrics concepts
 - Basic Kubernetes knowledge
 - A running Prometheus instance (kind/minikube with kube-prometheus-stack)
 

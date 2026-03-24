@@ -1047,7 +1047,7 @@ Choose Gitpod if:
 ## Next Steps
 
 - **Related**: [Module 8.4: DevPod](module-8.4-devpod.md) - Open source alternative
-- **Related**: [Platform Engineering](../../disciplines/platform-engineering/) - Building developer platforms
+- **Related**: [Platform Engineering](../../disciplines/platform-engineering/README.md) - Building developer platforms
 - **Related**: [Module 8.3: Local Kubernetes](module-8.3-local-kubernetes.md) - When you need local
 
 ---

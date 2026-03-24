@@ -8,7 +8,7 @@
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [DevSecOps Discipline](../../disciplines/devsecops/) - Security scanning concepts
+- [DevSecOps Discipline](../../disciplines/devsecops/README.md) - Security scanning concepts
 - Basic understanding of dependency management (npm, pip, maven)
 - Container basics (Dockerfile, images)
 - CI/CD fundamentals

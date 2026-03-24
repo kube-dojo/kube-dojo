@@ -8,8 +8,8 @@
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [DevSecOps Discipline](../../disciplines/devsecops/) - CI/CD and security concepts
-- [GitOps Discipline](../../disciplines/gitops/) - Git-centric workflows
+- [DevSecOps Discipline](../../disciplines/devsecops/README.md) - CI/CD and security concepts
+- [GitOps Discipline](../../disciplines/gitops/README.md) - Git-centric workflows
 - Basic Docker/Kubernetes experience
 - Git fundamentals (branches, merges, remotes)
 

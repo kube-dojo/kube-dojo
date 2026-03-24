@@ -6,7 +6,7 @@
 
 Before starting this module:
 - **Required**: [Module 2.1: What is Platform Engineering?](module-2.1-what-is-platform-engineering.md) — Platform foundations
-- **Recommended**: [Systems Thinking Track](../../foundations/systems-thinking/) — Understanding feedback loops
+- **Recommended**: [Systems Thinking Track](../../foundations/systems-thinking/README.md) — Understanding feedback loops
 - **Helpful**: Experience working on software development teams
 
 ---

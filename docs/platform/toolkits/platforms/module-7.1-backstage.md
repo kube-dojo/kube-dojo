@@ -13,7 +13,7 @@
 - Plugin ecosystem and customization
 
 **Prerequisites**:
-- [Platform Engineering Discipline](../../disciplines/platform-engineering/)
+- [Platform Engineering Discipline](../../disciplines/platform-engineering/README.md)
 - Node.js basics (for customization)
 - Kubernetes fundamentals
 

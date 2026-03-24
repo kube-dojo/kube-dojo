@@ -2,7 +2,7 @@
 
 **How to ship software reliably at scale.**
 
-This is NOT basic CI/CD — that's covered in [Modern DevOps](/prerequisites/modern-devops/module-3-cicd-pipelines/). Release Engineering is about release strategy, progressive delivery, feature management, and coordinating releases across many services and regions.
+This is NOT basic CI/CD — that's covered in [Modern DevOps](../../../prerequisites/modern-devops/module-3-cicd-pipelines.md). Release Engineering is about release strategy, progressive delivery, feature management, and coordinating releases across many services and regions.
 
 ---
 
@@ -22,10 +22,10 @@ This is NOT basic CI/CD — that's covered in [Modern DevOps](/prerequisites/mod
 
 ## Prerequisites
 
-- [CI/CD Pipelines](/prerequisites/modern-devops/module-3-cicd-pipelines/) — basic pipeline concepts
-- [Kubernetes Deployments](/prerequisites/kubernetes-basics/module-4-deployments/) — rolling updates
+- [CI/CD Pipelines](../../../prerequisites/modern-devops/module-3-cicd-pipelines.md) — basic pipeline concepts
+- [Kubernetes Deployments](../../../prerequisites/kubernetes-basics/module-4-deployments.md) — rolling updates
 - Prometheus/Grafana basics (for metrics modules)
 
 ## What's Next
 
-After Release Engineering, continue to [Chaos Engineering](/platform/disciplines/chaos-engineering/) — test your releases with controlled failure injection.
+After Release Engineering, continue to [Chaos Engineering](../chaos-engineering/README.md) — test your releases with controlled failure injection.

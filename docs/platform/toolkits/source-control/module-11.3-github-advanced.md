@@ -8,8 +8,8 @@
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [DevSecOps Discipline](../../disciplines/devsecops/) - Security scanning concepts
-- [GitOps Discipline](../../disciplines/gitops/) - Git-centric workflows
+- [DevSecOps Discipline](../../disciplines/devsecops/README.md) - Security scanning concepts
+- [GitOps Discipline](../../disciplines/gitops/README.md) - Git-centric workflows
 - Basic GitHub experience (repos, PRs, issues)
 - Understanding of CI/CD fundamentals
 

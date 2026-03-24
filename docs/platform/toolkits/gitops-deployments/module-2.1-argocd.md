@@ -11,7 +11,7 @@
 ## Prerequisites
 
 Before starting this module:
-- [GitOps Discipline](../../disciplines/gitops/) — GitOps principles and practices
+- [GitOps Discipline](../../disciplines/gitops/README.md) — GitOps principles and practices
 - Kubernetes basics (Deployments, Services, Namespaces)
 - Git fundamentals
 - kubectl experience

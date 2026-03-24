@@ -53,5 +53,5 @@ Rosetta Stone (cross-provider concepts)
 
 ## Prerequisites
 
-- [Fundamentals](/prerequisites/) — Cloud Native 101, Docker, basic K8s
-- [Linux Deep Dive](/linux/) — recommended for networking and security modules
+- [Fundamentals](../prerequisites/README.md) — Cloud Native 101, Docker, basic K8s
+- [Linux Deep Dive](../linux/README.md) — recommended for networking and security modules

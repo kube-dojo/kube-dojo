@@ -15,7 +15,7 @@ Every developer wants their own Kubernetes cluster. Nobody wants to pay for it. 
 
 **Prerequisites**:
 - Kubernetes fundamentals (Pods, Deployments, Services, Namespaces)
-- Multi-tenancy concepts ([Security Principles](../../foundations/security-principles/))
+- Multi-tenancy concepts ([Security Principles](../../foundations/security-principles/README.md))
 - kubectl basics
 - Helm basics
 
@@ -399,7 +399,7 @@ Developer                    Platform Team
            their virtual cluster
 ```
 
-This pattern ties directly into the principles covered in [Platform Engineering Discipline](../../disciplines/platform-engineering/)—golden paths, self-service, and reducing cognitive load.
+This pattern ties directly into the principles covered in [Platform Engineering Discipline](../../disciplines/platform-engineering/README.md)—golden paths, self-service, and reducing cognitive load.
 
 ### Resource Quotas on Host
 
@@ -597,8 +597,8 @@ vcluster delete my-vcluster-2
 
 - [Module 7.1: Backstage](module-7.1-backstage.md) — Build a self-service portal that provisions vClusters
 - [Module 7.2: Crossplane](module-7.2-crossplane.md) — Combine with Crossplane for full infrastructure self-service
-- [Platform Engineering Discipline](../../disciplines/platform-engineering/) — The principles behind self-service platforms
-- [Security Principles](../../foundations/security-principles/) — Multi-tenancy and isolation theory
+- [Platform Engineering Discipline](../../disciplines/platform-engineering/README.md) — The principles behind self-service platforms
+- [Security Principles](../../foundations/security-principles/README.md) — Multi-tenancy and isolation theory
 
 ---
 

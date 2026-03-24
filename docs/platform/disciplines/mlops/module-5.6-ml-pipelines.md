@@ -1014,4 +1014,4 @@ Congratulations on completing the MLOps Discipline! You now understand:
 - Drift detection and model monitoring
 - Pipeline orchestration and automation
 
-Next, explore the [ML Platforms Toolkit](../../toolkits/ml-platforms/) for hands-on implementations with Kubeflow, MLflow, and other tools.
+Next, explore the [ML Platforms Toolkit](../../toolkits/ml-platforms/README.md) for hands-on implementations with Kubeflow, MLflow, and other tools.

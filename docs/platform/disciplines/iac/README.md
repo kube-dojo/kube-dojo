@@ -12,7 +12,7 @@ This isn't about learning a specific tool—it's about understanding the pattern
 
 Before starting this track:
 - [Prerequisites: Infrastructure as Code](../../../prerequisites/modern-devops/module-1-infrastructure-as-code.md) — Basic IaC concepts
-- [Systems Thinking](../../foundations/systems-thinking/) — Understanding complex systems
+- [Systems Thinking](../../foundations/systems-thinking/README.md) — Understanding complex systems
 - Basic cloud provider knowledge (any cloud)
 
 ## Modules
@@ -116,7 +116,7 @@ Module 6.6: IaC Cost Management
 
 ## Tools Covered (Conceptually)
 
-This track covers **concepts** that apply across tools. For hands-on tool implementations, see the [IaC Tools Toolkit](../../toolkits/iac-tools/).
+This track covers **concepts** that apply across tools. For hands-on tool implementations, see the [IaC Tools Toolkit](../../toolkits/iac-tools/README.md).
 
 | Category | Examples |
 |----------|----------|
@@ -128,12 +128,12 @@ This track covers **concepts** that apply across tools. For hands-on tool implem
 
 ## Related Tracks
 
-- **Before**: [Systems Thinking](../../foundations/systems-thinking/) — Complex systems fundamentals
-- **Before**: [Security Principles](../../foundations/security-principles/) — Security foundations for IaC Security module
-- **Related**: [Platform Engineering](../platform-engineering/) — IaC is core to self-service platforms
-- **Related**: [DevSecOps](../devsecops/) — Security in IaC pipelines
-- **Related**: [GitOps](../gitops/) — GitOps for infrastructure delivery
-- **After**: [IaC Tools Toolkit](../../toolkits/iac-tools/) — Terraform, OpenTofu, Pulumi hands-on
+- **Before**: [Systems Thinking](../../foundations/systems-thinking/README.md) — Complex systems fundamentals
+- **Before**: [Security Principles](../../foundations/security-principles/README.md) — Security foundations for IaC Security module
+- **Related**: [Platform Engineering](../platform-engineering/README.md) — IaC is core to self-service platforms
+- **Related**: [DevSecOps](../devsecops/README.md) — Security in IaC pipelines
+- **Related**: [GitOps](../gitops/README.md) — GitOps for infrastructure delivery
+- **After**: [IaC Tools Toolkit](../../toolkits/iac-tools/README.md) — Terraform, OpenTofu, Pulumi hands-on
 
 ---
 

@@ -985,4 +985,4 @@ rm -rf ~/lab /tmp/restore-test
 
 ## Next Module
 
-You now have the skills to automate anything on a schedule and protect data with proper backups. Return to the [LFCS Learning Path](../../k8s/lfcs/) to review remaining study areas, or revisit [Module 8.1: Storage Management](module-8.1-storage-management.md) if you want to combine LVM snapshots with your backup strategy.
+You now have the skills to automate anything on a schedule and protect data with proper backups. Return to the [LFCS Learning Path](../../k8s/lfcs/README.md) to review remaining study areas, or revisit [Module 8.1: Storage Management](module-8.1-storage-management.md) if you want to combine LVM snapshots with your backup strategy.

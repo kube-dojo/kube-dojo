@@ -10,22 +10,22 @@ Toolkits are hands-on guides to specific tools. Unlike Foundations (timeless the
 
 | Toolkit | Focus | Modules |
 |---------|-------|---------|
-| [Observability](observability/) | Prometheus, OpenTelemetry, Grafana, Loki, Pixie, Hubble, Coroot | 8 |
-| [GitOps & Deployments](gitops-deployments/) | ArgoCD, Argo Rollouts, Flux, Helm | 4 |
-| [CI/CD Pipelines](ci-cd-pipelines/) | Dagger, Tekton, Argo Workflows | 3 |
-| [IaC Tools](iac-tools/) | Terraform, OpenTofu, Pulumi, Ansible, Wing, SST, System Initiative, Nitric | 10 |
-| [Security Tools](security-tools/) | Vault, OPA/Gatekeeper, Falco, Tetragon, KubeArmor | 6 |
-| [Networking](networking/) | Cilium, Service Mesh | 2 |
-| [Scaling & Reliability](scaling-reliability/) | Karpenter, KEDA, Velero | 3 |
-| [Platforms](platforms/) | Backstage, Crossplane, cert-manager | 3 |
-| [Developer Experience](developer-experience/) | K9s, Telepresence, Local K8s, DevPod, Gitpod/Codespaces | 5 |
-| [ML Platforms](ml-platforms/) | Kubeflow, MLflow, Feature Stores, vLLM, Ray Serve, LangChain | 6 |
-| [AIOps Tools](aiops-tools/) | Anomaly detection, Event correlation | 4 |
-| [Source Control](source-control/) | GitLab, Gitea/Forgejo, GitHub Advanced | 3 |
-| [Code Quality](code-quality/) | SonarQube, Semgrep, CodeQL, Snyk, Trivy | 5 |
-| [Container Registries](container-registries/) | Harbor, Zot, Dragonfly | 3 |
-| [K8s Distributions](k8s-distributions/) | k3s, k0s, MicroK8s, Talos, OpenShift, Managed K8s | 6 |
-| [Cloud-Native Databases](cloud-native-databases/) | CockroachDB, CloudNativePG, Neon/PlanetScale, Vitess | 4 |
+| [Observability](observability/README.md) | Prometheus, OpenTelemetry, Grafana, Loki, Pixie, Hubble, Coroot | 8 |
+| [GitOps & Deployments](gitops-deployments/README.md) | ArgoCD, Argo Rollouts, Flux, Helm | 4 |
+| [CI/CD Pipelines](ci-cd-pipelines/README.md) | Dagger, Tekton, Argo Workflows | 3 |
+| [IaC Tools](iac-tools/README.md) | Terraform, OpenTofu, Pulumi, Ansible, Wing, SST, System Initiative, Nitric | 10 |
+| [Security Tools](security-tools/README.md) | Vault, OPA/Gatekeeper, Falco, Tetragon, KubeArmor | 6 |
+| [Networking](networking/README.md) | Cilium, Service Mesh | 2 |
+| [Scaling & Reliability](scaling-reliability/README.md) | Karpenter, KEDA, Velero | 3 |
+| [Platforms](platforms/README.md) | Backstage, Crossplane, cert-manager | 3 |
+| [Developer Experience](developer-experience/README.md) | K9s, Telepresence, Local K8s, DevPod, Gitpod/Codespaces | 5 |
+| [ML Platforms](ml-platforms/README.md) | Kubeflow, MLflow, Feature Stores, vLLM, Ray Serve, LangChain | 6 |
+| [AIOps Tools](aiops-tools/README.md) | Anomaly detection, Event correlation | 4 |
+| [Source Control](source-control/README.md) | GitLab, Gitea/Forgejo, GitHub Advanced | 3 |
+| [Code Quality](code-quality/README.md) | SonarQube, Semgrep, CodeQL, Snyk, Trivy | 5 |
+| [Container Registries](container-registries/README.md) | Harbor, Zot, Dragonfly | 3 |
+| [K8s Distributions](k8s-distributions/README.md) | k3s, k0s, MicroK8s, Talos, OpenShift, Managed K8s | 6 |
+| [Cloud-Native Databases](cloud-native-databases/README.md) | CockroachDB, CloudNativePG, Neon/PlanetScale, Vitess | 4 |
 | **Total** | | **75** |
 
 ## How to Use Toolkits
@@ -49,8 +49,8 @@ We include tools that are:
 
 Before diving into toolkits:
 
-- Complete relevant [Foundations](../foundations/) modules
-- Understand the [Discipline](../disciplines/) the tool supports
+- Complete relevant [Foundations](../foundations/README.md) modules
+- Understand the [Discipline](../disciplines/README.md) the tool supports
 - Have a Kubernetes cluster (kind/minikube for learning)
 
 ## Start Learning

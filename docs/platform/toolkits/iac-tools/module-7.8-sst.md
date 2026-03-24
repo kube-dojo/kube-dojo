@@ -916,7 +916,7 @@ One fintech company reported 40% fewer production bugs after migrating from Serv
 
 - **Next Module**: [Module 7.9: System Initiative](module-7.9-system-initiative.md) — DevOps automation
 - **Related**: [Module 7.7: Wing](module-7.7-winglang.md) — Another unified approach
-- **Related**: [CI/CD Pipelines](../ci-cd-pipelines/) — Deploy SST apps
+- **Related**: [CI/CD Pipelines](../ci-cd-pipelines/README.md) — Deploy SST apps
 
 ---
 

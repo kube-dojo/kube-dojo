@@ -5,7 +5,7 @@
 ## Prerequisites
 
 Before starting this module:
-- [Observability Theory](../../foundations/observability-theory/) — Understanding of metrics, logs, traces
+- [Observability Theory](../../foundations/observability-theory/README.md) — Understanding of metrics, logs, traces
 - [SRE Fundamentals](../sre/module-1.1-what-is-sre.md) — Incident management basics
 - Basic understanding of machine learning concepts
 

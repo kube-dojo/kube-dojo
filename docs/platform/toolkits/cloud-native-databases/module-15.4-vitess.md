@@ -12,7 +12,7 @@ Before starting this module, you should have completed:
 - [Module 15.3: Neon & PlanetScale](module-15.3-serverless-databases.md) - PlanetScale is built on Vitess
 - MySQL fundamentals (basic SQL, replication concepts)
 - Kubernetes fundamentals (StatefulSets, Services, Operators)
-- [Distributed Systems Foundation](../../foundations/distributed-systems/) - Sharding concepts
+- [Distributed Systems Foundation](../../foundations/distributed-systems/README.md) - Sharding concepts
 
 ---
 
@@ -1059,8 +1059,8 @@ Don't use Vitess if:
 ## Next Steps
 
 - **Related**: [Module 15.3: PlanetScale](module-15.3-serverless-databases.md) — Managed Vitess experience
-- **Related**: [Distributed Systems Foundation](../../foundations/distributed-systems/) — Sharding theory
-- **Related**: [Observability Toolkit](../observability/) — Monitoring Vitess
+- **Related**: [Distributed Systems Foundation](../../foundations/distributed-systems/README.md) — Sharding theory
+- **Related**: [Observability Toolkit](../observability/README.md) — Monitoring Vitess
 
 ---
 

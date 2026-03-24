@@ -853,4 +853,4 @@ sudo nmcli connection delete static-eth0
 
 ## Next Module
 
-You've now covered the key LFCS gaps in storage and networking. Return to the [LFCS Learning Path](../../k8s/lfcs/) to review remaining study areas, or continue strengthening your Linux fundamentals with [Module 5.1: The USE Method](performance/module-5.1-use-method.md) for performance analysis.
+You've now covered the key LFCS gaps in storage and networking. Return to the [LFCS Learning Path](../../k8s/lfcs/README.md) to review remaining study areas, or continue strengthening your Linux fundamentals with [Module 5.1: The USE Method](performance/module-5.1-use-method.md) for performance analysis.

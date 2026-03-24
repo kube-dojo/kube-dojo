@@ -8,7 +8,7 @@
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [CKA Module: DNS in Kubernetes](../../../k8s/cka/) - Core DNS concepts, Service discovery basics
+- [CKA Module: DNS in Kubernetes](../../../k8s/cka/README.md) - Core DNS concepts, Service discovery basics
 - [Module 5.1: Cilium](module-5.1-cilium.md) - Networking fundamentals
 - Basic understanding of DNS (A records, CNAME, TTL)
 

@@ -1352,8 +1352,8 @@ Congratulations! You've completed the Observability Toolkit. You now understand:
 - **Jaeger/Tempo** for traces
 
 Consider exploring:
-- [GitOps & Deployments Toolkit](../gitops-deployments/) — Deploy your observable applications
-- [SRE Discipline](../../disciplines/sre/) — Apply observability for reliability
+- [GitOps & Deployments Toolkit](../gitops-deployments/README.md) — Deploy your observable applications
+- [SRE Discipline](../../disciplines/sre/README.md) — Apply observability for reliability
 
 ---
 

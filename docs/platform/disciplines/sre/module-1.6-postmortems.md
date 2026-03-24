@@ -7,7 +7,7 @@
 Before starting this module:
 - **Required**: [Module 1.5: Incident Management](module-1.5-incident-management.md) — Incident response
 - **Required**: [Module 1.1: What is SRE?](module-1.1-what-is-sre.md) — SRE fundamentals
-- **Recommended**: [Systems Thinking Track](../../foundations/systems-thinking/) — Understanding system dynamics
+- **Recommended**: [Systems Thinking Track](../../foundations/systems-thinking/README.md) — Understanding system dynamics
 
 ---
 

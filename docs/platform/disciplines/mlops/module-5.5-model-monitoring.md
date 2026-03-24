@@ -6,7 +6,7 @@
 
 Before starting this module:
 - [Module 5.4: Model Serving & Inference](module-5.4-model-serving.md)
-- [Observability Theory Track](../../foundations/observability-theory/) (recommended)
+- [Observability Theory Track](../../foundations/observability-theory/README.md) (recommended)
 - Understanding of statistical distributions
 - Basic Prometheus/Grafana knowledge
 

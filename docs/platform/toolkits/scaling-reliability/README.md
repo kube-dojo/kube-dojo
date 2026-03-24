@@ -6,12 +6,12 @@
 
 The Scaling & Reliability Toolkit covers advanced autoscaling and disaster recovery for Kubernetes. Karpenter provides intelligent node provisioning, KEDA enables event-driven workload scaling, and Velero ensures you can recover from disasters.
 
-This toolkit applies concepts from [SRE Discipline](../../disciplines/sre/) and [Reliability Engineering](../../foundations/reliability-engineering/).
+This toolkit applies concepts from [SRE Discipline](../../disciplines/sre/README.md) and [Reliability Engineering](../../foundations/reliability-engineering/README.md).
 
 ## Prerequisites
 
 Before starting this toolkit:
-- [SRE Discipline](../../disciplines/sre/) — Scaling and reliability concepts
+- [SRE Discipline](../../disciplines/sre/README.md) — Scaling and reliability concepts
 - Kubernetes HPA basics
 - Persistent Volume concepts
 - Cloud provider fundamentals
@@ -227,11 +227,11 @@ FAILOVER: Restore from replicated backup to DR cluster
 
 ## Related Tracks
 
-- **Before**: [SRE Discipline](../../disciplines/sre/) — SRE concepts
-- **Before**: [Reliability Engineering](../../foundations/reliability-engineering/) — Theory
-- **Related**: [IaC Tools Toolkit](../iac-tools/) — Terraform modules for Karpenter, KEDA
-- **Related**: [Observability Toolkit](../observability/) — Metrics for scaling
-- **After**: [Platforms Toolkit](../platforms/) — Platform features
+- **Before**: [SRE Discipline](../../disciplines/sre/README.md) — SRE concepts
+- **Before**: [Reliability Engineering](../../foundations/reliability-engineering/README.md) — Theory
+- **Related**: [IaC Tools Toolkit](../iac-tools/README.md) — Terraform modules for Karpenter, KEDA
+- **Related**: [Observability Toolkit](../observability/README.md) — Metrics for scaling
+- **After**: [Platforms Toolkit](../platforms/README.md) — Platform features
 
 ---
 

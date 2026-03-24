@@ -11,8 +11,8 @@ This track covers the complete DevSecOps journey—from shift-left practices and
 ## Prerequisites
 
 Before starting this track:
-- [Security Principles Track](../../foundations/security-principles/) — Defense in depth, least privilege
-- [GitOps Track](../gitops/) — Modern deployment practices
+- [Security Principles Track](../../foundations/security-principles/README.md) — Defense in depth, least privilege
+- [GitOps Track](../gitops/README.md) — Modern deployment practices
 - Basic CI/CD concepts (pipelines, builds, deployments)
 - Container basics (Docker, registries)
 
@@ -116,11 +116,11 @@ Module 4.6: Security Culture & Automation
 
 ## Related Tracks
 
-- **Before**: [Security Principles](../../foundations/security-principles/) — Foundational theory
-- **Related**: [GitOps](../gitops/) — Deployment practices that support DevSecOps
-- **Related**: [IaC Discipline](../iac/) — Infrastructure as Code security and testing
-- **After**: [Security Tools Toolkit](../../toolkits/security-tools/) — Hands-on implementations
-- **After**: [IaC Tools](../../toolkits/iac-tools/) — Terraform, OpenTofu, Pulumi hands-on
+- **Before**: [Security Principles](../../foundations/security-principles/README.md) — Foundational theory
+- **Related**: [GitOps](../gitops/README.md) — Deployment practices that support DevSecOps
+- **Related**: [IaC Discipline](../iac/README.md) — Infrastructure as Code security and testing
+- **After**: [Security Tools Toolkit](../../toolkits/security-tools/README.md) — Hands-on implementations
+- **After**: [IaC Tools](../../toolkits/iac-tools/README.md) — Terraform, OpenTofu, Pulumi hands-on
 
 ---
 

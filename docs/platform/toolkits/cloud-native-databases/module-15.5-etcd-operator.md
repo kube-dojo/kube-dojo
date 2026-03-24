@@ -11,7 +11,7 @@ Before starting this module, you should have completed:
 - [Module 15.1: CockroachDB](module-15.1-cockroachdb.md) - Distributed consensus concepts
 - Kubernetes fundamentals (CRDs, Operators, StatefulSets)
 - CKA etcd knowledge (backup, restore, cluster health)
-- [Reliability Engineering Foundation](../../foundations/reliability-engineering/) - HA concepts
+- [Reliability Engineering Foundation](../../foundations/reliability-engineering/README.md) - HA concepts
 
 ---
 

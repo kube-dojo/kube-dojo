@@ -298,4 +298,4 @@ k delete hpa challenge-web
 
 ## Next Module
 
-Return to [Part 2 Overview](../part2-workloads-scheduling/).
+Return to [Part 2 Overview](../part2-workloads-scheduling/README.md).

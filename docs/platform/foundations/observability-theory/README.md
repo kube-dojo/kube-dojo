@@ -109,8 +109,8 @@ Principles   Discipline        Toolkit
 
 ## Prerequisites
 
-- **Required**: [Systems Thinking Track](../systems-thinking/) — Understanding feedback loops and emergence
-- **Recommended**: [Reliability Engineering Track](../reliability-engineering/) — SLIs, SLOs, error budgets
+- **Required**: [Systems Thinking Track](../systems-thinking/README.md) — Understanding feedback loops and emergence
+- **Recommended**: [Reliability Engineering Track](../reliability-engineering/README.md) — SLIs, SLOs, error budgets
 - Helpful: Experience running any production system
 - Helpful: Basic understanding of HTTP and distributed systems
 
@@ -122,10 +122,10 @@ After completing Observability Theory, you're ready for:
 
 | Track | Why |
 |-------|-----|
-| [Security Principles](../security-principles/) | Security monitoring uses same concepts |
-| [SRE Discipline](../../disciplines/sre/) | Put observability into SRE practice |
-| [Observability Toolkit](../../toolkits/observability/) | Learn specific tools (Prometheus, Grafana, OTel) |
-| [Platform Engineering](../../disciplines/platform-engineering/) | Build observability into your platform |
+| [Security Principles](../security-principles/README.md) | Security monitoring uses same concepts |
+| [SRE Discipline](../../disciplines/sre/README.md) | Put observability into SRE practice |
+| [Observability Toolkit](../../toolkits/observability/README.md) | Learn specific tools (Prometheus, Grafana, OTel) |
+| [Platform Engineering](../../disciplines/platform-engineering/README.md) | Build observability into your platform |
 
 ---
 

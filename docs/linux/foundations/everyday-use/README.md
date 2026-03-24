@@ -24,8 +24,8 @@ These 5 modules bridge the gap between "I can use a terminal" and "I understand 
 
 ## Prerequisites
 
-- [Zero to Terminal](/prerequisites/zero-to-terminal/) — all 10 modules
+- [Zero to Terminal](../../../prerequisites/zero-to-terminal/README.md) — all 10 modules
 
 ## What's Next
 
-After completing Everyday Use, you're ready for [System Essentials](../system-essentials/) — where you'll learn how Linux actually works under the hood.
+After completing Everyday Use, you're ready for [System Essentials](../system-essentials/README.md) — where you'll learn how Linux actually works under the hood.

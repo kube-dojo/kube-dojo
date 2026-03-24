@@ -8,7 +8,7 @@
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [Distributed Systems Foundation](../../foundations/distributed-systems/) - Replication, erasure coding
+- [Distributed Systems Foundation](../../foundations/distributed-systems/README.md) - Replication, erasure coding
 - Kubernetes fundamentals (Deployments, Services, PVCs, Secrets)
 - Basic understanding of S3 API concepts (buckets, objects, presigned URLs)
 - [Module 16.1: Rook/Ceph](module-16.1-rook-ceph.md) (recommended, not required)
@@ -761,8 +761,8 @@ Inside a Kubernetes cluster, virtual-hosted style fails because Kubernetes DNS d
 ## Next Steps
 
 - **Next Module**: [Module 16.3: Longhorn](module-16.3-longhorn.md) — Lightweight distributed block storage
-- **Related**: [ML Platforms Toolkit](../ml-platforms/) — ML workflows that use MinIO for artifact storage
-- **Related**: [Observability Toolkit](../observability/) — Loki and Tempo with MinIO backends
+- **Related**: [ML Platforms Toolkit](../ml-platforms/README.md) — ML workflows that use MinIO for artifact storage
+- **Related**: [Observability Toolkit](../observability/README.md) — Loki and Tempo with MinIO backends
 
 ---
 

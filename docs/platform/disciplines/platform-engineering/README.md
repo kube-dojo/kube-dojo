@@ -24,7 +24,7 @@ Before starting this track, you should:
 
 - Understand Kubernetes fundamentals (deployments, services, namespaces)
 - Be familiar with CI/CD concepts and tools
-- Have experience with infrastructure-as-code (or complete [IaC Discipline](../iac/))
+- Have experience with infrastructure-as-code (or complete [IaC Discipline](../iac/README.md))
 - Complete the **Systems Thinking** foundation track (recommended)
 
 ## Modules
@@ -135,19 +135,19 @@ Platform teams treat developers as customers:
 ## Related Tracks
 
 **Foundations** (Start here if new to these concepts):
-- [Systems Thinking](../../foundations/systems-thinking/) - Feedback loops and emergent behavior
-- [Reliability Engineering](../../foundations/reliability-engineering/) - Change management principles
+- [Systems Thinking](../../foundations/systems-thinking/README.md) - Feedback loops and emergent behavior
+- [Reliability Engineering](../../foundations/reliability-engineering/README.md) - Change management principles
 
 **Disciplines** (Apply platform engineering in context):
-- [SRE Discipline](../sre/) - Reliability practices for platforms
-- [GitOps Discipline](../gitops/) - GitOps for platform delivery
-- [DevSecOps Discipline](../devsecops/) - Security in platform workflows
-- [IaC Discipline](../iac/) - Infrastructure as Code patterns and practices
+- [SRE Discipline](../sre/README.md) - Reliability practices for platforms
+- [GitOps Discipline](../gitops/README.md) - GitOps for platform delivery
+- [DevSecOps Discipline](../devsecops/README.md) - Security in platform workflows
+- [IaC Discipline](../iac/README.md) - Infrastructure as Code patterns and practices
 
 **Toolkits** (Deep dive into specific tools):
-- [GitOps Tools](../../toolkits/gitops-tools/) - ArgoCD, Flux implementation
-- [Platforms Toolkit](../../toolkits/platforms/) - Backstage, Crossplane hands-on
-- [IaC Tools](../../toolkits/iac-tools/) - Terraform, OpenTofu, Pulumi, Ansible
+- [GitOps Tools](../../toolkits/gitops-tools/README.md) - ArgoCD, Flux implementation
+- [Platforms Toolkit](../../toolkits/platforms/README.md) - Backstage, Crossplane hands-on
+- [IaC Tools](../../toolkits/iac-tools/README.md) - Terraform, OpenTofu, Pulumi, Ansible
 
 ## Tools You'll Encounter
 

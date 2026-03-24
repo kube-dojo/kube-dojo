@@ -7,7 +7,7 @@ The senior engineer stared at the CI failure notification—the third one this h
 ## Prerequisites
 
 Before starting this module:
-- [DevSecOps Discipline](../../disciplines/devsecops/) — CI/CD concepts
+- [DevSecOps Discipline](../../disciplines/devsecops/README.md) — CI/CD concepts
 - Programming experience in Go, Python, or TypeScript
 - Docker/container fundamentals
 - Basic CI/CD pipeline experience

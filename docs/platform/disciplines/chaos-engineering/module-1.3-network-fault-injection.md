@@ -6,7 +6,7 @@
 
 Before starting this module:
 - **Required**: [Module 1.2: Chaos Mesh Fundamentals](module-1.2-chaos-mesh.md) — PodChaos, NetworkChaos basics, installation
-- **Required**: [Service Mesh basics](../../toolkits/observability/) — Understanding of sidecar proxies, traffic management
+- **Required**: [Service Mesh basics](../../toolkits/observability/README.md) — Understanding of sidecar proxies, traffic management
 - **Recommended**: Familiarity with circuit breaker patterns (Envoy, Istio)
 - **Recommended**: Basic understanding of TCP/IP, DNS resolution, HTTP headers
 

@@ -5,9 +5,9 @@
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Systems Thinking Track](../../foundations/systems-thinking/) — Understanding feedback loops
+- **Required**: [Systems Thinking Track](../../foundations/systems-thinking/README.md) — Understanding feedback loops
 - **Required**: Basic Git knowledge (branches, commits, pull requests)
-- **Recommended**: [Kubernetes Basics](../../../prerequisites/kubernetes-basics/) — Pod, Deployment, Service concepts
+- **Recommended**: [Kubernetes Basics](../../../prerequisites/kubernetes-basics/README.md) — Pod, Deployment, Service concepts
 - **Helpful**: Experience with CI/CD pipelines
 
 ---
@@ -421,7 +421,7 @@ Several tools implement GitOps principles:
 - **Werf**: Integrated CI/CD
 - **Codefresh**: Commercial GitOps platform
 
-We'll explore specific tools in the [GitOps Tools Toolkit](../../toolkits/gitops-tools/).
+We'll explore specific tools in the [GitOps Tools Toolkit](../../toolkits/gitops-tools/README.md).
 
 ---
 

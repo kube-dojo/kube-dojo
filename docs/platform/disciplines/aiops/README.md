@@ -13,9 +13,9 @@ This track covers the complete AIOps journey—from understanding what it is to 
 ## Prerequisites
 
 Before starting this track:
-- [Observability Theory Track](../../foundations/observability-theory/) — Data sources for ML
-- [SRE Discipline](../sre/) — Incident management context
-- [MLOps Discipline](../mlops/) — ML fundamentals (recommended)
+- [Observability Theory Track](../../foundations/observability-theory/README.md) — Data sources for ML
+- [SRE Discipline](../sre/README.md) — Incident management context
+- [MLOps Discipline](../mlops/README.md) — ML fundamentals (recommended)
 - Basic statistics (mean, standard deviation, distributions)
 
 ## Modules
@@ -132,12 +132,12 @@ Module 6.6: Auto-Remediation
 
 ## Related Tracks
 
-- **Before**: [Observability Theory](../../foundations/observability-theory/) — Data collection
-- **Before**: [SRE Discipline](../sre/) — Operational practices
-- **Related**: [IaC Discipline](../iac/) — Infrastructure automation for AIOps platforms
-- **Related**: [MLOps Discipline](../mlops/) — ML fundamentals
-- **After**: [AIOps Tools Toolkit](../../toolkits/aiops-tools/) — Hands-on implementations
-- **After**: [IaC Tools Toolkit](../../toolkits/iac-tools/) — Automated infrastructure provisioning
+- **Before**: [Observability Theory](../../foundations/observability-theory/README.md) — Data collection
+- **Before**: [SRE Discipline](../sre/README.md) — Operational practices
+- **Related**: [IaC Discipline](../iac/README.md) — Infrastructure automation for AIOps platforms
+- **Related**: [MLOps Discipline](../mlops/README.md) — ML fundamentals
+- **After**: [AIOps Tools Toolkit](../../toolkits/aiops-tools/README.md) — Hands-on implementations
+- **After**: [IaC Tools Toolkit](../../toolkits/iac-tools/README.md) — Automated infrastructure provisioning
 
 ---
 

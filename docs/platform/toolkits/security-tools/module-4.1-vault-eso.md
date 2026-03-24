@@ -13,7 +13,7 @@ Hardcoded secrets in Git are a security incident waiting to happen. This module 
 - Secret rotation strategies
 
 **Prerequisites**:
-- [DevSecOps Discipline](../../disciplines/devsecops/)
+- [DevSecOps Discipline](../../disciplines/devsecops/README.md)
 - Kubernetes Secrets basics
 - RBAC concepts
 

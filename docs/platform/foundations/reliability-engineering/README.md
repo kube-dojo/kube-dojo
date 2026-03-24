@@ -107,7 +107,7 @@ Observability   Security        SRE
 
 ## Prerequisites
 
-- **Recommended**: [Systems Thinking Track](../systems-thinking/)
+- **Recommended**: [Systems Thinking Track](../systems-thinking/README.md)
 - Helpful: Some experience operating production systems
 - Helpful: Understanding of distributed systems basics
 
@@ -119,10 +119,10 @@ After completing Reliability Engineering, you're ready for:
 
 | Track | Why |
 |-------|-----|
-| [Observability Theory](../observability-theory/) | Can't improve reliability without seeing what's happening |
-| [SRE Discipline](../../disciplines/sre/) | Putting reliability engineering into operational practice |
-| [Security Principles](../security-principles/) | Security and reliability share patterns |
-| [Distributed Systems](../distributed-systems/) | Deep dive into CAP, consensus, and distributed patterns |
+| [Observability Theory](../observability-theory/README.md) | Can't improve reliability without seeing what's happening |
+| [SRE Discipline](../../disciplines/sre/README.md) | Putting reliability engineering into operational practice |
+| [Security Principles](../security-principles/README.md) | Security and reliability share patterns |
+| [Distributed Systems](../distributed-systems/README.md) | Deep dive into CAP, consensus, and distributed patterns |
 
 ---
 

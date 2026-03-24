@@ -39,5 +39,5 @@ After completing this section, you'll understand:
 
 ## Related Sections
 
-- **Next**: [Container Primitives](../container-primitives/) — Apply these concepts to containerization
+- **Next**: [Container Primitives](../container-primitives/README.md) — Apply these concepts to containerization
 - **Uses**: These concepts underpin everything in the track

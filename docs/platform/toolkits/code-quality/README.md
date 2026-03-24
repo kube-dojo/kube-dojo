@@ -6,12 +6,12 @@
 
 The Code Quality & Security Scanning Toolkit covers the shift-left revolution—catching bugs, vulnerabilities, and misconfigurations before they reach production. From SonarQube's technical debt visualization to Semgrep's developer-friendly security rules, these tools transform security from a gate to a guardrail.
 
-This toolkit applies concepts from [DevSecOps Discipline](../../disciplines/devsecops/) and integrates with [CI/CD Pipelines Toolkit](../ci-cd-pipelines/).
+This toolkit applies concepts from [DevSecOps Discipline](../../disciplines/devsecops/README.md) and integrates with [CI/CD Pipelines Toolkit](../ci-cd-pipelines/README.md).
 
 ## Prerequisites
 
 Before starting this toolkit:
-- [DevSecOps Discipline](../../disciplines/devsecops/) - Security integration concepts
+- [DevSecOps Discipline](../../disciplines/devsecops/README.md) - Security integration concepts
 - Basic CI/CD understanding
 - Programming experience in at least one language
 - Understanding of common vulnerability types (OWASP Top 10)
@@ -425,10 +425,10 @@ $100k+: Full enterprise stack
 
 ## Related Tracks
 
-- **Before**: [DevSecOps Discipline](../../disciplines/devsecops/) — Security concepts
-- **Related**: [CI/CD Pipelines Toolkit](../ci-cd-pipelines/) — Pipeline integration
-- **Related**: [Source Control Toolkit](../source-control/) — GitLab/GitHub security features
-- **After**: [Container Registries Toolkit](../container-registries/) — Image security
+- **Before**: [DevSecOps Discipline](../../disciplines/devsecops/README.md) — Security concepts
+- **Related**: [CI/CD Pipelines Toolkit](../ci-cd-pipelines/README.md) — Pipeline integration
+- **Related**: [Source Control Toolkit](../source-control/README.md) — GitLab/GitHub security features
+- **After**: [Container Registries Toolkit](../container-registries/README.md) — Image security
 
 ---
 

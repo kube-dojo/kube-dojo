@@ -8,7 +8,7 @@
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [DevSecOps Discipline](../../disciplines/devsecops/) - Security scanning concepts
+- [DevSecOps Discipline](../../disciplines/devsecops/README.md) - Security scanning concepts
 - [Module 11.3: GitHub Advanced](../source-control/module-11.3-github-advanced.md) - GHAS overview
 - Programming experience in at least one supported language
 - Understanding of common vulnerability classes (SQLi, XSS, etc.)

@@ -6,8 +6,8 @@
 
 Before starting this module:
 - **Required**: [Module 1.1: What is SRE?](module-1.1-what-is-sre.md) — Understanding SRE fundamentals
-- **Required**: [Reliability Engineering Track](../../foundations/reliability-engineering/) — Reliability concepts
-- **Recommended**: [Observability Theory Track](../../foundations/observability-theory/) — Metrics and measurement
+- **Required**: [Reliability Engineering Track](../../foundations/reliability-engineering/README.md) — Reliability concepts
+- **Recommended**: [Observability Theory Track](../../foundations/observability-theory/README.md) — Metrics and measurement
 
 ---
 

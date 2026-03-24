@@ -1266,10 +1266,10 @@ Congratulations! You've completed the Distributed Systems foundation. You now un
 
 | Your Interest | Next Track |
 |---------------|------------|
-| Platform building | [Platform Engineering Discipline](../../disciplines/platform-engineering/) |
-| Reliability | [SRE Discipline](../../disciplines/sre/) |
-| Kubernetes deep dive | [CKA Certification](../../../k8s/cka/) |
-| Observability tools | [Observability Toolkit](../../toolkits/observability/) |
+| Platform building | [Platform Engineering Discipline](../../disciplines/platform-engineering/README.md) |
+| Reliability | [SRE Discipline](../../disciplines/sre/README.md) |
+| Kubernetes deep dive | [CKA Certification](../../../k8s/cka/README.md) |
+| Observability tools | [Observability Toolkit](../../toolkits/observability/README.md) |
 
 ---
 
