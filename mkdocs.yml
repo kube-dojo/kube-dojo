@@ -58,7 +58,7 @@ plugins:
         Kubernetes Basics: Основи Kubernetes
         Modern DevOps: Сучасний DevOps
         Linux Deep Dive: Linux поглиблено
-        Everyday Use: Щоденне використання
+        Linux Everyday Use: Щоденне використання Linux
         System Essentials: Системні основи
         Container Primitives: Контейнерні примітиви
         Networking: Мережі
@@ -119,6 +119,13 @@ nav:
     - prerequisites/zero-to-terminal/module-0.8-software-and-packages.md
     - prerequisites/zero-to-terminal/module-0.9-what-is-the-cloud.md
     - prerequisites/zero-to-terminal/module-0.10-your-first-server.md
+  - Linux Everyday Use:
+    - linux/foundations/everyday-use/README.md
+    - linux/foundations/everyday-use/module-0.1-cli-power-user.md
+    - linux/foundations/everyday-use/module-0.2-environment-permissions.md
+    - linux/foundations/everyday-use/module-0.3-processes-resources.md
+    - linux/foundations/everyday-use/module-0.4-services-logs.md
+    - linux/foundations/everyday-use/module-0.5-networking-tools.md
   - Philosophy & Design:
     - prerequisites/philosophy-design/module-1-why-kubernetes-won.md
     - prerequisites/philosophy-design/module-2-declarative-vs-imperative.md
@@ -148,13 +155,6 @@ nav:
     - prerequisites/modern-devops/module-6-devsecops.md
   - Linux Deep Dive:
     - linux/README.md
-    - Everyday Use:
-      - linux/foundations/everyday-use/README.md
-      - linux/foundations/everyday-use/module-0.1-cli-power-user.md
-      - linux/foundations/everyday-use/module-0.2-environment-permissions.md
-      - linux/foundations/everyday-use/module-0.3-processes-resources.md
-      - linux/foundations/everyday-use/module-0.4-services-logs.md
-      - linux/foundations/everyday-use/module-0.5-networking-tools.md
     - System Essentials:
       - linux/foundations/system-essentials/README.md
       - linux/foundations/system-essentials/module-1.1-kernel-architecture.md
