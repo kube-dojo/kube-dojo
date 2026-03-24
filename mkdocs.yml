@@ -206,6 +206,16 @@ nav:
   - cloud/README.md
 - Certifications:
   - k8s/README.md
+  - Extending Kubernetes:
+    - k8s/extending/README.md
+    - k8s/extending/module-1.1-api-deep-dive.md
+    - k8s/extending/module-1.2-crds-advanced.md
+    - k8s/extending/module-1.3-controllers-client-go.md
+    - k8s/extending/module-1.4-kubebuilder.md
+    - k8s/extending/module-1.5-advanced-operators.md
+    - k8s/extending/module-1.6-admission-webhooks.md
+    - k8s/extending/module-1.7-scheduler-plugins.md
+    - k8s/extending/module-1.8-api-aggregation.md
   - KCNA:
     - k8s/kcna/README.md
     - 'Part 0: Introduction':
