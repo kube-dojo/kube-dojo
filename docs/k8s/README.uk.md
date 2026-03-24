@@ -42,11 +42,11 @@
 
 | Серт. | Назва | Тип | Модулі | Програма |
 |-------|-------|-----|--------|----------|
-| [KCNA](kcna/) | Kubernetes & Cloud Native Associate | Тестові запитання | 21 | [Детальніше](kcna/README.md) |
-| [KCSA](kcsa/) | Security Associate | Тестові запитання | 25 | [Детальніше](kcsa/README.md) |
-| [CKAD](ckad/) | Application Developer | Практична лабораторна | 28 | [Детальніше](ckad/) |
-| [CKA](cka/) | Administrator | Практична лабораторна | 38 | [Детальніше](cka/) |
-| [CKS](cks/) | Security Specialist | Практична лабораторна | 30 | [Детальніше](cks/) |
+| [KCNA](kcna/README.md) | Kubernetes & Cloud Native Associate | Тестові запитання | 21 | [Детальніше](kcna/README.md) |
+| [KCSA](kcsa/README.md) | Security Associate | Тестові запитання | 25 | [Детальніше](kcsa/README.md) |
+| [CKAD](ckad/README.md) | Application Developer | Практична лабораторна | 28 | [Детальніше](ckad/README.md) |
+| [CKA](cka/README.md) | Administrator | Практична лабораторна | 38 | [Детальніше](cka/README.md) |
+| [CKS](cks/README.md) | Security Specialist | Практична лабораторна | 30 | [Детальніше](cks/README.md) |
 | | **Разом** | | **142** | |
 
 ---

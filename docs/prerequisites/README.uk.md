@@ -73,5 +73,5 @@ Philosophy & Design → Cloud Native 101 → Kubernetes Basics → Modern DevOps
 
 | Мета | Наступний крок |
 |------|----------------|
-| Отримати сертифікат | [Kubernetes Certifications](../k8s/) |
-| Поглибити знання | [Platform Engineering](../platform/) |
+| Отримати сертифікат | [Kubernetes Certifications](../k8s/README.md) |
+| Поглибити знання | [Platform Engineering](../platform/README.md) |
