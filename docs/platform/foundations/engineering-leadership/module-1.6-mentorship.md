@@ -1,0 +1,951 @@
+# Module 1.6: Mentorship & Multiplying Impact
+
+> **Complexity**: `[MEDIUM]` | **Time**: 2 hours | **Prerequisites**: None
+>
+> **Track**: Foundations / Engineering Leadership
+
+---
+
+## The 10x Engineer Myth
+
+*There's a legend in software engineering about the "10x engineer"---the lone genius who writes more code, solves harder problems, and ships faster than everyone else combined.*
+
+*The legend is wrong. Or rather, it's incomplete.*
+
+The real 10x engineers aren't the ones who write 10x more code. They're the ones who make 10 other engineers twice as effective. They do this through mentorship, code review, knowledge sharing, and creating environments where everyone can do their best work.
+
+Consider two engineers:
+
+**Engineer A** writes 500 lines of production code per week. Exceptional output. But they work alone, rarely review others' code, and when they do, their feedback is terse and intimidating. Junior engineers are afraid to ask them questions. When Engineer A leaves the company (and they always do eventually), the team is left with a codebase only they understood.
+
+**Engineer B** writes 200 lines of production code per week. But they also review 15 PRs, mentor 2 junior engineers, pair-program for 3 hours per week, and write documentation that prevents 20 questions per week. They've helped 3 engineers get promoted. Every engineer they've worked with ships faster and makes fewer mistakes.
+
+Engineer A's impact: 500 lines/week. Total: 500.
+
+Engineer B's impact: 200 lines/week + making 10 engineers 30% more productive = 200 + (10 x 150 improvement) = 1,700 lines-equivalent/week.
+
+**Engineer B is the actual 10x engineer.** They just don't look like one in a sprint velocity chart.
+
+This module teaches you how to become Engineer B---how to multiply your impact through others instead of maximizing your individual output.
+
+---
+
+## Why This Module Matters
+
+At some point in every engineer's career, they hit a ceiling. Not a technical ceiling---they can still learn new frameworks, master new languages, solve harder problems. The ceiling is *impact*.
+
+There are only so many hours in a day. No matter how talented you are, you can only write so much code, review so many designs, and debug so many incidents. Your individual output has a hard upper bound.
+
+The only way to break through that ceiling is to **multiply your impact through others**. This means:
+
+- Teaching engineers to solve problems you used to solve yourself
+- Creating systems and documentation that answer questions without your involvement
+- Building a team culture where people grow quickly and stay long
+- Making every code review an investment in someone else's capability
+
+This transition---from individual contributor to force multiplier---is the hardest and most important transition in an engineering career. It requires you to redefine "productivity" from "code I wrote" to "outcomes the team achieved."
+
+> **The Bus Factor**
+>
+> The "bus factor" measures how many team members would need to be hit by a bus before the project stalls. If you're the only person who can deploy to production, debug the payment system, or understand the authentication flow, your bus factor is 1. That's not a sign of your importance---it's a sign of your failure to mentor. A strong mentor actively works to make themselves replaceable.
+
+---
+
+## What You'll Learn
+
+- The IC to tech lead transition and the "multiplier mindset"
+- How to give code review feedback that teaches, not just corrects
+- Pairing, mobbing, and async feedback techniques
+- Creating safe failure opportunities for junior engineers
+- Building psychological safety and inclusive engineering cultures
+- Measuring engineering effectiveness (beyond lines of code)
+
+---
+
+## Part 1: The IC to Tech Lead Transition
+
+### What Changes When You Become a Tech Lead
+
+The transition from individual contributor (IC) to tech lead is disorienting because the skills that made you a great IC are not the skills that make a great tech lead.
+
+```
+THE IC → TECH LEAD SHIFT
+======================================================================
+
+AS AN IC, YOU WERE REWARDED FOR:        AS A TECH LEAD, YOU'RE REWARDED FOR:
+────────────────────────────────────    ────────────────────────────────────
+Writing excellent code                  Ensuring the team writes good code
+Solving hard problems yourself          Helping others solve hard problems
+Deep focus for hours                    Being available and interruptible
+Knowing the answer                      Asking the right questions
+Speed of individual delivery            Consistency of team delivery
+Technical depth                         Technical breadth + communication
+Being the expert                        Creating more experts
+```
+
+### The Emotional Difficulty
+
+Nobody warns you about this: the transition *feels* like getting worse at your job. You write less code. You solve fewer problems directly. Your calendar fills with meetings. You feel like you're not "doing real work."
+
+This feeling is normal, and it's wrong. You ARE doing real work. It just doesn't look like what you're used to.
+
+```
+THE PRODUCTIVITY IDENTITY CRISIS
+======================================================================
+
+WEEK 1 AS TECH LEAD:
+
+  Monday:    3 hours of code review, 1 hour of mentoring,
+             2 hours of planning, 1 hour of 1:1s
+  Tuesday:   Design review meeting, helped junior debug a
+             concurrency issue, wrote ADR for caching strategy
+  Wednesday: Paired with mid-level engineer on API design,
+             reviewed 4 PRs, unblocked deployment pipeline issue
+  Thursday:  Sprint planning, architecture discussion with
+             platform team, wrote technical spec for Q2 project
+  Friday:    1:1s, reviewed 3 PRs, helped new hire understand
+             the authentication flow
+
+  LINES OF CODE WRITTEN: 47
+
+  YOUR BRAIN: "I was useless this week. I barely wrote any code."
+
+  REALITY: You unblocked 5 engineers, prevented 3 bugs from
+  reaching production, transferred knowledge to a new hire, and
+  shaped the technical direction for next quarter. Your team
+  shipped 40% more than they would have without you.
+```
+
+### The Multiplier Mindset
+
+The mindset shift is this: **your output is no longer measured by what you produce, but by what you enable.**
+
+Ask yourself these questions at the end of each week:
+
+1. Who did I unblock today?
+2. What did I teach someone that they'll use for years?
+3. What decision did I help the team make better?
+4. What mistake did I help someone avoid?
+5. What process did I improve that saves time every sprint?
+
+If you can answer at least three of these with concrete examples, you had a productive week---even if you wrote zero lines of code.
+
+---
+
+## Part 2: Effective Code Review
+
+### Code Review Is Teaching
+
+Most engineers treat code review as quality control---finding bugs and enforcing style. That's the floor, not the ceiling. Great code review is a **teaching opportunity** disguised as a process.
+
+Every PR review is a chance to:
+- Share knowledge about the codebase
+- Teach design patterns and best practices
+- Explain *why* something should be different, not just *what*
+- Model how to think about problems
+- Build the reviewer's (and author's) engineering judgment
+
+### The Teaching vs. Nitpicking Spectrum
+
+```
+THE CODE REVIEW SPECTRUM
+======================================================================
+
+NITPICKING (low value, high annoyance)
+─────────────────────────────────────────────────────────────────────
+  "Use camelCase here."
+  "Add a blank line before the return statement."
+  "This variable name should be longer."
+  "I prefer map() over forEach()."
+
+  → These should be handled by linters and formatters, not humans.
+  → If you're writing these comments, automate them instead.
+
+CORRECTING (medium value, necessary but insufficient)
+─────────────────────────────────────────────────────────────────────
+  "This will cause a null pointer exception if user is undefined."
+  "This SQL query is vulnerable to injection."
+  "This loop is O(n^2); it'll be slow with large datasets."
+
+  → Important to catch, but misses the teaching opportunity.
+  → The author fixes the bug but doesn't learn to prevent it.
+
+TEACHING (high value, lasting impact)
+─────────────────────────────────────────────────────────────────────
+  "This will NPE if user is undefined. A pattern I've found helpful
+   is to validate inputs at the function boundary---that way every
+   function can assume its inputs are valid. See how we did this in
+   the PaymentService: [link]. What do you think about that approach
+   here?"
+
+  "This SQL query concatenates user input directly, which opens us
+   to injection attacks. Here's a quick article on parameterized
+   queries: [link]. The short version: never put user input directly
+   in SQL strings. Use ? placeholders and let the database driver
+   handle escaping. Want to pair on refactoring this? It's a pattern
+   you'll use in every service."
+
+  → The author learns a principle they'll apply forever.
+  → The reviewer invests 3 extra minutes for a permanent improvement.
+```
+
+### The Code Review Checklist for Mentors
+
+When reviewing a junior engineer's PR, use this mental checklist:
+
+| Check | Question to Ask Yourself | Example Comment |
+|-------|------------------------|-----------------|
+| **Correctness** | Does it work? Are there edge cases? | "What happens when the list is empty? Let's add a test for that." |
+| **Design** | Is this the right approach? Could it be simpler? | "This solves the problem, but there's a simpler pattern. Have you seen the Strategy pattern? Here's how it could apply..." |
+| **Readability** | Will someone understand this in 6 months? | "This function does 3 things. If we split it, each piece becomes easier to test and understand. What do you think?" |
+| **Learning** | What principle can I teach here? | "Good instinct reaching for a cache here. One thing to think about: cache invalidation. What happens when the underlying data changes?" |
+| **Confidence** | What did they do well? | "The error handling in this function is really clean. Nice work." |
+| **Growth** | What's the next step in their development? | "Now that you're comfortable with REST APIs, I'd love for you to try designing the WebSocket endpoint for the next feature." |
+
+### How to Phrase Feedback
+
+The way you phrase feedback dramatically affects how it's received:
+
+| Phrasing | Impact | Better Version |
+|----------|--------|----------------|
+| "This is wrong." | Shuts down. Author feels attacked. | "I think there might be an issue here---let me explain what I'm seeing." |
+| "You should do X." | Prescriptive. Doesn't teach reasoning. | "Have you considered X? The reason I think it might work better is..." |
+| "Why didn't you...?" | Accusatory. Implies they should have known. | "One approach I've seen work well here is... What do you think?" |
+| "This is bad practice." | Vague and judgmental. | "This pattern can cause [specific problem] because [specific reason]. Here's an alternative..." |
+| "Just use a map." | Dismissive. Doesn't explain why. | "A Map could simplify this because it lets you look up values in O(1) instead of looping. Want me to show you an example?" |
+| "LGTM" (on a junior's PR) | Missed teaching opportunity. | "LGTM! One thing I liked: your test coverage for error cases. One thing to explore next time: consider adding a benchmark test for the sort function---it'll help you catch performance regressions." |
+
+### The "Nit" Prefix
+
+For truly minor suggestions that are optional, prefix with `nit:`. This signals that the comment is a preference, not a requirement, and the author can ignore it:
+
+```
+nit: I'd name this `processPayment` instead of `handlePayment`,
+since "process" implies a transformation and "handle" implies
+error handling in our codebase. But either works---not a blocker.
+```
+
+This small convention reduces review friction enormously. The author knows what's a suggestion and what's a requirement.
+
+---
+
+## Part 3: Pairing, Mobbing, and Async Feedback
+
+### Pair Programming: When and How
+
+Pair programming is not about writing code faster. It's about **transferring knowledge in real time**. Used correctly, it's the fastest way to level up a junior engineer.
+
+```
+WHEN TO PAIR
+======================================================================
+
+HIGH VALUE:                          LOW VALUE:
+────────────────────────────────    ────────────────────────────────────
+Complex debugging sessions           Routine CRUD implementation
+Unfamiliar part of the codebase     Well-understood, repetitive tasks
+Architecture/design decisions        Writing tests for existing code
+Junior learning a new concept        Senior doing something they've
+                                      done 100 times
+Onboarding a new team member         Solo deep-focus work
+```
+
+### Pair Programming Roles
+
+```
+DRIVER / NAVIGATOR MODEL
+======================================================================
+
+DRIVER (hands on keyboard):
+  - Writes the code
+  - Focuses on syntax and implementation
+  - Asks questions when stuck
+  - Thinks about the current line
+
+NAVIGATOR (watches the screen):
+  - Thinks about the big picture
+  - Catches bugs and typos
+  - Suggests approaches and patterns
+  - Thinks about edge cases
+  - Looks up documentation
+
+KEY RULE: Switch roles every 20-30 minutes.
+
+FOR MENTORING: Let the junior engineer drive. They learn by doing.
+The mentor navigates, asking guiding questions instead of dictating:
+
+  GOOD: "What do you think would happen if the input is null?"
+  BAD:  "Add a null check on line 14."
+
+  GOOD: "How could we make this function easier to test?"
+  BAD:  "Extract that into a separate function."
+```
+
+### Mob Programming
+
+Mob programming extends pairing to the whole team: one screen, one keyboard, the entire team contributing. It sounds wildly inefficient. In practice, it's extraordinarily effective for:
+
+- Solving problems nobody has solved before
+- Onboarding multiple new engineers simultaneously
+- Making complex architectural decisions with full team buy-in
+- Breaking through blockers that have stalled the team
+
+```
+MOB PROGRAMMING FORMAT
+======================================================================
+
+SETUP:
+  - One large screen (or screen share)
+  - One person "drives" (types)
+  - Everyone else "navigates" (suggests, questions, researches)
+  - Driver rotates every 10-15 minutes
+  - Time-box to 90 minutes maximum (with a break at 45)
+
+RULES:
+  1. The driver ONLY types what the navigators tell them
+     (this ensures the driver isn't running ahead alone)
+  2. Anyone can suggest an approach
+  3. Disagreements are resolved by trying both approaches
+  4. Take breaks---mob programming is mentally intense
+
+ANTI-PATTERNS:
+  ✗ One person dominates the conversation
+  ✗ The driver codes independently while others watch
+  ✗ Sessions run longer than 90 minutes
+  ✗ Used for tasks that don't benefit from collaboration
+```
+
+### Async Feedback
+
+Not all mentoring happens synchronously. Async feedback scales better and respects people's focus time. Here are effective async mentoring techniques:
+
+| Technique | How It Works | Best For |
+|-----------|-------------|----------|
+| **Detailed PR reviews** | Write thorough comments with explanations and links | Teaching patterns and best practices |
+| **Code walkthrough recordings** | Record a Loom/video walking through a design or implementation | Explaining complex systems to new team members |
+| **Written design feedback** | Comment on RFCs/design docs with thoughtful analysis | Teaching architectural thinking |
+| **"TIL" Slack channel** | Team members share one thing they learned today | Building a culture of continuous learning |
+| **Internal blog posts** | Write up how you solved a hard problem | Scaling knowledge beyond direct mentoring |
+| **Annotated examples** | Write sample code with extensive comments explaining decisions | Teaching idioms and patterns |
+
+---
+
+## Part 4: Creating Safe Failure Opportunities
+
+### Why Junior Engineers Need to Fail
+
+This sounds counterintuitive: you want junior engineers to fail? Yes. Controlled failure is the fastest path to learning. The key word is "controlled."
+
+```
+THE FAILURE LEARNING CURVE
+======================================================================
+
+EXPERIENCE LEVEL:     WHAT THEY LEARN FROM FAILURE:
+──────────────────    ──────────────────────────────────────────────
+First failure         "Things can go wrong" (awareness)
+Second failure        "I should have tested that" (prevention)
+Third failure         "I should think about edge cases" (foresight)
+Fifth failure         "Let me consider what could go wrong before
+                       I write code" (engineering judgment)
+Tenth failure         "This design has three failure modes. Here's
+                       how I'll handle each one." (expertise)
+
+THE PROBLEM: If junior engineers are never allowed to fail,
+they never develop engineering judgment. They follow rules
+without understanding why the rules exist.
+```
+
+### Safe Failure Environments
+
+Create opportunities where failure has minimal blast radius:
+
+| Environment | Blast Radius | What They Learn |
+|-------------|-------------|-----------------|
+| **Local development** | Zero | Basic debugging, trial and error |
+| **Feature branches** | Zero | Code review feedback, iteration |
+| **Staging/dev environment** | Very low | Deployment process, integration issues |
+| **Behind a feature flag** | Low | Production behavior, monitoring |
+| **Low-traffic production path** | Medium | Real-world performance, error handling |
+| **Internal tools** | Medium | Full ownership, end-to-end delivery |
+| **High-traffic production** | High | NOT appropriate for learning through failure |
+
+### The Mentor's Role in Safe Failure
+
+Your job is not to prevent failure. Your job is to:
+
+1. **Create the safety net**: Ensure failures are recoverable
+2. **Guide, don't rescue**: Ask questions instead of giving answers
+3. **Debrief without blame**: After a failure, ask "What did we learn?" not "What did you do wrong?"
+4. **Normalize failure**: Share your own failure stories. "Let me tell you about the time I dropped a production database..."
+5. **Escalate your trust gradually**: Start with low-risk tasks, increase responsibility as judgment develops
+
+```
+THE GUIDED FAILURE FRAMEWORK
+======================================================================
+
+STEP 1: ASSIGN A CHALLENGING TASK
+  "I'd like you to design the caching strategy for the product
+   catalog. Here are the requirements. Take a first pass and
+   bring it to our 1:1 on Thursday."
+
+STEP 2: LET THEM STRUGGLE (this is where learning happens)
+  - Don't intervene unless they're truly stuck (> 2 hours on
+    one problem with no progress)
+  - When they ask for help, ask questions first:
+    "What have you tried?"
+    "What do you think is causing the issue?"
+    "What would you do if you had to ship this today?"
+
+STEP 3: REVIEW AND TEACH (not correct)
+  - When they present their design, start with what's good
+  - Ask questions about areas that need improvement:
+    "What happens when the cache fills up?"
+    "How does a user get fresh data after an update?"
+    "What if two services update the same cached data?"
+  - Let them discover the issues themselves
+
+STEP 4: DEBRIEF
+  "What did you learn? What would you do differently next time?
+   What questions do you wish you'd asked at the beginning?"
+```
+
+---
+
+## Part 5: Psychological Safety
+
+### What Psychological Safety Actually Means
+
+Google's Project Aristotle (2015) studied 180 teams to find what makes teams effective. The single most important factor wasn't skill, experience, or having senior engineers. It was **psychological safety**---the belief that you won't be punished for making mistakes, asking questions, or proposing ideas.
+
+```
+PSYCHOLOGICAL SAFETY IS NOT:
+======================================================================
+
+  ✗ Being nice all the time
+  ✗ Avoiding conflict
+  ✗ Lowering the quality bar
+  ✗ Agreeing with everyone
+  ✗ Never giving critical feedback
+
+PSYCHOLOGICAL SAFETY IS:
+======================================================================
+
+  ✓ Admitting mistakes without fear of punishment
+  ✓ Asking "dumb" questions without being mocked
+  ✓ Disagreeing with senior engineers respectfully
+  ✓ Proposing unconventional ideas without ridicule
+  ✓ Saying "I don't know" without losing credibility
+  ✓ Giving honest feedback upward without retaliation
+```
+
+### Building Psychological Safety as a Tech Lead
+
+Psychological safety is not declared. It is demonstrated. Every day, in small interactions.
+
+| Action | Why It Matters | Example |
+|--------|---------------|---------|
+| **Admit your own mistakes publicly** | If the most senior person can be wrong, everyone else can too | "I missed a race condition in my design. Here's what I learned..." |
+| **Thank people for finding bugs** | Reframes bug reports as contributions, not criticism | "Great catch on that edge case, Sarah. You probably saved us an outage." |
+| **Ask questions in meetings** | Shows that not knowing is normal | "I'm not sure I understand how this interacts with the caching layer. Can someone explain?" |
+| **Respond to mistakes with curiosity** | Blame kills safety. Curiosity builds it. | Instead of "Why did you do that?" ask "Walk me through your thinking---I want to understand the context." |
+| **Give credit publicly** | People contribute more when they're recognized | "Raj's idea to use a circuit breaker here was really smart. It prevented exactly the failure mode we saw last week." |
+| **Protect dissent** | The person who disagrees might be right | "Wait, Elena raised a concern about this approach. I want to hear her out before we move forward." |
+
+### The "Failure Retrospective" Practice
+
+Run a monthly "failure retrospective" where the team shares things that went wrong and what they learned. Rules:
+
+```
+FAILURE RETROSPECTIVE FORMAT
+======================================================================
+
+FREQUENCY: Monthly, 30 minutes
+FORMAT:    Each person shares one failure or mistake from the month
+
+RULES:
+  1. Failures are celebrated, not criticized
+  2. Focus on learning, not blame
+  3. The most senior person goes FIRST (models vulnerability)
+  4. No "but it worked out fine"---own the failure
+  5. End each story with "What I'll do differently"
+
+EXAMPLE:
+
+  Tech Lead: "I approved a PR without testing the migration script.
+  It worked in staging but failed in production because the staging
+  database was missing 3 tables. What I'll do differently: always
+  run migration scripts against a production-like database backup
+  before approving."
+
+  Junior Engineer: "I deployed on Friday at 4 PM and caused an
+  alert storm. I didn't know about the no-Friday-deploys convention.
+  What I'll do differently: check with the team before deploying
+  late in the week, and I added it to our onboarding doc."
+```
+
+---
+
+## Part 6: Inclusive Engineering Cultures
+
+### Why Inclusion Is an Engineering Problem
+
+Inclusion isn't just an HR initiative. It directly affects engineering outcomes:
+
+- **Diverse teams find more bugs.** A 2018 study at North Carolina State University found that diverse code review teams identified 15% more defects than homogeneous ones.
+- **Inclusive teams retain talent.** Engineers who feel included stay 2x longer (Kapor Center, 2017). Turnover costs 50-200% of annual salary per engineer.
+- **Psychological safety requires inclusion.** If some team members don't feel they belong, they won't speak up---and you'll miss their contributions.
+
+### Practical Inclusion for Tech Leads
+
+| Practice | Implementation | Why It Matters |
+|----------|---------------|----------------|
+| **Rotate meeting facilitators** | Different person leads each standup/retro | Prevents dominant voices from controlling every discussion |
+| **Written before verbal** | Collect ideas in writing before discussing | Removes bias toward fast talkers and native speakers |
+| **Inclusive meeting times** | Rotate meeting times for distributed teams | Respects that not everyone is in your timezone |
+| **Interview diverse candidates** | Use structured interviews with consistent rubrics | Reduces bias in hiring (unstructured interviews are terrible predictors) |
+| **Review promotion criteria** | Audit who gets promoted and why | Ensure criteria reward impact, not visibility or self-promotion |
+| **Mentorship matching** | Pair underrepresented engineers with sponsors | Sponsorship (advocacy) is more impactful than mentorship (advice) alone |
+| **Document tribal knowledge** | Write down unwritten rules and norms | Levels the playing field for newcomers who don't have informal networks |
+| **Acknowledge different communication styles** | Some people think out loud, others need time to process | Don't penalize quiet people. Create space for async input. |
+
+### The "Brilliant Jerk" Problem
+
+Every team eventually faces this: a highly skilled engineer who is condescending, dismissive, or hostile to others. They write great code, but they make people miserable.
+
+```
+THE BRILLIANT JERK COST ANALYSIS
+======================================================================
+
+WHAT THE BRILLIANT JERK PRODUCES:
+  + Exceptional individual output
+  + Solves hard problems quickly
+
+WHAT THE BRILLIANT JERK COSTS:
+  - Junior engineers stop asking questions (learning stops)
+  - Team members avoid their code reviews (quality drops)
+  - People leave the team (replacement cost: $150K-$300K each)
+  - Remaining engineers disengage (productivity drops 20-40%)
+  - Candidates decline offers after meeting them (hiring slows)
+  - Psychological safety collapses (innovation stops)
+
+THE MATH:
+  If one brilliant jerk causes 2 engineers to leave per year:
+    Replacement cost: 2 × $200K = $400K
+    Lost productivity during vacancy: 2 × 3 months × $15K/mo = $90K
+    Ramp-up time for replacements: 2 × 3 months × reduced output = $60K
+    Total annual cost: ~$550K
+
+  No individual contributor's output is worth $550K/year in
+  damage to the team.
+
+WHAT TO DO:
+  1. Give clear, specific feedback about the behavior (not the person)
+  2. Set concrete expectations with a timeline
+  3. If behavior doesn't change, manage them out
+  4. NEVER tolerate brilliance as an excuse for cruelty
+```
+
+---
+
+## Part 7: Measuring Engineering Effectiveness
+
+### What Not to Measure
+
+Before discussing good metrics, let's address the bad ones:
+
+| Metric | Why It's Harmful |
+|--------|-----------------|
+| **Lines of code** | Incentivizes verbosity. The best code is often the shortest. |
+| **Number of commits** | Incentivizes small, meaningless commits. |
+| **Hours worked** | Incentivizes presence, not productivity. Punishes efficient engineers. |
+| **Story points completed** | Teams inflate estimates to look productive. Points become meaningless. |
+| **Number of PRs** | Incentivizes splitting work into tiny PRs regardless of logical grouping. |
+| **Individual velocity** | Pits team members against each other. Discourages helping others. |
+
+### DORA Metrics: The Industry Standard
+
+The DevOps Research and Assessment (DORA) team at Google identified four metrics that reliably predict engineering team effectiveness:
+
+```
+THE FOUR DORA METRICS
+======================================================================
+
+1. DEPLOYMENT FREQUENCY
+   How often does your team deploy to production?
+   ─────────────────────────────────────────────────────────
+   Elite:    Multiple times per day
+   High:     Once per day to once per week
+   Medium:   Once per week to once per month
+   Low:      Less than once per month
+
+2. LEAD TIME FOR CHANGES
+   How long from code commit to running in production?
+   ─────────────────────────────────────────────────────────
+   Elite:    Less than 1 hour
+   High:     1 day to 1 week
+   Medium:   1 week to 1 month
+   Low:      More than 1 month
+
+3. CHANGE FAILURE RATE
+   What percentage of deployments cause a failure?
+   ─────────────────────────────────────────────────────────
+   Elite:    0-15%
+   High:     16-30%
+   Medium:   31-45%
+   Low:      46-60%
+
+4. TIME TO RESTORE SERVICE
+   How long to recover from a failure in production?
+   ─────────────────────────────────────────────────────────
+   Elite:    Less than 1 hour
+   High:     Less than 1 day
+   Medium:   1 day to 1 week
+   Low:      More than 1 week
+
+KEY INSIGHT: Elite teams score high on ALL FOUR metrics.
+Speed and stability are NOT trade-offs---they reinforce each other.
+```
+
+### SPACE Framework: A Broader View
+
+DORA metrics focus on delivery. The SPACE framework (from Microsoft Research and GitHub) adds dimensions for developer satisfaction and collaboration:
+
+```
+THE SPACE FRAMEWORK
+======================================================================
+
+S - SATISFACTION AND WELL-BEING
+    Are developers happy and sustainable?
+    Measures: Survey scores, retention rates, burnout indicators
+
+P - PERFORMANCE
+    What is the outcome of the developer's work?
+    Measures: Quality, reliability, customer impact
+
+A - ACTIVITY
+    How much output is being produced? (Use cautiously)
+    Measures: Deployment frequency, PR throughput
+
+C - COMMUNICATION AND COLLABORATION
+    How effectively does the team work together?
+    Measures: Review turnaround time, knowledge sharing,
+              onboarding speed
+
+E - EFFICIENCY AND FLOW
+    Can developers get work done without interruptions?
+    Measures: Flow state time, context switches, meeting load
+```
+
+### Mentorship-Specific Metrics
+
+How do you know if your mentoring is working?
+
+| Metric | How to Measure | Target |
+|--------|---------------|--------|
+| **Time to first PR** | Days from start date to first merged PR | < 1 week |
+| **Time to first solo feature** | Weeks from start date to independently shipped feature | < 6 weeks |
+| **Code review turnaround** | Hours from PR opened to first review | < 4 hours |
+| **Questions asked in public channels** | Count of questions in team Slack | Increasing (means people feel safe asking) |
+| **Knowledge sharing** | Blog posts, presentations, documentation PRs | At least 1 per person per quarter |
+| **Promotion rate of mentees** | Percentage of mentees who get promoted within 18 months | > 50% |
+| **Retention rate** | Percentage of team members still at company after 1 year | > 85% |
+
+---
+
+## Common Mistakes
+
+| Mistake | Why It's a Problem | Better Approach |
+|---------|-------------------|-----------------|
+| **Giving answers instead of asking questions** | The mentee learns the answer but not how to find it. They'll come back with the same type of question next week. | Ask guiding questions. "What have you tried? What do you think is happening? Where would you look next?" |
+| **Only reviewing for correctness** | Misses the teaching opportunity. The code works but the engineer doesn't grow. | Review for design, readability, and patterns. Explain the *why* behind your suggestions. |
+| **Pairing by taking the keyboard** | The junior watches but doesn't internalize. They learn to be passive. | Let the junior drive. Navigate with questions, not commands. |
+| **Assuming everyone learns the same way** | Some people learn by reading, some by doing, some by discussing. One approach doesn't fit all. | Ask your mentee: "How do you learn best?" Adapt your style. |
+| **Protecting junior engineers from all failure** | They never develop judgment. They can follow rules but can't think independently. | Create safe failure environments. Let them make recoverable mistakes. Debrief afterward. |
+| **Not giving positive feedback** | People don't know what they're doing well. They only hear about problems. Growth stalls because they don't know what to repeat. | For every piece of critical feedback, give at least one piece of specific positive feedback. "The way you handled that error case was really thorough." |
+| **Tolerating brilliant jerks** | One toxic person can destroy a team's psychological safety, cause turnover, and negate years of culture building. | Address behavior directly and early. Set clear expectations. If behavior doesn't change, the person must go---regardless of technical skill. |
+| **Measuring inputs instead of outcomes** | Lines of code, hours worked, and commits per day incentivize the wrong behaviors and punish efficient engineers. | Use DORA and SPACE metrics. Measure deployment frequency, lead time, change failure rate, and developer satisfaction. |
+
+---
+
+## Quiz
+
+Test your understanding of mentorship and engineering effectiveness.
+
+**Question 1:** What's the difference between a "10x engineer" in myth versus reality?
+
+<details>
+<summary>Show Answer</summary>
+
+**Myth**: A 10x engineer writes 10x more code than the average engineer. They're a lone genius who solves problems nobody else can.
+
+**Reality**: A true 10x engineer makes 10 other engineers more effective through mentorship, code review, knowledge sharing, and creating enabling environments. Their impact is measured in team output, not individual output.
+
+The mythical 10x engineer is a single point of failure. The real 10x engineer is a force multiplier whose impact scales with team size.
+</details>
+
+**Question 2:** You're reviewing a junior engineer's PR. They used a nested loop that's O(n^2) where a hash map would be O(n). Which response is better?
+
+A) "This is O(n^2). Use a hash map."
+
+B) "This works correctly---nice job on the edge case handling. One optimization to consider: the nested loop checks every item against every other item. If we put the items in a hash map first, we can do lookups in O(1) instead of O(n), making the whole thing O(n) instead of O(n^2). For our current dataset of 100 items, it won't matter. But if this list grows to 10,000 items, the difference is 100 million operations vs 10,000. Want to try refactoring it? Happy to pair if you'd like."
+
+<details>
+<summary>Show Answer</summary>
+
+**B is far better.** It:
+1. Starts with positive feedback (builds confidence)
+2. Explains *why* the optimization matters (teaches the principle)
+3. Gives concrete numbers (makes the abstract tangible)
+4. Contextualizes the impact (at current scale vs future scale)
+5. Invites collaboration instead of demanding compliance
+6. Offers help without being condescending
+
+Response A is technically correct but teaches nothing. The junior fixes this instance but won't recognize the same pattern next time because they don't understand the reasoning.
+</details>
+
+**Question 3:** What are the four DORA metrics?
+
+<details>
+<summary>Show Answer</summary>
+
+1. **Deployment Frequency**: How often the team deploys to production
+2. **Lead Time for Changes**: Time from code commit to running in production
+3. **Change Failure Rate**: Percentage of deployments that cause failures
+4. **Time to Restore Service**: How long it takes to recover from a production failure
+
+The key insight from DORA research is that elite teams score high on ALL four metrics. Speed and stability are not trade-offs---they reinforce each other. Teams that deploy frequently tend to have lower failure rates because each change is smaller and easier to debug.
+</details>
+
+**Question 4:** A junior engineer deployed a change that caused a 10-minute outage. How should you respond?
+
+<details>
+<summary>Show Answer</summary>
+
+1. **First**: Fix the outage. Help them restore service. This is not the time for feedback.
+2. **After resolution**: Ask them to walk you through what happened, without judgment. "Walk me through the deployment---what did you do, and what did you see?"
+3. **Focus on learning**: "What would you do differently next time?" Let them identify the lesson.
+4. **Normalize the experience**: Share a time YOU caused an outage. "Let me tell you about the time I accidentally deleted a production database..."
+5. **Fix the system, not the person**: If a junior engineer can cause a 10-minute outage with a single deployment, the deployment pipeline lacks safeguards. Fix the pipeline.
+6. **Never blame publicly**: If leadership asks what happened, say "we had a deployment issue" not "a junior engineer broke things."
+
+The goal: the junior engineer should walk away thinking "I learned something important and my team has my back," not "I'm going to be terrified of deploying for the next 6 months."
+</details>
+
+**Question 5:** What is psychological safety and why does it matter for engineering teams?
+
+<details>
+<summary>Show Answer</summary>
+
+Psychological safety is the belief that you won't be punished for making mistakes, asking questions, or proposing unconventional ideas. It does NOT mean avoiding conflict or lowering standards.
+
+It matters because:
+- Google's Project Aristotle found it was the #1 predictor of team effectiveness (above skills, experience, or seniority)
+- Without it, junior engineers won't ask questions (they'll stay stuck for hours)
+- Without it, people won't report bugs or near-misses (problems stay hidden)
+- Without it, nobody will challenge bad ideas from senior engineers (groupthink)
+- Without it, diverse team members won't contribute their unique perspectives (inclusion fails)
+
+You build it through consistent behavior: admitting your own mistakes, thanking people for finding problems, responding to errors with curiosity instead of blame, and protecting dissent.
+</details>
+
+**Question 6:** Why should you let a junior engineer "drive" during pair programming, and what does the mentor do instead?
+
+<details>
+<summary>Show Answer</summary>
+
+The junior should drive (hands on keyboard) because:
+1. People learn by doing, not watching
+2. Typing forces them to think through the implementation details
+3. It prevents the mentor from unconsciously taking over
+4. It builds the junior's confidence and muscle memory
+
+The mentor navigates by:
+- Asking guiding questions ("What do you think would happen if...?")
+- Pointing out considerations ("Have you thought about the error case?")
+- Suggesting approaches ("One pattern that works well here is...")
+- Catching bugs and typos
+- Looking up documentation so the junior can stay focused
+- Thinking about the big picture while the junior focuses on the current code
+
+The key discipline: resist the urge to say "just let me do it." The 5 minutes you save by typing it yourself costs the junior an hour of learning.
+</details>
+
+**Question 7:** What is the "brilliant jerk" problem and how should a tech lead handle it?
+
+<details>
+<summary>Show Answer</summary>
+
+A "brilliant jerk" is a highly skilled engineer who is condescending, dismissive, or hostile to colleagues. They produce excellent individual work but damage the team through:
+- Intimidating junior engineers into silence
+- Causing turnover (people leave to escape them)
+- Destroying psychological safety
+- Making code reviews adversarial instead of educational
+
+How to handle it:
+1. **Give specific feedback about behavior** (not character): "In yesterday's code review, you called Sarah's approach 'naive.' That's not how we give feedback on this team."
+2. **Set concrete expectations**: "I need you to phrase all code review feedback as suggestions with explanations. I'll be reviewing your comments for the next month."
+3. **Follow up consistently**: Check that behavior changes. Acknowledge improvement.
+4. **If behavior doesn't change, manage them out**: No individual's technical output is worth the team damage. The math doesn't work---one brilliant jerk easily causes $500K+/year in turnover and productivity damage.
+</details>
+
+---
+
+## Hands-On Exercise: Review a Junior Engineer's PR
+
+### Scenario
+
+A junior engineer named Alex has submitted a pull request for a function that finds duplicate users in a database. The function works correctly but has several issues you'd want to address in a mentoring code review.
+
+Here is Alex's code:
+
+```python
+# user_dedup.py - Find and merge duplicate user accounts
+
+import psycopg2
+import os
+
+def find_duplicates():
+    conn = psycopg2.connect(
+        host=os.environ['DB_HOST'],
+        port=os.environ['DB_PORT'],
+        dbname=os.environ['DB_NAME'],
+        user=os.environ['DB_USER'],
+        password=os.environ['DB_PASSWORD']
+    )
+
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, email, name, created_at FROM users")
+    all_users = cursor.fetchall()
+
+    duplicates = []
+
+    for i in range(len(all_users)):
+        for j in range(i + 1, len(all_users)):
+            if all_users[i][1].lower() == all_users[j][1].lower():
+                duplicates.append({
+                    'original': all_users[i],
+                    'duplicate': all_users[j]
+                })
+
+    if len(duplicates) > 0:
+        for dup in duplicates:
+            original_id = dup['original'][0]
+            duplicate_id = dup['duplicate'][0]
+            cursor.execute(
+                "UPDATE orders SET user_id = " + str(original_id) +
+                " WHERE user_id = " + str(duplicate_id)
+            )
+            cursor.execute(
+                "DELETE FROM users WHERE id = " + str(duplicate_id)
+            )
+        conn.commit()
+        print(f"Merged {len(duplicates)} duplicate users")
+    else:
+        print("No duplicates found")
+
+    conn.close()
+    return duplicates
+
+
+if __name__ == '__main__':
+    find_duplicates()
+```
+
+### Your Task
+
+Write a code review with **at least 6 comments** on Alex's PR. Your review must:
+
+1. **Start with something positive** --- find at least one thing Alex did well
+2. **Identify the critical issues** --- there are at least 3 serious problems in this code
+3. **Teach, don't just correct** --- explain *why* each issue matters and how to fix it
+4. **Prioritize** --- mark which issues are blockers vs suggestions
+5. **Offer to help** --- suggest pairing or point to learning resources
+6. **End with encouragement** --- acknowledge the effort and set expectations for iteration
+
+### Issues to Find
+
+Here are hints about what to look for (try to find them yourself first):
+
+<details>
+<summary>Hint 1: Security</summary>
+The SQL queries use string concatenation with user data. This is vulnerable to SQL injection, even though the data comes from the database itself---it's a dangerous pattern to learn.
+</details>
+
+<details>
+<summary>Hint 2: Performance</summary>
+The nested loop comparing every user to every other user is O(n^2). With 100,000 users, that's 10 billion comparisons. A hash map (or a SQL GROUP BY query) would be dramatically faster.
+</details>
+
+<details>
+<summary>Hint 3: Data Safety</summary>
+The function fetches all users into memory, then deletes users and reassigns orders without any transaction safety. If the process crashes halfway through, data is left in an inconsistent state.
+</details>
+
+<details>
+<summary>Hint 4: Error Handling</summary>
+No try/except blocks. No connection cleanup on failure. Environment variables accessed without defaults. Any error crashes the process silently.
+</details>
+
+<details>
+<summary>Hint 5: Design</summary>
+One function does everything: connects to the database, fetches data, finds duplicates, merges records, and prints output. This is impossible to test in isolation.
+</details>
+
+<details>
+<summary>Hint 6: Operational Safety</summary>
+This function deletes user records with no dry-run mode, no logging, no backup, and no confirmation. Running it in production could cause irreversible data loss.
+</details>
+
+### Success Criteria
+
+- [ ] Review starts with specific positive feedback (not generic "good job")
+- [ ] At least 6 comments addressing different issues
+- [ ] Each comment explains WHY the issue matters (not just WHAT to change)
+- [ ] Comments are phrased as teaching opportunities, not commands
+- [ ] Critical issues (security, data safety) are clearly marked as blockers
+- [ ] Minor suggestions are marked as non-blocking (e.g., prefixed with `nit:`)
+- [ ] Review ends with encouragement and an offer to pair or discuss
+- [ ] Tone is constructive throughout---Alex should feel motivated to improve, not discouraged
+
+### Stretch Goals
+
+- Rewrite one section of the code to show Alex what the improved version looks like
+- Suggest a test that Alex should write for the `find_duplicates` logic
+- Identify which improvement would be the best learning opportunity for Alex to tackle first
+
+---
+
+## Did You Know?
+
+- **Google's "Project Aristotle"** (2015) studied 180 teams and found that WHO was on the team mattered less than HOW the team worked together. Psychological safety was the #1 predictor of team success. Teams of "average" engineers with high psychological safety consistently outperformed teams of "star" engineers without it.
+
+- **The term "pair programming" was popularized by Kent Beck** in his 1999 book "Extreme Programming Explained," but the practice predates it. Fred Brooks observed in the 1970s that the best code at IBM was written by pairs of programmers working together. He just didn't have a name for it.
+
+- **Netflix has no formal mentorship program.** Instead, they embed mentoring into their culture through "context, not control"---leaders provide context about strategy and constraints, then trust engineers to make good decisions. When mistakes happen, the response is "what did we learn?" not "who's responsible?" This approach works because it treats every interaction as a mentoring moment.
+
+- **Studies show that diverse code review teams catch 15% more defects** (North Carolina State University, 2018). The reason is simple: people with different backgrounds and experiences notice different things. A reviewer who has experienced a particular class of bug is more likely to spot it. Homogeneous teams have homogeneous blind spots.
+
+---
+
+## Further Reading
+
+- **"The Manager's Path"** by Camille Fournier --- The definitive guide to the IC-to-management transition. Chapters on tech lead and mentoring are essential.
+
+- **"Accelerate"** by Nicole Forsgren, Jez Humble, and Gene Kim --- The research behind DORA metrics. Data-driven proof that speed and stability aren't trade-offs.
+
+- **"The Fearless Organization"** by Amy Edmondson --- The research behind psychological safety. Edmondson coined the term and has studied it for 25 years.
+
+- **"An Elegant Puzzle"** by Will Larson --- Systems-thinking approach to engineering leadership. Practical advice on team dynamics and growing engineers.
+
+- **"Radical Candor"** by Kim Scott --- Framework for giving feedback that is both caring and direct. The "Ruinous Empathy" quadrant is a common trap for new mentors.
+
+---
+
+## Next Module
+
+Return to the [Engineering Leadership README](README.md) for the full module index and learning path.
+
+---
+
+*"The best engineers are not the ones who know the most. They're the ones who make everyone around them better."* --- Unknown
+
+*"Tell me and I forget, teach me and I may remember, involve me and I learn."* --- Benjamin Franklin

@@ -489,6 +489,14 @@ nav:
       - platform/foundations/distributed-systems/module-5.1-what-makes-systems-distributed.md
       - platform/foundations/distributed-systems/module-5.2-consensus-and-coordination.md
       - platform/foundations/distributed-systems/module-5.3-eventual-consistency.md
+    - Engineering Leadership:
+      - platform/foundations/engineering-leadership/README.md
+      - platform/foundations/engineering-leadership/module-1.1-incident-command.md
+      - platform/foundations/engineering-leadership/module-1.2-postmortems.md
+      - platform/foundations/engineering-leadership/module-1.3-oncall.md
+      - platform/foundations/engineering-leadership/module-1.4-adrs.md
+      - platform/foundations/engineering-leadership/module-1.5-stakeholders.md
+      - platform/foundations/engineering-leadership/module-1.6-mentorship.md
   - Disciplines:
     - SRE:
       - platform/disciplines/sre/README.md
