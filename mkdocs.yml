@@ -593,6 +593,14 @@ nav:
       - platform/disciplines/data-engineering/module-1.4-spark.md
       - platform/disciplines/data-engineering/module-1.5-airflow.md
       - platform/disciplines/data-engineering/module-1.6-lakehouse.md
+    - AI Infrastructure:
+      - platform/disciplines/ai-infrastructure/README.md
+      - platform/disciplines/ai-infrastructure/module-1.1-gpu-provisioning.md
+      - platform/disciplines/ai-infrastructure/module-1.2-gpu-scheduling.md
+      - platform/disciplines/ai-infrastructure/module-1.3-distributed-training.md
+      - platform/disciplines/ai-infrastructure/module-1.4-ai-storage.md
+      - platform/disciplines/ai-infrastructure/module-1.5-llm-serving.md
+      - platform/disciplines/ai-infrastructure/module-1.6-ai-cost.md
   - Toolkits:
     - platform/toolkits/README.md
     - Observability:
