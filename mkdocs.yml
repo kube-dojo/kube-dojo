@@ -58,6 +58,7 @@ plugins:
         Kubernetes Basics: Основи Kubernetes
         Modern DevOps: Сучасний DevOps
         Linux Deep Dive: Linux поглиблено
+        Everyday Use: Щоденне використання
         System Essentials: Системні основи
         Container Primitives: Контейнерні примітиви
         Networking: Мережі
@@ -147,6 +148,13 @@ nav:
     - prerequisites/modern-devops/module-6-devsecops.md
   - Linux Deep Dive:
     - linux/README.md
+    - Everyday Use:
+      - linux/foundations/everyday-use/README.md
+      - linux/foundations/everyday-use/module-0.1-cli-power-user.md
+      - linux/foundations/everyday-use/module-0.2-environment-permissions.md
+      - linux/foundations/everyday-use/module-0.3-processes-resources.md
+      - linux/foundations/everyday-use/module-0.4-services-logs.md
+      - linux/foundations/everyday-use/module-0.5-networking-tools.md
     - System Essentials:
       - linux/foundations/system-essentials/README.md
       - linux/foundations/system-essentials/module-1.1-kernel-architecture.md
