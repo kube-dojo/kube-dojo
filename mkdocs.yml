@@ -218,6 +218,20 @@ nav:
     - cloud/aws-essentials/module-10-cloudwatch.md
     - cloud/aws-essentials/module-11-cicd.md
     - cloud/aws-essentials/module-12-cloudformation.md
+  - GCP Essentials:
+    - cloud/gcp-essentials/README.md
+    - cloud/gcp-essentials/module-1-iam.md
+    - cloud/gcp-essentials/module-2-vpc.md
+    - cloud/gcp-essentials/module-3-compute.md
+    - cloud/gcp-essentials/module-4-gcs.md
+    - cloud/gcp-essentials/module-5-dns.md
+    - cloud/gcp-essentials/module-6-artifact-registry.md
+    - cloud/gcp-essentials/module-7-cloud-run.md
+    - cloud/gcp-essentials/module-8-cloud-functions.md
+    - cloud/gcp-essentials/module-9-secret-manager.md
+    - cloud/gcp-essentials/module-10-operations.md
+    - cloud/gcp-essentials/module-11-cloud-build.md
+    - cloud/gcp-essentials/module-12-patterns.md
 - Certifications:
   - k8s/README.md
   - Extending Kubernetes:
