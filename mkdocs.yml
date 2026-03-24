@@ -232,6 +232,20 @@ nav:
     - cloud/gcp-essentials/module-10-operations.md
     - cloud/gcp-essentials/module-11-cloud-build.md
     - cloud/gcp-essentials/module-12-patterns.md
+  - Azure Essentials:
+    - cloud/azure-essentials/README.md
+    - cloud/azure-essentials/module-1-entra-id.md
+    - cloud/azure-essentials/module-2-vnet.md
+    - cloud/azure-essentials/module-3-vms.md
+    - cloud/azure-essentials/module-4-blob.md
+    - cloud/azure-essentials/module-5-dns.md
+    - cloud/azure-essentials/module-6-acr.md
+    - cloud/azure-essentials/module-7-aci-aca.md
+    - cloud/azure-essentials/module-8-functions.md
+    - cloud/azure-essentials/module-9-key-vault.md
+    - cloud/azure-essentials/module-10-monitor.md
+    - cloud/azure-essentials/module-11-cicd.md
+    - cloud/azure-essentials/module-12-bicep.md
 - Certifications:
   - k8s/README.md
   - Extending Kubernetes:
