@@ -56,8 +56,8 @@ GCP offers four machine families, each optimized for different workload characte
 
 | Series | CPU | vCPU:Memory Ratio | Best For | Notes |
 | :--- | :--- | :--- | :--- | :--- |
-| **E2** | Intel/AMD (automatic) | 1:4 (0.5 to 32 vCPUs) | Cost-sensitive, dev/test | Cheapest, shared-core options available |
-| **N2** | Intel Cascade Lake/Ice Lake | 1:4 (2 to 128 vCPUs) | General production | Good balance, sustained use discounts |
+| **E2** | Intel/AMD (automatic) | 1:4 (0.25 to 32 vCPUs) | Cost-sensitive, dev/test | Cheapest, shared-core options (e2-micro: 0.25 vCPU) |
+| **N2** | Intel Cascade Lake/Ice Lake | 1:4 (2 to 128 vCPUs) | General production | Good balance, use CUDs for savings (no SUDs) |
 | **N2D** | AMD EPYC | 1:4 (2 to 224 vCPUs) | Same as N2, prefer AMD | Often 10-15% cheaper than N2 |
 | **T2D** | AMD EPYC | 1:4 (1 to 60 vCPUs) | Scale-out workloads | Best per-thread performance |
 | **N1** | Intel Skylake/older | 1:3.75 | Legacy (avoid for new) | Still supported but outdated |

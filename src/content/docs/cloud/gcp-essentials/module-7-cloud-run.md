@@ -59,7 +59,6 @@ Cloud Run is a managed implementation of Knative Serving. Understanding the Knat
 gcloud run deploy my-api \
   --image=us-central1-docker.pkg.dev/my-project/docker-repo/my-api:v1.0.0 \
   --region=us-central1 \
-  --platform=managed \
   --allow-unauthenticated \
   --port=8080 \
   --memory=512Mi \
