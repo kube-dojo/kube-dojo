@@ -24,7 +24,7 @@ In October 2021, Facebook disappeared from the internet. Not figuratively -- lit
 
 DNS is the invisible foundation of every internet application. When it works, nobody thinks about it. When it fails, nothing else matters -- your beautifully architected microservices, your multi-region deployment, your zero-downtime release strategy -- all of it becomes unreachable if users cannot resolve your domain name.
 
-AWS Route 53 is Amazon's managed DNS service, named after the port that DNS traffic runs on (UDP port 53). It handles over a trillion DNS queries per month across AWS's global network of edge locations. In this module, you will learn how Route 53 works, how to configure hosted zones and records, how to implement sophisticated routing policies for multi-region architectures, and how to keep your DNS infrastructure healthy with automated health checks. By the end, you will have built a multi-region active-passive failover configuration -- the kind of setup that would have saved Facebook's engineers a very bad day.
+AWS Route 53 is Amazon's managed DNS service, named after the port that DNS traffic runs on (port 53). It handles over a trillion DNS queries per month across AWS's global network of edge locations. In this module, you will learn how Route 53 works, how to configure hosted zones and records, how to implement sophisticated routing policies for multi-region architectures, and how to keep your DNS infrastructure healthy with automated health checks. By the end, you will have built a multi-region active-passive failover configuration -- the kind of setup that would have saved Facebook's engineers a very bad day.
 
 ---
 
