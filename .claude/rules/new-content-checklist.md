@@ -6,9 +6,10 @@ description: Checklist before committing new modules or content changes
 
 EVERY TIME new modules are added, do ALL of these BEFORE committing:
 
-1. **mkdocs.yml nav** — add to navigation
-2. **Parent README** — add module to section's README table
-3. **Build** — `source .venv/bin/activate && NO_MKDOCS_2_WARNING=1 mkdocs build` — verify 0 warnings
-4. **Verify links** — no broken relative links or orphaned modules
-5. **changelog.md** — add entry for significant additions
-6. **index.md** — update if module counts changed significantly
+1. **Frontmatter** — every `.md` file needs `title:` and `sidebar.order:`
+2. **Slug** — if filename contains dots (e.g. `module-1.1-foo.md`), add explicit `slug:` to preserve them
+3. **Parent index.md** — add module to section's index table
+4. **Internal links** — use slug format (`module-foo/`), never `.md` extension
+5. **Build** — `npm run build` — verify no errors
+6. **Health check** — `python scripts/check_site_health.py` — 0 errors
+7. **changelog.md** — add entry for significant additions
