@@ -1,5 +1,6 @@
-# Claude Code local config (deployed from claude_extensions/)
-.claude/
+# Claude Code — commit team config, ignore personal/local
+.claude/settings.local.json
+.claude/projects/
 
 # OS files
 .DS_Store
