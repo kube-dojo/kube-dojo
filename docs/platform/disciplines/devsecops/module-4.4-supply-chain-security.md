@@ -1112,9 +1112,10 @@ The goal is end-to-end integrity: from source code to running container, every s
 
 ---
 
-## Next Module
+## Next Steps
 
-Continue to [Module 4.5: Runtime Security](module-4.5-runtime-security.md) to learn about protecting running applications and detecting threats in production.
+- **[Supply Chain Defense Guide](supply-chain-defense-guide.md)** -- Project-agnostic checklist covering CI/CD hardening, dependency management, container security, runtime defense, and incident response preparation
+- **[Module 4.5: Runtime Security](module-4.5-runtime-security.md)** -- Protecting running applications and detecting threats in production
 
 ---
 

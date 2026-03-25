@@ -651,6 +651,7 @@ nav:
       - platform/disciplines/devsecops/module-4.2-shift-left-security.md
       - platform/disciplines/devsecops/module-4.3-security-cicd.md
       - platform/disciplines/devsecops/module-4.4-supply-chain-security.md
+      - platform/disciplines/devsecops/supply-chain-defense-guide.md
       - platform/disciplines/devsecops/module-4.5-runtime-security.md
       - platform/disciplines/devsecops/module-4.6-security-culture.md
     - MLOps:

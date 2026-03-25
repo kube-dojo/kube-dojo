@@ -24,6 +24,7 @@ Before starting this track:
 | 4.2 | [Shift-Left Security](module-4.2-shift-left-security.md) | `[MEDIUM]` | 35-40 min |
 | 4.3 | [Security in CI/CD Pipelines](module-4.3-security-cicd.md) | `[COMPLEX]` | 40-45 min |
 | 4.4 | [Supply Chain Security](module-4.4-supply-chain-security.md) | `[COMPLEX]` | 40-45 min |
+| -- | [Supply Chain Defense Guide](supply-chain-defense-guide.md) | Reference | 20-25 min |
 | 4.5 | [Runtime Security](module-4.5-runtime-security.md) | `[COMPLEX]` | 40-45 min |
 | 4.6 | [Security Culture & Automation](module-4.6-security-culture.md) | `[MEDIUM]` | 30-35 min |
 
