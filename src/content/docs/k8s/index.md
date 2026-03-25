@@ -76,6 +76,31 @@ KCNA → CKAD → (stop here or continue to CKA)
 CKA → CKS → KCSA
 ```
 
+## Tool & Specialist Certifications
+
+Beyond Kubestronaut, CNCF offers tool-specific certifications. KubeDojo maps existing modules as learning paths for each:
+
+| Cert | Name | Learning Path |
+|------|------|---------------|
+| [PCA](pca/) | Prometheus Certified Associate | Prometheus, PromQL, alerting |
+| [ICA](ica/) | Istio Certified Associate | Service mesh, traffic management |
+| [CCA](cca/) | Cilium Certified Associate | eBPF networking, policies |
+| [CGOA](cgoa/) | Certified GitOps Associate | ArgoCD, Flux, GitOps principles |
+| [CBA](cba/) | Certified Backstage Associate | IDPs, developer portals |
+| [OTCA](otca/) | OpenTelemetry Certified Associate | Observability, tracing |
+| [KCA](kca/) | Kyverno Certified Associate | Policy as code |
+| [CAPA](capa/) | Certified Argo Project Associate | Argo Workflows, Rollouts |
+| [CNPE](cnpe/) | Cloud Native Platform Engineer | Cross-track learning path |
+| [CNPA](cnpa/) | Cloud Native Platform Associate | Platform fundamentals |
+| [LFCS](lfcs/) | Linux Foundation Certified Sysadmin | Linux deep dive |
+| [FinOps](finops/) | FinOps Practitioner | Cloud cost optimization |
+
+## Extending Kubernetes
+
+| Section | Modules | Description |
+|---------|---------|-------------|
+| [Extending K8s](extending/) | 8 | Controllers, operators, webhooks, API aggregation, CRDs |
+
 ---
 
 ## Exam Tips

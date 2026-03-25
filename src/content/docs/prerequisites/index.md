@@ -12,6 +12,22 @@ These tracks build foundational knowledge before diving into certifications or a
 
 ## Tracks
 
+### [Zero to Terminal](zero-to-terminal/) — 10 modules
+*Never used a terminal before? Start here. From "what is a computer" to "I deployed a website."*
+
+| Module | Topic |
+|--------|-------|
+| 0.1 | [What is a Computer?](zero-to-terminal/module-0.1-what-is-a-computer/) |
+| 0.2 | [What is a Terminal?](zero-to-terminal/module-0.2-what-is-a-terminal/) |
+| 0.3 | [First Terminal Commands](zero-to-terminal/module-0.3-first-commands/) |
+| 0.4 | [Files and Directories](zero-to-terminal/module-0.4-files-and-directories/) |
+| 0.5 | [Editing Files](zero-to-terminal/module-0.5-editing-files/) |
+| 0.6 | [What is Networking?](zero-to-terminal/module-0.6-what-is-networking/) |
+| 0.7 | [Servers and SSH](zero-to-terminal/module-0.7-servers-and-ssh/) |
+| 0.8 | [Software and Packages](zero-to-terminal/module-0.8-software-and-packages/) |
+| 0.9 | [What is the Cloud?](zero-to-terminal/module-0.9-what-is-the-cloud/) |
+| 0.10 | [Your First Server](zero-to-terminal/module-0.10-your-first-server/) |
+
 ### [Philosophy & Design](philosophy-design/) — 4 modules
 *Why Kubernetes exists and how to think about it.*
 
@@ -64,10 +80,10 @@ These tracks build foundational knowledge before diving into certifications or a
 ## Suggested Order
 
 ```
-Philosophy & Design → Cloud Native 101 → Kubernetes Basics → Modern DevOps
+Zero to Terminal → Philosophy & Design → Cloud Native 101 → Kubernetes Basics → Modern DevOps
 ```
 
-Or jump directly to **Kubernetes Basics** if you already understand containers.
+Or jump directly to **Kubernetes Basics** if you already understand containers and the terminal.
 
 ---
 
@@ -78,4 +94,6 @@ Ready to continue? Choose your path:
 | Goal | Next Step |
 |------|-----------|
 | Get certified | [Kubernetes Certifications](../k8s/) |
+| Learn cloud providers | [Cloud](../cloud/) |
 | Go deeper | [Platform Engineering](../platform/) |
+| Master Linux | [Linux Deep Dive](../linux/) |
