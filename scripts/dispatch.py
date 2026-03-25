@@ -72,13 +72,40 @@ def dispatch_gemini(prompt: str, model: str = "gemini-3.1-pro-preview",
             cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, text=True, cwd=str(REPO_ROOT), env=_ENV,
         )
-        if proc.stdin:
-            proc.stdin.write(prompt)
-            proc.stdin.close()
 
-        output_lines = _stream_with_timeout(proc, timeout)
+        # Write stdin in a background thread to avoid deadlock on large prompts
+        stderr_lines: list[str] = []
+
+        def _write_stdin():
+            try:
+                if proc.stdin:
+                    proc.stdin.write(prompt)
+                    proc.stdin.close()
+            except OSError:
+                pass
+
+        def _read_stderr():
+            try:
+                if proc.stderr:
+                    for line in proc.stderr:
+                        stderr_lines.append(line)
+            except (OSError, ValueError):
+                pass
+
+        stdin_thread = threading.Thread(target=_write_stdin, daemon=True)
+        stderr_thread = threading.Thread(target=_read_stderr, daemon=True)
+        stdin_thread.start()
+        stderr_thread.start()
+
+        output_lines, timed_out = _stream_with_timeout(proc, timeout)
         proc.wait()
-        stderr = proc.stderr.read() if proc.stderr else ""
+        stdin_thread.join(timeout=5)
+        stderr_thread.join(timeout=5)
+        stderr = "".join(stderr_lines)
+
+        if timed_out:
+            print(f"Gemini timed out after {timeout}s", file=sys.stderr)
+            return False, ""
 
         if proc.returncode != 0:
             output = "".join(output_lines).strip()
@@ -92,10 +119,6 @@ def dispatch_gemini(prompt: str, model: str = "gemini-3.1-pro-preview",
 
     except FileNotFoundError:
         print("gemini CLI not found. Install: https://github.com/google-gemini/gemini-cli", file=sys.stderr)
-        return False, ""
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        print(f"Gemini timed out after {timeout}s", file=sys.stderr)
         return False, ""
 
 
@@ -181,8 +204,8 @@ def post_to_github(issue_num: int, content: str, model: str) -> bool:
 
 # --- Helpers ---
 
-def _stream_with_timeout(proc, timeout: int) -> list[str]:
-    """Stream stdout lines, kill if timeout exceeded."""
+def _stream_with_timeout(proc, timeout: int) -> tuple[list[str], bool]:
+    """Stream stdout lines, kill if timeout exceeded. Returns (lines, timed_out)."""
     output_lines: list[str] = []
     timed_out = False
 
@@ -190,7 +213,6 @@ def _stream_with_timeout(proc, timeout: int) -> list[str]:
         def _kill():
             nonlocal timed_out
             timed_out = True
-            print(f"\nGemini timed out after {timeout}s — killing", file=sys.stderr)
             try:
                 proc.kill()
             except OSError:
@@ -213,7 +235,7 @@ def _stream_with_timeout(proc, timeout: int) -> list[str]:
     if timer:
         timer.cancel()
 
-    return output_lines
+    return output_lines, timed_out
 
 
 def _split_content(content: str, limit: int = GH_CHAR_LIMIT) -> list[str]:
