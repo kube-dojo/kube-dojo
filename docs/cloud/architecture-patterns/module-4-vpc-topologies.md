@@ -992,4 +992,4 @@ Estimate the monthly cost for the complete network architecture, including NAT G
 
 ## Next Module
 
-This is the final module in the Cloud Architecture Patterns series. You now have the knowledge to design Kubernetes deployments that are well-managed (Module 1), resilient across regions (Module 2), secured with identity federation (Module 3), and networked correctly from day one (Module 4). Consider exploring the [Platform Engineering Track](../../platform/) for deeper dives into GitOps, observability, and security tooling.
+This is the final module in the Cloud Architecture Patterns series. You now have the knowledge to design Kubernetes deployments that are well-managed (Module 1), resilient across regions (Module 2), secured with identity federation (Module 3), and networked correctly from day one (Module 4). Consider exploring the [Platform Engineering Track](../../platform/README.md) for deeper dives into GitOps, observability, and security tooling.

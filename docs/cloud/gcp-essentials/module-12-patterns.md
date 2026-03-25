@@ -823,7 +823,7 @@ Congratulations on completing the **GCP DevOps Essentials** track! You now have 
 
 - **[GCP Essentials README](README.md)** --- Review the full module listing and revisit any topics
 - **[Hyperscaler Rosetta Stone](../hyperscaler-rosetta-stone.md)** --- Map GCP concepts to their AWS and Azure equivalents
-- **[KubeDojo Kubernetes Tracks](/docs/k8s/)** --- Deep dive into CKA, CKAD, CKS, KCNA, and KCSA certifications
-- **[Platform Engineering Track](/docs/platform/)** --- Learn SRE, GitOps, DevSecOps, and MLOps practices
+- **[KubeDojo Kubernetes Tracks](../../k8s/README.md)** --- Deep dive into CKA, CKAD, CKS, KCNA, and KCSA certifications
+- **[Platform Engineering Track](../../platform/README.md)** --- Learn SRE, GitOps, DevSecOps, and MLOps practices
 
 The patterns in this module are starting points. Every organization's landing zone is unique, shaped by their compliance requirements, team structure, and workload characteristics. The key principle is always the same: **build the foundation right, and everything built on top of it inherits that correctness.**

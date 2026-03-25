@@ -104,6 +104,7 @@ copyright: MIT License - Free to use, share, and modify
 nav:
 - Home: index.md
 - What's New: changelog.md
+- Ukrainian Glossary: uk-glossary.md
 - Fundamentals:
   - prerequisites/README.md
   - Zero to Terminal:
@@ -126,17 +127,20 @@ nav:
     - linux/foundations/everyday-use/module-0.4-services-logs.md
     - linux/foundations/everyday-use/module-0.5-networking-tools.md
   - Philosophy & Design:
+    - prerequisites/philosophy-design/README.md
     - prerequisites/philosophy-design/module-1-why-kubernetes-won.md
     - prerequisites/philosophy-design/module-2-declarative-vs-imperative.md
     - prerequisites/philosophy-design/module-3-what-we-dont-cover.md
     - prerequisites/philosophy-design/module-4-dead-ends.md
   - Cloud Native 101:
+    - prerequisites/cloud-native-101/README.md
     - prerequisites/cloud-native-101/module-1-what-are-containers.md
     - prerequisites/cloud-native-101/module-2-docker-fundamentals.md
     - prerequisites/cloud-native-101/module-3-what-is-kubernetes.md
     - prerequisites/cloud-native-101/module-4-cloud-native-ecosystem.md
     - prerequisites/cloud-native-101/module-5-monolith-to-microservices.md
   - Kubernetes Basics:
+    - prerequisites/kubernetes-basics/README.md
     - prerequisites/kubernetes-basics/module-1-first-cluster.md
     - prerequisites/kubernetes-basics/module-2-kubectl-basics.md
     - prerequisites/kubernetes-basics/module-3-pods.md
@@ -146,6 +150,7 @@ nav:
     - prerequisites/kubernetes-basics/module-7-namespaces-labels.md
     - prerequisites/kubernetes-basics/module-8-yaml-kubernetes.md
   - Modern DevOps:
+    - prerequisites/modern-devops/README.md
     - prerequisites/modern-devops/module-1-infrastructure-as-code.md
     - prerequisites/modern-devops/module-2-gitops.md
     - prerequisites/modern-devops/module-3-cicd-pipelines.md
@@ -323,9 +328,11 @@ nav:
   - KCNA:
     - k8s/kcna/README.md
     - 'Part 0: Introduction':
+      - k8s/kcna/part0-introduction/README.md
       - k8s/kcna/part0-introduction/module-0.1-kcna-overview.md
       - k8s/kcna/part0-introduction/module-0.2-study-strategy.md
     - 'Part 1: K8s Fundamentals':
+      - k8s/kcna/part1-kubernetes-fundamentals/README.md
       - k8s/kcna/part1-kubernetes-fundamentals/module-1.1-what-is-kubernetes.md
       - k8s/kcna/part1-kubernetes-fundamentals/module-1.2-container-fundamentals.md
       - k8s/kcna/part1-kubernetes-fundamentals/module-1.3-control-plane.md
@@ -336,11 +343,13 @@ nav:
       - k8s/kcna/part1-kubernetes-fundamentals/module-1.8-namespaces-labels.md
       - k8s/kcna/part1-kubernetes-fundamentals/module-1.9-debugging-basics.md
     - 'Part 2: Container Orchestration':
+      - k8s/kcna/part2-container-orchestration/README.md
       - k8s/kcna/part2-container-orchestration/module-2.1-scheduling.md
       - k8s/kcna/part2-container-orchestration/module-2.2-scaling.md
       - k8s/kcna/part2-container-orchestration/module-2.3-storage.md
       - k8s/kcna/part2-container-orchestration/module-2.4-configuration.md
     - 'Part 3: Cloud Native Architecture':
+      - k8s/kcna/part3-cloud-native-architecture/README.md
       - k8s/kcna/part3-cloud-native-architecture/module-3.1-cloud-native-principles.md
       - k8s/kcna/part3-cloud-native-architecture/module-3.2-cncf-ecosystem.md
       - k8s/kcna/part3-cloud-native-architecture/module-3.3-patterns.md
@@ -352,12 +361,14 @@ nav:
       - k8s/kcna/part3-cloud-native-architecture/module-3.9-webassembly.md
       - k8s/kcna/part3-cloud-native-architecture/module-3.10-green-computing.md
     - 'Part 4: Application Delivery':
+      - k8s/kcna/part4-application-delivery/README.md
       - k8s/kcna/part4-application-delivery/module-4.1-ci-cd.md
       - k8s/kcna/part4-application-delivery/module-4.2-application-packaging.md
       - k8s/kcna/part4-application-delivery/module-4.3-release-strategies.md
   - KCSA:
     - k8s/kcsa/README.md
     - 'Part 0: Introduction':
+      - k8s/kcsa/part0-introduction/README.md
       - k8s/kcsa/part0-introduction/module-0.1-kcsa-overview.md
       - k8s/kcsa/part0-introduction/module-0.2-security-mindset.md
     - 'Part 1: Cloud Native Security':
@@ -406,6 +417,7 @@ nav:
       - k8s/cka/part0-environment/module-0.5-exam-strategy.md
       - k8s/cka/part0-environment/part0-cumulative-quiz.md
     - 'Part 1: Cluster Architecture':
+      - k8s/cka/part1-cluster-architecture/README.md
       - k8s/cka/part1-cluster-architecture/module-1.1-control-plane.md
       - k8s/cka/part1-cluster-architecture/module-1.2-extension-interfaces.md
       - k8s/cka/part1-cluster-architecture/module-1.3-helm.md
@@ -415,6 +427,7 @@ nav:
       - k8s/cka/part1-cluster-architecture/module-1.7-kubeadm.md
       - k8s/cka/part1-cluster-architecture/part1-cumulative-quiz.md
     - 'Part 2: Workloads & Scheduling':
+      - k8s/cka/part2-workloads-scheduling/README.md
       - k8s/cka/part2-workloads-scheduling/module-2.1-pods.md
       - k8s/cka/part2-workloads-scheduling/module-2.2-deployments.md
       - k8s/cka/part2-workloads-scheduling/module-2.3-daemonsets-statefulsets.md
@@ -426,6 +439,7 @@ nav:
       - k8s/cka/part2-workloads-scheduling/module-2.9-autoscaling.md
       - k8s/cka/part2-workloads-scheduling/part2-cumulative-quiz.md
     - 'Part 3: Services & Networking':
+      - k8s/cka/part3-services-networking/README.md
       - k8s/cka/part3-services-networking/module-3.1-services.md
       - k8s/cka/part3-services-networking/module-3.2-endpoints.md
       - k8s/cka/part3-services-networking/module-3.3-dns.md
@@ -436,6 +450,7 @@ nav:
       - k8s/cka/part3-services-networking/module-3.8-cluster-networking-data-path.md
       - k8s/cka/part3-services-networking/part3-cumulative-quiz.md
     - 'Part 4: Storage':
+      - k8s/cka/part4-storage/README.md
       - k8s/cka/part4-storage/module-4.1-volumes.md
       - k8s/cka/part4-storage/module-4.2-pv-pvc.md
       - k8s/cka/part4-storage/module-4.3-storageclasses.md
@@ -443,6 +458,7 @@ nav:
       - k8s/cka/part4-storage/module-4.5-troubleshooting.md
       - k8s/cka/part4-storage/part4-cumulative-quiz.md
     - 'Part 5: Troubleshooting':
+      - k8s/cka/part5-troubleshooting/README.md
       - k8s/cka/part5-troubleshooting/module-5.1-methodology.md
       - k8s/cka/part5-troubleshooting/module-5.2-application-failures.md
       - k8s/cka/part5-troubleshooting/module-5.3-control-plane.md
@@ -451,6 +467,8 @@ nav:
       - k8s/cka/part5-troubleshooting/module-5.6-services.md
       - k8s/cka/part5-troubleshooting/module-5.7-logging-monitoring.md
       - k8s/cka/part5-troubleshooting/cumulative-quiz.md
+    - 'Part 6: Mock Exams':
+      - k8s/cka/part6-mock-exams/README.md
   - CKAD:
     - k8s/ckad/README.md
     - 'Part 0: Environment':
@@ -573,6 +591,7 @@ nav:
 - Platform Engineering:
   - platform/README.md
   - Foundations:
+    - platform/foundations/README.md
     - Systems Thinking:
       - platform/foundations/systems-thinking/README.md
       - platform/foundations/systems-thinking/module-1.1-what-is-systems-thinking.md
@@ -620,6 +639,7 @@ nav:
       - platform/foundations/advanced-networking/module-1.5-load-balancing.md
       - platform/foundations/advanced-networking/module-1.6-zero-trust.md
   - Disciplines:
+    - platform/disciplines/README.md
     - SRE:
       - platform/disciplines/sre/README.md
       - platform/disciplines/sre/module-1.1-what-is-sre.md
