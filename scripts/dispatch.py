@@ -10,6 +10,7 @@ Usage:
 """
 
 import argparse
+import json
 import os
 import re
 import shutil
@@ -17,9 +18,11 @@ import subprocess
 import sys
 import threading
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
+LOG_DIR = REPO_ROOT / ".dispatch-logs"
 
 # Resolve CLI paths at import time
 GEMINI_CLI = shutil.which("gemini") or "gemini"
@@ -62,10 +65,9 @@ Respond with:
 def dispatch_gemini(prompt: str, model: str = "gemini-3.1-pro-preview",
                     review: bool = False, timeout: int = 900) -> tuple[bool, str]:
     """Call Gemini CLI directly. Returns (success, output)."""
-    if review:
-        prompt = f"{REVIEW_CONTEXT}\n---\n\nTASK:\n{prompt}"
-
+    full_prompt = f"{REVIEW_CONTEXT}\n---\n\nTASK:\n{prompt}" if review else prompt
     cmd = [GEMINI_CLI, "-m", model, "-y"]
+    t0 = time.time()
 
     try:
         proc = subprocess.Popen(
@@ -79,7 +81,7 @@ def dispatch_gemini(prompt: str, model: str = "gemini-3.1-pro-preview",
         def _write_stdin():
             try:
                 if proc.stdin:
-                    proc.stdin.write(prompt)
+                    proc.stdin.write(full_prompt)
                     proc.stdin.close()
             except OSError:
                 pass
@@ -102,22 +104,29 @@ def dispatch_gemini(prompt: str, model: str = "gemini-3.1-pro-preview",
         stdin_thread.join(timeout=5)
         stderr_thread.join(timeout=5)
         stderr = "".join(stderr_lines)
+        elapsed = time.time() - t0
 
         if timed_out:
             print(f"Gemini timed out after {timeout}s", file=sys.stderr)
+            _log("gemini", model, full_prompt, "", False, elapsed, "TIMEOUT")
             return False, ""
 
         if proc.returncode != 0:
             output = "".join(output_lines).strip()
             if output and len(output) > 50:
                 # Non-zero exit but got output — likely usable
+                _log("gemini", model, full_prompt, output, True, elapsed, stderr)
                 return True, output
             print(f"Gemini error (exit {proc.returncode}): {stderr[:500]}", file=sys.stderr)
+            _log("gemini", model, full_prompt, output, False, elapsed, stderr)
             return False, stderr
 
-        return True, "".join(output_lines).strip()
+        output = "".join(output_lines).strip()
+        _log("gemini", model, full_prompt, output, True, elapsed)
+        return True, output
 
     except FileNotFoundError:
+        _log("gemini", model, full_prompt, "", False, time.time() - t0, "CLI not found")
         print("gemini CLI not found. Install: https://github.com/google-gemini/gemini-cli", file=sys.stderr)
         return False, ""
 
@@ -150,21 +159,28 @@ def dispatch_claude(prompt: str, model: str = "claude-sonnet-4-6",
         "--model", model,
         "--output-format", "text",
     ]
+    t0 = time.time()
 
     try:
         result = subprocess.run(
             cmd, input=prompt, capture_output=True, text=True,
             timeout=timeout, cwd=str(REPO_ROOT), env=_ENV,
         )
+        elapsed = time.time() - t0
         if result.returncode != 0:
             print(f"Claude error (exit {result.returncode}): {result.stderr[:500]}", file=sys.stderr)
+            _log("claude", model, prompt, "", False, elapsed, result.stderr)
             return False, result.stderr
-        return True, result.stdout.strip()
+        output = result.stdout.strip()
+        _log("claude", model, prompt, output, True, elapsed)
+        return True, output
 
     except FileNotFoundError:
+        _log("claude", model, prompt, "", False, time.time() - t0, "CLI not found")
         print("claude CLI not found.", file=sys.stderr)
         return False, ""
     except subprocess.TimeoutExpired:
+        _log("claude", model, prompt, "", False, time.time() - t0, "TIMEOUT")
         print(f"Claude timed out after {timeout}s", file=sys.stderr)
         return False, ""
 
@@ -200,6 +216,34 @@ def post_to_github(issue_num: int, content: str, model: str) -> bool:
 
     print(f"Review posted to #{issue_num} ({total} part{'s' if total > 1 else ''})")
     return True
+
+
+# --- Logging ---
+
+def _log(agent: str, model: str, prompt: str, output: str, ok: bool,
+         duration_s: float, stderr: str = "") -> Path:
+    """Write a JSON log entry. Returns the log file path."""
+    LOG_DIR.mkdir(exist_ok=True)
+    ts = datetime.now(UTC)
+    slug = ts.strftime("%Y%m%d-%H%M%S")
+    log_file = LOG_DIR / f"{slug}-{agent}.json"
+
+    entry = {
+        "timestamp": ts.isoformat(),
+        "agent": agent,
+        "model": model,
+        "success": ok,
+        "duration_s": round(duration_s, 1),
+        "prompt_chars": len(prompt),
+        "output_chars": len(output),
+        "prompt": prompt[:5000] + ("..." if len(prompt) > 5000 else ""),
+        "output": output[:10000] + ("..." if len(output) > 10000 else ""),
+    }
+    if stderr:
+        entry["stderr"] = stderr[:2000]
+
+    log_file.write_text(json.dumps(entry, indent=2, ensure_ascii=False))
+    return log_file
 
 
 # --- Helpers ---
@@ -279,6 +323,12 @@ def main():
     cp.add_argument("--model", default="claude-sonnet-4-6", help="Claude model")
     cp.add_argument("--timeout", type=int, default=600, help="Timeout in seconds (default: 600)")
 
+    # logs
+    lp = subparsers.add_parser("logs", help="Show recent dispatch logs")
+    lp.add_argument("-n", type=int, default=10, help="Number of entries (default: 10)")
+    lp.add_argument("--full", action="store_true", help="Show full prompt/output (not truncated)")
+    lp.add_argument("--id", dest="log_id", help="Show a specific log file by timestamp prefix (e.g. 20260325-141523)")
+
     args = parser.parse_args()
 
     if not args.agent:
@@ -300,6 +350,43 @@ def main():
         if ok:
             print(output)
         sys.exit(0 if ok else 1)
+
+    elif args.agent == "logs":
+        _show_logs(args.n, args.full, args.log_id)
+
+
+def _show_logs(n: int, full: bool, log_id: str | None):
+    """Show recent dispatch logs."""
+    if not LOG_DIR.exists():
+        print("No logs yet.")
+        return
+
+    if log_id:
+        matches = sorted(LOG_DIR.glob(f"{log_id}*.json"))
+        if not matches:
+            print(f"No log matching '{log_id}'")
+            return
+        for m in matches:
+            entry = json.loads(m.read_text())
+            print(json.dumps(entry, indent=2, ensure_ascii=False))
+        return
+
+    logs = sorted(LOG_DIR.glob("*.json"), reverse=True)[:n]
+    if not logs:
+        print("No logs yet.")
+        return
+
+    for log_file in reversed(logs):
+        entry = json.loads(log_file.read_text())
+        status = "OK" if entry["success"] else "FAIL"
+        prompt_preview = entry["prompt"][:80].replace("\n", " ")
+        if not full:
+            print(f"  {entry['timestamp'][:19]}  {entry['agent']:6s}  {status:4s}  "
+                  f"{entry['duration_s']:6.1f}s  {entry['prompt_chars']:>6} -> {entry['output_chars']:>6} chars  "
+                  f"{prompt_preview}...")
+        else:
+            print(f"\n{'='*60}")
+            print(json.dumps(entry, indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":

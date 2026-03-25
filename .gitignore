@@ -2,6 +2,9 @@
 .claude/settings.local.json
 .claude/projects/
 
+# Dispatch logs (CLI agent comms)
+.dispatch-logs/
+
 # OS files
 .DS_Store
 Thumbs.db
