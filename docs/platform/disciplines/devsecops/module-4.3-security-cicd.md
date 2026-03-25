@@ -576,6 +576,43 @@ They implemented:
 
 **The lesson:** If they'd had container scanning for six months, they wouldn't have had a Black Friday crisis. The vulnerabilities accumulated silently.
 
+### The CI/CD Tool That Became the Attack Vector (March 2026)
+
+The Trivy/LiteLLM incident of March 2026 is a cautionary tale for every CI/CD pipeline. Threat actor TeamPCP compromised the `trivy-action` GitHub Action by rewriting Git tags to point to a malicious release. When LiteLLM's pipeline ran Trivy **without pinning the action to a commit SHA**, the compromised scanner exfiltrated their `PYPI_PUBLISH` token from the GitHub Actions runner environment. The attacker then published backdoored versions of LiteLLM (3.4M daily downloads) that deployed persistent backdoor pods into victim Kubernetes clusters.
+
+Two CI/CD lessons from this incident:
+
+**1. Pin GitHub Actions to commit SHAs, not tags:**
+```yaml
+# VULNERABLE — tags are mutable, can be rewritten:
+- uses: aquasecurity/trivy-action@latest
+- uses: aquasecurity/trivy-action@v0.69
+
+# SECURE — commit SHAs are immutable:
+- uses: aquasecurity/trivy-action@a7a829a0ece790ca07e16ed53ba6daba6e7e4e04
+```
+
+**2. Scope secrets to the jobs that need them:**
+```yaml
+jobs:
+  scan:
+    # This job has NO access to publish tokens
+    permissions:
+      contents: read
+    steps:
+      - uses: aquasecurity/trivy-action@a7a829...  # pinned
+
+  publish:
+    needs: scan
+    # Only THIS job can publish
+    permissions:
+      id-token: write  # OIDC for Trusted Publishers
+    steps:
+      - uses: pypa/gh-action-pypi-publish@release/v1
+```
+
+For the full attack chain, payload analysis, and postmortem, see [Module 4.4: Supply Chain Security](module-4.4-supply-chain-security.md#war-story-when-the-security-scanner-became-the-weapon-march-2026).
+
 ---
 
 ## Security Gates and Policies

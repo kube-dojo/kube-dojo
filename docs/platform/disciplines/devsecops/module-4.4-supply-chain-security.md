@@ -78,6 +78,7 @@ After this module, you'll understand:
 
 | Attack | Year | Impact | Vector |
 |--------|------|--------|--------|
+| **Trivy/LiteLLM** | 2026 | 3.4M daily downloads, K8s clusters backdoored | CI tool compromise + credential theft |
 | **SolarWinds** | 2020 | 18,000 orgs, including US gov | Build process injection |
 | **Codecov** | 2021 | 29,000 repos exposed | CI script tampering |
 | **Log4Shell** | 2021 | Millions of apps | Transitive dependency |
@@ -487,55 +488,89 @@ slsa-verifier verify-artifact myapp-linux-amd64 \
 
 ---
 
-## War Story: The Dependency That Wasn't
+## War Story: When the Security Scanner Became the Weapon (March 2026)
 
-A security researcher discovered something interesting in a fintech company's production Kubernetes cluster.
+On March 24, 2026, the LiteLLM project -- an AI model routing library with 3.4 million daily PyPI downloads -- was backdoored. The attack chain started five days earlier with a compromise that nobody expected: Trivy, the most trusted open source security scanner in the Kubernetes ecosystem.
 
-**The Discovery:**
+**The Attack Chain:**
 
-Running a routine SBOM comparison:
-```bash
-# Compare production SBOM to build SBOM
-diff <(jq '.components[].name' build-sbom.json | sort) \
-     <(jq '.components[].name' prod-sbom.json | sort)
+```
+DAY 1: Attacker (TeamPCP) rewrites Git tags in trivy-action GitHub Action
+        └─▶ Tag v0.69.4 now points to malicious release
 
-> pkg:npm/debug-production-helper@1.0.0
+DAY 5: LiteLLM CI/CD runs trivy-action WITHOUT a pinned version
+        └─▶ Pulls compromised Trivy
+            └─▶ Malicious scanner exfiltrates PYPI_PUBLISH token
+                └─▶ Attacker publishes litellm 1.82.7 and 1.82.8
+                    └─▶ 3.4M daily downloads, live for 3 hours
 ```
 
-A package in production that wasn't in the build?
+**Two Delivery Mechanisms:**
 
-**The Investigation:**
+Version 1.82.7 embedded a Base64-encoded payload in `litellm/proxy/proxy_server.py` that executed on import. Version 1.82.8 was worse -- it dropped a `.pth` file into `site-packages` that executed on **every Python interpreter startup**, including `pip`, `python -c`, and IDE language servers.
 
-```bash
-# Check npm registry
-npm info debug-production-helper
-# Not found in public registry
+**Three-Stage Payload:**
 
-# Check internal registry
-curl internal-npm.company.com/debug-production-helper
-# Package exists, uploaded 3 months ago
+Stage 1 harvested SSH keys, AWS/GCP/Azure credentials (with IMDSv2 signing), Docker registry credentials, Kubernetes kubeconfig files, service account tokens, and cryptocurrency wallets. Stage 2 encrypted everything with AES-256 and exfiltrated to `models.litellm.cloud`. Stage 3 deployed persistent backdoor pods named `node-setup-*` into the `kube-system` namespace with host filesystem mounts, installing backdoors on the underlying nodes.
 
-# Check who uploaded
-# "service-account-compromised" ← Red flag!
+```yaml
+# What the backdoor deployed into victim clusters
+apiVersion: v1
+kind: Pod
+metadata:
+  name: node-setup-worker-1     # Looks legitimate
+  namespace: kube-system         # Hides among system pods
+spec:
+  hostPID: true
+  hostNetwork: true
+  containers:
+    - name: setup
+      securityContext:
+        privileged: true         # Full host access
+      volumeMounts:
+        - name: host-root
+          mountPath: /host       # Mounts entire host filesystem
+  volumes:
+    - name: host-root
+      hostPath:
+        path: /
 ```
 
-**What Happened:**
-1. Attacker compromised a service account
-2. Published malicious package to internal registry
-3. Added dependency during manual "debugging"
-4. Package exfiltrated environment variables (including secrets)
+**The Root Cause:**
 
-**The Response:**
-1. Rotate all secrets exposed to affected pods
-2. Remove malicious package
-3. Implement:
-   - SBOM comparison in deploy pipeline
-   - Package signing for internal registry
-   - Alert on new dependencies not in build
+One line in LiteLLM's CI/CD configuration:
+
+```yaml
+# WHAT LITELLM HAD (vulnerable):
+- uses: aquasecurity/trivy-action@latest
+
+# WHAT THEY SHOULD HAVE HAD (pinned to commit SHA):
+- uses: aquasecurity/trivy-action@a7a829a0ece790ca07e16ed53ba6daba6e7e4e04
+```
+
+Git tags are mutable. Anyone with write access can rewrite where a tag points. Commit SHAs are immutable.
+
+The `PYPI_PUBLISH` token was also accessible to every step in the workflow, including the security scanner. It should have been scoped to a dedicated publish job with `permissions:` restricted.
+
+**Detection:**
+
+A security researcher at FutureSearch was testing a Cursor MCP plugin when his machine started thrashing. He traced the RAM exhaustion to litellm's `.pth` file causing a fork bomb. Within an hour, the disclosure hit Reddit and Hacker News. PyPI quarantined the packages three hours after publication.
+
+**Postmortem: Five Failures**
+
+| # | Failure | Defense |
+|---|---------|---------|
+| 1 | Unpinned GitHub Action tag | Pin all actions to commit SHA, never `@latest` or `@v1` |
+| 2 | Publish token accessible to scanner | Scope secrets to specific jobs using `permissions:` |
+| 3 | No `.pth` file monitoring | Audit `site-packages` for unexpected `.pth` files before deployment |
+| 4 | No admission control for privileged pods | Pod Security Standards, OPA/Kyverno deny `privileged: true` |
+| 5 | No runtime detection for `kube-system` anomalies | Falco rules for unexpected pods in system namespaces |
 
 **The Lesson:**
 
-Without SBOM comparison, they'd never have noticed. The malicious package was designed to look like a debugging tool and had no obvious malicious behavior—it just quietly logged environment variables to an external endpoint.
+The irony is devastating: a security scanner -- the tool meant to protect your supply chain -- became the attack vector. Every defense in this module (SBOM, signing, SLSA, admission control) would have mitigated a different stage of this attack. No single control stops everything. Defense in depth is not optional.
+
+> Source: [Snyk - Poisoned Security Scanner Backdooring LiteLLM](https://snyk.io/articles/poisoned-security-scanner-backdooring-litellm/), March 2026.
 
 ---
 

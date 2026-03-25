@@ -43,6 +43,8 @@ Trivy isn't the deepest scanner in any single category, but it's remarkably good
 
 - **The Log4Shell incident made Trivy famous overnight** — On December 9, 2021, the Log4j vulnerability (CVE-2021-44228) was disclosed. Within 4 hours, Trivy had detection rules. Within 24 hours, thousands of companies had run `trivy fs --scanners vuln .` for the first time. Trivy downloads spiked 400% that week—and many of those emergency users became permanent adopters.
 
+- **In March 2026, Trivy itself was compromised in the TeamPCP supply chain attack** — Threat actor TeamPCP rewrote Git tags in the `trivy-action` GitHub Action repository, pointing tag `v0.69.4` to a malicious release. The compromised action exfiltrated CI/CD secrets from any pipeline that used `trivy-action@latest` or an unpinned tag. The most high-profile victim was LiteLLM (3.4M daily PyPI downloads), whose stolen `PYPI_PUBLISH` token was used to push backdoored packages that deployed persistent pods into victim Kubernetes clusters. The incident proved that even trusted security tools can become attack vectors -- and that pinning GitHub Actions to commit SHAs (not tags) is not optional. See [Module 4.4: Supply Chain Security](../../disciplines/devsecops/module-4.4-supply-chain-security.md) for the full postmortem.
+
 ---
 
 ## What Trivy Scans
