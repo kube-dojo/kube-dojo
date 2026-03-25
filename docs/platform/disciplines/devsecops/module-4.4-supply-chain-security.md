@@ -31,6 +31,8 @@ After this module, you'll understand:
 - SLSA framework for supply chain integrity
 - Practical defenses at each layer
 
+For a ready-to-use checklist you can apply to any project today, see the **[Supply Chain Defense Guide](supply-chain-defense-guide.md)**.
+
 ---
 
 ## Understanding the Software Supply Chain
