@@ -1,7 +1,6 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
-import sitemap from '@astrojs/sitemap';
 
 export default defineConfig({
   site: 'https://kube-dojo.github.io',
@@ -83,6 +82,5 @@ export default defineConfig({
         { label: 'Glossary', link: '/glossary/' },
       ],
     }),
-    sitemap(),
   ],
 });

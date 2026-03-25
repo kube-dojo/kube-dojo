@@ -4,7 +4,7 @@ KubeDojo — free, open-source cloud native curriculum.
 
 ## Project Overview
 
-**Website**: https://kube-dojo.github.io/ (MkDocs Material, pinned mkdocs<2.0.0)
+**Website**: https://kube-dojo.github.io/ (Starlight/Astro)
 
 **Site tabs**: Home | What's New | Fundamentals | Cloud | Certifications | Platform Engineering
 
@@ -14,7 +14,7 @@ KubeDojo — free, open-source cloud native curriculum.
 - **Certifications** — CKA, CKAD, CKS, KCNA, KCSA, Extending K8s, 10+ tool certs
 - **Platform Engineering** — Foundations (7 sections), Disciplines (12 sections), Toolkits (17 categories)
 
-**Ukrainian translation**: ~40% (Prerequisites, CKA, CKAD). `.uk.md` suffix files, `docs/glossary.md`.
+**Ukrainian translation**: ~40% (Prerequisites, CKA, CKAD). Files in `src/content/docs/uk/`.
 
 ## Session Workflow
 
@@ -26,9 +26,9 @@ KubeDojo — free, open-source cloud native curriculum.
 ## Build & Serve
 
 ```bash
-source .venv/bin/activate
-NO_MKDOCS_2_WARNING=1 mkdocs build                    # 0 warnings expected
-NO_MKDOCS_2_WARNING=1 mkdocs serve --dev-addr 127.0.0.1:8001 --no-livereload --clean
+npm run build              # builds to dist/, ~56s for 1,297 pages
+npx astro dev              # dev server with hot reload
+npx astro preview          # preview built site
 ```
 
 ## Key Files
@@ -42,35 +42,22 @@ NO_MKDOCS_2_WARNING=1 mkdocs serve --dev-addr 127.0.0.1:8001 --no-livereload --c
 | `.claude/settings.local.json` | Personal overrides (gitignored) |
 | `scripts/prompts/module-writer.md` | Standard prompt for module creation |
 | `scripts/dispatch.py` | Direct CLI dispatch for Gemini/Claude |
-| `docs/glossary.md` | Ukrainian translation glossary |
-| `requirements.txt` | Pinned deps (mkdocs<2.0.0) |
+| `astro.config.mjs` | Starlight config (sidebar, i18n, theme) |
+| `package.json` | Node.js dependencies |
 
 ## Curriculum Structure
 
 ```
-docs/
-├── prerequisites/         # Fundamentals tab (33 modules)
-├── linux/                 # Also Fundamentals (33 modules)
+src/content/docs/          # English content (648 files)
+├── prerequisites/         # Fundamentals tab
+├── linux/                 # Linux Deep Dive + Everyday Use
 ├── cloud/                 # Cloud tab (85 modules)
-│   ├── hyperscaler-rosetta-stone.md
-│   ├── aws-essentials/    # 12 modules
-│   ├── gcp-essentials/    # 12 modules
-│   ├── azure-essentials/  # 12 modules
-│   ├── architecture-patterns/  # 4 modules
-│   ├── eks-deep-dive/     # 5 modules
-│   ├── gke-deep-dive/     # 5 modules
-│   ├── aks-deep-dive/     # 4 modules
-│   ├── advanced-operations/    # 10 modules
-│   ├── managed-services/  # 10 modules
-│   └── enterprise-hybrid/ # 10 modules
-├── k8s/                   # Certifications tab (150+ modules)
-│   ├── extending/         # 8 modules (controllers, operators)
-│   ├── cka/ ckad/ cks/ kcna/ kcsa/
-│   └── ...tool certs
-└── platform/              # Platform Engineering tab (170+ modules)
-    ├── foundations/        # 7 sections (32 modules)
-    ├── disciplines/        # 12 sections (75 modules)
-    └── toolkits/           # 17 categories (75+ modules)
+├── k8s/                   # Certifications tab (169 modules)
+├── platform/              # Platform Engineering tab (199 modules)
+└── uk/                    # Ukrainian translations (115 files)
+    ├── prerequisites/
+    ├── k8s/cka/
+    └── k8s/ckad/
 ```
 
 ## Commands Available
