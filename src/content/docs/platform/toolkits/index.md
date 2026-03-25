@@ -29,7 +29,8 @@ Toolkits are hands-on guides to specific tools. Unlike Foundations (timeless the
 | [Container Registries](container-registries/) | Harbor, Zot, Dragonfly | 3 |
 | [K8s Distributions](k8s-distributions/) | k3s, k0s, MicroK8s, Talos, OpenShift, Managed K8s | 6 |
 | [Cloud-Native Databases](cloud-native-databases/) | CockroachDB, CloudNativePG, Neon/PlanetScale, Vitess | 4 |
-| **Total** | | **75** |
+| [Storage](storage/) | Rook/Ceph, MinIO, Longhorn | 3 |
+| **Total** | | **78** |
 
 ## How to Use Toolkits
 
