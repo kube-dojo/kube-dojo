@@ -37,7 +37,7 @@ if ok:
 **2. Translator (Ukrainian)**
 - Produces good Ukrainian translations (99-100% of original length)
 - Quality: 9-10/10 for Ukrainian language
-- Must follow glossary at `docs/uk-glossary.md`
+- Must follow glossary at `docs/glossary.md`
 
 **3. Content Drafter (with expansion)**
 - Writes first drafts (~350-400 lines) — needs Claude expansion to 700-900+

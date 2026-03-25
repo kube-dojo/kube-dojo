@@ -2,7 +2,6 @@
 description: Rules for Ukrainian translation of KubeDojo modules
 paths:
   - "docs/**/*.uk.md"
-  - "docs/uk-glossary.md"
 ---
 
 # Ukrainian Translation Rules
@@ -21,7 +20,7 @@ paths:
 - Tool names: kubectl, Helm, ArgoCD, Terraform, etc.
 - Comments inside code blocks
 
-## Glossary (docs/uk-glossary.md)
+## Glossary (docs/glossary.md)
 - Pod = Под, Deployment = Деплоймент, Service = Сервіс
 - Namespace = Простір імен, cluster = кластер, container = контейнер
 - control plane = площина управління, worker node = робочий вузол

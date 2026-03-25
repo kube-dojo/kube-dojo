@@ -14,7 +14,7 @@ KubeDojo — free, open-source cloud native curriculum.
 - **Certifications** — CKA, CKAD, CKS, KCNA, KCSA, Extending K8s, 10+ tool certs
 - **Platform Engineering** — Foundations (7 sections), Disciplines (12 sections), Toolkits (17 categories)
 
-**Ukrainian translation**: ~40% (Prerequisites, CKA, CKAD). `.uk.md` suffix files, `docs/uk-glossary.md`.
+**Ukrainian translation**: ~40% (Prerequisites, CKA, CKAD). `.uk.md` suffix files, `docs/glossary.md`.
 
 ## Session Workflow
 
@@ -42,7 +42,7 @@ NO_MKDOCS_2_WARNING=1 mkdocs serve --dev-addr 127.0.0.1:8001 --no-livereload --c
 | `.claude/settings.local.json` | Personal overrides (gitignored) |
 | `scripts/prompts/module-writer.md` | Standard prompt for module creation |
 | `scripts/dispatch.py` | Direct CLI dispatch for Gemini/Claude |
-| `docs/uk-glossary.md` | Ukrainian translation glossary |
+| `docs/glossary.md` | Ukrainian translation glossary |
 | `requirements.txt` | Pinned deps (mkdocs<2.0.0) |
 
 ## Curriculum Structure

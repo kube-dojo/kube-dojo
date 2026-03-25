@@ -72,7 +72,7 @@ plugins:
         Foundations: Основи
         Toolkits: Інструменти
         Disciplines: Дисципліни
-        Ukrainian Glossary: Глосарій
+        Glossary: Глосарій
 markdown_extensions:
 - pymdownx.highlight:
     anchor_linenums: true
@@ -868,4 +868,4 @@ nav:
       - platform/toolkits/storage/module-16.1-rook-ceph.md
       - platform/toolkits/storage/module-16.2-minio.md
       - platform/toolkits/storage/module-16.3-longhorn.md
-- Ukrainian Glossary: uk-glossary.md
+- Glossary: glossary.md
