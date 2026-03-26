@@ -332,7 +332,7 @@ spec:
             to: eu-west-1
           - from: eu-west-1
             to: us-east-1
-      warmupDurationSecs: 30
+      warmupDurationSecs: "30s"
 ```
 
 ---

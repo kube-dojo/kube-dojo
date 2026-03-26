@@ -497,7 +497,7 @@ Before committing, answer honestly:
 | Comparing only control plane costs | EKS "$73/mo" vs kubeadm "$0" seems obvious | Calculate full TCO including labor, risk, and data transfer |
 | Running self-managed without etcd expertise | "How hard can a database be?" | Very hard. etcd quorum loss = total cluster outage. Get trained or go managed |
 | Ignoring managed node groups | Teams manage nodes manually on EKS/GKE | Use managed node groups (EKS) or node auto-provisioning (GKE) to reduce toil |
-| Skipping upgrade testing | "It worked in staging" (staging was 2 versions behind) | Maintain version parity across environments; test upgrades in a disposable cluster first |
+| Skipping upgrade testing | "It worked in staging" (staging was 3 versions behind) | Maintain version parity across environments; test upgrades in a disposable cluster first |
 | Choosing self-managed for "learning" in production | Curiosity-driven architecture decisions | Learn in lab environments. Production exists to serve customers, not educate engineers |
 | Not planning for provider lock-in | "We'll just migrate later" | Abstract provider-specific features behind interfaces from day one (Cluster API, Crossplane) |
 | Assuming managed means zero ops | "GKE handles everything" | You still own nodes, networking, security, and workload configuration |
@@ -599,7 +599,7 @@ apiServer:
 # etcd: co-located on control plane nodes (no dedicated disks)
 # OS: Ubuntu 20.04 LTS (EOL April 2025 -- ALREADY EOL)
 # Last upgrade: 8 months ago
-# Kubernetes version: v1.32.6 (2 versions behind current)
+# Kubernetes version: v1.32.6 (3 versions behind current)
 # Team: 2 senior engineers (one leaving in 3 months)
 ```
 
@@ -748,7 +748,7 @@ Draft a one-page recommendation for engineering leadership. Include: current ris
 **Current State Risk Assessment: HIGH**
 
 Our self-managed Kubernetes cluster has four critical issues:
-1. Running Kubernetes v1.32 (2 versions behind, potentially out of support)
+1. Running Kubernetes v1.32 (3 versions behind, potentially out of support)
 2. Host OS (Ubuntu 20.04) is past end-of-life with no security patches
 3. etcd (cluster database) has no backup configuration or dedicated storage
 4. One of our two infrastructure engineers is departing in 3 months

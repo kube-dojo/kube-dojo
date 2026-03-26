@@ -655,8 +655,8 @@ Even with short-lived tokens, a compromised pod could use its token to assume th
           "oidc.eks.us-east-1.amazonaws.com/id/ABCDEF1234567890:sub": "system:serviceaccount:production:data-processor",
           "oidc.eks.us-east-1.amazonaws.com/id/ABCDEF1234567890:aud": "sts.amazonaws.com"
         },
-        "IpAddress": {
-          "aws:SourceIp": ["10.0.0.0/16"]
+        "StringEquals": {
+          "aws:SourceVpc": "vpc-0abc123def456"
         }
       }
     }
