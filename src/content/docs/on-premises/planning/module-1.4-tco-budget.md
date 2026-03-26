@@ -199,51 +199,53 @@ Your effective power cost = IT power cost × PUE
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│           3-YEAR TCO MODEL (100 nodes)                      │
+│   3-YEAR TCO MODEL (100 K8s nodes on 12 bare-metal servers) │
+│   (Each server: 64 cores, 256GB → ~8 K8s nodes per server)  │
 │                                                               │
 │  YEAR 0 (SETUP)                                              │
 │  ────────────────────────────────────────                    │
 │  Servers (12 x $15K)                    $180,000            │
 │  Networking (switches + cabling)         $45,000            │
-│  Storage (Ceph nodes)                    $40,000            │
+│  Storage (Ceph nodes, 3 x $12K)         $36,000            │
 │  Racks + PDUs                            $8,000             │
 │  Professional services (buildout)        $60,000            │
 │  ────────────────────────────────────────                    │
-│  CapEx subtotal                         $333,000            │
+│  CapEx subtotal                         $329,000            │
 │                                                               │
 │  ANNUAL OPEX                                                 │
 │  ────────────────────────────────────────                    │
 │  Colocation (3 racks)                    $54,000            │
-│  Power + cooling                         $28,000            │
+│  Power + cooling (7kW IT x PUE 1.4      $10,300            │
+│    x $0.12/kWh x 8,760 hrs)                                 │
 │  Internet (2x circuits)                  $24,000            │
 │  Staffing (3 engineers)                 $525,000            │
 │  Maintenance contracts                   $16,500            │
 │  Software licenses                       $12,000            │
 │  Insurance + compliance                  $15,000            │
 │  ────────────────────────────────────────                    │
-│  OpEx subtotal (per year)              $674,500             │
+│  OpEx subtotal (per year)              $656,800             │
 │                                                               │
 │  3-YEAR TOTAL                                                │
 │  ────────────────────────────────────────                    │
-│  CapEx                                  $333,000            │
-│  OpEx (3 years)                       $2,023,500            │
+│  CapEx                                  $329,000            │
+│  OpEx (3 years)                       $1,970,400            │
 │  ────────────────────────────────────────                    │
-│  TOTAL                                $2,356,500            │
-│  Per month                               $65,458            │
-│  Per node per month                         $655            │
+│  TOTAL                                $2,299,400            │
+│  Per month                               $63,872            │
 │                                                               │
-│  CLOUD COMPARISON (100 x m6i.2xlarge)                       │
+│  CLOUD COMPARISON (100 x m6i.2xlarge @ $0.384/hr)           │
 │  ────────────────────────────────────────                    │
-│  On-demand                        $3,456,000 (3 yr)         │
-│  1-year RI (no upfront)          $2,400,000 (3 yr)         │
-│  3-year RI (all upfront)         $1,728,000 (3 yr)         │
+│  On-demand: 100 x $280/mo           $1,008,000 (3 yr)      │
+│  1-year RI (no upfront, ~35% off)      $655,000 (3 yr)     │
+│  3-year RI (all upfront, ~55% off)     $454,000 (3 yr)     │
+│  + EKS fee + storage + data xfer     ~$200,000 (3 yr)      │
 │                                                               │
-│  VERDICT at 100 nodes:                                       │
-│  Cloud (3yr RI) = $1.73M vs On-prem = $2.36M               │
-│  → Cloud wins at 100 nodes (staffing dominates on-prem)     │
+│  VERDICT at 100 nodes (12 servers):                          │
+│  Cloud (3yr RI + extras) ≈ $650K vs On-prem ≈ $2.3M        │
+│  → Cloud wins decisively (staffing dominates on-prem)       │
 │                                                               │
-│  Breakeven: ~200 nodes (hardware costs amortize,            │
-│             staffing grows sub-linearly with automation)     │
+│  Breakeven: ~300-500 nodes where staffing amortizes         │
+│  and cloud egress/storage costs grow linearly                │
 │                                                               │
 └─────────────────────────────────────────────────────────────┘
 ```

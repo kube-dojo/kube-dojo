@@ -13,7 +13,7 @@ sidebar:
 
 ## Why This Module Matters
 
-In 2021, a European insurance company ran a single 400-node Kubernetes cluster in their on-premises datacenter. Everything — customer portal, claims processing, actuarial calculations, internal tooling — ran on one cluster. When they upgraded from Kubernetes 1.22 to 1.23, a breaking change in the PodSecurityPolicy API caused 60% of their workloads to fail admission. The entire company was down for 4 hours. Their postmortem identified the root cause as "catastrophic blast radius" — a single cluster meant a single failure domain for 200+ applications across 15 business units.
+In 2021, a European insurance company ran a single 400-node Kubernetes cluster in their on-premises datacenter. Everything — customer portal, claims processing, actuarial calculations, internal tooling — ran on one cluster. When they upgraded from Kubernetes 1.24 to 1.25, the removal of the PodSecurityPolicy API caused 60% of their workloads to fail admission. The entire company was down for 4 hours. Their postmortem identified the root cause as "catastrophic blast radius" — a single cluster meant a single failure domain for 200+ applications across 15 business units.
 
 They spent the next six months splitting into 7 clusters: one per business domain plus a shared platform cluster. The migration cost $800K in engineering time. The CTO's lesson: "The most expensive architecture decision is the one you make on day one and have to undo on day 300."
 
