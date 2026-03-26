@@ -17,7 +17,7 @@ sidebar:
 
 **November 2020. A large European e-commerce company. Black Friday preparation.**
 
-The networking team had built a hub-and-spoke topology using AWS VPC Peering -- 23 spoke VPCs connected to a central hub VPC. The architecture worked. Until it didn't. Three weeks before Black Friday, the data platform team needed connectivity to a new analytics VPC. They submitted a peering request. The networking team realized they had hit the VPC peering limit of 125 per VPC -- not because of the connections themselves, but because VPC peering route table entries had consumed the 200-route soft limit across multiple route tables. Adding one more peering connection would require restructuring routing for 16 production VPCs.
+The networking team had built a hub-and-spoke topology using AWS VPC Peering -- 23 spoke VPCs connected to a central hub VPC. The architecture worked. Until it didn't. Three weeks before Black Friday, the data platform team needed connectivity to a new analytics VPC. They submitted a peering request. The networking team realized they had hit the VPC peering limit of 125 per VPC -- not because of the connections themselves, but because VPC peering route table entries had consumed the 50-route default quota (increasable to 1,000) across multiple route tables. Adding one more peering connection would require restructuring routing for 16 production VPCs.
 
 The migration to AWS Transit Gateway took 11 days. During peak pre-Black Friday traffic. With a hard freeze on infrastructure changes that the CEO overrode because they had no choice. The migration succeeded, but two transient routing blackholes caused 14 minutes of degraded checkout performance across three regions.
 

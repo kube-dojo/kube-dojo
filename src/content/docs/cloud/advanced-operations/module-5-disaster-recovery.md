@@ -15,7 +15,7 @@ sidebar:
 
 ## Why This Module Matters
 
-**March 2020. GitLab.**
+**January 2017. GitLab.**
 
 A database engineer executed a `rm -rf` command on what they believed was a replicated staging database directory. It was the production PostgreSQL data directory. The primary database for GitLab.com was gone. The team immediately looked to their backup systems: five different backup methods were configured. None of them worked. LVM snapshots had never been verified. pg_dump hadn't run successfully in months due to a silent error. Azure disk snapshots were untested. The S3 backup process was only partially configured. The only thing that saved GitLab was a staging database that happened to be a six-hour-old copy of production, created for an unrelated test.
 
