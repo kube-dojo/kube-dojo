@@ -10,6 +10,6 @@ On-premises storage is the most consequential infrastructure decision you will m
 
 | Module | Description | Time |
 |--------|-------------|------|
-| 4.1 Storage Architecture Decisions | DAS vs NAS vs SAN, NVMe tiering, etcd storage | 45 min |
-| 4.2 Software-Defined Storage (Ceph/Rook) | Ceph architecture, Rook operator, performance tuning | 60 min |
-| 4.3 Local Storage & Alternatives | OpenEBS, Longhorn, LVM CSI, TopoLVM | 45 min |
+| [4.1 Storage Architecture Decisions](module-4.1-storage-architecture/) | DAS vs NAS vs SAN, NVMe tiering, etcd storage | 45 min |
+| [4.2 Software-Defined Storage (Ceph/Rook)](module-4.2-ceph-rook/) | Ceph architecture, Rook operator, performance tuning | 60 min |
+| [4.3 Local Storage & Alternatives](module-4.3-local-storage/) | OpenEBS, Longhorn, LVM CSI, TopoLVM | 45 min |
