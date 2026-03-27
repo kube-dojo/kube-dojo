@@ -1,0 +1,16 @@
+---
+/**
+ * Custom Head override — injects content enhancer + progress tracker scripts
+ * Issue: #138, #139
+ */
+import type { Props } from '@astrojs/starlight/props';
+import Default from '@astrojs/starlight/components/Head.astro';
+---
+
+<Default {...Astro.props}><slot /></Default>
+
+<!-- Content Enhancer: styles War Story, Did You Know, Quiz sections -->
+<script src="../scripts/content-enhancer.ts"></script>
+
+<!-- Progress Tracker: localStorage-based module completion -->
+<script src="../scripts/progress-tracker.ts"></script>

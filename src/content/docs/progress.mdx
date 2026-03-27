@@ -1,0 +1,151 @@
+---
+title: "My Progress"
+template: splash
+sidebar:
+  hidden: true
+pagefind: false
+hero:
+  tagline: "Track your learning journey across all KubeDojo tracks."
+---
+
+<div class="kd-progress-page" style="max-width: 800px; margin: 0 auto; padding: 0 1rem;">
+
+## Your Learning Progress
+
+<div id="kd-progress-dashboard">
+  <p style="color: var(--sl-color-gray-4); font-style: italic;">Loading progress data...</p>
+</div>
+
+---
+
+## Manage Progress
+
+<div style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin: 1rem 0;">
+  <button id="kd-export-btn" style="padding: 0.5rem 1rem; border: 2px solid var(--sl-color-gray-2); border-radius: 8px; background: transparent; font-size: 0.85rem; font-weight: 600; cursor: pointer; font-family: var(--sl-font);">
+    Export Progress (JSON)
+  </button>
+  <label id="kd-import-label" style="padding: 0.5rem 1rem; border: 2px solid var(--sl-color-gray-2); border-radius: 8px; background: transparent; font-size: 0.85rem; font-weight: 600; cursor: pointer; font-family: var(--sl-font);">
+    Import Progress
+    <input type="file" id="kd-import-input" accept=".json" style="display: none;" />
+  </label>
+  <button id="kd-clear-btn" style="padding: 0.5rem 1rem; border: 2px solid var(--sl-color-gray-2); border-radius: 8px; background: transparent; font-size: 0.85rem; font-weight: 600; cursor: pointer; color: #FF1744; font-family: var(--sl-font);">
+    Reset All Progress
+  </button>
+</div>
+
+<p style="font-size: 0.8rem; color: var(--sl-color-gray-4);">
+  Progress is stored in your browser's localStorage. It's per-device and will be lost if you clear browser data.
+  Use Export to back up your progress.
+</p>
+
+</div>
+
+<script>{`
+(function() {
+  const STORAGE_KEY = 'kubedojo-progress';
+  const TRACKS = [
+    { prefix: 'prerequisites', name: 'Fundamentals', color: '#00E676', total: 33 },
+    { prefix: 'linux', name: 'Linux', color: '#FFD600', total: 37 },
+    { prefix: 'cloud', name: 'Cloud', color: '#7C4DFF', total: 85 },
+    { prefix: 'k8s', name: 'Certifications', color: '#326CE5', total: 169 },
+    { prefix: 'platform', name: 'Platform Engineering', color: '#FF6D00', total: 214 },
+    { prefix: 'on-premises', name: 'On-Premises', color: '#00BFA5', total: 30 },
+  ];
+
+  function getProgress() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
+    catch { return {}; }
+  }
+
+  function render() {
+    const data = getProgress();
+    const slugs = Object.keys(data);
+    const totalCompleted = slugs.length;
+    const totalModules = TRACKS.reduce((s, t) => s + t.total, 0);
+
+    const dashboard = document.getElementById('kd-progress-dashboard');
+    if (!dashboard) return;
+
+    // Overall stats
+    const pct = totalModules > 0 ? Math.round((totalCompleted / totalModules) * 100) : 0;
+    let html = '<div style="margin-bottom: 2rem;">';
+    html += '<div style="display: flex; align-items: baseline; gap: 0.75rem; margin-bottom: 0.5rem;">';
+    html += '<span style="font-size: 2.5rem; font-weight: 800; font-family: var(--sl-font-mono);">' + totalCompleted + '</span>';
+    html += '<span style="font-size: 1rem; color: var(--sl-color-gray-4);">of ' + totalModules + ' modules completed (' + pct + '%)</span>';
+    html += '</div>';
+    html += '<div style="height: 8px; background: var(--sl-color-gray-2); border-radius: 4px; overflow: hidden;">';
+    html += '<div style="height: 100%; width: ' + pct + '%; background: linear-gradient(90deg, #326CE5, #00E676); border-radius: 4px; transition: width 0.5s;"></div>';
+    html += '</div></div>';
+
+    // Per-track
+    TRACKS.forEach(function(track) {
+      const completed = slugs.filter(function(s) { return s.startsWith(track.prefix + '/'); }).length;
+      const trackPct = track.total > 0 ? Math.round((completed / track.total) * 100) : 0;
+
+      html += '<div style="margin-bottom: 1.25rem;">';
+      html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.375rem;">';
+      html += '<span style="font-weight: 600; font-size: 0.9rem;">' + track.name + '</span>';
+      html += '<span style="font-size: 0.8rem; color: var(--sl-color-gray-4); font-family: var(--sl-font-mono);">' + completed + ' / ' + track.total + '</span>';
+      html += '</div>';
+      html += '<div style="height: 6px; background: var(--sl-color-gray-2); border-radius: 3px; overflow: hidden;">';
+      html += '<div style="height: 100%; width: ' + trackPct + '%; background: ' + track.color + '; border-radius: 3px; transition: width 0.5s;"></div>';
+      html += '</div></div>';
+    });
+
+    if (totalCompleted === 0) {
+      html += '<p style="color: var(--sl-color-gray-4); font-style: italic; margin-top: 1rem;">No modules completed yet. Start learning and mark modules as complete!</p>';
+    }
+
+    dashboard.innerHTML = html;
+  }
+
+  // Export
+  document.getElementById('kd-export-btn')?.addEventListener('click', function() {
+    const data = JSON.stringify(getProgress(), null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'kubedojo-progress-' + new Date().toISOString().slice(0,10) + '.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // Import
+  document.getElementById('kd-import-input')?.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+      try {
+        const imported = JSON.parse(ev.target.result);
+        if (typeof imported !== 'object') throw new Error('Invalid');
+        const existing = getProgress();
+        const merged = Object.assign({}, existing, imported);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+        render();
+        alert('Progress imported! ' + Object.keys(imported).length + ' entries merged.');
+      } catch {
+        alert('Invalid progress file.');
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  // Clear
+  document.getElementById('kd-clear-btn')?.addEventListener('click', function() {
+    if (confirm('Are you sure? This will remove ALL your progress data.')) {
+      localStorage.removeItem(STORAGE_KEY);
+      render();
+    }
+  });
+
+  // Init
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', render);
+  } else {
+    render();
+  }
+  document.addEventListener('astro:page-load', render);
+})();
+`}</script>

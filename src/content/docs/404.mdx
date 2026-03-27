@@ -1,0 +1,61 @@
+---
+title: "Page Not Found"
+template: splash
+editUrl: false
+hero:
+  tagline: "The page you're looking for doesn't exist or has been moved."
+  actions:
+    - text: Go Home
+      link: /
+      icon: right-arrow
+      variant: primary
+    - text: Search the Curriculum
+      link: /#_top
+      icon: magnifier
+      variant: minimal
+pagefind: false
+sidebar:
+  hidden: true
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+<div style="max-width: 720px; margin: 0 auto;">
+
+## Looking for something specific?
+
+Browse our main curriculum tracks to find what you need.
+
+<CardGrid>
+  <LinkCard
+    title="Fundamentals"
+    description="Zero to Terminal, Linux, Cloud Native 101, Kubernetes Basics"
+    href="/prerequisites/"
+  />
+  <LinkCard
+    title="Cloud"
+    description="AWS, GCP, Azure Essentials, EKS/GKE/AKS Deep Dives"
+    href="/cloud/"
+  />
+  <LinkCard
+    title="Certifications"
+    description="CKA, CKAD, CKS, KCNA, KCSA, and tool certifications"
+    href="/k8s/"
+  />
+  <LinkCard
+    title="Platform Engineering"
+    description="Foundations, Disciplines, and Toolkits"
+    href="/platform/"
+  />
+  <LinkCard
+    title="On-Premises"
+    description="Bare-metal Kubernetes, networking, storage, operations"
+    href="/on-premises/"
+  />
+</CardGrid>
+
+---
+
+**Tip:** Use the search bar at the top of the page (or press <kbd>Ctrl</kbd>+<kbd>K</kbd> / <kbd>Cmd</kbd>+<kbd>K</kbd>) to quickly find any topic across the entire curriculum.
+
+</div>

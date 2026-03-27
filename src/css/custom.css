@@ -1,53 +1,317 @@
-/* KubeDojo theme overrides */
+/* ============================================================
+   KubeDojo Design System — Module/Docs Pages
+   Issue: #136
 
+   Homepage is standalone (src/pages/index.astro).
+   This CSS transforms Starlight's module pages to match the POC.
+   ============================================================ */
+
+/* ===== Design Tokens ===== */
 :root {
-  /* Deep purple + amber accent — matches MkDocs Material theme */
-  --sl-color-accent-low: #1a1340;
-  --sl-color-accent: #7c4dff;
-  --sl-color-accent-high: #b388ff;
-  --sl-color-white: #ffffff;
-  --sl-color-gray-1: #e0e0e0;
-  --sl-color-gray-2: #bdbdbd;
-  --sl-color-gray-3: #9e9e9e;
-  --sl-color-gray-4: #616161;
-  --sl-color-gray-5: #424242;
-  --sl-color-gray-6: #212121;
-  --sl-color-black: #121212;
+  --kube-blue: #326CE5;
+  --kube-blue-light: #EBF1FF;
+  --kube-blue-dark: #1A3A7A;
+  --terminal-green: #00E676;
+  --terminal-green-light: #E8FFF0;
+  --terminal-green-dark: #00A651;
+  --pod-orange: #FF6D00;
+  --pod-orange-light: #FFF3E0;
+  --deploy-purple: #7C4DFF;
+  --deploy-purple-light: #F3EDFF;
+  --danger-red: #FF1744;
+  --danger-red-light: #FFEBEE;
+  --warning-amber: #FFD600;
+  --warning-amber-light: #FFFDE7;
+  --node-teal: #00BFA5;
+  --node-teal-light: #E0F7F4;
+  --kube-radius: 12px;
+  --kube-radius-sm: 8px;
+  --sl-font: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --sl-font-mono: 'SF Mono', 'Fira Code', 'JetBrains Mono', Consolas, monospace;
 }
 
-/* Ensure ASCII diagrams in code blocks don't wrap */
-pre code {
-  white-space: pre;
-  word-wrap: normal;
-  overflow-x: auto;
+/* Accent tokens per mode */
+:root[data-theme='light'] {
+  --sl-color-accent-low: #EBF1FF;
+  --sl-color-accent: #326CE5;
+  --sl-color-accent-high: #1A3A7A;
+  /* Gap #4 & #6: Light sidebar and page background */
+  --sl-color-bg-sidebar: #ffffff;
+  --sl-color-bg: #FAFBFC;
+}
+:root[data-theme='dark'] {
+  --sl-color-accent-low: #172554;
+  --sl-color-accent: #326CE5;
+  --sl-color-accent-high: #93B4F5;
 }
 
-/* Details/summary styling for quiz answers */
-details {
-  margin: 1rem 0;
-  padding: 0.5rem 1rem;
-  border: 1px solid var(--sl-color-gray-5);
-  border-radius: 0.5rem;
+body { -webkit-font-smoothing: antialiased; }
+
+/* Issue #8: Default to light mode (auto = system preference, light for most users) */
+/* Starlight defaults to dark. We set the default via ThemeProvider. */
+
+/* Issue #3: Sidebar border-right separator */
+.sidebar-pane {
+  border-inline-end: 1px solid var(--sl-color-hairline-light) !important;
 }
 
-details summary {
-  cursor: pointer;
+/* Issue #4 & #5: Style the module metadata blockquote (Complexity/Time/Prerequisites) as chips */
+.sl-markdown-content > blockquote:first-of-type {
+  background: var(--sl-color-bg-nav) !important;
+  border-left: 4px solid var(--sl-color-accent) !important;
+  border-radius: 0 var(--kube-radius-sm) var(--kube-radius-sm) 0;
+  padding: 0.75rem 1.25rem !important;
+  font-size: 0.875rem;
+}
+
+/* ===== SIDEBAR — Match POC: white bg, no dark buttons, clean links =====
+ *
+ * Starlight's sidebar groups use <details> with <summary> as the group toggle.
+ * The summaries have dark backgrounds by default. We make them transparent/subtle.
+ */
+
+/* All sidebar summary/group toggles — override Starlight's dark buttons */
+summary {
+  background: transparent !important;
+  border: 1px solid var(--sl-color-hairline-light) !important;
+  border-radius: var(--kube-radius-sm) !important;
+  font-weight: 600 !important;
+  color: var(--sl-color-text) !important;
+}
+summary:hover {
+  background: var(--sl-color-accent-low) !important;
+  border-color: var(--sl-color-accent) !important;
+}
+
+/* But NOT content details/summary (quizzes) — those are handled separately below */
+.sl-markdown-content summary {
+  background: var(--sl-color-bg-nav) !important;
+  border: none !important;
+  border-radius: 0 !important;
+}
+
+/* Active/current page link */
+a[aria-current="page"] {
+  background: var(--sl-color-accent-low) !important;
+  color: var(--sl-color-accent-high) !important;
+  font-weight: 600 !important;
+  border-radius: var(--kube-radius-sm) !important;
+}
+
+/* Sidebar links */
+.sidebar-content a {
+  border-radius: var(--kube-radius-sm);
+  transition: all 0.15s;
+}
+.sidebar-content a:hover {
+  background: var(--sl-color-bg-nav);
+}
+
+/* ===== CONTENT TYPOGRAPHY — match POC ===== */
+.sl-markdown-content h2 {
+  padding-bottom: 0.4rem;
+  border-bottom: 2px solid var(--sl-color-accent-low);
+  font-size: 1.375rem;
+  font-weight: 700;
+}
+
+.sl-markdown-content h3 {
+  font-size: 1.0625rem;
+  font-weight: 700;
+}
+
+.sl-markdown-content p {
+  font-size: 0.9375rem;
+}
+
+/* ===== LINKS ===== */
+.sl-markdown-content a {
+  color: var(--sl-color-accent-high);
+  text-decoration: none;
+  font-weight: 500;
+}
+.sl-markdown-content a:hover { text-decoration: underline; }
+
+/* ===== TABLES — blue header, hover rows ===== */
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; }
+.sl-markdown-content table { border-radius: var(--kube-radius-sm); overflow: hidden; }
+.sl-markdown-content th {
+  background: var(--sl-color-accent-low);
+  color: var(--sl-color-accent-high);
+  font-weight: 600; font-size: 0.85rem; letter-spacing: 0.02em;
+}
+.sl-markdown-content tr:hover td { background: var(--sl-color-accent-low); }
+
+/* ===== BLOCKQUOTES ===== */
+.sl-markdown-content blockquote {
+  border-left: 4px solid var(--sl-color-accent);
+  background: var(--sl-color-accent-low);
+  padding: 1rem 1.25rem;
+  border-radius: 0 var(--kube-radius-sm) var(--kube-radius-sm) 0;
+  margin: 1.25rem 0;
+}
+.sl-markdown-content blockquote p { margin: 0.25rem 0; }
+
+/* ===== CODE BLOCKS ===== */
+pre code { white-space: pre; word-wrap: normal; overflow-x: auto; }
+pre { border-radius: var(--kube-radius) !important; }
+
+/* ===== QUIZ / DETAILS-SUMMARY ===== */
+.sl-markdown-content details {
+  margin: 1rem 0; padding: 0;
+  border: 2px solid var(--sl-color-hairline-light);
+  border-radius: var(--kube-radius); overflow: hidden;
+  transition: border-color 0.2s;
+}
+.sl-markdown-content details:hover { border-color: var(--kube-blue); }
+.sl-markdown-content details summary {
+  cursor: pointer; font-weight: 600;
+  padding: 0.75rem 1rem;
+  background: var(--sl-color-bg-nav) !important;
+  border: none !important;
+  font-size: 0.9rem; transition: background 0.2s;
+  border-radius: 0 !important;
+}
+.sl-markdown-content details summary:hover { background: var(--sl-color-accent-low) !important; }
+.sl-markdown-content details[open] summary {
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--sl-color-hairline-light) !important;
+  padding-bottom: 0.75rem;
+}
+.sl-markdown-content details[open] > :not(summary) { padding: 0 1rem; }
+
+/* ===== TOC (right panel) — Gap #5: match POC minimal blue-accent style ===== */
+starlight-toc nav {
+  font-size: 0.75rem !important;
+}
+starlight-toc h2 {
+  font-size: 0.6875rem !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.8px !important;
+  color: var(--sl-color-gray-3) !important;
+}
+starlight-toc a {
+  font-size: 0.75rem !important;
+  padding-block: 0.2rem !important;
+}
+starlight-toc a[aria-current="true"] {
+  color: var(--sl-color-accent) !important;
+  font-weight: 600 !important;
+}
+
+/* ===== CALLOUT / ASIDE — rounded ===== */
+.starlight-aside {
+  border-radius: var(--kube-radius);
+  border-width: 0;
+  border-left-width: 4px;
+}
+
+/* ===== PAGINATION (prev/next) — card style ===== */
+.pagination-links a {
+  border-radius: var(--kube-radius) !important;
+  transition: all 0.2s !important;
+}
+.pagination-links a:hover {
+  border-color: var(--kube-blue) !important;
+  background: var(--sl-color-accent-low) !important;
+}
+
+/* ===== TOC (right panel) ===== */
+starlight-toc a[aria-current="true"],
+.right-sidebar a[aria-current="true"] {
+  color: var(--sl-color-accent) !important;
+  border-inline-start-color: var(--sl-color-accent) !important;
   font-weight: 600;
-  padding: 0.25rem 0;
 }
 
-details[open] summary {
-  margin-bottom: 0.5rem;
-  border-bottom: 1px solid var(--sl-color-gray-5);
-  padding-bottom: 0.5rem;
+/* ===== META CHIPS (complexity badges) ===== */
+.kd-chip {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-family: var(--sl-font-mono);
+  letter-spacing: 0.3px;
+}
+.kd-chip-quick { background: var(--terminal-green-light); color: var(--terminal-green-dark); }
+.kd-chip-medium { background: var(--warning-amber-light); color: #F57F17; }
+.kd-chip-advanced { background: var(--danger-red-light); color: var(--danger-red); }
+
+/* ===== WAR STORY (content-enhancer.ts) ===== */
+.kd-warstory {
+  background: var(--sl-color-bg);
+  border: 2px solid var(--sl-color-hairline-light);
+  border-radius: var(--kube-radius);
+  overflow: hidden; margin: 1.5rem 0;
+}
+.kd-warstory-header {
+  background: #0f172a; color: white;
+  padding: 0.875rem 1.25rem;
+  display: flex; align-items: center; gap: 0.5rem;
+  font-weight: 700; font-size: 0.9rem;
+}
+.kd-warstory-header .impact {
+  margin-left: auto; background: var(--danger-red);
+  padding: 0.15rem 0.625rem; border-radius: 4px;
+  font-size: 0.7rem; font-weight: 700;
+}
+.kd-warstory-body { padding: 1.25rem; }
+
+/* ===== DID YOU KNOW (content-enhancer.ts) ===== */
+.kd-dyk {
+  background: linear-gradient(135deg, #F0F4FF 0%, #E8EEFF 100%);
+  border: 1px solid rgba(50,108,229,0.15);
+  border-radius: var(--kube-radius);
+  padding: 1.25rem 1.5rem; margin: 1.5rem 0;
+}
+[data-theme='dark'] .kd-dyk {
+  background: linear-gradient(135deg, rgba(50,108,229,0.1) 0%, rgba(50,108,229,0.05) 100%);
+  border-color: rgba(50,108,229,0.2);
+}
+.kd-dyk-header {
+  display: flex; align-items: center; gap: 0.5rem;
+  font-weight: 700; font-size: 0.9rem;
+  color: var(--kube-blue); margin-bottom: 0.625rem;
 }
 
-/* Table styling */
-table {
-  width: 100%;
-  border-collapse: collapse;
+/* ===== MARK COMPLETE BUTTON ===== */
+.kd-complete-btn {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border: 2px solid var(--sl-color-hairline-light);
+  border-radius: var(--kube-radius-sm);
+  background: transparent; font-size: 0.85rem; font-weight: 600;
+  cursor: pointer; transition: all 0.2s;
+  font-family: var(--sl-font); color: var(--sl-color-text);
+}
+.kd-complete-btn:hover {
+  border-color: var(--terminal-green-dark);
+  background: var(--terminal-green-light);
+}
+.kd-complete-btn.completed {
+  border-color: var(--terminal-green-dark);
+  background: var(--terminal-green-light);
+  color: var(--terminal-green-dark);
 }
 
-th, td {
-  text-align: left;
+/* Sidebar checkmarks */
+nav.sidebar [data-completed]::after {
+  content: ' \2713';
+  color: var(--terminal-green-dark);
+  font-weight: 700;
+}
+
+/* ===== DEDICATION (content-enhancer.ts) ===== */
+.kd-dedication-wrap {
+  display: block !important;
+  background: linear-gradient(135deg, #0057B8 0%, #0057B8 50%, #FFD700 50%, #FFD700 100%);
+  padding: 3px; border-radius: var(--kube-radius); margin: 2rem 0;
+}
+.kd-dedication-wrap-inner {
+  display: block !important;
+  background: var(--sl-color-bg);
+  border-radius: 10px; padding: 1.75rem 2rem;
 }

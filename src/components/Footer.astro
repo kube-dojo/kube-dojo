@@ -1,0 +1,45 @@
+---
+/**
+ * Custom Footer override for KubeDojo
+ * Dark footer matching the POC design
+ */
+import type { Props } from '@astrojs/starlight/props';
+---
+
+<footer class="kd-footer">
+  <div class="kd-footer-inner">
+    <p>
+      KubeDojo — Free, comprehensive cloud native education.
+      <a href="https://github.com/kube-dojo/kube-dojo.github.io">GitHub</a>
+      &middot;
+      <a href="/changelog/">Changelog</a>
+      &middot;
+      <a href="/progress/">My Progress</a>
+    </p>
+  </div>
+</footer>
+
+<style>
+  .kd-footer {
+    background: #0f172a;
+    color: #64748b;
+    padding: 2.5rem 2rem;
+    font-size: 0.8125rem;
+    text-align: center;
+    border-top: 1px solid #1e293b;
+  }
+
+  .kd-footer-inner {
+    max-width: 68rem;
+    margin: 0 auto;
+  }
+
+  .kd-footer a {
+    color: #326CE5;
+    text-decoration: none;
+  }
+
+  .kd-footer a:hover {
+    text-decoration: underline;
+  }
+</style>

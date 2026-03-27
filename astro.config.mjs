@@ -19,6 +19,13 @@ export default defineConfig({
         },
       ],
       credits: false,
+      components: {
+        Head: './src/components/Head.astro',
+        Header: './src/components/Header.astro',
+        Footer: './src/components/Footer.astro',
+        Sidebar: './src/components/Sidebar.astro',
+        PageTitle: './src/components/PageTitle.astro',
+      },
       defaultLocale: 'root',
       locales: {
         root: { label: 'English', lang: 'en' },

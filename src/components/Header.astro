@@ -1,0 +1,166 @@
+---
+/**
+ * Custom Header override for KubeDojo
+ * Matches the POC design: logo with K icon, nav pills, search, language switcher
+ */
+import type { Props } from '@astrojs/starlight/props';
+import LanguageSelect from '@astrojs/starlight/components/LanguageSelect.astro';
+import Search from '@astrojs/starlight/components/Search.astro';
+import ThemeSelect from '@astrojs/starlight/components/ThemeSelect.astro';
+import SocialIcons from '@astrojs/starlight/components/SocialIcons.astro';
+---
+
+<div class="kd-topbar">
+  <a class="kd-logo" href="/">
+    <span class="kd-logo-icon">K</span>
+    <span class="kd-logo-text">KubeDojo</span>
+  </a>
+  <nav class="kd-nav">
+    <a href="/">Home</a>
+    <a href="/prerequisites/">Fundamentals</a>
+    <a href="/cloud/">Cloud</a>
+    <a href="/k8s/">Certifications</a>
+    <a href="/platform/">Platform</a>
+    <a href="/on-premises/">On-Premises</a>
+  </nav>
+  <div class="kd-topbar-right">
+    <div class="kd-search-wrapper">
+      <Search {...Astro.props} />
+    </div>
+    <div class="kd-theme-wrapper">
+      <ThemeSelect {...Astro.props} />
+    </div>
+    <div class="kd-social-wrapper">
+      <SocialIcons {...Astro.props} />
+    </div>
+    <div class="kd-lang-wrapper">
+      <LanguageSelect {...Astro.props} />
+    </div>
+  </div>
+</div>
+
+<script>
+  // Highlight current nav link
+  function highlightNav() {
+    const path = window.location.pathname;
+    document.querySelectorAll('.kd-nav a').forEach(link => {
+      const href = link.getAttribute('href') || '';
+      const isActive = href === '/'
+        ? path === '/'
+        : path.startsWith(href);
+      link.classList.toggle('active', isActive);
+    });
+  }
+  highlightNav();
+  document.addEventListener('astro:page-load', highlightNav);
+</script>
+
+<style>
+  .kd-topbar {
+    background: var(--sl-color-bg);
+    border-bottom: 1px solid var(--sl-color-hairline-light);
+    padding: 0 2rem;
+    display: flex;
+    align-items: center;
+    height: 3.5rem;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .kd-logo {
+    font-weight: 800;
+    font-size: 1.125rem;
+    letter-spacing: -0.5px;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--sl-color-text);
+    text-decoration: none;
+    flex-shrink: 0;
+  }
+
+  .kd-logo-icon {
+    width: 1.75rem;
+    height: 1.75rem;
+    background: #326CE5;
+    border-radius: 0.4rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 0.875rem;
+    font-weight: 900;
+  }
+
+  .kd-nav {
+    display: flex;
+    gap: 0.25rem;
+    margin-left: 2rem;
+  }
+
+  .kd-nav a {
+    padding: 0.375rem 0.875rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--sl-color-gray-3);
+    text-decoration: none;
+    border-radius: 0.375rem;
+    transition: all 0.2s;
+  }
+
+  .kd-nav a:hover {
+    color: var(--sl-color-text);
+    background: var(--sl-color-bg-nav);
+  }
+
+  .kd-nav a.active {
+    color: var(--sl-color-accent);
+    background: var(--sl-color-accent-low);
+    font-weight: 600;
+  }
+
+  .kd-topbar-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  /* Style the search to fit the topbar */
+  .kd-search-wrapper {
+    min-width: 12rem;
+  }
+
+  .kd-search-wrapper :global(button) {
+    border-radius: 0.5rem !important;
+    height: 2rem !important;
+    font-size: 0.8125rem !important;
+  }
+
+  .kd-theme-wrapper :global(select) {
+    font-size: 0.75rem;
+  }
+
+  .kd-lang-wrapper :global(select) {
+    font-size: 0.75rem;
+  }
+
+  .kd-social-wrapper :global(a) {
+    color: var(--sl-color-gray-3);
+  }
+
+  .kd-social-wrapper :global(a:hover) {
+    color: var(--sl-color-text);
+  }
+
+  /* Mobile */
+  @media (max-width: 50rem) {
+    .kd-nav {
+      display: none;
+    }
+    .kd-topbar {
+      padding: 0 1rem;
+    }
+  }
+</style>

@@ -1,0 +1,195 @@
+---
+/**
+ * Custom Sidebar — POC-style: clean toggles, monospace numbers, blue active
+ */
+import type { Props } from '@astrojs/starlight/props';
+import MobileMenuFooter from 'virtual:starlight/components/MobileMenuFooter';
+
+const { sidebar } = Astro.locals.starlightRoute;
+const slug = Astro.locals.starlightRoute.slug || '';
+
+function getModNum(label: string): string | null {
+  const m = label.match(/^Module\s+(\d+\.?\d*)/i);
+  return m ? m[1] : null;
+}
+
+function cleanLabel(label: string): string {
+  return label.replace(/^Module\s+\d+\.?\d*[:\s\-]*/i, '').trim() || label;
+}
+
+function hasCurrent(entries: any[]): boolean {
+  for (const e of entries) {
+    if (e.type === 'link' && e.isCurrent) return true;
+    if (e.type === 'group' && hasCurrent(e.entries)) return true;
+  }
+  return false;
+}
+
+/** Check if a group's entries are all leaf modules (Part-level group) */
+function isPartGroup(entry: any): boolean {
+  if (entry.type !== 'group') return false;
+  return entry.entries.every((e: any) => e.type === 'link');
+}
+
+function renderEntry(entry: any, depth = 0): string {
+  if (entry.type === 'link') {
+    const modNum = getModNum(entry.label);
+    const label = modNum ? cleanLabel(entry.label) : entry.label;
+    const cls = entry.isCurrent ? 'kd-link kd-active' : 'kd-link';
+    const aria = entry.isCurrent ? ' aria-current="page"' : '';
+    const numHtml = modNum ? `<span class="kd-num">${modNum}</span>` : '';
+    return `<a href="${entry.href}" class="${cls}"${aria}>${numHtml}<span>${label}</span></a>`;
+  }
+
+  const isOpen = hasCurrent(entry.entries) || !entry.collapsed;
+  const children = entry.entries.map((e: any) => renderEntry(e, depth + 1)).join('');
+  const caret = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>';
+
+  // Part-level groups (depth >= 2, contains only links) → bold header + module links
+  // If the first child is an index page matching the group label, make the header a link to it
+  if (depth >= 2 && isPartGroup(entry)) {
+    const normalized = (s: string) => s.toLowerCase().replace(/[-_]/g, ' ').trim();
+    const indexEntry = entry.entries.find((e: any) =>
+      e.type === 'link' && normalized(e.label) === normalized(entry.label)
+    );
+    const moduleEntries = entry.entries.filter((e: any) => e !== indexEntry);
+    const moduleChildren = moduleEntries.map((e: any) => renderEntry(e, depth + 1)).join('');
+
+    if (indexEntry) {
+      // Header is a link to the index page
+      const activeCls = indexEntry.isCurrent ? ' kd-part-active' : '';
+      return `<a href="${indexEntry.href}" class="kd-part-header${activeCls}"${indexEntry.isCurrent ? ' aria-current="page"' : ''}>${entry.label}</a>${moduleChildren}`;
+    }
+    return `<div class="kd-part-header">${entry.label}</div>${moduleChildren}`;
+  }
+
+  return `<details${isOpen ? ' open' : ''}>
+    <summary class="kd-group">${entry.label}${caret}</summary>
+    <div class="kd-children">${children}</div>
+  </details>`;
+}
+
+// Find the current section name for the section title
+function findCurrentSection(): string {
+  for (const entry of sidebar) {
+    if (entry.type === 'group' && hasCurrent(entry.entries || [])) {
+      return entry.label;
+    }
+  }
+  return '';
+}
+const currentSection = findCurrentSection();
+---
+
+<div class="kd-sidebar">
+  {currentSection && (
+    <div class="kd-section-title">
+      <span class="kd-dot"></span>
+      <span>{currentSection}</span>
+    </div>
+  )}
+  <Fragment set:html={sidebar.map((e: any) => renderEntry(e)).join('')} />
+</div>
+<div class="md:sl-hidden">
+  <MobileMenuFooter />
+</div>
+
+<style>
+  .kd-sidebar { font-size: 0.8125rem; }
+
+  /* Section title — "CKA Curriculum" with blue dot (Gap #2) */
+  .kd-section-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--sl-color-gray-3);
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.5rem;
+  }
+  .kd-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 2px;
+    background: var(--sl-color-accent);
+    flex-shrink: 0;
+  }
+
+  /* Group toggles */
+  .kd-sidebar :global(summary.kd-group) {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.4rem 0.75rem; cursor: pointer; user-select: none;
+    border-radius: 0.5rem; background: transparent;
+    border: 1px solid var(--sl-color-hairline-light);
+    font-weight: 600; font-size: 0.875rem; color: var(--sl-color-text);
+    list-style: none; transition: all 0.15s; margin-bottom: 0.25rem;
+  }
+  .kd-sidebar :global(summary.kd-group:hover) {
+    background: var(--sl-color-accent-low); border-color: var(--sl-color-accent);
+  }
+  .kd-sidebar :global(summary.kd-group::marker),
+  .kd-sidebar :global(summary.kd-group::-webkit-details-marker) { display: none; }
+  .kd-sidebar :global(summary.kd-group svg) {
+    transition: transform 0.2s; color: var(--sl-color-gray-3); flex-shrink: 0;
+  }
+  .kd-sidebar :global(details[open] > summary.kd-group svg) { transform: rotate(90deg); }
+
+  /* Children */
+  .kd-sidebar :global(.kd-children) {
+    margin-left: 0.5rem; padding-left: 0.5rem;
+    border-left: 1px solid var(--sl-color-hairline-light);
+  }
+  .kd-sidebar :global(.kd-children summary.kd-group) {
+    font-size: 0.8125rem; padding: 0.3rem 0.625rem;
+  }
+
+  /* Links */
+  .kd-sidebar :global(a.kd-link) {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.3rem 0.75rem; border-radius: 0.375rem;
+    color: var(--sl-color-gray-2); text-decoration: none;
+    line-height: 1.4; transition: all 0.15s;
+  }
+  .kd-sidebar :global(a.kd-link:hover) {
+    color: var(--sl-color-white); background: var(--sl-color-bg-nav);
+  }
+  .kd-sidebar :global(a.kd-active) {
+    font-weight: 600; color: var(--sl-color-accent-high);
+    background: var(--sl-color-accent-low);
+  }
+
+  /* Module numbers */
+  .kd-sidebar :global(.kd-num) {
+    font-family: var(--sl-font-mono); font-size: 0.6875rem;
+    min-width: 1.75rem; flex-shrink: 0; color: var(--sl-color-gray-3);
+  }
+  .kd-sidebar :global(a.kd-active .kd-num) { color: var(--sl-color-accent-high); }
+
+  /* Part headers — bold, not collapsible (Gap #3) */
+  .kd-sidebar :global(.kd-part-header) {
+    display: block;
+    font-weight: 700;
+    font-size: 0.75rem;
+    color: var(--sl-color-text);
+    padding: 0.625rem 0.75rem 0.25rem;
+    margin-top: 0.5rem;
+    text-decoration: none;
+    border-radius: 0.375rem;
+  }
+  .kd-sidebar :global(a.kd-part-header:hover) {
+    background: var(--sl-color-bg-nav);
+  }
+  .kd-sidebar :global(.kd-part-active) {
+    color: var(--sl-color-accent-high);
+    background: var(--sl-color-accent-low);
+  }
+
+  /* Spacing */
+  .kd-sidebar :global(details + details),
+  .kd-sidebar :global(details + a),
+  .kd-sidebar :global(a + details),
+  .kd-sidebar :global(a + a) { margin-top: 0.25rem; }
+</style>

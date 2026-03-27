@@ -1,0 +1,304 @@
+---
+/**
+ * Custom Hero override for KubeDojo
+ * Issue: #137
+ *
+ * On the homepage (slug === ''): renders full hero with terminal, track cards, stats, learning path
+ * On other splash pages: falls back to Starlight default Hero
+ */
+import type { Props } from '@astrojs/starlight/props';
+import Default from '@astrojs/starlight/components/Hero.astro';
+
+const isHomepage = Astro.locals.starlightRoute?.entry?.id === 'index.md'
+  || Astro.locals.starlightRoute?.slug === '';
+---
+
+{isHomepage ? (
+  <div class="kd-hero">
+    <div class="kd-hero-inner">
+      <div class="kd-hero-badge">
+        <span class="kd-pulse"></span>
+        Free & Open Source
+      </div>
+      <h1 class="kd-hero-title">
+        Master <span class="kd-accent">Cloud Native</span><br />from Zero to Production
+      </h1>
+      <p class="kd-hero-subtitle">
+        The most comprehensive Kubernetes curriculum on the internet.
+        Certifications, platform engineering, SRE, DevSecOps — theory-first, hands-on always.
+      </p>
+      <div class="kd-hero-cta">
+        <a class="kd-btn-primary" href="/prerequisites/">Start Learning →</a>
+        <a class="kd-btn-secondary" href="/changelog/">What's New</a>
+        <a class="kd-btn-secondary" href="/progress/">My Progress</a>
+      </div>
+      <div class="kd-hero-stats">
+        <div class="kd-stat"><span class="kd-stat-num">568</span><span class="kd-stat-label">Modules</span></div>
+        <div class="kd-stat"><span class="kd-stat-num">6</span><span class="kd-stat-label">Tracks</span></div>
+        <div class="kd-stat"><span class="kd-stat-num">21</span><span class="kd-stat-label">Certifications</span></div>
+        <div class="kd-stat"><span class="kd-stat-num">115</span><span class="kd-stat-label">Ukrainian translations</span></div>
+      </div>
+    </div>
+
+    <div class="kd-hero-terminal">
+      <div class="kd-term-bar">
+        <span class="kd-dot kd-r"></span>
+        <span class="kd-dot kd-y"></span>
+        <span class="kd-dot kd-g"></span>
+        <span class="kd-term-title">kubectl — kubedojo</span>
+      </div>
+      <div class="kd-term-body">
+        <span class="t-prompt">$</span> <span class="t-cmd">kubectl get tracks</span><br />
+        <span class="t-out">NAME              MODULES   STATUS</span><br />
+        <span class="t-hl">fundamentals</span>      <span class="t-ok">33</span>        Ready<br />
+        <span class="t-hl">linux</span>             <span class="t-ok">37</span>        Ready<br />
+        <span class="t-hl">cloud</span>             <span class="t-ok">85</span>        Ready<br />
+        <span class="t-hl">certifications</span>    <span class="t-ok">169</span>       Ready<br />
+        <span class="t-hl">platform</span>          <span class="t-ok">214</span>       Ready<br />
+        <span class="t-hl">on-premises</span>       <span class="t-ok">30</span>        Ready<br />
+        <br />
+        <span class="t-prompt">$</span> <span class="t-cmd">kubectl apply -f learning-path.yaml</span><br />
+        <span class="t-ok">✓</span> <span class="t-out">learningpath/cka-track configured</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Track Cards -->
+  <div class="kd-section">
+    <h2 class="kd-section-title">Learning Tracks</h2>
+    <p class="kd-section-desc">Six structured paths from absolute beginner to production expert.</p>
+    <div class="kd-tracks">
+      <a class="kd-track t-fund" href="/prerequisites/">
+        <div class="kd-track-icon">⚙</div>
+        <h3>Fundamentals</h3>
+        <p>Zero to Terminal, Cloud Native 101, K8s Basics. Start here if you're new.</p>
+        <span class="kd-track-meta">📚 33 modules · ⏱ ~40h</span>
+      </a>
+      <a class="kd-track t-linux" href="/linux/">
+        <div class="kd-track-icon">💻</div>
+        <h3>Linux</h3>
+        <p>Everyday Use + Deep Dive. From basic commands to kernel internals.</p>
+        <span class="kd-track-meta">📚 37 modules · ⏱ ~50h</span>
+      </a>
+      <a class="kd-track t-cloud" href="/cloud/">
+        <div class="kd-track-icon">☁</div>
+        <h3>Cloud</h3>
+        <p>AWS, GCP, Azure essentials. EKS/GKE/AKS deep dives. Architecture patterns.</p>
+        <span class="kd-track-meta">📚 85 modules · ⏱ ~120h</span>
+      </a>
+      <a class="kd-track t-cert" href="/k8s/">
+        <div class="kd-track-icon">🏆</div>
+        <h3>Certifications</h3>
+        <p>CKA, CKAD, CKS, KCNA, KCSA — exam-aligned with practice questions.</p>
+        <span class="kd-track-meta">📚 169 modules · ⏱ ~200h</span>
+      </a>
+      <a class="kd-track t-plat" href="/platform/">
+        <div class="kd-track-icon">🛠</div>
+        <h3>Platform Engineering</h3>
+        <p>SRE, GitOps, DevSecOps, MLOps, FinOps, Chaos Engineering. 96 toolkit modules.</p>
+        <span class="kd-track-meta">📚 214 modules · ⏱ ~280h</span>
+      </a>
+      <a class="kd-track t-prem" href="/on-premises/">
+        <div class="kd-track-icon">🏗</div>
+        <h3>On-Premises</h3>
+        <p>Bare metal K8s from rack to cluster. Networking, storage, operations.</p>
+        <span class="kd-track-meta">📚 30 modules · ⏱ ~45h</span>
+      </a>
+    </div>
+
+    <!-- Learning Path -->
+    <h2 class="kd-section-title" style="margin-top: 3rem;">Recommended Path</h2>
+    <p class="kd-section-desc">Not sure where to start? Follow this progression.</p>
+    <div class="kd-path">
+      <div class="kd-path-row">
+        <div class="kd-step s-green"><span class="kd-step-num">1</span> Fundamentals <span class="kd-step-mod">33 modules</span></div>
+        <span class="kd-arrow">→</span>
+        <div class="kd-step s-blue"><span class="kd-step-num">2</span> CKA Certification <span class="kd-step-mod">47 modules</span></div>
+        <span class="kd-arrow">→</span>
+        <div class="kd-step s-blue"><span class="kd-step-num">3</span> CKAD + CKS <span class="kd-step-mod">60 modules</span></div>
+      </div>
+      <div class="kd-path-row">
+        <div class="kd-step s-purple"><span class="kd-step-num">4</span> Cloud Deep Dive <span class="kd-step-mod">85 modules</span></div>
+        <span class="kd-arrow">→</span>
+        <div class="kd-step s-orange"><span class="kd-step-num">5</span> Platform Engineering <span class="kd-step-mod">214 modules</span></div>
+        <span class="kd-arrow">→</span>
+        <div class="kd-step s-teal"><span class="kd-step-num">6</span> On-Prem / Extending <span class="kd-step-mod">38 modules</span></div>
+      </div>
+    </div>
+  </div>
+) : (
+  <Default {...Astro.props}><slot /></Default>
+)}
+
+<style>
+  /* Hero */
+  .kd-hero {
+    background: linear-gradient(135deg, #0f172a 0%, #1a2744 50%, #1A3A7A 100%);
+    color: white;
+    padding: 5rem 2rem 3.75rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .kd-hero::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background:
+      radial-gradient(circle at 20% 80%, rgba(50,108,229,0.15) 0%, transparent 50%),
+      radial-gradient(circle at 80% 20%, rgba(0,230,118,0.08) 0%, transparent 50%);
+  }
+  .kd-hero-inner { max-width: 68rem; margin: 0 auto; position: relative; z-index: 1; }
+
+  .kd-hero-badge {
+    display: inline-flex; align-items: center; gap: 0.375rem;
+    background: rgba(0,230,118,0.12); border: 1px solid rgba(0,230,118,0.3);
+    color: #00E676; padding: 0.25rem 0.875rem; border-radius: 1.25rem;
+    font-size: 0.75rem; font-weight: 600; font-family: var(--sl-font-mono); margin-bottom: 1.25rem;
+  }
+  .kd-pulse {
+    width: 6px; height: 6px; background: #00E676; border-radius: 50%;
+    animation: kdpulse 2s infinite;
+  }
+  @keyframes kdpulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  .kd-hero-title {
+    font-size: 3rem; font-weight: 800; letter-spacing: -1.5px; line-height: 1.15;
+    margin-bottom: 1rem; border: none !important;
+  }
+  .kd-accent { color: #326CE5; }
+  .kd-hero-subtitle {
+    font-size: 1.125rem; color: rgba(255,255,255,0.7); max-width: 36rem;
+    line-height: 1.6; margin-bottom: 2rem;
+  }
+
+  .kd-hero-cta { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+  .kd-btn-primary {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    padding: 0.75rem 1.5rem; background: #326CE5; color: white;
+    border: none; border-radius: 0.625rem; font-size: 0.875rem; font-weight: 600;
+    text-decoration: none; transition: all 0.2s;
+  }
+  .kd-btn-primary:hover { background: #2858c7; transform: translateY(-1px); }
+  .kd-btn-secondary {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    padding: 0.75rem 1.5rem; background: rgba(255,255,255,0.08); color: white;
+    border: 1px solid rgba(255,255,255,0.2); border-radius: 0.625rem; font-size: 0.875rem;
+    text-decoration: none; transition: all 0.2s;
+  }
+  .kd-btn-secondary:hover { background: rgba(255,255,255,0.15); }
+
+  .kd-hero-stats {
+    display: flex; gap: 2.5rem; margin-top: 2.5rem; padding-top: 2rem;
+    border-top: 1px solid rgba(255,255,255,0.1); flex-wrap: wrap;
+  }
+  .kd-stat-num {
+    font-size: 2.25rem; font-weight: 800; font-family: var(--sl-font-mono);
+    background: linear-gradient(135deg, white, #326CE5);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+    display: block;
+  }
+  .kd-stat-label { font-size: 0.8rem; color: rgba(255,255,255,0.5); }
+
+  /* Terminal */
+  .kd-hero-terminal {
+    position: absolute; right: 2rem; top: 50%; transform: translateY(-50%);
+    width: 24rem; background: #0f172a; border: 1px solid #334155;
+    border-radius: 0.75rem; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    font-family: var(--sl-font-mono); font-size: 0.75rem; opacity: 0.8; z-index: 1;
+  }
+  .kd-term-bar {
+    background: #1e293b; padding: 0.5rem 0.75rem; display: flex; gap: 0.375rem; align-items: center;
+  }
+  .kd-dot { width: 0.625rem; height: 0.625rem; border-radius: 50%; }
+  .kd-r { background: #FF5F56; } .kd-y { background: #FFBD2E; } .kd-g { background: #27C93F; }
+  .kd-term-title { margin-left: 0.5rem; color: #64748b; font-size: 0.7rem; }
+  .kd-term-body { padding: 0.875rem 1rem; line-height: 1.8; color: #94a3b8; }
+  .t-prompt { color: #00E676; } .t-cmd { color: white; }
+  .t-out { color: #64748b; } .t-hl { color: #326CE5; } .t-ok { color: #00E676; }
+
+  @media (max-width: 72rem) { .kd-hero-terminal { display: none; } }
+  @media (max-width: 50rem) {
+    .kd-hero-title { font-size: 2rem; }
+    .kd-hero-stats { gap: 1.5rem; }
+  }
+
+  /* Tracks section */
+  .kd-section {
+    max-width: 68rem; margin: 0 auto; padding: 3.75rem 2rem;
+  }
+  .kd-section-title {
+    font-size: 1.75rem; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 0.5rem;
+    border: none !important; padding: 0 !important;
+  }
+  .kd-section-desc { color: #64748b; font-size: 0.95rem; margin-bottom: 2rem; }
+
+  .kd-tracks {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem;
+  }
+  @media (max-width: 72rem) { .kd-tracks { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 50rem) { .kd-tracks { grid-template-columns: 1fr; } }
+
+  .kd-track {
+    background: var(--sl-color-bg-nav); border: 1px solid var(--sl-color-hairline-light);
+    border-radius: 0.75rem; padding: 1.5rem; transition: all 0.25s; text-decoration: none;
+    color: var(--sl-color-text); display: block; position: relative; overflow: hidden;
+  }
+  .kd-track:hover { border-color: transparent; box-shadow: 0 10px 30px rgba(0,0,0,0.1); transform: translateY(-2px); }
+  .kd-track::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+  .t-fund::before { background: #00E676; } .t-linux::before { background: #FFD600; }
+  .t-cloud::before { background: #7C4DFF; } .t-cert::before { background: #326CE5; }
+  .t-plat::before { background: #FF6D00; } .t-prem::before { background: #00BFA5; }
+
+  .kd-track-icon {
+    width: 2.75rem; height: 2.75rem; border-radius: 0.625rem; display: flex;
+    align-items: center; justify-content: center; font-size: 1.25rem; margin-bottom: 1rem;
+  }
+  .t-fund .kd-track-icon { background: #E8FFF0; } .t-linux .kd-track-icon { background: #FFFDE7; }
+  .t-cloud .kd-track-icon { background: #F3EDFF; } .t-cert .kd-track-icon { background: #EBF1FF; }
+  .t-plat .kd-track-icon { background: #FFF3E0; } .t-prem .kd-track-icon { background: #E0F7F4; }
+
+  .kd-track h3 { font-size: 1rem; font-weight: 700; margin-bottom: 0.375rem; color: var(--sl-color-text); }
+  .kd-track p { font-size: 0.8rem; color: var(--sl-color-gray-3); margin-bottom: 1rem; line-height: 1.5; }
+  .kd-track-meta { font-size: 0.75rem; color: var(--sl-color-gray-3); }
+
+  /* Learning path */
+  .kd-path {
+    background: var(--sl-color-bg-nav); border: 1px solid var(--sl-color-hairline-light);
+    border-radius: 0.75rem; padding: 2rem;
+  }
+  .kd-path-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
+  .kd-path-row:last-child { margin-bottom: 0; }
+  .kd-step {
+    display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1.125rem;
+    border-radius: 0.5rem; font-size: 0.8rem; font-weight: 600; flex: 1;
+  }
+  .kd-step-num {
+    width: 1.5rem; height: 1.5rem; border-radius: 0.375rem; display: flex;
+    align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 800;
+    font-family: var(--sl-font-mono);
+  }
+  .kd-step-mod { font-size: 0.7rem; opacity: 0.6; margin-left: auto; font-family: var(--sl-font-mono); }
+  .kd-arrow { color: #D1D5DB; font-size: 1.125rem; flex-shrink: 0; }
+
+  .s-green { background: #E8FFF0; color: #1B5E20; border: 1px solid rgba(0,230,118,0.2); }
+  .s-green .kd-step-num { background: rgba(0,166,81,0.15); }
+  .s-blue { background: #EBF1FF; color: #1A3A7A; border: 1px solid rgba(50,108,229,0.2); }
+  .s-blue .kd-step-num { background: rgba(50,108,229,0.15); }
+  .s-purple { background: #F3EDFF; color: #4A148C; border: 1px solid rgba(124,77,255,0.2); }
+  .s-purple .kd-step-num { background: rgba(124,77,255,0.15); }
+  .s-orange { background: #FFF3E0; color: #BF360C; border: 1px solid rgba(255,109,0,0.2); }
+  .s-orange .kd-step-num { background: rgba(255,109,0,0.15); }
+  .s-teal { background: #E0F7F4; color: #004D40; border: 1px solid rgba(0,191,165,0.2); }
+  .s-teal .kd-step-num { background: rgba(0,191,165,0.15); }
+
+  :global([data-theme='dark']) .s-green { background: rgba(0,230,118,0.08); border-color: rgba(0,230,118,0.15); color: #66BB6A; }
+  :global([data-theme='dark']) .s-blue { background: rgba(50,108,229,0.08); border-color: rgba(50,108,229,0.15); color: #64B5F6; }
+  :global([data-theme='dark']) .s-purple { background: rgba(124,77,255,0.08); border-color: rgba(124,77,255,0.15); color: #B39DDB; }
+  :global([data-theme='dark']) .s-orange { background: rgba(255,109,0,0.08); border-color: rgba(255,109,0,0.15); color: #FFB74D; }
+  :global([data-theme='dark']) .s-teal { background: rgba(0,191,165,0.08); border-color: rgba(0,191,165,0.15); color: #80CBC4; }
+
+  @media (max-width: 50rem) {
+    .kd-path-row { flex-direction: column; }
+    .kd-arrow { transform: rotate(90deg); }
+  }
+</style>

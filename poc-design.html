@@ -1,0 +1,1123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KubeDojo — Design POC</title>
+<style>
+  :root {
+    --kube-blue: #326CE5;
+    --kube-blue-light: #EBF1FF;
+    --kube-blue-dark: #1A3A7A;
+    --terminal-green: #00E676;
+    --terminal-green-light: #E8FFF0;
+    --terminal-green-dark: #00A651;
+    --pod-orange: #FF6D00;
+    --pod-orange-light: #FFF3E0;
+    --deploy-purple: #7C4DFF;
+    --deploy-purple-light: #F3EDFF;
+    --danger-red: #FF1744;
+    --danger-red-light: #FFEBEE;
+    --warning-amber: #FFD600;
+    --warning-amber-light: #FFFDE7;
+    --node-teal: #00BFA5;
+    --node-teal-light: #E0F7F4;
+    --gray-50: #FAFBFC; --gray-100: #F3F4F6; --gray-200: #E5E7EB;
+    --gray-300: #D1D5DB; --gray-400: #9CA3AF; --gray-500: #6B7280;
+    --gray-600: #4B5563; --gray-700: #374151; --gray-800: #1F2937; --gray-900: #0F172A;
+    --radius: 12px;
+    --radius-sm: 8px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+    --shadow-lg: 0 10px 30px rgba(0,0,0,0.1), 0 4px 8px rgba(0,0,0,0.05);
+    --mono: 'SF Mono', 'Fira Code', 'JetBrains Mono', Consolas, monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+    color: var(--gray-900); background: var(--gray-50); line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ===== PAGE SWITCHER ===== */
+  .page-switch {
+    background: var(--gray-900); color: white; padding: 10px 24px;
+    display: flex; align-items: center; gap: 12px; font-size: 13px;
+    position: sticky; top: 0; z-index: 200;
+  }
+  .page-switch .label { opacity: 0.5; font-size: 12px; }
+  .page-switch button {
+    background: transparent; color: white; border: 1px solid var(--gray-600);
+    padding: 5px 14px; border-radius: 6px; font-size: 12px; cursor: pointer;
+    transition: all 0.2s; font-family: var(--mono);
+  }
+  .page-switch button:hover { border-color: var(--kube-blue); background: rgba(50,108,229,0.15); }
+  .page-switch button.active { background: var(--kube-blue); border-color: var(--kube-blue); font-weight: 600; }
+  .page-switch .poc-tag {
+    margin-left: auto; color: var(--terminal-green); font-weight: 700;
+    font-family: var(--mono); font-size: 11px; letter-spacing: 1px;
+  }
+
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* ===== TOPBAR ===== */
+  .topbar {
+    background: white; border-bottom: 1px solid var(--gray-200);
+    padding: 0 32px; display: flex; align-items: center; height: 56px;
+    position: sticky; top: 38px; z-index: 100;
+  }
+  .topbar-logo {
+    font-weight: 800; font-size: 18px; letter-spacing: -0.5px;
+    display: flex; align-items: center; gap: 8px; color: var(--gray-900);
+    text-decoration: none;
+  }
+  .topbar-logo .logo-icon {
+    width: 28px; height: 28px; background: var(--kube-blue);
+    border-radius: 7px; display: flex; align-items: center; justify-content: center;
+    color: white; font-size: 14px; font-weight: 900;
+  }
+  .topbar-nav { display: flex; gap: 4px; margin-left: 32px; }
+  .topbar-nav a {
+    padding: 6px 14px; font-size: 13px; font-weight: 500; color: var(--gray-500);
+    text-decoration: none; border-radius: 6px; transition: all 0.2s;
+  }
+  .topbar-nav a:hover { color: var(--gray-900); background: var(--gray-100); }
+  .topbar-nav a.active { color: var(--kube-blue); background: var(--kube-blue-light); font-weight: 600; }
+  .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  .search-box {
+    display: flex; align-items: center; gap: 8px; padding: 6px 14px;
+    background: var(--gray-100); border-radius: 8px; font-size: 13px; color: var(--gray-400);
+    cursor: pointer; border: 1px solid transparent; transition: all 0.2s; min-width: 220px;
+  }
+  .search-box:hover { border-color: var(--gray-300); }
+  .search-box kbd {
+    margin-left: auto; background: white; border: 1px solid var(--gray-200);
+    padding: 1px 6px; border-radius: 4px; font-size: 11px; font-family: var(--mono);
+  }
+  .lang-switch {
+    padding: 5px 10px; border: 1px solid var(--gray-200); border-radius: 6px;
+    font-size: 12px; background: white; cursor: pointer;
+  }
+
+  /* ===== HERO ===== */
+  .hero {
+    background: linear-gradient(135deg, var(--gray-900) 0%, #1a2744 50%, var(--kube-blue-dark) 100%);
+    color: white; padding: 80px 32px 60px; position: relative; overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background:
+      radial-gradient(circle at 20% 80%, rgba(50,108,229,0.15) 0%, transparent 50%),
+      radial-gradient(circle at 80% 20%, rgba(0,230,118,0.08) 0%, transparent 50%);
+  }
+  .hero-inner { max-width: 1100px; margin: 0 auto; position: relative; z-index: 1; }
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(0,230,118,0.12); border: 1px solid rgba(0,230,118,0.3);
+    color: var(--terminal-green); padding: 4px 14px; border-radius: 20px;
+    font-size: 12px; font-weight: 600; font-family: var(--mono); margin-bottom: 20px;
+  }
+  .hero-badge .pulse {
+    width: 6px; height: 6px; background: var(--terminal-green); border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .hero h1 {
+    font-size: 48px; font-weight: 800; letter-spacing: -1.5px; line-height: 1.15;
+    margin-bottom: 16px;
+  }
+  .hero h1 .accent { color: var(--kube-blue); }
+  .hero .subtitle {
+    font-size: 18px; color: rgba(255,255,255,0.7); max-width: 580px;
+    line-height: 1.6; margin-bottom: 32px;
+  }
+  .hero-stats {
+    display: flex; gap: 40px; margin-top: 40px; padding-top: 32px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+  }
+  .hero-stat .num {
+    font-size: 36px; font-weight: 800; font-family: var(--mono);
+    background: linear-gradient(135deg, white, var(--kube-blue));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .hero-stat .label { font-size: 13px; color: rgba(255,255,255,0.5); margin-top: 2px; }
+  .hero-cta { display: flex; gap: 12px; }
+  .btn-primary {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 12px 24px; background: var(--kube-blue); color: white;
+    border: none; border-radius: 10px; font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: all 0.2s; text-decoration: none;
+  }
+  .btn-primary:hover { background: #2858c7; transform: translateY(-1px); box-shadow: var(--shadow-md); }
+  .btn-secondary {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 12px 24px; background: rgba(255,255,255,0.08); color: white;
+    border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; font-size: 14px;
+    font-weight: 500; cursor: pointer; transition: all 0.2s; text-decoration: none;
+  }
+  .btn-secondary:hover { background: rgba(255,255,255,0.15); }
+
+  /* Terminal decoration */
+  .hero-terminal {
+    position: absolute; right: 32px; top: 50%; transform: translateY(-50%);
+    width: 380px; background: var(--gray-900); border: 1px solid var(--gray-700);
+    border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-lg);
+    font-family: var(--mono); font-size: 12px; opacity: 0.75;
+  }
+  .terminal-bar {
+    background: var(--gray-800); padding: 8px 12px; display: flex; gap: 6px; align-items: center;
+  }
+  .terminal-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .terminal-dot.r { background: #FF5F56; } .terminal-dot.y { background: #FFBD2E; } .terminal-dot.g { background: #27C93F; }
+  .terminal-title { margin-left: 8px; color: var(--gray-400); font-size: 11px; }
+  .terminal-body { padding: 14px 16px; line-height: 1.8; color: var(--gray-300); }
+  .terminal-body .prompt { color: var(--terminal-green); }
+  .terminal-body .cmd { color: white; }
+  .terminal-body .output { color: var(--gray-500); }
+  .terminal-body .highlight { color: var(--kube-blue); }
+  .terminal-body .success { color: var(--terminal-green); }
+
+  /* ===== TRACKS SECTION ===== */
+  .section { max-width: 1100px; margin: 0 auto; padding: 60px 32px; }
+  .section-header { margin-bottom: 32px; }
+  .section-header h2 {
+    font-size: 28px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 8px;
+  }
+  .section-header p { color: var(--gray-500); font-size: 15px; }
+
+  .tracks-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .track-card {
+    background: white; border-radius: var(--radius); border: 1px solid var(--gray-200);
+    padding: 24px; transition: all 0.25s; cursor: pointer; position: relative; overflow: hidden;
+  }
+  .track-card:hover { border-color: transparent; box-shadow: var(--shadow-lg); transform: translateY(-2px); }
+  .track-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  }
+  .track-card.t-fundamentals::before { background: var(--terminal-green); }
+  .track-card.t-certifications::before { background: var(--kube-blue); }
+  .track-card.t-cloud::before { background: var(--deploy-purple); }
+  .track-card.t-platform::before { background: var(--pod-orange); }
+  .track-card.t-onprem::before { background: var(--node-teal); }
+  .track-card.t-linux::before { background: var(--warning-amber); }
+  .track-icon {
+    width: 44px; height: 44px; border-radius: 10px; display: flex;
+    align-items: center; justify-content: center; font-size: 20px; margin-bottom: 16px;
+  }
+  .t-fundamentals .track-icon { background: var(--terminal-green-light); }
+  .t-certifications .track-icon { background: var(--kube-blue-light); }
+  .t-cloud .track-icon { background: var(--deploy-purple-light); }
+  .t-platform .track-icon { background: var(--pod-orange-light); }
+  .t-onprem .track-icon { background: var(--node-teal-light); }
+  .t-linux .track-icon { background: var(--warning-amber-light); }
+  .track-card h3 { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+  .track-card .desc { font-size: 13px; color: var(--gray-500); margin-bottom: 16px; line-height: 1.5; }
+  .track-meta { display: flex; gap: 16px; font-size: 12px; color: var(--gray-400); }
+  .track-meta span { display: flex; align-items: center; gap: 4px; }
+
+  /* ===== LEARNING PATH SECTION ===== */
+  .path-visual {
+    background: white; border: 1px solid var(--gray-200); border-radius: var(--radius);
+    padding: 32px; margin-top: 20px;
+  }
+  .path-row { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .path-row:last-child { margin-bottom: 0; }
+  .path-step {
+    display: flex; align-items: center; gap: 12px; padding: 12px 18px;
+    border-radius: var(--radius-sm); font-size: 13px; font-weight: 600;
+    flex: 1; transition: all 0.2s; cursor: pointer;
+  }
+  .path-step:hover { transform: translateX(4px); }
+  .path-step.s-green { background: var(--terminal-green-light); color: #1B5E20; border: 1px solid rgba(0,230,118,0.2); }
+  .path-step.s-blue { background: var(--kube-blue-light); color: var(--kube-blue-dark); border: 1px solid rgba(50,108,229,0.2); }
+  .path-step.s-purple { background: var(--deploy-purple-light); color: #4A148C; border: 1px solid rgba(124,77,255,0.2); }
+  .path-step.s-orange { background: var(--pod-orange-light); color: #BF360C; border: 1px solid rgba(255,109,0,0.2); }
+  .path-step.s-teal { background: var(--node-teal-light); color: #004D40; border: 1px solid rgba(0,191,165,0.2); }
+  .path-num {
+    width: 24px; height: 24px; border-radius: 6px; display: flex;
+    align-items: center; justify-content: center; font-size: 11px;
+    font-weight: 800; font-family: var(--mono);
+  }
+  .s-green .path-num { background: rgba(0,166,81,0.15); }
+  .s-blue .path-num { background: rgba(50,108,229,0.15); }
+  .s-purple .path-num { background: rgba(124,77,255,0.15); }
+  .s-orange .path-num { background: rgba(255,109,0,0.15); }
+  .s-teal .path-num { background: rgba(0,191,165,0.15); }
+  .path-arrow { color: var(--gray-300); font-size: 18px; flex-shrink: 0; }
+  .path-modules { font-size: 11px; opacity: 0.6; margin-left: auto; font-family: var(--mono); }
+
+  /* ===== DEDICATION ===== */
+  .dedication {
+    background: linear-gradient(135deg, #0057B8 0%, #0057B8 50%, #FFD700 50%, #FFD700 100%);
+    padding: 3px; border-radius: var(--radius); margin-top: 40px;
+  }
+  .dedication-inner {
+    background: white; border-radius: 10px; padding: 28px 32px;
+    text-align: center;
+  }
+  .dedication-inner p { font-size: 14px; color: var(--gray-600); font-style: italic; line-height: 1.7; }
+  .dedication-inner .flag { font-size: 24px; margin-bottom: 8px; }
+
+  /* ========================================================
+     PAGE 2: MODULE VIEW
+     ======================================================== */
+
+  .module-layout {
+    display: grid; grid-template-columns: 260px 1fr 220px;
+    min-height: calc(100vh - 94px);
+  }
+
+  /* Sidebar */
+  .sidebar {
+    background: white; border-right: 1px solid var(--gray-200);
+    padding: 20px 0; position: sticky; top: 94px; height: calc(100vh - 94px);
+    overflow-y: auto; font-size: 13px;
+  }
+  .sidebar-section { padding: 0 16px; margin-bottom: 8px; }
+  .sidebar-section-title {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;
+    color: var(--gray-400); padding: 8px 0; display: flex; align-items: center; gap: 8px;
+  }
+  .sidebar-section-title .dot { width: 6px; height: 6px; border-radius: 2px; }
+  .sidebar-section-title .dot.d-blue { background: var(--kube-blue); }
+  .sidebar-link {
+    display: flex; align-items: center; gap: 8px; padding: 7px 12px; margin: 1px 0;
+    color: var(--gray-600); text-decoration: none; border-radius: var(--radius-sm);
+    transition: all 0.15s; font-weight: 500;
+  }
+  .sidebar-link:hover { background: var(--gray-100); color: var(--gray-900); }
+  .sidebar-link.active {
+    background: var(--kube-blue-light); color: var(--kube-blue);
+    font-weight: 600;
+  }
+  .sidebar-link .mod-num {
+    font-family: var(--mono); font-size: 11px; color: var(--gray-400);
+    min-width: 28px;
+  }
+  .sidebar-link.active .mod-num { color: var(--kube-blue); }
+  .sidebar-part-header {
+    font-weight: 700; color: var(--gray-700); padding: 10px 12px 6px;
+    font-size: 12px;
+  }
+
+  /* Content area */
+  .module-content { padding: 40px 48px 80px; max-width: 820px; }
+
+  /* Module header */
+  .module-breadcrumb {
+    display: flex; align-items: center; gap: 6px; font-size: 12px;
+    color: var(--gray-400); margin-bottom: 16px;
+  }
+  .module-breadcrumb a { color: var(--gray-400); text-decoration: none; }
+  .module-breadcrumb a:hover { color: var(--kube-blue); }
+  .module-title { font-size: 32px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 16px; }
+
+  .module-meta {
+    display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 28px;
+  }
+  .meta-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 600;
+  }
+  .meta-chip.complexity-quick { background: var(--terminal-green-light); color: var(--terminal-green-dark); }
+  .meta-chip.complexity-medium { background: var(--warning-amber-light); color: #F57F17; }
+  .meta-chip.complexity-advanced { background: var(--danger-red-light); color: var(--danger-red); }
+  .meta-chip.time { background: var(--gray-100); color: var(--gray-600); }
+  .meta-chip.cert { background: var(--kube-blue-light); color: var(--kube-blue); }
+  .meta-chip .chip-icon { font-size: 14px; }
+
+  /* Content typography */
+  .module-content h2 {
+    font-size: 22px; font-weight: 700; margin: 36px 0 14px;
+    padding-bottom: 8px; border-bottom: 2px solid var(--kube-blue-light);
+    color: var(--gray-900);
+  }
+  .module-content h2:first-of-type { margin-top: 0; }
+  .module-content h3 { font-size: 17px; font-weight: 700; margin: 24px 0 10px; }
+  .module-content p { margin-bottom: 14px; font-size: 15px; color: var(--gray-700); }
+
+  /* Callout boxes */
+  .callout {
+    border-radius: var(--radius); padding: 18px 22px; margin: 22px 0;
+    border-left: 4px solid; position: relative;
+  }
+  .callout-header {
+    display: flex; align-items: center; gap: 8px; font-weight: 700;
+    font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;
+  }
+  .callout-body { font-size: 14px; line-height: 1.6; }
+  .callout.c-info { background: var(--kube-blue-light); border-color: var(--kube-blue); }
+  .callout.c-info .callout-header { color: var(--kube-blue); }
+  .callout.c-warning { background: var(--warning-amber-light); border-color: #F9A825; }
+  .callout.c-warning .callout-header { color: #F57F17; }
+  .callout.c-danger { background: var(--danger-red-light); border-color: var(--danger-red); }
+  .callout.c-danger .callout-header { color: var(--danger-red); }
+  .callout.c-success { background: var(--terminal-green-light); border-color: var(--terminal-green-dark); }
+  .callout.c-success .callout-header { color: var(--terminal-green-dark); }
+
+  /* Did You Know */
+  .dyk-card {
+    background: linear-gradient(135deg, #F0F4FF 0%, #E8EEFF 100%);
+    border: 1px solid rgba(50,108,229,0.15); border-radius: var(--radius);
+    padding: 20px 24px; margin: 22px 0;
+  }
+  .dyk-header {
+    display: flex; align-items: center; gap: 8px; font-weight: 700;
+    font-size: 14px; color: var(--kube-blue); margin-bottom: 10px;
+  }
+  .dyk-body { font-size: 14px; color: var(--gray-700); line-height: 1.6; }
+
+  /* War Story */
+  .warstory {
+    background: white; border: 2px solid var(--gray-200); border-radius: var(--radius);
+    overflow: hidden; margin: 22px 0;
+  }
+  .warstory-header {
+    background: var(--gray-900); color: white; padding: 14px 22px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .warstory-header .icon { font-size: 18px; }
+  .warstory-header .title { font-weight: 700; font-size: 14px; }
+  .warstory-header .impact {
+    margin-left: auto; background: var(--danger-red); padding: 3px 10px;
+    border-radius: 4px; font-size: 11px; font-weight: 700;
+  }
+  .warstory-body { padding: 20px 22px; font-size: 14px; line-height: 1.7; color: var(--gray-700); }
+  .warstory-timeline {
+    display: flex; gap: 0; margin: 16px 0; overflow-x: auto;
+  }
+  .timeline-item {
+    flex: 1; min-width: 120px; padding: 12px; text-align: center;
+    border-top: 3px solid var(--gray-200); position: relative;
+  }
+  .timeline-item::before {
+    content: ''; position: absolute; top: -6px; left: 50%;
+    transform: translateX(-50%); width: 9px; height: 9px;
+    background: var(--gray-400); border-radius: 50%;
+  }
+  .timeline-item.critical::before { background: var(--danger-red); }
+  .timeline-item.critical { border-top-color: var(--danger-red); }
+  .timeline-item.resolve::before { background: var(--terminal-green-dark); }
+  .timeline-item.resolve { border-top-color: var(--terminal-green-dark); }
+  .timeline-time { font-size: 11px; font-family: var(--mono); color: var(--gray-400); margin-bottom: 4px; }
+  .timeline-text { font-size: 12px; font-weight: 600; }
+
+  /* Code blocks */
+  .code-block {
+    background: var(--gray-900); border-radius: var(--radius); overflow: hidden;
+    margin: 18px 0; box-shadow: var(--shadow);
+  }
+  .code-header {
+    background: var(--gray-800); padding: 8px 16px; display: flex;
+    align-items: center; font-size: 12px; color: var(--gray-400);
+  }
+  .code-header .lang {
+    font-family: var(--mono); font-weight: 600; color: var(--terminal-green);
+  }
+  .code-header .copy-btn {
+    margin-left: auto; background: transparent; border: 1px solid var(--gray-600);
+    color: var(--gray-400); padding: 3px 10px; border-radius: 4px; font-size: 11px;
+    cursor: pointer; font-family: var(--mono); transition: all 0.2s;
+  }
+  .code-header .copy-btn:hover { background: var(--gray-700); color: white; }
+  .code-body {
+    padding: 16px 20px; font-family: var(--mono); font-size: 13px;
+    line-height: 1.7; color: var(--gray-300); overflow-x: auto;
+  }
+  .code-body .prompt { color: var(--terminal-green); }
+  .code-body .comment { color: var(--gray-500); }
+  .code-body .keyword { color: #7C4DFF; }
+  .code-body .string { color: #FFD600; }
+  .code-body .key { color: #42A5F5; }
+  .code-body .value { color: var(--terminal-green); }
+
+  /* Exercise cards */
+  .exercise-card {
+    background: white; border: 2px solid var(--gray-200); border-radius: var(--radius);
+    overflow: hidden; margin: 22px 0; transition: border-color 0.2s;
+  }
+  .exercise-card:hover { border-color: var(--kube-blue); }
+  .exercise-header {
+    padding: 14px 22px; display: flex; align-items: center; gap: 10px;
+    border-bottom: 1px solid var(--gray-200); background: var(--gray-50);
+  }
+  .exercise-badge {
+    font-size: 10px; font-weight: 800; padding: 3px 10px; border-radius: 4px;
+    text-transform: uppercase; letter-spacing: 0.8px; color: white;
+  }
+  .badge-quiz { background: var(--kube-blue); }
+  .badge-handson { background: var(--terminal-green-dark); }
+  .badge-scenario { background: var(--pod-orange); }
+  .badge-debug { background: var(--danger-red); }
+  .badge-yaml { background: var(--deploy-purple); }
+  .exercise-title { font-weight: 600; font-size: 14px; }
+  .exercise-num { margin-left: auto; font-size: 11px; color: var(--gray-400); font-family: var(--mono); }
+  .exercise-body { padding: 20px 22px; }
+
+  /* Quiz component */
+  .quiz-q { font-weight: 600; font-size: 15px; margin-bottom: 12px; }
+  .quiz-options { display: flex; flex-direction: column; gap: 8px; }
+  .quiz-option {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 16px; border: 2px solid var(--gray-200); border-radius: var(--radius-sm);
+    cursor: pointer; font-size: 14px; transition: all 0.2s; background: white;
+  }
+  .quiz-option:hover { border-color: var(--kube-blue); background: var(--kube-blue-light); }
+  .quiz-option .letter {
+    width: 24px; height: 24px; border-radius: 6px; display: flex;
+    align-items: center; justify-content: center; background: var(--gray-100);
+    font-size: 12px; font-weight: 700; font-family: var(--mono); flex-shrink: 0;
+  }
+  .quiz-option.correct { border-color: var(--terminal-green-dark); background: var(--terminal-green-light); }
+  .quiz-option.correct .letter { background: var(--terminal-green-dark); color: white; }
+  .quiz-option.wrong { border-color: var(--danger-red); background: var(--danger-red-light); }
+  .quiz-option.wrong .letter { background: var(--danger-red); color: white; }
+
+  /* YAML exercise */
+  .yaml-editor {
+    background: var(--gray-900); border-radius: var(--radius-sm); padding: 16px 20px;
+    font-family: var(--mono); font-size: 13px; line-height: 1.7; color: var(--gray-300);
+  }
+  .yaml-blank {
+    display: inline-block; min-width: 80px; border-bottom: 2px dashed var(--kube-blue);
+    color: var(--kube-blue); text-align: center; cursor: text; padding: 0 4px;
+    font-weight: 600;
+  }
+  .yaml-blank.filled {
+    border-bottom-style: solid; color: var(--terminal-green);
+    border-color: var(--terminal-green);
+  }
+
+  /* Hands-on exercise */
+  .handson-steps { counter-reset: step; }
+  .handson-step {
+    display: flex; gap: 14px; margin-bottom: 16px; position: relative;
+  }
+  .handson-step::before {
+    counter-increment: step; content: counter(step);
+    width: 28px; height: 28px; background: var(--kube-blue); color: white;
+    border-radius: 7px; display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 800; font-family: var(--mono); flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .handson-step .step-content { flex: 1; font-size: 14px; }
+  .handson-step .step-content strong { color: var(--gray-900); }
+
+  /* Right TOC */
+  .toc-panel {
+    padding: 20px 16px; position: sticky; top: 94px; height: calc(100vh - 94px);
+    overflow-y: auto; font-size: 12px; border-left: 1px solid var(--gray-200);
+  }
+  .toc-title {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;
+    color: var(--gray-400); margin-bottom: 12px;
+  }
+  .toc-link {
+    display: block; padding: 4px 0 4px 12px; color: var(--gray-500);
+    text-decoration: none; border-left: 2px solid transparent; transition: all 0.15s;
+    line-height: 1.4; margin-bottom: 2px;
+  }
+  .toc-link:hover { color: var(--gray-700); border-left-color: var(--gray-300); }
+  .toc-link.active { color: var(--kube-blue); border-left-color: var(--kube-blue); font-weight: 600; }
+  .toc-link.sub { padding-left: 24px; font-size: 11px; }
+
+  /* Prev/Next nav */
+  .prev-next {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+    margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--gray-200);
+  }
+  .pn-link {
+    padding: 16px 20px; border: 1px solid var(--gray-200); border-radius: var(--radius);
+    text-decoration: none; transition: all 0.2s;
+  }
+  .pn-link:hover { border-color: var(--kube-blue); background: var(--kube-blue-light); }
+  .pn-label { font-size: 11px; color: var(--gray-400); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .pn-title { font-size: 14px; font-weight: 600; color: var(--gray-900); margin-top: 4px; }
+  .pn-next { text-align: right; }
+
+  /* ===== FOOTER ===== */
+  .footer {
+    background: var(--gray-900); color: var(--gray-400); padding: 40px 32px;
+    font-size: 13px; text-align: center;
+  }
+  .footer a { color: var(--kube-blue); text-decoration: none; }
+
+  /* ===== RESPONSIVE ===== */
+  @media (max-width: 1100px) {
+    .hero-terminal { display: none; }
+    .tracks-grid { grid-template-columns: repeat(2, 1fr); }
+    .module-layout { grid-template-columns: 1fr; }
+    .sidebar, .toc-panel { display: none; }
+  }
+  @media (max-width: 700px) {
+    .tracks-grid { grid-template-columns: 1fr; }
+    .hero h1 { font-size: 32px; }
+    .hero-stats { flex-wrap: wrap; gap: 24px; }
+    .path-row { flex-direction: column; }
+    .path-arrow { transform: rotate(90deg); }
+  }
+</style>
+</head>
+<body>
+
+<!-- Page Switcher -->
+<div class="page-switch">
+  <span class="label">VIEW</span>
+  <button class="active" onclick="showPage('home')">Homepage</button>
+  <button onclick="showPage('module')">Module Page</button>
+  <span class="poc-tag">POC DESIGN v1</span>
+</div>
+
+<!-- =========================================================
+     PAGE 1: HOMEPAGE
+     ========================================================= -->
+<div class="page active" id="page-home">
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <a class="topbar-logo" href="#">
+      <span class="logo-icon">K</span>
+      KubeDojo
+    </a>
+    <nav class="topbar-nav">
+      <a href="#" class="active">Home</a>
+      <a href="#">Fundamentals</a>
+      <a href="#">Cloud</a>
+      <a href="#">Certifications</a>
+      <a href="#">Platform</a>
+      <a href="#">On-Premises</a>
+    </nav>
+    <div class="topbar-right">
+      <div class="search-box">
+        <span>&#128269;</span> Search docs...
+        <kbd>&#8984;K</kbd>
+      </div>
+      <select class="lang-switch"><option>EN</option><option>UK</option></select>
+    </div>
+  </div>
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-inner">
+      <div class="hero-badge"><span class="pulse"></span> Free &amp; Open Source</div>
+      <h1>Master <span class="accent">Cloud Native</span><br>from Zero to Production</h1>
+      <p class="subtitle">
+        The most comprehensive Kubernetes curriculum on the internet.
+        Certifications, platform engineering, SRE, DevSecOps — theory-first, hands-on always.
+      </p>
+      <div class="hero-cta">
+        <a class="btn-primary" href="#">Start Learning &#8594;</a>
+        <a class="btn-secondary" href="#">Browse Curriculum</a>
+      </div>
+      <div class="hero-stats">
+        <div class="hero-stat"><div class="num">568</div><div class="label">Modules</div></div>
+        <div class="hero-stat"><div class="num">6</div><div class="label">Tracks</div></div>
+        <div class="hero-stat"><div class="num">21</div><div class="label">Certifications</div></div>
+        <div class="hero-stat"><div class="num">115</div><div class="label">Ukrainian translations</div></div>
+      </div>
+    </div>
+
+    <!-- Terminal decoration -->
+    <div class="hero-terminal">
+      <div class="terminal-bar">
+        <span class="terminal-dot r"></span>
+        <span class="terminal-dot y"></span>
+        <span class="terminal-dot g"></span>
+        <span class="terminal-title">kubectl &mdash; kubedojo</span>
+      </div>
+      <div class="terminal-body">
+        <span class="prompt">$</span> <span class="cmd">kubectl get tracks</span><br>
+        <span class="output">NAME              MODULES   STATUS</span><br>
+        <span class="highlight">fundamentals</span>      <span class="success">33</span>        Ready<br>
+        <span class="highlight">linux</span>             <span class="success">37</span>        Ready<br>
+        <span class="highlight">cloud</span>             <span class="success">85</span>        Ready<br>
+        <span class="highlight">certifications</span>    <span class="success">169</span>       Ready<br>
+        <span class="highlight">platform</span>          <span class="success">214</span>       Ready<br>
+        <span class="highlight">on-premises</span>       <span class="success">30</span>        Ready<br>
+        <br>
+        <span class="prompt">$</span> <span class="cmd">kubectl apply -f learning-path.yaml</span><br>
+        <span class="success">&#10003;</span> <span class="output">learningpath/cka-track configured</span><br>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tracks -->
+  <div class="section">
+    <div class="section-header">
+      <h2>Learning Tracks</h2>
+      <p>Six structured paths from absolute beginner to production expert.</p>
+    </div>
+    <div class="tracks-grid">
+      <div class="track-card t-fundamentals">
+        <div class="track-icon">&#9881;</div>
+        <h3>Fundamentals</h3>
+        <div class="desc">Zero to Terminal, Cloud Native 101, K8s Basics. Start here if you're new to tech.</div>
+        <div class="track-meta">
+          <span>&#128218; 33 modules</span>
+          <span>&#9201; ~40 hours</span>
+        </div>
+      </div>
+      <div class="track-card t-linux">
+        <div class="track-icon">&#128187;</div>
+        <h3>Linux</h3>
+        <div class="desc">Everyday Use + Deep Dive. From basic commands to kernel internals and systemd.</div>
+        <div class="track-meta">
+          <span>&#128218; 37 modules</span>
+          <span>&#9201; ~50 hours</span>
+        </div>
+      </div>
+      <div class="track-card t-cloud">
+        <div class="track-icon">&#9729;</div>
+        <h3>Cloud</h3>
+        <div class="desc">AWS, GCP, Azure essentials. EKS/GKE/AKS deep dives. Architecture patterns.</div>
+        <div class="track-meta">
+          <span>&#128218; 85 modules</span>
+          <span>&#9201; ~120 hours</span>
+        </div>
+      </div>
+      <div class="track-card t-certifications">
+        <div class="track-icon">&#127942;</div>
+        <h3>Certifications</h3>
+        <div class="desc">CKA, CKAD, CKS, KCNA, KCSA — exam-aligned curriculum with practice questions.</div>
+        <div class="track-meta">
+          <span>&#128218; 169 modules</span>
+          <span>&#9201; ~200 hours</span>
+        </div>
+      </div>
+      <div class="track-card t-platform">
+        <div class="track-icon">&#128736;</div>
+        <h3>Platform Engineering</h3>
+        <div class="desc">SRE, GitOps, DevSecOps, MLOps, FinOps, Chaos Engineering. 96 toolkit modules.</div>
+        <div class="track-meta">
+          <span>&#128218; 214 modules</span>
+          <span>&#9201; ~280 hours</span>
+        </div>
+      </div>
+      <div class="track-card t-onprem">
+        <div class="track-icon">&#127959;</div>
+        <h3>On-Premises</h3>
+        <div class="desc">Bare metal K8s from rack to cluster. Networking, storage, operations, resilience.</div>
+        <div class="track-meta">
+          <span>&#128218; 30 modules</span>
+          <span>&#9201; ~45 hours</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Learning Path -->
+    <div style="margin-top: 60px;">
+      <div class="section-header">
+        <h2>Recommended Path</h2>
+        <p>Not sure where to start? Follow this progression.</p>
+      </div>
+      <div class="path-visual">
+        <div class="path-row">
+          <div class="path-step s-green"><span class="path-num">1</span> Fundamentals <span class="path-modules">33 modules</span></div>
+          <span class="path-arrow">&#8594;</span>
+          <div class="path-step s-blue"><span class="path-num">2</span> CKA Certification <span class="path-modules">47 modules</span></div>
+          <span class="path-arrow">&#8594;</span>
+          <div class="path-step s-blue"><span class="path-num">3</span> CKAD + CKS <span class="path-modules">60 modules</span></div>
+        </div>
+        <div class="path-row">
+          <div class="path-step s-purple"><span class="path-num">4</span> Cloud Deep Dive <span class="path-modules">85 modules</span></div>
+          <span class="path-arrow">&#8594;</span>
+          <div class="path-step s-orange"><span class="path-num">5</span> Platform Engineering <span class="path-modules">214 modules</span></div>
+          <span class="path-arrow">&#8594;</span>
+          <div class="path-step s-teal"><span class="path-num">6</span> On-Premises / Extending K8s <span class="path-modules">38 modules</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dedication -->
+    <div class="dedication">
+      <div class="dedication-inner">
+        <div class="flag">&#127482;&#127462;</div>
+        <p>
+          This project is dedicated to Ukrainian IT engineers who gave their lives defending their homeland.<br>
+          They were developers, DevOps engineers, system administrators. Their code lives on. Their sacrifice is not forgotten.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <p>KubeDojo &mdash; Free, comprehensive cloud native education. <a href="#">GitHub</a> &middot; <a href="#">Contributing</a> &middot; <a href="#">License</a></p>
+  </div>
+</div>
+
+<!-- =========================================================
+     PAGE 2: MODULE VIEW
+     ========================================================= -->
+<div class="page" id="page-module">
+
+  <div class="topbar">
+    <a class="topbar-logo" href="#">
+      <span class="logo-icon">K</span>
+      KubeDojo
+    </a>
+    <nav class="topbar-nav">
+      <a href="#">Home</a>
+      <a href="#">Fundamentals</a>
+      <a href="#">Cloud</a>
+      <a href="#" class="active">Certifications</a>
+      <a href="#">Platform</a>
+      <a href="#">On-Premises</a>
+    </nav>
+    <div class="topbar-right">
+      <div class="search-box">
+        <span>&#128269;</span> Search docs...
+        <kbd>&#8984;K</kbd>
+      </div>
+    </div>
+  </div>
+
+  <div class="module-layout">
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">
+          <span class="dot d-blue"></span> CKA Curriculum
+        </div>
+        <div class="sidebar-part-header">Part 3: Services & Networking</div>
+        <a class="sidebar-link" href="#"><span class="mod-num">3.1</span> Services Deep-Dive</a>
+        <a class="sidebar-link" href="#"><span class="mod-num">3.2</span> Endpoints & EndpointSlices</a>
+        <a class="sidebar-link" href="#"><span class="mod-num">3.3</span> DNS & CoreDNS</a>
+        <a class="sidebar-link active" href="#"><span class="mod-num">3.4</span> Ingress</a>
+        <a class="sidebar-link" href="#"><span class="mod-num">3.5</span> Gateway API</a>
+        <a class="sidebar-link" href="#"><span class="mod-num">3.6</span> Network Policies</a>
+        <a class="sidebar-link" href="#"><span class="mod-num">3.7</span> CNI & Cluster Networking</a>
+        <a class="sidebar-link" href="#"><span class="mod-num">3.8</span> Cluster Networking Data Path</a>
+        <div class="sidebar-part-header" style="margin-top: 8px;">Part 4: Storage</div>
+        <a class="sidebar-link" href="#"><span class="mod-num">4.1</span> Volumes</a>
+        <a class="sidebar-link" href="#"><span class="mod-num">4.2</span> Persistent Volumes</a>
+        <a class="sidebar-link" href="#"><span class="mod-num">4.3</span> StorageClasses</a>
+        <a class="sidebar-link" href="#"><span class="mod-num">4.4</span> StatefulSets & Storage</a>
+        <a class="sidebar-link" href="#"><span class="mod-num">4.5</span> CSI Drivers</a>
+        <a class="sidebar-link" href="#"><span class="mod-num">4.6</span> Volume Snapshots</a>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="module-content">
+      <div class="module-breadcrumb">
+        <a href="#">CKA</a> <span>/</span>
+        <a href="#">Part 3: Services & Networking</a> <span>/</span>
+        <span>Module 3.4</span>
+      </div>
+
+      <h1 class="module-title">Module 3.4: Ingress</h1>
+
+      <div class="module-meta">
+        <span class="meta-chip complexity-medium"><span class="chip-icon">&#9888;</span> Medium</span>
+        <span class="meta-chip time"><span class="chip-icon">&#9201;</span> 45-55 min</span>
+        <span class="meta-chip cert"><span class="chip-icon">&#127942;</span> CKA Exam</span>
+      </div>
+
+      <h2>Why This Module Matters</h2>
+      <p>
+        While Services expose applications to the network, Ingress provides <strong>HTTP/HTTPS routing</strong>
+        with features like path-based routing, virtual hosts, and TLS termination. Instead of exposing many
+        NodePorts, you expose one Ingress controller that routes traffic based on URLs.
+      </p>
+
+      <div class="callout c-warning">
+        <div class="callout-header">&#9888;&#65039; Important</div>
+        <div class="callout-body">
+          The <strong>ingress-nginx controller</strong> reached end-of-life on March 31, 2026.
+          The Ingress API itself is NOT deprecated &mdash; it's part of the Kubernetes stable API.
+          Consider migrating to the <strong>Gateway API</strong> for new projects.
+        </div>
+      </div>
+
+      <!-- Did You Know -->
+      <div class="dyk-card">
+        <div class="dyk-header">&#128161; Did You Know?</div>
+        <div class="dyk-body">
+          The <strong>Gateway API</strong> took 4 years to reach GA (v1.0 in October 2023). It was originally
+          called "Service APIs" and renamed to avoid confusion with the existing Service resource. The design
+          required consensus from 8 different Ingress controller vendors.
+        </div>
+      </div>
+
+      <h2>Part 1: Ingress Architecture</h2>
+      <h3>1.1 How Ingress Works</h3>
+      <p>An Ingress resource defines routing rules. An Ingress Controller watches for these resources and configures an actual load balancer (nginx, envoy, HAProxy) accordingly.</p>
+
+      <!-- Code block -->
+      <div class="code-block">
+        <div class="code-header">
+          <span class="lang">yaml</span>
+          <button class="copy-btn" onclick="this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
+        </div>
+        <div class="code-body">
+<span class="key">apiVersion</span>: <span class="value">networking.k8s.io/v1</span>
+<span class="key">kind</span>: <span class="value">Ingress</span>
+<span class="key">metadata</span>:
+  <span class="key">name</span>: <span class="value">web-ingress</span>
+  <span class="key">annotations</span>:
+    <span class="key">nginx.ingress.kubernetes.io/rewrite-target</span>: <span class="value">/</span>
+<span class="key">spec</span>:
+  <span class="key">ingressClassName</span>: <span class="value">nginx</span>
+  <span class="key">rules</span>:
+  - <span class="key">host</span>: <span class="string">"app.example.com"</span>
+    <span class="key">http</span>:
+      <span class="key">paths</span>:
+      - <span class="key">path</span>: <span class="string">/api</span>
+        <span class="key">pathType</span>: <span class="value">Prefix</span>
+        <span class="key">backend</span>:
+          <span class="key">service</span>:
+            <span class="key">name</span>: <span class="value">api-service</span>
+            <span class="key">port</span>:
+              <span class="key">number</span>: <span class="value">8080</span>
+        </div>
+      </div>
+
+      <!-- War Story -->
+      <div class="warstory">
+        <div class="warstory-header">
+          <span class="icon">&#128293;</span>
+          <span class="title">War Story: The Ingress That Brought Down Black Friday</span>
+          <span class="impact">$2.3M lost revenue</span>
+        </div>
+        <div class="warstory-body">
+          <p>A major e-commerce platform used a single nginx Ingress controller for all traffic. On Black Friday 2023,
+          a misconfigured rate-limiting annotation on one backend caused the entire controller to reload every 3 seconds,
+          dropping connections across all 47 services behind it.</p>
+
+          <div class="warstory-timeline">
+            <div class="timeline-item">
+              <div class="timeline-time">09:00</div>
+              <div class="timeline-text">Traffic ramp begins</div>
+            </div>
+            <div class="timeline-item critical">
+              <div class="timeline-time">11:23</div>
+              <div class="timeline-text">Nginx reload loop starts</div>
+            </div>
+            <div class="timeline-item critical">
+              <div class="timeline-time">11:24</div>
+              <div class="timeline-text">502s across all services</div>
+            </div>
+            <div class="timeline-item resolve">
+              <div class="timeline-time">11:51</div>
+              <div class="timeline-text">Bad annotation removed</div>
+            </div>
+            <div class="timeline-item resolve">
+              <div class="timeline-time">12:05</div>
+              <div class="timeline-text">Full recovery</div>
+            </div>
+          </div>
+
+          <p style="margin-top: 14px;"><strong>Lesson:</strong> Never share a single Ingress controller across environments. Use separate IngressClasses for critical vs. non-critical traffic.</p>
+        </div>
+      </div>
+
+      <h2>Hands-On Exercise</h2>
+
+      <div class="exercise-card">
+        <div class="exercise-header">
+          <span class="exercise-badge badge-handson">Hands-On</span>
+          <span class="exercise-title">Deploy an Ingress Controller on kind</span>
+          <span class="exercise-num">Exercise 1 of 3</span>
+        </div>
+        <div class="exercise-body">
+          <div class="handson-steps">
+            <div class="handson-step">
+              <div class="step-content">
+                <strong>Create a kind cluster with port mappings:</strong>
+                <div class="code-block" style="margin-top: 8px;">
+                  <div class="code-body">
+<span class="prompt">$</span> <span class="cmd">kind create cluster --config=- <<EOF</span>
+<span class="key">kind</span>: <span class="value">Cluster</span>
+<span class="key">apiVersion</span>: <span class="value">kind.x-k8s.io/v1alpha4</span>
+<span class="key">nodes</span>:
+- <span class="key">role</span>: <span class="value">control-plane</span>
+  <span class="key">kubeadmConfigPatches</span>:
+  - |
+    <span class="key">kind</span>: <span class="value">InitConfiguration</span>
+<span class="cmd">EOF</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="handson-step">
+              <div class="step-content">
+                <strong>Install the nginx Ingress controller:</strong>
+                <div class="code-block" style="margin-top: 8px;">
+                  <div class="code-body">
+<span class="prompt">$</span> <span class="cmd">kubectl apply -f https://raw.githubusercontent.com/</span>
+  <span class="cmd">kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="handson-step">
+              <div class="step-content">
+                <strong>Wait for the controller to be ready:</strong>
+                <div class="code-block" style="margin-top: 8px;">
+                  <div class="code-body">
+<span class="prompt">$</span> <span class="cmd">kubectl wait --namespace ingress-nginx \</span>
+  <span class="cmd">--for=condition=ready pod \</span>
+  <span class="cmd">--selector=app.kubernetes.io/component=controller \</span>
+  <span class="cmd">--timeout=90s</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <h2>Knowledge Check</h2>
+
+      <div class="exercise-card">
+        <div class="exercise-header">
+          <span class="exercise-badge badge-quiz">Quiz</span>
+          <span class="exercise-title">Test Your Understanding</span>
+          <span class="exercise-num">Q1 of 8</span>
+        </div>
+        <div class="exercise-body">
+          <div class="quiz-q">What happens if you create an Ingress resource without an IngressClass?</div>
+          <div class="quiz-options">
+            <div class="quiz-option" onclick="this.classList.add('wrong')">
+              <span class="letter">A</span> The Ingress is rejected by the API server
+            </div>
+            <div class="quiz-option" onclick="this.classList.add('correct')">
+              <span class="letter">B</span> It uses the default IngressClass (if one is marked as default)
+            </div>
+            <div class="quiz-option" onclick="this.classList.add('wrong')">
+              <span class="letter">C</span> It creates its own nginx controller automatically
+            </div>
+            <div class="quiz-option" onclick="this.classList.add('wrong')">
+              <span class="letter">D</span> The Ingress is created but never reconciled
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="exercise-card">
+        <div class="exercise-header">
+          <span class="exercise-badge badge-yaml">YAML Challenge</span>
+          <span class="exercise-title">Complete the TLS Ingress</span>
+          <span class="exercise-num">Q2 of 8</span>
+        </div>
+        <div class="exercise-body">
+          <p style="font-size: 14px; color: var(--gray-600); margin-bottom: 12px;">Fill in the blanks to configure TLS termination for this Ingress resource:</p>
+          <div class="yaml-editor">
+<span class="key">apiVersion</span>: networking.k8s.io/v1
+<span class="key">kind</span>: Ingress
+<span class="key">spec</span>:
+  <span class="key">tls</span>:
+  - <span class="key">hosts</span>:
+    - <span class="yaml-blank" contenteditable="true" onfocus="this.textContent=''" onblur="if(!this.textContent.trim())this.textContent='?'">?</span>
+    <span class="key">secretName</span>: <span class="yaml-blank" contenteditable="true" onfocus="this.textContent=''" onblur="if(!this.textContent.trim())this.textContent='?'">?</span>
+  <span class="key">rules</span>:
+  - <span class="key">host</span>: app.example.com
+    <span class="key">http</span>:
+      <span class="key">paths</span>:
+      - <span class="key">path</span>: /
+        <span class="key">pathType</span>: <span class="yaml-blank" contenteditable="true" onfocus="this.textContent=''" onblur="if(!this.textContent.trim())this.textContent='?'">?</span>
+          </div>
+          <div class="callout c-info" style="margin-top: 14px;">
+            <div class="callout-header">&#128161; Hint</div>
+            <div class="callout-body">The host in the TLS section must match the host in the rules. The secretName refers to a Kubernetes Secret of type <code>kubernetes.io/tls</code>.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="exercise-card">
+        <div class="exercise-header">
+          <span class="exercise-badge badge-debug">Debug Scenario</span>
+          <span class="exercise-title">Why is My Ingress Returning 404?</span>
+          <span class="exercise-num">Q5 of 8</span>
+        </div>
+        <div class="exercise-body">
+          <div class="callout c-danger" style="margin-top: 0;">
+            <div class="callout-header">&#128680; Incident</div>
+            <div class="callout-body">
+              A developer reports that <code>https://api.prod.example.com/v2/users</code> returns 404,
+              but <code>https://api.prod.example.com/v1/users</code> works fine. Both backends are healthy.
+              The Ingress uses <code>pathType: Exact</code>. What's wrong?
+            </div>
+          </div>
+          <div class="quiz-options" style="margin-top: 16px;">
+            <div class="quiz-option" onclick="this.classList.add('wrong')">
+              <span class="letter">A</span> The /v2 backend service doesn't exist
+            </div>
+            <div class="quiz-option" onclick="this.classList.add('correct')">
+              <span class="letter">B</span> <code>pathType: Exact</code> requires <code>/v2/users</code> exactly &mdash; the path <code>/v2/users</code> must be defined, not just <code>/v2</code>
+            </div>
+            <div class="quiz-option" onclick="this.classList.add('wrong')">
+              <span class="letter">C</span> TLS is blocking the /v2 path
+            </div>
+            <div class="quiz-option" onclick="this.classList.add('wrong')">
+              <span class="letter">D</span> The Ingress controller needs to be restarted after adding new paths
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Prev/Next -->
+      <div class="prev-next">
+        <a class="pn-link" href="#">
+          <div class="pn-label">&#8592; Previous</div>
+          <div class="pn-title">Module 3.3: DNS & CoreDNS</div>
+        </a>
+        <a class="pn-link pn-next" href="#">
+          <div class="pn-label">Next &#8594;</div>
+          <div class="pn-title">Module 3.5: Gateway API</div>
+        </a>
+      </div>
+    </div>
+
+    <!-- TOC -->
+    <div class="toc-panel">
+      <div class="toc-title">On this page</div>
+      <a class="toc-link active" href="#">Why This Module Matters</a>
+      <a class="toc-link" href="#">Part 1: Ingress Architecture</a>
+      <a class="toc-link sub" href="#">1.1 How Ingress Works</a>
+      <a class="toc-link sub" href="#">1.2 Ingress vs Other Options</a>
+      <a class="toc-link sub" href="#">1.3 Components Needed</a>
+      <a class="toc-link" href="#">Part 2: Ingress Controllers</a>
+      <a class="toc-link sub" href="#">2.1 Popular Controllers</a>
+      <a class="toc-link sub" href="#">2.2 Installing nginx</a>
+      <a class="toc-link" href="#">Part 3: Creating Ingress Resources</a>
+      <a class="toc-link" href="#">Part 4: TLS/HTTPS</a>
+      <a class="toc-link" href="#">Part 5: Annotations</a>
+      <a class="toc-link" href="#">War Story</a>
+      <a class="toc-link" href="#">Hands-On Exercise</a>
+      <a class="toc-link" href="#">Knowledge Check</a>
+    </div>
+  </div>
+
+  <div class="footer">
+    <p>KubeDojo &mdash; Free, comprehensive cloud native education. <a href="#">GitHub</a> &middot; <a href="#">Contributing</a></p>
+  </div>
+</div>
+
+<script>
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  document.querySelectorAll('.page-switch button').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+// YAML blank interaction
+document.querySelectorAll('.yaml-blank').forEach(el => {
+  el.addEventListener('input', function() {
+    const val = this.textContent.trim().toLowerCase();
+    if (val === 'app.example.com' || val === 'tls-secret' || val === 'prefix') {
+      this.classList.add('filled');
+    } else {
+      this.classList.remove('filled');
+    }
+  });
+});
+</script>
+
+</body>
+</html>
