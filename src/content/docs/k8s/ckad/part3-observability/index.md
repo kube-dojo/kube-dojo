@@ -2,6 +2,7 @@
 title: "Part 3: Observability"
 sidebar:
   order: 1
+  label: "Part 3: Observability"
 ---
 
 Observe, monitor, and debug applications running in Kubernetes using probes, logging, metrics, and API deprecation handling.

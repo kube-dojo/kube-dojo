@@ -2,6 +2,7 @@
 title: "Part 2: Workloads & Scheduling"
 sidebar:
   order: 1
+  label: "Part 2: Workloads & Scheduling"
 ---
 ## Modules
 

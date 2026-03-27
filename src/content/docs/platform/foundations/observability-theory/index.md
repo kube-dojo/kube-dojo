@@ -2,6 +2,7 @@
 title: "Observability Theory"
 sidebar:
   order: 1
+  label: "Observability Theory"
 ---
 > **Foundation Track** | 4 Modules | ~2 hours total
 

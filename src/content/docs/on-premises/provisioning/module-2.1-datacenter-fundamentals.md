@@ -293,7 +293,7 @@ curl -k -u admin:password -X PATCH \
 |-----------|-------|-------------|----------|
 | Cat6 (copper) | 10GbE | 55m | Short runs, management |
 | Cat6a (copper) | 10GbE | 100m | In-rack and short between-rack |
-| OM4 MMF (fiber) | 100GbE | 150m | Between-rack, between-row |
+| OM4 MMF (fiber) | 100GbE | 100m | Between-rack, between-row |
 | OS2 SMF (fiber) | 100GbE+ | 10km+ | Between buildings, to WAN |
 | DAC (copper twinax) | 25/100GbE | 5m | Within-rack switch-to-server |
 
@@ -321,7 +321,7 @@ curl -k -u admin:password -X PATCH \
 
 - **UPS batteries last 3-5 years and are the most common point of failure** in power systems. A UPS that has not had a battery replacement in 4+ years may provide only 30 seconds of backup instead of the rated 10-15 minutes. Test your UPS under load annually.
 
-- **Datacenter fires are extremely rare but devastating.** The OVHcloud Strasbourg fire (March 2021) destroyed an entire datacenter and partially damaged another. 3.6 million websites went offline. The cause: a faulty UPS caught fire during a maintenance period when fire suppression was disabled.
+- **Datacenter fires are extremely rare but devastating.** The OVHcloud Strasbourg fire (March 2021) destroyed an entire datacenter and partially damaged another. 3.6 million websites went offline. The cause: a faulty UPS caught fire, and the building lacked an automatic fire extinguishing system entirely — it was not temporarily disabled, it simply did not exist.
 
 - **The Redfish API is replacing IPMI.** IPMI was designed in 1998 and has known security vulnerabilities (including cleartext password transmission). Redfish uses HTTPS, JSON, and modern authentication. If you are buying new servers, insist on Redfish support.
 

@@ -22,3 +22,5 @@ Applied practices, mental models, and best practices for each operational domain
 | 10 | [AIOps](aiops/) | AI-driven operations |
 | 11 | [AI Infrastructure](ai-infrastructure/) | GPU scheduling, distributed training, LLM serving |
 | 12 | [Data Engineering](data-engineering/) | Running data infrastructure on Kubernetes |
+| 13 | [Kubernetes Networking](networking/) | CNI, network policies, service mesh, ingress, multi-cluster |
+| 14 | [Platform Leadership](leadership/) | Team building, developer experience, adoption, scaling |

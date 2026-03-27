@@ -126,7 +126,7 @@ kind: BGPPeer
 metadata:
   name: peer-with-route-reflectors
 spec:
-  nodeSelector: "!route-reflector == 'true'"
+  nodeSelector: "route-reflector != 'true'"
   peerSelector: route-reflector == 'true'
 
 ---
@@ -431,7 +431,7 @@ When should you use eBGP between K8s nodes and the ToR switch instead of iBGP?
 
 ## Hands-On Exercise: Configure Calico BGP Peering
 
-**Task**: Set up Calico BGP peering in a local kind cluster with a simulated ToR router.
+**Task**: Set up Calico BGP configuration in a local kind cluster — disable the node-to-node mesh and configure route reflectors.
 
 ```bash
 # Create a kind cluster with Calico
@@ -474,14 +474,14 @@ kubectl exec -n kube-system calicoctl -- /calicoctl get bgpConfiguration -o yaml
 # Check node BGP status
 kubectl exec -n kube-system calicoctl -- /calicoctl node status
 
-# Create a route reflector configuration
-kubectl exec -n kube-system calicoctl -- /calicoctl apply -f - <<EOF
+# Disable node-to-node mesh and configure BGP
+kubectl exec -i -n kube-system calicoctl -- /calicoctl apply -f - <<EOF
 apiVersion: projectcalico.org/v3
 kind: BGPConfiguration
 metadata:
   name: default
 spec:
-  nodeToNodeMeshEnabled: true
+  nodeToNodeMeshEnabled: false
   asNumber: 64512
   serviceClusterIPs:
     - cidr: 10.96.0.0/12
@@ -493,10 +493,9 @@ kubectl exec -n kube-system calicoctl -- /calicoctl get bgpPeer -o wide
 
 ### Success Criteria
 - [ ] Kind cluster with Calico CNI running
-- [ ] BGP configuration applied
-- [ ] Node-to-node BGP sessions established
-- [ ] Pod CIDRs visible in BGP routing table
-- [ ] Service CIDR advertised
+- [ ] BGP configuration applied with node-to-node mesh disabled
+- [ ] Service CIDR (10.96.0.0/12) configured for advertisement
+- [ ] `calicoctl get bgpConfiguration` shows the expected settings
 
 ---
 

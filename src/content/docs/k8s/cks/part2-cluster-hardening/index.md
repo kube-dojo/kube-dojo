@@ -2,6 +2,7 @@
 title: "Part 2: Cluster Hardening"
 sidebar:
   order: 1
+  label: "Part 2: Cluster Hardening"
 ---
 
 Harden Kubernetes clusters with RBAC, ServiceAccount security, API server configuration, upgrades, and API access restrictions.

@@ -2,6 +2,7 @@
 title: "FinOps"
 sidebar:
   order: 1
+  label: "FinOps"
 ---
 **Make cloud spending a first-class engineering concern.**
 

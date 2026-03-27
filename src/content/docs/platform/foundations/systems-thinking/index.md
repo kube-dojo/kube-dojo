@@ -2,6 +2,7 @@
 title: "Systems Thinking"
 sidebar:
   order: 1
+  label: "Systems Thinking"
 ---
 > **Foundation Track** | 4 Modules | ~2 hours total
 

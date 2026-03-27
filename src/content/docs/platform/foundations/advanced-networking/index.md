@@ -2,6 +2,7 @@
 title: "Advanced Networking"
 sidebar:
   order: 1
+  label: "Advanced Networking"
 ---
 **Networking beyond Kubernetes — what happens when traffic hits the real world.**
 

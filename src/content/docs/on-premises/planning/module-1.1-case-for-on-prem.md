@@ -131,11 +131,11 @@ Cloud pricing is linear. On-premises cost is mostly fixed.
 | Compute | ~$50K/month (m6i.2xlarge) | ~$400K upfront / 36mo = $11K/mo |
 | Storage | ~$15K/month (gp3 + S3) | ~$80K upfront / 36mo = $2.2K/mo |
 | Networking | ~$8K/month (data transfer) | ~$50K upfront / 36mo = $1.4K/mo |
-| Managed K8s | ~$2.4K/month (EKS) | $0 (self-managed) |
+| Managed K8s | ~$73/month (EKS, 1 cluster) | $0 (self-managed) |
 | Staffing | 2 engineers (~$30K/mo) | 3-4 engineers (~$50K/mo) |
 | Facility | $0 | ~$8K/mo (colo, power, cooling) |
-| **Monthly total** | **~$105K** | **~$73K** |
-| **3-year total** | **~$3.8M** | **~$2.6M + $530K upfront = $3.1M** |
+| **Monthly total** | **~$103K** | **~$73K** |
+| **3-year total** | **~$3.7M** | **~$2.6M** (includes $530K hardware amortized above) |
 
 These numbers are illustrative — your mileage will vary dramatically based on region, workload, and negotiated cloud discounts. The point is: **at scale, on-prem is almost always cheaper**. The question is whether the operational complexity is worth the savings.
 
@@ -232,7 +232,7 @@ Use this framework to evaluate whether on-premises makes sense for your organiza
 
 ## Did You Know?
 
-- **Dropbox saved $75 million over two years** by moving from AWS to on-premises infrastructure in 2016. They built custom servers ("Diskotech" for storage, "Edgerouter" for networking) and reduced their storage cost per GB by 50%. As of 2024, they run one of the largest private clouds in the world.
+- **Dropbox saved $75 million over two years** by moving from AWS to on-premises infrastructure in 2016. They built custom servers ("Diskotech" for storage, a custom "Edge Network" proxy stack for networking) and reduced their storage cost per GB by 50%. As of 2024, they run one of the largest private clouds in the world.
 
 - **Apple runs one of the largest on-premises Kubernetes deployments**, managing tens of thousands of nodes across multiple datacenters. Their internal platform team built custom tooling for bare metal provisioning, and they contribute to several CNCF projects.
 
@@ -267,9 +267,9 @@ Your company runs 30 nodes on AWS and spends $45K/month. A vendor quotes $200K f
 
 **Probably not.** The math:
 - Cloud: $45K/month x 36 months = $1.62M
-- On-prem: $200K hardware + ~$15K/month operations (staffing, colo, power) x 36 = $200K + $540K = $740K
+- On-prem: $200K hardware + ~$15K/month operations (colo, power, maintenance) x 36 = $200K + $540K = $740K
 
-The on-prem TCO looks cheaper ($740K vs $1.62M), but 30 nodes is below the typical breakeven for operational complexity. You need at least 2-3 infrastructure engineers ($300K-$450K/year) who could instead be building product. At 30 nodes, the staffing cost alone may exceed the cloud savings. Additionally, cloud pricing at this scale can often be negotiated 30-40% lower with committed use discounts.
+The on-prem TCO looks cheaper ($740K vs $1.62M), but this does not include staffing. You need at least 2-3 infrastructure engineers ($300K-$450K/year) who could instead be building product. Adding staffing brings the on-prem 3-year cost to $1.6M-$2.1M — exceeding or matching the cloud cost. At 30 nodes, the staffing cost alone erases the savings. Additionally, cloud pricing at this scale can often be negotiated 30-40% lower with committed use discounts.
 
 **The right answer depends on**: Do you have the team? Is this growing to 100+ nodes? Are there regulatory requirements?
 </details>

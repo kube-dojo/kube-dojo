@@ -2,6 +2,7 @@
 title: "Chaos Engineering"
 sidebar:
   order: 1
+  label: "Chaos Engineering"
 ---
 **Break things on purpose — before they break on their own.**
 

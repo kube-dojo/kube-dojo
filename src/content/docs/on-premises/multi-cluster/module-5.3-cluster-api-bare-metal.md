@@ -219,6 +219,9 @@ spec:
     matchLabels:
       cluster.x-k8s.io/cluster-name: production
   template:
+    metadata:
+      labels:
+        cluster.x-k8s.io/cluster-name: production
     spec:
       clusterName: production
       version: v1.32.0
@@ -393,7 +396,7 @@ You have 20 bare-metal servers and need to run 3 Kubernetes clusters (dev: 3 nod
 
 Allocation:
 - Dev cluster: 1 CP + 2 workers = 3 nodes
-- Staging cluster: 2 CP + 3 workers = 5 nodes (2 CP is not ideal, but acceptable for staging)
+- Staging cluster: 1 CP + 4 workers = 5 nodes (control plane nodes must always be an odd number -- 1 or 3 -- to maintain etcd quorum; 2 CP nodes are worse than 1 because a single failure loses quorum)
 - Production cluster: 3 CP + 6 workers = 9 nodes
 - Total allocated: 17 nodes
 - Spare: 3 nodes (15% of total)
@@ -542,7 +545,7 @@ clusterctl generate cluster dev-cluster \
 kubectl apply -f dev-cluster.yaml
 
 # Watch provisioning and get kubeconfig
-kubectl get cluster,machines -A --watch
+kubectl get cluster,machines -A
 kubectl wait cluster/dev-cluster --for=condition=Ready --timeout=300s
 clusterctl get kubeconfig dev-cluster > dev-cluster.kubeconfig
 

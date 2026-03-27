@@ -2,6 +2,7 @@
 title: "Security Principles"
 sidebar:
   order: 1
+  label: "Security Principles"
 ---
 > **Foundation Track** | 4 Modules | ~2 hours total
 

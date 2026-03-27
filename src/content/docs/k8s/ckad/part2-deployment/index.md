@@ -2,6 +2,7 @@
 title: "Part 2: Deployment"
 sidebar:
   order: 1
+  label: "Part 2: Deployment"
 ---
 
 Master application deployment techniques including Deployments, Helm, Kustomize, and rolling update strategies.

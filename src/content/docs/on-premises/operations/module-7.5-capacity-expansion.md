@@ -93,6 +93,14 @@ while IFS=, read -r HOSTNAME BMC_IP MGMT_IP; do
       --discovery-token-ca-cert-hash sha256:${CA_CERT_HASH}
 REMOTE_EOF
 
+  # Wait for the node to register with the API server
+  # (kubeadm join returns before the Node object is fully created)
+  echo "Waiting for ${HOSTNAME} to register..."
+  until kubectl get node "$HOSTNAME" &>/dev/null; do
+    sleep 5
+  done
+  kubectl wait --for=condition=Ready "node/$HOSTNAME" --timeout=120s
+
   # Label the node from a control plane
   echo "Labeling ${HOSTNAME}..."
   kubectl label node "$HOSTNAME" \
@@ -302,10 +310,22 @@ NODE="$1"
 echo "=== Pre-decommission checks for ${NODE} ==="
 
 # Check 1: Will remaining capacity handle the load?
-TOTAL_CPU=$(kubectl get nodes -o json | jq '[.items[].status.allocatable.cpu | rtrimstr("m") | tonumber] | add')
-NODE_CPU=$(kubectl get node "$NODE" -o json | jq '.status.allocatable.cpu | rtrimstr("m") | tonumber')
+# Normalize CPU values to millicores — K8s returns either "4" (cores) or "3900m" (millicores)
+TOTAL_CPU=$(kubectl get nodes -o json | jq '
+  [.items[].status.allocatable.cpu |
+    if endswith("m") then rtrimstr("m") | tonumber
+    else tonumber * 1000 end
+  ] | add')
+NODE_CPU=$(kubectl get node "$NODE" -o json | jq '
+  .status.allocatable.cpu |
+    if endswith("m") then rtrimstr("m") | tonumber
+    else tonumber * 1000 end')
 REMAINING_CPU=$((TOTAL_CPU - NODE_CPU))
-REQUESTED_CPU=$(kubectl get pods -A -o json | jq '[.items[].spec.containers[].resources.requests.cpu // "0" | rtrimstr("m") | tonumber] | add')
+REQUESTED_CPU=$(kubectl get pods -A -o json | jq '
+  [.items[].spec.containers[].resources.requests.cpu // "0" |
+    if endswith("m") then rtrimstr("m") | tonumber
+    else tonumber * 1000 end
+  ] | add')
 
 echo "Total allocatable CPU: ${TOTAL_CPU}m"
 echo "This node CPU: ${NODE_CPU}m"
@@ -515,19 +535,29 @@ Actually, the topology spread constraint evaluates where scheduling the new pod 
 **The problem**: With `whenUnsatisfiable: DoNotSchedule`, no placement satisfies maxSkew=1 because the new rack starts at 0.
 
 **Fix options:**
-1. Temporarily relax the constraint:
+1. **Use `matchLabelKeys` (recommended, K8s 1.27+):** Add `matchLabelKeys: ["pod-template-hash"]` to the topology spread constraint. This makes the skew calculation scoped to only the current ReplicaSet, so a `rollout restart` will redistribute pods evenly because it only counts new pods:
+   ```yaml
+   topologySpreadConstraints:
+     - maxSkew: 1
+       topologyKey: topology.kubernetes.io/zone
+       whenUnsatisfiable: DoNotSchedule
+       matchLabelKeys:
+         - pod-template-hash
+       labelSelector:
+         matchLabels:
+           app: critical-service
+   ```
+   Then run `kubectl rollout restart deployment critical-service` to rebalance across all 4 racks.
+2. Temporarily relax the constraint:
    ```yaml
    maxSkew: 2  # allow wider skew during expansion
    ```
-2. Use `whenUnsatisfiable: ScheduleAnyway` (soft constraint)
-3. Scale up the deployment so pods can be placed on rack-d, then scale back down
-4. Manually trigger a rollout:
-   ```bash
-   kubectl rollout restart deployment critical-service
-   # This reschedules all pods, distributing across 4 racks
-   ```
+3. Use `whenUnsatisfiable: ScheduleAnyway` (soft constraint)
+4. Scale up the deployment so pods can be placed on rack-d, then scale back down
 
-After rebalancing: 9 replicas across 4 racks = 3,2,2,2 or 2,3,2,2 (skew=1, satisfied).
+**Note:** A plain `rollout restart` without `matchLabelKeys` will NOT fix this. The default `labelSelector` matches pods from both old and new ReplicaSets (they share the `app: critical-service` label), so the skew calculation still sees the old pod distribution and new pods cannot schedule on rack-d.
+
+After rebalancing with `matchLabelKeys`: 9 replicas across 4 racks = 3,2,2,2 or 2,3,2,2 (skew=1, satisfied).
 </details>
 
 ### Question 3

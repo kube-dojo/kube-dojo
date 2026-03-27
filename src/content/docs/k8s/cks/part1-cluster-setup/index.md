@@ -2,6 +2,7 @@
 title: "Part 1: Cluster Setup"
 sidebar:
   order: 1
+  label: "Part 1: Cluster Setup"
 ---
 
 Secure cluster setup including network policies, CIS benchmarks, ingress hardening, and node metadata protection.

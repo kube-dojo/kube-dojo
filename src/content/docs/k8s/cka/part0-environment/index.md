@@ -2,6 +2,7 @@
 title: "Part 0: Environment Setup"
 sidebar:
   order: 1
+  label: "Part 0: Environment Setup"
 ---
 
 Set up your exam environment, master shell and editor skills, learn to navigate the Kubernetes docs, and develop a winning exam strategy.

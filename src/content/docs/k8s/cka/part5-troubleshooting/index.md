@@ -2,6 +2,7 @@
 title: "Part 5: Troubleshooting"
 sidebar:
   order: 1
+  label: "Part 5: Troubleshooting"
 ---
 ## Modules
 

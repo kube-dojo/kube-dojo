@@ -13,7 +13,7 @@ sidebar:
 
 ## Why This Module Matters
 
-In March 2022, a media streaming company deployed a 60-node Kubernetes cluster on bare metal in their colocation facility. They connected all servers to a single pair of 48-port top-of-rack switches. For the first three months, everything worked. Then they deployed a real-time video transcoding pipeline that generated 8 Gbps of east-west traffic between pods. The ToR switches — rated for 48x 10GbE ports with a 480 Gbps switching fabric — became the bottleneck. The uplinks to the core switches were only 2x 40GbE, creating a 5:1 oversubscription ratio. During peak transcoding, packet drops hit 3%, causing TCP retransmissions that increased video processing latency from 200ms to 4 seconds. Viewers saw buffering. Revenue dropped $12,000/hour during prime time.
+In March 2022, a media streaming company deployed a 60-node Kubernetes cluster on bare metal in their colocation facility. They connected all servers to a single pair of 48-port top-of-rack switches. For the first three months, everything worked. Then they deployed a real-time video transcoding pipeline that generated 8 Gbps of east-west traffic between pods. The ToR switches — rated for 48x 10GbE ports with a 480 Gbps switching fabric — became the bottleneck. The uplinks to the core switches were only 2x 40GbE, creating a 6:1 oversubscription ratio. During peak transcoding, packet drops hit 3%, causing TCP retransmissions that increased video processing latency from 200ms to 4 seconds. Viewers saw buffering. Revenue dropped $12,000/hour during prime time.
 
 The fix required adding spine switches, upgrading to 25GbE server connections, and implementing a proper leaf-spine topology with ECMP (Equal-Cost Multi-Path) routing. The migration took 3 weeks of weekend maintenance windows. Total cost: $85,000 in new switches plus $40,000 in engineering time. The CTO's postmortem note: "We designed our network for the workload we had, not the workload we would have in 6 months."
 
@@ -166,6 +166,7 @@ For Kubernetes east-west heavy workloads:
 │  Linux bond setup:                                           │
 │  # /etc/netplan/01-bond.yaml (Ubuntu)                       │
 │  network:                                                    │
+│    version: 2                                                │
 │    bonds:                                                    │
 │      bond0:                                                  │
 │        interfaces: [eno1, eno2]                             │
@@ -381,7 +382,7 @@ spec:
 
 ## Did You Know?
 
-- **Facebook's datacenter fabric uses a 6-plane spine-leaf topology** with custom switches running FBOSS (Facebook Open Switching System). Each fabric plane has independent failure domains, so a spine switch failure only affects 1/6th of inter-rack bandwidth.
+- **Meta's datacenter fabric uses a 4-plane spine-leaf topology** (F4 architecture) with custom switches running FBOSS (Facebook Open Switching System). Each fabric plane has independent failure domains, so a spine switch failure only affects 1/4th of inter-rack bandwidth. Newer designs scale to 16-plane (F16) for even larger fabrics.
 
 - **The term "Top of Rack" is becoming misleading** as many modern deployments use "End of Row" (EoR) or "Middle of Row" (MoR) switch placements. But "ToR" persists in the industry vocabulary regardless of physical placement.
 
@@ -561,7 +562,7 @@ Leaf switches peer with both spines
 
 ```
 25 nodes per rack × 25 Gbps = 625 Gbps intra-rack
-6 × 100 Gbps = 600 Gbps to spine (2:1 oversubscription)
+6 × 100 Gbps = 600 Gbps to spine (effective ~1:1 for connected hosts; 2:1 at full switch capacity)
 Total spine bandwidth: 2 × 32 × 100G = 6,400 Gbps
 ```
 

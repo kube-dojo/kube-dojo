@@ -2,6 +2,7 @@
 title: "Part 0: Environment"
 sidebar:
   order: 1
+  label: "Part 0: Environment"
 ---
 
 Prepare your exam environment, understand the CKAD format, and establish an efficient developer workflow before diving into domain-specific content.

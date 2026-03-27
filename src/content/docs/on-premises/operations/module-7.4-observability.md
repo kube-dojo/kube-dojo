@@ -109,17 +109,29 @@ scrape_configs:
         action: keep
 
   # IPMI exporter (hardware metrics)
+  # BMCs speak IPMI, not HTTP — use the multi-target exporter pattern
+  # where Prometheus scrapes the ipmi-exporter and passes the BMC address
+  # as a URL parameter (similar to blackbox-exporter)
   - job_name: ipmi
     static_configs:
       - targets:
-          - bmc-worker-01:9290
-          - bmc-worker-02:9290
-          # ... all BMC addresses
+          - bmc-worker-01
+          - bmc-worker-02
+          # ... all BMC addresses (no port — these are IPMI targets)
     metrics_path: /ipmi
     params:
       module: [default]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: ipmi-exporter:9290   # the actual exporter service
 
-  # SMART disk metrics
+  # SMART disk metrics (via standalone smartctl_exporter)
+  # Note: if using Node Exporter's textfile collector for SMART data,
+  # remove this job — the metrics are already scraped by the node-exporter job above
   - job_name: smartmon
     kubernetes_sd_configs:
       - role: node
@@ -127,7 +139,7 @@ scrape_configs:
       - source_labels: [__address__]
         regex: (.+):(.+)
         target_label: __address__
-        replacement: $1:9100
+        replacement: $1:9633
     metrics_path: /metrics
 ```
 
@@ -384,15 +396,16 @@ Your Prometheus instance is ingesting 500,000 samples per second with 30-second 
 **Architecture: Prometheus HA pair + Thanos with MinIO object storage.**
 
 **Sizing calculation:**
-- 500,000 samples/sec * 2 bytes/sample (compressed) = ~1 MB/s
-- Per day: 1 MB/s * 86,400 = ~84 GB/day raw
-- With Prometheus compression: ~40 GB/day
-- 48-hour local retention: 80 GB per Prometheus instance
+- 500,000 samples/sec * 2 bytes/sample (TSDB compressed) = ~1 MB/s
+- Per day: 1 MB/s * 86,400 = ~84 GB/day
+  (The 2 bytes/sample figure already accounts for Prometheus TSDB compression;
+  raw uncompressed samples are 16 bytes each)
+- 48-hour local retention: ~168 GB per Prometheus instance
 - 1 year in Thanos with downsampling:
-  - Raw (first 30 days): 40 GB * 30 = 1.2 TB
-  - 5-minute downsampled (30-365 days): ~200 GB
-  - 1-hour downsampled (optional, for very old data): ~30 GB
-  - Total object storage: ~1.5 TB
+  - Raw (first 30 days): 84 GB * 30 = ~2.5 TB
+  - 5-minute downsampled (30-365 days): ~400 GB
+  - 1-hour downsampled (optional, for very old data): ~60 GB
+  - Total object storage: ~3 TB
 
 **Architecture:**
 1. **2x Prometheus** (HA pair, same config, external_labels differ only by `replica`)
@@ -400,10 +413,10 @@ Your Prometheus instance is ingesting 500,000 samples per second with 30-second 
 3. **1x Thanos Query** (deduplicates HA pair, queries both local and store)
 4. **1x Thanos Store Gateway** (serves queries from MinIO)
 5. **1x Thanos Compactor** (downsamples: raw -> 5m -> 1h)
-6. **MinIO cluster** (4 nodes, erasure coding, 2 TB usable)
+6. **MinIO cluster** (4 nodes, erasure coding, 4 TB usable)
 
 **Why not just increase Prometheus retention?**
-- 1 year at 40 GB/day = 14.6 TB local disk -- expensive NVMe
+- 1 year at 84 GB/day = ~30 TB local disk -- expensive NVMe
 - Prometheus queries slow down with large TSDB
 - No HA: disk failure = data loss
 - MinIO with erasure coding is cheaper and fault-tolerant
@@ -581,6 +594,8 @@ helm install monitoring prometheus-community/kube-prometheus-stack \
    metadata:
      name: test-alert
      namespace: monitoring
+     labels:
+       release: monitoring    # Required for Prometheus Operator to discover this rule
    spec:
      groups:
        - name: test

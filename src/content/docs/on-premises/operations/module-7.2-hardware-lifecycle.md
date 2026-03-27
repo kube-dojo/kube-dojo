@@ -172,13 +172,14 @@ curl -sk -u admin:password \
 ### Staging a BIOS Update
 
 ```bash
-# Upload firmware image via Redfish (Dell iDRAC example)
+# Stage firmware via Redfish SimpleUpdate (Dell iDRAC example)
+# The BMC pulls the image from an HTTP server — host the firmware file
+# on an internal web server accessible from the BMC management network
 curl -sk -u admin:password \
   -X POST \
-  -H "Content-Type: application/octet-stream" \
-  --data-binary @BIOS_P4GKN_LN_2.19.1.bin \
+  -H "Content-Type: application/json" \
   https://bmc-worker-01.internal/redfish/v1/UpdateService/Actions/UpdateService.SimpleUpdate \
-  -d '{"ImageURI": "file:///tmp/BIOS_P4GKN_LN_2.19.1.bin",
+  -d '{"ImageURI": "http://internal-web-server/firmware/BIOS_P4GKN_LN_2.19.1.bin",
        "TransferProtocol": "HTTP",
        "@Redfish.OperationApplyTime": "OnReset"}'
 
@@ -243,20 +244,18 @@ ceph osd down osd.5
 ceph osd out osd.5
 
 # Step 4: Remove the OSD from the cluster
+# (purge removes the OSD from CRUSH, deletes its auth keys, and removes it from the map)
 ceph osd purge osd.5 --yes-i-really-mean-it
 
-# Step 5: Remove the OSD auth key
-ceph auth del osd.5
+# Step 5: Physically replace the disk (or wait for datacenter hands)
 
-# Step 6: Physically replace the disk (or wait for datacenter hands)
-
-# Step 7: Prepare the new disk
+# Step 6: Prepare the new disk
 ceph-volume lvm create --data /dev/sdc
 
-# Step 8: Unset noout to allow rebalancing
+# Step 7: Unset noout to allow rebalancing
 ceph osd unset noout
 
-# Step 9: Monitor rebalancing
+# Step 8: Monitor rebalancing
 ceph -w  # watch rebalancing progress
 ```
 
@@ -560,6 +559,10 @@ for DISK in /dev/sd{a..z}; do
 
   PENDING=$(smartctl -A "$DISK" 2>/dev/null | awk '/Current_Pending/ {print $10}' || echo 0)
   echo "smartmon_current_pending_sector{disk=\"${DEVICE}\"} ${PENDING:-0}"
+
+  # SSD wear leveling (Wear_Leveling_Count or Media_Wearout_Indicator)
+  WEAR=$(smartctl -A "$DISK" 2>/dev/null | awk '/Wear_Leveling_Count|Media_Wearout_Indicator/ {print $4}' || echo -1)
+  [ "$WEAR" != "-1" ] && echo "smartmon_wear_leveling_count_value{disk=\"${DEVICE}\"} ${WEAR}"
 done > "$OUTPUT"
 SMARTEOF
 chmod +x /tmp/smartmon-collector.sh

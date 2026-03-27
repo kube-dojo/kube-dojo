@@ -13,7 +13,7 @@ sidebar:
 
 ## Why This Module Matters
 
-In June 2023, a logistics company running an 80-node bare metal Kubernetes cluster experienced a cascade failure that started with a single faulty power supply. At 2:47 AM, worker-34's redundant PSU failed. The server continued on its remaining PSU. Nobody noticed because there was no hardware-level alerting. At 3:12 AM, the second PSU tripped due to a power surge on the same circuit. Worker-34 went offline. Kubernetes marked the node as `NotReady` after 40 seconds and began rescheduling pods -- but only after the default 5-minute `pod-eviction-timeout`. During those 5 minutes, 23 pods were unavailable.
+In June 2023, a logistics company running an 80-node bare metal Kubernetes cluster experienced a cascade failure that started with a single faulty power supply. At 2:47 AM, worker-34's redundant PSU failed. The server continued on its remaining PSU. Nobody noticed because there was no hardware-level alerting. At 3:12 AM, the second PSU tripped due to a power surge on the same circuit. Worker-34 went offline. Kubernetes marked the node as `NotReady` after 40 seconds and began rescheduling pods -- but only after the default 5-minute taint toleration expired. During those 5 minutes, 23 pods were unavailable.
 
 Then it got worse. Worker-34 hosted a Ceph OSD with 4TB of data. The OSD went down, triggering Ceph recovery across the remaining OSDs. The recovery I/O saturated the storage network on the same rack. Worker-33 and worker-35, sharing the same top-of-rack switch, experienced packet drops. Their kubelet heartbeats became intermittent. The control plane marked them as `NotReady` too. Now three nodes were degraded, and Ceph was trying to rebuild 4TB of data across already-stressed nodes.
 
@@ -92,7 +92,7 @@ spec:
             - /node-problem-detector
             - --logtostderr
             - --config.system-log-monitor=/config/kernel-monitor.json
-            - --config.system-log-monitor=/config/docker-monitor.json
+            - --config.system-log-monitor=/config/containerd-monitor.json
             - --config.custom-plugin-monitor=/config/health-checker-kubelet.json
           securityContext:
             privileged: true
@@ -375,17 +375,33 @@ ipmitool -I lanplus -H bmc-addr -U admin -P pass sdr type "Power Supply"
 
 Default Kubernetes eviction settings are tuned for cloud environments. On bare metal, you may want faster or slower eviction depending on the failure mode.
 
+Since Kubernetes 1.22, pod eviction on node failure uses taint-based eviction rather than the removed `--pod-eviction-timeout` flag. When a node becomes `NotReady`, the node lifecycle controller adds a `node.kubernetes.io/not-ready` taint. Pods are evicted when their toleration for this taint expires.
+
 ```bash
-# Default: kube-controller-manager
-#   --node-monitor-period=5s         (check node status every 5s)
-#   --node-monitor-grace-period=40s  (mark NotReady after 40s no heartbeat)
-#   --pod-eviction-timeout=5m0s      (evict pods after 5min NotReady)
+# Default behavior:
+#   kube-controller-manager:
+#     --node-monitor-period=5s         (check node status every 5s)
+#     --node-monitor-grace-period=40s  (mark NotReady after 40s no heartbeat)
+#
+#   kube-apiserver:
+#     --default-not-ready-toleration-seconds=300     (evict 5 min after NotReady taint)
+#     --default-unreachable-toleration-seconds=300   (evict 5 min after Unreachable taint)
 
 # For faster bare metal remediation:
+# Edit kube-apiserver manifest (/etc/kubernetes/manifests/kube-apiserver.yaml)
+#   --default-not-ready-toleration-seconds=120      (evict after 2 min instead of 5)
+#   --default-unreachable-toleration-seconds=120
+#
+# Or set tolerationSeconds directly on pods for fine-grained control:
+# spec.tolerations:
+#   - key: "node.kubernetes.io/not-ready"
+#     operator: "Exists"
+#     effect: "NoExecute"
+#     tolerationSeconds: 60   # evict after 60s for this specific workload
+
+# Also tune node-monitor-grace-period for faster NotReady detection:
 # Edit kube-controller-manager manifest
-# /etc/kubernetes/manifests/kube-controller-manager.yaml
-#   --pod-eviction-timeout=2m0s      (evict after 2 min instead of 5)
-#   --node-monitor-grace-period=30s  (mark NotReady after 30s)
+#   --node-monitor-grace-period=30s  (mark NotReady after 30s instead of 40s)
 ```
 
 ---
@@ -409,7 +425,7 @@ Default Kubernetes eviction settings are tuned for cloud environments. On bare m
 | No auto-remediation for NotReady nodes | 5+ min downtime waiting for human response at 3 AM | Deploy MHC or custom watchdog with BMC power cycle |
 | Remediating too aggressively | Cascade failure if root cause affects multiple nodes | Set maxUnhealthy in MHC (40% is a safe default) |
 | No spare nodes | Failed node reduces capacity until physically fixed | Keep 5% spare nodes cordoned and ready |
-| Default pod eviction timeout (5 min) | Pods on failed node unavailable for 5 minutes | Tune to 2 min for non-stateful workloads |
+| Default taint toleration (5 min) | Pods on failed node unavailable for 5 minutes | Tune `--default-not-ready-toleration-seconds` on kube-apiserver or set `tolerationSeconds` on pods |
 | Not monitoring ECC errors | DIMM failure is a surprise | Deploy edac monitoring, alert at >10 errors/day |
 | NIC flap not detected | Intermittent connectivity causes random pod failures | Monitor `node_network_carrier` changes |
 | No BMC connectivity | Cannot remotely power cycle failed nodes | Ensure BMC network is on a separate, reliable management VLAN |
@@ -425,11 +441,9 @@ Your MHC is configured with `maxUnhealthy: 40%` and you have 10 worker nodes. No
 <details>
 <summary>Answer</summary>
 
-**The MHC will NOT remediate node-07 and node-09.**
+**The MHC WILL remediate node-07 and node-09.**
 
-With 10 nodes and 3 unhealthy (30%), the MHC checks: is 30% >= 40%? No, so it could proceed. But node-03 is already being remediated. Let us count: 3 out of 10 nodes are unhealthy = 30%, still under the 40% threshold.
-
-However, the critical insight is: if nodes are failing in groups, it is likely a systemic issue (power, network, shared dependency). The MHC will check `maxUnhealthy` before each remediation:
+With 10 nodes and 3 unhealthy (30%), the MHC checks: is 30% >= 40%? No, so it proceeds. The MHC checks `maxUnhealthy` before each remediation:
 
 - Node-03: 1/10 unhealthy = 10% < 40% -> remediate
 - Node-07: 3/10 unhealthy = 30% < 40% -> remediate
@@ -546,7 +560,10 @@ systemctl restart kubelet
 # Option 3: Bootstrap with a new token
 # On a control plane node:
 kubeadm token create --print-join-command
-# On the failed node:
+# On the failed node — remove old PKI artifacts first, or kubeadm join
+# will fail pre-flight checks because existing files are detected:
+rm /etc/kubernetes/kubelet.conf
+rm /var/lib/kubelet/pki/kubelet-client-current.pem
 kubeadm join <api-server>:6443 --token <new-token> \
   --discovery-token-ca-cert-hash sha256:<hash>
 ```
@@ -598,8 +615,10 @@ EOF
 4. **Simulate a kernel issue:**
    ```bash
    # Exec into the worker node container (kind-specific)
+   # Write to /dev/kmsg so the message is picked up by journald and NPD
+   # (kind nodes use journald, not traditional syslog, so /var/log/kern.log may not exist)
    docker exec npd-lab-worker bash -c \
-     'echo "kernel: BUG: unable to handle kernel NULL pointer dereference" >> /var/log/kern.log'
+     'echo "kernel: BUG: unable to handle kernel NULL pointer dereference" > /dev/kmsg'
    ```
 
 5. **Observe NPD reporting the condition:**

@@ -2,6 +2,7 @@
 title: "Part 5: Services & Networking"
 sidebar:
   order: 1
+  label: "Part 5: Services & Networking"
 ---
 
 Expose applications and control network traffic using Services, Ingress resources, and NetworkPolicies.

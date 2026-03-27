@@ -81,8 +81,14 @@ kubectl get nodes -o custom-columns=\
 # Check available versions
 apt-cache madison kubeadm | head -5
 
+# Unhold packages to allow upgrade
+apt-mark unhold kubeadm
+
 # Upgrade kubeadm on the first control plane node
 apt-get update && apt-get install -y kubeadm=1.29.0-1.1
+
+# Hold kubeadm to prevent accidental upgrades
+apt-mark hold kubeadm
 
 # Verify the upgrade plan
 kubeadm upgrade plan
@@ -90,8 +96,10 @@ kubeadm upgrade plan
 # Apply the upgrade (first control plane only)
 kubeadm upgrade apply v1.29.0
 
-# Upgrade kubelet and kubectl
+# Unhold packages, upgrade kubelet and kubectl, then hold again
+apt-mark unhold kubelet kubectl
 apt-get install -y kubelet=1.29.0-1.1 kubectl=1.29.0-1.1
+apt-mark hold kubelet kubectl
 systemctl daemon-reload
 systemctl restart kubelet
 ```
@@ -100,12 +108,16 @@ systemctl restart kubelet
 
 ```bash
 # On each additional control plane node
+apt-mark unhold kubeadm
 apt-get update && apt-get install -y kubeadm=1.29.0-1.1
+apt-mark hold kubeadm
 
 # Use 'node' instead of 'apply' for additional control planes
 kubeadm upgrade node
 
+apt-mark unhold kubelet kubectl
 apt-get install -y kubelet=1.29.0-1.1 kubectl=1.29.0-1.1
+apt-mark hold kubelet kubectl
 systemctl daemon-reload
 systemctl restart kubelet
 ```
@@ -273,10 +285,14 @@ Rolling back a Kubernetes upgrade is harder than the upgrade itself. You must pl
 # You must manually downgrade packages
 
 # Step 1: Install the previous kubeadm version
+apt-mark unhold kubeadm
 apt-get install -y kubeadm=1.28.5-1.1
+apt-mark hold kubeadm
 
 # Step 2: Downgrade kubelet and kubectl
+apt-mark unhold kubelet kubectl
 apt-get install -y kubelet=1.28.5-1.1 kubectl=1.28.5-1.1
+apt-mark hold kubelet kubectl
 systemctl daemon-reload
 systemctl restart kubelet
 
@@ -287,9 +303,13 @@ ETCDCTL_API=3 etcdctl snapshot restore /backup/etcd-pre-upgrade.db \
   --name $(hostname) \
   --initial-cluster $(hostname)=https://$(hostname):2380
 
-# Step 4: Point etcd to the restored data
-# Edit /etc/kubernetes/manifests/etcd.yaml:
-#   --data-dir=/var/lib/etcd-restored
+# Step 4: Swap the etcd data directory
+mv /var/lib/etcd /var/lib/etcd-broken
+mv /var/lib/etcd-restored /var/lib/etcd
+
+# Step 5: Restore static pod manifests from pre-upgrade backup
+# Without this, the control plane containers will still run the newer images
+cp /backup/manifests-pre-upgrade/* /etc/kubernetes/manifests/
 ```
 
 ### The etcd Backup Rule
@@ -556,9 +576,9 @@ You need to roll back the control plane from 1.29 to 1.28 after discovering a cr
 
 ---
 
-## Hands-On Exercise: Plan and Execute a Cluster Upgrade
+## Hands-On Exercise: Practice Node Draining and PDB Enforcement
 
-**Task**: Using a kind cluster, practice the full kubeadm upgrade workflow.
+**Task**: Using a kind cluster, practice node draining with PodDisruptionBudgets. Note: kind nodes are containers with pre-baked binaries, so OS-level package upgrades (`apt-get install kubeadm`) cannot be performed. This exercise focuses on the drain/uncordon workflow that is critical during real upgrades.
 
 ### Setup
 

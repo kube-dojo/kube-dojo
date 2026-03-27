@@ -2,6 +2,7 @@
 title: "Part 3: Services & Networking"
 sidebar:
   order: 1
+  label: "Part 3: Services & Networking"
 ---
 ## Modules
 

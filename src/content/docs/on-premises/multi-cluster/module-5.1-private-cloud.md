@@ -124,7 +124,7 @@ metadata:
   name: vsphere-sc
 provisioner: csi.vsphere.vmware.com
 parameters:
-  StoragePolicyName: "vSAN Default Storage Policy"
+  storagepolicyname: "vSAN Default Storage Policy"
   datastoreurl: "ds:///vmfs/volumes/vsan-datastore/"
 reclaimPolicy: Delete
 allowVolumeExpansion: true
@@ -327,7 +327,7 @@ spec:
     http:
       url: "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img"
   pvc:
-    accessModes: ["ReadWriteMany"]
+    accessModes: ["ReadWriteOnce"]
     storageClassName: longhorn
     resources:
       requests:

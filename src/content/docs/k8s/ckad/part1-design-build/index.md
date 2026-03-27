@@ -2,6 +2,7 @@
 title: "Part 1: Design & Build"
 sidebar:
   order: 1
+  label: "Part 1: Design & Build"
 ---
 
 Learn to design and build cloud native applications using container images, Jobs, multi-container Pods, and persistent storage.

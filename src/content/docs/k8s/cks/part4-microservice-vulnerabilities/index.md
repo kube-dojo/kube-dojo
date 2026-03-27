@@ -2,6 +2,7 @@
 title: "Part 4: Microservice Vulnerabilities"
 sidebar:
   order: 1
+  label: "Part 4: Microservice Vulns"
 ---
 
 Minimize microservice vulnerabilities using security contexts, Pod Security Admission, secrets management, and runtime sandboxing.

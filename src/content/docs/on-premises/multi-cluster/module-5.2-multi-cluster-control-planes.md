@@ -362,7 +362,7 @@ Kamaji (shared etcd):
 
 - **vCluster was created by Loft Labs** and is one of the fastest-growing CNCF sandbox projects. It can create a fully functional Kubernetes cluster in under 5 seconds because it does not need to provision any infrastructure -- it just starts a pod with an API server and a syncer.
 
-- **Kamaji uses a single etcd cluster for multiple tenants by default**, with key-prefix isolation. Each tenant's data is stored under a unique prefix (e.g., `/tenant-alpha/`). This is similar to how managed Kubernetes services (EKS, GKE, AKS) share etcd infrastructure across customers, though those services do not expose this implementation detail.
+- **Kamaji uses a single etcd cluster for multiple tenants by default**, with key-prefix isolation. Each tenant's data is stored under a unique prefix (e.g., `/tenant-alpha/`). This contrasts with managed Kubernetes services (EKS, GKE, AKS), which provision dedicated etcd instances per tenant cluster to guarantee strict isolation and prevent noisy-neighbor failures.
 
 - **The Kubernetes control plane components are stateless** (except etcd). The API server, controller manager, and scheduler can be restarted at any time without data loss. This is what makes vCluster and Kamaji possible -- you can run these components as regular pods with restart policies.
 
@@ -449,7 +449,7 @@ Your Kamaji setup has 15 tenant control planes sharing a single etcd cluster. Th
 <details>
 <summary>Answer</summary>
 
-**Yes, you should be concerned.** etcd has a default space quota of 8 GB (configurable, but not recommended to exceed). At 4 GB with 15 tenants, you are at 50% capacity.
+**Yes, you should be concerned.** etcd has a default space quota of 2 GB (configurable up to a recommended maximum of 8 GB). At 4 GB with 15 tenants, you have already exceeded the default quota and would need an explicitly configured `--quota-backend-bytes` to reach this size.
 
 **Risks**:
 - If one tenant creates thousands of ConfigMaps or Secrets, they can push etcd past the quota

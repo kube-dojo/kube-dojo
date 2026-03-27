@@ -17,7 +17,7 @@ In September 2022, a logistics company ordered twelve Dell PowerEdge R750xs serv
 
 First, the SATA SSDs could not keep up with etcd's fsync requirements. etcd commit latency exceeded 100ms during peak hours, causing leader elections every few minutes. The API server became unreliable. They needed NVMe drives for the control plane nodes — a $24,000 additional investment and two weeks of downtime for hardware replacement.
 
-Second, the vehicle tracking pods needed 2GB of RAM each but only 0.5 vCPU — a 1:4 CPU-to-RAM ratio per pod. But their servers had a 1:2.7 ratio (96 vCPUs, 256GB RAM) — too CPU-heavy for this workload. They ran out of RAM with 40% of CPU unused. They had ordered compute-optimized servers for a memory-intensive workload. The remaining CPU capacity sat idle for the next three years.
+Second, the vehicle tracking pods needed 2GB of RAM each but only 0.5 vCPU — a 1:4 CPU-to-RAM ratio per pod. But their servers had a 1:2.7 ratio (96 vCPUs, 256GB RAM) — too CPU-heavy for this workload. They ran out of RAM with 33% of CPU unused. They had ordered compute-optimized servers for a memory-intensive workload. The remaining CPU capacity sat idle for the next three years.
 
 Hardware mistakes are expensive and permanent. You live with them for 3-5 years. This module teaches you how to size servers correctly the first time.
 
@@ -271,7 +271,8 @@ Different workloads need different server configurations:
 │  Example:                                                    │
 │    Workload: 200 pods, avg 1 CPU + 2GB RAM each             │
 │    Cluster needs: 200 CPU, 400GB RAM (+ 30% = 260 CPU, 520GB)│
-│    Server: 64 cores, 256GB RAM (allocatable: 62 cores, 252GB)│
+│    Server: 32-core (64 vCPUs with SMT), 256GB RAM            │
+│    Allocatable: 62 vCPUs, 252GB RAM                          │
 │    By CPU: 260/62 = 5 nodes                                 │
 │    By RAM: 520/252 = 3 nodes                                │
 │    Bottleneck: CPU (5 nodes)                                 │
@@ -385,13 +386,14 @@ You are building a Kubernetes cluster for a real-time analytics platform. The wo
 
 **Server selection:**
 Choose memory-optimized servers. For example:
-- Server: Dual AMD EPYC 9354 (32 cores each = 64 cores/server, 128 threads), 512GB DDR5
-- Allocatable: ~62 cores, ~508GB RAM
+- Server: Single AMD EPYC 9354 (32 cores, 64 threads), 512GB DDR5
+- Note: Kubernetes counts 1 CPU = 1 hyperthread (vCPU), so this server provides 64 allocatable vCPUs
+- Allocatable: ~62 vCPUs, ~508GB RAM
 - By CPU: 260 / 62 = 5 nodes
 - By RAM: 2,080 / 508 = 5 nodes (balanced!)
 - With N+2: 7 nodes
 
-This is a well-balanced configuration because the CPU:RAM ratio of the server (1:8) matches the workload profile. With SATA SSD servers (1:4 ratio), you would need 9+ nodes to satisfy RAM, wasting 50% of CPU.
+This is a well-balanced configuration because the vCPU:RAM ratio of the server (1:8) matches the workload profile. With compute-optimized servers (1:4 ratio, like the ones in the intro story), you would need 9+ nodes to satisfy RAM, wasting 50% of CPU.
 </details>
 
 ### Question 2
@@ -505,36 +507,37 @@ Monitoring: 15 x 512MB =   7.5 GB
 
 ```bash
 # CPU:RAM ratio of workload: 219:582 ≈ 1:2.7 (balanced/slightly memory-heavy)
-# Choose: Dual 32-core servers with 256GB RAM (1:4 ratio, slight RAM surplus)
+# Choose: Dual 32-core servers with 256GB RAM
+# Note: K8s sees 1 CPU = 1 hyperthread (vCPU), so dual 32-core with SMT = 128 vCPUs
 
 # Per node allocatable:
-# CPU: 64 cores - 2 system = 62 cores
+# CPU: 128 vCPUs - 2 system = 126 vCPUs
 # RAM: 256GB - 4GB system = 252GB
 
-# By CPU: 219 / 62 = 4 nodes (rounded up)
+# By CPU: 219 / 126 = 2 nodes (rounded up)
 # By RAM: 582 / 252 = 3 nodes (rounded up)
-# Bottleneck: CPU → need 4 worker nodes
+# Bottleneck: RAM → need 3 worker nodes
 
-# With N+2: 6 worker nodes
+# With N+2: 5 worker nodes
 # Plus 3 control plane nodes (dedicated, smaller)
 
-# TOTAL: 9 servers
+# TOTAL: 8 servers
 # - 3x CP: 8 cores, 32GB RAM, 200GB NVMe each
-# - 6x Worker: 64 cores, 256GB RAM, 2x 3.84TB NVMe each
+# - 5x Worker: dual 32-core (128 vCPUs), 256GB RAM, 2x 3.84TB NVMe each
 ```
 
 3. **Estimate costs:**
 
 ```bash
 # Control plane servers: 3 x ~$6K = $18K
-# Worker servers: 6 x ~$15K = $90K
+# Worker servers: 5 x ~$15K = $75K
 # Networking (2 ToR + cabling): ~$20K
-# Total hardware: ~$128K
+# Total hardware: ~$113K
 #
-# Compare to cloud (6 x m6i.8xlarge equivalent):
-# 6 x $1,228/mo = $7,368/mo = $88K/year = $265K over 3 years
-# On-prem 3-year TCO (incl ops): ~$128K + $150K ops = $278K
-# Roughly equal — on-prem wins at larger scale
+# Compare to cloud (5 x m6i.8xlarge equivalent):
+# 5 x $1,228/mo = $6,140/mo = $74K/year = $221K over 3 years
+# On-prem 3-year TCO (incl ops): ~$113K + $150K ops = $263K
+# On-prem slightly more expensive at this scale — wins at larger scale
 ```
 
 ### Success Criteria

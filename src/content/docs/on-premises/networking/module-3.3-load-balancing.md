@@ -326,18 +326,28 @@ backend k8s-api-backend
     server cp-02 10.0.20.11:6443 check check-ssl verify none
     server cp-03 10.0.20.12:6443 check check-ssl verify none
 
-# HTTP/HTTPS ingress
+# HTTP ingress
 frontend http-ingress
     bind *:80
-    bind *:443
-    default_backend ingress-backend
+    default_backend ingress-http-backend
 
-backend ingress-backend
+# HTTPS ingress (TLS passthrough to ingress controller)
+frontend https-ingress
+    bind *:443
+    default_backend ingress-https-backend
+
+backend ingress-http-backend
     balance roundrobin
     option httpchk GET /healthz
     server ingress-01 10.0.20.50:80 check
     server ingress-02 10.0.20.51:80 check
     server ingress-03 10.0.20.52:80 check
+
+backend ingress-https-backend
+    balance roundrobin
+    server ingress-01 10.0.20.50:443 check port 80
+    server ingress-02 10.0.20.51:443 check port 80
+    server ingress-03 10.0.20.52:443 check port 80
 ```
 
 ---
@@ -479,7 +489,7 @@ Your Kubernetes API server is at 10.0.20.10:6443 (single CP node). What happens 
 **Task**: Install MetalLB in a kind cluster and create a LoadBalancer service.
 
 ```bash
-# Create kind cluster with extra port mappings
+# Create kind cluster
 cat <<EOF | kind create cluster --config=-
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
@@ -529,7 +539,14 @@ kubectl get svc web
 # web    LoadBalancer   10.96.x.x      172.18.255.200   80:31234/TCP  5s
 
 # Test access
+# On Linux, you can curl the MetalLB IP directly:
 curl http://172.18.255.200
+
+# On macOS/Windows, the Docker network is not directly reachable from the host.
+# Use a container on the kind network instead:
+docker run --network kind --rm curlimages/curl http://172.18.255.200
+# Or exec into a kind node:
+docker exec kind-control-plane curl -s http://172.18.255.200
 # <!DOCTYPE html>...
 
 # Cleanup

@@ -176,6 +176,50 @@ pip-audit
 govulncheck ./...
 ```
 
+### Audit transitive dependencies, not just direct ones
+
+The LiteLLM compromise hit many projects that never directly installed it. Cursor IDE users were affected because an MCP plugin pulled LiteLLM as a transitive dependency. Your `requirements.txt` or `package.json` may look clean while your resolved dependency tree contains hundreds of packages you never chose.
+
+```bash
+# Python — audit the full resolved graph
+pip-audit                              # Scans installed packages for known vulns
+pip install pipdeptree && pipdeptree   # Visualize the full dependency tree
+
+# Node.js — audit transitive deps
+npm audit --all                        # Includes transitive dependencies
+npx socket report create               # Socket.dev deep analysis of full tree
+
+# Go — list all transitive modules
+go mod graph | grep litellm            # Check if a specific package is in your tree
+
+# General — list all packages, direct + transitive
+pip freeze | wc -l                     # "I depend on 12 packages" vs "I have 247 installed"
+```
+
+Make this part of CI: fail the build if a new transitive dependency appears that wasn't explicitly approved. Tools like Socket.dev and Phylum automate this.
+
+### Defend against registry quarantine (collateral damage)
+
+When PyPI quarantined the entire `litellm` package, **no version** was available for download -- not just the compromised v1.82.8. Every project that depended on LiteLLM had broken builds, even if they pinned a safe version.
+
+Defenses:
+- **Vendor critical dependencies**: Cache packages locally or in an internal registry (Artifactory, Nexus, GitLab Package Registry)
+- **Mirror public registries**: Run a pull-through cache so builds never depend on public registry availability
+- **Pin + cache in CI**: Use `pip download` or `npm pack` to pre-fetch packages and store them as build artifacts
+- **Test with `--no-index`**: Periodically verify your builds succeed with only cached/vendored packages
+
+```bash
+# Cache Python deps for offline builds
+pip download -r requirements.txt -d ./vendor/
+# Install from cache
+pip install --no-index --find-links=./vendor/ -r requirements.txt
+
+# Node.js — use verdaccio as a local registry mirror
+# npm set registry http://localhost:4873
+```
+
+This is also a business continuity issue: if a single PyPI package being quarantined breaks your deployment pipeline, your blast radius from supply chain incidents extends far beyond the compromised package.
+
 ---
 
 ## 3. Container Image Security
@@ -335,6 +379,21 @@ spec:
             cidr: 10.0.0.0/8    # Internal services only
 ```
 
+### Treat AI/LLM gateway packages as critical infrastructure
+
+Packages like LiteLLM, LangChain, and LlamaIndex sit between your applications and multiple AI providers. By design, they have access to API keys for OpenAI, Anthropic, Azure, and other services. A compromised LLM gateway package has a disproportionate blast radius because it can:
+
+- **Intercept and exfiltrate every API key** it routes traffic through
+- **Read and log all prompts and responses**, including those containing PII or business-critical data
+- **Modify model responses** silently, poisoning downstream outputs
+- **Pivot to other services** using the credentials it legitimately holds
+
+Treat LLM proxy/gateway packages with the same rigor as your database driver or auth library:
+- Pin to exact versions with hash verification
+- Run them in isolated network segments with egress restricted to known AI provider endpoints
+- Monitor for unexpected outbound connections (the LiteLLM backdoor connected to a C2 server)
+- Audit the package before every upgrade -- these packages update frequently and have large dependency trees
+
 ### Detect persistence mechanisms
 
 Watch for systemd services, cron jobs, and startup scripts created by compromised workloads:
@@ -381,6 +440,36 @@ When a supply chain compromise is detected, rotate in this order:
 
 Automate rotation where possible. If you cannot rotate a credential within 15 minutes, it is too manual.
 
+### Verify rotation is complete, not just initiated
+
+The March 2026 Trivy/LiteLLM incident was a **second compromise** -- attackers reused credentials retained from a previous breach because remediation was not fully atomic. Starting a rotation is not the same as completing one.
+
+After every rotation:
+
+```bash
+# Verify old credentials are actually revoked (not just new ones issued)
+# PyPI: check old token returns 401
+curl -s -o /dev/null -w "%{http_code}" \
+  -H "Authorization: token $OLD_TOKEN" \
+  https://upload.pypi.org/legacy/
+
+# AWS: verify old access key is disabled
+aws iam list-access-keys --user-name ci-publisher \
+  --query 'AccessKeyMetadata[?Status==`Active`]'
+
+# K8s: verify old service account tokens are invalidated
+kubectl get secrets -n production -o json | \
+  jq '.items[] | select(.type=="kubernetes.io/service-account-token") |
+  {name: .metadata.name, created: .metadata.creationTimestamp}'
+```
+
+Build a rotation verification checklist:
+- [ ] New credential issued and tested
+- [ ] Old credential revoked (not just deactivated)
+- [ ] All systems using old credential updated to new one
+- [ ] Audit log confirms old credential has zero successful auth attempts post-rotation
+- [ ] Rotation documented in incident timeline with timestamps
+
 ### Maintain a known-good baseline
 
 ```bash
@@ -406,6 +495,10 @@ diff <(jq -r '.items[].metadata.name' baseline-pods.json | sort) \
 | **Exfiltrate data** | Harvest credentials, upload to C2 | Egress network policies, secrets encryption at rest |
 | **Persist in cluster** | Deploy privileged pods, install node backdoors | Pod Security Standards, admission control, Falco |
 | **Lateral movement** | Use stolen kubeconfig to access other clusters | Network segmentation, short-lived tokens, audit logging |
+| **Transitive dependency** | Compromise a library used by many packages | Audit full resolved dependency tree, not just direct deps |
+| **Registry quarantine** | Package yanked, all versions unavailable | Vendor/mirror critical deps, test offline builds |
+| **AI gateway compromise** | Intercept API keys and prompts via LLM proxy | Isolate AI packages, restrict egress to known providers |
+| **Incomplete remediation** | Reuse credentials from prior breach | Verify old creds revoked, audit post-rotation auth attempts |
 
 ---
 
@@ -425,6 +518,9 @@ Use this as a starting point. Not everything applies to every project, but most 
 - [ ] Automated dependency updates (Dependabot / Renovate)
 - [ ] New dependency review process (manual or automated)
 - [ ] Internal packages use scoped names, reserved on public registries
+- [ ] Transitive dependency tree audited (not just direct deps)
+- [ ] Critical dependencies vendored or cached in internal registry
+- [ ] AI/LLM gateway packages treated as critical infrastructure
 
 ### Containers
 - [ ] Images signed in CI/CD (Cosign/Sigstore)
@@ -441,6 +537,7 @@ Use this as a starting point. Not everything applies to every project, but most 
 ### Incident Readiness
 - [ ] Dependency graph maintained (know what runs where)
 - [ ] Credential rotation playbook documented and tested
+- [ ] Rotation verification: old credentials confirmed revoked, not just new ones issued
 - [ ] Known-good baseline snapshots available for comparison
 - [ ] Team has practiced a supply chain incident tabletop exercise
 

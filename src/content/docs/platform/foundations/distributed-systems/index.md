@@ -2,6 +2,7 @@
 title: "Distributed Systems"
 sidebar:
   order: 1
+  label: "Distributed Systems"
 ---
 > **Foundation Track** | 3 Modules | ~1.5 hours total
 

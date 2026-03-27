@@ -272,7 +272,13 @@ spec:
               app: payment-api
       # This ensures: max 1 pod difference between racks
       # With 6 replicas across 3 racks: 2-2-2 distribution
-      # If rack-a fails: 0-2-2 (still 4 replicas running)
+      # If rack-a fails: 0-2-2 (4 replicas survive immediately)
+      #
+      # WARNING: With DoNotSchedule, the 2 replacement pods will
+      # stay Pending — placing them would create skew 0-3-3 (skew=3),
+      # violating maxSkew:1. For HA, use ScheduleAnyway instead,
+      # which treats the constraint as a preference rather than
+      # a hard requirement during scheduling.
 ```
 
 ### Recommended Rack Layout
@@ -471,24 +477,24 @@ A manufacturing company is deploying Kubernetes on-premises:
 ### Steps
 
 1. **Determine cluster count:**
-   - PCI cluster (dedicated, DC-East): 20 worker nodes + 3 CP
-   - Production cluster (DC-East primary): 80 worker nodes + 3 CP
-   - GPU cluster (DC-East): 10 worker nodes + 3 CP (can share CP with prod)
-   - DR/Standby cluster (DC-West): 40 worker nodes + 3 CP
-   - Non-prod cluster (DC-West): 20 worker nodes + 3 CP
+   - PCI cluster (dedicated, DC-East): 15 worker nodes + 3 CP = 18
+   - Production cluster (DC-East primary): 50 worker nodes + 10 GPU nodes + 3 CP = 63
+   - DR/Standby cluster (DC-West): 35 worker nodes + 3 CP = 38
+   - Non-prod cluster (DC-West): 28 worker nodes + 3 CP = 31
+   - **Total: 18 + 63 + 38 + 31 = 150 nodes**
 
 2. **Place control planes:**
 
 ```bash
-# DC-East (3 racks)
-# Rack A: PCI CP-1, Prod CP-1, 8 workers
-# Rack B: PCI CP-2, Prod CP-2, 8 workers
-# Rack C: PCI CP-3, Prod CP-3, 8 workers + GPU nodes
+# DC-East (3 racks) — 81 nodes total (PCI: 18, Prod: 63)
+# Rack A: PCI CP-1, Prod CP-1, 5 PCI workers, 20 Prod workers  (27 nodes)
+# Rack B: PCI CP-2, Prod CP-2, 5 PCI workers, 20 Prod workers  (27 nodes)
+# Rack C: PCI CP-3, Prod CP-3, 5 PCI workers, 10 Prod workers + 10 GPU  (27 nodes)
 
-# DC-West (2 racks)
-# Rack D: DR CP-1, NonProd CP-1, 15 workers
-# Rack E: DR CP-2, NonProd CP-2, 15 workers
-# Rack F: DR CP-3, NonProd CP-3, 10 workers
+# DC-West (3 racks) — 69 nodes total (DR: 38, NonProd: 31)
+# Rack D: DR CP-1, NonProd CP-1, 12 DR workers, 9 NonProd workers  (23 nodes)
+# Rack E: DR CP-2, NonProd CP-2, 12 DR workers, 9 NonProd workers  (23 nodes)
+# Rack F: DR CP-3, NonProd CP-3, 11 DR workers, 10 NonProd workers (23 nodes)
 ```
 
 3. **Label nodes:**
@@ -500,22 +506,26 @@ kubectl label node east-rack-a-01 \
   topology.kubernetes.io/zone=rack-a \
   node.kubernetes.io/purpose=worker
 
-# GPU nodes
+# GPU nodes — label and taint to isolate
 kubectl label node east-rack-c-gpu-01 \
   topology.kubernetes.io/region=dc-east \
   topology.kubernetes.io/zone=rack-c \
   node.kubernetes.io/gpu=nvidia-a100 \
   node.kubernetes.io/purpose=gpu
+
+kubectl taint nodes east-rack-c-gpu-01 \
+  node.kubernetes.io/gpu=nvidia-a100:NoSchedule
 ```
 
 4. **Define topology spread:**
 
 ```yaml
 # Production deployment spread across racks
+# Using ScheduleAnyway so replacements can schedule after a rack failure
 topologySpreadConstraints:
   - maxSkew: 1
     topologyKey: topology.kubernetes.io/zone
-    whenUnsatisfiable: DoNotSchedule
+    whenUnsatisfiable: ScheduleAnyway
 ```
 
 ### Success Criteria

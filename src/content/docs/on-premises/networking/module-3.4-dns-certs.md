@@ -113,8 +113,8 @@ data:
         }
         # Forward internal domains to corporate DNS
         forward internal.company.com 10.0.10.1 10.0.10.2
-        # Forward everything else to corporate DNS (which forwards to public)
-        forward . 10.0.10.1 10.0.10.2
+        # Forward everything else to public DNS
+        forward . 8.8.8.8 1.1.1.1
         cache 30
         loop
         reload
@@ -279,6 +279,27 @@ vault write pki_int/roles/kubernetes \
   allowed_domains="internal.company.com,svc.cluster.local" \
   allow_subdomains=true \
   max_ttl=720h
+
+# Enable Kubernetes auth method in Vault
+vault auth enable kubernetes
+
+# Configure Vault to talk to the K8s API
+vault write auth/kubernetes/config \
+  kubernetes_host="https://$(kubectl get svc kubernetes -o jsonpath='{.spec.clusterIP}'):443"
+
+# Create a policy allowing cert-manager to sign certificates
+vault policy write cert-manager - <<POLICY
+path "pki_int/sign/kubernetes" {
+  capabilities = ["create", "update"]
+}
+POLICY
+
+# Create a Kubernetes auth role for cert-manager
+vault write auth/kubernetes/role/cert-manager \
+  bound_service_account_names=cert-manager \
+  bound_service_account_namespaces=cert-manager \
+  policies=cert-manager \
+  ttl=1h
 ```
 
 ```yaml
@@ -451,7 +472,7 @@ apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: wildcard-apps-tls
-  namespace: ingress
+  namespace: monitoring
 spec:
   secretName: wildcard-apps-tls-secret
   duration: 2160h  # 90 days
