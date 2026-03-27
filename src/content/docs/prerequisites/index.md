@@ -75,6 +75,26 @@ These tracks build foundational knowledge before diving into certifications or a
 | 5 | [Platform Engineering](modern-devops/module-5-platform-engineering/) |
 | 6 | [Security Practices (DevSecOps)](modern-devops/module-6-devsecops/) |
 
+### [Linux Everyday Use](/linux/foundations/everyday-use/) — 5 modules
+*Essential Linux skills for daily work: CLI power user, permissions, processes, services, networking tools.*
+
+| Module | Topic |
+|--------|-------|
+| 0.1 | [The CLI Power User](/linux/foundations/everyday-use/module-0.1-cli-power-user/) |
+| 0.2 | [Environment & Permissions](/linux/foundations/everyday-use/module-0.2-environment-permissions/) |
+| 0.3 | [Process & Resource Survival Guide](/linux/foundations/everyday-use/module-0.3-processes-resources/) |
+| 0.4 | [Services & Logs Demystified](/linux/foundations/everyday-use/module-0.4-services-logs/) |
+| 0.5 | [Everyday Networking Tools](/linux/foundations/everyday-use/module-0.5-networking-tools/) |
+
+### [Linux Deep Dive](/linux/) — 28 modules
+*Kernel internals, system architecture, container primitives, networking, security. [See all modules →](/linux/)*
+
+| Section | Modules | Topics |
+|---------|---------|--------|
+| System Essentials | 4 | Kernel, processes/systemd, filesystem, users/permissions |
+| Container Primitives | 4 | Namespaces, cgroups, capabilities/LSMs, union filesystems |
+| Networking | 4 | TCP/IP, DNS, network namespaces/veth, iptables/netfilter |
+
 ---
 
 ## Suggested Order
