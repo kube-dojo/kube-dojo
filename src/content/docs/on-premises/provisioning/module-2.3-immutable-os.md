@@ -109,7 +109,7 @@ curl -sL https://talos.dev/install | sh
 
 # Generate cluster configuration
 talosctl gen config my-cluster https://10.0.1.10:6443 \
-  --output-dir _out
+  --output _out
 
 # Apply config to a node (via API, not SSH)
 talosctl apply-config --insecure \

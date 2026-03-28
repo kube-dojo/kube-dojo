@@ -245,7 +245,7 @@ spec:
         kubernetes.io/cluster/my-cluster: owned
 
   blockDeviceMappings:
-    - deviceName: /dev/xvda
+    - deviceName: /dev/xvdb           # Bottlerocket data volume (container storage)
       ebs:
         volumeSize: 50Gi
         volumeType: gp3

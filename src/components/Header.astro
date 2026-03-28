@@ -1,24 +1,42 @@
 ---
 /**
  * Custom Header — exact match to POC v2 topbar
+ * Locale-aware: detects /uk/ prefix and switches labels + hrefs.
  */
 import type { Props } from '@astrojs/starlight/props';
 import Search from 'virtual:starlight/components/Search';
 import ThemeSelect from 'virtual:starlight/components/ThemeSelect';
 import SocialIcons from 'virtual:starlight/components/SocialIcons';
 import LanguageSelect from 'virtual:starlight/components/LanguageSelect';
+
+const isUk = Astro.url.pathname.startsWith('/uk/') || Astro.url.pathname === '/uk';
+const p = isUk ? '/uk' : '';
+
+const nav = isUk
+  ? [
+      [`${p}/`, 'Головна'],
+      [`${p}/prerequisites/`, 'Основи'],
+      [`${p}/linux/`, 'Linux'],
+      [`${p}/cloud/`, 'Хмара'],
+      [`${p}/k8s/`, 'Сертифікації'],
+      [`${p}/platform/`, 'Платформа'],
+      [`${p}/on-premises/`, 'On-Premises'],
+    ]
+  : [
+      ['/', 'Home'],
+      ['/prerequisites/', 'Fundamentals'],
+      ['/linux/', 'Linux'],
+      ['/cloud/', 'Cloud'],
+      ['/k8s/', 'Certifications'],
+      ['/platform/', 'Platform'],
+      ['/on-premises/', 'On-Premises'],
+    ];
 ---
 
 <div class="kd-topbar">
-  <a class="kd-logo" href="/"><span class="kd-logo-icon">K</span><span>KubeDojo</span></a>
+  <a class="kd-logo" href={`${p}/` || '/'}><span class="kd-logo-icon">K</span><span>KubeDojo</span></a>
   <nav class="kd-nav">
-    <a href="/">Home</a>
-    <a href="/prerequisites/">Fundamentals</a>
-    <a href="/linux/">Linux</a>
-    <a href="/cloud/">Cloud</a>
-    <a href="/k8s/">Certifications</a>
-    <a href="/platform/">Platform</a>
-    <a href="/on-premises/">On-Premises</a>
+    {nav.map(([href, label]) => <a href={href}>{label}</a>)}
   </nav>
   <div class="kd-right">
     <div class="kd-search"><Search {...Astro.props} /></div>
@@ -30,9 +48,11 @@ import LanguageSelect from 'virtual:starlight/components/LanguageSelect';
 <script>
   function hlNav() {
     const p = window.location.pathname;
+    const isUk = p.startsWith('/uk/') || p === '/uk';
+    const home = isUk ? '/uk/' : '/';
     document.querySelectorAll('.kd-nav a').forEach(a => {
       const h = a.getAttribute('href') || '';
-      a.classList.toggle('active', h === '/' ? p === '/' : p.startsWith(h));
+      a.classList.toggle('active', h === home ? p === home : p.startsWith(h));
     });
   }
   hlNav(); document.addEventListener('astro:page-load', hlNav);

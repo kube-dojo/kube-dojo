@@ -279,8 +279,12 @@ spec:
   replicas: 5
   clusterName: production
   selector:
-    matchLabels: {}
+    matchLabels:
+      cluster.x-k8s.io/cluster-name: production
   template:
+    metadata:
+      labels:
+        cluster.x-k8s.io/cluster-name: production
     spec:
       clusterName: production
       version: v1.35.0
@@ -455,10 +459,17 @@ You need to upgrade Kubernetes from 1.34 to 1.35 on a 50-node production cluster
 
 **Rolling upgrade via CAPI:**
 
-1. **Update the version field** in the Cluster/MachineDeployment YAML:
+1. **Update the version field** in the control plane and MachineDeployment YAMLs:
    ```yaml
+   # TalosControlPlane — version is at spec.version
    spec:
      version: v1.35.0  # was v1.34.0
+
+   # MachineDeployment — version is at spec.template.spec.version
+   spec:
+     template:
+       spec:
+         version: v1.35.0  # was v1.34.0
    ```
 
 2. **Apply** (or Git push if using GitOps). CAPI detects the version change.

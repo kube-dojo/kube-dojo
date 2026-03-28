@@ -779,7 +779,7 @@ spec:
   mode: cluster
   image: apache/spark-py:3.5.4
   imagePullPolicy: IfNotPresent
-  mainApplicationFile: local:///opt/spark/work-dir/etl.py
+  mainApplicationFile: local:///scripts/etl.py
   sparkVersion: "3.5.4"
   restartPolicy:
     type: OnFailure
@@ -799,7 +799,7 @@ spec:
       role: driver
     volumeMounts:
       - name: etl-script
-        mountPath: /opt/spark/work-dir
+        mountPath: /scripts
       - name: data
         mountPath: /data
   executor:

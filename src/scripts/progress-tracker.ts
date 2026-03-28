@@ -93,6 +93,9 @@ function injectCompleteButton(): void {
   const slug = window.location.pathname.replace(/^\/|\/$/g, '');
   if (!slug) return;
 
+  // Don't add to non-module pages (changelog, landing pages)
+  if (slug === 'changelog' || slug === 'uk/changelog') return;
+
   // Find the pagination nav (prev/next) or end of content
   const pagination = document.querySelector('.pagination-links') ||
                      document.querySelector('[class*="pagination"]');

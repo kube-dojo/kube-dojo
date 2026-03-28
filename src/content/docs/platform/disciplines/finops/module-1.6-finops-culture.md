@@ -227,21 +227,26 @@ jobs:
 
       - name: Check cost threshold
         run: |
-          # Extract the percentage change
-          DIFF_PCT=$(cat /tmp/infracost-diff.json | \
-            jq -r '.diffTotalMonthlyCost // "0"' | \
-            awk '{print ($1 < 0) ? -$1 : $1}')
+          # Extract the cost difference (positive = increase, negative = decrease)
+          DIFF=$(cat /tmp/infracost-diff.json | \
+            jq -r '.diffTotalMonthlyCost // "0"')
           BASE=$(cat /tmp/infracost-diff.json | \
             jq -r '.pastTotalMonthlyCost // "1"')
 
-          # Calculate percentage
+          # Only check increases (skip if cost decreased)
+          if [ "$(echo "$DIFF <= 0" | bc)" -eq 1 ]; then
+            echo "Cost change: \$${DIFF}/mo (decrease or zero). No threshold check needed."
+            exit 0
+          fi
+
+          # Calculate percentage increase
           if [ "$(echo "$BASE > 0" | bc)" -eq 1 ]; then
-            PCT=$(echo "scale=1; ($DIFF_PCT / $BASE) * 100" | bc)
+            PCT=$(echo "scale=1; ($DIFF / $BASE) * 100" | bc)
           else
             PCT="0"
           fi
 
-          echo "Cost change: ${PCT}%"
+          echo "Cost increase: ${PCT}%"
 
           # Fail if cost increase exceeds 10%
           THRESHOLD=10
@@ -367,9 +372,9 @@ spec:
           )
           /
           avg_over_time(
-            sum by (namespace) (
+            (sum by (namespace) (
               kubecost_allocation_cpu_cost + kubecost_allocation_memory_cost
-            )[7d:]
+            ))[7d:1h]
           )
         ) > 1.3
       for: 2h

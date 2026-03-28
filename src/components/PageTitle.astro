@@ -7,9 +7,12 @@ const PAGE_TITLE_ID = '_top';
 const route = Astro.locals.starlightRoute;
 const title = route.entry.data.title;
 const slug = route.slug || '';
-const parts = slug.split('/').filter(Boolean);
+const isUk = Astro.url.pathname.startsWith('/uk/') || Astro.url.pathname === '/uk';
+// Strip 'uk/' prefix from parts so breadcrumbs work the same way
+const rawParts = slug.split('/').filter(Boolean);
+const parts = (rawParts[0] === 'uk') ? rawParts.slice(1) : rawParts;
 
-const labelMap: Record<string, string> = {
+const enLabels: Record<string, string> = {
   'k8s': 'Certifications', 'platform': 'Platform', 'prerequisites': 'Fundamentals',
   'cloud': 'Cloud', 'linux': 'Linux', 'on-premises': 'On-Premises',
   'cka': 'CKA', 'ckad': 'CKAD', 'cks': 'CKS', 'kcna': 'KCNA', 'kcsa': 'KCSA',
@@ -17,6 +20,17 @@ const labelMap: Record<string, string> = {
   'toolkits': 'Toolkits', 'sre': 'SRE', 'gitops': 'GitOps', 'devsecops': 'DevSecOps',
   'mlops': 'MLOps', 'aiops': 'AIOps', 'finops': 'FinOps', 'iac': 'IaC',
 };
+
+const ukLabels: Record<string, string> = {
+  'k8s': 'Сертифікації', 'platform': 'Платформа', 'prerequisites': 'Основи',
+  'cloud': 'Хмара', 'linux': 'Linux', 'on-premises': 'On-Premises',
+  'cka': 'CKA', 'ckad': 'CKAD', 'cks': 'CKS', 'kcna': 'KCNA', 'kcsa': 'KCSA',
+  'extending': 'Розширення K8s', 'disciplines': 'Дисципліни', 'foundations': 'Основи',
+  'toolkits': 'Інструменти', 'sre': 'SRE', 'gitops': 'GitOps', 'devsecops': 'DevSecOps',
+  'mlops': 'MLOps', 'aiops': 'AIOps', 'finops': 'FinOps', 'iac': 'IaC',
+};
+
+const labelMap = isUk ? ukLabels : enLabels;
 
 // Map part directories to clean labels: "part3-services-networking" → "Part 3: Services & Networking"
 function cleanPart(s: string): string {
@@ -26,8 +40,9 @@ function cleanPart(s: string): string {
 }
 
 const crumbs: { label: string; href: string }[] = [];
+const prefix = isUk ? '/uk' : '';
 if (parts.length > 1) {
-  let path = '';
+  let path = prefix;
   for (let i = 0; i < parts.length - 1; i++) {
     path += '/' + parts[i];
     const label = labelMap[parts[i]] || cleanPart(parts[i]);

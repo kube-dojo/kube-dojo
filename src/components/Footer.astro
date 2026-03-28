@@ -3,12 +3,18 @@
  * Custom Footer — exact match to POC v2
  */
 import type { Props } from '@astrojs/starlight/props';
+
+const isUk = Astro.url.pathname.startsWith('/uk/') || Astro.url.pathname === '/uk';
+const p = isUk ? '/uk' : '';
+const tagline = isUk ? 'KubeDojo — Безкоштовна, всеосяжна хмарна освіта.' : 'KubeDojo — Free, comprehensive cloud native education.';
+const changelogLabel = isUk ? 'Журнал змін' : 'Changelog';
+const progressLabel = isUk ? 'Мій прогрес' : 'My Progress';
 ---
 <footer class="kd-footer">
-  KubeDojo — Free, comprehensive cloud native education.
+  {tagline}
   <a href="https://github.com/kube-dojo/kube-dojo.github.io">GitHub</a> ·
-  <a href="/changelog/">Changelog</a> ·
-  <a href="/progress/">My Progress</a>
+  <a href={`${p}/changelog/`}>{changelogLabel}</a> ·
+  <a href={`${p}/progress/`}>{progressLabel}</a>
 </footer>
 <style>
   .kd-footer {

@@ -1,5 +1,6 @@
 ---
 title: "\u0416\u0443\u0440\u043d\u0430\u043b \u0437\u043c\u0456\u043d"
+template: splash
 sidebar:
   order: 2
 ---

@@ -586,7 +586,10 @@ kubectl get namespaces -l env=production
 
 ```bash
 # From a test Pod, attempt to reach the target
-kubectl run test-conn --image=busybox:1.36 -n frontend --rm -it --restart=Never -- \
+# Important: If the namespace has default-deny egress, the test Pod needs
+# labels matching an egress policy — otherwise its traffic (except DNS) is blocked.
+kubectl run test-conn --image=busybox:1.36 -n frontend --rm -it --restart=Never \
+  --labels="app=web" -- \
   wget --timeout=3 -qO- http://api-service.backend.svc.cluster.local:8080/healthz
 
 # If blocked, you'll see:
@@ -848,17 +851,26 @@ EOF
 
 **Task 4**: Verify the policies work correctly.
 
+> **Important**: Under default-deny, `kubectl run` test Pods need labels that match
+> the egress policies. Without labels, the test Pod's egress is denied (only DNS is allowed).
+
 ```bash
 # frontend -> backend: should work
-kubectl run test -n frontend --rm -it --restart=Never --image=busybox:1.36 -- \
+# Note: --labels="app=web" ensures this Pod matches the web-egress-to-api egress policy
+kubectl run test -n frontend --rm -it --restart=Never --image=busybox:1.36 \
+  --labels="app=web" -- \
   wget --timeout=3 -qO- http://api.backend.svc.cluster.local:8080
 
 # frontend -> database: should be BLOCKED
-kubectl run test -n frontend --rm -it --restart=Never --image=busybox:1.36 -- \
+# (app=web egress policy only allows traffic to backend, not database)
+kubectl run test -n frontend --rm -it --restart=Never --image=busybox:1.36 \
+  --labels="app=web" -- \
   sh -c "echo | nc -w 3 db.database.svc.cluster.local 5432 && echo CONNECTED || echo BLOCKED"
 
 # backend -> database: should work
-kubectl run test -n backend --rm -it --restart=Never --image=busybox:1.36 -- \
+# Note: --labels="app=api" ensures this Pod matches the api-egress-to-db egress policy
+kubectl run test -n backend --rm -it --restart=Never --image=busybox:1.36 \
+  --labels="app=api" -- \
   sh -c "echo | nc -w 3 db.database.svc.cluster.local 5432 && echo CONNECTED || echo BLOCKED"
 ```
 

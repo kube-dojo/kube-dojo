@@ -33,7 +33,7 @@ This module teaches you to deploy, configure, secure, and operate a production-g
 ## Did You Know?
 
 - **Kafka was named after the author Franz Kafka** because Jay Kreps, its creator, thought a system optimized for writing deserved a writer's name. The name has no deeper connection to Kafka's literary themes.
-- **A single Kafka broker can sustain 800 MB/s of throughput** on appropriate hardware. That is roughly 28 TB per hour, per broker. Most performance problems are caused by misconfiguration, not Kafka's limits.
+- **A single Kafka broker can sustain 800 MB/s of throughput** on appropriate hardware. That is roughly 2.8 TB per hour, per broker. Most performance problems are caused by misconfiguration, not Kafka's limits.
 - **KRaft mode eliminates ZooKeeper entirely.** Since Kafka 3.3, the metadata quorum runs inside the brokers themselves using the Raft consensus protocol. Strimzi fully supports KRaft, and ZooKeeper-based deployments are now deprecated.
 
 ---

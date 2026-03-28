@@ -1,5 +1,6 @@
 ---
 title: "What's New"
+template: splash
 sidebar:
   order: 2
   label: "What's New"
