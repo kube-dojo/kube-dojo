@@ -1,0 +1,61 @@
+---
+title: "Сторінку не знайдено"
+template: splash
+editUrl: false
+hero:
+  tagline: "Сторінка, яку ви шукаєте, не існує або була переміщена."
+  actions:
+    - text: На головну
+      link: /uk/
+      icon: right-arrow
+      variant: primary
+    - text: Пошук по навчальній програмі
+      link: /uk/#_top
+      icon: magnifier
+      variant: minimal
+pagefind: false
+sidebar:
+  hidden: true
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+<div style="max-width: 720px; margin: 0 auto;">
+
+## Шукаєте щось конкретне?
+
+Перегляньте основні навчальні треки, щоб знайти потрібне.
+
+<CardGrid>
+  <LinkCard
+    title="Передумови"
+    description="З нуля до терміналу, Linux, Cloud Native 101, основи Kubernetes"
+    href="/prerequisites/"
+  />
+  <LinkCard
+    title="Хмара"
+    description="AWS, GCP, Azure Essentials, поглиблене вивчення EKS/GKE/AKS"
+    href="/cloud/"
+  />
+  <LinkCard
+    title="Сертифікації"
+    description="CKA, CKAD, CKS, KCNA, KCSA та сертифікації інструментів"
+    href="/k8s/"
+  />
+  <LinkCard
+    title="Платформна інженерія"
+    description="Основи, дисципліни та інструментарій"
+    href="/platform/"
+  />
+  <LinkCard
+    title="On-Premises"
+    description="Bare-metal Kubernetes, мережі, сховища, операції"
+    href="/on-premises/"
+  />
+</CardGrid>
+
+---
+
+**Порада:** Скористайтеся рядком пошуку вгорі сторінки (або натисніть <kbd>Ctrl</kbd>+<kbd>K</kbd> / <kbd>Cmd</kbd>+<kbd>K</kbd>), щоб швидко знайти будь-яку тему в навчальній програмі.
+
+</div>
