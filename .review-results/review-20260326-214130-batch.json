@@ -1,8 +1,0 @@
-[
-  {
-    "file": "src/content/docs/on-premises/multi-cluster/module-5.1-private-cloud.md",
-    "success": true,
-    "verdict": "NEEDS CHANGES",
-    "output": "1. Verdict: **NEEDS CHANGES**\n\n2. Specific, actionable feedback:\n\n- **Harvester VM YAML (DataVolume accessModes)**\n  - **Section/Line:** Under \"Harvester VM Creation\", in the DataVolume manifest (`name: k8s-worker-01-root`): `accessModes: [\"ReadWriteMany\"]`\n  - **What's wrong:** The default `longhorn` storage class provides block devices and supports `ReadWriteOnce` by default. `ReadWriteMany` requires a specifically configured NFS-backed Longhorn StorageClass (e.g., `longhorn-rwx`). Furthermore, a standard VM root disk does not need RWX; KubeVirt and Longhorn handle live migration seamlessly using `ReadWriteOnce` by orchestrating the volume detach/attach process.\n  - **What it should be:** Change to `accessModes: [\"ReadWriteOnce\"]`\n\n- **vSphere CSI Driver (StorageClass Parameter Casing)**\n  - **Section/Line:** Under \"vSphere CSI Driver\", in the StorageClass manifest: `StoragePolicyName: \"vSAN Default Storage Policy\"`\n  - **What's wrong:** Kubernetes CSI parameters are parsed precisely by the underlying provisioner. The official vSphere CSI driver (`csi.vsphere.vmware.com`) expects this parameter to be completely lowercase. (Notice how `datastoreurl` correctly follows this convention right below it).\n  - **What it should be:** Change to `storagepolicyname: \"vSAN Default Storage Policy\"`"
-  }
-]

@@ -38,3 +38,12 @@ node_modules/
 dist/
 .astro/
 build-log.txt
+
+# Dev/test files
+poc-design*.html
+test.*
+test-*
+kubelogin*
+scripts/batch-gemini-review.py
+.review-results/
+.dispatch-logs/

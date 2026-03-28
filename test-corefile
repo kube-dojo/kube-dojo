@@ -1,4 +1,0 @@
-.:53 {
-    forward internal.company.com 10.0.10.1 10.0.10.2
-    forward . 10.0.10.1 10.0.10.2
-}
