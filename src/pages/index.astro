@@ -175,8 +175,10 @@
     function toggleTheme() {
       const body = document.body;
       const isDark = body.classList.toggle('dark');
-      localStorage.setItem('kubedojo-theme', isDark ? 'dark' : 'light');
-      document.getElementById('theme-toggle').textContent = isDark ? '☀ Light' : '☾ Dark';
+      localStorage.setItem('starlight-theme', isDark ? 'dark' : 'light');
+      var toggleBtn = document.getElementById('theme-toggle');
+      toggleBtn.textContent = isDark ? '☀ Light' : '☾ Dark';
+      toggleBtn.setAttribute('aria-pressed', String(isDark));
     }
   </script>
 </head>
@@ -184,7 +186,7 @@
 <script is:inline>
   // Restore theme before paint to avoid flash
   (function() {
-    var saved = localStorage.getItem('kubedojo-theme');
+    var saved = localStorage.getItem('starlight-theme');
     var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     if (saved === 'dark' || (!saved && prefersDark)) {
       document.body.classList.add('dark');
@@ -192,7 +194,11 @@
     // Update button text after DOM ready
     document.addEventListener('DOMContentLoaded', function() {
       var btn = document.getElementById('theme-toggle');
-      if (btn) btn.textContent = document.body.classList.contains('dark') ? '☀ Light' : '☾ Dark';
+      if (btn) {
+        var isDark = document.body.classList.contains('dark');
+        btn.textContent = isDark ? '☀ Light' : '☾ Dark';
+        btn.setAttribute('aria-pressed', String(isDark));
+      }
     });
   })();
 </script>
@@ -200,6 +206,7 @@
 <!-- Topbar -->
 <div class="topbar">
   <a class="logo" href="/"><span class="logo-icon">K</span> KubeDojo</a>
+  <!-- Keep in sync with src/components/Header.astro -->
   <nav class="nav">
     <a href="/" class="active">Home</a>
     <a href="/prerequisites/">Fundamentals</a>
@@ -210,8 +217,8 @@
     <a href="/on-premises/">On-Premises</a>
   </nav>
   <div class="topbar-right">
-    <div class="search-placeholder" onclick="window.location='/k8s/'">Search docs... <kbd>⌘K</kbd></div>
-    <button id="theme-toggle" onclick="toggleTheme()" style="background:none;border:1px solid var(--g200);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.75rem;color:var(--g500);">☀ Light</button>
+    <div class="search-placeholder" role="button" tabindex="0" onclick="window.location='/k8s/'" onkeydown="if(event.key==='Enter')window.location='/k8s/'">Search docs... <kbd>⌘K</kbd></div>
+    <button id="theme-toggle" aria-pressed="false" onclick="toggleTheme()" style="background:none;border:1px solid var(--g200);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.75rem;color:var(--g500);">☀ Light</button>
     <a href="https://github.com/kube-dojo/kube-dojo.github.io">GitHub</a>
     <a href="/uk/">🇺🇦 UK</a>
   </div>

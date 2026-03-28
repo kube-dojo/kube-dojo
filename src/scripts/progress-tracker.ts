@@ -50,7 +50,7 @@ function isComplete(slug: string): boolean {
 
 function getTrackProgress(trackPrefix: string): { completed: number; total: number } {
   const data = getProgress();
-  const sidebarLinks = document.querySelectorAll('nav.sidebar a[href]');
+  const sidebarLinks = document.querySelectorAll('.kd-sb a[href]');
   let total = 0;
   let completed = 0;
   sidebarLinks.forEach((link) => {
@@ -131,6 +131,7 @@ function injectCompleteButton(): void {
 function updateButtonState(btn: HTMLButtonElement, slug: string): void {
   const completed = isComplete(slug);
   btn.className = `kd-complete-btn${completed ? ' completed' : ''}`;
+  btn.setAttribute('aria-pressed', String(completed));
   btn.innerHTML = completed
     ? '✓ Completed — click to undo'
     : '○ Mark as Complete';
@@ -140,7 +141,7 @@ function updateButtonState(btn: HTMLButtonElement, slug: string): void {
 
 function decorateSidebar(): void {
   const data = getProgress();
-  const links = document.querySelectorAll('nav.sidebar a[href]');
+  const links = document.querySelectorAll('.kd-sb a[href]');
   links.forEach((link) => {
     const href = (link as HTMLAnchorElement).pathname;
     const slug = href.replace(/^\/|\/$/g, '');

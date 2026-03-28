@@ -1,183 +1,133 @@
 ---
-title: "Linux Deep Dive Track"
+title: "Linux Deep Dive"
 sidebar:
   order: 1
   label: "Linux Deep Dive"
 ---
-> **Essential Linux knowledge for Kubernetes and DevOps practitioners.**
 
-The foundation that makes everything else make sense. You can't debug Kubernetes if you don't understand Linux. Every container issue is ultimately a Linux issue.
+**Essential Linux knowledge for Kubernetes and DevOps practitioners.**
 
-## Who This Track Is For
+Every container issue is ultimately a Linux issue. This track gives you the deep system knowledge that separates operators from debuggers.
 
-- **Kubernetes practitioners** who want to understand what's happening beneath containers
-- **DevOps engineers** who need Linux fundamentals for automation and troubleshooting
-- **SREs** who need deep system knowledge for incident response
-- **Anyone** starting their cloud-native journey
+**37 modules** across 6 sections · ~50 hours total
 
-## Track Structure
+---
+
+## Sections
+
+### [Everyday Use](/linux/foundations/everyday-use/) — 5 modules
+*Essential Linux skills for daily work.*
+
+| # | Module | Time |
+|---|--------|------|
+| 0.1 | [The CLI Power User](/linux/foundations/everyday-use/module-0.1-cli-power-user/) | 30 min |
+| 0.2 | [Environment & Permissions](/linux/foundations/everyday-use/module-0.2-environment-permissions/) | 30 min |
+| 0.3 | [Process & Resource Survival Guide](/linux/foundations/everyday-use/module-0.3-processes-resources/) | 30 min |
+| 0.4 | [Services & Logs Demystified](/linux/foundations/everyday-use/module-0.4-services-logs/) | 30 min |
+| 0.5 | [Everyday Networking Tools](/linux/foundations/everyday-use/module-0.5-networking-tools/) | 30 min |
+
+### [System Essentials](/linux/foundations/system-essentials/) — 4 modules
+*Kernel, processes, filesystem, permissions — the foundation of everything.*
+
+| # | Module | Time |
+|---|--------|------|
+| 1.1 | [Kernel Architecture](/linux/foundations/system-essentials/module-1.1-kernel-architecture/) | 25-30 min |
+| 1.2 | [Processes & systemd](/linux/foundations/system-essentials/module-1.2-processes-systemd/) | 30-35 min |
+| 1.3 | [Filesystem Hierarchy](/linux/foundations/system-essentials/module-1.3-filesystem-hierarchy/) | 25-30 min |
+| 1.4 | [Users & Permissions](/linux/foundations/system-essentials/module-1.4-users-permissions/) | 25-30 min |
+
+### [Container Primitives](/linux/foundations/container-primitives/) — 4 modules
+*The Linux features that make containers work — namespaces, cgroups, capabilities, overlay filesystems.*
+
+| # | Module | Time |
+|---|--------|------|
+| 2.1 | [Linux Namespaces](/linux/foundations/container-primitives/module-2.1-namespaces/) | 30-35 min |
+| 2.2 | [Control Groups (cgroups)](/linux/foundations/container-primitives/module-2.2-cgroups/) | 30-35 min |
+| 2.3 | [Capabilities & Linux Security Modules](/linux/foundations/container-primitives/module-2.3-capabilities-lsms/) | 25-30 min |
+| 2.4 | [Union Filesystems](/linux/foundations/container-primitives/module-2.4-union-filesystems/) | 25-30 min |
+
+### [Networking](/linux/foundations/networking/) — 4 modules
+*TCP/IP, DNS, network namespaces, iptables — the network stack that Kubernetes builds on.*
+
+| # | Module | Time |
+|---|--------|------|
+| 3.1 | [TCP/IP Essentials](/linux/foundations/networking/module-3.1-tcp-ip-essentials/) | 30-35 min |
+| 3.2 | [DNS in Linux](/linux/foundations/networking/module-3.2-dns-linux/) | 25-30 min |
+| 3.3 | [Network Namespaces & veth](/linux/foundations/networking/module-3.3-network-namespaces/) | 30-35 min |
+| 3.4 | [iptables & netfilter](/linux/foundations/networking/module-3.4-iptables-netfilter/) | 35-40 min |
+
+### [Security](/linux/security/hardening/) — 4 modules
+*Kernel hardening, AppArmor, SELinux, seccomp — securing the host that runs your containers.*
+
+| # | Module | Time |
+|---|--------|------|
+| 4.1 | [Kernel Hardening](/linux/security/hardening/module-4.1-kernel-hardening/) | 25-30 min |
+| 4.2 | [AppArmor Profiles](/linux/security/hardening/module-4.2-apparmor/) | 30-35 min |
+| 4.3 | [SELinux Contexts](/linux/security/hardening/module-4.3-selinux/) | 35-40 min |
+| 4.4 | [seccomp Profiles](/linux/security/hardening/module-4.4-seccomp/) | 25-30 min |
+
+### Operations — 16 modules
+*Performance analysis, troubleshooting, shell scripting, system administration.*
+
+#### [System Administration](/linux/operations/) — 4 modules
+
+| # | Module | Time |
+|---|--------|------|
+| 8.1 | [Storage Management](/linux/operations/module-8.1-storage-management/) | 30-35 min |
+| 8.2 | [Network Administration](/linux/operations/module-8.2-network-administration/) | 30-35 min |
+| 8.3 | [Package & User Management](/linux/operations/module-8.3-package-user-management/) | 25-30 min |
+| 8.4 | [Scheduling & Backups](/linux/operations/module-8.4-scheduling-backups/) | 25-30 min |
+
+#### [Performance](/linux/operations/performance/) — 4 modules
+
+| # | Module | Time |
+|---|--------|------|
+| 5.1 | [The USE Method](/linux/operations/performance/module-5.1-use-method/) | 25-30 min |
+| 5.2 | [CPU & Scheduling](/linux/operations/performance/module-5.2-cpu-scheduling/) | 30-35 min |
+| 5.3 | [Memory Management](/linux/operations/performance/module-5.3-memory-management/) | 30-35 min |
+| 5.4 | [I/O Performance](/linux/operations/performance/module-5.4-io-performance/) | 25-30 min |
+
+#### [Troubleshooting](/linux/operations/troubleshooting/) — 4 modules
+
+| # | Module | Time |
+|---|--------|------|
+| 6.1 | [Systematic Troubleshooting](/linux/operations/troubleshooting/module-6.1-systematic-troubleshooting/) | 25-30 min |
+| 6.2 | [Log Analysis](/linux/operations/troubleshooting/module-6.2-log-analysis/) | 25-30 min |
+| 6.3 | [Process Debugging](/linux/operations/troubleshooting/module-6.3-process-debugging/) | 30-35 min |
+| 6.4 | [Network Debugging](/linux/operations/troubleshooting/module-6.4-network-debugging/) | 30-35 min |
+
+#### [Shell Scripting](/linux/operations/shell-scripting/) — 4 modules
+
+| # | Module | Time |
+|---|--------|------|
+| 7.1 | [Bash Fundamentals](/linux/operations/shell-scripting/module-7.1-bash-fundamentals/) | 30-35 min |
+| 7.2 | [Text Processing](/linux/operations/shell-scripting/module-7.2-text-processing/) | 30-35 min |
+| 7.3 | [Practical Scripts](/linux/operations/shell-scripting/module-7.3-practical-scripts/) | 25-30 min |
+| 7.4 | [DevOps Automation](/linux/operations/shell-scripting/module-7.4-devops-automation/) | 30-35 min |
+
+---
+
+## Suggested Order
 
 ```
-linux/
-├── foundations/              # Core Linux (must-know)
-│   ├── system-essentials/       # Kernel, processes, filesystem, permissions
-│   ├── container-primitives/    # Namespaces, cgroups, capabilities, overlayfs
-│   └── networking/              # TCP/IP, DNS, network namespaces, iptables
-│
-├── security/                 # Linux security
-│   └── hardening/               # sysctl, AppArmor, SELinux, seccomp
-│
-├── sysadmin/                # System administration
-│   └── sysadmin/                # Storage, networking, packages, scheduling
-│
-└── operations/               # SRE/DevOps skills
-    ├── performance/             # USE method, CPU, memory, I/O
-    ├── troubleshooting/         # Systematic debugging, logs, process, network
-    └── shell-scripting/         # Bash, text processing, practical automation
+Everyday Use → System Essentials → Container Primitives → Networking → Security → Operations
 ```
 
-**Total: 32 modules**
+Start with **Everyday Use** if you're new to Linux. Jump to **Container Primitives** if you already know the basics and want to understand how containers work under the hood.
 
 ---
 
-## Learning Path
+## Why This Track Matters for Kubernetes
 
-### Start Here: Foundations (12 modules)
-
-#### 1. System Essentials (4 modules)
-| Module | Description | Time |
-|--------|-------------|------|
-| [1.1 Kernel Architecture](foundations/system-essentials/module-1.1-kernel-architecture/) | Kernel vs userspace, system calls, why containers share kernels | 25-30 min |
-| [1.2 Processes & systemd](foundations/system-essentials/module-1.2-processes-systemd/) | PIDs, process lifecycle, signals, systemctl | 30-35 min |
-| [1.3 Filesystem Hierarchy](foundations/system-essentials/module-1.3-filesystem-hierarchy/) | FHS, /proc, /sys, inodes, mount points | 25-30 min |
-| [1.4 Users & Permissions](foundations/system-essentials/module-1.4-users-permissions/) | UIDs, rwx, setuid, sudo, least privilege | 25-30 min |
-
-#### 2. Container Primitives (4 modules)
-| Module | Description | Time |
-|--------|-------------|------|
-| [2.1 Linux Namespaces](foundations/container-primitives/module-2.1-namespaces/) | PID, network, mount, user isolation | 30-35 min |
-| [2.2 Control Groups](foundations/container-primitives/module-2.2-cgroups/) | CPU/memory limits, v1 vs v2, Kubernetes integration | 30-35 min |
-| [2.3 Capabilities & LSMs](foundations/container-primitives/module-2.3-capabilities-lsms/) | CAP_*, AppArmor, SELinux, seccomp overview | 25-30 min |
-| [2.4 Union Filesystems](foundations/container-primitives/module-2.4-union-filesystems/) | OverlayFS, layers, storage drivers | 25-30 min |
-
-#### 3. Networking (4 modules)
-| Module | Description | Time |
-|--------|-------------|------|
-| [3.1 TCP/IP Essentials](foundations/networking/module-3.1-tcp-ip-essentials/) | OSI model, TCP vs UDP, routing, ports | 30-35 min |
-| [3.2 DNS in Linux](foundations/networking/module-3.2-dns-linux/) | resolv.conf, dig, DNS debugging, CoreDNS | 25-30 min |
-| [3.3 Network Namespaces](foundations/networking/module-3.3-network-namespaces/) | veth pairs, bridges, pod networking | 30-35 min |
-| [3.4 iptables & netfilter](foundations/networking/module-3.4-iptables-netfilter/) | Packet filtering, NAT, kube-proxy internals | 35-40 min |
-
-### Then: Security (4 modules)
-
-#### 4. Hardening
-| Module | Description | Time |
-|--------|-------------|------|
-| [4.1 Kernel Hardening](security/hardening/module-4.1-kernel-hardening/) | sysctl, network stack, memory protection | 25-30 min |
-| [4.2 AppArmor Profiles](security/hardening/module-4.2-apparmor/) | MAC, profile modes, K8s integration | 30-35 min |
-| [4.3 SELinux Contexts](security/hardening/module-4.3-selinux/) | Policies, contexts, troubleshooting | 35-40 min |
-| [4.4 seccomp Profiles](security/hardening/module-4.4-seccomp/) | System call filtering, custom profiles | 25-30 min |
-
-### Then: System Administration (4 modules)
-
-#### 8. System Administration
-| Module | Description | Time |
-|--------|-------------|------|
-| [8.1 Storage Management](operations/module-8.1-storage-management/) | LVM, RAID, NFS | 30-35 min |
-| [8.2 Network Administration](operations/module-8.2-network-administration/) | firewalld, bonding, chrony | 30-35 min |
-| [8.3 Package & User Management](operations/module-8.3-package-user-management/) | apt/dnf, useradd/visudo | 25-30 min |
-| [8.4 Scheduling & Backups](operations/module-8.4-scheduling-backups/) | cron, tar, rsync | 25-30 min |
-
-### Then: Operations (12 modules)
-
-#### 5. Performance (4 modules)
-| Module | Description | Time |
-|--------|-------------|------|
-| [5.1 The USE Method](operations/performance/module-5.1-use-method/) | Utilization, Saturation, Errors | 25-30 min |
-| [5.2 CPU & Scheduling](operations/performance/module-5.2-cpu-scheduling/) | CPU metrics, CFS scheduler, K8s CPU limits | 30-35 min |
-| [5.3 Memory Management](operations/performance/module-5.3-memory-management/) | Virtual memory, caching, OOM killer | 30-35 min |
-| [5.4 I/O Performance](operations/performance/module-5.4-io-performance/) | iostat, block scheduling, storage tuning | 25-30 min |
-
-#### 6. Troubleshooting (4 modules)
-| Module | Description | Time |
-|--------|-------------|------|
-| [6.1 Systematic Troubleshooting](operations/troubleshooting/module-6.1-systematic-troubleshooting/) | Scientific method, divide & conquer, timeline | 25-30 min |
-| [6.2 Log Analysis](operations/troubleshooting/module-6.2-log-analysis/) | journalctl, dmesg, log correlation | 25-30 min |
-| [6.3 Process Debugging](operations/troubleshooting/module-6.3-process-debugging/) | strace, /proc, lsof, hung processes | 30-35 min |
-| [6.4 Network Debugging](operations/troubleshooting/module-6.4-network-debugging/) | tcpdump, ss, connection troubleshooting | 30-35 min |
-
-#### 7. Shell Scripting (4 modules)
-| Module | Description | Time |
-|--------|-------------|------|
-| [7.1 Bash Fundamentals](operations/shell-scripting/module-7.1-bash-fundamentals/) | Variables, control flow, functions | 30-35 min |
-| [7.2 Text Processing](operations/shell-scripting/module-7.2-text-processing/) | grep, sed, awk, jq, pipelines | 30-35 min |
-| [7.3 Practical Scripts](operations/shell-scripting/module-7.3-practical-scripts/) | Error handling, logging, common patterns | 25-30 min |
-| [7.4 DevOps Automation](operations/shell-scripting/module-7.4-devops-automation/) | kubectl scripts, CI/CD helpers, operational tools | 30-35 min |
+- **Namespaces and cgroups ARE containers** — understanding these demystifies container technology
+- **Network policies use iptables/eBPF** — can't debug networking without understanding the stack
+- **Security contexts use capabilities/AppArmor/seccomp** — pod security requires Linux security knowledge
+- **Resource limits are cgroup configurations** — understanding cgroups explains K8s resource management
 
 ---
 
-## Why This Track Matters
+## After This Track
 
-### For Kubernetes
-
-- **Namespaces and cgroups ARE containers** — Understanding these demystifies container technology
-- **Network policies use iptables/eBPF** — Can't debug networking without understanding the stack
-- **Security contexts use capabilities/AppArmor/seccomp** — Pod security requires Linux security knowledge
-- **Resource limits are cgroup configurations** — Understanding cgroups explains Kubernetes resource management
-
-### For DevOps
-
-- **CI/CD runs on Linux** — Your pipelines execute shell commands
-- **Automation requires shell scripting** — You'll write bash whether you like it or not
-- **Troubleshooting needs system understanding** — Can't fix what you don't understand
-- **Performance tuning needs kernel knowledge** — Optimization requires understanding the system
-
-### For SRE
-
-- **Incident response requires deep system knowledge** — The 3am call needs expertise
-- **Performance analysis uses Linux tools** — USE method depends on Linux metrics
-- **Capacity planning needs resource understanding** — Memory, CPU, I/O all work differently
-
----
-
-## Prerequisites
-
-**None.** This track IS the prerequisite for everything else.
-
-Start here if you're new to Linux or want to fill gaps in your knowledge.
-
----
-
-## Recommended After
-
-After completing this track, you'll be ready for:
-
-- **[Cloud Native 101](../prerequisites/cloud-native-101/)** — Apply Linux knowledge to cloud-native concepts
-- **[CKA/CKAD/CKS certifications](../k8s/)** — Linux knowledge is essential for these exams
-- **[Platform Engineering Track](../platform/)** — Build on the foundation
-
----
-
-## Progress Tracking
-
-### Foundations
-- [ ] System Essentials (4 modules)
-- [ ] Container Primitives (4 modules)
-- [ ] Networking (4 modules)
-
-### Security
-- [ ] Hardening (4 modules)
-
-### System Administration
-- [ ] System Administration (4 modules)
-
-### Operations
-- [ ] Performance (4 modules)
-- [ ] Troubleshooting (4 modules)
-- [ ] Shell Scripting (4 modules)
-
----
-
-## Contributing
-
-Found an issue? Have a suggestion? This track is part of [KubeDojo](https://github.com/krisztiankoos/kubedojo), an open-source Kubernetes curriculum.
+- [CKA / CKAD / CKS certifications](/k8s/) — Linux knowledge is essential for these exams
+- [Platform Engineering](/platform/) — build on the foundation
+- [On-Premises Kubernetes](/on-premises/) — run K8s on bare metal
