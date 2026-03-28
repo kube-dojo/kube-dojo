@@ -461,7 +461,6 @@ spec:
       name: imagenet
       options:
         aws.accessKeyId: AKIAIOSFODNN7EXAMPLE
-        aws.secretAccessKey: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
         aws.region: us-east-1
       encryptOptions:
         - name: aws.secretAccessKey

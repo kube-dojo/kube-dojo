@@ -635,14 +635,27 @@ spec:
 **Task 3**: Verify the traffic split by sending 100 requests and counting responses.
 
 ```bash
-# Get the Gateway's external address
-GW_IP=$(kubectl get gateway lab-gateway -o jsonpath='{.status.addresses[0].value}')
+# In kind, Envoy Gateway creates a LoadBalancer Service that stays in
+# "Pending" state. Use port-forward to reach the gateway instead:
+# Find the Envoy Gateway service created for your Gateway
+GW_SVC=$(kubectl get svc -A -l gateway.envoyproxy.io/owning-gateway-name=lab-gateway \
+  -o jsonpath='{.items[0].metadata.name}')
+GW_NS=$(kubectl get svc -A -l gateway.envoyproxy.io/owning-gateway-name=lab-gateway \
+  -o jsonpath='{.items[0].metadata.namespace}')
+
+# Port-forward to the gateway service (run in background)
+kubectl port-forward -n "$GW_NS" svc/"$GW_SVC" 8080:80 &
+PF_PID=$!
+sleep 2
 
 # Send 100 requests and count v1 vs v2
 for i in $(seq 1 100); do
-  curl -s http://$GW_IP:80/ 2>/dev/null
+  curl -s http://localhost:8080/ 2>/dev/null
 done | sort | uniq -c
 # Expected: ~80 "v1", ~20 "v2"
+
+# Clean up port-forward
+kill $PF_PID
 ```
 
 ### Exercise 2: Header-Based Routing
@@ -674,12 +687,12 @@ spec:
           port: 8080
 ```
 
-Test:
+Test (with port-forward running as shown in Exercise 1, Task 3):
 ```bash
 # Without header — v1
-curl -s http://$GW_IP:80/
+curl -s http://localhost:8080/
 # With header — v2
-curl -s -H "X-Version: v2" http://$GW_IP:80/
+curl -s -H "X-Version: v2" http://localhost:8080/
 ```
 
 </details>

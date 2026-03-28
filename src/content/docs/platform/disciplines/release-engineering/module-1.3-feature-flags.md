@@ -525,7 +525,7 @@ If flag-on metrics significantly degrade, pause or reduce the rollout percentage
 
 3. **Knight Capital lost $440 million in 45 minutes in 2012** because of a deployment that accidentally re-enabled dead code from an old feature flag that was never removed. The flag referenced a trading algorithm that had been repurposed years earlier. When the flag was accidentally toggled during a deployment, the zombie algorithm executed millions of unintended trades. This is the most expensive feature flag tech debt in history.
 
-4. **The CNCF adopted OpenFeature as a sandbox project in 2023**, recognizing that feature flag standardization is as important as observability standardization (OpenTelemetry). The specification defines a vendor-neutral API that lets teams switch between providers (Unleash, LaunchDarkly, etc.) without rewriting application code — the same way OpenTelemetry lets you switch between Jaeger and Zipkin.
+4. **The CNCF adopted OpenFeature as a sandbox project in 2022**, and it graduated to incubating status in 2024, recognizing that feature flag standardization is as important as observability standardization (OpenTelemetry). The specification defines a vendor-neutral API that lets teams switch between providers (Unleash, LaunchDarkly, etc.) without rewriting application code — the same way OpenTelemetry lets you switch between Jaeger and Zipkin.
 
 ---
 
@@ -779,6 +779,8 @@ spec:
               value: "false"
             - name: INIT_ADMIN_API_TOKENS
               value: "*:*.unleash-admin-api-token"
+            - name: INIT_CLIENT_API_TOKENS
+              value: "default:development.unleash-client-api-token"
           ports:
             - containerPort: 4242
           readinessProbe:
@@ -859,7 +861,7 @@ data:
     import os
 
     UNLEASH_URL = os.getenv("UNLEASH_URL", "http://unleash:4242/api")
-    API_TOKEN = os.getenv("UNLEASH_API_TOKEN", "*:*.unleash-admin-api-token")
+    API_TOKEN = os.getenv("UNLEASH_API_TOKEN", "default:development.unleash-client-api-token")
 
     def check_flag(flag_name, user_id):
         """Simple flag check against Unleash API."""
@@ -926,7 +928,7 @@ spec:
             - name: UNLEASH_URL
               value: "http://unleash:4242/api"
             - name: UNLEASH_API_TOKEN
-              value: "*:*.unleash-admin-api-token"
+              value: "default:development.unleash-client-api-token"
           ports:
             - containerPort: 8080
           volumeMounts:
@@ -997,16 +999,22 @@ curl -s "http://localhost:8080/?user=user-42"
 ### Step 6: Add More Users Without Redeploying
 
 ```bash
-# Add user-7 to the targeting list
-curl -s -X PUT "http://localhost:4242/api/admin/projects/default/features/new-ui-dashboard/environments/development/strategies" \
+# Get the strategy ID first
+STRATEGY_ID=$(curl -s http://localhost:4242/api/admin/projects/default/features/new-ui-dashboard/environments/development/strategies \
+  -H "Authorization: *:*.unleash-admin-api-token" | jq -r '.[0].id')
+
+echo "Strategy ID: $STRATEGY_ID"
+
+# Update the strategy to add user-7 to the targeting list
+curl -s -X PUT "http://localhost:4242/api/admin/projects/default/features/new-ui-dashboard/environments/development/strategies/$STRATEGY_ID" \
   -H "Authorization: *:*.unleash-admin-api-token" \
   -H "Content-Type: application/json" \
-  -d '[{
+  -d '{
     "name": "userWithId",
     "parameters": {
       "userIds": "user-42,user-99,user-7"
     }
-  }]' | jq .
+  }' | jq .
 
 # Now user-7 also sees the new dashboard
 curl -s "http://localhost:8080/?user=user-7"

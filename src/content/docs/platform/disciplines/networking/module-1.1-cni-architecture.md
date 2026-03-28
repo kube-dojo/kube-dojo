@@ -317,7 +317,7 @@ hubble observe --verdict DROPPED  # See blocked traffic
 | **Multi-cluster** | No | Federation (Enterprise) | ClusterMesh |
 | **Min kernel** | 3.10 | 3.10 (iptables), 5.3 (eBPF) | 5.4 (5.10+ recommended) |
 | **Memory per node** | ~15 MB | ~60-120 MB | ~150-300 MB |
-| **CNCF status** | Archived (maintenance) | None (Tigera) | Graduated |
+| **CNCF status** | Sandbox | None (Tigera) | Graduated |
 | **Best for** | Dev/test, simple setups | Enterprise, BGP environments | Modern, eBPF-capable |
 
 ### Performance Benchmarks (Approximate)
@@ -533,12 +533,14 @@ iptables-save | head -50        # iptables rules (if not using eBPF)
 kind delete cluster --name cni-lab
 kind create cluster --name cilium-lab --config kind-config.yaml
 
-# Install Cilium CLI
+# Install Cilium CLI (detect OS and architecture)
 CILIUM_CLI_VERSION=$(curl -s https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt)
+CLI_ARCH=amd64
+if [ "$(uname -m)" = "aarch64" ] || [ "$(uname -m)" = "arm64" ]; then CLI_ARCH=arm64; fi
 curl -L --fail --remote-name-all \
-  https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-darwin-arm64.tar.gz
-sudo tar xzvfC cilium-darwin-arm64.tar.gz /usr/local/bin
-rm cilium-darwin-arm64.tar.gz
+  https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-$(uname -s | tr '[:upper:]' '[:lower:]')-${CLI_ARCH}.tar.gz
+sudo tar xzvfC cilium-$(uname -s | tr '[:upper:]' '[:lower:]')-${CLI_ARCH}.tar.gz /usr/local/bin
+rm cilium-$(uname -s | tr '[:upper:]' '[:lower:]')-${CLI_ARCH}.tar.gz
 
 # Install Cilium
 cilium install --version 1.16.5

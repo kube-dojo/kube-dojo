@@ -726,10 +726,12 @@ A vLLM deployment serves Llama-3.1-8B with `--max-model-len=32768` on an A100-40
 <details>
 <summary>Show Answer</summary>
 
-The `--max-model-len` parameter determines how much GPU memory vLLM pre-allocates for the KV cache pool. The KV cache memory per request is proportional to `max_model_len`:
+vLLM pre-allocates the KV cache pool based on `--gpu-memory-utilization` and the available GPU memory (total VRAM minus model weights). The `--max-model-len` parameter sets the maximum sequence length the scheduler allows per request, which determines how much KV cache each concurrent request can consume:
 
-- At 32768: KV cache per request slot ~= 4GB. With ~32GB available for KV cache (40GB total - 8GB model weights), that's ~8 concurrent slots.
-- At 4096: KV cache per request slot ~= 0.5GB. Same 32GB available / 0.5GB = ~64 theoretical slots; vLLM manages 48 practically.
+- At 32768: Each request can reserve up to ~4GB of KV cache. With ~32GB available for KV cache (40GB total - 8GB model weights), the scheduler can fit ~8 concurrent requests at maximum length.
+- At 4096: Each request can reserve up to ~0.5GB. Same 32GB pool allows ~64 theoretical slots; vLLM manages 48 practically due to internal overhead.
+
+In both cases, the total KV cache pool size is the same (determined by `--gpu-memory-utilization`), but the maximum per-request allocation changes, which controls how many concurrent requests fit.
 
 The fix: Set `--max-model-len` to the actual maximum you expect (e.g., 4096 for a chatbot with short conversations), not the model's theoretical maximum (32768). You can still handle occasional longer sequences by enabling `--swap-space` to move inactive KV cache to CPU memory.
 </details>

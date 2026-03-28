@@ -732,7 +732,7 @@ The critical principle: **deploy schema changes separately from code changes**, 
 
 ### Objective
 
-Simulate a ring deployment across three "regions" using ArgoCD ApplicationSets on a local kind cluster, deploying different versions to different rings and practicing promotion.
+Simulate a ring deployment across three "regions" using namespaces on a local kind cluster, deploying different versions to different rings and practicing manual promotion and rollback. This exercise demonstrates the ring deployment pattern; in production, you would automate this with ArgoCD ApplicationSets as described earlier in this module.
 
 ### Setup
 
@@ -760,21 +760,7 @@ EOF
 kind create cluster --name global-release-lab --config /tmp/kind-config.yaml
 ```
 
-### Step 1: Install ArgoCD
-
-```bash
-kubectl create namespace argocd
-kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
-
-# Wait for ArgoCD to be ready
-kubectl -n argocd rollout status deployment argocd-server --timeout=120s
-
-# Get the admin password
-ARGOCD_PASS=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d)
-echo "ArgoCD password: $ARGOCD_PASS"
-```
-
-### Step 2: Create Namespaces for Each Ring
+### Step 1: Create Namespaces for Each Ring
 
 ```bash
 # Simulate regions with namespaces
@@ -783,10 +769,12 @@ kubectl create namespace ring-2-eu-west
 kubectl create namespace ring-3-us-east
 ```
 
-### Step 3: Deploy Ring 1 (Canary) with v2
+### Step 2: Deploy Ring 1 (Canary) with v2
 
-```yaml
-# ring-1-deployment.yaml
+Create the manifest file:
+
+```bash
+cat <<'EOF' > ring-1-deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -827,12 +815,13 @@ spec:
   ports:
     - port: 80
       targetPort: 8080
+EOF
 ```
 
-### Step 4: Deploy Rings 2 and 3 with v1 (Stable)
+### Step 3: Deploy Rings 2 and 3 with v1 (Stable)
 
-```yaml
-# ring-2-deployment.yaml
+```bash
+cat <<'EOF' > ring-2-deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -873,10 +862,11 @@ spec:
   ports:
     - port: 80
       targetPort: 8080
+EOF
 ```
 
-```yaml
-# ring-3-deployment.yaml
+```bash
+cat <<'EOF' > ring-3-deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -917,6 +907,7 @@ spec:
   ports:
     - port: 80
       targetPort: 8080
+EOF
 ```
 
 ```bash
@@ -925,29 +916,26 @@ kubectl apply -f ring-2-deployment.yaml
 kubectl apply -f ring-3-deployment.yaml
 ```
 
-### Step 5: Verify Ring State
+### Step 4: Verify Ring State
 
 ```bash
 # Check all rings
 echo "=== Ring 1 (Canary - ap-south-1) ==="
 kubectl -n ring-1-ap-south get pods -o wide --show-labels
-kubectl -n ring-1-ap-south port-forward svc/webapp 8081:80 &
-sleep 1
-curl -s http://localhost:8081
+kubectl run curl-r1 --rm -it --restart=Never --image=curlimages/curl -- \
+  curl -s webapp.ring-1-ap-south.svc:80
 
 echo ""
 echo "=== Ring 2 (eu-west-1) ==="
 kubectl -n ring-2-eu-west get pods -o wide --show-labels
-kubectl -n ring-2-eu-west port-forward svc/webapp 8082:80 &
-sleep 1
-curl -s http://localhost:8082
+kubectl run curl-r2 --rm -it --restart=Never --image=curlimages/curl -- \
+  curl -s webapp.ring-2-eu-west.svc:80
 
 echo ""
 echo "=== Ring 3 (us-east-1) ==="
 kubectl -n ring-3-us-east get pods -o wide --show-labels
-kubectl -n ring-3-us-east port-forward svc/webapp 8083:80 &
-sleep 1
-curl -s http://localhost:8083
+kubectl run curl-r3 --rm -it --restart=Never --image=curlimages/curl -- \
+  curl -s webapp.ring-3-us-east.svc:80
 ```
 
 Expected output:
@@ -957,14 +945,12 @@ Ring 2: v2.0.0 - Ring 2 (eu-west-1) - STABLE
 Ring 3: v2.0.0 - Ring 3 (us-east-1) - STABLE
 ```
 
-### Step 6: Simulate Ring Promotion (Promote Ring 2)
+### Step 5: Simulate Ring Promotion (Promote Ring 2)
 
 After validating Ring 1 is healthy, promote Ring 2:
 
 ```bash
 # Update Ring 2 to v2
-kubectl -n ring-2-eu-west set image deployment/webapp webapp=hashicorp/http-echo:0.2.3
-kubectl -n ring-2-eu-west set env deployment/webapp --containers=webapp -- # Trigger update
 kubectl -n ring-2-eu-west patch deployment webapp --type='json' -p='[
   {"op":"replace","path":"/spec/template/spec/containers/0/args","value":["-text=v2.1.0 - Ring 2 (eu-west-1) - NEW VERSION","-listen=:8080"]}
 ]'
@@ -973,11 +959,12 @@ kubectl -n ring-2-eu-west patch deployment webapp --type='json' -p='[
 kubectl -n ring-2-eu-west rollout status deployment webapp
 
 # Verify
-curl -s http://localhost:8082
+kubectl run curl-r2v2 --rm -it --restart=Never --image=curlimages/curl -- \
+  curl -s webapp.ring-2-eu-west.svc:80
 # Output: v2.1.0 - Ring 2 (eu-west-1) - NEW VERSION
 ```
 
-### Step 7: Simulate Ring 2 Failure and Rollback
+### Step 6: Simulate Ring 2 Failure and Rollback
 
 ```bash
 # Simulate failure — roll back Ring 2 to stable
@@ -988,27 +975,34 @@ kubectl -n ring-2-eu-west patch deployment webapp --type='json' -p='[
 kubectl -n ring-2-eu-west rollout status deployment webapp
 
 # Verify rollback
-curl -s http://localhost:8082
+kubectl run curl-rb2 --rm -it --restart=Never --image=curlimages/curl -- \
+  curl -s webapp.ring-2-eu-west.svc:80
 # Output: v2.0.0 - Ring 2 (eu-west-1) - STABLE (ROLLED BACK)
 
 # Ring 3 was never promoted — still on stable
-curl -s http://localhost:8083
+kubectl run curl-rb3 --rm -it --restart=Never --image=curlimages/curl -- \
+  curl -s webapp.ring-3-us-east.svc:80
 # Output: v2.0.0 - Ring 3 (us-east-1) - STABLE
 ```
 
-### Step 8: Verify Isolation
+### Step 7: Verify Isolation
 
 ```bash
 echo "=== Global Release State ==="
-echo "Ring 1 (canary): $(curl -s http://localhost:8081)"
-echo "Ring 2 (rolled back): $(curl -s http://localhost:8082)"
-echo "Ring 3 (untouched): $(curl -s http://localhost:8083)"
+echo "Ring 1 (canary):"
+kubectl run curl-iso1 --rm -it --restart=Never --image=curlimages/curl -- \
+  curl -s webapp.ring-1-ap-south.svc:80
+echo "Ring 2 (rolled back):"
+kubectl run curl-iso2 --rm -it --restart=Never --image=curlimages/curl -- \
+  curl -s webapp.ring-2-eu-west.svc:80
+echo "Ring 3 (untouched):"
+kubectl run curl-iso3 --rm -it --restart=Never --image=curlimages/curl -- \
+  curl -s webapp.ring-3-us-east.svc:80
 ```
 
 ### Clean Up
 
 ```bash
-kill %1 %2 %3 2>/dev/null
 kind delete cluster --name global-release-lab
 ```
 

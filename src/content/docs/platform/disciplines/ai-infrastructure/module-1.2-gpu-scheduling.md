@@ -859,7 +859,7 @@ spec:
           args:
             - |
               # Simulate inference workload — periodic GPU compute bursts
-              apt-get update -qq && apt-get install -y -qq cuda-samples-12-5 2>/dev/null
+              apt-get update -qq && apt-get install -y -qq cuda-demo-suite-12-5 2>/dev/null
               while true; do
                 /usr/local/cuda-12.5/extras/demo_suite/deviceQuery
                 sleep $((RANDOM % 5 + 1))

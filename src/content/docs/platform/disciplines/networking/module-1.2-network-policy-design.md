@@ -90,7 +90,13 @@ spec:
       ports:
         - port: 5432
           protocol: TCP
-    - to: []            # Allow DNS (required for name resolution)
+    - to:                # Allow DNS (required for name resolution)
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
       ports:
         - port: 53
           protocol: UDP
@@ -429,8 +435,8 @@ hubble observe --namespace production --output json | \
 # Enable flow logs in Calico Enterprise or Calico Cloud
 # Then export the discovered traffic flows as NetworkPolicy YAML
 
-# Using Inspektor Gadget (open source)
-kubectl gadget trace network --namespace production --output columns=src,dst,port,proto
+# Using Inspektor Gadget (open source) — monitor traffic and suggest policies
+kubectl gadget advise network-policy monitor --namespace production --timeout 60
 ```
 
 ---

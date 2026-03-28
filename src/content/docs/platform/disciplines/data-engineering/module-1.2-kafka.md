@@ -1040,7 +1040,6 @@ kubectl -n kafka run consumer-bench --rm -it --restart=Never \
     --bootstrap-server lab-kafka-bootstrap:9092 \
     --topic benchmark-throughput \
     --messages 1000000 \
-    --threads 3 \
     --group benchmark-consumer-group
 
 # Record:

@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 1.1: Building Platform Teams](../module-1.1-platform-team-building/) — Team structures and organizational design
+- **Required**: [Module 1.1: Building Platform Teams](./module-1.1-platform-team-building/) — Team structures and organizational design
 - **Required**: [Engineering Leadership Track](../../foundations/engineering-leadership/) — Stakeholder communication and ADRs
 - **Recommended**: [SRE: Service Level Objectives](../sre/module-1.2-slos/) — Measuring outcomes with SLIs/SLOs
 - **Recommended**: Experience using internal developer platforms (as a consumer)
@@ -470,7 +470,7 @@ Update service mesh config        E          4  ← Target for reduction
 
 **Month 12 (after fixes)**: 19 out of 25 teams migrated (76%). Developer satisfaction with deployment tools went from 2.1/5 to 4.2/5.
 
-**Business impact**: The 6-month delay cost approximately $1.2M in engineering time (60 engineers x $200K fully loaded x 1% productivity loss from bad tooling x 6 months) and delayed two product launches that depended on the new deployment capabilities.
+**Business impact**: The 6-month delay cost approximately $1.2M in engineering time (60 engineers x $200K fully loaded x 20% productivity loss from bad tooling x 0.5 years) and delayed two product launches that depended on the new deployment capabilities.
 
 **Lessons**:
 1. **Build with users, not for users**: Embedded user research would have caught the missing features before launch

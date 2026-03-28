@@ -33,7 +33,7 @@ The company's response was to hire more platform engineers. They went from 5 to 
 
 ## Did You Know?
 
-> **Dunbar's number** (roughly 150) is the cognitive limit to the number of people with whom one can maintain stable social relationships. When a platform organization exceeds ~15 people (about 10% of Dunbar's number), informal coordination breaks down and you need explicit processes. Most platform scaling problems happen at exactly this inflection point.
+> **Dunbar's number** (roughly 150) is the cognitive limit to the number of people with whom one can maintain stable social relationships. When a platform organization exceeds ~8-12 people, informal coordination breaks down and you need explicit processes. Most platform scaling problems happen at exactly this inflection point.
 
 > **Amazon's "two-pizza team" rule** was not about team size — it was about **ownership scope**. Jeff Bezos' insight was that small teams with clear ownership make better decisions and move faster than large teams with shared ownership. This principle applies directly to platform sub-teams.
 

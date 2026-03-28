@@ -375,6 +375,26 @@ spec:
         app: trino
         role: coordinator
     spec:
+      initContainers:
+        - name: init-config
+          image: busybox:1.37
+          command: ["sh", "-c"]
+          args:
+            - |
+              # Copy configs to writable directory
+              cp /etc/trino-cm/* /etc/trino/
+              mkdir -p /etc/trino/catalog
+              cp /etc/trino-catalog/* /etc/trino/catalog/
+              # Generate unique node.id (required by Trino)
+              NODE_ID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || hostname)
+              sed -i "s|^node.data-dir=|node.id=${NODE_ID}\nnode.data-dir=|" /etc/trino/node.properties
+          volumeMounts:
+            - name: config-cm
+              mountPath: /etc/trino-cm
+            - name: catalog-cm
+              mountPath: /etc/trino-catalog
+            - name: config
+              mountPath: /etc/trino
       containers:
         - name: trino
           image: trinodb/trino:467
@@ -387,8 +407,6 @@ spec:
           volumeMounts:
             - name: config
               mountPath: /etc/trino
-            - name: catalog
-              mountPath: /etc/trino/catalog
           resources:
             requests:
               cpu: "2"
@@ -402,12 +420,14 @@ spec:
             initialDelaySeconds: 30
             periodSeconds: 10
       volumes:
-        - name: config
+        - name: config-cm
           configMap:
             name: trino-coordinator-config
-        - name: catalog
+        - name: catalog-cm
           configMap:
             name: trino-catalog
+        - name: config
+          emptyDir: {}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -426,14 +446,30 @@ spec:
         app: trino
         role: worker
     spec:
+      initContainers:
+        - name: init-config
+          image: busybox:1.37
+          command: ["sh", "-c"]
+          args:
+            - |
+              cp /etc/trino-cm/* /etc/trino/
+              mkdir -p /etc/trino/catalog
+              cp /etc/trino-catalog/* /etc/trino/catalog/
+              NODE_ID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || hostname)
+              sed -i "s|^node.data-dir=|node.id=${NODE_ID}\nnode.data-dir=|" /etc/trino/node.properties
+          volumeMounts:
+            - name: config-cm
+              mountPath: /etc/trino-cm
+            - name: catalog-cm
+              mountPath: /etc/trino-catalog
+            - name: config
+              mountPath: /etc/trino
       containers:
         - name: trino
           image: trinodb/trino:467
           volumeMounts:
             - name: config
               mountPath: /etc/trino
-            - name: catalog
-              mountPath: /etc/trino/catalog
           resources:
             requests:
               cpu: "4"
@@ -441,12 +477,14 @@ spec:
             limits:
               memory: 16Gi
       volumes:
-        - name: config
+        - name: config-cm
           configMap:
             name: trino-worker-config
-        - name: catalog
+        - name: catalog-cm
           configMap:
             name: trino-catalog
+        - name: config
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -1027,6 +1065,26 @@ spec:
       labels:
         app: trino
     spec:
+      initContainers:
+        - name: init-config
+          image: busybox:1.37
+          command: ["sh", "-c"]
+          args:
+            - |
+              # Copy configs to a writable directory (ConfigMap mounts are read-only)
+              cp /etc/trino-cm/* /etc/trino/
+              mkdir -p /etc/trino/catalog
+              cp /etc/trino-catalog/* /etc/trino/catalog/
+              # Generate unique node.id (required by Trino to start)
+              NODE_ID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || hostname)
+              sed -i "s|^node.data-dir=|node.id=${NODE_ID}\nnode.data-dir=|" /etc/trino/node.properties
+          volumeMounts:
+            - name: config-cm
+              mountPath: /etc/trino-cm
+            - name: catalog-cm
+              mountPath: /etc/trino-catalog
+            - name: config
+              mountPath: /etc/trino
       containers:
         - name: trino
           image: trinodb/trino:467
@@ -1035,8 +1093,6 @@ spec:
           volumeMounts:
             - name: config
               mountPath: /etc/trino
-            - name: catalog
-              mountPath: /etc/trino/catalog
           resources:
             requests:
               cpu: "1"
@@ -1050,12 +1106,14 @@ spec:
             initialDelaySeconds: 30
             periodSeconds: 10
       volumes:
-        - name: config
+        - name: config-cm
           configMap:
             name: trino-config
-        - name: catalog
+        - name: catalog-cm
           configMap:
             name: trino-catalog-config
+        - name: config
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

@@ -106,7 +106,7 @@ kubectl exec -it deployment/api-server -n app -- \
   done'
 
 # Check PostgreSQL's internal IO statistics
-kubectl exec -it statefulset/postgresql-0 -n database -- \
+kubectl exec -it postgresql-0 -n database -- \
   psql -U postgres -c "SELECT * FROM pg_stat_io WHERE backend_type = 'client backend';"
 
 # Clean up
@@ -555,15 +555,15 @@ spec:
                   aws s3 cp s3://backups/postgresql/latest.dump /tmp/restore.dump
 
                   # Create a temporary database for verification
-                  PGPASSWORD=$POSTGRES_PASSWORD psql -h postgresql-replica.database.svc \
+                  PGPASSWORD=$POSTGRES_PASSWORD psql -h postgresql.database.svc \
                     -U postgres -c "CREATE DATABASE backup_verify_$(date +%Y%m%d);"
 
                   # Restore into the temporary database
-                  PGPASSWORD=$POSTGRES_PASSWORD pg_restore -h postgresql-replica.database.svc \
+                  PGPASSWORD=$POSTGRES_PASSWORD pg_restore -h postgresql.database.svc \
                     -U postgres -d "backup_verify_$(date +%Y%m%d)" /tmp/restore.dump
 
                   # Run verification queries
-                  PGPASSWORD=$POSTGRES_PASSWORD psql -h postgresql-replica.database.svc \
+                  PGPASSWORD=$POSTGRES_PASSWORD psql -h postgresql.database.svc \
                     -U postgres -d "backup_verify_$(date +%Y%m%d)" -c "
                       SELECT 'users' as table_name, count(*) as row_count FROM users
                       UNION ALL
@@ -572,7 +572,7 @@ spec:
                       SELECT 'products', count(*) FROM products;"
 
                   # Clean up temporary database
-                  PGPASSWORD=$POSTGRES_PASSWORD psql -h postgresql-replica.database.svc \
+                  PGPASSWORD=$POSTGRES_PASSWORD psql -h postgresql.database.svc \
                     -U postgres -c "DROP DATABASE backup_verify_$(date +%Y%m%d);"
 
                   echo "=== Backup Verification Complete ==="

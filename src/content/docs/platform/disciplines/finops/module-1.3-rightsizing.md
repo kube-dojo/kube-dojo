@@ -702,6 +702,21 @@ spec:
         - containerPort: 80
 EOF
 
+# Create a Service so the load-generator can reach the app via DNS
+kubectl apply -f - << 'EOF'
+apiVersion: v1
+kind: Service
+metadata:
+  name: overprovisioned-app
+  namespace: rightsizing-lab
+spec:
+  selector:
+    app: overprovisioned-app
+  ports:
+    - port: 80
+      targetPort: 80
+EOF
+
 # Wait for pods to be ready
 kubectl rollout status deployment/overprovisioned-app -n rightsizing-lab
 

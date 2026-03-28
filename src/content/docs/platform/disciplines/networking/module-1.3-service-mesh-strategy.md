@@ -161,7 +161,7 @@ The sidecarless model separates L4 (mTLS, basic authorization) from L7 (HTTP rou
 | **mTLS** | Yes | Yes | Yes (WireGuard or IPsec) |
 | **L7 traffic management** | Full (VirtualService) | Basic (ServiceProfile) | Via Envoy per-node |
 | **Traffic splitting** | Yes (weight, header, cookie) | Yes (weight only) | Yes (CiliumEnvoyConfig) |
-| **Circuit breaking** | Yes | No (by design) | Via Envoy config |
+| **Circuit breaking** | Yes | Yes (failure accrual) | Via Envoy config |
 | **Rate limiting** | Yes (local + global) | No | Yes (Envoy filter) |
 | **Fault injection** | Yes | No | Via Envoy config |
 | **Retries** | Full config | Yes | Via Envoy config |
@@ -618,9 +618,11 @@ In the **sidecar model**, each Pod gets its own proxy container (Envoy or linker
 </details>
 
 <details>
-<summary>2. Why does Linkerd NOT support circuit breaking, while Istio does?</summary>
+<summary>2. How does Linkerd's approach to circuit breaking differ from Istio's?</summary>
 
-This is a deliberate design choice, not a limitation. Linkerd's philosophy is that **circuit breaking at the proxy layer is dangerous** — it makes decisions about service health based on incomplete information (the proxy sees symptoms but not causes). Linkerd instead implements **load-based balancing** using real-time latency data (EWMA — Exponentially Weighted Moving Average) to route requests away from slow endpoints. The Linkerd team argues this achieves the same goal (protecting against failing backends) without the binary open/closed failure mode that circuit breakers introduce.
+Istio implements circuit breaking via Envoy's **outlierDetection** in DestinationRule resources — configuring thresholds like consecutive 5xx errors, ejection duration, and max ejection percentage. This is a traditional circuit breaker pattern with explicit open/closed states.
+
+Linkerd (since v2.13) implements circuit breaking through **consecutive failure accrual** in its Rust-based proxy. When a destination accumulates consecutive failures beyond a configurable threshold, Linkerd marks it as unavailable and stops sending traffic to it. This is configured using Gateway API policies (e.g., HTTPRoute backendRef filters) rather than Istio-style CRDs. Linkerd also uses **EWMA (Exponentially Weighted Moving Average) load balancing** to proactively route traffic away from slow endpoints before failures accumulate. The result is similar protection against failing backends, but Linkerd's approach is more tightly integrated with its load balancing strategy rather than being a separate, binary open/closed mechanism.
 </details>
 
 <details>

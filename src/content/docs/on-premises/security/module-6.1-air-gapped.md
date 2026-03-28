@@ -63,12 +63,14 @@ Disable unused physical ports at the BIOS and OS level:
 
 ```bash
 # Disable USB storage at the kernel level (Linux)
-echo "blacklist usb-storage" > /etc/modprobe.d/disable-usb-storage.conf
-echo "blacklist uas" >> /etc/modprobe.d/disable-usb-storage.conf
+# Use 'install' directive instead of 'blacklist' — blacklist only prevents
+# auto-loading but the module can still be loaded manually with modprobe.
+echo "install usb-storage /bin/false" > /etc/modprobe.d/disable-usb-storage.conf
+echo "install uas /bin/false" >> /etc/modprobe.d/disable-usb-storage.conf
 update-initramfs -u
 
-# Verify USB storage is blocked
-modprobe usb-storage 2>&1  # Should fail
+# Verify USB storage is blocked (modprobe should return an error)
+modprobe usb-storage 2>&1  # Should fail with "install /bin/false"
 
 # Disable Thunderbolt/DMA attack vectors
 echo "blacklist thunderbolt" > /etc/modprobe.d/disable-thunderbolt.conf

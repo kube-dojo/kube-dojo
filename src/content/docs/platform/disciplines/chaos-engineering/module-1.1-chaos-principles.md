@@ -223,7 +223,11 @@ experiment:
     customer_impact: "possible 2-3s delay for ~5% of checkouts"
 
   duration: 10 minutes
-  rollback: "kubectl rollout restart deployment/payment-service"
+  rollback: |
+    # For pod-kill, Kubernetes self-heals via ReplicaSet — verify pod recreation:
+    kubectl get pods -l app=payment-service -n production -w
+    # If needed, restore original replica count:
+    kubectl scale deployment/payment-service -n production --replicas=3
 ```
 
 ### Step 4: Blast Radius and Abort Conditions
@@ -592,7 +596,10 @@ experiment:
     max_data_impact: "none (Redis holds state)"
 
   rollback: |
-    kubectl rollout restart deployment/cart-service -n staging
+    # For pod-kill, Kubernetes self-heals via ReplicaSet — verify pod recreation:
+    kubectl get pods -l app=cart-service -n staging -w
+    # If needed, restore original replica count:
+    kubectl scale deployment/cart-service -n staging --replicas=3
     kubectl wait --for=condition=available deployment/cart-service -n staging --timeout=60s
 
   duration: "10 minutes"

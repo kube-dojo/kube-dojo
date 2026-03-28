@@ -694,10 +694,12 @@ kubectl -n flink wait --for=condition=Available \
   deployment/flink-kubernetes-operator --timeout=120s
 ```
 
-### Step 2: Create the Flink SQL Job
+### Step 2: Create the Flink Session Cluster and Submit a SQL Job
+
+Since the Flink Kubernetes Operator manages job lifecycle, we deploy a **session cluster** and then use the Flink SQL Client to submit our streaming query.
 
 ```yaml
-# flink-sql-job.yaml
+# flink-session.yaml
 apiVersion: flink.apache.org/v1beta1
 kind: FlinkDeployment
 metadata:
@@ -723,61 +725,6 @@ spec:
       memory: "2048m"
       cpu: 1
     replicas: 2
-  job:
-    jarURI: local:///opt/flink/lib/flink-sql-runner.jar
-    entryClass: org.apache.flink.table.gateway.SqlRunner
-    parallelism: 3
-    upgradeMode: stateless
-    state: running
-    args:
-      - |
-        CREATE TABLE sensor_readings (
-            sensor_id STRING,
-            temperature DOUBLE,
-            humidity DOUBLE,
-            event_time TIMESTAMP(3),
-            WATERMARK FOR event_time AS event_time - INTERVAL '10' SECOND
-        ) WITH (
-            'connector' = 'kafka',
-            'topic' = 'sensor-readings',
-            'properties.bootstrap.servers' = 'flink-lab-kafka-bootstrap.kafka.svc.cluster.local:9092',
-            'properties.group.id' = 'flink-sensor-aggregator',
-            'scan.startup.mode' = 'earliest-offset',
-            'format' = 'json',
-            'json.timestamp-format.standard' = 'ISO-8601'
-        );
-
-        CREATE TABLE sensor_aggregates (
-            sensor_id STRING,
-            window_start TIMESTAMP(3),
-            window_end TIMESTAMP(3),
-            avg_temperature DOUBLE,
-            max_temperature DOUBLE,
-            min_temperature DOUBLE,
-            avg_humidity DOUBLE,
-            reading_count BIGINT
-        ) WITH (
-            'connector' = 'kafka',
-            'topic' = 'sensor-aggregates',
-            'properties.bootstrap.servers' = 'flink-lab-kafka-bootstrap.kafka.svc.cluster.local:9092',
-            'format' = 'json',
-            'json.timestamp-format.standard' = 'ISO-8601'
-        );
-
-        INSERT INTO sensor_aggregates
-        SELECT
-            sensor_id,
-            TUMBLE_START(event_time, INTERVAL '1' MINUTE) AS window_start,
-            TUMBLE_END(event_time, INTERVAL '1' MINUTE) AS window_end,
-            AVG(temperature) AS avg_temperature,
-            MAX(temperature) AS max_temperature,
-            MIN(temperature) AS min_temperature,
-            AVG(humidity) AS avg_humidity,
-            COUNT(*) AS reading_count
-        FROM sensor_readings
-        GROUP BY
-            sensor_id,
-            TUMBLE(event_time, INTERVAL '1' MINUTE);
 ```
 
 ```bash
@@ -786,10 +733,80 @@ kubectl -n flink create serviceaccount flink
 kubectl create clusterrolebinding flink-role-binding \
   --clusterrole=edit --serviceaccount=flink:flink
 
-kubectl apply -f flink-sql-job.yaml
+kubectl apply -f flink-session.yaml
 
-# Watch the deployment
+# Wait for the session cluster to be ready
 kubectl -n flink get flinkdeployment sensor-aggregator -w
+# Wait until READY status shows True
+```
+
+Next, download the Kafka SQL connector JAR into the Flink cluster and submit the SQL job:
+
+```bash
+# Copy the Kafka connector into the running JobManager
+FLINK_JM=$(kubectl -n flink get pod -l component=jobmanager,app=sensor-aggregator -o jsonpath='{.items[0].metadata.name}')
+
+# Download the Flink SQL Kafka connector into the JobManager
+kubectl -n flink exec $FLINK_JM -- bash -c '
+  wget -q -P /opt/flink/lib/ \
+    https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/3.3.0-1.20/flink-sql-connector-kafka-3.3.0-1.20.jar &&
+  echo "Kafka connector downloaded"
+'
+
+# Submit the SQL job via the SQL Client
+kubectl -n flink exec -it $FLINK_JM -- /opt/flink/bin/sql-client.sh embedded -e "
+CREATE TABLE sensor_readings (
+    sensor_id STRING,
+    temperature DOUBLE,
+    humidity DOUBLE,
+    event_time TIMESTAMP(3),
+    WATERMARK FOR event_time AS event_time - INTERVAL '10' SECOND
+) WITH (
+    'connector' = 'kafka',
+    'topic' = 'sensor-readings',
+    'properties.bootstrap.servers' = 'flink-lab-kafka-bootstrap.kafka.svc.cluster.local:9092',
+    'properties.group.id' = 'flink-sensor-aggregator',
+    'scan.startup.mode' = 'earliest-offset',
+    'format' = 'json',
+    'json.timestamp-format.standard' = 'ISO-8601'
+);
+
+CREATE TABLE sensor_aggregates (
+    sensor_id STRING,
+    window_start TIMESTAMP(3),
+    window_end TIMESTAMP(3),
+    avg_temperature DOUBLE,
+    max_temperature DOUBLE,
+    min_temperature DOUBLE,
+    avg_humidity DOUBLE,
+    reading_count BIGINT
+) WITH (
+    'connector' = 'kafka',
+    'topic' = 'sensor-aggregates',
+    'properties.bootstrap.servers' = 'flink-lab-kafka-bootstrap.kafka.svc.cluster.local:9092',
+    'format' = 'json',
+    'json.timestamp-format.standard' = 'ISO-8601'
+);
+
+SET 'parallelism.default' = '3';
+SET 'pipeline.name' = 'sensor-aggregator';
+
+INSERT INTO sensor_aggregates
+SELECT
+    sensor_id,
+    window_start,
+    window_end,
+    AVG(temperature) AS avg_temperature,
+    MAX(temperature) AS max_temperature,
+    MIN(temperature) AS min_temperature,
+    AVG(humidity) AS avg_humidity,
+    COUNT(*) AS reading_count
+FROM TABLE(
+    TUMBLE(TABLE sensor_readings, DESCRIPTOR(event_time), INTERVAL '1' MINUTE)
+)
+GROUP BY
+    sensor_id, window_start, window_end;
+"
 ```
 
 ### Step 3: Produce Test Events
@@ -847,6 +864,7 @@ kubectl -n flink port-forward svc/sensor-aggregator-rest 8081:8081 &
 ```bash
 kubectl -n flink delete flinkdeployment sensor-aggregator
 helm -n flink uninstall flink-kubernetes-operator
+kubectl delete -f https://github.com/cert-manager/cert-manager/releases/download/v1.16.3/cert-manager.yaml
 kubectl -n kafka delete kafka flink-lab
 kubectl -n kafka delete kafkanodepool combined
 kubectl delete -f 'https://strimzi.io/install/latest?namespace=kafka' -n kafka

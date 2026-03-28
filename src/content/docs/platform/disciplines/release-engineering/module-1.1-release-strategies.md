@@ -720,9 +720,9 @@ Verify Blue is live:
 k get pods -l version=blue
 # Should show 3 pods Running
 
-# Test the service
-k port-forward svc/webapp 8080:80 &
-curl http://localhost:8080
+# Test the service using an in-cluster curl
+kubectl run curl-test --rm -it --restart=Never --image=curlimages/curl -- \
+  curl -s webapp.default.svc:80
 # Output: Hello from BLUE (v1)
 ```
 
@@ -792,7 +792,8 @@ k patch service webapp -p '{"spec":{"selector":{"version":"green"}}}'
 Verify the switch:
 
 ```bash
-curl http://localhost:8080
+kubectl run curl-test2 --rm -it --restart=Never --image=curlimages/curl -- \
+  curl -s webapp.default.svc:80
 # Output: Hello from GREEN (v2)
 ```
 
@@ -806,21 +807,23 @@ Simulate a problem with Green and roll back:
 # Rollback to Blue
 k patch service webapp -p '{"spec":{"selector":{"version":"blue"}}}'
 
-curl http://localhost:8080
+kubectl run curl-test3 --rm -it --restart=Never --image=curlimages/curl -- \
+  curl -s webapp.default.svc:80
 # Output: Hello from BLUE (v1)
 ```
 
 ### Step 5: Verify with a Traffic Loop
 
-Run a continuous traffic loop to prove zero downtime during switching:
+Run a continuous traffic loop to prove zero downtime during switching. Use an in-cluster pod to test through the Service (port-forward does not dynamically follow Service selector changes):
 
 ```bash
-# In one terminal — continuous requests
-while true; do
-  RESPONSE=$(curl -s http://localhost:8080)
-  echo "$(date +%H:%M:%S) - $RESPONSE"
-  sleep 0.5
-done
+# In one terminal — continuous requests via in-cluster pod
+kubectl run traffic-loop --rm -it --restart=Never --image=curlimages/curl -- \
+  sh -c 'while true; do
+    RESPONSE=$(curl -s webapp.default.svc:80)
+    echo "$(date +%H:%M:%S) - $RESPONSE"
+    sleep 0.5
+  done'
 ```
 
 In another terminal, perform the cutover:
@@ -834,7 +837,6 @@ Watch the first terminal. You should see the response change from Blue to Green 
 ### Step 6: Clean Up
 
 ```bash
-kill %1 %2 2>/dev/null    # Stop port-forwards
 kind delete cluster --name release-lab
 ```
 

@@ -160,10 +160,12 @@ vgcreate myvg /dev/nvme1n1
 helm repo add topolvm https://topolvm.github.io/topolvm
 helm install topolvm topolvm/topolvm \
   --namespace topolvm-system --create-namespace \
+  --set lvmd.deviceClasses[0].name=nvme \
+  --set lvmd.deviceClasses[0].volume-group=myvg \
+  --set lvmd.deviceClasses[0].default=true \
   --set storageClasses[0].name=topolvm-provisioner \
-  --set storageClasses[0].volumeGroup=myvg \
-  --set storageClasses[0].fsType=xfs \
-  --set storageClasses[0].isDefaultClass=true
+  --set storageClasses[0].storageClass.fsType=xfs \
+  --set storageClasses[0].storageClass.isDefaultClass=true
 ```
 
 ### StorageClass with Device Classes

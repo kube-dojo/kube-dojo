@@ -262,8 +262,9 @@ infracost:
   stage: validate
   image: infracost/infracost:ci-latest
   script:
-    - infracost breakdown --path=terraform/ --format=json --out-file=base.json
     - git checkout $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
+    - infracost breakdown --path=terraform/ --format=json --out-file=base.json
+    - git checkout $CI_COMMIT_SHA
     - infracost diff --path=terraform/ --compare-to=base.json --format=json --out-file=diff.json
     - infracost comment gitlab --path=diff.json --gitlab-token=$GITLAB_TOKEN
         --repo=$CI_PROJECT_PATH --merge-request=$CI_MERGE_REQUEST_IID
@@ -993,7 +994,7 @@ Technical FinOps without cultural FinOps is a project. Technical FinOps *with* c
 
 You've completed the FinOps discipline track. To continue your learning:
 
-- **Review the [FinOps README]()** for a summary of all modules and additional resources
+- **Review the FinOps modules** for a summary of all topics and additional resources
 - **Apply what you've learned** — start with Module 1.1's exercise on your own cloud bill
 - **Join the FinOps Foundation** at finops.org for community, certifications, and frameworks
 - **Explore related disciplines**: [SRE](../sre/), [Platform Engineering](../platform-engineering/), [GitOps](../gitops/)

@@ -961,11 +961,11 @@ data:
           - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
             action: keep
             regex: true
-          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port]
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
             action: replace
             target_label: __address__
-            regex: (.+)
-            replacement: ${1}
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: ${1}:${2}
 EOF
 ```
 

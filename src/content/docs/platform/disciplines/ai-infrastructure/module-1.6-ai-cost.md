@@ -119,11 +119,11 @@ For training jobs, the key is **checkpoint frequency** vs **interruption frequen
 ```
 Interruption rate: ~1 per 4 hours (average for GPU spot on AWS)
 Checkpoint frequency: every 30 minutes
-Maximum work lost per interruption: 30 minutes of training
-Cost of lost work: 8 A100 x $1.56/hr (spot) x 0.5hr = $6.24
+Average work lost per interruption: 15 minutes (half a checkpoint interval)
+Cost of lost work: 8 A100 x $1.56/hr (spot) x 0.25hr = $3.12
 
 Savings from spot: 8 A100 x ($32.77 - $12.50) x 4hr = $648.64 per period
-Net savings: $648.64 - $6.24 = $642.40 per 4-hour period (99% of potential savings captured)
+Net savings: $648.64 - $3.12 = $645.52 per 4-hour period (99.5% of potential savings captured)
 ```
 
 ### Node Termination Handler
@@ -841,16 +841,16 @@ A training job checkpoints every 30 minutes. On spot instances, it costs $12/hr.
 **Spot cost analysis:**
 - Base cost: $12/hr
 - Interruptions per hour: 1/3
-- Work lost per interruption: 30 minutes (half a checkpoint interval)
-- Cost of lost work: 30 min × $12/hr = $6 per interruption
-- Interruption cost per hour: $6 × (1/3) = $2/hr
-- **Effective cost: $12 + $2 = $14/hr**
+- Average work lost per interruption: 15 minutes (half a checkpoint interval, since an interruption is equally likely at any point within the 30-minute window)
+- Cost of lost work: 15 min × $12/hr = $3 per interruption
+- Interruption cost per hour: $3 × (1/3) = $1/hr
+- **Effective cost: $12 + $1 = $13/hr**
 
 **On-demand cost: $32/hr**
 
-**Savings with spot: ($32 - $14) / $32 = 56% savings**
+**Savings with spot: ($32 - $13) / $32 = 59% savings**
 
-Even accounting for lost work from interruptions, spot is dramatically cheaper. The savings would be even higher with more frequent checkpointing (e.g., every 15 minutes reduces lost-work cost to $1/hr).
+Even accounting for lost work from interruptions, spot is dramatically cheaper. The savings would be even higher with more frequent checkpointing (e.g., every 15 minutes reduces average lost-work cost to $0.50/hr).
 </details>
 
 ### Question 2

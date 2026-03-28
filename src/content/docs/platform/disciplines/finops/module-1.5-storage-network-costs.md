@@ -151,10 +151,15 @@ Orphaned Volume Lifecycle:
 
 ```bash
 # Find PVs that are Released (no longer bound to a PVC)
-kubectl get pv --field-selector=status.phase=Released
+# Note: PVs only support metadata.name and metadata.namespace field selectors,
+# so we filter by phase using grep or jq instead
+kubectl get pv | grep Released
 
 # Find PVs that are Available (never claimed)
-kubectl get pv --field-selector=status.phase=Available
+kubectl get pv | grep Available
+
+# For structured output, use jq:
+# kubectl get pv -o json | jq '.items[] | select(.status.phase=="Released") | .metadata.name'
 
 # Detailed view with age
 kubectl get pv -o custom-columns=\
@@ -739,7 +744,12 @@ echo ""
 # Section 1: Unbound PVs (Available or Released)
 echo "--- Unbound Persistent Volumes ---"
 echo ""
-UNBOUND=$(kubectl get pv --field-selector='status.phase!=Bound' -o json 2>/dev/null)
+UNBOUND=$(kubectl get pv -o json 2>/dev/null | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+items = [pv for pv in data.get('items', []) if pv['status']['phase'] != 'Bound']
+json.dump({'items': items}, sys.stdout)
+" 2>/dev/null)
 UNBOUND_COUNT=$(echo "$UNBOUND" | python3 -c "
 import json, sys
 data = json.load(sys.stdin)

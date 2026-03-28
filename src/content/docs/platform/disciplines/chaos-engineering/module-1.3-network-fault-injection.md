@@ -269,8 +269,8 @@ spec:
   port: 80                     # Target port
   method: GET                  # Only affect GET requests
   path: "/api/products*"       # Only affect product API paths
-  code: 500                    # Return HTTP 500
-  abort: true                  # Abort the request (don't forward to app)
+  replace:
+    code: 500                  # Replace response with HTTP 500
   duration: "120s"
 ```
 

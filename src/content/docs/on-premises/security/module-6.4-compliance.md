@@ -218,7 +218,11 @@ rules:
 
   # CRITICAL: Log all Secret access with full metadata
   # (Required for HIPAA, SOC 2, PCI DSS)
-  - level: RequestResponse
+  # WARNING: Do NOT use RequestResponse for secrets — it logs actual secret
+  # data (values) in the audit log, creating a severe security vulnerability.
+  # Metadata level captures who accessed which secret and when, without
+  # exposing secret contents.
+  - level: Metadata
     resources:
     - group: ""
       resources: ["secrets"]
@@ -414,7 +418,7 @@ Build a script that generates auditor-ready evidence organized by control area: 
 
 | Mistake | Problem | Solution |
 |---------|---------|----------|
-| Audit policy set to `None` for secrets | No evidence of who accessed secrets | Set `RequestResponse` level for secrets |
+| Audit policy set to `None` for secrets | No evidence of who accessed secrets | Set `Metadata` level for secrets (not `RequestResponse`, which would log secret data) |
 | Audit logs stored only on the node | Root access = log tampering | Ship to WORM storage (MinIO with object lock) |
 | No retention policy for logs | Logs deleted before audit period | HIPAA: 6 years, SOC 2: Type II period + 1 year, PCI: 1 year online + 1 year archive |
 | Entire cluster in PCI scope | Massive audit surface, huge cost | Isolate CDE in dedicated namespaces + nodes, minimize scope |
@@ -471,10 +475,10 @@ What is the difference between Kubernetes audit levels `None`, `Metadata`, `Requ
 
 - **`Request`**: Logs metadata plus the request body (but not the response body). Use when you need to know what was submitted: RBAC changes (what role was created), admission webhook configurations. Not commonly needed.
 
-- **`RequestResponse`**: Logs metadata, request body, and response body. Use for the most sensitive operations: Secret access (what secret was read or created), `pods/exec` (what command was executed), RBAC changes. This level generates the most data but provides full forensic capability.
+- **`RequestResponse`**: Logs metadata, request body, and response body. Use for operations where you need full forensic capability: `pods/exec` (what command was executed), RBAC changes. **Do NOT use for Secrets** -- `RequestResponse` on secrets logs the actual secret data (values) into the audit log, creating a severe security vulnerability. Use `Metadata` for secrets instead, which captures who accessed which secret and when without exposing contents.
 
 **Compliance mapping:**
-- HIPAA/PCI DSS audit requirements for sensitive data access: `RequestResponse` for secrets, exec, RBAC
+- HIPAA/PCI DSS audit requirements for sensitive data access: `Metadata` for secrets (captures access without exposing values), `RequestResponse` for exec and RBAC
 - SOC 2 change management evidence: `Metadata` for most write operations
 - General operational awareness: `Metadata` catch-all rule
 
@@ -552,7 +556,7 @@ Your company processes payments (PCI DSS) and healthcare data (HIPAA) on the sam
 
 ### Steps
 
-1. **Create an audit policy** with rules: `None` for health checks, `RequestResponse` for secrets and `pods/exec`, `Metadata` for all write operations, and a `Metadata` catch-all.
+1. **Create an audit policy** with rules: `None` for health checks, `Metadata` for secrets (never `RequestResponse` which would log secret values), `RequestResponse` for `pods/exec`, `Metadata` for all write operations, and a `Metadata` catch-all.
 
 2. **Create a kind cluster with audit logging** -- mount the audit policy into the control plane container and configure `kube-apiserver` with `--audit-policy-file` and `--audit-log-path`. Mount a host directory for log output.
 
@@ -574,7 +578,7 @@ Your company processes payments (PCI DSS) and healthcare data (HIPAA) on the sam
 
 ### Success Criteria
 - [ ] Audit policy deployed with kind cluster
-- [ ] Secret create/read/delete events captured at `RequestResponse` level
+- [ ] Secret create/read/delete events captured at `Metadata` level
 - [ ] Pod exec events captured with command details
 - [ ] Health check endpoints produce no audit events
 - [ ] Audit log output parseable with `jq`

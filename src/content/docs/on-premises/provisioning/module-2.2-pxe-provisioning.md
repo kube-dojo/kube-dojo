@@ -551,10 +551,15 @@ sudo apt-get install -y dnsmasq nginx qemu-kvm
 # Create TFTP directory
 sudo mkdir -p /srv/tftp
 
-# Download Ubuntu netboot files
-wget http://archive.ubuntu.com/ubuntu/dists/jammy/main/installer-amd64/current/legacy-images/netboot/pxelinux.0 -O /srv/tftp/pxelinux.0
-wget http://archive.ubuntu.com/ubuntu/dists/jammy/main/installer-amd64/current/legacy-images/netboot/ubuntu-installer/amd64/linux -O /srv/tftp/vmlinuz
-wget http://archive.ubuntu.com/ubuntu/dists/jammy/main/installer-amd64/current/legacy-images/netboot/ubuntu-installer/amd64/initrd.gz -O /srv/tftp/initrd.gz
+# Download Ubuntu 22.04 Live Server ISO and extract boot files
+# Note: Canonical removed debian-installer netboot images after 20.04.
+# Extract vmlinuz and initrd from the ISO's casper directory instead.
+wget https://releases.ubuntu.com/22.04/ubuntu-22.04-live-server-amd64.iso
+mkdir -p /mnt/iso
+sudo mount -o loop ubuntu-22.04-live-server-amd64.iso /mnt/iso
+cp /mnt/iso/casper/vmlinuz /srv/tftp/vmlinuz
+cp /mnt/iso/casper/initrd /srv/tftp/initrd
+sudo umount /mnt/iso
 ```
 
 2. **Configure dnsmasq for PXE**:
@@ -574,7 +579,7 @@ cat | sudo tee /srv/tftp/pxelinux.cfg/default << 'EOF'
 DEFAULT install
 LABEL install
   KERNEL vmlinuz
-  APPEND initrd=initrd.gz auto=true
+  APPEND initrd=initrd
 EOF
 
 sudo systemctl restart dnsmasq

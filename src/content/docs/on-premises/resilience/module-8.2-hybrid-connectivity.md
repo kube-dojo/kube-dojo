@@ -198,7 +198,7 @@ kubectl create secret generic cacerts -n istio-system \
   --from-file=root-cert.pem=certs/root-cert.pem \
   --from-file=cert-chain.pem=certs/on-prem-ca-cert.pem
 
-istioctl install -f - <<EOF
+istioctl install -y -f - <<EOF
 apiVersion: install.istio.io/v1alpha1
 kind: IstioOperator
 spec:

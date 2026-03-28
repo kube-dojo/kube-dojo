@@ -397,7 +397,7 @@ For tools without native OIDC support, deploy `oauth2-proxy` as a reverse proxy 
 | No OIDC groups prefix | AD group could match "system:masters" | Always set `--oidc-groups-prefix` |
 | Long-lived OIDC tokens | Terminated employee retains access until token expires | Set token lifetime to 15-60 minutes in Keycloak |
 | LDAP bind account with write access | Compromised Keycloak/Dex could modify AD | Use a read-only service account for LDAP bind |
-| Not testing group sync | Users authenticate but have no permissions | Verify group claims in JWT: `kubectl oidc-login get-token --oidc-issuer-url=... | jq -R 'split(".") | .[1] | @base64d | fromjson | .groups'` |
+| Not testing group sync | Users authenticate but have no permissions | Verify group claims in JWT: `kubectl oidc-login get-token --oidc-issuer-url=... --oidc-client-id=kubernetes | jq -r '.status.token' | cut -d. -f2 | base64 -d | jq .groups` |
 | Skipping MFA for cluster-admin | Single factor for highest privilege access | Require MFA in Keycloak for k8s-cluster-admins group |
 | Hardcoded service account tokens for CI/CD | CI/CD uses human auth flow | Use Kubernetes service accounts with bound tokens for CI/CD |
 | Single OIDC provider, no failover | Keycloak outage = nobody can authenticate | Deploy Keycloak HA (2+ replicas) with shared PostgreSQL |
@@ -419,9 +419,9 @@ A developer reports that `kubectl get pods` returns "Forbidden" even though they
    kubectl oidc-login get-token \
      --oidc-issuer-url=https://keycloak.internal.corp/realms/kubernetes \
      --oidc-client-id=kubernetes \
-     | jq -R 'split(".") | .[1] | @base64d | fromjson'
+     | jq -r '.status.token' | cut -d. -f2 | base64 -d | jq .
    ```
-   Check that the `groups` field contains the expected group name.
+   The output of `oidc-login get-token` is an ExecCredential JSON object; extract the token from `.status.token` first, then decode the JWT payload. Check that the `groups` field contains the expected group name.
 
 2. **Check the group name matches exactly (including prefix).** If `--oidc-groups-prefix=oidc:` is set, the RoleBinding must reference `oidc:k8s-dev-frontend`, not `k8s-dev-frontend`.
 

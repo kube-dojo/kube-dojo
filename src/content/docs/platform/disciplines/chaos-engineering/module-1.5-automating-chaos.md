@@ -145,7 +145,7 @@ jobs:
           # Query Prometheus for current error rate
           ERROR_RATE=$(curl -s "http://prometheus.monitoring:9090/api/v1/query" \
             --data-urlencode 'query=sum(rate(http_requests_total{namespace="staging",code=~"5.."}[5m])) / sum(rate(http_requests_total{namespace="staging"}[5m])) * 100' \
-            | jq -r '.data.result[0].value[1]')
+            | jq -r 'if .data.result | length > 0 then .data.result[0].value[1] else "0" end')
 
           echo "Current error rate: ${ERROR_RATE}%"
 
@@ -159,7 +159,7 @@ jobs:
         run: |
           P99=$(curl -s "http://prometheus.monitoring:9090/api/v1/query" \
             --data-urlencode 'query=histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{namespace="staging"}[5m])) by (le))' \
-            | jq -r '.data.result[0].value[1]')
+            | jq -r 'if .data.result | length > 0 then .data.result[0].value[1] else "0" end')
 
           echo "Current p99 latency: ${P99}s"
 
@@ -209,11 +209,11 @@ jobs:
           # Check error rate over the last 3 minutes
           ERROR_RATE=$(curl -s "http://prometheus.monitoring:9090/api/v1/query" \
             --data-urlencode 'query=sum(rate(http_requests_total{namespace="staging",code=~"5.."}[3m])) / sum(rate(http_requests_total{namespace="staging"}[3m])) * 100' \
-            | jq -r '.data.result[0].value[1]')
+            | jq -r 'if .data.result | length > 0 then .data.result[0].value[1] else "0" end')
 
           P99=$(curl -s "http://prometheus.monitoring:9090/api/v1/query" \
             --data-urlencode 'query=histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{namespace="staging"}[3m])) by (le))' \
-            | jq -r '.data.result[0].value[1]')
+            | jq -r 'if .data.result | length > 0 then .data.result[0].value[1] else "0" end')
 
           echo "Error rate during chaos: ${ERROR_RATE}%"
           echo "P99 latency during chaos: ${P99}s"
@@ -290,7 +290,7 @@ jobs:
 
           P99=$(curl -s "http://prometheus.monitoring:9090/api/v1/query" \
             --data-urlencode 'query=histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{namespace="staging"}[3m])) by (le))' \
-            | jq -r '.data.result[0].value[1]')
+            | jq -r 'if .data.result | length > 0 then .data.result[0].value[1] else "0" end')
 
           echo "P99 latency during network delay: ${P99}s"
 

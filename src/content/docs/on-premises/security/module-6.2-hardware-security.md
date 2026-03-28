@@ -367,7 +367,7 @@ Running pods that already have their secrets (injected via Vault Agent or CSI dr
 
 2. **If no HA HSM**: Vault pods that are already running and unsealed continue serving requests. Do not restart them. Contact the HSM vendor for emergency replacement.
 
-3. **Disaster recovery**: If all Vault pods restart before the HSM is restored, you need the Vault recovery keys (generated during `vault operator init`). These allow unsealing without the HSM as a break-glass procedure.
+3. **Disaster recovery**: If all Vault pods restart before the HSM is restored, you cannot unseal Vault. Recovery keys generated during `vault operator init` with HSM auto-unseal are for recovery operations (e.g., generating a new root token) -- they **cannot** be used to unseal Vault. You must either restore the HSM, provision a replacement HSM with the same key material (from HSM backups), or migrate the seal type.
 
 4. **Prevention**: Always deploy HSMs in pairs. The $50K cost of a second HSM is trivial compared to the cost of a secrets management outage across the cluster.
 </details>

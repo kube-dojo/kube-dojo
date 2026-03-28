@@ -208,10 +208,10 @@ spec:
     volumeMounts:
       - name: spark-local-dir
         mountPath: /tmp/spark-local
-    volumes:
-      - name: spark-local-dir
-        emptyDir:
-          sizeLimit: 20Gi
+  volumes:
+    - name: spark-local-dir
+      emptyDir:
+        sizeLimit: 20Gi
 ```
 
 ### ScheduledSparkApplication for Recurring Jobs
@@ -261,7 +261,7 @@ The default Spark Docker image is over 1 GB. When you spin up 50 executors, that
 
 ```dockerfile
 # Dockerfile.spark
-FROM apache/spark:3.5.4-java17 AS base
+FROM apache/spark-py:3.5.4 AS base
 
 # Stage 1: Add only the dependencies you need
 FROM base AS deps
@@ -284,7 +284,7 @@ WORKDIR /opt/spark/work-dir
 | Strategy | Impact | How |
 |----------|--------|-----|
 | Multi-stage builds | 20-40% smaller | Separate build deps from runtime |
-| Use `-java17` base | 15% smaller | Java 17 has smaller default modules |
+| Use Java 17 base image | 15% smaller | Java 17 has smaller default modules |
 | Pre-install dependencies | Faster startup | Dependencies cached in image, not installed at runtime |
 | Image caching on nodes | 10x faster pull | Use `imagePullPolicy: IfNotPresent` and pre-pull |
 | Pin exact versions | Reproducible | Never use `latest` tags |
@@ -777,7 +777,7 @@ spec:
   type: Python
   pythonVersion: "3"
   mode: cluster
-  image: apache/spark:3.5.4-java17-python3
+  image: apache/spark-py:3.5.4
   imagePullPolicy: IfNotPresent
   mainApplicationFile: local:///opt/spark/work-dir/etl.py
   sparkVersion: "3.5.4"

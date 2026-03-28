@@ -1034,6 +1034,69 @@ EOF
 ### Step 5: Deploy a Distributed PyTorch Training Job
 
 ```bash
+# First, create a ConfigMap with the training script
+# (torchrun does not support -c for inline scripts — it requires a file path)
+cat <<'SCRIPTEOF' | kubectl apply -f -
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mnist-train-script
+  namespace: ml-training
+data:
+  train.py: |
+    import torch
+    import torch.nn as nn
+    import torch.distributed as dist
+    import torch.optim as optim
+    from torch.nn.parallel import DistributedDataParallel as DDP
+    from torchvision import datasets, transforms
+    from torch.utils.data.distributed import DistributedSampler
+
+    dist.init_process_group(backend='nccl')
+    rank = dist.get_rank()
+    world_size = dist.get_world_size()
+    device = torch.device('cuda')
+    print(f"Rank {rank}/{world_size} on {device}")
+
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.1307,), (0.3081,))
+    ])
+    dataset = datasets.MNIST('/tmp/data', train=True, download=True, transform=transform)
+    sampler = DistributedSampler(dataset, num_replicas=world_size, rank=rank)
+    loader = torch.utils.data.DataLoader(dataset, batch_size=64, sampler=sampler)
+
+    model = nn.Sequential(
+        nn.Flatten(),
+        nn.Linear(784, 256), nn.ReLU(),
+        nn.Linear(256, 10)
+    ).to(device)
+    model = DDP(model)
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    criterion = nn.CrossEntropyLoss()
+
+    for epoch in range(3):
+        sampler.set_epoch(epoch)
+        total_loss = 0
+        for batch_idx, (data, target) in enumerate(loader):
+            data, target = data.to(device), target.to(device)
+            optimizer.zero_grad()
+            output = model(data)
+            loss = criterion(output, target)
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
+            if batch_idx % 100 == 0:
+                print(f"Rank {rank} Epoch {epoch} Batch {batch_idx} Loss {loss.item():.4f}")
+        print(f"Rank {rank} Epoch {epoch} Avg Loss: {total_loss/len(loader):.4f}")
+
+    if rank == 0:
+        torch.save(model.state_dict(), '/checkpoints/mnist_ddp.pt')
+        print("Model saved!")
+    dist.destroy_process_group()
+SCRIPTEOF
+
+# Now create the PyTorchJob referencing the script file
 cat <<'JOBEOF' | kubectl apply -f -
 apiVersion: kubeflow.org/v1
 kind: PyTorchJob
@@ -1060,58 +1123,7 @@ spec:
                 - --nproc_per_node=1
                 - --rdzv_backend=c10d
                 - --rdzv_endpoint=$(MASTER_ADDR):$(MASTER_PORT)
-                - -c
-                - |
-                  import torch
-                  import torch.nn as nn
-                  import torch.distributed as dist
-                  import torch.optim as optim
-                  from torch.nn.parallel import DistributedDataParallel as DDP
-                  from torchvision import datasets, transforms
-                  from torch.utils.data.distributed import DistributedSampler
-
-                  dist.init_process_group(backend='nccl')
-                  rank = dist.get_rank()
-                  world_size = dist.get_world_size()
-                  device = torch.device('cuda')
-                  print(f"Rank {rank}/{world_size} on {device}")
-
-                  transform = transforms.Compose([
-                      transforms.ToTensor(),
-                      transforms.Normalize((0.1307,), (0.3081,))
-                  ])
-                  dataset = datasets.MNIST('/tmp/data', train=True, download=True, transform=transform)
-                  sampler = DistributedSampler(dataset, num_replicas=world_size, rank=rank)
-                  loader = torch.utils.data.DataLoader(dataset, batch_size=64, sampler=sampler)
-
-                  model = nn.Sequential(
-                      nn.Flatten(),
-                      nn.Linear(784, 256), nn.ReLU(),
-                      nn.Linear(256, 10)
-                  ).to(device)
-                  model = DDP(model)
-                  optimizer = optim.Adam(model.parameters(), lr=0.001)
-                  criterion = nn.CrossEntropyLoss()
-
-                  for epoch in range(3):
-                      sampler.set_epoch(epoch)
-                      total_loss = 0
-                      for batch_idx, (data, target) in enumerate(loader):
-                          data, target = data.to(device), target.to(device)
-                          optimizer.zero_grad()
-                          output = model(data)
-                          loss = criterion(output, target)
-                          loss.backward()
-                          optimizer.step()
-                          total_loss += loss.item()
-                          if batch_idx % 100 == 0:
-                              print(f"Rank {rank} Epoch {epoch} Batch {batch_idx} Loss {loss.item():.4f}")
-                      print(f"Rank {rank} Epoch {epoch} Avg Loss: {total_loss/len(loader):.4f}")
-
-                  if rank == 0:
-                      torch.save(model.state_dict(), '/checkpoints/mnist_ddp.pt')
-                      print("Model saved!")
-                  dist.destroy_process_group()
+                - /scripts/train.py
               env:
                 - name: NCCL_DEBUG
                   value: "INFO"
@@ -1121,11 +1133,16 @@ spec:
                   cpu: "4"
                   memory: 16Gi
               volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
                 - name: checkpoints
                   mountPath: /checkpoints
                 - name: dshm
                   mountPath: /dev/shm
           volumes:
+            - name: scripts
+              configMap:
+                name: mnist-train-script
             - name: checkpoints
               persistentVolumeClaim:
                 claimName: training-checkpoints
@@ -1150,55 +1167,7 @@ spec:
                 - --nproc_per_node=1
                 - --rdzv_backend=c10d
                 - --rdzv_endpoint=$(MASTER_ADDR):$(MASTER_PORT)
-                - -c
-                - |
-                  import torch
-                  import torch.nn as nn
-                  import torch.distributed as dist
-                  import torch.optim as optim
-                  from torch.nn.parallel import DistributedDataParallel as DDP
-                  from torchvision import datasets, transforms
-                  from torch.utils.data.distributed import DistributedSampler
-
-                  dist.init_process_group(backend='nccl')
-                  rank = dist.get_rank()
-                  world_size = dist.get_world_size()
-                  device = torch.device('cuda')
-                  print(f"Rank {rank}/{world_size} on {device}")
-
-                  transform = transforms.Compose([
-                      transforms.ToTensor(),
-                      transforms.Normalize((0.1307,), (0.3081,))
-                  ])
-                  dataset = datasets.MNIST('/tmp/data', train=True, download=True, transform=transform)
-                  sampler = DistributedSampler(dataset, num_replicas=world_size, rank=rank)
-                  loader = torch.utils.data.DataLoader(dataset, batch_size=64, sampler=sampler)
-
-                  model = nn.Sequential(
-                      nn.Flatten(),
-                      nn.Linear(784, 256), nn.ReLU(),
-                      nn.Linear(256, 10)
-                  ).to(device)
-                  model = DDP(model)
-                  optimizer = optim.Adam(model.parameters(), lr=0.001)
-                  criterion = nn.CrossEntropyLoss()
-
-                  for epoch in range(3):
-                      sampler.set_epoch(epoch)
-                      total_loss = 0
-                      for batch_idx, (data, target) in enumerate(loader):
-                          data, target = data.to(device), target.to(device)
-                          optimizer.zero_grad()
-                          output = model(data)
-                          loss = criterion(output, target)
-                          loss.backward()
-                          optimizer.step()
-                          total_loss += loss.item()
-                          if batch_idx % 100 == 0:
-                              print(f"Rank {rank} Epoch {epoch} Batch {batch_idx} Loss {loss.item():.4f}")
-                      print(f"Rank {rank} Epoch {epoch} Avg Loss: {total_loss/len(loader):.4f}")
-
-                  dist.destroy_process_group()
+                - /scripts/train.py
               env:
                 - name: NCCL_DEBUG
                   value: "INFO"
@@ -1208,9 +1177,14 @@ spec:
                   cpu: "4"
                   memory: 16Gi
               volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
                 - name: dshm
                   mountPath: /dev/shm
           volumes:
+            - name: scripts
+              configMap:
+                name: mnist-train-script
             - name: dshm
               emptyDir:
                 medium: Memory

@@ -77,11 +77,9 @@ These metrics are:
 **How to measure it**:
 
 ```promql
-# Count deployments per day (using deployment annotation timestamps)
-count(
-  count_over_time(
-    kube_deployment_status_observed_generation{namespace="production"}[24h]
-  )
+# Count deployments per day (using observed generation changes)
+sum(
+  changes(kube_deployment_status_observed_generation{namespace="production"}[24h])
 ) by (deployment)
 ```
 
@@ -154,9 +152,9 @@ In practice, most teams compute this by comparing the deployment timestamp with 
 **How to measure it**:
 
 ```promql
-# Failed deployments / Total deployments
-sum(deployment_completed_total{result="failure", environment="production"}) /
-sum(deployment_completed_total{environment="production"})
+# Failed deployments / Total deployments (use increase() for counters over a window)
+sum(increase(deployment_completed_total{result="failure", environment="production"}[30d])) /
+sum(increase(deployment_completed_total{environment="production"}[30d]))
 ```
 
 **What counts as a "failure"?**:

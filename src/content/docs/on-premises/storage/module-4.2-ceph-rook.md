@@ -448,29 +448,21 @@ storageClassName: ceph-filesystem
 
 ## Hands-On Exercise: Deploy Rook-Ceph in Kind
 
+> **Note**: Rook removed support for directory-backed OSDs in v1.4. This exercise
+> uses PVC-based OSDs with Kind's default `standard` StorageClass (local-path
+> provisioner), which is the recommended approach for test clusters.
+
 ```bash
-# Create a kind cluster with extra mounts for OSD data
+# Create a kind cluster with 3 worker nodes
 cat <<EOF | kind create cluster --config=-
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 nodes:
   - role: control-plane
   - role: worker
-    extraMounts:
-      - hostPath: /tmp/rook-osd-0
-        containerPath: /var/lib/rook-osd-0
   - role: worker
-    extraMounts:
-      - hostPath: /tmp/rook-osd-1
-        containerPath: /var/lib/rook-osd-1
   - role: worker
-    extraMounts:
-      - hostPath: /tmp/rook-osd-2
-        containerPath: /var/lib/rook-osd-2
 EOF
-
-# Create OSD directories
-for i in 0 1 2; do mkdir -p /tmp/rook-osd-$i; done
 
 # Install Rook operator
 helm repo add rook-release https://charts.rook.io/release
@@ -481,8 +473,57 @@ helm install rook-ceph rook-release/rook-ceph \
 kubectl -n rook-ceph wait --for=condition=Ready pod \
   -l app=rook-ceph-operator --timeout=300s
 
-# Deploy a test CephCluster (using directories instead of devices)
-kubectl apply -f https://raw.githubusercontent.com/rook/rook/release-1.16/deploy/examples/cluster-test.yaml
+# Deploy a test CephCluster using PVC-based OSDs
+# This uses Kind's default StorageClass to back each OSD with a PVC
+kubectl apply -f - <<EOF
+apiVersion: ceph.rook.io/v1
+kind: CephCluster
+metadata:
+  name: rook-ceph
+  namespace: rook-ceph
+spec:
+  cephVersion:
+    image: quay.io/ceph/ceph:v19.2
+    allowUnsupported: true
+  dataDirHostPath: /var/lib/rook
+  mon:
+    count: 1
+    allowMultiplePerNode: true
+  mgr:
+    count: 1
+    allowMultiplePerNode: true
+  dashboard:
+    enabled: false
+  crashCollector:
+    disable: true
+  storage:
+    storageClassDeviceSets:
+      - name: set1
+        count: 3
+        portable: true
+        volumeClaimTemplates:
+          - metadata:
+              name: data
+            spec:
+              resources:
+                requests:
+                  storage: 5Gi
+              storageClassName: standard
+              volumeMode: Block
+              accessModes:
+                - ReadWriteOnce
+  resources:
+    mon:
+      limits:
+        memory: "512Mi"
+      requests:
+        memory: "256Mi"
+    osd:
+      limits:
+        memory: "1Gi"
+      requests:
+        memory: "512Mi"
+EOF
 
 # Wait for Ceph to be healthy (takes 3-5 minutes)
 kubectl -n rook-ceph wait --for=condition=Ready cephcluster/rook-ceph --timeout=600s

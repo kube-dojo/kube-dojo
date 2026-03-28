@@ -53,7 +53,7 @@ Matthew Skelton and Manuel Pais defined four fundamental team types. Understandi
 
 ### How These Map to Platform Organizations
 
-```
+```text
 ┌──────────────────────────────────────────────────────────┐
 │                   PLATFORM ORGANIZATION                   │
 │                                                           │
@@ -97,7 +97,7 @@ Teams don't just exist — they interact. Team Topologies defines three interact
 
 **Critical insight for platform leaders**: Most platform capabilities should evolve through these phases:
 
-```
+```text
 Collaboration → Facilitating → X-as-a-Service
   (build it      (teach them    (they self-serve
    together)      to use it)     independently)
@@ -195,7 +195,7 @@ Traditional engineering interviews test algorithm skills and system design. For 
 Amazon's "two-pizza team" (6-8 people) applies to platform teams, but the skill mix is different:
 
 **Minimum viable platform team (5-7 people)**:
-```
+```text
 ┌─────────────────────────────────────────────┐
 │         MINIMUM PLATFORM TEAM               │
 │                                             │
@@ -239,7 +239,7 @@ This is one of the most consequential decisions a platform leader makes.
 
 **The hub-and-spoke model** is the most common pattern for mature platform organizations:
 
-```
+```text
 ┌─────────────────────────────────────┐
 │        Platform Hub (Central)        │
 │  • Architecture decisions            │
@@ -378,7 +378,7 @@ Map your current organization using Team Topologies:
 **Step 1**: List all teams that interact with infrastructure or platform services.
 
 **Step 2**: Classify each team:
-```
+```text
 ┌──────────────────────────────────────────────────────────┐
 │ Team Name:                                               │
 │ Type: [ ] Stream-aligned  [ ] Platform                   │
@@ -431,13 +431,13 @@ Analyze Conway's Law in your organization:
 5. **Propose changes**: Would reorganizing one team improve your architecture?
 
 Document your findings:
-```
+```text
 Conway's Law Audit - [Date]
 ═══════════════════════════
 
 Current org structure creates:
-  ✅ Good alignment: [examples]
-  ❌ Poor alignment: [examples]
+  [+] Good alignment: [examples]
+  [-] Poor alignment: [examples]
 
 Architecture changes blocked by org structure:
   1. [example]

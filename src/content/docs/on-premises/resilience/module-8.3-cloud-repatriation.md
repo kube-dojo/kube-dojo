@@ -94,6 +94,15 @@ metadata:
 spec:
   addresses:
   - 192.168.1.240/28    # 14 usable IPs for LoadBalancer services
+---
+apiVersion: metallb.io/v1beta1
+kind: BGPAdvertisement
+metadata:
+  name: production-advertisement
+  namespace: metallb-system
+spec:
+  ipAddressPools:
+  - production-pool
 ```
 
 ### AWS ALB Annotation Translation

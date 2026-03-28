@@ -643,7 +643,7 @@ awk -F',' 'NR>1 && $5!="" {env[$5]+=$7} END {for(e in env) printf "  %-15s $%9.2
 echo ""
 
 UNTAGGED=$(awk -F',' 'NR>1 && $2=="untagged" {sum+=$7} END {printf "%.2f", sum}' "$FILE")
-PCT=$(echo "scale=1; $UNTAGGED / $TOTAL * 100" | bc)
+PCT=$(echo "scale=1; $UNTAGGED * 100 / $TOTAL" | bc)
 echo "--- Tagging Compliance ---"
 echo "  Untagged spend: \$$UNTAGGED ($PCT% of total)"
 echo ""

@@ -198,7 +198,7 @@ Submariner creates IPsec or WireGuard tunnels between clusters and supports the 
 
 ```bash
 # Install subctl CLI
-curl -Ls https://get.submariner.io | VERSION=0.18.0 bash
+curl -Ls https://get.submariner.io | VERSION=0.23.1 bash
 
 # Deploy the broker (coordination component) on Cluster A
 subctl deploy-broker --kubeconfig kubeconfig-cluster-a

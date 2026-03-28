@@ -250,13 +250,13 @@ spec:
     spec:
       containers:
         - name: httpbin
-          image: kennethreitz/httpbin:latest
+          image: mccutchen/go-httpbin:v2.14.0
           ports:
-            - containerPort: 80
+            - containerPort: 8080
           readinessProbe:
             httpGet:
               path: /get
-              port: 80
+              port: 8080
             initialDelaySeconds: 5
             periodSeconds: 5
           resources:
@@ -277,7 +277,7 @@ spec:
     app: backend
   ports:
     - port: 80
-      targetPort: 80
+      targetPort: 8080
 ```
 
 ```bash

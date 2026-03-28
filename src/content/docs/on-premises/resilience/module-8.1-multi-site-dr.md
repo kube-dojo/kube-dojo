@@ -353,7 +353,7 @@ Design DR for: 200-node cluster, two DCs 50km apart (3ms RTT), payment processin
 <details>
 <summary>Answer</summary>
 
-Tiered strategy. **Payments**: stretched etcd (3ms is safe), pods in both sites via topologySpreadConstraints, synchronous storage replication, DNS GSLB with 30s TTL. **Analytics**: Velero every 4 hours to MinIO at Site B, manual failover. **Layout**: etcd 2 members Site A + 1 Site B, 120 workers Site A + 80 Site B, payment pods across both, analytics pods Site A only. **Testing**: monthly payment failover drill, quarterly full DR exercise.
+Tiered strategy. **Payments**: stretched etcd (3ms is safe), pods in both sites via topologySpreadConstraints, synchronous storage replication, DNS GSLB with 30s TTL. **Analytics**: Velero every 4 hours to MinIO at Site B, manual failover. **Layout**: etcd 3 members Site A + 2 Site B (5-member cluster ensures quorum survives losing either site's minority; odd total avoids split-brain), 120 workers Site A + 80 Site B, payment pods across both, analytics pods Site A only. **Testing**: monthly payment failover drill, quarterly full DR exercise.
 </details>
 
 ---
@@ -369,6 +369,7 @@ kind create cluster --name site-b
 docker run -d --name minio -p 9000:9000 -p 9001:9001 \
   -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
   quay.io/minio/minio server /data --console-address ":9001"
+docker exec minio mkdir -p /data/velero-backups
 
 # 2. Install Velero on site-a and deploy a sample app
 kubectl config use-context kind-site-a

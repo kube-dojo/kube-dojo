@@ -375,7 +375,7 @@ kubectl describe node gpu-worker-01 | grep nvidia.com/gpu
 # Run a CUDA validation pod
 kubectl run cuda-test --rm -it --restart=Never \
   --image=nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0 \
-  --limits='nvidia.com/gpu=1' \
+  --overrides='{"spec":{"containers":[{"name":"cuda-test","image":"nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0","resources":{"limits":{"nvidia.com/gpu":"1"}}}]}}' \
   -- ./vectoradd
 
 # Expected: "Test PASSED"
@@ -515,7 +515,7 @@ If you have a GPU node, run this to understand what the nvidia-container-toolkit
 ```bash
 kubectl run nvidia-smi --rm -it --restart=Never \
   --image=nvcr.io/nvidia/cuda:12.5.0-base-ubuntu22.04 \
-  --limits='nvidia.com/gpu=1' \
+  --overrides='{"spec":{"containers":[{"name":"nvidia-smi","image":"nvcr.io/nvidia/cuda:12.5.0-base-ubuntu22.04","resources":{"limits":{"nvidia.com/gpu":"1"}}}]}}' \
   -- bash -c '
     echo "=== nvidia-smi ==="
     nvidia-smi

@@ -30,18 +30,6 @@ Project Atlas was an engineering project, not a product. Nobody had asked develo
 
 ---
 
-## Did You Know?
-
-> **Gartner predicted** that by 2026, 80% of large software engineering organizations will have platform teams acting as internal providers of reusable services and tools. But they also predicted that most will fail to deliver measurable value because they lack product management discipline.
-
-> The concept of "internal customers" dates back to the 1980s (Kaoru Ishikawa's quality management work), but most internal platform teams still don't treat their users as customers. They treat them as captive audiences who have no choice. This mindset produces bad platforms.
-
-> **Stripe's developer experience team** applies the same product rigor to their internal tools as they do to their external API. Internal tools go through design reviews, user testing, and beta programs. The result: Stripe consistently ranks as one of the best engineering organizations to work at.
-
-> According to McKinsey's 2023 developer survey, organizations with dedicated platform product managers see **23% higher developer satisfaction** and **31% faster time-to-production** compared to organizations where platform teams set their own priorities.
-
----
-
 ## The Product Management Mindset for Platforms
 
 ### You Are Not a Service Bureau
@@ -119,7 +107,7 @@ This is wrong for three reasons:
 Sit next to a developer for 2 hours. Don't help. Just watch and take notes.
 
 **What to observe**:
-```
+```text
 Developer Shadowing Notes - [Date] - [Developer Name/Team]
 ═══════════════════════════════════════════════════════════
 
@@ -187,7 +175,7 @@ A platform roadmap is different from a product roadmap in three key ways:
 
 ### Roadmap Structure
 
-```
+```text
 ┌────────────────────────────────────────────────────────┐
 │              PLATFORM ROADMAP - 2026                    │
 ├────────────────────────────────────────────────────────┤
@@ -247,7 +235,7 @@ In this example, faster CI pipelines wins by a wide margin. Service mesh — des
 
 Impact mapping connects business goals to platform initiatives:
 
-```
+```text
 WHY (Goal)                 WHO (Actor)        HOW (Impact)           WHAT (Deliverable)
 ────────                   ──────────         ──────────             ─────────────────
 Reduce time              → Developers       → Deploy faster       → Faster CI pipelines
@@ -338,192 +326,30 @@ The most effective internal marketing is peer recommendation. A "champions progr
 
 ---
 
-## Hands-On Exercises
+## Common Mistakes
 
-### Exercise 1: Platform Product Canvas (45 min)
-
-Complete this canvas for your platform (or a platform you plan to build):
-
-```
-┌────────────────────────────────────────────────────────┐
-│                 PLATFORM PRODUCT CANVAS                  │
-├────────────────────────────────────────────────────────┤
-│                                                         │
-│  USERS                     PROBLEMS                     │
-│  ─────                     ────────                     │
-│  Who uses our platform?    What problems do they have?  │
-│  •                         •                            │
-│  •                         •                            │
-│  •                         •                            │
-│                                                         │
-│  ALTERNATIVES              VALUE PROPOSITION            │
-│  ────────────              ─────────────────            │
-│  What do they use today?   Why is our platform better?  │
-│  •                         •                            │
-│  •                         •                            │
-│  •                         •                            │
-│                                                         │
-│  KEY METRICS               UNFAIR ADVANTAGE             │
-│  ───────────               ────────────────             │
-│  How do we measure         What can we do that nobody   │
-│  success?                  else can?                    │
-│  •                         •                            │
-│  •                         •                            │
-│  •                         •                            │
-│                                                         │
-│  CHANNELS                  COST STRUCTURE               │
-│  ────────                  ──────────────               │
-│  How do users find and     What does the platform cost  │
-│  adopt the platform?       to build and run?            │
-│  •                         •                            │
-│  •                         •                            │
-│  •                         •                            │
-│                                                         │
-└────────────────────────────────────────────────────────┘
-```
-
-**Validation**: Share the canvas with 3 developers. Ask: "Does this accurately describe your experience?" Revise based on feedback.
-
-### Exercise 2: User Interview Practice (40 min)
-
-Conduct a mock user interview with a colleague (or a real one if you have access to a developer team):
-
-**Preparation** (10 min):
-1. Write down your 3 biggest assumptions about what developers need
-2. Create 5 open-ended questions designed to validate or challenge those assumptions
-3. Prepare a notepad for observations
-
-**Interview** (20 min):
-Follow the interview script from the "Structured User Interviews" section. Record key quotes.
-
-**Synthesis** (10 min):
-```
-Interview Synthesis - [Date]
-════════════════════════════
-
-Top 3 pain points mentioned:
-  1. [quote + context]
-  2. [quote + context]
-  3. [quote + context]
-
-Surprises (things I didn't expect):
-  1.
-  2.
-
-Assumptions validated:
-  ✅ [assumption] — confirmed by [evidence]
-  ❌ [assumption] — contradicted by [evidence]
-
-Actions:
-  1. [what to investigate further]
-  2. [what to change based on this interview]
-```
-
-### Exercise 3: RICE Prioritization (30 min)
-
-Take your current platform backlog (or create a fictional one of 8-10 items) and score each using RICE:
-
-| Initiative | Reach | Impact | Confidence | Effort | RICE |
-|-----------|-------|--------|------------|--------|------|
-| | | | | | |
-| | | | | | |
-| | | | | | |
-
-After scoring:
-1. Sort by RICE score
-2. Compare with your current priority order
-3. Identify the biggest discrepancy (something you ranked low that RICE ranks high, or vice versa)
-4. Discuss: Is RICE right, or is there context RICE misses?
-
-### Exercise 4: Internal Marketing Plan (30 min)
-
-Create a 90-day marketing plan for your platform's next major feature:
-
-```
-Feature: [name]
-Target audience: [which teams]
-Launch date: [date]
-
-Pre-launch (30 days before):
-  Week 1: [ ] Identify 3 champion teams for beta
-  Week 2: [ ] Beta launch with champions
-  Week 3: [ ] Collect feedback, iterate
-  Week 4: [ ] Create success story from beta team
-
-Launch (week of):
-  [ ] Blog post with problem/solution narrative
-  [ ] Demo day presentation
-  [ ] Slack announcement with key metrics
-  [ ] Documentation published
-  [ ] Migration guide ready
-
-Post-launch (60 days after):
-  Week 1-2: [ ] Office hours for early adopters
-  Week 3-4: [ ] Publish adoption metrics
-  Week 5-6: [ ] Champions help next wave of teams
-  Week 7-8: [ ] Retrospective: what worked, what didn't
-
-Success criteria:
-  [ ] X teams adopted within 30 days
-  [ ] Developer satisfaction > Y/5
-  [ ] Support tickets < Z per week
-```
+| Common Mistake | Why It Happens | Better Approach |
+|---------------|----------------|-----------------|
+| Building features without user research | Engineers assume they know what developers need | Interview 5+ developers before starting any major initiative |
+| Measuring success by features shipped | Feature count feels productive and is easy to track | Measure adoption rate, developer satisfaction, and time-to-production instead |
+| Skipping internal marketing | "Good products sell themselves" mindset | Treat every launch like a product launch: changelog, demo day, champions |
+| No product manager on the platform team | Leadership sees platform as "just infrastructure" | Hire or designate a PM; without one, engineering preferences drive priorities |
+| Treating all feedback equally | Loudest voices get priority regardless of impact | Use RICE scoring to prioritize by reach, impact, confidence, and effort |
+| Building for power users only | Power users give the most feedback and are easiest to reach | Shadow average developers; the silent majority has different needs |
+| Roadmap driven by leadership pet projects | Senior leaders push "strategic" initiatives without data | Require concrete business justification and show trade-offs explicitly |
+| Never killing projects | Sunk cost fallacy and fear of admitting mistakes | Set clear success criteria upfront; kill projects that do not meet them |
 
 ---
 
-## War Story: The Platform That Saved Itself With Product Management
+## Did You Know?
 
-**Company**: B2B SaaS company, ~600 engineers, 45 services
+> **Gartner predicted** that by 2026, 80% of large software engineering organizations will have platform teams acting as internal providers of reusable services and tools. But they also predicted that most will fail to deliver measurable value because they lack product management discipline.
 
-**Situation**: The platform team (8 engineers) had been building for 2 years without a product manager. They had a sophisticated CI/CD system, a Kubernetes abstraction layer, and an observability stack. But adoption was stagnating at ~50% of teams, and the CTO was questioning the team's value.
+> The concept of "internal customers" dates back to the 1980s (Kaoru Ishikawa's quality management work), but most internal platform teams still don't treat their users as customers. They treat them as captive audiences who have no choice. This mindset produces bad platforms.
 
-**The intervention**: The company hired a platform product manager. Her first 30 days:
+> **Stripe's developer experience team** applies the same product rigor to their internal tools as they do to their external API. Internal tools go through design reviews, user testing, and beta programs. The result: Stripe consistently ranks as one of the best engineering organizations to work at.
 
-**Week 1: Discovery**
-- Interviewed 15 developers across 8 teams
-- Shadowed 3 developers for 2 hours each
-- Analyzed 6 months of support tickets
-- Reviewed platform usage analytics
-
-**Key finding**: The platform's biggest problem was not missing features. It was that the 50% of teams who had not adopted were not even aware of what the platform offered. The team had never done internal marketing. Features existed but were undiscoverable.
-
-**Second finding**: The features developers wanted most were not what the platform team was building. Developers wanted faster CI (averaging 18 minutes), easier rollback (currently a manual 7-step process), and better documentation. The platform team was building multi-cloud abstraction.
-
-**Week 2-3: Strategy**
-- Created a platform product canvas
-- Built a RICE-prioritized roadmap
-- Killed the multi-cloud project (RICE score: 8. Faster CI score: 240)
-- Defined success metrics: adoption rate, time-to-deploy, NPS
-
-**Week 4: Execution kickoff**
-- Launched a weekly changelog (Slack + email)
-- Created a champions program with 6 developer advocates
-- Started a monthly demo day
-- Began work on CI speed (18 min → target 5 min)
-
-**Results after 6 months**:
-- Adoption: 50% → 78%
-- CI pipeline time: 18 min → 6 min
-- Deploy rollback: 7 manual steps → 1 command
-- Developer NPS: 12 → 48
-- Support tickets: Down 40%
-
-**Business impact**: The CTO went from questioning the team's existence to expanding it by 4 headcount. Two product teams attributed faster feature delivery directly to platform improvements. Estimated productivity gain: 15% across adopting teams.
-
-**Timeline**:
-- Month 0: PM hired
-- Month 1: Discovery and strategy
-- Month 2: Quick wins (changelog, champions, docs)
-- Month 3-4: CI speed improvement
-- Month 5: Rollback UX improvement
-- Month 6: Measure results, plan next cycle
-
-**Lessons**:
-1. **Product management transforms platform teams**: The same 8 engineers delivered dramatically more value with product direction
-2. **Discovery before delivery**: 30 days of research prevented months of wasted work (multi-cloud)
-3. **Marketing is not optional**: If developers don't know about your platform, it doesn't exist
-4. **Measure adoption, not features**: Features shipped means nothing; adoption means everything
-5. **Kill projects ruthlessly**: The multi-cloud project was 4 months in. Killing it was painful but correct
+> According to McKinsey's 2023 developer survey, organizations with dedicated platform product managers see **23% higher developer satisfaction** and **31% faster time-to-production** compared to organizations where platform teams set their own priorities.
 
 ---
 
@@ -614,6 +440,195 @@ Why should platform teams never measure success by "features shipped"?
 Features shipped is an **output** metric, not an **outcome** metric. A platform team that ships 20 features nobody uses has delivered zero value. What matters is: (1) **Adoption** — are developers using what you built? (2) **Satisfaction** — do they like using it? (3) **Efficiency** — did it make them faster? (4) **Reliability** — did it make their services more stable? You can ship one feature that transforms developer productivity or twenty features that collect dust. Feature count incentivizes building more, not building better. It also incentivizes splitting work into small features to inflate the count. Measure outcomes (adoption, satisfaction, time-to-production), not outputs (features, PRs, lines of code).
 
 </details>
+
+---
+
+## Hands-On Exercises
+
+### Exercise 1: Platform Product Canvas (45 min)
+
+Complete this canvas for your platform (or a platform you plan to build):
+
+```text
+┌────────────────────────────────────────────────────────┐
+│                 PLATFORM PRODUCT CANVAS                  │
+├────────────────────────────────────────────────────────┤
+│                                                         │
+│  USERS                     PROBLEMS                     │
+│  ─────                     ────────                     │
+│  Who uses our platform?    What problems do they have?  │
+│  •                         •                            │
+│  •                         •                            │
+│  •                         •                            │
+│                                                         │
+│  ALTERNATIVES              VALUE PROPOSITION            │
+│  ────────────              ─────────────────            │
+│  What do they use today?   Why is our platform better?  │
+│  •                         •                            │
+│  •                         •                            │
+│  •                         •                            │
+│                                                         │
+│  KEY METRICS               UNFAIR ADVANTAGE             │
+│  ───────────               ────────────────             │
+│  How do we measure         What can we do that nobody   │
+│  success?                  else can?                    │
+│  •                         •                            │
+│  •                         •                            │
+│  •                         •                            │
+│                                                         │
+│  CHANNELS                  COST STRUCTURE               │
+│  ────────                  ──────────────               │
+│  How do users find and     What does the platform cost  │
+│  adopt the platform?       to build and run?            │
+│  •                         •                            │
+│  •                         •                            │
+│  •                         •                            │
+│                                                         │
+└────────────────────────────────────────────────────────┘
+```
+
+**Validation**: Share the canvas with 3 developers. Ask: "Does this accurately describe your experience?" Revise based on feedback.
+
+### Exercise 2: User Interview Practice (40 min)
+
+Conduct a mock user interview with a colleague (or a real one if you have access to a developer team):
+
+**Preparation** (10 min):
+1. Write down your 3 biggest assumptions about what developers need
+2. Create 5 open-ended questions designed to validate or challenge those assumptions
+3. Prepare a notepad for observations
+
+**Interview** (20 min):
+Follow the interview script from the "Structured User Interviews" section. Record key quotes.
+
+**Synthesis** (10 min):
+```text
+Interview Synthesis - [Date]
+════════════════════════════
+
+Top 3 pain points mentioned:
+  1. [quote + context]
+  2. [quote + context]
+  3. [quote + context]
+
+Surprises (things I didn't expect):
+  1.
+  2.
+
+Assumptions validated:
+  [+] [assumption] — confirmed by [evidence]
+  [-] [assumption] — contradicted by [evidence]
+
+Actions:
+  1. [what to investigate further]
+  2. [what to change based on this interview]
+```
+
+### Exercise 3: RICE Prioritization (30 min)
+
+Take your current platform backlog (or create a fictional one of 8-10 items) and score each using RICE:
+
+| Initiative | Reach | Impact | Confidence | Effort | RICE |
+|-----------|-------|--------|------------|--------|------|
+| | | | | | |
+| | | | | | |
+| | | | | | |
+
+After scoring:
+1. Sort by RICE score
+2. Compare with your current priority order
+3. Identify the biggest discrepancy (something you ranked low that RICE ranks high, or vice versa)
+4. Discuss: Is RICE right, or is there context RICE misses?
+
+### Exercise 4: Internal Marketing Plan (30 min)
+
+Create a 90-day marketing plan for your platform's next major feature:
+
+```text
+Feature: [name]
+Target audience: [which teams]
+Launch date: [date]
+
+Pre-launch (30 days before):
+  Week 1: [ ] Identify 3 champion teams for beta
+  Week 2: [ ] Beta launch with champions
+  Week 3: [ ] Collect feedback, iterate
+  Week 4: [ ] Create success story from beta team
+
+Launch (week of):
+  [ ] Blog post with problem/solution narrative
+  [ ] Demo day presentation
+  [ ] Slack announcement with key metrics
+  [ ] Documentation published
+  [ ] Migration guide ready
+
+Post-launch (60 days after):
+  Week 1-2: [ ] Office hours for early adopters
+  Week 3-4: [ ] Publish adoption metrics
+  Week 5-6: [ ] Champions help next wave of teams
+  Week 7-8: [ ] Retrospective: what worked, what didn't
+
+Success criteria:
+  [ ] X teams adopted within 30 days
+  [ ] Developer satisfaction > Y/5
+  [ ] Support tickets < Z per week
+```
+
+---
+
+## War Story: The Platform That Saved Itself With Product Management
+
+**Company**: B2B SaaS company, ~600 engineers, 45 services
+
+**Situation**: The platform team (8 engineers) had been building for 2 years without a product manager. They had a sophisticated CI/CD system, a Kubernetes abstraction layer, and an observability stack. But adoption was stagnating at ~50% of teams, and the CTO was questioning the team's value.
+
+**The intervention**: The company hired a platform product manager. Her first 30 days:
+
+**Week 1: Discovery**
+- Interviewed 15 developers across 8 teams
+- Shadowed 3 developers for 2 hours each
+- Analyzed 6 months of support tickets
+- Reviewed platform usage analytics
+
+**Key finding**: The platform's biggest problem was not missing features. It was that the 50% of teams who had not adopted were not even aware of what the platform offered. The team had never done internal marketing. Features existed but were undiscoverable.
+
+**Second finding**: The features developers wanted most were not what the platform team was building. Developers wanted faster CI (averaging 18 minutes), easier rollback (currently a manual 7-step process), and better documentation. The platform team was building multi-cloud abstraction.
+
+**Week 2-3: Strategy**
+- Created a platform product canvas
+- Built a RICE-prioritized roadmap
+- Killed the multi-cloud project (RICE score: 8. Faster CI score: 240)
+- Defined success metrics: adoption rate, time-to-deploy, NPS
+
+**Week 4: Execution kickoff**
+- Launched a weekly changelog (Slack + email)
+- Created a champions program with 6 developer advocates
+- Started a monthly demo day
+- Began work on CI speed (18 min → target 5 min)
+
+**Results after 6 months**:
+- Adoption: 50% → 78%
+- CI pipeline time: 18 min → 6 min
+- Deploy rollback: 7 manual steps → 1 command
+- Developer NPS: 12 → 48
+- Support tickets: Down 40%
+
+**Business impact**: The CTO went from questioning the team's existence to expanding it by 4 headcount. Two product teams attributed faster feature delivery directly to platform improvements. Estimated productivity gain: 15% across adopting teams.
+
+**Timeline**:
+- Month 0: PM hired
+- Month 1: Discovery and strategy
+- Month 2: Quick wins (changelog, champions, docs)
+- Month 3-4: CI speed improvement
+- Month 5: Rollback UX improvement
+- Month 6: Measure results, plan next cycle
+
+**Lessons**:
+1. **Product management transforms platform teams**: The same 8 engineers delivered dramatically more value with product direction
+2. **Discovery before delivery**: 30 days of research prevented months of wasted work (multi-cloud)
+3. **Marketing is not optional**: If developers don't know about your platform, it doesn't exist
+4. **Measure adoption, not features**: Features shipped means nothing; adoption means everything
+5. **Kill projects ruthlessly**: The multi-cloud project was 4 months in. Killing it was painful but correct
 
 ---
 
