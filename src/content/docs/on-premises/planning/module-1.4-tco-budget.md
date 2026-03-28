@@ -13,7 +13,7 @@ sidebar:
 
 ## Why This Module Matters
 
-In 2023, a logistics company presented their board with a plan to move from AWS to on-premises Kubernetes. The infrastructure team calculated hardware costs: $380,000 for servers, networking, and storage. The CFO approved. Twelve months later, the actual spend was $1.2 million. The team had not budgeted for colocation fees ($72K/year), redundant internet circuits ($36K/year), a part-time facilities manager ($45K/year), two additional engineers ($350K/year), hardware maintenance contracts ($38K/year), or the $180K in professional services for the initial buildout. The "savings" over cloud disappeared entirely.
+In 2023, a logistics company presented their board with a plan to move from AWS to on-premises Kubernetes. The infrastructure team calculated hardware costs: $380,000 for servers, networking, and storage. The CFO approved. Twelve months later, the actual spend was $1.1 million. The team had not budgeted for colocation fees ($72K/year), redundant internet circuits ($36K/year), a part-time facilities manager ($45K/year), two additional engineers ($350K/year), hardware maintenance contracts ($38K/year), or the $180K in professional services for the initial buildout. The "savings" over cloud disappeared entirely.
 
 The infrastructure team was not incompetent — they were engineers, not financial modelers. They calculated what they knew (hardware) and missed what they did not (everything else). This module teaches you to build a complete TCO model so your budget reflects reality.
 
@@ -199,18 +199,18 @@ Your effective power cost = IT power cost × PUE
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│   3-YEAR TCO MODEL (100 K8s nodes on 12 bare-metal servers) │
+│   3-YEAR TCO MODEL (100 K8s nodes on 13 bare-metal servers) │
 │   (Each server: 64 cores, 256GB → ~8 K8s nodes per server)  │
 │                                                               │
 │  YEAR 0 (SETUP)                                              │
 │  ────────────────────────────────────────                    │
-│  Servers (12 x $15K)                    $180,000            │
+│  Servers (13 x $15K)                    $195,000            │
 │  Networking (switches + cabling)         $45,000            │
 │  Storage (Ceph nodes, 3 x $12K)         $36,000            │
 │  Racks + PDUs                            $8,000             │
 │  Professional services (buildout)        $60,000            │
 │  ────────────────────────────────────────                    │
-│  CapEx subtotal                         $329,000            │
+│  CapEx subtotal                         $344,000            │
 │                                                               │
 │  ANNUAL OPEX                                                 │
 │  ────────────────────────────────────────                    │
@@ -227,11 +227,11 @@ Your effective power cost = IT power cost × PUE
 │                                                               │
 │  3-YEAR TOTAL                                                │
 │  ────────────────────────────────────────                    │
-│  CapEx                                  $329,000            │
+│  CapEx                                  $344,000            │
 │  OpEx (3 years)                       $1,970,400            │
 │  ────────────────────────────────────────                    │
-│  TOTAL                                $2,299,400            │
-│  Per month                               $63,872            │
+│  TOTAL                                $2,314,400            │
+│  Per month                               $64,289            │
 │                                                               │
 │  CLOUD COMPARISON (100 x m6i.2xlarge @ $0.384/hr)           │
 │  ────────────────────────────────────────                    │
@@ -240,7 +240,7 @@ Your effective power cost = IT power cost × PUE
 │  3-year RI (all upfront, ~55% off)     $454,000 (3 yr)     │
 │  + EKS fee + storage + data xfer     ~$200,000 (3 yr)      │
 │                                                               │
-│  VERDICT at 100 nodes (12 servers):                          │
+│  VERDICT at 100 nodes (13 servers):                          │
 │  Cloud (3yr RI + extras) ≈ $650K vs On-prem ≈ $2.3M        │
 │  → Cloud wins decisively (staffing dominates on-prem)       │
 │                                                               │

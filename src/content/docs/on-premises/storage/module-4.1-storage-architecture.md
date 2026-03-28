@@ -211,9 +211,9 @@ fio --name=rand-read \
     --size=4g --numjobs=8 --runtime=60 \
     --group_reporting --filename=/data/fio-test
 
-# Test etcd-like workload (sequential write with fsync)
+# Test etcd-like workload (sequential write with fdatasync)
 fio --name=etcd-wal \
-    --rw=write --bs=2300 --fsync=1 \
+    --rw=write --bs=2300 --fdatasync=1 \
     --size=22m --runtime=60 --time_based \
     --filename=/data/etcd-test
 
@@ -227,7 +227,7 @@ fio --name=etcd-wal \
 
 ## Did You Know?
 
-- **Ceph was created at UC Santa Cruz** as a PhD thesis by Sage Weil in 2004. It became the storage backbone for most OpenStack deployments and is now the default distributed storage for on-premises Kubernetes via Rook.
+- **Ceph was started at UC Santa Cruz** by Sage Weil in 2004 and formalized in his PhD thesis in 2007. It became the storage backbone for most OpenStack deployments and is now the default distributed storage for on-premises Kubernetes via Rook.
 
 - **NVMe drives can fail faster under sustained write loads** than SATA SSDs because they have higher write amplification at full speed. Enterprise NVMe drives (like Samsung PM9A3) have much higher endurance (DWPD — Drive Writes Per Day) than consumer NVMe. Always use enterprise-grade drives for Ceph OSDs.
 
@@ -357,32 +357,34 @@ This is one of the most common on-premises Kubernetes issues and is entirely pre
 
 ```bash
 # Create a test directory
-mkdir -p /tmp/storage-benchmark
+mkdir -p /mnt/storage-benchmark
+# NOTE: Run benchmarks on the target storage device mount point.
+# /tmp is often tmpfs (RAM disk) which gives misleading results.
 
 # Test 1: Sequential write throughput
 echo "=== Sequential Write ==="
 fio --name=seq-write --rw=write --bs=128k --direct=1 \
     --size=1g --numjobs=1 --runtime=30 --time_based \
-    --group_reporting --filename=/tmp/storage-benchmark/seq-test
+    --group_reporting --filename=/mnt/storage-benchmark/seq-test
 
 # Test 2: Random read IOPS
 echo "=== Random Read IOPS ==="
 fio --name=rand-read --rw=randread --bs=4k --direct=1 \
     --size=1g --numjobs=4 --runtime=30 --time_based \
-    --group_reporting --filename=/tmp/storage-benchmark/iops-test
+    --group_reporting --filename=/mnt/storage-benchmark/iops-test
 
 # Test 3: etcd WAL simulation
-echo "=== etcd WAL (fsync) ==="
-fio --name=etcd-wal --rw=write --bs=2300 --fsync=1 \
+echo "=== etcd WAL (fdatasync) ==="
+fio --name=etcd-wal --rw=write --bs=2300 --fdatasync=1 \
     --size=22m --runtime=30 --time_based \
-    --filename=/tmp/storage-benchmark/etcd-test
+    --filename=/mnt/storage-benchmark/etcd-test
 
 # Record results and compare against the tier guide above
-# NVMe should show: >1 GB/s seq, >100K IOPS rand, <1ms fsync
-# SATA SSD: ~400 MB/s seq, ~50K IOPS rand, ~2-5ms fsync
+# NVMe should show: >1 GB/s seq, >100K IOPS rand, <1ms fdatasync
+# SATA SSD: ~400 MB/s seq, ~50K IOPS rand, ~2-5ms fdatasync
 
 # Cleanup
-rm -rf /tmp/storage-benchmark
+rm -rf /mnt/storage-benchmark
 ```
 
 ### Success Criteria
