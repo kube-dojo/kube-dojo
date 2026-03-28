@@ -47,3 +47,7 @@ kubelogin*
 scripts/batch-gemini-review.py
 .review-results/
 .dispatch-logs/
+clusterctl
+talosctl
+demo-cluster.yaml
+test_script.sh
