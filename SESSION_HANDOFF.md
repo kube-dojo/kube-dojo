@@ -1,47 +1,87 @@
-# Session Handoff — 2026-03-27 (Session 3)
+# Session Handoff — 2026-03-28 (Session 3 continued)
 
-## Content Work (SOLID — all verified, builds pass)
-- Networking discipline: 5 modules + index (4,056 lines)
-- Leadership discipline: 5 modules + index (3,683 lines)
-- Supply chain guide: 4 new sections
-- Gemini reviews: 20/30 on-prem reviewed, 16 fixed
-- Sidebar labels: 32 index.md files fixed
-- 568 modules total, 1,437 pages, build ~27-35s
+## What Was Done This Session
 
-## Theme Work (INCOMPLETE)
-- Homepage (`src/pages/index.astro`): DONE — standalone page, matches POC
-- Header override: DONE — K logo, nav pills
-- Footer override: DONE — dark footer
-- Sidebar override: DONE — monospace numbers, part headers, blue active
-- PageTitle override: DONE — breadcrumbs
-- Content enhancer: DONE — War Story, DYK, Quiz, Dedication, Meta chips
-- Progress tracker: DONE — Mark Complete, sidebar checkmarks, dashboard
-- CSS: DONE — accent tokens, tables, blockquotes, code blocks, TOC
+### Theme Overhaul (COMPLETE — deployed to production)
+- **Standalone homepage** (`src/pages/index.astro`) — hero, terminal, track cards, stats, learning path, dedication with Ukrainian flag border, Shevchenko poem
+- **Standalone Ukrainian homepage** (`src/pages/uk/index.astro`) — full translation matching English design
+- **Component overrides**: Header (K logo, 7 nav pills), Footer (dark), Sidebar (collapsible, filtered, monospace numbers), PageTitle (breadcrumbs), Head (scripts)
+- **Smart sidebar**: shows current track's subsections, all collapsible, active expanded, siblings clickable. Works for all 6 tracks.
+- **Content enhancer**: War Story, Did You Know, Quiz, Meta Chips, Dedication — all via client-side JS
+- **Progress tracking**: Mark Complete button, sidebar checkmarks, progress dashboard, export/import
+- **Dark mode polish**: 10 CSS fixes across 2 Gemini review passes
+- **Accessibility**: aria-pressed, aria-hidden, role=button, tabindex, keyboard nav
 
-## What Still Doesn't Match the POC
-The module pages have all the structural pieces but visual polish is incomplete. Need browser verification for:
-- Sidebar background color in light mode
-- Part headers rendering correctly
-- TOC active link styling
-- Meta chip colors
-- Overall spacing/sizing vs POC
+### Content (COMPLETE)
+- **Networking discipline**: 5 modules (4,056 lines)
+- **Leadership discipline**: 5 modules (3,683 lines)
+- **Supply chain guide**: 4 new sections
+- **Linux Deep Dive**: moved to top-level track (after Fundamentals, before Cloud)
+- **All cert learning paths** added to sidebar (PCA, ICA, CCA, CGOA, CBA, OTCA, KCA, CAPA, CNPE, CNPA, LFCS, FinOps)
+- **Sidebar labels**: 32 index.md files fixed
+- **Changelog**: fully rewritten with Session 2+3 updates
+- **Landing pages**: all 6 track landing pages verified complete with correct module references
 
-## Critical Lesson
-CSS overrides on Starlight DON'T WORK. Component overrides DO. The homepage proved it. All module page components are now overridden (Sidebar, Header, Footer, PageTitle, Head). The CSS should only handle content styling within `.sl-markdown-content`.
+### Ukrainian Translation Phase 1 (COMPLETE)
+- Standalone Ukrainian homepage matching English design
+- 8 Ukrainian landing pages created (Linux, Cloud, Platform, On-Premises, Disciplines, Foundations, Toolkits, Glossary)
+- 4 Prerequisites index pages translated (Prerequisites now 100%)
+- `src/content/i18n/uk.json` — 28 Starlight UI string translations
+- Ukrainian 404 page
 
-## GitHub Issues
-#136-#141 created. #137 (homepage), #138 (404 + enhancer), #139 (progress) are done.
+### Gemini Reviews (PARTIALLY COMPLETE)
+- **Batch 1** (4 modules): 2 fixed (TCO math, fio benchmark), 2 timed out
+- **Batch 2** (50 modules): 1 approved, 35 need changes, 14 timed out/errors
+- Review results saved in `.review-results/gemini-review-all.json`
+- **35 modules need fixes** — review feedback is in the JSON file
+- **14 modules need re-review** (timed out)
 
-## Files Created This Session
-- `src/pages/index.astro` — Standalone homepage
-- `src/components/Header.astro`, `Footer.astro`, `Sidebar.astro`, `PageTitle.astro`, `Head.astro`
-- `src/scripts/content-enhancer.ts`, `progress-tracker.ts`
-- `src/content/docs/progress.mdx`, `404.mdx`
-- `src/content/docs/platform/disciplines/networking/` (6 files)
-- `src/content/docs/platform/disciplines/leadership/` (6 files)
-- `src/css/custom.css` — Full rewrite
-- `scripts/test-theme.py` — 74 tests
-- `poc-design.html` — Reference design
+### Infrastructure
+- Astro 5.17.3 → 5.18.1 (security fix)
+- GitHub Actions updated: checkout v6.0.2, upload-pages-artifact v4.0.0
+- Dependabot PRs closed, branches deleted
+- Favicon created (blue K icon)
+- Test files removed from tracking, .gitignore updated
 
-## Unpushed
-All changes unstaged. No commits this session.
+### GitHub Issues
+- **Closed**: #105, #136, #137, #138, #139, #140, #141
+- **Created**: #142 (MDX Component Epic), #143 (Ukrainian Translation Epic)
+- **Open**: #14 (Curriculum Monitoring), #142, #143
+
+## TODO Next Session
+
+### Priority 1: Fix Gemini Review Issues
+35 modules need fixes. Review feedback is in `.review-results/gemini-review-all.json`. Modules:
+- On-prem: 8 modules (provisioning, resilience, security)
+- Release Engineering: 4 modules
+- Chaos Engineering: 4 modules
+- FinOps: 3 modules
+- Data Engineering: 2 modules
+- AI Infrastructure: 6 modules
+- Networking: 3 modules
+- Leadership: 5 modules
+
+14 modules timed out and need re-review:
+- On-prem: 4 (storage, provisioning)
+- Disciplines: 10 (feature-flags, chaos-mesh, compute-optimization, finops-culture, stateful-workloads, kafka, flink, spark, cni-architecture, network-policy-design)
+
+### Priority 2: Ukrainian Translation Phase 2 (#143)
+- CKS (30 modules), KCNA remaining (28), KCSA (26)
+- Then Cloud, Linux, Platform
+
+### Priority 3: MDX Component System (#142)
+- Build components, conversion script, batch convert 568 files
+
+## Current State
+- **568 modules** across 6 tracks
+- **1,437 pages**, ~25s build, 0 errors, 0 warnings
+- **Site live** at https://kube-dojo.github.io/
+- **All deployed** — everything pushed to main
+- **Working tree clean**
+
+## Key Lessons
+- CSS overrides on Starlight DON'T WORK for layout changes — use component overrides
+- Standalone Astro pages (src/pages/) bypass Starlight completely — use for homepage
+- Gemini times out on large modules (~300s) — use longer timeout or split
+- Port 8765 and 4321 are reserved — don't use them
+- Always do systematic comparison (screenshot POC vs live) before declaring design "done"
