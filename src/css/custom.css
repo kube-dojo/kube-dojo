@@ -226,5 +226,17 @@ starlight-toc a[aria-current="true"] {
 /* Progress bars: dark mode bg */
 :root[data-theme='dark'] .progress-bar-wrap { background: var(--g700); }
 
-/* Mark Complete button: dark mode border */
+/* Mark Complete button: dark mode */
 :root[data-theme='dark'] .kd-complete-btn { border-color: var(--g700); }
+:root[data-theme='dark'] .kd-complete-btn:hover,
+:root[data-theme='dark'] .kd-complete-btn.completed { background: rgba(0, 230, 118, 0.15); }
+
+/* Meta chips: dark mode */
+:root[data-theme='dark'] .kd-chip-time { background: var(--g800); color: var(--g300); }
+:root[data-theme='dark'] .kd-chip-quick { background: rgba(0, 230, 118, 0.15); }
+:root[data-theme='dark'] .kd-chip-medium { background: rgba(255, 214, 0, 0.15); }
+:root[data-theme='dark'] .kd-chip-advanced { background: rgba(255, 23, 68, 0.15); }
+
+/* Quiz summary and pagination hover: dark mode */
+:root[data-theme='dark'] .sl-markdown-content details > summary:hover,
+:root[data-theme='dark'] .pagination-links a:hover { background: rgba(50, 108, 229, 0.15) !important; }
