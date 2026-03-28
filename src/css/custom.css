@@ -52,7 +52,7 @@ body { -webkit-font-smoothing: antialiased; }
   font-weight: 700;
   margin: 2.25rem 0 0.875rem;
   padding-bottom: 0.5rem;
-  border-bottom: 2px solid var(--kube-blue-light);
+  border-bottom: 2px solid var(--sl-color-accent-low);
 }
 .sl-markdown-content h2:first-of-type { margin-top: 0; }
 .sl-markdown-content h3 { font-size: 1.0625rem; font-weight: 700; margin: 1.5rem 0 0.625rem; }
@@ -203,3 +203,28 @@ starlight-toc a[aria-current="true"] {
 /* ===== PROGRESS: bars ===== */
 .progress-bar-wrap { height: 8px; background: var(--g200); border-radius: 4px; overflow: hidden; margin: 0.375rem 0; }
 .progress-bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s; }
+
+/* ===== DARK MODE OVERRIDES (Gemini review fixes) ===== */
+
+/* Code blocks: always dark bg */
+:root[data-theme='light'] pre,
+:root[data-theme='light'] .expressive-code .frame {
+  background-color: var(--g900) !important;
+}
+
+/* Tables: dark mode blue-tinted header and hover */
+:root[data-theme='dark'] .sl-markdown-content th { background: rgba(50, 108, 229, 0.15); color: #93B4F5; }
+:root[data-theme='dark'] .sl-markdown-content tr:hover td { background: rgba(50, 108, 229, 0.1); }
+
+/* Section cards: dark mode bg */
+:root[data-theme='dark'] .sl-markdown-content .section-card { background: var(--g800); border-color: var(--g700); }
+
+/* Module rows: dark mode borders and hover */
+:root[data-theme='dark'] .sl-markdown-content .module-row { border-color: var(--g700); }
+:root[data-theme='dark'] .sl-markdown-content .module-row:hover { background: rgba(50, 108, 229, 0.15); }
+
+/* Progress bars: dark mode bg */
+:root[data-theme='dark'] .progress-bar-wrap { background: var(--g700); }
+
+/* Mark Complete button: dark mode border */
+:root[data-theme='dark'] .kd-complete-btn { border-color: var(--g700); }
