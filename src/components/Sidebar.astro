@@ -55,28 +55,23 @@ function renderEntry(entry: any, depth: number = 0): string {
   const isOpen = hasCurrent(entry.entries) || !entry.collapsed;
   const caret = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>';
 
-  // Groups that contain only links: render as bold part header + flat links (no toggle)
-  if (isLeafGroup(entry)) {
-    // Find the index page (first link whose label doesn't start with "Module")
-    const indexEntry = entry.entries.find((e: any) => e.type === 'link' && !getModNum(e.label));
-    const moduleEntries = entry.entries.filter((e: any) => e !== indexEntry);
-    const links = moduleEntries.map((e: any) => renderLink(e)).join('');
+  // All groups: collapsible toggle with clean label
+  // Fix raw directory name labels using the index page's label
+  const isRawName = entry.label.includes('-') && !entry.label.includes(':') && !entry.label.includes(' ');
+  const indexLink = isRawName ? entry.entries.find((e: any) => e.type === 'link' && !getModNum(e.label)) : null;
+  const groupLabel = (isRawName && indexLink) ? indexLink.label : entry.label;
 
-    // Use the index page's label if the group label is a raw directory name
-    const isRawDirName = entry.label.includes('-') && !entry.label.includes(':') && !entry.label.includes(' ');
-    const headerLabel = (isRawDirName && indexEntry) ? indexEntry.label : entry.label;
+  // Filter out index page from children (it duplicates the group toggle)
+  const filteredEntries = indexLink ? entry.entries.filter((e: any) => e !== indexLink) : entry.entries;
+  const children = filteredEntries.map((e: any) => renderEntry(e, depth + 1)).join('');
 
-    if (indexEntry) {
-      const cls = indexEntry.isCurrent ? 'kd-ph kd-ph-active' : 'kd-ph';
-      return `<a href="${indexEntry.href}" class="${cls}"${indexEntry.isCurrent ? ' aria-current="page"' : ''}>${headerLabel}</a>${links}`;
-    }
-    return `<div class="kd-ph">${headerLabel}</div>${links}`;
-  }
+  // If there's an index page, make the label a clickable link too
+  const labelHtml = indexLink
+    ? `<a href="${indexLink.href}" class="kd-sg-link" onclick="event.stopPropagation()">${groupLabel}</a>`
+    : groupLabel;
 
-  // Regular group: collapsible toggle
-  const children = entry.entries.map((e: any) => renderEntry(e, depth + 1)).join('');
   return `<details${isOpen ? ' open' : ''}>
-    <summary class="kd-sg">${entry.label}${caret}</summary>
+    <summary class="kd-sg">${labelHtml}${caret}</summary>
     <div class="kd-sc">${children}</div>
   </details>`;
 }
@@ -152,6 +147,10 @@ const entriesToRender = currentBranch ? currentBranch.entries : sidebar;
   .kd-sb :global(summary.kd-sg:hover) { background: #EBF1FF; border-color: #326CE5; }
   :global([data-theme='dark']) .kd-sb :global(summary.kd-sg:hover) { background: rgba(50,108,229,0.15); }
   .kd-sb :global(summary.kd-sg::marker), .kd-sb :global(summary.kd-sg::-webkit-details-marker) { display: none; }
+  /* Group label as link */
+  .kd-sb :global(.kd-sg-link) { color: inherit; text-decoration: none; }
+  .kd-sb :global(.kd-sg-link:hover) { color: #326CE5; text-decoration: none; }
+
   .kd-sb :global(summary.kd-sg svg) { transition: transform 0.2s; color: #9CA3AF; flex-shrink: 0; }
   .kd-sb :global(details[open] > summary.kd-sg svg) { transform: rotate(90deg); }
 
