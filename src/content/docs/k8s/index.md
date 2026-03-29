@@ -92,7 +92,6 @@ Beyond Kubestronaut, CNCF offers tool-specific certifications. KubeDojo maps exi
 | [CAPA](capa/) | Certified Argo Project Associate | Argo Workflows, Rollouts |
 | [CNPE](cnpe/) | Cloud Native Platform Engineer | Cross-track learning path |
 | [CNPA](cnpa/) | Cloud Native Platform Associate | Platform fundamentals |
-| [LFCS](lfcs/) | Linux Foundation Certified Sysadmin | Linux deep dive |
 | [FinOps](finops/) | FinOps Practitioner | Cloud cost optimization |
 
 ## Extending Kubernetes

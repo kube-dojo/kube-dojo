@@ -126,8 +126,21 @@ sidebar:
 
 ---
 
+## Сертифікація: LFCS
+
+**Linux Foundation Certified System Administrator (LFCS)** — сертифікація, що входить до цього треку. Модулі Linux вище охоплюють усі домени іспиту LFCS — основи системи, мережу, сховище, безпеку та операції.
+
+| Ресурс | Посилання |
+|--------|-----------|
+| Шлях навчання LFCS | [Сертифікація LFCS](/k8s/lfcs/) |
+| Деталі іспиту | [Linux Foundation LFCS](https://training.linuxfoundation.org/certification/linux-foundation-certified-sysadmin-lfcs/) |
+
+---
+
 ## Після цього треку
 
-- [Сертифікації CKA / CKAD / CKS](/k8s/) — знання Linux необхідні для цих іспитів
-- [Platform Engineering](/platform/) — будуйте на фундаменті
+- [Сертифікації Kubernetes](/k8s/) — CKA, CKAD, CKS — знання Linux необхідні для цих іспитів
+- [Cloud](/cloud/) — вивчіть гіперскейлери, на яких працюють ваші кластери
 - [On-Premises Kubernetes](/on-premises/) — запускайте K8s на bare metal
+- [Platform Engineering](/platform/) — будуйте на фундаменті
+- [Cloud Native Tools](/platform/toolkits/) — досліджуйте екосистему CNCF

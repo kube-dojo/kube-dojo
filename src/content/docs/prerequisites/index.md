@@ -85,7 +85,7 @@ Zero to Terminal → Philosophy & Design → Cloud Native 101 → Kubernetes Bas
 
 Or jump directly to **Kubernetes Basics** if you already understand containers and the terminal.
 
-Want to go deeper into Linux? Continue to the [Linux](/linux/) track (37 modules covering kernel internals, container primitives, networking, security, and operations).
+Want to go deeper into Linux? Continue to the [Linux](/linux/) track (37 modules covering kernel internals, container primitives, networking, security, and operations — plus the LFCS certification path).
 
 ---
 
@@ -95,8 +95,9 @@ Ready to continue? Choose your path:
 
 | Goal | Next Step |
 |------|-----------|
+| Master Linux | [Linux](../linux/) (includes LFCS certification) |
 | Get certified | [Kubernetes Certifications](../k8s/) |
 | Learn cloud providers | [Cloud](../cloud/) |
+| Run on your own hardware | [On-Premises Kubernetes](../on-premises/) |
 | Go deeper | [Platform Engineering](../platform/) |
-| Master Linux | [Linux](../linux/) |
-| Explore cloud native tools | [Cloud Native Tools](../cloud/) |
+| Explore cloud native tools | [Cloud Native Tools](../platform/toolkits/) |

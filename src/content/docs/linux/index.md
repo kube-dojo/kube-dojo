@@ -126,9 +126,21 @@ Start with **Everyday Use** if you're new to Linux. Jump to **Container Primitiv
 
 ---
 
+## Certification: LFCS
+
+The **Linux Foundation Certified System Administrator (LFCS)** certification is included in this track. The Linux modules above cover all LFCS exam domains — system essentials, networking, storage, security, and operations.
+
+| Resource | Link |
+|----------|------|
+| LFCS Learning Path | [LFCS Certification](/k8s/lfcs/) |
+| Exam Details | [Linux Foundation LFCS](https://training.linuxfoundation.org/certification/linux-foundation-certified-sysadmin-lfcs/) |
+
+---
+
 ## After This Track
 
-- [CKA / CKAD / CKS certifications](/k8s/) — Linux knowledge is essential for these exams
-- [Platform Engineering](/platform/) — build on the foundation
-- [Cloud Native Tools](/cloud/) — explore the CNCF ecosystem
+- [Kubernetes Certifications](/k8s/) — CKA, CKAD, CKS — Linux knowledge is essential for these exams
+- [Cloud](/cloud/) — learn the hyperscalers that run your clusters
 - [On-Premises Kubernetes](/on-premises/) — run K8s on bare metal
+- [Platform Engineering](/platform/) — build on the foundation
+- [Cloud Native Tools](/platform/toolkits/) — explore the CNCF ecosystem

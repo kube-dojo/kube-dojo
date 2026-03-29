@@ -76,5 +76,9 @@ Philosophy & Design → Cloud Native 101 → Kubernetes Basics → Modern DevOps
 
 | Мета | Наступний крок |
 |------|----------------|
+| Опанувати Linux | [Linux](../linux/) (включає сертифікацію LFCS) |
 | Отримати сертифікат | [Kubernetes Certifications](../k8s/) |
+| Вивчити хмарних провайдерів | [Cloud](../cloud/) |
+| Запускати на власному обладнанні | [On-Premises Kubernetes](../on-premises/) |
 | Поглибити знання | [Platform Engineering](../platform/) |
+| Дослідити cloud native інструменти | [Cloud Native Tools](../platform/toolkits/) |

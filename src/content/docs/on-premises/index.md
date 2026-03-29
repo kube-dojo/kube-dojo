@@ -52,8 +52,8 @@ Bare Metal Provisioning (4 modules)
 ## Prerequisites
 
 - [Fundamentals](../prerequisites/) — Cloud Native 101, K8s Basics
-- [Linux](../linux/) — networking, storage, security hardening
-- [CKA](../k8s/cka/) — cluster architecture, kubeadm
+- [Linux](../linux/) — networking, storage, security hardening (includes LFCS)
+- [Certifications](../k8s/) — [CKA](../k8s/cka/) (cluster architecture, kubeadm) is required
 - Recommended: [CKS](../k8s/cks/) for security modules
 - Recommended: [Platform Engineering](../platform/) for SRE and operations modules
 

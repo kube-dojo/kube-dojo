@@ -77,3 +77,4 @@ Rosetta Stone (cross-provider concepts)
 
 - [Fundamentals](../prerequisites/) — Cloud Native 101, Docker, basic K8s
 - [Linux](../linux/) — recommended for networking and security modules
+- [Certifications](../k8s/) — recommended (CKA/CKAD give hands-on K8s experience before cloud-specific deep dives)
