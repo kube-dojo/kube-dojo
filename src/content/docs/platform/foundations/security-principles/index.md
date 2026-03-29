@@ -126,8 +126,8 @@ After completing Security Principles, you're ready for:
 
 | Track | Why |
 |-------|-----|
-| [DevSecOps Discipline](../../disciplines/devsecops/) | Put security into practice in CI/CD |
-| [Security Tools Toolkit](../../toolkits/security-tools/) | Learn specific tools (Vault, OPA, Falco) |
+| [DevSecOps Discipline](../../disciplines/reliability-security/devsecops/) | Put security into practice in CI/CD |
+| [Security Tools Toolkit](../../toolkits/security-quality/security-tools/) | Learn specific tools (Vault, OPA, Falco) |
 | [CKS Certification](../../../k8s/cks/) | Kubernetes security specialization |
 | [Distributed Systems](../distributed-systems/) | Security in distributed architectures |
 

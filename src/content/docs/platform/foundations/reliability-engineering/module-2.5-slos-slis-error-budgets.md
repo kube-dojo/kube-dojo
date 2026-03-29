@@ -78,7 +78,7 @@ SLIs, SLOs, and error budgets replace politics with math. They answer three ques
 2. **"What should we measure?"** — The SLI answers this.
 3. **"Should we ship or stabilize?"** — The error budget answers this.
 
-This module teaches the **theory** behind these concepts. You will learn what SLIs, SLOs, and error budgets are, why they work, and how to think about them correctly. Later modules cover the operational practices ([Module 1.2: SLO Discipline](../../disciplines/sre/)), budget management ([Module 1.3: Error Budget Management](../../disciplines/sre/)), and tooling ([Module 1.10: SLO Tooling — Sloth/Pyrra](../../toolkits/observability/)).
+This module teaches the **theory** behind these concepts. You will learn what SLIs, SLOs, and error budgets are, why they work, and how to think about them correctly. Later modules cover the operational practices ([Module 1.2: SLO Discipline](../../disciplines/core-platform/sre/)), budget management ([Module 1.3: Error Budget Management](../../disciplines/core-platform/sre/)), and tooling ([Module 1.10: SLO Tooling — Sloth/Pyrra](../../toolkits/observability-intelligence/observability/)).
 
 > **The Restaurant Analogy**
 >

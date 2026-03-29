@@ -382,4 +382,4 @@ kubectl delete svc web web-external
 
 ## Наступний модуль
 
-[Модуль 6: ConfigMaps та Secrets](module-6-configmaps-secrets/) — керування конфігурацією.
+[Модуль 6: ConfigMaps та Secrets](module-1.6-configmaps-secrets/) — керування конфігурацією.

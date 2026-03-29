@@ -20,12 +20,12 @@ The FinOps Certified Practitioner (FOCP) validates your understanding of cloud f
 
 | Domain | Weight | Module |
 |--------|--------|--------|
-| FinOps Lifecycle | 30% | [Module 1](module-1-finops-fundamentals/) |
-| FinOps Capabilities | 28% | [Module 2](module-2-finops-practice/) |
-| FinOps Principles | 12% | [Module 1](module-1-finops-fundamentals/) |
-| Teams & Motivation | 12% | [Module 1](module-1-finops-fundamentals/) |
-| Terminology & Cloud Bill | 10% | [Module 2](module-2-finops-practice/) |
-| Challenge of Cloud | 8% | [Module 1](module-1-finops-fundamentals/) |
+| FinOps Lifecycle | 30% | [Module 1](module-1.1-finops-fundamentals/) |
+| FinOps Capabilities | 28% | [Module 2](module-1.2-finops-practice/) |
+| FinOps Principles | 12% | [Module 1](module-1.1-finops-fundamentals/) |
+| Teams & Motivation | 12% | [Module 1](module-1.1-finops-fundamentals/) |
+| Terminology & Cloud Bill | 10% | [Module 2](module-1.2-finops-practice/) |
+| Challenge of Cloud | 8% | [Module 1](module-1.1-finops-fundamentals/) |
 
 ---
 
@@ -53,7 +53,7 @@ Module 2: FinOps in Practice (applied)
 
 Bonus: Hands-On with OpenCost (toolkit)
 └── OpenCost installation, cost dashboards, right-sizing
-    See: platform/toolkits/scaling-reliability/module-6.4-finops-opencost.md
+    See: platform/toolkits/developer-experience/scaling-reliability/module-6.4-finops-opencost.md
 ```
 
 ---
@@ -62,8 +62,8 @@ Bonus: Hands-On with OpenCost (toolkit)
 
 | # | Module | Complexity | Time | Focus |
 |---|--------|------------|------|-------|
-| 1 | [FinOps Fundamentals](module-1-finops-fundamentals/) | `[MEDIUM]` | 45 min | Principles, lifecycle, teams, organizational models |
-| 2 | [FinOps in Practice](module-2-finops-practice/) | `[MEDIUM]` | 50 min | Cost allocation, optimization, billing, K8s FinOps |
+| 1 | [FinOps Fundamentals](module-1.1-finops-fundamentals/) | `[MEDIUM]` | 45 min | Principles, lifecycle, teams, organizational models |
+| 2 | [FinOps in Practice](module-1.2-finops-practice/) | `[MEDIUM]` | 50 min | Cost allocation, optimization, billing, K8s FinOps |
 
 ---
 
@@ -73,9 +73,9 @@ The FOCP is conceptual, but KubeDojo's Platform Engineering track covers the **h
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [OpenCost Toolkit](../../platform/toolkits/scaling-reliability/module-6.4-finops-opencost/) | OpenCost installation, cost dashboards, right-sizing | Direct — the practical side of Module 2 |
-| [Karpenter](../../platform/toolkits/scaling-reliability/module-6.1-karpenter/) | Node autoscaling, spot instance strategies | Supports rate optimization concepts |
-| [KEDA](../../platform/toolkits/scaling-reliability/module-6.2-keda/) | Event-driven autoscaling | Supports workload optimization concepts |
+| [OpenCost Toolkit](../../platform/toolkits/developer-experience/scaling-reliability/module-6.4-finops-opencost/) | OpenCost installation, cost dashboards, right-sizing | Direct — the practical side of Module 2 |
+| [Karpenter](../../platform/toolkits/developer-experience/scaling-reliability/module-6.1-karpenter/) | Node autoscaling, spot instance strategies | Supports rate optimization concepts |
+| [KEDA](../../platform/toolkits/developer-experience/scaling-reliability/module-6.2-keda/) | Event-driven autoscaling | Supports workload optimization concepts |
 
 ---
 

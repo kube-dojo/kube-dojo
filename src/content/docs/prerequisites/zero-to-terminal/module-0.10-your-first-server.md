@@ -463,7 +463,7 @@ The Cloud Native track picks up right where you left off. You'll learn about con
 
 If you want to become a cloud engineer, DevOps engineer, or platform engineer, this is your path.
 
-> Start here: [Cloud Native 101](../cloud-native-101/module-1-what-are-containers/)
+> Start here: [Cloud Native 101](../cloud-native-101/module-1.1-what-are-containers/)
 
 ### Path C: Both
 

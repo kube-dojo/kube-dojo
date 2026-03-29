@@ -7,7 +7,7 @@ sidebar:
 
 > **Complexity**: `[MEDIUM]` | Time: 45 minutes
 >
-> **Prerequisites**: [Module 1.2: Server Sizing](module-1.2-server-sizing/), [FinOps Fundamentals](../../k8s/finops/module-1-finops-fundamentals/)
+> **Prerequisites**: [Module 1.2: Server Sizing](module-1.2-server-sizing/), [FinOps Fundamentals](../../k8s/finops/module-1.1-finops-fundamentals/)
 
 ---
 

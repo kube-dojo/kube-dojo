@@ -51,27 +51,27 @@ KubeDojo тепер повністю узгоджений з **Kubernetes 1.35**
 | Модуль | Трек | Опис |
 |--------|------|------|
 | [Autoscaling (HPA/VPA)](../k8s/cka/part2-workloads-scheduling/module-2.9-autoscaling/) | CKA | Горизонтальне та вертикальне автомасштабування Подів із практичним навантажувальним тестуванням |
-| [etcd-operator v0.2.0](../platform/toolkits/cloud-native-databases/module-15.5-etcd-operator/) | Platform | Офіційний оператор etcd — керування TLS, керовані оновлення |
+| [etcd-operator v0.2.0](../platform/toolkits/data-ai-platforms/cloud-native-databases/module-15.5-etcd-operator/) | Platform | Офіційний оператор etcd — керування TLS, керовані оновлення |
 | [Навчальний шлях CNPE](../k8s/cnpe/) | CNPE | Зіставлення 60+ наявних модулів із доменами нової сертифікації CNPE |
 
 #### Набір інструментів платформної інженерії — 15 нових модулів
 | Модуль | Категорія | Опис |
 |--------|-----------|------|
-| [**FinOps та OpenCost**](../platform/toolkits/scaling-reliability/module-6.4-finops-opencost/) | Масштабування | Оптимізація витрат K8s, правильний вибір ресурсів, очищення неактивного |
-| [**Kyverno**](../platform/toolkits/security-tools/module-4.7-kyverno/) | Безпека | YAML-рідний рушій політик — валідація, мутація, генерація |
-| [**Хаос-інженерія**](../platform/toolkits/scaling-reliability/module-6.5-chaos-engineering/) | Масштабування | LitmusChaos + Chaos Mesh практика з плануванням GameDay |
-| [**Створення операторів**](../platform/toolkits/platforms/module-3.4-kubebuilder/) | Платформи | Kubebuilder з нуля — побудова оператора WebApp |
-| [**Безперервне профілювання**](../platform/toolkits/observability/module-1.9-continuous-profiling/) | Спостережуваність | Parca + Pyroscope — 4-й стовп спостережуваності |
-| [**Інструменти SLO**](../platform/toolkits/observability/module-1.10-slo-tooling/) | Спостережуваність | Sloth + Pyrra — мост від теорії SRE до практики |
-| [**Cluster API**](../platform/toolkits/platforms/module-3.5-cluster-api/) | Платформи | Декларативне керування життєвим циклом кластерів K8s (CAPI) |
-| [**vCluster**](../platform/toolkits/platforms/module-3.6-vcluster/) | Платформи | Віртуальні кластери K8s для мультиорендності за 1/10 вартості |
-| [**Rook/Ceph**](../platform/toolkits/storage/module-16.1-rook-ceph/) | Сховище | Розподілене сховище — блокове, файлова система та об'єктне з одного кластера |
-| [**MinIO**](../platform/toolkits/storage/module-16.2-minio/) | Сховище | S3-сумісне об'єктне сховище на K8s |
-| [**Longhorn**](../platform/toolkits/storage/module-16.3-longhorn/) | Сховище | Легке розподілене блокове сховище з резервним копіюванням та аварійним відновленням |
-| [**Планування GPU**](../platform/toolkits/ml-platforms/module-9.7-gpu-scheduling/) | ML-платформи | NVIDIA GPU Operator, time-slicing, MIG, моніторинг |
-| [**Поглиблене DNS**](../platform/toolkits/networking/module-5.3-dns-deep-dive/) | Мережі | Налаштування CoreDNS, external-dns, оптимізація ndots |
-| [**MetalLB**](../platform/toolkits/networking/module-5.4-metallb/) | Мережі | Балансування навантаження для bare-metal — режими L2 та BGP |
-| [**SPIFFE/SPIRE**](../platform/toolkits/security-tools/module-4.8-spiffe-spire/) | Безпека | Криптографічна ідентифікація навантажень для мереж з нульовою довірою |
+| [**FinOps та OpenCost**](../platform/toolkits/developer-experience/scaling-reliability/module-6.4-finops-opencost/) | Масштабування | Оптимізація витрат K8s, правильний вибір ресурсів, очищення неактивного |
+| [**Kyverno**](../platform/toolkits/security-quality/security-tools/module-4.7-kyverno/) | Безпека | YAML-рідний рушій політик — валідація, мутація, генерація |
+| [**Хаос-інженерія**](../platform/toolkits/developer-experience/scaling-reliability/module-6.5-chaos-engineering/) | Масштабування | LitmusChaos + Chaos Mesh практика з плануванням GameDay |
+| [**Створення операторів**](../platform/toolkits/infrastructure-networking/platforms/module-3.4-kubebuilder/) | Платформи | Kubebuilder з нуля — побудова оператора WebApp |
+| [**Безперервне профілювання**](../platform/toolkits/observability-intelligence/observability/module-1.9-continuous-profiling/) | Спостережуваність | Parca + Pyroscope — 4-й стовп спостережуваності |
+| [**Інструменти SLO**](../platform/toolkits/observability-intelligence/observability/module-1.10-slo-tooling/) | Спостережуваність | Sloth + Pyrra — мост від теорії SRE до практики |
+| [**Cluster API**](../platform/toolkits/infrastructure-networking/platforms/module-3.5-cluster-api/) | Платформи | Декларативне керування життєвим циклом кластерів K8s (CAPI) |
+| [**vCluster**](../platform/toolkits/infrastructure-networking/platforms/module-3.6-vcluster/) | Платформи | Віртуальні кластери K8s для мультиорендності за 1/10 вартості |
+| [**Rook/Ceph**](../platform/toolkits/infrastructure-networking/storage/module-16.1-rook-ceph/) | Сховище | Розподілене сховище — блокове, файлова система та об'єктне з одного кластера |
+| [**MinIO**](../platform/toolkits/infrastructure-networking/storage/module-16.2-minio/) | Сховище | S3-сумісне об'єктне сховище на K8s |
+| [**Longhorn**](../platform/toolkits/infrastructure-networking/storage/module-16.3-longhorn/) | Сховище | Легке розподілене блокове сховище з резервним копіюванням та аварійним відновленням |
+| [**Планування GPU**](../platform/toolkits/data-ai-platforms/ml-platforms/module-9.7-gpu-scheduling/) | ML-платформи | NVIDIA GPU Operator, time-slicing, MIG, моніторинг |
+| [**Поглиблене DNS**](../platform/toolkits/infrastructure-networking/networking/module-5.3-dns-deep-dive/) | Мережі | Налаштування CoreDNS, external-dns, оптимізація ndots |
+| [**MetalLB**](../platform/toolkits/infrastructure-networking/networking/module-5.4-metallb/) | Мережі | Балансування навантаження для bare-metal — режими L2 та BGP |
+| [**SPIFFE/SPIRE**](../platform/toolkits/security-quality/security-tools/module-4.8-spiffe-spire/) | Безпека | Криптографічна ідентифікація навантажень для мереж з нульовою довірою |
 
 ### Узгодження з іспитом CKS
 

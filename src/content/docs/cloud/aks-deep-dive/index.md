@@ -13,10 +13,10 @@ AKS is the fastest-growing managed Kubernetes service, tightly integrated with t
 
 | # | Module | Time | What You'll Learn |
 |---|--------|------|-------------------|
-| 1 | [AKS Architecture & Node Management](module-1-aks-architecture/) | 2h | System/user node pools, VMSS, availability zones, Entra ID RBAC |
-| 2 | [AKS Advanced Networking](module-2-aks-networking/) | 3.5h | Kubenet vs Azure CNI vs Overlay vs Cilium, network policies, Private Link |
-| 3 | [AKS Workload Identity & Security](module-3-aks-identity/) | 1.5h | Entra Workload Identity, Secrets Store CSI, Azure Policy, Defender |
-| 4 | [AKS Storage, Observability & Scaling](module-4-aks-production/) | 2.5h | Azure Disks/Files, Container Insights, Managed Prometheus, KEDA |
+| 1 | [AKS Architecture & Node Management](module-7.1-aks-architecture/) | 2h | System/user node pools, VMSS, availability zones, Entra ID RBAC |
+| 2 | [AKS Advanced Networking](module-7.2-aks-networking/) | 3.5h | Kubenet vs Azure CNI vs Overlay vs Cilium, network policies, Private Link |
+| 3 | [AKS Workload Identity & Security](module-7.3-aks-identity/) | 1.5h | Entra Workload Identity, Secrets Store CSI, Azure Policy, Defender |
+| 4 | [AKS Storage, Observability & Scaling](module-7.4-aks-production/) | 2.5h | Azure Disks/Files, Container Insights, Managed Prometheus, KEDA |
 
 **Total time**: ~9.5 hours
 

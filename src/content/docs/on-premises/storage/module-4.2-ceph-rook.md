@@ -7,7 +7,7 @@ sidebar:
 
 > **Complexity**: `[COMPLEX]` | Time: 60 minutes
 >
-> **Prerequisites**: [Module 4.1: Storage Architecture](module-4.1-storage-architecture/), [Rook/Ceph Toolkit](../../platform/toolkits/storage/module-16.1-rook-ceph/)
+> **Prerequisites**: [Module 4.1: Storage Architecture](module-4.1-storage-architecture/), [Rook/Ceph Toolkit](../../platform/toolkits/infrastructure-networking/storage/module-16.1-rook-ceph/)
 
 ---
 

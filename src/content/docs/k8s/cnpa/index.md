@@ -45,43 +45,43 @@ The CNPA (Certified Cloud Native Platform Engineering Associate) validates found
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [Platform Eng 2.1](../../platform/disciplines/platform-engineering/module-2.1-what-is-platform-engineering/) | What is Platform Engineering? | Direct |
-| [Platform Eng 2.2](../../platform/disciplines/platform-engineering/module-2.2-developer-experience/) | Developer Experience (DevEx) | Direct |
-| [Platform Eng 2.3](../../platform/disciplines/platform-engineering/module-2.3-internal-developer-platforms/) | Internal Developer Platforms | Direct |
-| [Platform Eng 2.4](../../platform/disciplines/platform-engineering/module-2.4-golden-paths/) | Golden Paths and paved roads | Direct |
-| [Platform Eng 2.5](../../platform/disciplines/platform-engineering/module-2.5-self-service-infrastructure/) | Self-Service Infrastructure | Direct |
-| [Platform Eng 2.6](../../platform/disciplines/platform-engineering/module-2.6-platform-maturity/) | Platform Maturity Models | Direct |
+| [Platform Eng 2.1](../../platform/disciplines/core-platform/platform-engineering/module-2.1-what-is-platform-engineering/) | What is Platform Engineering? | Direct |
+| [Platform Eng 2.2](../../platform/disciplines/core-platform/platform-engineering/module-2.2-developer-experience/) | Developer Experience (DevEx) | Direct |
+| [Platform Eng 2.3](../../platform/disciplines/core-platform/platform-engineering/module-2.3-internal-developer-platforms/) | Internal Developer Platforms | Direct |
+| [Platform Eng 2.4](../../platform/disciplines/core-platform/platform-engineering/module-2.4-golden-paths/) | Golden Paths and paved roads | Direct |
+| [Platform Eng 2.5](../../platform/disciplines/core-platform/platform-engineering/module-2.5-self-service-infrastructure/) | Self-Service Infrastructure | Direct |
+| [Platform Eng 2.6](../../platform/disciplines/core-platform/platform-engineering/module-2.6-platform-maturity/) | Platform Maturity Models | Direct |
 
 **GitOps:**
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [GitOps 3.1](../../platform/disciplines/gitops/module-3.1-what-is-gitops/) | What is GitOps? OpenGitOps 4 principles | Direct |
-| [GitOps 3.2](../../platform/disciplines/gitops/module-3.2-repository-strategies/) | Repository strategies, mono vs multi-repo | Direct |
-| [GitOps 3.3](../../platform/disciplines/gitops/module-3.3-environment-promotion/) | Environment promotion patterns | Direct |
-| [GitOps 3.4](../../platform/disciplines/gitops/module-3.4-drift-detection/) | Drift detection and reconciliation | Direct |
-| [GitOps 3.5](../../platform/disciplines/gitops/module-3.5-secrets/) | Secrets management in GitOps | Direct |
-| [GitOps 3.6](../../platform/disciplines/gitops/module-3.6-multi-cluster/) | Multi-cluster GitOps | Direct |
+| [GitOps 3.1](../../platform/disciplines/delivery-automation/gitops/module-3.1-what-is-gitops/) | What is GitOps? OpenGitOps 4 principles | Direct |
+| [GitOps 3.2](../../platform/disciplines/delivery-automation/gitops/module-3.2-repository-strategies/) | Repository strategies, mono vs multi-repo | Direct |
+| [GitOps 3.3](../../platform/disciplines/delivery-automation/gitops/module-3.3-environment-promotion/) | Environment promotion patterns | Direct |
+| [GitOps 3.4](../../platform/disciplines/delivery-automation/gitops/module-3.4-drift-detection/) | Drift detection and reconciliation | Direct |
+| [GitOps 3.5](../../platform/disciplines/delivery-automation/gitops/module-3.5-secrets/) | Secrets management in GitOps | Direct |
+| [GitOps 3.6](../../platform/disciplines/delivery-automation/gitops/module-3.6-multi-cluster/) | Multi-cluster GitOps | Direct |
 
 **Architecture & IaC:**
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
 | [Distributed Systems 5.1](../../platform/foundations/distributed-systems/module-5.1-what-makes-systems-distributed/) | Distributed systems fundamentals | Direct |
-| [IaC 6.1](../../platform/disciplines/iac/module-6.1-iac-fundamentals/) | Infrastructure as Code fundamentals | Direct |
+| [IaC 6.1](../../platform/disciplines/delivery-automation/iac/module-6.1-iac-fundamentals/) | Infrastructure as Code fundamentals | Direct |
 | [Systems Thinking 1.1](../../platform/foundations/systems-thinking/module-1.1-what-is-systems-thinking/) | Systems thinking for platform design | Partial |
 
 **Tools (conceptual understanding):**
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [ArgoCD](../../platform/toolkits/gitops-deployments/module-2.1-argocd/) | ArgoCD: GitOps delivery | Direct |
-| [Flux](../../platform/toolkits/gitops-deployments/module-2.3-flux/) | Flux CD: GitOps controllers | Direct |
-| [Helm & Kustomize](../../platform/toolkits/gitops-deployments/module-2.4-helm-kustomize/) | Declarative packaging and customization | Direct |
-| [Dagger](../../platform/toolkits/ci-cd-pipelines/module-3.1-dagger/) | CI/CD pipeline design | Direct |
-| [Tekton](../../platform/toolkits/ci-cd-pipelines/module-3.2-tekton/) | K8s-native CI/CD pipelines | Direct |
-| [Argo Workflows](../../platform/toolkits/ci-cd-pipelines/module-3.3-argo-workflows/) | Workflow automation | Direct |
-| [Argo Rollouts](../../platform/toolkits/gitops-deployments/module-2.2-argo-rollouts/) | Progressive delivery: canary, blue-green | Direct |
+| [ArgoCD](../../platform/toolkits/cicd-delivery/gitops-deployments/module-2.1-argocd/) | ArgoCD: GitOps delivery | Direct |
+| [Flux](../../platform/toolkits/cicd-delivery/gitops-deployments/module-2.3-flux/) | Flux CD: GitOps controllers | Direct |
+| [Helm & Kustomize](../../platform/toolkits/cicd-delivery/gitops-deployments/module-2.4-helm-kustomize/) | Declarative packaging and customization | Direct |
+| [Dagger](../../platform/toolkits/cicd-delivery/ci-cd-pipelines/module-3.1-dagger/) | CI/CD pipeline design | Direct |
+| [Tekton](../../platform/toolkits/cicd-delivery/ci-cd-pipelines/module-3.2-tekton/) | K8s-native CI/CD pipelines | Direct |
+| [Argo Workflows](../../platform/toolkits/cicd-delivery/ci-cd-pipelines/module-3.3-argo-workflows/) | Workflow automation | Direct |
+| [Argo Rollouts](../../platform/toolkits/cicd-delivery/gitops-deployments/module-2.2-argo-rollouts/) | Progressive delivery: canary, blue-green | Direct |
 
 ---
 
@@ -112,22 +112,22 @@ The CNPA (Certified Cloud Native Platform Engineering Associate) validates found
 | [Security 4.1](../../platform/foundations/security-principles/module-4.1-security-mindset/) | Security mindset | Direct |
 | [Security 4.2](../../platform/foundations/security-principles/module-4.2-defense-in-depth/) | Defense in depth | Direct |
 | [Security 4.3](../../platform/foundations/security-principles/module-4.3-identity-and-access/) | Identity and access management | Direct |
-| [DevSecOps 4.1](../../platform/disciplines/devsecops/module-4.1-devsecops-fundamentals/) | DevSecOps fundamentals | Direct |
-| [DevSecOps 4.3](../../platform/disciplines/devsecops/module-4.3-security-cicd/) | Security in CI/CD | Direct |
+| [DevSecOps 4.1](../../platform/disciplines/reliability-security/devsecops/module-4.1-devsecops-fundamentals/) | DevSecOps fundamentals | Direct |
+| [DevSecOps 4.3](../../platform/disciplines/reliability-security/devsecops/module-4.3-security-cicd/) | Security in CI/CD | Direct |
 
 **Tools (know what they do):**
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [Prometheus](../../platform/toolkits/observability/module-1.1-prometheus/) | Pull-based monitoring, PromQL | Direct |
-| [OpenTelemetry](../../platform/toolkits/observability/module-1.2-opentelemetry/) | OTel Collector, auto-instrumentation | Direct |
-| [Grafana](../../platform/toolkits/observability/module-1.3-grafana/) | Dashboards, data sources | Direct |
-| [Loki](../../platform/toolkits/observability/module-1.4-loki/) | Log aggregation, LogQL | Direct |
-| [Tracing](../../platform/toolkits/observability/module-1.5-tracing/) | Jaeger/Tempo, context propagation | Direct |
-| [OPA/Gatekeeper](../../platform/toolkits/security-tools/module-4.2-opa-gatekeeper/) | Policy engine, admission control | Direct |
-| [Kyverno](../../platform/toolkits/security-tools/module-4.7-kyverno/) | YAML-native policy engine | Direct |
-| [SPIFFE/SPIRE](../../platform/toolkits/security-tools/module-4.8-spiffe-spire/) | Workload identity, mTLS | Direct |
-| [Service Mesh](../../platform/toolkits/networking/module-5.2-service-mesh/) | Istio/Linkerd mTLS | Direct |
+| [Prometheus](../../platform/toolkits/observability-intelligence/observability/module-1.1-prometheus/) | Pull-based monitoring, PromQL | Direct |
+| [OpenTelemetry](../../platform/toolkits/observability-intelligence/observability/module-1.2-opentelemetry/) | OTel Collector, auto-instrumentation | Direct |
+| [Grafana](../../platform/toolkits/observability-intelligence/observability/module-1.3-grafana/) | Dashboards, data sources | Direct |
+| [Loki](../../platform/toolkits/observability-intelligence/observability/module-1.4-loki/) | Log aggregation, LogQL | Direct |
+| [Tracing](../../platform/toolkits/observability-intelligence/observability/module-1.5-tracing/) | Jaeger/Tempo, context propagation | Direct |
+| [OPA/Gatekeeper](../../platform/toolkits/security-quality/security-tools/module-4.2-opa-gatekeeper/) | Policy engine, admission control | Direct |
+| [Kyverno](../../platform/toolkits/security-quality/security-tools/module-4.7-kyverno/) | YAML-native policy engine | Direct |
+| [SPIFFE/SPIRE](../../platform/toolkits/security-quality/security-tools/module-4.8-spiffe-spire/) | Workload identity, mTLS | Direct |
+| [Service Mesh](../../platform/toolkits/infrastructure-networking/networking/module-5.2-service-mesh/) | Istio/Linkerd mTLS | Direct |
 | [CKA RBAC](../../k8s/cka/part1-cluster-architecture/module-1.6-rbac/) | RBAC fundamentals | Direct |
 
 ---
@@ -145,24 +145,24 @@ The CNPA (Certified Cloud Native Platform Engineering Associate) validates found
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [GitOps 3.1](../../platform/disciplines/gitops/module-3.1-what-is-gitops/) | What is GitOps? OpenGitOps principles | Direct |
-| [GitOps 3.3](../../platform/disciplines/gitops/module-3.3-environment-promotion/) | Environment promotion patterns | Direct |
-| [GitOps 3.4](../../platform/disciplines/gitops/module-3.4-drift-detection/) | Drift detection and reconciliation | Direct |
-| [SRE 1.5](../../platform/disciplines/sre/module-1.5-incident-management/) | Incident Management | Direct |
-| [SRE 1.6](../../platform/disciplines/sre/module-1.6-postmortems/) | Blameless Postmortems | Direct |
-| [DevSecOps 4.2](../../platform/disciplines/devsecops/module-4.2-shift-left-security/) | Shift-left (CI integration) | Partial |
+| [GitOps 3.1](../../platform/disciplines/delivery-automation/gitops/module-3.1-what-is-gitops/) | What is GitOps? OpenGitOps principles | Direct |
+| [GitOps 3.3](../../platform/disciplines/delivery-automation/gitops/module-3.3-environment-promotion/) | Environment promotion patterns | Direct |
+| [GitOps 3.4](../../platform/disciplines/delivery-automation/gitops/module-3.4-drift-detection/) | Drift detection and reconciliation | Direct |
+| [SRE 1.5](../../platform/disciplines/core-platform/sre/module-1.5-incident-management/) | Incident Management | Direct |
+| [SRE 1.6](../../platform/disciplines/core-platform/sre/module-1.6-postmortems/) | Blameless Postmortems | Direct |
+| [DevSecOps 4.2](../../platform/disciplines/reliability-security/devsecops/module-4.2-shift-left-security/) | Shift-left (CI integration) | Partial |
 
 **Tools:**
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [ArgoCD](../../platform/toolkits/gitops-deployments/module-2.1-argocd/) | ArgoCD: Application CRD, sync, RBAC | Direct |
-| [Flux](../../platform/toolkits/gitops-deployments/module-2.3-flux/) | Flux CD: GitRepository, HelmRelease | Direct |
-| [Argo Rollouts](../../platform/toolkits/gitops-deployments/module-2.2-argo-rollouts/) | Progressive delivery strategies | Direct |
-| [Dagger](../../platform/toolkits/ci-cd-pipelines/module-3.1-dagger/) | CI/CD pipeline design | Direct |
-| [Tekton](../../platform/toolkits/ci-cd-pipelines/module-3.2-tekton/) | K8s-native CI/CD pipelines | Direct |
-| [Argo Workflows](../../platform/toolkits/ci-cd-pipelines/module-3.3-argo-workflows/) | Workflow automation | Direct |
-| [Supply Chain](../../platform/toolkits/security-tools/module-4.4-supply-chain/) | Sigstore/Cosign, image signing | Partial |
+| [ArgoCD](../../platform/toolkits/cicd-delivery/gitops-deployments/module-2.1-argocd/) | ArgoCD: Application CRD, sync, RBAC | Direct |
+| [Flux](../../platform/toolkits/cicd-delivery/gitops-deployments/module-2.3-flux/) | Flux CD: GitRepository, HelmRelease | Direct |
+| [Argo Rollouts](../../platform/toolkits/cicd-delivery/gitops-deployments/module-2.2-argo-rollouts/) | Progressive delivery strategies | Direct |
+| [Dagger](../../platform/toolkits/cicd-delivery/ci-cd-pipelines/module-3.1-dagger/) | CI/CD pipeline design | Direct |
+| [Tekton](../../platform/toolkits/cicd-delivery/ci-cd-pipelines/module-3.2-tekton/) | K8s-native CI/CD pipelines | Direct |
+| [Argo Workflows](../../platform/toolkits/cicd-delivery/ci-cd-pipelines/module-3.3-argo-workflows/) | Workflow automation | Direct |
+| [Supply Chain](../../platform/toolkits/security-quality/security-tools/module-4.4-supply-chain/) | Sigstore/Cosign, image signing | Partial |
 
 ---
 
@@ -180,9 +180,9 @@ The CNPA (Certified Cloud Native Platform Engineering Associate) validates found
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [Platform Eng 2.5](../../platform/disciplines/platform-engineering/module-2.5-self-service-infrastructure/) | Self-Service Infrastructure | Direct |
-| [IaC 6.1](../../platform/disciplines/iac/module-6.1-iac-fundamentals/) | Infrastructure as Code | Direct |
-| [IaC 6.4](../../platform/disciplines/iac/module-6.4-iac-at-scale/) | IaC at Scale | Direct |
+| [Platform Eng 2.5](../../platform/disciplines/core-platform/platform-engineering/module-2.5-self-service-infrastructure/) | Self-Service Infrastructure | Direct |
+| [IaC 6.1](../../platform/disciplines/delivery-automation/iac/module-6.1-iac-fundamentals/) | Infrastructure as Code | Direct |
+| [IaC 6.4](../../platform/disciplines/delivery-automation/iac/module-6.4-iac-at-scale/) | IaC at Scale | Direct |
 | [Distributed Systems 5.2](../../platform/foundations/distributed-systems/module-5.2-consensus-and-coordination/) | Consensus and coordination (reconciliation) | Partial |
 | [CKA CRDs](../../k8s/cka/part1-cluster-architecture/module-1.5-crds-operators/) | CRD creation and operator pattern | Direct |
 | [CKA Extension Interfaces](../../k8s/cka/part1-cluster-architecture/module-1.2-extension-interfaces/) | K8s extension points | Direct |
@@ -191,11 +191,11 @@ The CNPA (Certified Cloud Native Platform Engineering Associate) validates found
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [Crossplane](../../platform/toolkits/platforms/module-7.2-crossplane/) | XRDs, Compositions, Providers | Direct |
-| [Kubebuilder](../../platform/toolkits/platforms/module-3.4-kubebuilder/) | Building custom operators | Direct |
-| [Cluster API](../../platform/toolkits/platforms/module-3.5-cluster-api/) | Declarative cluster lifecycle | Direct |
-| [Helm & Kustomize](../../platform/toolkits/gitops-deployments/module-2.4-helm-kustomize/) | Declarative resource packaging | Partial |
-| [vCluster](../../platform/toolkits/platforms/module-3.6-vcluster/) | Virtual clusters for provisioning | Partial |
+| [Crossplane](../../platform/toolkits/infrastructure-networking/platforms/module-7.2-crossplane/) | XRDs, Compositions, Providers | Direct |
+| [Kubebuilder](../../platform/toolkits/infrastructure-networking/platforms/module-3.4-kubebuilder/) | Building custom operators | Direct |
+| [Cluster API](../../platform/toolkits/infrastructure-networking/platforms/module-3.5-cluster-api/) | Declarative cluster lifecycle | Direct |
+| [Helm & Kustomize](../../platform/toolkits/cicd-delivery/gitops-deployments/module-2.4-helm-kustomize/) | Declarative resource packaging | Partial |
+| [vCluster](../../platform/toolkits/infrastructure-networking/platforms/module-3.6-vcluster/) | Virtual clusters for provisioning | Partial |
 
 ---
 
@@ -212,23 +212,23 @@ The CNPA (Certified Cloud Native Platform Engineering Associate) validates found
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [Platform Eng 2.2](../../platform/disciplines/platform-engineering/module-2.2-developer-experience/) | Developer Experience (DevEx) | Direct |
-| [Platform Eng 2.3](../../platform/disciplines/platform-engineering/module-2.3-internal-developer-platforms/) | Internal Developer Platforms | Direct |
-| [Platform Eng 2.4](../../platform/disciplines/platform-engineering/module-2.4-golden-paths/) | Golden Paths and templates | Direct |
-| [Platform Eng 2.6](../../platform/disciplines/platform-engineering/module-2.6-platform-maturity/) | Platform Maturity Models | Direct |
-| [AIOps 6.1](../../platform/disciplines/aiops/module-6.1-aiops-foundations/) | AIOps foundations | Direct |
-| [AIOps 6.6](../../platform/disciplines/aiops/module-6.6-auto-remediation/) | Auto-remediation with AI | Partial |
+| [Platform Eng 2.2](../../platform/disciplines/core-platform/platform-engineering/module-2.2-developer-experience/) | Developer Experience (DevEx) | Direct |
+| [Platform Eng 2.3](../../platform/disciplines/core-platform/platform-engineering/module-2.3-internal-developer-platforms/) | Internal Developer Platforms | Direct |
+| [Platform Eng 2.4](../../platform/disciplines/core-platform/platform-engineering/module-2.4-golden-paths/) | Golden Paths and templates | Direct |
+| [Platform Eng 2.6](../../platform/disciplines/core-platform/platform-engineering/module-2.6-platform-maturity/) | Platform Maturity Models | Direct |
+| [AIOps 6.1](../../platform/disciplines/data-ai/aiops/module-6.1-aiops-foundations/) | AIOps foundations | Direct |
+| [AIOps 6.6](../../platform/disciplines/data-ai/aiops/module-6.6-auto-remediation/) | Auto-remediation with AI | Partial |
 
 **Tools:**
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [Backstage](../../platform/toolkits/platforms/module-7.1-backstage/) | Software Catalog, Templates, TechDocs | Direct |
-| [K9s CLI](../../platform/toolkits/developer-experience/module-8.1-k9s-cli/) | Developer CLI tooling | Partial |
-| [Telepresence/Tilt](../../platform/toolkits/developer-experience/module-8.2-telepresence-tilt/) | Inner-loop development | Partial |
-| [DevPod](../../platform/toolkits/developer-experience/module-8.4-devpod/) | Reproducible dev environments | Partial |
-| [Gitpod/Codespaces](../../platform/toolkits/developer-experience/module-8.5-gitpod-codespaces/) | Cloud development environments | Partial |
-| [AIOps Tools](../../platform/toolkits/aiops-tools/module-10.3-observability-ai-features/) | AI-powered observability features | Partial |
+| [Backstage](../../platform/toolkits/infrastructure-networking/platforms/module-7.1-backstage/) | Software Catalog, Templates, TechDocs | Direct |
+| [K9s CLI](../../platform/toolkits/developer-experience/devex-tools/module-8.1-k9s-cli/) | Developer CLI tooling | Partial |
+| [Telepresence/Tilt](../../platform/toolkits/developer-experience/devex-tools/module-8.2-telepresence-tilt/) | Inner-loop development | Partial |
+| [DevPod](../../platform/toolkits/developer-experience/devex-tools/module-8.4-devpod/) | Reproducible dev environments | Partial |
+| [Gitpod/Codespaces](../../platform/toolkits/developer-experience/devex-tools/module-8.5-gitpod-codespaces/) | Cloud development environments | Partial |
+| [AIOps Tools](../../platform/toolkits/observability-intelligence/aiops-tools/module-10.3-observability-ai-features/) | AI-powered observability features | Partial |
 
 ---
 
@@ -245,11 +245,11 @@ The CNPA (Certified Cloud Native Platform Engineering Associate) validates found
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [SRE 1.2](../../platform/disciplines/sre/module-1.2-slos/) | SLOs (SLIs, SLAs) | Direct |
-| [SRE 1.3](../../platform/disciplines/sre/module-1.3-error-budgets/) | Error Budgets and burn rates | Direct |
-| [SRE 1.4](../../platform/disciplines/sre/module-1.4-toil-automation/) | Toil and automation metrics | Direct |
-| [SRE 1.7](../../platform/disciplines/sre/module-1.7-capacity-planning/) | Capacity Planning | Partial |
-| [Platform Eng 2.6](../../platform/disciplines/platform-engineering/module-2.6-platform-maturity/) | Platform Maturity Models | Direct |
+| [SRE 1.2](../../platform/disciplines/core-platform/sre/module-1.2-slos/) | SLOs (SLIs, SLAs) | Direct |
+| [SRE 1.3](../../platform/disciplines/core-platform/sre/module-1.3-error-budgets/) | Error Budgets and burn rates | Direct |
+| [SRE 1.4](../../platform/disciplines/core-platform/sre/module-1.4-toil-automation/) | Toil and automation metrics | Direct |
+| [SRE 1.7](../../platform/disciplines/core-platform/sre/module-1.7-capacity-planning/) | Capacity Planning | Partial |
+| [Platform Eng 2.6](../../platform/disciplines/core-platform/platform-engineering/module-2.6-platform-maturity/) | Platform Maturity Models | Direct |
 | [Reliability 2.4](../../platform/foundations/reliability-engineering/module-2.4-measuring-and-improving-reliability/) | Measuring reliability | Direct |
 | [Reliability 2.5](../../platform/foundations/reliability-engineering/module-2.5-slos-slis-error-budgets/) | SLOs, SLIs, error budgets (theory) | Direct |
 
@@ -257,8 +257,8 @@ The CNPA (Certified Cloud Native Platform Engineering Associate) validates found
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [SLO Tooling](../../platform/toolkits/observability/module-1.10-slo-tooling/) | Sloth, Pyrra, error budget dashboards | Direct |
-| [FinOps](../../platform/toolkits/scaling-reliability/module-6.4-finops-opencost/) | OpenCost, cost allocation, efficiency | Direct |
+| [SLO Tooling](../../platform/toolkits/observability-intelligence/observability/module-1.10-slo-tooling/) | Sloth, Pyrra, error budget dashboards | Direct |
+| [FinOps](../../platform/toolkits/developer-experience/scaling-reliability/module-6.4-finops-opencost/) | OpenCost, cost allocation, efficiency | Direct |
 
 ---
 

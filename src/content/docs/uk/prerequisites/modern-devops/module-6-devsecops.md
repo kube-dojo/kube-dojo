@@ -646,4 +646,4 @@ rm insecure-deployment.yaml secure-deployment.yaml
 **Наступні кроки**:
 - [Навчальний план CKA](../../k8s/cka/part0-environment/module-0.1-cluster-setup/) — Сертифікація адміністратора
 - [Навчальний план CKAD](../../k8s/ckad/part0-environment/module-0.1-ckad-overview/) — Сертифікація розробника
-- [Філософія та дизайн](../philosophy-design/module-1-why-kubernetes-won/) — Чому Kubernetes?
+- [Філософія та дизайн](../philosophy-design/module-1.1-why-kubernetes-won/) — Чому Kubernetes?

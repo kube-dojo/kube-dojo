@@ -22,9 +22,9 @@ These modules cover the areas between KubeDojo's existing Backstage toolkit modu
 
 | # | Module | Topic | Domains Covered |
 |---|--------|-------|-----------------|
-| 1 | [Backstage Developer Workflow](module-1-backstage-dev-workflow/) | Monorepo structure, TypeScript essentials, Docker builds, app-config, CLI | Domain 1 (24%) |
-| 2 | [Backstage Plugin Development](module-2-backstage-plugin-development/) | Frontend/backend plugins, React/MUI, scaffolder actions, themes, APIs | Domain 4 (32%) |
-| 3 | [Backstage Catalog & Infrastructure](module-3-backstage-catalog-infrastructure/) | Entity processors, providers, annotations, auth, deployment, troubleshooting | Domains 2-3 (44%) |
+| 1 | [Backstage Developer Workflow](module-1.1-backstage-dev-workflow/) | Monorepo structure, TypeScript essentials, Docker builds, app-config, CLI | Domain 1 (24%) |
+| 2 | [Backstage Plugin Development](module-1.2-backstage-plugin-development/) | Frontend/backend plugins, React/MUI, scaffolder actions, themes, APIs | Domain 4 (32%) |
+| 3 | [Backstage Catalog & Infrastructure](module-1.3-backstage-catalog-infrastructure/) | Entity processors, providers, annotations, auth, deployment, troubleshooting | Domains 2-3 (44%) |
 
 ---
 
@@ -49,10 +49,10 @@ These modules cover the areas between KubeDojo's existing Backstage toolkit modu
 
 | Domain | Weight | KubeDojo Coverage |
 |--------|--------|-------------------|
-| Customizing Backstage | 32% | Excellent ([Plugin Development](module-2-backstage-plugin-development/) — React/MUI, plugins, themes, scaffolder) |
-| Backstage Development Workflow | 24% | Excellent ([Developer Workflow](module-1-backstage-dev-workflow/) — monorepo, TypeScript, Docker, CLI) |
-| Backstage Infrastructure | 22% | Excellent ([Catalog & Infrastructure](module-3-backstage-catalog-infrastructure/) — auth, deployment, production) |
-| Backstage Catalog | 22% | Excellent ([Catalog & Infrastructure](module-3-backstage-catalog-infrastructure/) — processors, providers, annotations) |
+| Customizing Backstage | 32% | Excellent ([Plugin Development](module-1.2-backstage-plugin-development/) — React/MUI, plugins, themes, scaffolder) |
+| Backstage Development Workflow | 24% | Excellent ([Developer Workflow](module-1.1-backstage-dev-workflow/) — monorepo, TypeScript, Docker, CLI) |
+| Backstage Infrastructure | 22% | Excellent ([Catalog & Infrastructure](module-1.3-backstage-catalog-infrastructure/) — auth, deployment, production) |
+| Backstage Catalog | 22% | Excellent ([Catalog & Infrastructure](module-1.3-backstage-catalog-infrastructure/) — processors, providers, annotations) |
 
 ---
 
@@ -72,13 +72,13 @@ These modules cover the areas between KubeDojo's existing Backstage toolkit modu
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [Backstage 7.1](../../platform/toolkits/platforms/module-7.1-backstage/) | Installation, `npx @backstage/create-app`, `yarn dev` | Partial -- covers basic setup only |
+| [Backstage 7.1](../../platform/toolkits/infrastructure-networking/platforms/module-7.1-backstage/) | Installation, `npx @backstage/create-app`, `yarn dev` | Partial -- covers basic setup only |
 
 **Dedicated CBA module:**
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [Backstage Developer Workflow](module-1-backstage-dev-workflow/) | Monorepo structure, TypeScript essentials, Docker builds, app-config overlays, CLI commands | Direct |
+| [Backstage Developer Workflow](module-1.1-backstage-dev-workflow/) | Monorepo structure, TypeScript essentials, Docker builds, app-config overlays, CLI commands | Direct |
 
 ---
 
@@ -99,15 +99,15 @@ These modules cover the areas between KubeDojo's existing Backstage toolkit modu
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [Backstage 7.1](../../platform/toolkits/platforms/module-7.1-backstage/) | Architecture diagram, app-config.yaml, K8s deployment YAML | Direct |
-| [Platform Eng 2.3](../../platform/disciplines/platform-engineering/module-2.3-internal-developer-platforms/) | IDP concepts, why portals matter | Background |
-| [Platform Eng 2.2](../../platform/disciplines/platform-engineering/module-2.2-developer-experience/) | Developer Experience principles | Background |
+| [Backstage 7.1](../../platform/toolkits/infrastructure-networking/platforms/module-7.1-backstage/) | Architecture diagram, app-config.yaml, K8s deployment YAML | Direct |
+| [Platform Eng 2.3](../../platform/disciplines/core-platform/platform-engineering/module-2.3-internal-developer-platforms/) | IDP concepts, why portals matter | Background |
+| [Platform Eng 2.2](../../platform/disciplines/core-platform/platform-engineering/module-2.2-developer-experience/) | Developer Experience principles | Background |
 
 **Dedicated CBA module:**
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [Backstage Catalog & Infrastructure](module-3-backstage-catalog-infrastructure/) | Auth providers, proxy, database migrations, production hardening, backend-for-frontend | Direct |
+| [Backstage Catalog & Infrastructure](module-1.3-backstage-catalog-infrastructure/) | Auth providers, proxy, database migrations, production hardening, backend-for-frontend | Direct |
 
 ---
 
@@ -129,15 +129,15 @@ These modules cover the areas between KubeDojo's existing Backstage toolkit modu
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [Backstage 7.1](../../platform/toolkits/platforms/module-7.1-backstage/) | Entity types, catalog-info.yaml, relationships, annotations, auto-discovery | Direct |
-| [Platform Eng 2.4](../../platform/disciplines/platform-engineering/module-2.4-golden-paths/) | Golden paths concept (templates use catalog) | Background |
-| [Platform Eng 2.5](../../platform/disciplines/platform-engineering/module-2.5-self-service-infrastructure/) | Self-service concepts | Background |
+| [Backstage 7.1](../../platform/toolkits/infrastructure-networking/platforms/module-7.1-backstage/) | Entity types, catalog-info.yaml, relationships, annotations, auto-discovery | Direct |
+| [Platform Eng 2.4](../../platform/disciplines/core-platform/platform-engineering/module-2.4-golden-paths/) | Golden paths concept (templates use catalog) | Background |
+| [Platform Eng 2.5](../../platform/disciplines/core-platform/platform-engineering/module-2.5-self-service-infrastructure/) | Self-service concepts | Background |
 
 **Dedicated CBA module:**
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [Backstage Catalog & Infrastructure](module-3-backstage-catalog-infrastructure/) | Entity processors, providers, all annotations, troubleshooting, Location kind, lifecycle management | Direct |
+| [Backstage Catalog & Infrastructure](module-1.3-backstage-catalog-infrastructure/) | Entity processors, providers, all annotations, troubleshooting, Location kind, lifecycle management | Direct |
 
 ---
 
@@ -160,13 +160,13 @@ These modules cover the areas between KubeDojo's existing Backstage toolkit modu
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [Backstage 7.1](../../platform/toolkits/platforms/module-7.1-backstage/) | Plugin ecosystem overview, basic plugin code snippet | Minimal |
+| [Backstage 7.1](../../platform/toolkits/infrastructure-networking/platforms/module-7.1-backstage/) | Plugin ecosystem overview, basic plugin code snippet | Minimal |
 
 **Dedicated CBA module:**
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [Backstage Plugin Development](module-2-backstage-plugin-development/) | React/MUI, frontend/backend plugins, scaffolder actions, themes, extension points | Direct |
+| [Backstage Plugin Development](module-1.2-backstage-plugin-development/) | React/MUI, frontend/backend plugins, scaffolder actions, themes, extension points | Direct |
 
 ---
 
@@ -192,9 +192,9 @@ Overall weighted coverage:              ~90%
 
 | Module | Topics | Domains Covered |
 |--------|--------|-----------------|
-| [Backstage Developer Workflow](module-1-backstage-dev-workflow/) | Monorepo structure, TypeScript essentials, Docker builds, app-config overlays, CLI commands, local dev workflow | Domain 1 (24%) |
-| [Backstage Plugin Development](module-2-backstage-plugin-development/) | Frontend plugins (React/MUI), backend plugins (Express), scaffolder custom actions, custom themes, extension points, API refs | Domain 4 (32%) |
-| [Backstage Catalog & Infrastructure](module-3-backstage-catalog-infrastructure/) | Entity processors, entity providers, all annotations, auth, production deployment, troubleshooting | Domains 2-3 (44%) |
+| [Backstage Developer Workflow](module-1.1-backstage-dev-workflow/) | Monorepo structure, TypeScript essentials, Docker builds, app-config overlays, CLI commands, local dev workflow | Domain 1 (24%) |
+| [Backstage Plugin Development](module-1.2-backstage-plugin-development/) | Frontend plugins (React/MUI), backend plugins (Express), scaffolder custom actions, custom themes, extension points, API refs | Domain 4 (32%) |
+| [Backstage Catalog & Infrastructure](module-1.3-backstage-catalog-infrastructure/) | Entity processors, entity providers, all annotations, auth, production deployment, troubleshooting | Domains 2-3 (44%) |
 
 These three modules plus the existing Module 7.1 provide comprehensive CBA preparation.
 
@@ -304,10 +304,10 @@ The CBA pairs well with the **CNPE** (Certified Cloud Native Platform Engineer).
 
 | Module | Path | CBA Relevance |
 |--------|------|---------------|
-| Backstage 7.1 | [module-7.1-backstage.md](../../platform/toolkits/platforms/module-7.1-backstage/) | Core -- architecture, catalog, templates, plugins overview |
-| Platform Eng 2.1 | [module-2.1-what-is-platform-engineering.md](../../platform/disciplines/platform-engineering/module-2.1-what-is-platform-engineering/) | Background -- what platform engineering is |
-| Platform Eng 2.2 | [module-2.2-developer-experience.md](../../platform/disciplines/platform-engineering/module-2.2-developer-experience/) | Background -- DevEx principles |
-| Platform Eng 2.3 | [module-2.3-internal-developer-platforms.md](../../platform/disciplines/platform-engineering/module-2.3-internal-developer-platforms/) | Background -- IDP concepts |
-| Platform Eng 2.4 | [module-2.4-golden-paths.md](../../platform/disciplines/platform-engineering/module-2.4-golden-paths/) | Background -- golden paths (templates) |
-| Platform Eng 2.5 | [module-2.5-self-service-infrastructure.md](../../platform/disciplines/platform-engineering/module-2.5-self-service-infrastructure/) | Background -- self-service concepts |
-| Platform Eng 2.6 | [module-2.6-platform-maturity.md](../../platform/disciplines/platform-engineering/module-2.6-platform-maturity/) | Background -- maturity models |
+| Backstage 7.1 | [module-7.1-backstage.md](../../platform/toolkits/infrastructure-networking/platforms/module-7.1-backstage/) | Core -- architecture, catalog, templates, plugins overview |
+| Platform Eng 2.1 | [module-2.1-what-is-platform-engineering.md](../../platform/disciplines/core-platform/platform-engineering/module-2.1-what-is-platform-engineering/) | Background -- what platform engineering is |
+| Platform Eng 2.2 | [module-2.2-developer-experience.md](../../platform/disciplines/core-platform/platform-engineering/module-2.2-developer-experience/) | Background -- DevEx principles |
+| Platform Eng 2.3 | [module-2.3-internal-developer-platforms.md](../../platform/disciplines/core-platform/platform-engineering/module-2.3-internal-developer-platforms/) | Background -- IDP concepts |
+| Platform Eng 2.4 | [module-2.4-golden-paths.md](../../platform/disciplines/core-platform/platform-engineering/module-2.4-golden-paths/) | Background -- golden paths (templates) |
+| Platform Eng 2.5 | [module-2.5-self-service-infrastructure.md](../../platform/disciplines/core-platform/platform-engineering/module-2.5-self-service-infrastructure/) | Background -- self-service concepts |
+| Platform Eng 2.6 | [module-2.6-platform-maturity.md](../../platform/disciplines/core-platform/platform-engineering/module-2.6-platform-maturity/) | Background -- maturity models |

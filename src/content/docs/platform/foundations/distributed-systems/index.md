@@ -114,10 +114,10 @@ After completing Distributed Systems, you're ready for:
 
 | Track | Why |
 |-------|-----|
-| [SRE Discipline](../../disciplines/sre/) | Apply distributed systems thinking to reliability |
-| [Platform Engineering Discipline](../../disciplines/platform-engineering/) | Build platforms on distributed foundations |
-| [GitOps Discipline](../../disciplines/gitops/) | Eventual consistency in practice |
-| [Observability Toolkit](../../toolkits/observability/) | Monitor distributed systems |
+| [SRE Discipline](../../disciplines/core-platform/sre/) | Apply distributed systems thinking to reliability |
+| [Platform Engineering Discipline](../../disciplines/core-platform/platform-engineering/) | Build platforms on distributed foundations |
+| [GitOps Discipline](../../disciplines/delivery-automation/gitops/) | Eventual consistency in practice |
+| [Observability Toolkit](../../toolkits/observability-intelligence/observability/) | Monitor distributed systems |
 
 ---
 

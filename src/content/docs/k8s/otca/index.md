@@ -22,8 +22,8 @@ These modules cover the areas between KubeDojo's existing observability modules 
 
 | # | Module | Topic | Domains Covered |
 |---|--------|-------|-----------------|
-| 1 | [OTel SDK Deep Dive](module-1-otel-sdk-deep-dive/) | TracerProvider, MeterProvider, span processors, sampling, context propagation | Domain 2 (46%) |
-| 2 | [OTel Collector Advanced](module-2-otel-collector-advanced/) | Collector pipelines, deployment patterns, connectors, distributions | Domain 3 (26%) |
+| 1 | [OTel SDK Deep Dive](module-1.1-otel-sdk-deep-dive/) | TracerProvider, MeterProvider, span processors, sampling, context propagation | Domain 2 (46%) |
+| 2 | [OTel Collector Advanced](module-1.2-otel-collector-advanced/) | Collector pipelines, deployment patterns, connectors, distributions | Domain 3 (26%) |
 
 ---
 
@@ -32,8 +32,8 @@ These modules cover the areas between KubeDojo's existing observability modules 
 | Domain | Weight | KubeDojo Coverage |
 |--------|--------|-------------------|
 | Fundamentals of Observability | 18% | Excellent (4 foundation modules) |
-| OTel API and SDK | 46% | Excellent ([OTel SDK Deep Dive](module-1-otel-sdk-deep-dive/) + overview module) |
-| OTel Collector | 26% | Excellent ([OTel Collector Advanced](module-2-otel-collector-advanced/) + overview module) |
+| OTel API and SDK | 46% | Excellent ([OTel SDK Deep Dive](module-1.1-otel-sdk-deep-dive/) + overview module) |
+| OTel Collector | 26% | Excellent ([OTel Collector Advanced](module-1.2-otel-collector-advanced/) + overview module) |
 | Ecosystem | 10% | Good (covered across multiple modules) |
 
 ---
@@ -61,14 +61,14 @@ These modules cover the areas between KubeDojo's existing observability modules 
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [OpenTelemetry](../../platform/toolkits/observability/module-1.2-opentelemetry/) | OTel architecture overview, signals, auto-instrumentation | Direct |
-| [Tracing](../../platform/toolkits/observability/module-1.5-tracing/) | Distributed tracing concepts, Jaeger/Tempo | Direct |
-| [Prometheus](../../platform/toolkits/observability/module-1.1-prometheus/) | Metrics fundamentals, metric types, PromQL | Partial |
+| [OpenTelemetry](../../platform/toolkits/observability-intelligence/observability/module-1.2-opentelemetry/) | OTel architecture overview, signals, auto-instrumentation | Direct |
+| [Tracing](../../platform/toolkits/observability-intelligence/observability/module-1.5-tracing/) | Distributed tracing concepts, Jaeger/Tempo | Direct |
+| [Prometheus](../../platform/toolkits/observability-intelligence/observability/module-1.1-prometheus/) | Metrics fundamentals, metric types, PromQL | Partial |
 
 ### Key Exam Topics — Additional Study
-- **Semantic conventions** — Covered in [OTel SDK Deep Dive](module-1-otel-sdk-deep-dive/); supplement with the [official semconv reference](https://opentelemetry.io/docs/specs/semconv/)
-- **Signal relationships** — Exemplars linking metrics to traces are covered in [OTel SDK Deep Dive](module-1-otel-sdk-deep-dive/)
-- **Resource vs. attribute semantics** — Resource describes the entity, attributes describe the event — covered in [OTel SDK Deep Dive](module-1-otel-sdk-deep-dive/)
+- **Semantic conventions** — Covered in [OTel SDK Deep Dive](module-1.1-otel-sdk-deep-dive/); supplement with the [official semconv reference](https://opentelemetry.io/docs/specs/semconv/)
+- **Signal relationships** — Exemplars linking metrics to traces are covered in [OTel SDK Deep Dive](module-1.1-otel-sdk-deep-dive/)
+- **Resource vs. attribute semantics** — Resource describes the entity, attributes describe the event — covered in [OTel SDK Deep Dive](module-1.1-otel-sdk-deep-dive/)
 
 ---
 
@@ -92,14 +92,14 @@ These modules cover the areas between KubeDojo's existing observability modules 
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [OpenTelemetry](../../platform/toolkits/observability/module-1.2-opentelemetry/) | OTel SDK overview, auto-instrumentation basics | Partial |
-| [Tracing](../../platform/toolkits/observability/module-1.5-tracing/) | Spans, trace context, propagation basics | Partial |
+| [OpenTelemetry](../../platform/toolkits/observability-intelligence/observability/module-1.2-opentelemetry/) | OTel SDK overview, auto-instrumentation basics | Partial |
+| [Tracing](../../platform/toolkits/observability-intelligence/observability/module-1.5-tracing/) | Spans, trace context, propagation basics | Partial |
 | [Observability 3.3](../../platform/foundations/observability-theory/module-3.3-instrumentation-principles/) | Instrumentation theory and principles | Partial |
-| [OTel SDK Deep Dive](module-1-otel-sdk-deep-dive/) | TracerProvider, MeterProvider, span processors, sampling, context propagation, metric instruments | Direct |
+| [OTel SDK Deep Dive](module-1.1-otel-sdk-deep-dive/) | TracerProvider, MeterProvider, span processors, sampling, context propagation, metric instruments | Direct |
 
 ### Key Exam Topics — Now Covered
 
-All of the following are covered in the [OTel SDK Deep Dive](module-1-otel-sdk-deep-dive/):
+All of the following are covered in the [OTel SDK Deep Dive](module-1.1-otel-sdk-deep-dive/):
 
 - **TracerProvider pipeline**: `TracerProvider` -> `SpanProcessor` -> `SpanExporter` — how spans flow from creation to export
 - **MeterProvider pipeline**: `MeterProvider` -> `MetricReader` -> `MetricExporter` — push vs. pull metric export
@@ -129,14 +129,14 @@ All of the following are covered in the [OTel SDK Deep Dive](module-1-otel-sdk-d
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [OpenTelemetry](../../platform/toolkits/observability/module-1.2-opentelemetry/) | Collector overview, receiver/processor/exporter basics | Partial |
-| [Prometheus](../../platform/toolkits/observability/module-1.1-prometheus/) | Prometheus receiver/exporter context | Partial |
-| [Tracing](../../platform/toolkits/observability/module-1.5-tracing/) | Trace pipeline concepts | Partial |
-| [OTel Collector Advanced](module-2-otel-collector-advanced/) | Pipeline configuration, deployment patterns, connectors, distributions, processors | Direct |
+| [OpenTelemetry](../../platform/toolkits/observability-intelligence/observability/module-1.2-opentelemetry/) | Collector overview, receiver/processor/exporter basics | Partial |
+| [Prometheus](../../platform/toolkits/observability-intelligence/observability/module-1.1-prometheus/) | Prometheus receiver/exporter context | Partial |
+| [Tracing](../../platform/toolkits/observability-intelligence/observability/module-1.5-tracing/) | Trace pipeline concepts | Partial |
+| [OTel Collector Advanced](module-1.2-otel-collector-advanced/) | Pipeline configuration, deployment patterns, connectors, distributions, processors | Direct |
 
 ### Key Exam Topics — Now Covered
 
-All of the following are covered in the [OTel Collector Advanced](module-2-otel-collector-advanced/):
+All of the following are covered in the [OTel Collector Advanced](module-1.2-otel-collector-advanced/):
 
 - **Collector configuration deep dive**: Full pipeline YAML (receivers, processors, exporters, service.pipelines)
 - **Deployment patterns**: Agent (sidecar/DaemonSet) vs. Gateway (Deployment) — when to use each
@@ -162,16 +162,16 @@ All of the following are covered in the [OTel Collector Advanced](module-2-otel-
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [OpenTelemetry](../../platform/toolkits/observability/module-1.2-opentelemetry/) | OTel project overview, CNCF status, architecture | Direct |
+| [OpenTelemetry](../../platform/toolkits/observability-intelligence/observability/module-1.2-opentelemetry/) | OTel project overview, CNCF status, architecture | Direct |
 | [Observability 3.1](../../platform/foundations/observability-theory/module-3.1-what-is-observability/) | Observability landscape and evolution | Partial |
-| [Prometheus](../../platform/toolkits/observability/module-1.1-prometheus/) | Prometheus as OTel metrics backend | Partial |
-| [Tracing](../../platform/toolkits/observability/module-1.5-tracing/) | Jaeger/Tempo as OTel trace backends | Partial |
-| [Continuous Profiling](../../platform/toolkits/observability/module-1.9-continuous-profiling/) | Profiling signal (newest addition) | Partial |
+| [Prometheus](../../platform/toolkits/observability-intelligence/observability/module-1.1-prometheus/) | Prometheus as OTel metrics backend | Partial |
+| [Tracing](../../platform/toolkits/observability-intelligence/observability/module-1.5-tracing/) | Jaeger/Tempo as OTel trace backends | Partial |
+| [Continuous Profiling](../../platform/toolkits/observability-intelligence/observability/module-1.9-continuous-profiling/) | Profiling signal (newest addition) | Partial |
 
 ### Key Exam Topics — Coverage Notes
 
-- **OTLP protocol details** — Covered in [OTel Collector Advanced](module-2-otel-collector-advanced/) (gRPC, HTTP/protobuf transports, OTLP/JSON)
-- **OpenTelemetry Operator for Kubernetes** — Covered in [OTel Collector Advanced](module-2-otel-collector-advanced/) (auto-instrumentation injection, Collector CRD)
+- **OTLP protocol details** — Covered in [OTel Collector Advanced](module-1.2-otel-collector-advanced/) (gRPC, HTTP/protobuf transports, OTLP/JSON)
+- **OpenTelemetry Operator for Kubernetes** — Covered in [OTel Collector Advanced](module-1.2-otel-collector-advanced/) (auto-instrumentation injection, Collector CRD)
 - **Signal maturity model** — Supplement with the [OTel status page](https://opentelemetry.io/status/); traces/metrics/logs = stable, profiling = development
 - **Community structure** — SIGs, language SIGs, Collector SIG, specification process; review [OTel community docs](https://opentelemetry.io/community/)
 - **Compatibility guarantees** — What "stable" means for API vs. SDK vs. Collector components; review [OTel versioning spec](https://opentelemetry.io/docs/specs/otel/versioning-and-stability/)
@@ -235,18 +235,18 @@ KubeDojo's observability modules plus the two dedicated OTCA modules now provide
 | Topic | Status | Notes |
 |-------|--------|-------|
 | Three pillars / observability theory | Covered | Existing foundation modules 3.1-3.4 |
-| Semantic conventions | Covered | [OTel SDK Deep Dive](module-1-otel-sdk-deep-dive/) |
-| TracerProvider / MeterProvider pipelines | Covered | [OTel SDK Deep Dive](module-1-otel-sdk-deep-dive/) |
-| Span processors (Simple vs. Batch) | Covered | [OTel SDK Deep Dive](module-1-otel-sdk-deep-dive/) |
-| Sampling strategies (head vs. tail) | Covered | [OTel SDK Deep Dive](module-1-otel-sdk-deep-dive/) |
-| Context propagation internals | Covered | [OTel SDK Deep Dive](module-1-otel-sdk-deep-dive/) |
-| Metric instruments (sync vs. async) | Covered | [OTel SDK Deep Dive](module-1-otel-sdk-deep-dive/) |
-| Exemplars | Covered | [OTel SDK Deep Dive](module-1-otel-sdk-deep-dive/) |
-| Collector configuration deep dive | Covered | [OTel Collector Advanced](module-2-otel-collector-advanced/) |
-| Collector deployment patterns | Covered | [OTel Collector Advanced](module-2-otel-collector-advanced/) |
-| Collector connectors | Covered | [OTel Collector Advanced](module-2-otel-collector-advanced/) |
-| OTLP protocol details | Covered | [OTel Collector Advanced](module-2-otel-collector-advanced/) |
-| OTel Operator for Kubernetes | Covered | [OTel Collector Advanced](module-2-otel-collector-advanced/) |
+| Semantic conventions | Covered | [OTel SDK Deep Dive](module-1.1-otel-sdk-deep-dive/) |
+| TracerProvider / MeterProvider pipelines | Covered | [OTel SDK Deep Dive](module-1.1-otel-sdk-deep-dive/) |
+| Span processors (Simple vs. Batch) | Covered | [OTel SDK Deep Dive](module-1.1-otel-sdk-deep-dive/) |
+| Sampling strategies (head vs. tail) | Covered | [OTel SDK Deep Dive](module-1.1-otel-sdk-deep-dive/) |
+| Context propagation internals | Covered | [OTel SDK Deep Dive](module-1.1-otel-sdk-deep-dive/) |
+| Metric instruments (sync vs. async) | Covered | [OTel SDK Deep Dive](module-1.1-otel-sdk-deep-dive/) |
+| Exemplars | Covered | [OTel SDK Deep Dive](module-1.1-otel-sdk-deep-dive/) |
+| Collector configuration deep dive | Covered | [OTel Collector Advanced](module-1.2-otel-collector-advanced/) |
+| Collector deployment patterns | Covered | [OTel Collector Advanced](module-1.2-otel-collector-advanced/) |
+| Collector connectors | Covered | [OTel Collector Advanced](module-1.2-otel-collector-advanced/) |
+| OTLP protocol details | Covered | [OTel Collector Advanced](module-1.2-otel-collector-advanced/) |
+| OTel Operator for Kubernetes | Covered | [OTel Collector Advanced](module-1.2-otel-collector-advanced/) |
 | Signal maturity levels | Minor gap | Review [OTel status page](https://opentelemetry.io/status/) for current signal maturity levels |
 
 ---

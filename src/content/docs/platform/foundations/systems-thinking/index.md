@@ -118,7 +118,7 @@ After completing Systems Thinking, you're ready for:
 |-------|-----|
 | [Reliability Engineering](../reliability-engineering/) | Applies systems thinking to failure modes and redundancy |
 | [Observability Theory](../observability-theory/) | Understanding what to measure and why |
-| [SRE Discipline](../../disciplines/sre/) | Putting systems thinking into operational practice |
+| [SRE Discipline](../../disciplines/core-platform/sre/) | Putting systems thinking into operational practice |
 | [Distributed Systems](../distributed-systems/) | Deep dive into CAP, consensus, and distributed patterns |
 
 ---

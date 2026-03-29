@@ -76,13 +76,13 @@ platform/
 
 | Дисципліна | Найкраще для |
 |------------|-------------|
-| [SRE](disciplines/sre/) | Операції, надійність, чергування |
-| [Platform Engineering](disciplines/platform-engineering/) | Досвід розробника, самообслуговування |
-| [GitOps](disciplines/gitops/) | Розгортання, узгодження |
-| [Infrastructure as Code](disciplines/iac/) | Патерни IaC, тестування, дрейф конфігурації |
-| [DevSecOps](disciplines/devsecops/) | Інтеграція безпеки, комплаєнс |
-| [MLOps](disciplines/mlops/) | Життєвий цикл ML, обслуговування моделей |
-| [AIOps](disciplines/aiops/) | Операції на базі AI, автоматизація |
+| [SRE](disciplines/core-platform/sre/) | Операції, надійність, чергування |
+| [Platform Engineering](disciplines/core-platform/platform-engineering/) | Досвід розробника, самообслуговування |
+| [GitOps](disciplines/delivery-automation/gitops/) | Розгортання, узгодження |
+| [Infrastructure as Code](disciplines/delivery-automation/iac/) | Патерни IaC, тестування, дрейф конфігурації |
+| [DevSecOps](disciplines/reliability-security/devsecops/) | Інтеграція безпеки, комплаєнс |
+| [MLOps](disciplines/data-ai/mlops/) | Життєвий цикл ML, обслуговування моделей |
+| [AIOps](disciplines/data-ai/aiops/) | Операції на базі AI, автоматизація |
 
 ### Використовуйте набори інструментів за потребою
 
@@ -90,17 +90,17 @@ platform/
 
 | Набір інструментів | Коли використовувати |
 |--------------------|---------------------|
-| [Спостережуваність](toolkits/observability/) | Налаштування моніторингу/трейсингу |
-| [GitOps та розгортання](toolkits/gitops-deployments/) | Впровадження ArgoCD/Flux |
-| [CI/CD конвеєри](toolkits/ci-cd-pipelines/) | Dagger, Tekton, Argo Workflows |
-| [Інструменти IaC](toolkits/iac-tools/) | Terraform, OpenTofu, Pulumi, Ansible |
-| [Інструменти безпеки](toolkits/security-tools/) | Політики, секрети, безпека середовища виконання |
-| [Мережа](toolkits/networking/) | Cilium, Service Mesh |
-| [Масштабування та надійність](toolkits/scaling-reliability/) | Karpenter, KEDA, Velero |
-| [Платформи](toolkits/platforms/) | Побудова внутрішніх платформ |
-| [Досвід розробника](toolkits/developer-experience/) | K9s, Telepresence |
-| [ML-платформи](toolkits/ml-platforms/) | ML-інфраструктура |
-| [Інструменти AIOps](toolkits/aiops-tools/) | Виявлення аномалій, AIOps |
+| [Спостережуваність](toolkits/observability-intelligence/observability/) | Налаштування моніторингу/трейсингу |
+| [GitOps та розгортання](toolkits/cicd-delivery/gitops-deployments/) | Впровадження ArgoCD/Flux |
+| [CI/CD конвеєри](toolkits/cicd-delivery/ci-cd-pipelines/) | Dagger, Tekton, Argo Workflows |
+| [Інструменти IaC](toolkits/infrastructure-networking/iac-tools/) | Terraform, OpenTofu, Pulumi, Ansible |
+| [Інструменти безпеки](toolkits/security-quality/security-tools/) | Політики, секрети, безпека середовища виконання |
+| [Мережа](toolkits/infrastructure-networking/networking/) | Cilium, Service Mesh |
+| [Масштабування та надійність](toolkits/developer-experience/scaling-reliability/) | Karpenter, KEDA, Velero |
+| [Платформи](toolkits/infrastructure-networking/platforms/) | Побудова внутрішніх платформ |
+| [Досвід розробника](toolkits/developer-experience/devex-tools/) | K9s, Telepresence |
+| [ML-платформи](toolkits/data-ai-platforms/ml-platforms/) | ML-інфраструктура |
+| [Інструменти AIOps](toolkits/observability-intelligence/aiops-tools/) | Виявлення аномалій, AIOps |
 
 ---
 

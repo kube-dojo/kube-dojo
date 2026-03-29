@@ -463,7 +463,7 @@ exit
 
 Якщо ви хочете стати хмарним інженером, DevOps-інженером чи платформним інженером — це ваш шлях.
 
-> Почніть тут: [Cloud Native 101](../cloud-native-101/module-1-what-are-containers/)
+> Почніть тут: [Cloud Native 101](../cloud-native-101/module-1.1-what-are-containers/)
 
 ### Шлях C: Обидва
 

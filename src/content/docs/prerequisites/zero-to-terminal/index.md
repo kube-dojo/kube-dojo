@@ -96,7 +96,7 @@ You loved the terminal? Go deeper into how Linux actually works -- the kernel, p
 
 You want to build and deploy apps at scale? Learn containers, Docker, and Kubernetes. This is where the industry is heading.
 
-> Start here: [Cloud Native 101](../cloud-native-101/module-1-what-are-containers/)
+> Start here: [Cloud Native 101](../cloud-native-101/module-1.1-what-are-containers/)
 
 ### Path C: Both
 

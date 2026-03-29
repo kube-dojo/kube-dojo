@@ -9,11 +9,11 @@ Hands-on fundamentals: clusters, kubectl, core resources, and YAML.
 
 | # | Module | Description |
 |---|--------|-------------|
-| 1 | [Your First Cluster](module-1-first-cluster/) | Setting up a local Kubernetes cluster |
-| 2 | [kubectl Basics](module-2-kubectl-basics/) | Essential commands for interacting with clusters |
-| 3 | [Pods](module-3-pods/) | The atomic unit of Kubernetes |
-| 4 | [Deployments](module-4-deployments/) | Managing applications declaratively |
-| 5 | [Services](module-5-services/) | Stable networking for pods |
-| 6 | [ConfigMaps and Secrets](module-6-configmaps-secrets/) | Externalizing configuration and sensitive data |
-| 7 | [Namespaces and Labels](module-7-namespaces-labels/) | Organizing and selecting resources |
-| 8 | [YAML for Kubernetes](module-8-yaml-kubernetes/) | Writing and understanding Kubernetes manifests |
+| 1 | [Your First Cluster](module-1.1-first-cluster/) | Setting up a local Kubernetes cluster |
+| 2 | [kubectl Basics](module-1.2-kubectl-basics/) | Essential commands for interacting with clusters |
+| 3 | [Pods](module-1.3-pods/) | The atomic unit of Kubernetes |
+| 4 | [Deployments](module-1.4-deployments/) | Managing applications declaratively |
+| 5 | [Services](module-1.5-services/) | Stable networking for pods |
+| 6 | [ConfigMaps and Secrets](module-1.6-configmaps-secrets/) | Externalizing configuration and sensitive data |
+| 7 | [Namespaces and Labels](module-1.7-namespaces-labels/) | Organizing and selecting resources |
+| 8 | [YAML for Kubernetes](module-1.8-yaml-kubernetes/) | Writing and understanding Kubernetes manifests |

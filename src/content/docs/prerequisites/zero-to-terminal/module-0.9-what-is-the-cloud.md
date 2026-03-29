@@ -467,7 +467,7 @@ You started knowing nothing about computers or terminals, and now you understand
 - What servers are and how to connect to them
 - What the cloud is and where Kubernetes fits
 
-Your next step is [Cloud Native 101](../cloud-native-101/module-1-what-are-containers/), where you'll learn about containers -- the technology that makes Kubernetes possible. Containers are like standardized shipping containers for software, and they changed everything about how we build and deploy applications.
+Your next step is [Cloud Native 101](../cloud-native-101/module-1.1-what-are-containers/), where you'll learn about containers -- the technology that makes Kubernetes possible. Containers are like standardized shipping containers for software, and they changed everything about how we build and deploy applications.
 
 The foundation is solid. The kitchen is built. Time to start cooking.
 

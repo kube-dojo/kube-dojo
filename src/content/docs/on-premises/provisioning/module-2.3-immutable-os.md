@@ -7,7 +7,7 @@ sidebar:
 
 > **Complexity**: `[MEDIUM]` | Time: 45 minutes
 >
-> **Prerequisites**: [Module 2.2: OS Provisioning & PXE Boot](module-2.2-pxe-provisioning/), [K8s Distributions](../../platform/toolkits/k8s-distributions/)
+> **Prerequisites**: [Module 2.2: OS Provisioning & PXE Boot](module-2.2-pxe-provisioning/), [K8s Distributions](../../platform/toolkits/infrastructure-networking/k8s-distributions/)
 
 ---
 

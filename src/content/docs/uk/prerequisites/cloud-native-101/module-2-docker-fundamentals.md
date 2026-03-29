@@ -549,4 +549,4 @@ docker rm -f hello
 
 ## Наступний модуль
 
-[Модуль 3: Що таке Kubernetes?](module-3-what-is-kubernetes/) — загальний огляд оркестрації контейнерів.
+[Модуль 3: Що таке Kubernetes?](module-1.3-what-is-kubernetes/) — загальний огляд оркестрації контейнерів.

@@ -7,7 +7,7 @@ sidebar:
 
 > **Complexity**: `[MEDIUM]` | Time: 60 minutes
 >
-> **Prerequisites**: [Module 3.2: BGP & Routing](module-3.2-bgp-routing/), [MetalLB](../../platform/toolkits/networking/module-5.4-metallb/)
+> **Prerequisites**: [Module 3.2: BGP & Routing](module-3.2-bgp-routing/), [MetalLB](../../platform/toolkits/infrastructure-networking/networking/module-5.4-metallb/)
 
 ---
 

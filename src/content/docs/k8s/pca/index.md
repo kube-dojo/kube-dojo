@@ -22,8 +22,8 @@ These modules cover the areas between KubeDojo's existing observability modules 
 
 | # | Module | Topic | Domains Covered |
 |---|--------|-------|-----------------|
-| 1 | [PromQL Deep Dive](module-1-promql-deep-dive/) | Selectors, rates, aggregation, histograms, binary ops, subqueries, recording rules | Domain 3 (28%) |
-| 2 | [Instrumentation & Alerting](module-2-instrumentation-alerting/) | Client libraries, metric types, naming conventions, exporters, Alertmanager config | Domain 4 (16%) + Domain 5 (18%) |
+| 1 | [PromQL Deep Dive](module-1.1-promql-deep-dive/) | Selectors, rates, aggregation, histograms, binary ops, subqueries, recording rules | Domain 3 (28%) |
+| 2 | [Instrumentation & Alerting](module-1.2-instrumentation-alerting/) | Client libraries, metric types, naming conventions, exporters, Alertmanager config | Domain 4 (16%) + Domain 5 (18%) |
 
 ---
 
@@ -33,9 +33,9 @@ These modules cover the areas between KubeDojo's existing observability modules 
 |--------|--------|-------------------|
 | Observability Concepts | 18% | Excellent (4 foundation modules) |
 | Prometheus Fundamentals | 20% | Excellent (module-1.1-prometheus.md) |
-| PromQL | 28% | Excellent ([PromQL Deep Dive](module-1-promql-deep-dive/) + fundamentals module) |
-| Instrumentation & Exporters | 16% | Excellent ([Instrumentation & Alerting](module-2-instrumentation-alerting/)) |
-| Alerting & Dashboarding | 18% | Excellent ([Instrumentation & Alerting](module-2-instrumentation-alerting/) + Grafana module) |
+| PromQL | 28% | Excellent ([PromQL Deep Dive](module-1.1-promql-deep-dive/) + fundamentals module) |
+| Instrumentation & Exporters | 16% | Excellent ([Instrumentation & Alerting](module-1.2-instrumentation-alerting/)) |
+| Alerting & Dashboarding | 18% | Excellent ([Instrumentation & Alerting](module-1.2-instrumentation-alerting/) + Grafana module) |
 
 ---
 
@@ -62,8 +62,8 @@ These modules cover the areas between KubeDojo's existing observability modules 
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [Prometheus](../../platform/toolkits/observability/module-1.1-prometheus/) | Pull model, architecture, TSDB, service discovery | Direct |
-| [OpenTelemetry](../../platform/toolkits/observability/module-1.2-opentelemetry/) | OTel as instrumentation standard, relationship to Prometheus | Partial |
+| [Prometheus](../../platform/toolkits/observability-intelligence/observability/module-1.1-prometheus/) | Pull model, architecture, TSDB, service discovery | Direct |
+| [OpenTelemetry](../../platform/toolkits/observability-intelligence/observability/module-1.2-opentelemetry/) | OTel as instrumentation standard, relationship to Prometheus | Partial |
 
 ---
 
@@ -80,9 +80,9 @@ These modules cover the areas between KubeDojo's existing observability modules 
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [Prometheus](../../platform/toolkits/observability/module-1.1-prometheus/) | Architecture, pull model, TSDB, service discovery, K8s deployment | Direct |
-| [SRE 1.2](../../platform/disciplines/sre/module-1.2-slos/) | SLOs and how Prometheus implements them | Direct |
-| [SRE 1.3](../../platform/disciplines/sre/module-1.3-error-budgets/) | Error budgets, burn rate alerts — Prometheus in practice | Direct |
+| [Prometheus](../../platform/toolkits/observability-intelligence/observability/module-1.1-prometheus/) | Architecture, pull model, TSDB, service discovery, K8s deployment | Direct |
+| [SRE 1.2](../../platform/disciplines/core-platform/sre/module-1.2-slos/) | SLOs and how Prometheus implements them | Direct |
+| [SRE 1.3](../../platform/disciplines/core-platform/sre/module-1.3-error-budgets/) | Error budgets, burn rate alerts — Prometheus in practice | Direct |
 
 ### Key Exam Topics — Coverage Notes
 - **Prometheus architecture** — Fully covered in module-1.1-prometheus.md (pull model, TSDB, Alertmanager, Pushgateway)
@@ -111,13 +111,13 @@ These modules cover the areas between KubeDojo's existing observability modules 
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [Prometheus](../../platform/toolkits/observability/module-1.1-prometheus/) | PromQL basics: selectors, rate, aggregation, histograms | Partial |
-| [SLO Tooling](../../platform/toolkits/observability/module-1.10-slo-tooling/) | SLO-focused PromQL (burn rates, error budgets) | Partial |
-| [PromQL Deep Dive](module-1-promql-deep-dive/) | Complete PromQL coverage: all selector types, rate functions, aggregation, binary operators, histogram_quantile, recording rules, subqueries | Direct |
+| [Prometheus](../../platform/toolkits/observability-intelligence/observability/module-1.1-prometheus/) | PromQL basics: selectors, rate, aggregation, histograms | Partial |
+| [SLO Tooling](../../platform/toolkits/observability-intelligence/observability/module-1.10-slo-tooling/) | SLO-focused PromQL (burn rates, error budgets) | Partial |
+| [PromQL Deep Dive](module-1.1-promql-deep-dive/) | Complete PromQL coverage: all selector types, rate functions, aggregation, binary operators, histogram_quantile, recording rules, subqueries | Direct |
 
 ### Key Exam Topics — Now Covered
 
-All of the following are covered in the [PromQL Deep Dive](module-1-promql-deep-dive/):
+All of the following are covered in the [PromQL Deep Dive](module-1.1-promql-deep-dive/):
 
 - **Selector types**: Instant vectors, range vectors, label matchers (`=`, `!=`, `=~`, `!~`)
 - **Rate functions**: `rate()` vs `irate()` vs `increase()` — when to use each, counter reset handling
@@ -145,13 +145,13 @@ All of the following are covered in the [PromQL Deep Dive](module-1-promql-deep-
 | Module | Topic | Relevance |
 |--------|-------|-----------|
 | [Observability 3.3](../../platform/foundations/observability-theory/module-3.3-instrumentation-principles/) | What to instrument, instrumentation principles | Direct |
-| [Prometheus](../../platform/toolkits/observability/module-1.1-prometheus/) | Metric types overview, exporters basics | Partial |
-| [OpenTelemetry](../../platform/toolkits/observability/module-1.2-opentelemetry/) | OTel SDK instrumentation (complementary approach) | Partial |
-| [Instrumentation & Alerting](module-2-instrumentation-alerting/) | Client libraries (Go/Python/Java), naming conventions, metric type selection, exporters deep dive | Direct |
+| [Prometheus](../../platform/toolkits/observability-intelligence/observability/module-1.1-prometheus/) | Metric types overview, exporters basics | Partial |
+| [OpenTelemetry](../../platform/toolkits/observability-intelligence/observability/module-1.2-opentelemetry/) | OTel SDK instrumentation (complementary approach) | Partial |
+| [Instrumentation & Alerting](module-1.2-instrumentation-alerting/) | Client libraries (Go/Python/Java), naming conventions, metric type selection, exporters deep dive | Direct |
 
 ### Key Exam Topics — Now Covered
 
-All of the following are covered in the [Instrumentation & Alerting](module-2-instrumentation-alerting/):
+All of the following are covered in the [Instrumentation & Alerting](module-1.2-instrumentation-alerting/):
 
 - **Four metric types**: Counter (monotonic), Gauge (up/down), Histogram (distribution with buckets), Summary (client-side quantiles)
 - **When to use which type**: Decision framework for choosing the right metric type
@@ -175,21 +175,21 @@ All of the following are covered in the [Instrumentation & Alerting](module-2-in
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [Prometheus](../../platform/toolkits/observability/module-1.1-prometheus/) | Alerting rules basics, Alertmanager overview | Partial |
-| [Grafana](../../platform/toolkits/observability/module-1.3-grafana/) | Dashboards, data sources, provisioning, variables | Direct |
-| [SRE 1.2](../../platform/disciplines/sre/module-1.2-slos/) | SLO-based alerting philosophy | Direct |
-| [SRE 1.3](../../platform/disciplines/sre/module-1.3-error-budgets/) | Error budget burn rate alerting | Direct |
-| [Instrumentation & Alerting](module-2-instrumentation-alerting/) | Alertmanager routing, receivers, inhibition, silencing, recording rules, alerting rule patterns | Direct |
+| [Prometheus](../../platform/toolkits/observability-intelligence/observability/module-1.1-prometheus/) | Alerting rules basics, Alertmanager overview | Partial |
+| [Grafana](../../platform/toolkits/observability-intelligence/observability/module-1.3-grafana/) | Dashboards, data sources, provisioning, variables | Direct |
+| [SRE 1.2](../../platform/disciplines/core-platform/sre/module-1.2-slos/) | SLO-based alerting philosophy | Direct |
+| [SRE 1.3](../../platform/disciplines/core-platform/sre/module-1.3-error-budgets/) | Error budget burn rate alerting | Direct |
+| [Instrumentation & Alerting](module-1.2-instrumentation-alerting/) | Alertmanager routing, receivers, inhibition, silencing, recording rules, alerting rule patterns | Direct |
 
 ### Key Exam Topics — Now Covered
 
-- **Alertmanager routing tree** — Covered in [Instrumentation & Alerting](module-2-instrumentation-alerting/): route hierarchy, `match`/`match_re`, `continue`, `group_by`
+- **Alertmanager routing tree** — Covered in [Instrumentation & Alerting](module-1.2-instrumentation-alerting/): route hierarchy, `match`/`match_re`, `continue`, `group_by`
 - **Receivers** — Slack, PagerDuty, email, webhook configuration
 - **Inhibition rules** — Suppress dependent alerts when root-cause alert fires
 - **Silences** — Temporarily mute alerts during maintenance
 - **Alert states** — `inactive` -> `pending` -> `firing` -> `resolved` lifecycle
 - **Recording rules** — Naming convention, when to use, performance optimization
-- **Grafana dashboards** — Covered in existing [Grafana module](../../platform/toolkits/observability/module-1.3-grafana/)
+- **Grafana dashboards** — Covered in existing [Grafana module](../../platform/toolkits/observability-intelligence/observability/module-1.3-grafana/)
 
 ---
 
@@ -259,17 +259,17 @@ KubeDojo's observability modules plus the two dedicated PCA modules provide comp
 |-------|--------|-------|
 | Observability theory (three pillars) | Covered | Existing foundation modules 3.1-3.4 |
 | Prometheus architecture and fundamentals | Covered | Existing module-1.1-prometheus.md |
-| PromQL selectors and label matchers | Covered | [PromQL Deep Dive](module-1-promql-deep-dive/) |
-| rate/irate/increase functions | Covered | [PromQL Deep Dive](module-1-promql-deep-dive/) + module-1.1 |
-| Aggregation operators | Covered | [PromQL Deep Dive](module-1-promql-deep-dive/) |
-| Binary operators and vector matching | Covered | [PromQL Deep Dive](module-1-promql-deep-dive/) |
-| histogram_quantile() | Covered | [PromQL Deep Dive](module-1-promql-deep-dive/) + module-1.1 |
-| Recording rules | Covered | [PromQL Deep Dive](module-1-promql-deep-dive/) + module-1.1 |
-| Client libraries (Go/Python/Java) | Covered | [Instrumentation & Alerting](module-2-instrumentation-alerting/) |
-| Metric naming conventions | Covered | [Instrumentation & Alerting](module-2-instrumentation-alerting/) |
-| Exporters (node, blackbox) | Covered | [Instrumentation & Alerting](module-2-instrumentation-alerting/) |
-| Alertmanager configuration | Covered | [Instrumentation & Alerting](module-2-instrumentation-alerting/) |
-| Inhibition and silencing | Covered | [Instrumentation & Alerting](module-2-instrumentation-alerting/) |
+| PromQL selectors and label matchers | Covered | [PromQL Deep Dive](module-1.1-promql-deep-dive/) |
+| rate/irate/increase functions | Covered | [PromQL Deep Dive](module-1.1-promql-deep-dive/) + module-1.1 |
+| Aggregation operators | Covered | [PromQL Deep Dive](module-1.1-promql-deep-dive/) |
+| Binary operators and vector matching | Covered | [PromQL Deep Dive](module-1.1-promql-deep-dive/) |
+| histogram_quantile() | Covered | [PromQL Deep Dive](module-1.1-promql-deep-dive/) + module-1.1 |
+| Recording rules | Covered | [PromQL Deep Dive](module-1.1-promql-deep-dive/) + module-1.1 |
+| Client libraries (Go/Python/Java) | Covered | [Instrumentation & Alerting](module-1.2-instrumentation-alerting/) |
+| Metric naming conventions | Covered | [Instrumentation & Alerting](module-1.2-instrumentation-alerting/) |
+| Exporters (node, blackbox) | Covered | [Instrumentation & Alerting](module-1.2-instrumentation-alerting/) |
+| Alertmanager configuration | Covered | [Instrumentation & Alerting](module-1.2-instrumentation-alerting/) |
+| Inhibition and silencing | Covered | [Instrumentation & Alerting](module-1.2-instrumentation-alerting/) |
 | Grafana dashboarding | Covered | Existing module-1.3-grafana.md |
 | Prometheus remote write/read | Minor gap | Review [Prometheus docs on remote storage](https://prometheus.io/docs/prometheus/latest/storage/#remote-storage-integrations) |
 | Thanos/Cortex federation | Minor gap | Out of scope for PCA; covered lightly in module-1.1 |

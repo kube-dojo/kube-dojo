@@ -41,11 +41,11 @@ The CGOA (Certified GitOps Associate) validates your understanding of GitOps pri
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [GitOps 3.1](../../platform/disciplines/gitops/module-3.1-what-is-gitops/) | What is GitOps? OpenGitOps 4 principles, key terminology | Direct |
-| [GitOps 3.4](../../platform/disciplines/gitops/module-3.4-drift-detection/) | Drift detection and reconciliation loops | Direct |
-| [IaC 6.1](../../platform/disciplines/iac/module-6.1-iac-fundamentals/) | Declarative vs imperative, desired state concepts | Direct |
-| [IaC 6.5](../../platform/disciplines/iac/module-6.5-drift-remediation/) | Drift remediation strategies | Direct |
-| [Modern DevOps: GitOps](../../prerequisites/modern-devops/module-2-gitops/) | GitOps overview for beginners | Supporting |
+| [GitOps 3.1](../../platform/disciplines/delivery-automation/gitops/module-3.1-what-is-gitops/) | What is GitOps? OpenGitOps 4 principles, key terminology | Direct |
+| [GitOps 3.4](../../platform/disciplines/delivery-automation/gitops/module-3.4-drift-detection/) | Drift detection and reconciliation loops | Direct |
+| [IaC 6.1](../../platform/disciplines/delivery-automation/iac/module-6.1-iac-fundamentals/) | Declarative vs imperative, desired state concepts | Direct |
+| [IaC 6.5](../../platform/disciplines/delivery-automation/iac/module-6.5-drift-remediation/) | Drift remediation strategies | Direct |
+| [Modern DevOps: GitOps](../../prerequisites/modern-devops/module-1.2-gitops/) | GitOps overview for beginners | Supporting |
 
 ---
 
@@ -63,13 +63,13 @@ The CGOA (Certified GitOps Associate) validates your understanding of GitOps pri
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [GitOps 3.1](../../platform/disciplines/gitops/module-3.1-what-is-gitops/) | OpenGitOps 4 principles in depth | Direct |
-| [GitOps 3.2](../../platform/disciplines/gitops/module-3.2-repository-strategies/) | Git as the versioned, immutable source of truth; repo strategies | Direct |
-| [GitOps 3.4](../../platform/disciplines/gitops/module-3.4-drift-detection/) | Continuous reconciliation and drift detection | Direct |
-| [GitOps 3.6](../../platform/disciplines/gitops/module-3.6-multi-cluster/) | Pull-based delivery across clusters | Direct |
-| [IaC 6.1](../../platform/disciplines/iac/module-6.1-iac-fundamentals/) | Declarative configuration, state management | Direct |
-| [ArgoCD](../../platform/toolkits/gitops-deployments/module-2.1-argocd/) | Pull-based reconciliation in practice (Application CRD, sync policies) | Direct |
-| [Flux](../../platform/toolkits/gitops-deployments/module-2.3-flux/) | Pull-based reconciliation with 5 controllers | Direct |
+| [GitOps 3.1](../../platform/disciplines/delivery-automation/gitops/module-3.1-what-is-gitops/) | OpenGitOps 4 principles in depth | Direct |
+| [GitOps 3.2](../../platform/disciplines/delivery-automation/gitops/module-3.2-repository-strategies/) | Git as the versioned, immutable source of truth; repo strategies | Direct |
+| [GitOps 3.4](../../platform/disciplines/delivery-automation/gitops/module-3.4-drift-detection/) | Continuous reconciliation and drift detection | Direct |
+| [GitOps 3.6](../../platform/disciplines/delivery-automation/gitops/module-3.6-multi-cluster/) | Pull-based delivery across clusters | Direct |
+| [IaC 6.1](../../platform/disciplines/delivery-automation/iac/module-6.1-iac-fundamentals/) | Declarative configuration, state management | Direct |
+| [ArgoCD](../../platform/toolkits/cicd-delivery/gitops-deployments/module-2.1-argocd/) | Pull-based reconciliation in practice (Application CRD, sync policies) | Direct |
+| [Flux](../../platform/toolkits/cicd-delivery/gitops-deployments/module-2.3-flux/) | Pull-based reconciliation with 5 controllers | Direct |
 
 ---
 
@@ -85,17 +85,17 @@ The CGOA (Certified GitOps Associate) validates your understanding of GitOps pri
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [IaC 6.1](../../platform/disciplines/iac/module-6.1-iac-fundamentals/) | IaC fundamentals, declarative infrastructure | Direct |
-| [IaC 6.4](../../platform/disciplines/iac/module-6.4-iac-at-scale/) | IaC at scale, configuration management | Direct |
-| [IaC 6.2](../../platform/disciplines/iac/module-6.2-iac-testing/) | Testing infrastructure code | Supporting |
-| [IaC 6.3](../../platform/disciplines/iac/module-6.3-iac-security/) | Security in IaC | Supporting |
-| [Modern DevOps: IaC](../../prerequisites/modern-devops/module-1-infrastructure-as-code/) | IaC overview for beginners | Supporting |
-| [Modern DevOps: CI/CD](../../prerequisites/modern-devops/module-3-cicd-pipelines/) | CI/CD pipeline fundamentals | Direct |
-| [Modern DevOps: DevSecOps](../../prerequisites/modern-devops/module-6-devsecops/) | DevOps/DevSecOps culture | Supporting |
-| [DevSecOps 4.3](../../platform/disciplines/devsecops/module-4.3-security-cicd/) | CI/CD pipeline design and security integration | Supporting |
-| [Cloud Native Ecosystem](../../prerequisites/cloud-native-101/module-4-cloud-native-ecosystem/) | CNCF landscape, cloud native practices | Supporting |
-| [Dagger](../../platform/toolkits/ci-cd-pipelines/module-3.1-dagger/) | Modern CI/CD pipeline design | Supporting |
-| [Tekton](../../platform/toolkits/ci-cd-pipelines/module-3.2-tekton/) | K8s-native CI/CD | Supporting |
+| [IaC 6.1](../../platform/disciplines/delivery-automation/iac/module-6.1-iac-fundamentals/) | IaC fundamentals, declarative infrastructure | Direct |
+| [IaC 6.4](../../platform/disciplines/delivery-automation/iac/module-6.4-iac-at-scale/) | IaC at scale, configuration management | Direct |
+| [IaC 6.2](../../platform/disciplines/delivery-automation/iac/module-6.2-iac-testing/) | Testing infrastructure code | Supporting |
+| [IaC 6.3](../../platform/disciplines/delivery-automation/iac/module-6.3-iac-security/) | Security in IaC | Supporting |
+| [Modern DevOps: IaC](../../prerequisites/modern-devops/module-1.1-infrastructure-as-code/) | IaC overview for beginners | Supporting |
+| [Modern DevOps: CI/CD](../../prerequisites/modern-devops/module-1.3-cicd-pipelines/) | CI/CD pipeline fundamentals | Direct |
+| [Modern DevOps: DevSecOps](../../prerequisites/modern-devops/module-1.6-devsecops/) | DevOps/DevSecOps culture | Supporting |
+| [DevSecOps 4.3](../../platform/disciplines/reliability-security/devsecops/module-4.3-security-cicd/) | CI/CD pipeline design and security integration | Supporting |
+| [Cloud Native Ecosystem](../../prerequisites/cloud-native-101/module-1.4-cloud-native-ecosystem/) | CNCF landscape, cloud native practices | Supporting |
+| [Dagger](../../platform/toolkits/cicd-delivery/ci-cd-pipelines/module-3.1-dagger/) | Modern CI/CD pipeline design | Supporting |
+| [Tekton](../../platform/toolkits/cicd-delivery/ci-cd-pipelines/module-3.2-tekton/) | K8s-native CI/CD | Supporting |
 
 ---
 
@@ -112,14 +112,14 @@ The CGOA (Certified GitOps Associate) validates your understanding of GitOps pri
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [GitOps 3.2](../../platform/disciplines/gitops/module-3.2-repository-strategies/) | Monorepo vs polyrepo, app-of-apps pattern | Direct |
-| [GitOps 3.3](../../platform/disciplines/gitops/module-3.3-environment-promotion/) | Environment promotion patterns (dev/staging/prod) | Direct |
-| [GitOps 3.5](../../platform/disciplines/gitops/module-3.5-secrets/) | Secrets management patterns in GitOps workflows | Direct |
-| [GitOps 3.6](../../platform/disciplines/gitops/module-3.6-multi-cluster/) | Multi-cluster deployment patterns | Direct |
-| [Argo Rollouts](../../platform/toolkits/gitops-deployments/module-2.2-argo-rollouts/) | Progressive delivery: canary, blue-green, analysis runs | Direct |
-| [ArgoCD](../../platform/toolkits/gitops-deployments/module-2.1-argocd/) | ApplicationSet, sync waves, hooks, pull-based model | Direct |
-| [Flux](../../platform/toolkits/gitops-deployments/module-2.3-flux/) | Event-driven reconciliation, notification controller | Direct |
-| [Helm & Kustomize](../../platform/toolkits/gitops-deployments/module-2.4-helm-kustomize/) | Manifest customization patterns for promotion | Direct |
+| [GitOps 3.2](../../platform/disciplines/delivery-automation/gitops/module-3.2-repository-strategies/) | Monorepo vs polyrepo, app-of-apps pattern | Direct |
+| [GitOps 3.3](../../platform/disciplines/delivery-automation/gitops/module-3.3-environment-promotion/) | Environment promotion patterns (dev/staging/prod) | Direct |
+| [GitOps 3.5](../../platform/disciplines/delivery-automation/gitops/module-3.5-secrets/) | Secrets management patterns in GitOps workflows | Direct |
+| [GitOps 3.6](../../platform/disciplines/delivery-automation/gitops/module-3.6-multi-cluster/) | Multi-cluster deployment patterns | Direct |
+| [Argo Rollouts](../../platform/toolkits/cicd-delivery/gitops-deployments/module-2.2-argo-rollouts/) | Progressive delivery: canary, blue-green, analysis runs | Direct |
+| [ArgoCD](../../platform/toolkits/cicd-delivery/gitops-deployments/module-2.1-argocd/) | ApplicationSet, sync waves, hooks, pull-based model | Direct |
+| [Flux](../../platform/toolkits/cicd-delivery/gitops-deployments/module-2.3-flux/) | Event-driven reconciliation, notification controller | Direct |
+| [Helm & Kustomize](../../platform/toolkits/cicd-delivery/gitops-deployments/module-2.4-helm-kustomize/) | Manifest customization patterns for promotion | Direct |
 
 ---
 
@@ -134,11 +134,11 @@ The CGOA (Certified GitOps Associate) validates your understanding of GitOps pri
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [ArgoCD](../../platform/toolkits/gitops-deployments/module-2.1-argocd/) | Application CRD, sync policies, RBAC, ApplicationSet | Direct |
-| [Flux](../../platform/toolkits/gitops-deployments/module-2.3-flux/) | GitRepository, HelmRelease, Kustomization, 5 controllers | Direct |
-| [Helm & Kustomize](../../platform/toolkits/gitops-deployments/module-2.4-helm-kustomize/) | Helm charts, Kustomize overlays, manifest packaging | Direct |
-| [GitOps 3.2](../../platform/disciplines/gitops/module-3.2-repository-strategies/) | Git as state store, repo layout patterns | Direct |
-| [Argo Rollouts](../../platform/toolkits/gitops-deployments/module-2.2-argo-rollouts/) | Progressive delivery tooling | Direct |
+| [ArgoCD](../../platform/toolkits/cicd-delivery/gitops-deployments/module-2.1-argocd/) | Application CRD, sync policies, RBAC, ApplicationSet | Direct |
+| [Flux](../../platform/toolkits/cicd-delivery/gitops-deployments/module-2.3-flux/) | GitRepository, HelmRelease, Kustomization, 5 controllers | Direct |
+| [Helm & Kustomize](../../platform/toolkits/cicd-delivery/gitops-deployments/module-2.4-helm-kustomize/) | Helm charts, Kustomize overlays, manifest packaging | Direct |
+| [GitOps 3.2](../../platform/disciplines/delivery-automation/gitops/module-3.2-repository-strategies/) | Git as state store, repo layout patterns | Direct |
+| [Argo Rollouts](../../platform/toolkits/cicd-delivery/gitops-deployments/module-2.2-argo-rollouts/) | Progressive delivery tooling | Direct |
 
 ---
 

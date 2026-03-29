@@ -415,4 +415,4 @@ Kubernetes — це платформа оркестрації контейнер
 
 ## Наступний модуль
 
-[Модуль 4: Екосистема Cloud Native](module-4-cloud-native-ecosystem/) — розуміння ландшафту CNCF та місця Kubernetes у ньому.
+[Модуль 4: Екосистема Cloud Native](module-1.4-cloud-native-ecosystem/) — розуміння ландшафту CNCF та місця Kubernetes у ньому.

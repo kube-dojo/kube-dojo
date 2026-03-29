@@ -127,9 +127,9 @@ After completing Observability Theory, you're ready for:
 | Track | Why |
 |-------|-----|
 | [Security Principles](../security-principles/) | Security monitoring uses same concepts |
-| [SRE Discipline](../../disciplines/sre/) | Put observability into SRE practice |
-| [Observability Toolkit](../../toolkits/observability/) | Learn specific tools (Prometheus, Grafana, OTel) |
-| [Platform Engineering](../../disciplines/platform-engineering/) | Build observability into your platform |
+| [SRE Discipline](../../disciplines/core-platform/sre/) | Put observability into SRE practice |
+| [Observability Toolkit](../../toolkits/observability-intelligence/observability/) | Learn specific tools (Prometheus, Grafana, OTel) |
+| [Platform Engineering](../../disciplines/core-platform/platform-engineering/) | Build observability into your platform |
 
 ---
 

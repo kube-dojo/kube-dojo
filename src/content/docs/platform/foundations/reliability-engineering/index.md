@@ -124,7 +124,7 @@ After completing Reliability Engineering, you're ready for:
 | Track | Why |
 |-------|-----|
 | [Observability Theory](../observability-theory/) | Can't improve reliability without seeing what's happening |
-| [SRE Discipline](../../disciplines/sre/) | Putting reliability engineering into operational practice |
+| [SRE Discipline](../../disciplines/core-platform/sre/) | Putting reliability engineering into operational practice |
 | [Security Principles](../security-principles/) | Security and reliability share patterns |
 | [Distributed Systems](../distributed-systems/) | Deep dive into CAP, consensus, and distributed patterns |
 

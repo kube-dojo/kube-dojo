@@ -429,6 +429,6 @@ Lesson: Network effects are powerful. Sometimes the best tech loses.
 4. Яких технологій уникати і чому
 
 **Наступні кроки**:
-- [Cloud Native 101](../cloud-native-101/module-1-what-are-containers/) — Якщо ви новачок у контейнерах
-- [Основи Kubernetes](../kubernetes-basics/module-1-first-cluster/) — Якщо ви вже розумієте контейнери
+- [Cloud Native 101](../cloud-native-101/module-1.1-what-are-containers/) — Якщо ви новачок у контейнерах
+- [Основи Kubernetes](../kubernetes-basics/module-1.1-first-cluster/) — Якщо ви вже розумієте контейнери
 - [Навчальний план CKA](../../k8s/cka/part0-environment/module-0.1-cluster-setup/) — Якщо ви готові до підготовки до сертифікації

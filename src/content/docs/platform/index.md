@@ -76,13 +76,13 @@ Applied practices - how to do the work.
 
 | Discipline | Best For |
 |------------|----------|
-| [SRE](disciplines/sre/) | Operations, reliability, on-call |
-| [Platform Engineering](disciplines/platform-engineering/) | Developer experience, self-service |
-| [GitOps](disciplines/gitops/) | Deployment, reconciliation |
-| [Infrastructure as Code](disciplines/iac/) | IaC patterns, testing, drift management |
-| [DevSecOps](disciplines/devsecops/) | Security integration, compliance |
-| [MLOps](disciplines/mlops/) | ML lifecycle, model serving |
-| [AIOps](disciplines/aiops/) | AI-driven operations, automation |
+| [SRE](disciplines/core-platform/sre/) | Operations, reliability, on-call |
+| [Platform Engineering](disciplines/core-platform/platform-engineering/) | Developer experience, self-service |
+| [GitOps](disciplines/delivery-automation/gitops/) | Deployment, reconciliation |
+| [Infrastructure as Code](disciplines/delivery-automation/iac/) | IaC patterns, testing, drift management |
+| [DevSecOps](disciplines/reliability-security/devsecops/) | Security integration, compliance |
+| [MLOps](disciplines/data-ai/mlops/) | ML lifecycle, model serving |
+| [AIOps](disciplines/data-ai/aiops/) | AI-driven operations, automation |
 
 ### Reference Toolkits as Needed
 
@@ -90,17 +90,17 @@ Tools change. Use these as reference when implementing.
 
 | Toolkit | When to Use |
 |---------|-------------|
-| [Observability](toolkits/observability/) | Setting up monitoring/tracing |
-| [GitOps & Deployments](toolkits/gitops-deployments/) | Implementing ArgoCD/Flux |
-| [CI/CD Pipelines](toolkits/ci-cd-pipelines/) | Dagger, Tekton, Argo Workflows |
-| [IaC Tools](toolkits/iac-tools/) | Terraform, OpenTofu, Pulumi, Ansible |
-| [Security Tools](toolkits/security-tools/) | Policy, secrets, runtime security |
-| [Networking](toolkits/networking/) | Cilium, Service Mesh |
-| [Scaling & Reliability](toolkits/scaling-reliability/) | Karpenter, KEDA, Velero |
-| [Platforms](toolkits/platforms/) | Building internal platforms |
-| [Developer Experience](toolkits/developer-experience/) | K9s, Telepresence |
-| [ML Platforms](toolkits/ml-platforms/) | ML infrastructure |
-| [AIOps Tools](toolkits/aiops-tools/) | Anomaly detection, AIOps |
+| [Observability](toolkits/observability-intelligence/observability/) | Setting up monitoring/tracing |
+| [GitOps & Deployments](toolkits/cicd-delivery/gitops-deployments/) | Implementing ArgoCD/Flux |
+| [CI/CD Pipelines](toolkits/cicd-delivery/ci-cd-pipelines/) | Dagger, Tekton, Argo Workflows |
+| [IaC Tools](toolkits/infrastructure-networking/iac-tools/) | Terraform, OpenTofu, Pulumi, Ansible |
+| [Security Tools](toolkits/security-quality/security-tools/) | Policy, secrets, runtime security |
+| [Networking](toolkits/infrastructure-networking/networking/) | Cilium, Service Mesh |
+| [Scaling & Reliability](toolkits/developer-experience/scaling-reliability/) | Karpenter, KEDA, Velero |
+| [Platforms](toolkits/infrastructure-networking/platforms/) | Building internal platforms |
+| [Developer Experience](toolkits/developer-experience/devex-tools/) | K9s, Telepresence |
+| [ML Platforms](toolkits/data-ai-platforms/ml-platforms/) | ML infrastructure |
+| [AIOps Tools](toolkits/observability-intelligence/aiops-tools/) | Anomaly detection, AIOps |
 
 ---
 
