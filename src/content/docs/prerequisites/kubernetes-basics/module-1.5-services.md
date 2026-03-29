@@ -3,6 +3,12 @@ title: "Module 1.5: Services - Stable Networking"
 slug: prerequisites/kubernetes-basics/module-1.5-services/
 sidebar:
   order: 6
+lab:
+  id: "prereq-k8s-1.5-services"
+  url: "https://killercoda.com/kubedojo/scenario/prereq-k8s-1.5-services"
+  duration: "25 min"
+  difficulty: "beginner"
+  environment: "kubernetes"
 ---
 > **Complexity**: `[MEDIUM]` - Essential networking concept
 >

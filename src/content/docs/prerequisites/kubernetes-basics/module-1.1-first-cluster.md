@@ -3,6 +3,12 @@ title: "Module 1.1: Your First Cluster"
 slug: prerequisites/kubernetes-basics/module-1.1-first-cluster/
 sidebar:
   order: 2
+lab:
+  id: "prereq-k8s-1.1-first-cluster"
+  url: "https://killercoda.com/kubedojo/scenario/prereq-k8s-1.1-first-cluster"
+  duration: "25 min"
+  difficulty: "beginner"
+  environment: "kubernetes"
 ---
 > **Complexity**: `[MEDIUM]` - Hands-on setup required
 >

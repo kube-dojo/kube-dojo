@@ -1,11 +1,13 @@
 ---
 /**
- * Custom PageTitle — breadcrumbs + title, exact POC v2 values
+ * Custom PageTitle — breadcrumbs + title + lab banner
  */
 import type { Props } from '@astrojs/starlight/props';
+import LabBanner from './LabBanner.astro';
 const PAGE_TITLE_ID = '_top';
 const route = Astro.locals.starlightRoute;
 const title = route.entry.data.title;
+const lab = (route.entry.data as any).lab;
 const slug = route.slug || '';
 const isUk = Astro.url.pathname.startsWith('/uk/') || Astro.url.pathname === '/uk';
 // Strip 'uk/' prefix from parts so breadcrumbs work the same way
@@ -60,6 +62,16 @@ if (parts.length > 1) {
   </nav>
 )}
 <h1 id={PAGE_TITLE_ID} class="kd-title">{title}</h1>
+
+{lab && (
+  <LabBanner
+    id={lab.id}
+    url={lab.url}
+    duration={lab.duration}
+    difficulty={lab.difficulty}
+    environment={lab.environment}
+  />
+)}
 
 <style>
   /* Exact POC v2 values */

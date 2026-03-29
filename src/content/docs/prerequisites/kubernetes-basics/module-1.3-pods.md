@@ -3,6 +3,12 @@ title: "Module 1.3: Pods - The Atomic Unit"
 slug: prerequisites/kubernetes-basics/module-1.3-pods/
 sidebar:
   order: 4
+lab:
+  id: "prereq-k8s-1.3-pods"
+  url: "https://killercoda.com/kubedojo/scenario/prereq-k8s-1.3-pods"
+  duration: "25 min"
+  difficulty: "beginner"
+  environment: "kubernetes"
 ---
 > **Complexity**: `[MEDIUM]` - Core concept, hands-on required
 >

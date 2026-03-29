@@ -3,6 +3,12 @@ title: "Module 0.3: First Terminal Commands"
 slug: prerequisites/zero-to-terminal/module-0.3-first-commands
 sidebar:
   order: 4
+lab:
+  id: "prereq-0.3-first-commands"
+  url: "https://killercoda.com/kubedojo/scenario/prereq-0.3-first-commands"
+  duration: "20 min"
+  difficulty: "beginner"
+  environment: "ubuntu"
 ---
 > **Complexity**: `[QUICK]` - Follow along and type what you see
 >

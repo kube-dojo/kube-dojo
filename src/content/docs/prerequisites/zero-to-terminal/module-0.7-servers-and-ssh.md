@@ -3,6 +3,12 @@ title: "Module 0.7: Servers and SSH"
 slug: prerequisites/zero-to-terminal/module-0.7-servers-and-ssh
 sidebar:
   order: 8
+lab:
+  id: "prereq-0.7-servers-ssh"
+  url: "https://killercoda.com/kubedojo/scenario/prereq-0.7-servers-ssh"
+  duration: "25 min"
+  difficulty: "beginner"
+  environment: "ubuntu"
 ---
 > **Complexity**: `[QUICK]` - Concepts and a hands-on connection
 >

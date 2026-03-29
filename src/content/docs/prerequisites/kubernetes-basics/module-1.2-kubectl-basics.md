@@ -3,6 +3,12 @@ title: "Module 1.2: kubectl Basics"
 slug: prerequisites/kubernetes-basics/module-1.2-kubectl-basics/
 sidebar:
   order: 3
+lab:
+  id: "prereq-k8s-1.2-kubectl"
+  url: "https://killercoda.com/kubedojo/scenario/prereq-k8s-1.2-kubectl"
+  duration: "30 min"
+  difficulty: "beginner"
+  environment: "kubernetes"
 ---
 > **Complexity**: `[MEDIUM]` - Essential commands to master
 >

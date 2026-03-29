@@ -3,6 +3,12 @@ title: "Module 0.4: Files and Directories"
 slug: prerequisites/zero-to-terminal/module-0.4-files-and-directories
 sidebar:
   order: 5
+lab:
+  id: "prereq-0.4-files-directories"
+  url: "https://killercoda.com/kubedojo/scenario/prereq-0.4-files-directories"
+  duration: "20 min"
+  difficulty: "beginner"
+  environment: "ubuntu"
 ---
 > **Complexity**: `[QUICK]` - Absolute beginner
 >

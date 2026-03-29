@@ -3,6 +3,12 @@ title: "Module 0.5: Editing Files"
 slug: prerequisites/zero-to-terminal/module-0.5-editing-files
 sidebar:
   order: 6
+lab:
+  id: "prereq-0.5-editing-files"
+  url: "https://killercoda.com/kubedojo/scenario/prereq-0.5-editing-files"
+  duration: "20 min"
+  difficulty: "beginner"
+  environment: "ubuntu"
 ---
 > **Complexity**: `[QUICK]` - Type what you see, save, done
 >
