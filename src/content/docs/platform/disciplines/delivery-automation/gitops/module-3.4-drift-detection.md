@@ -9,8 +9,8 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 3.1: What is GitOps?](module-3.1-what-is-gitops/) — GitOps fundamentals
-- **Required**: [Module 3.3: Environment Promotion](module-3.3-environment-promotion/) — Environment management
+- **Required**: [Module 3.1: What is GitOps?](../module-3.1-what-is-gitops/) — GitOps fundamentals
+- **Required**: [Module 3.3: Environment Promotion](../module-3.3-environment-promotion/) — Environment management
 - **Recommended**: Experience with Kubernetes kubectl debugging
 
 ---
@@ -869,7 +869,7 @@ The goal isn't zero drift — it's knowing what drift exists and why.
 
 ## Next Module
 
-Continue to [Module 3.5: Secrets in GitOps](module-3.5-secrets/) to learn how to handle sensitive data in a GitOps workflow.
+Continue to [Module 3.5: Secrets in GitOps](../module-3.5-secrets/) to learn how to handle sensitive data in a GitOps workflow.
 
 ---
 

@@ -398,4 +398,4 @@ rm -rf /mnt/storage-benchmark
 
 ## Next Module
 
-Continue to [Module 4.2: Software-Defined Storage (Ceph/Rook)](module-4.2-ceph-rook/) to learn how to deploy and operate Ceph as distributed storage for Kubernetes.
+Continue to [Module 4.2: Software-Defined Storage (Ceph/Rook)](../module-4.2-ceph-rook/) to learn how to deploy and operate Ceph as distributed storage for Kubernetes.

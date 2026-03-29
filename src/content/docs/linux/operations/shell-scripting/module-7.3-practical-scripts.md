@@ -9,8 +9,8 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 7.1: Bash Fundamentals](module-7.1-bash-fundamentals/)
-- **Required**: [Module 7.2: Text Processing](module-7.2-text-processing/)
+- **Required**: [Module 7.1: Bash Fundamentals](../module-7.1-bash-fundamentals/)
+- **Required**: [Module 7.2: Text Processing](../module-7.2-text-processing/)
 - **Helpful**: Experience with operational tasks
 
 ---

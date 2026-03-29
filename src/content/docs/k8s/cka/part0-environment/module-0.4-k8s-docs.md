@@ -591,4 +591,4 @@ Score: How many did you complete in 10 minutes?
 
 ## Next Module
 
-[Module 0.5: Exam Strategy - Three-Pass Method](module-0.5-exam-strategy/) - The strategy that maximizes your score.
+[Module 0.5: Exam Strategy - Three-Pass Method](../module-0.5-exam-strategy/) - The strategy that maximizes your score.

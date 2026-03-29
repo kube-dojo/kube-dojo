@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 40-50 minutes
 >
-> **Prerequisites**: [Module 2.1: What Is Reliability](module-2.1-what-is-reliability/), [Module 2.4: Measuring and Improving Reliability](module-2.4-measuring-and-improving-reliability/)
+> **Prerequisites**: [Module 2.1: What Is Reliability](../module-2.1-what-is-reliability/), [Module 2.4: Measuring and Improving Reliability](../module-2.4-measuring-and-improving-reliability/)
 >
 > **Track**: Foundations
 
@@ -1370,7 +1370,7 @@ SLI / SLO / ERROR BUDGET FUNDAMENTALS
 
 This module covered the **theory** of SLIs, SLOs, and error budgets. The following modules build on this foundation with operational practice and tooling:
 
-- [Module 2.1: What Is Reliability](module-2.1-what-is-reliability/) — Review the reliability fundamentals if any concepts here felt unclear
+- [Module 2.1: What Is Reliability](../module-2.1-what-is-reliability/) — Review the reliability fundamentals if any concepts here felt unclear
 - **Module 1.2: SLO Discipline** (Disciplines track) — How to operationalize SLOs day-to-day: reviews, reporting, cultural adoption
 - **Module 1.3: Error Budget Management** (Disciplines track) — Deep dive on budget policies, negotiation, and organizational alignment
 - **Module 1.10: SLO Tooling — Sloth/Pyrra** (Toolkits track) — Hands-on with tools that automate SLO calculation, burn rate alerting, and budget dashboards

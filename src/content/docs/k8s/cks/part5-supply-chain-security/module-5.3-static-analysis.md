@@ -784,4 +784,4 @@ rm -f insecure.yaml secure.yaml
 
 ## Next Module
 
-[Module 5.4: Admission Controllers](module-5.4-admission-controllers/) - Custom admission control for security.
+[Module 5.4: Admission Controllers](../module-5.4-admission-controllers/) - Custom admission control for security.

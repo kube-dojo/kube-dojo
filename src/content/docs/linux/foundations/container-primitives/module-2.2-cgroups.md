@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 2.1: Linux Namespaces](module-2.1-namespaces/)
+- **Required**: [Module 2.1: Linux Namespaces](../module-2.1-namespaces/)
 - **Helpful**: Understanding of CPU and memory concepts
 
 ---

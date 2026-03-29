@@ -1610,7 +1610,7 @@ kind delete cluster --name cilium-lab
 
 ## Next Module
 
-Continue to [Module 5.2: Service Mesh](module-5.2-service-mesh/) to learn about service mesh patterns with Istio, and when sidecar-free approaches make sense.
+Continue to [Module 5.2: Service Mesh](../module-5.2-service-mesh/) to learn about service mesh patterns with Istio, and when sidecar-free approaches make sense.
 
 ---
 

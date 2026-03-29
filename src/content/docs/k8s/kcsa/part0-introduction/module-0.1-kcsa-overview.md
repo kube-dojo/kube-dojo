@@ -298,4 +298,4 @@ This curriculum follows the exam domains:
 
 ## Next Module
 
-[Module 0.2: Security Mindset](module-0.2-security-mindset/) - How to think like a security professional and approach security questions strategically.
+[Module 0.2: Security Mindset](../module-0.2-security-mindset/) - How to think like a security professional and approach security questions strategically.

@@ -1,6 +1,6 @@
 ---
 title: "Module 1.7: Namespaces and Labels"
-slug: prerequisites/kubernetes-basics/module-1.7-namespaces-labels/
+slug: prerequisites/kubernetes-basics/module-1.7-namespaces-labels
 sidebar:
   order: 8
 ---
@@ -347,4 +347,4 @@ kubectl delete namespace frontend backend
 
 ## Next Module
 
-[Module 8: YAML for Kubernetes](module-1.8-yaml-kubernetes/) - Writing and understanding K8s manifests.
+[Module 8: YAML for Kubernetes](../module-1.8-yaml-kubernetes/) - Writing and understanding K8s manifests.

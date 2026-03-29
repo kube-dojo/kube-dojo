@@ -412,4 +412,4 @@ These are production-ready projects you should know:
 
 ## Next Module
 
-[Module 3.3: Cloud Native Patterns](module-3.3-patterns/) - Service mesh, serverless, and other cloud native architectural patterns.
+[Module 3.3: Cloud Native Patterns](../module-3.3-patterns/) - Service mesh, serverless, and other cloud native architectural patterns.

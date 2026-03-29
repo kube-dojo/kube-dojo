@@ -1,6 +1,6 @@
 ---
 title: "Module 1.1: OTel API & SDK Deep Dive"
-slug: k8s/otca/module-1.1-otel-sdk-deep-dive/
+slug: k8s/otca/module-1.1-otel-sdk-deep-dive
 sidebar:
   order: 2
 ---
@@ -680,4 +680,4 @@ pip install opentelemetry-api opentelemetry-sdk opentelemetry-exporter-otlp-prot
 
 ---
 
-**Next Module**: [Module 2: OTel Collector Architecture](module-1.2-otel-collector-advanced/) — how to receive, process, and export telemetry at scale.
+**Next Module**: [Module 2: OTel Collector Architecture](../module-1.2-otel-collector-advanced/) — how to receive, process, and export telemetry at scale.

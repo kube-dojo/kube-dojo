@@ -1098,7 +1098,7 @@ What's the relationship between CodeQL and GHAS?
 
 ## Next Steps
 
-- **Next Module**: [Module 12.4: Snyk](module-12.4-snyk/) - Dependency and container scanning
+- **Next Module**: [Module 12.4: Snyk](../module-12.4-snyk/) - Dependency and container scanning
 - **Related**: [Module 11.3: GitHub Advanced](../../cicd-delivery/source-control/module-11.3-github-advanced/) - GHAS integration
 - **Related**: [Module 4.4: Supply Chain Security](../security-tools/module-4.4-supply-chain/) - SBOM and signing
 

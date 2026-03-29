@@ -1,6 +1,6 @@
 ---
 title: "Module 1.3: Backstage Catalog & Infrastructure"
-slug: k8s/cba/module-1.3-backstage-catalog-infrastructure/
+slug: k8s/cba/module-1.3-backstage-catalog-infrastructure
 sidebar:
   order: 4
 ---

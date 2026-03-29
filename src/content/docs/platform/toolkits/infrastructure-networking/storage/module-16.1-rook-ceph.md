@@ -852,7 +852,7 @@ Choose **RBD** when you need **ReadWriteOnce (RWO)**—a dedicated volume for a 
 
 ## Next Steps
 
-- **Next Module**: [Module 16.2: MinIO](module-16.2-minio/) — S3-compatible object storage on Kubernetes
+- **Next Module**: [Module 16.2: MinIO](../module-16.2-minio/) — S3-compatible object storage on Kubernetes
 - **Related**: [Cloud-Native Databases](../../data-ai-platforms/cloud-native-databases/) — Databases that run on Ceph storage
 - **Related**: [Observability Toolkit](../../observability-intelligence/observability/) — Monitoring storage with Prometheus
 

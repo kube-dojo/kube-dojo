@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 25-30 minutes
 >
-> **Prerequisites**: [Module 4.3: Container Escape](module-4.3-container-escape/)
+> **Prerequisites**: [Module 4.3: Container Escape](../module-4.3-container-escape/)
 
 ---
 

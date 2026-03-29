@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 25-30 minutes
 >
-> **Prerequisites**: [Module 4.2: Common Vulnerabilities](module-4.2-vulnerabilities/)
+> **Prerequisites**: [Module 4.2: Common Vulnerabilities](../module-4.2-vulnerabilities/)
 
 ---
 
@@ -482,4 +482,4 @@ Defense strategy:
 
 ## Next Module
 
-[Module 4.4: Supply Chain Threats](module-4.4-supply-chain/) - Understanding and mitigating software supply chain risks.
+[Module 4.4: Supply Chain Threats](../module-4.4-supply-chain/) - Understanding and mitigating software supply chain risks.

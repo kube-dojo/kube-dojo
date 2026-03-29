@@ -547,4 +547,4 @@ rm /tmp/apiserver.yaml
 
 ## Next Module
 
-[Module 2.4: Kubernetes Upgrades](module-2.4-kubernetes-upgrades/) - Security considerations for cluster upgrades.
+[Module 2.4: Kubernetes Upgrades](../module-2.4-kubernetes-upgrades/) - Security considerations for cluster upgrades.

@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 1.1: FinOps Fundamentals](module-1.1-finops-fundamentals/) — FinOps lifecycle, pricing models, tagging
+- **Required**: [Module 1.1: FinOps Fundamentals](../module-1.1-finops-fundamentals/) — FinOps lifecycle, pricing models, tagging
 - **Required**: Kubernetes basics — Pods, Deployments, Namespaces, Services
 - **Required**: Understanding of resource requests and limits
 - **Recommended**: Access to a local Kubernetes cluster (kind or minikube)
@@ -958,7 +958,7 @@ Kubernetes cost allocation is the critical bridge between cloud bills and team a
 
 ## Next Module
 
-Continue to [Module 1.3: Workload Rightsizing & Optimization](module-1.3-rightsizing/) to learn how to identify and fix over-provisioned workloads.
+Continue to [Module 1.3: Workload Rightsizing & Optimization](../module-1.3-rightsizing/) to learn how to identify and fix over-provisioned workloads.
 
 ---
 

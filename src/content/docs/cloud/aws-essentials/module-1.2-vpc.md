@@ -942,4 +942,4 @@ echo "All resources cleaned up."
 
 ## Next Module
 
-With the network foundation laid, it is time to deploy servers into those subnets. Head to [Module 1.3: EC2 & Compute](module-1.3-ec2/).
+With the network foundation laid, it is time to deploy servers into those subnets. Head to [Module 1.3: EC2 & Compute](../module-1.3-ec2/).

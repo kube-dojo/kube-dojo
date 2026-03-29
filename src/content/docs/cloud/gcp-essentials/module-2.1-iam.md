@@ -772,4 +772,4 @@ echo "Cleanup complete. Projects scheduled for deletion (30-day recovery window)
 
 ## Next Module
 
-Next up: **[Module 2.2: VPC Networking](module-2.2-vpc/)** --- Learn how GCP's global VPC model differs from other clouds, configure firewall rules using service account targets, and build a Shared VPC connecting multiple projects through a single network.
+Next up: **[Module 2.2: VPC Networking](../module-2.2-vpc/)** --- Learn how GCP's global VPC model differs from other clouds, configure firewall rules using service account targets, and build a Shared VPC connecting multiple projects through a single network.

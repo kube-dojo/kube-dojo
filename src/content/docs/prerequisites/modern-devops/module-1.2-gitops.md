@@ -1,6 +1,6 @@
 ---
 title: "Module 1.2: GitOps"
-slug: prerequisites/modern-devops/module-1.2-gitops/
+slug: prerequisites/modern-devops/module-1.2-gitops
 sidebar:
   order: 3
 ---
@@ -539,4 +539,4 @@ rm -rf ~/gitops-demo
 
 ## Next Module
 
-[Module 3: CI/CD Pipelines](module-1.3-cicd-pipelines/) - Automating build, test, and deployment.
+[Module 3: CI/CD Pipelines](../module-1.3-cicd-pipelines/) - Automating build, test, and deployment.

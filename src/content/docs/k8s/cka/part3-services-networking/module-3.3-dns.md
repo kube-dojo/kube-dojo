@@ -855,4 +855,4 @@ k delete namespace test
 
 ## Next Module
 
-[Module 3.4: Ingress](module-3.4-ingress/) - HTTP routing and external access to services.
+[Module 3.4: Ingress](../module-3.4-ingress/) - HTTP routing and external access to services.

@@ -1132,4 +1132,4 @@ gcloud compute target-http-proxies list --filter="description~net-demo"
 
 ## Next Module
 
-Next up: **[Module 6.3: GKE Workload Identity and Security](module-6.3-gke-identity/)** --- Learn how to securely connect pods to GCP services without storing credentials, enforce binary authorization for trusted images, and leverage GKE's security posture dashboard.
+Next up: **[Module 6.3: GKE Workload Identity and Security](../module-6.3-gke-identity/)** --- Learn how to securely connect pods to GCP services without storing credentials, enforce binary authorization for trusted images, and leverage GKE's security posture dashboard.

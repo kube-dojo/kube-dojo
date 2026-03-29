@@ -757,4 +757,4 @@ Event correlation platforms—BigPanda, Moogsoft, PagerDuty AIOps, ServiceNow IT
 
 ## Next Module
 
-Continue to [Module 10.3: Observability AI Features](module-10.3-observability-ai-features/) to learn about AI built into observability platforms.
+Continue to [Module 10.3: Observability AI Features](../module-10.3-observability-ai-features/) to learn about AI built into observability platforms.

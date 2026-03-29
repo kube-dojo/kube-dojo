@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 25-30 minutes
 >
-> **Prerequisites**: [Module 3.4: ServiceAccount Security](module-3.4-serviceaccounts/)
+> **Prerequisites**: [Module 3.4: ServiceAccount Security](../module-3.4-serviceaccounts/)
 
 ---
 

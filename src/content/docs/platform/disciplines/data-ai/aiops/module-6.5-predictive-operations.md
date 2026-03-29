@@ -9,8 +9,8 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- [Module 6.2: Anomaly Detection](module-6.2-anomaly-detection/) — Time series analysis
-- [Module 6.4: Root Cause Analysis](module-6.4-root-cause-analysis/) — Understanding causality
+- [Module 6.2: Anomaly Detection](../module-6.2-anomaly-detection/) — Time series analysis
+- [Module 6.4: Root Cause Analysis](../module-6.4-root-cause-analysis/) — Understanding causality
 - Basic statistics (regression, forecasting concepts)
 - Familiarity with capacity planning
 
@@ -1150,4 +1150,4 @@ The key is matching the model to the pattern (linear vs. seasonal), acting on pr
 
 ## Next Module
 
-Continue to [Module 6.6: Auto-Remediation](module-6.6-auto-remediation/) to learn how to safely automate fixes with proper guardrails.
+Continue to [Module 6.6: Auto-Remediation](../module-6.6-auto-remediation/) to learn how to safely automate fixes with proper guardrails.

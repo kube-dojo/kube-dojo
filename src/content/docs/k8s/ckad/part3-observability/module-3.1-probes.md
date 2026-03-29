@@ -664,4 +664,4 @@ k delete pod drill6
 
 ## Next Module
 
-[Module 3.2: Container Logging](module-3.2-logging/) - Access, manage, and troubleshoot container logs.
+[Module 3.2: Container Logging](../module-3.2-logging/) - Access, manage, and troubleshoot container logs.

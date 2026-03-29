@@ -569,4 +569,4 @@ k delete pod drill6
 
 ## Next Module
 
-[Module 4.5: ServiceAccounts](module-4.5-serviceaccounts/) - Configure pod identities for API access.
+[Module 4.5: ServiceAccounts](../module-4.5-serviceaccounts/) - Configure pod identities for API access.

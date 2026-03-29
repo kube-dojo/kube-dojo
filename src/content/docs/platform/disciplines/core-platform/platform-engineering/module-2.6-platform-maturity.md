@@ -10,11 +10,11 @@ sidebar:
 
 Before starting this module, you should:
 
-- Complete [Module 2.1: What is Platform Engineering?](module-2.1-what-is-platform-engineering/) - Platform foundations
-- Complete [Module 2.2: Developer Experience](module-2.2-developer-experience/) - DevEx measurement
-- Complete [Module 2.3: Internal Developer Platforms](module-2.3-internal-developer-platforms/) - IDP components
-- Complete [Module 2.4: Golden Paths](module-2.4-golden-paths/) - Template design
-- Complete [Module 2.5: Self-Service Infrastructure](module-2.5-self-service-infrastructure/) - Self-service patterns
+- Complete [Module 2.1: What is Platform Engineering?](../module-2.1-what-is-platform-engineering/) - Platform foundations
+- Complete [Module 2.2: Developer Experience](../module-2.2-developer-experience/) - DevEx measurement
+- Complete [Module 2.3: Internal Developer Platforms](../module-2.3-internal-developer-platforms/) - IDP components
+- Complete [Module 2.4: Golden Paths](../module-2.4-golden-paths/) - Template design
+- Complete [Module 2.5: Self-Service Infrastructure](../module-2.5-self-service-infrastructure/) - Self-service patterns
 - Have read or worked with a platform team
 
 ## Why This Module Matters

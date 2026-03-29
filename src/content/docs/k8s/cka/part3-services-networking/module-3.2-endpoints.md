@@ -992,4 +992,4 @@ k delete endpoints manual-svc
 
 ## Next Module
 
-[Module 3.3: DNS & CoreDNS](module-3.3-dns/) - Deep-dive into Kubernetes DNS and service discovery.
+[Module 3.3: DNS & CoreDNS](../module-3.3-dns/) - Deep-dive into Kubernetes DNS and service discovery.

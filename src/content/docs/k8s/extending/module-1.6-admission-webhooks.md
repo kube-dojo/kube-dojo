@@ -1031,4 +1031,4 @@ kind delete cluster --name webhook-lab
 
 ## Next Module
 
-[Module 1.7: Customizing the Scheduler](module-1.7-scheduler-plugins/) - Extend the Kubernetes scheduler with custom scoring and filtering plugins.
+[Module 1.7: Customizing the Scheduler](../module-1.7-scheduler-plugins/) - Extend the Kubernetes scheduler with custom scoring and filtering plugins.

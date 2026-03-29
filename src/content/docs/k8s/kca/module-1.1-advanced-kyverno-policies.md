@@ -1,6 +1,6 @@
 ---
 title: "Module 1.1: Advanced Kyverno Policies"
-slug: k8s/kca/module-1.1-advanced-kyverno-policies/
+slug: k8s/kca/module-1.1-advanced-kyverno-policies
 sidebar:
   order: 2
 ---

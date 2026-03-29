@@ -763,4 +763,4 @@ echo "  gcloud container clusters list --region=$REGION"
 
 ## Next Module
 
-Next up: **[Module 6.2: GKE Networking (Dataplane V2 and Gateway API)](module-6.2-gke-networking/)** --- Dive into VPC-native networking, eBPF-powered Dataplane V2, Cloud Load Balancing integration, and the new Gateway API that is replacing Ingress.
+Next up: **[Module 6.2: GKE Networking (Dataplane V2 and Gateway API)](../module-6.2-gke-networking/)** --- Dive into VPC-native networking, eBPF-powered Dataplane V2, Cloud Load Balancing integration, and the new Gateway API that is replacing Ingress.

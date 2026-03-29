@@ -1,6 +1,6 @@
 ---
 title: "Module 1.4: Istio Observability"
-slug: k8s/ica/module-1.4-istio-observability/
+slug: k8s/ica/module-1.4-istio-observability
 sidebar:
   order: 5
 ---
@@ -12,9 +12,9 @@ sidebar:
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [Module 1: Installation & Architecture](module-1.1-istio-installation-architecture/) — istiod, Envoy, sidecar injection
-- [Module 2: Traffic Management](module-1.2-istio-traffic-management/) — VirtualService, DestinationRule, Gateway
-- [Module 3: Security & Troubleshooting](module-1.3-istio-security-troubleshooting/) — mTLS, AuthorizationPolicy, debugging
+- [Module 1: Installation & Architecture](../module-1.1-istio-installation-architecture/) — istiod, Envoy, sidecar injection
+- [Module 2: Traffic Management](../module-1.2-istio-traffic-management/) — VirtualService, DestinationRule, Gateway
+- [Module 3: Security & Troubleshooting](../module-1.3-istio-security-troubleshooting/) — mTLS, AuthorizationPolicy, debugging
 - Basic understanding of Prometheus metrics and distributed tracing concepts
 
 ---

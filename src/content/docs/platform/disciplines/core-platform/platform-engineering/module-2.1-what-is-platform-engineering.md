@@ -776,7 +776,7 @@ The goal isn't to build a platform. It's to make developers more productive and 
 
 ## Next Module
 
-Continue to [Module 2.2: Developer Experience (DevEx)](module-2.2-developer-experience/) to learn how to measure and improve developer experience—the core metric for platform success.
+Continue to [Module 2.2: Developer Experience (DevEx)](../module-2.2-developer-experience/) to learn how to measure and improve developer experience—the core metric for platform success.
 
 ---
 

@@ -629,4 +629,4 @@ Key principles:
 
 ## Next Module
 
-[Module 5.2: Security Observability](module-5.2-observability/) - Monitoring and detecting security threats in Kubernetes.
+[Module 5.2: Security Observability](../module-5.2-observability/) - Monitoring and detecting security threats in Kubernetes.

@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 4.2: Shift-Left Security](module-4.2-shift-left-security/) — Pre-commit checks
+- **Required**: [Module 4.2: Shift-Left Security](../module-4.2-shift-left-security/) — Pre-commit checks
 - **Required**: CI/CD experience (GitHub Actions, GitLab CI, Jenkins, etc.)
 - **Recommended**: Container basics (Docker, image registries)
 - **Helpful**: YAML configuration experience
@@ -615,7 +615,7 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@release/v1
 ```
 
-For the full attack chain, payload analysis, and postmortem, see [Module 4.4: Supply Chain Security](module-4.4-supply-chain-security/#war-story-when-the-security-scanner-became-the-weapon-march-2026).
+For the full attack chain, payload analysis, and postmortem, see [Module 4.4: Supply Chain Security](../module-4.4-supply-chain-security/#war-story-when-the-security-scanner-became-the-weapon-march-2026).
 
 ---
 
@@ -1247,7 +1247,7 @@ A well-designed security pipeline catches vulnerabilities automatically, before 
 
 ## Next Module
 
-Continue to [Module 4.4: Supply Chain Security](module-4.4-supply-chain-security/) to learn about securing the entire software supply chain from source to deployment.
+Continue to [Module 4.4: Supply Chain Security](../module-4.4-supply-chain-security/) to learn about securing the entire software supply chain from source to deployment.
 
 ---
 

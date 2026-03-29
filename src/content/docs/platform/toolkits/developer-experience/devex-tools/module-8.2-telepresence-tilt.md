@@ -19,7 +19,7 @@ sidebar:
 **Prerequisites**:
 - Local Kubernetes basics (Docker Desktop, minikube)
 - Container build process understanding
-- [Module 8.1: k9s & CLI Tools](module-8.1-k9s-cli/)
+- [Module 8.1: k9s & CLI Tools](../module-8.1-k9s-cli/)
 
 ---
 
@@ -662,7 +662,7 @@ Add a second service (database) and configure resource dependencies so the app w
 
 ## Next Module
 
-Continue to [Module 8.3: Local Kubernetes](module-8.3-local-kubernetes/) to learn about kind, minikube, and local Kubernetes development environments.
+Continue to [Module 8.3: Local Kubernetes](../module-8.3-local-kubernetes/) to learn about kind, minikube, and local Kubernetes development environments.
 
 ---
 

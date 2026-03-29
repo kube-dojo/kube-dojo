@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 25-30 minutes
 >
-> **Prerequisites**: [Module 1.2: Cloud Provider Security](module-1.2-cloud-provider-security/)
+> **Prerequisites**: [Module 1.2: Cloud Provider Security](../module-1.2-cloud-provider-security/)
 
 ---
 

@@ -602,4 +602,4 @@ k delete pod drill6 cm drill6-nginx
 
 ## Next Module
 
-[Module 4.2: Secrets](module-4.2-secrets/) - Manage sensitive data securely.
+[Module 4.2: Secrets](../module-4.2-secrets/) - Manage sensitive data securely.

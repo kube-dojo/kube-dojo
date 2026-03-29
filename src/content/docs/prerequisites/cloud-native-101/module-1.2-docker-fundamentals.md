@@ -1,6 +1,6 @@
 ---
 title: "Module 1.2: Docker Fundamentals"
-slug: prerequisites/cloud-native-101/module-1.2-docker-fundamentals/
+slug: prerequisites/cloud-native-101/module-1.2-docker-fundamentals
 sidebar:
   order: 3
 ---
@@ -550,4 +550,4 @@ Essential Docker for Kubernetes:
 
 ## Next Module
 
-[Module 3: What Is Kubernetes?](module-1.3-what-is-kubernetes/) - High-level overview of container orchestration.
+[Module 3: What Is Kubernetes?](../module-1.3-what-is-kubernetes/) - High-level overview of container orchestration.

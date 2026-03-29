@@ -940,7 +940,7 @@ Write the same message as a 3-sentence Slack message to the CEO, who only has 30
 
 ## Next Module
 
-[Module 1.6: Mentorship & Multiplying Impact](module-1.6-mentorship/) --- Transitioning from individual contributor to force multiplier. Effective code review, creating safe failure opportunities, and building inclusive engineering cultures.
+[Module 1.6: Mentorship & Multiplying Impact](../module-1.6-mentorship/) --- Transitioning from individual contributor to force multiplier. Effective code review, creating safe failure opportunities, and building inclusive engineering cultures.
 
 ---
 

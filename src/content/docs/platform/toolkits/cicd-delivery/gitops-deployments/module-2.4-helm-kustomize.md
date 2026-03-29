@@ -11,7 +11,7 @@ The DevOps lead scrolled through the pull request with growing horror. Someone h
 ## Prerequisites
 
 Before starting this module:
-- [Module 2.1: ArgoCD](module-2.1-argocd/) or [Module 2.3: Flux](module-2.3-flux/)
+- [Module 2.1: ArgoCD](../module-2.1-argocd/) or [Module 2.3: Flux](../module-2.3-flux/)
 - Basic Kubernetes YAML knowledge
 - Understanding of templating concepts
 

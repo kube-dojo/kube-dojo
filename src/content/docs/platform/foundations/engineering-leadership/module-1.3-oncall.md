@@ -1069,7 +1069,7 @@ You've completed this exercise successfully if:
 
 ## Next Module
 
-Continue your engineering leadership journey with **[Module 1.4: Architecture Decision Records](module-1.4-adrs/)** — learn how to document technical decisions so your team stops re-debating the same choices every quarter.
+Continue your engineering leadership journey with **[Module 1.4: Architecture Decision Records](../module-1.4-adrs/)** — learn how to document technical decisions so your team stops re-debating the same choices every quarter.
 
 ---
 

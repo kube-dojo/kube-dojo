@@ -781,4 +781,4 @@ Practice these scenarios for exam readiness:
 
 ## Next Module
 
-Continue to [Module 4.2: PersistentVolumes & PersistentVolumeClaims](module-4.2-pv-pvc/) to learn about persistent storage that survives pod deletion.
+Continue to [Module 4.2: PersistentVolumes & PersistentVolumeClaims](../module-4.2-pv-pvc/) to learn about persistent storage that survives pod deletion.

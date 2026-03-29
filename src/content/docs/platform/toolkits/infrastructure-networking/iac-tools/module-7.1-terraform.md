@@ -1481,4 +1481,4 @@ terraform plan
 
 ## Next Module
 
-Continue to [Module 7.2: OpenTofu](module-7.2-opentofu/) to learn about the open-source fork of Terraform and its unique features.
+Continue to [Module 7.2: OpenTofu](../module-7.2-opentofu/) to learn about the open-source fork of Terraform and its unique features.

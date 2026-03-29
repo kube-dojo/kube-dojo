@@ -1,6 +1,6 @@
 ---
 title: "Module 1.5: Platform Engineering Concepts"
-slug: prerequisites/modern-devops/module-1.5-platform-engineering/
+slug: prerequisites/modern-devops/module-1.5-platform-engineering
 sidebar:
   order: 6
 ---
@@ -564,4 +564,4 @@ rm complex-deployment.yaml
 
 ## Next Module
 
-[Module 6: Security Practices (DevSecOps)](module-1.6-devsecops/) - Integrating security into DevOps.
+[Module 6: Security Practices (DevSecOps)](../module-1.6-devsecops/) - Integrating security into DevOps.

@@ -7,7 +7,7 @@ sidebar:
 
 > **Complexity**: `[INTERMEDIATE]` | Time: 45 minutes
 >
-> **Prerequisites**: [Module 4.1: Storage Architecture](module-4.1-storage-architecture/), [Module 4.2: Ceph & Rook](module-4.2-ceph-rook/)
+> **Prerequisites**: [Module 4.1: Storage Architecture](../module-4.1-storage-architecture/), [Module 4.2: Ceph & Rook](../module-4.2-ceph-rook/)
 
 ---
 

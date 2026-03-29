@@ -876,7 +876,7 @@ Register a model to the Model Registry and load it by alias.
 
 ## Next Module
 
-Continue to [Module 9.3: Feature Stores](module-9.3-feature-stores/) to learn about managing ML features at scale.
+Continue to [Module 9.3: Feature Stores](../module-9.3-feature-stores/) to learn about managing ML features at scale.
 
 ---
 

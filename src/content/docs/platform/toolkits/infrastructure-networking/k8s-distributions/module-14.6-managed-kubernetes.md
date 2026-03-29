@@ -12,8 +12,8 @@ sidebar:
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [Module 14.4: Talos](module-14.4-talos/) - Self-managed Kubernetes concepts
-- [Module 14.5: OpenShift](module-14.5-openshift/) - Enterprise distributions
+- [Module 14.4: Talos](../module-14.4-talos/) - Self-managed Kubernetes concepts
+- [Module 14.5: OpenShift](../module-14.5-openshift/) - Enterprise distributions
 - Kubernetes fundamentals (control plane, nodes, networking)
 - Cloud provider basics (one of AWS, GCP, or Azure)
 - [Platform Engineering Discipline](../../../disciplines/core-platform/platform-engineering/) - Platform decisions

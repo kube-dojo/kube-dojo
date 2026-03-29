@@ -818,4 +818,4 @@ curl -H "Host: <hostname>" http://<ingress-ip>
 
 ## Next Module
 
-Continue to [Module 5.7: Logging & Monitoring](module-5.7-logging-monitoring/) to learn how to use logs and metrics for troubleshooting.
+Continue to [Module 5.7: Logging & Monitoring](../module-5.7-logging-monitoring/) to learn how to use logs and metrics for troubleshooting.

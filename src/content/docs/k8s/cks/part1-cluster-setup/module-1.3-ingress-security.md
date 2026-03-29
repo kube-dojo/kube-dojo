@@ -603,4 +603,4 @@ kubectl delete namespace secure-app
 
 ## Next Module
 
-[Module 1.4: Node Metadata Protection](module-1.4-node-metadata/) - Protecting cloud provider metadata services.
+[Module 1.4: Node Metadata Protection](../module-1.4-node-metadata/) - Protecting cloud provider metadata services.

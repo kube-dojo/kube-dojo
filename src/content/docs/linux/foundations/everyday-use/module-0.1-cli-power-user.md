@@ -889,4 +889,4 @@ You have completed this exercise when:
 
 ---
 
-**Next Up:** [Module 0.2: Environment & Permissions](module-0.2-environment-permissions/) -- Learn how Linux knows who you are, how to customize your shell, and how the permission system keeps everything secure.
+**Next Up:** [Module 0.2: Environment & Permissions](../module-0.2-environment-permissions/) -- Learn how Linux knows who you are, how to customize your shell, and how the permission system keeps everything secure.

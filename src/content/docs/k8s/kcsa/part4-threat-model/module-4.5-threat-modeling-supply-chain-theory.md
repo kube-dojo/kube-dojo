@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 25-30 minutes
 >
-> **Prerequisites**: [Module 4.1: Attack Surfaces](module-4.1-attack-surfaces/), [Module 4.4: Supply Chain Threats](module-4.4-supply-chain/)
+> **Prerequisites**: [Module 4.1: Attack Surfaces](../module-4.1-attack-surfaces/), [Module 4.4: Supply Chain Threats](../module-4.4-supply-chain/)
 
 ---
 

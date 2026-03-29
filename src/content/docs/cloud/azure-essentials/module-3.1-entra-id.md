@@ -720,4 +720,4 @@ az role definition delete --name "Storage Blob Lister"
 
 ## Next Module
 
-[Module 3.2: Virtual Networks (VNet)](module-3.2-vnet/) --- Learn how Azure networking works, from VNets and subnets to NSGs, peering, and the hub-and-spoke architecture that every enterprise uses.
+[Module 3.2: Virtual Networks (VNet)](../module-3.2-vnet/) --- Learn how Azure networking works, from VNets and subnets to NSGs, peering, and the hub-and-spoke architecture that every enterprise uses.

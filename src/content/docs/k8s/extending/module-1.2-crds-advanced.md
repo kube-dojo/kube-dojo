@@ -1306,4 +1306,4 @@ k delete crd backuppolicies.data.kubedojo.io
 
 ## Next Module
 
-[Module 1.3: Building Controllers with client-go](module-1.3-controllers-client-go/) - Write a complete Kubernetes controller from scratch using the patterns you learned in Modules 1.1 and 1.2.
+[Module 1.3: Building Controllers with client-go](../module-1.3-controllers-client-go/) - Write a complete Kubernetes controller from scratch using the patterns you learned in Modules 1.1 and 1.2.

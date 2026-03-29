@@ -14,7 +14,7 @@ lab:
 >
 > **Time to Complete**: 25-30 minutes
 >
-> **Prerequisites**: [Module 0.2: What is a Terminal?](module-0.2-what-is-a-terminal/) — You should be able to open a terminal and type commands.
+> **Prerequisites**: [Module 0.2: What is a Terminal?](../module-0.2-what-is-a-terminal/) — You should be able to open a terminal and type commands.
 
 ---
 
@@ -579,4 +579,4 @@ You've completed this exercise when you can:
 
 You can now navigate the filesystem, create files and directories, read files, and understand permissions. The kitchen is starting to feel familiar.
 
-**Next Module**: [Module 0.6: What is Networking?](module-0.6-what-is-networking/) — Learn how computers talk to each other across the internet, and run your first network commands.
+**Next Module**: [Module 0.6: What is Networking?](../module-0.6-what-is-networking/) — Learn how computers talk to each other across the internet, and run your first network commands.

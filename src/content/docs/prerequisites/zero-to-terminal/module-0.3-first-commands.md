@@ -14,7 +14,7 @@ lab:
 >
 > **Time to Complete**: 25 minutes
 >
-> **Prerequisites**: [Module 0.1 - What is a Computer?](module-0.1-what-is-a-computer/)
+> **Prerequisites**: [Module 0.1 - What is a Computer?](../module-0.1-what-is-a-computer/)
 
 ---
 
@@ -562,7 +562,7 @@ No output means it's gone.
 
 ## What's Next?
 
-In [Module 0.5: Editing Files](module-0.5-editing-files/), you'll learn how to actually put content inside files using a text editor that runs right in your terminal. Creating empty files is useful, but filling them with content is where the real work happens.
+In [Module 0.5: Editing Files](../module-0.5-editing-files/), you'll learn how to actually put content inside files using a text editor that runs right in your terminal. Creating empty files is useful, but filling them with content is where the real work happens.
 
 ---
 

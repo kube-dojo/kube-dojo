@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 25-30 minutes
 >
-> **Prerequisites**: [Module 5.3: Runtime Security](module-5.3-runtime-security/)
+> **Prerequisites**: [Module 5.3: Runtime Security](../module-5.3-runtime-security/)
 
 ---
 

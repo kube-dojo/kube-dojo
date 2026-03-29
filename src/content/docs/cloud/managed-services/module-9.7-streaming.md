@@ -905,4 +905,4 @@ kind delete cluster --name kafka-lab
 
 ---
 
-**Next Module**: [Module 9.8: Secrets Management Deep Dive](module-9.8-secrets-deep/) -- Learn how External Secrets Operator, Secrets Store CSI, and HashiCorp Vault integrate with Kubernetes to manage dynamic secrets, TTLs, and credential rotation at scale.
+**Next Module**: [Module 9.8: Secrets Management Deep Dive](../module-9.8-secrets-deep/) -- Learn how External Secrets Operator, Secrets Store CSI, and HashiCorp Vault integrate with Kubernetes to manage dynamic secrets, TTLs, and credential rotation at scale.

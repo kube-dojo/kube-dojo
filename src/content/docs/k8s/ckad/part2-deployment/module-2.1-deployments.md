@@ -641,4 +641,4 @@ k delete svc production
 
 ## Next Module
 
-[Module 2.2: Helm Package Manager](module-2.2-helm/) - Deploy and manage applications with Helm charts.
+[Module 2.2: Helm Package Manager](../module-2.2-helm/) - Deploy and manage applications with Helm charts.

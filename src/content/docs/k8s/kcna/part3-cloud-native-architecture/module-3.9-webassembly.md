@@ -355,4 +355,4 @@ D) Wasm is just a container image format
 
 ## Next Module
 
-[Module 3.10: Green Computing and Sustainability](module-3.10-green-computing/) - How cloud native practices intersect with environmental sustainability and carbon-aware computing.
+[Module 3.10: Green Computing and Sustainability](../module-3.10-green-computing/) - How cloud native practices intersect with environmental sustainability and carbon-aware computing.

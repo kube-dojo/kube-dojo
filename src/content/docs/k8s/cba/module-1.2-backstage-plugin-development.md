@@ -1,6 +1,6 @@
 ---
 title: "Module 1.2: Backstage Plugin Development \u2014 Customizing Backstage"
-slug: k8s/cba/module-1.2-backstage-plugin-development/
+slug: k8s/cba/module-1.2-backstage-plugin-development
 sidebar:
   order: 3
 ---
@@ -1346,6 +1346,6 @@ This module covered the core of CBA Domain 4 — the largest domain on the exam 
 
 ## Next Steps
 
-- **Module 3**: [Backstage Catalog Deep Dive](module-1.3-backstage-catalog-infrastructure/) — Entity processors, providers, annotations, and troubleshooting (Domain 3, 22%)
-- **Module 1**: [Backstage Development Workflow](module-1.1-backstage-dev-workflow/) — Monorepo structure, Docker builds, CLI commands (Domain 1, 24%)
+- **Module 3**: [Backstage Catalog Deep Dive](../module-1.3-backstage-catalog-infrastructure/) — Entity processors, providers, annotations, and troubleshooting (Domain 3, 22%)
+- **Module 1**: [Backstage Development Workflow](../module-1.1-backstage-dev-workflow/) — Monorepo structure, Docker builds, CLI commands (Domain 1, 24%)
 - Review the [Backstage Official Plugin Development Guide](https://backstage.io/docs/plugins/) for additional depth

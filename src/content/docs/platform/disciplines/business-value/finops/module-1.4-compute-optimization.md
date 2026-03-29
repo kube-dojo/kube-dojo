@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 1.3: Workload Rightsizing](module-1.3-rightsizing/) — VPA, rightsizing workflows
+- **Required**: [Module 1.3: Workload Rightsizing](../module-1.3-rightsizing/) — VPA, rightsizing workflows
 - **Required**: Understanding of Kubernetes node pools and autoscaling
 - **Required**: Familiarity with Karpenter or Cluster Autoscaler concepts
 - **Recommended**: AWS experience (Karpenter examples use AWS terminology)
@@ -1038,7 +1038,7 @@ Cluster-level compute optimization is the next frontier after workload rightsizi
 
 ## Next Module
 
-Continue to [Module 1.5: Storage & Network Cost Management](module-1.5-storage-network-costs/) to learn how to tame the often-overlooked costs of persistent volumes, data transfer, and cross-AZ traffic.
+Continue to [Module 1.5: Storage & Network Cost Management](../module-1.5-storage-network-costs/) to learn how to tame the often-overlooked costs of persistent volumes, data transfer, and cross-AZ traffic.
 
 ---
 

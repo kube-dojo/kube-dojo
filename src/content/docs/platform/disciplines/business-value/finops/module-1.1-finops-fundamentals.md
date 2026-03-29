@@ -720,7 +720,7 @@ The key insight is that FinOps is not about spending *less*. It's about spending
 
 ## Next Module
 
-Continue to [Module 1.2: Kubernetes Cost Allocation & Visibility](module-1.2-k8s-cost-allocation/) to learn how to attribute cloud costs in multi-tenant Kubernetes clusters.
+Continue to [Module 1.2: Kubernetes Cost Allocation & Visibility](../module-1.2-k8s-cost-allocation/) to learn how to attribute cloud costs in multi-tenant Kubernetes clusters.
 
 ---
 

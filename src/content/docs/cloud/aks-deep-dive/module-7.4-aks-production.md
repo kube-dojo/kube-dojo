@@ -4,7 +4,7 @@ slug: cloud/aks-deep-dive/module-7.4-aks-production
 sidebar:
   order: 5
 ---
-**Complexity**: [MEDIUM] | **Time to Complete**: 2.5h | **Prerequisites**: [Module 7.1: AKS Architecture & Node Management](module-7.1-aks-architecture/)
+**Complexity**: [MEDIUM] | **Time to Complete**: 2.5h | **Prerequisites**: [Module 7.1: AKS Architecture & Node Management](../module-7.1-aks-architecture/)
 
 ## Why This Module Matters
 

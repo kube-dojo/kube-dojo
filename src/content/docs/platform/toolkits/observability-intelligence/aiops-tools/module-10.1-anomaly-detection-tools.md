@@ -917,4 +917,4 @@ Anomaly detection tools each have strengths: Prophet for seasonal time series, L
 
 ## Next Module
 
-Continue to [Module 10.2: Event Correlation Platforms](module-10.2-event-correlation-platforms/) to learn about enterprise platforms like BigPanda and Moogsoft.
+Continue to [Module 10.2: Event Correlation Platforms](../module-10.2-event-correlation-platforms/) to learn about enterprise platforms like BigPanda and Moogsoft.

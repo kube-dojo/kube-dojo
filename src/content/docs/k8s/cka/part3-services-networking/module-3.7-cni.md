@@ -854,4 +854,4 @@ Congratulations on completing Part 3! You now understand:
 - Network Policies for security
 - CNI and cluster networking
 
-Take the [Part 3 Cumulative Quiz](part3-cumulative-quiz/) to test your knowledge.
+Take the [Part 3 Cumulative Quiz](../part3-cumulative-quiz/) to test your knowledge.

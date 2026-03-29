@@ -1030,7 +1030,7 @@ multipass purge
 
 ## Next Module
 
-Continue to [Module 14.3: MicroK8s](module-14.3-microk8s/) — Canonical's snap-based Kubernetes with rich add-ons.
+Continue to [Module 14.3: MicroK8s](../module-14.3-microk8s/) — Canonical's snap-based Kubernetes with rich add-ons.
 
 ---
 

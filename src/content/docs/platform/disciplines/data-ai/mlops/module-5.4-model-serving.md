@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- [Module 5.3: Model Training & Experimentation](module-5.3-model-training/)
+- [Module 5.3: Model Training & Experimentation](../module-5.3-model-training/)
 - Understanding of REST APIs
 - Basic Kubernetes concepts (Deployments, Services)
 - Familiarity with containerization (Docker)
@@ -685,4 +685,4 @@ Model serving bridges the gap between training and production. The right serving
 
 ## Next Module
 
-Continue to [Module 5.5: Model Monitoring & Observability](module-5.5-model-monitoring/) to learn how to detect model degradation before it impacts users.
+Continue to [Module 5.5: Model Monitoring & Observability](../module-5.5-model-monitoring/) to learn how to detect model degradation before it impacts users.

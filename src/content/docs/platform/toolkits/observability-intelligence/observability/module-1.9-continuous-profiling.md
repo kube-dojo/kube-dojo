@@ -88,7 +88,7 @@ CPU profiles are the starting point for most investigations. Memory allocation p
 
 ### Architecture
 
-Parca uses eBPF to sample stack traces from every process on a node -- no code changes, no language agents, no restarts. It is to profiling what Pixie (see [Module 1.6](module-1.6-pixie/)) is to tracing.
+Parca uses eBPF to sample stack traces from every process on a node -- no code changes, no language agents, no restarts. It is to profiling what Pixie (see [Module 1.6](../module-1.6-pixie/)) is to tracing.
 
 ```
 ┌────────────────────────────────────────────────────────────┐
@@ -570,6 +570,6 @@ Traces tell you that Service A spent 200ms in the `/checkout` handler. Profiling
 ## Next Module
 
 Continue to Module 2.1 or explore related modules:
-- [Module 1.6: Pixie](module-1.6-pixie/) - eBPF-based observability (same kernel technology, different focus)
-- [Module 1.2: OpenTelemetry](module-1.2-opentelemetry/) - Traces and metrics that profiling complements
-- [Module 1.3: Grafana](module-1.3-grafana/) - Where Pyroscope profiles are visualized
+- [Module 1.6: Pixie](../module-1.6-pixie/) - eBPF-based observability (same kernel technology, different focus)
+- [Module 1.2: OpenTelemetry](../module-1.2-opentelemetry/) - Traces and metrics that profiling complements
+- [Module 1.3: Grafana](../module-1.3-grafana/) - Where Pyroscope profiles are visualized

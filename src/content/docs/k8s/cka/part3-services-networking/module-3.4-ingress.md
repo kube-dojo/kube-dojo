@@ -1152,4 +1152,4 @@ rm tls.key tls.crt
 
 ## Next Module
 
-[Module 3.5: Gateway API](module-3.5-gateway-api/) - The next generation of Kubernetes ingress.
+[Module 3.5: Gateway API](../module-3.5-gateway-api/) - The next generation of Kubernetes ingress.

@@ -618,4 +618,4 @@ Success requires good data foundations, realistic expectations, and incremental 
 
 ## Next Module
 
-Continue to [Module 6.2: Anomaly Detection](module-6.2-anomaly-detection/) to learn statistical and ML approaches for finding problems without predefined thresholds.
+Continue to [Module 6.2: Anomaly Detection](../module-6.2-anomaly-detection/) to learn statistical and ML approaches for finding problems without predefined thresholds.

@@ -408,4 +408,4 @@ For resources, track:
 
 ## Next Module
 
-[Module 3.5: Observability Tools](module-3.5-observability-tools/) - Prometheus, Grafana, Jaeger, and other observability tools in Kubernetes.
+[Module 3.5: Observability Tools](../module-3.5-observability-tools/) - Prometheus, Grafana, Jaeger, and other observability tools in Kubernetes.

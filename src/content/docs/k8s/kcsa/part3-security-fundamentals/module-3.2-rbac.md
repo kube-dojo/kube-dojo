@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 30-35 minutes
 >
-> **Prerequisites**: [Module 3.1: Pod Security](module-3.1-pod-security/)
+> **Prerequisites**: [Module 3.1: Pod Security](../module-3.1-pod-security/)
 
 ---
 
@@ -592,4 +592,4 @@ Best practices:
 
 ## Next Module
 
-[Module 3.3: Secrets Management](module-3.3-secrets/) - How to securely handle sensitive data in Kubernetes.
+[Module 3.3: Secrets Management](../module-3.3-secrets/) - How to securely handle sensitive data in Kubernetes.

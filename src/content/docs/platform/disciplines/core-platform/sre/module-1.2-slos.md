@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 1.1: What is SRE?](module-1.1-what-is-sre/) — Understanding SRE fundamentals
+- **Required**: [Module 1.1: What is SRE?](../module-1.1-what-is-sre/) — Understanding SRE fundamentals
 - **Required**: [Reliability Engineering Track](../../../foundations/reliability-engineering/) — Reliability concepts
 - **Recommended**: [Observability Theory Track](../../../foundations/observability-theory/) — Metrics and measurement
 
@@ -422,7 +422,7 @@ While SLOs measure **service reliability**, DORA metrics measure **delivery perf
 SLOs and DORA metrics are complementary lenses on the same system:
 
 - **Deployment Frequency** is enabled by **error budgets** — teams with budget remaining can deploy confidently
-- **Lead Time** improves when platforms reduce toil and friction (see [Module 1.4: Toil](module-1.4-toil-automation/))
+- **Lead Time** improves when platforms reduce toil and friction (see [Module 1.4: Toil](../module-1.4-toil-automation/))
 - **Change Failure Rate** directly consumes your **error budget** — every failed deployment burns SLO margin
 - **MTTR** maps to how fast you detect (via SLO-based alerting) and recover from incidents
 
@@ -790,7 +790,7 @@ Without SLOs, reliability is a feeling. With SLOs, it's a fact.
 
 ## Next Module
 
-Continue to [Module 1.3: Error Budgets](module-1.3-error-budgets/) to learn how to use SLOs to balance reliability with velocity.
+Continue to [Module 1.3: Error Budgets](../module-1.3-error-budgets/) to learn how to use SLOs to balance reliability with velocity.
 
 ---
 

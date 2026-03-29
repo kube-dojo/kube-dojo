@@ -1012,4 +1012,4 @@ This proportional model is the most common approach. Alternatives include equal 
 
 ## Next Module
 
-[Module 8.2: Advanced Cloud Networking & Transit Hubs](module-8.2-transit-hubs/) -- Learn how to connect all these accounts without creating a networking nightmare. Hub-and-spoke, transit gateways, and the art of routing traffic across organizational boundaries.
+[Module 8.2: Advanced Cloud Networking & Transit Hubs](../module-8.2-transit-hubs/) -- Learn how to connect all these accounts without creating a networking nightmare. Hub-and-spoke, transit gateways, and the art of routing traffic across organizational boundaries.

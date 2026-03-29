@@ -614,7 +614,7 @@ k delete pod gpu-pod-1 gpu-pod-2 gpu-pod-3 gpu-pod-4
 | **Kueue** | K8s-native job queueing | GPU job queuing with fair sharing |
 | **Karpenter** | Node autoscaling | Auto-provision GPU nodes on demand ([Module 6.1](../../developer-experience/scaling-reliability/module-6.1-karpenter/)) |
 
-For MLOps pipeline integration with GPU workloads, see [Module 9.1: Kubeflow](module-9.1-kubeflow/).
+For MLOps pipeline integration with GPU workloads, see [Module 9.1: Kubeflow](../module-9.1-kubeflow/).
 
 ---
 

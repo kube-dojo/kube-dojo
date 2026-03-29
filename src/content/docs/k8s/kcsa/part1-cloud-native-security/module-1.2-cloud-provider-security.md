@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 25-30 minutes
 >
-> **Prerequisites**: [Module 1.1: The 4 Cs of Cloud Native Security](module-1.1-four-cs/)
+> **Prerequisites**: [Module 1.1: The 4 Cs of Cloud Native Security](../module-1.1-four-cs/)
 
 ---
 
@@ -435,4 +435,4 @@ Remember: The cloud provider gives you secure building blocks. Assembling them s
 
 ## Next Module
 
-[Module 1.3: Security Principles](module-1.3-security-principles/) - Defense in depth, least privilege, and other foundational security principles.
+[Module 1.3: Security Principles](../module-1.3-security-principles/) - Defense in depth, least privilege, and other foundational security principles.

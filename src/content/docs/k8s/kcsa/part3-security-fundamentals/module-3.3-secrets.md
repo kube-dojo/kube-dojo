@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 25-30 minutes
 >
-> **Prerequisites**: [Module 3.2: RBAC Fundamentals](module-3.2-rbac/)
+> **Prerequisites**: [Module 3.2: RBAC Fundamentals](../module-3.2-rbac/)
 
 ---
 
@@ -532,4 +532,4 @@ Key points:
 
 ## Next Module
 
-[Module 3.4: ServiceAccount Security](module-3.4-serviceaccounts/) - Securing pod identities and API access.
+[Module 3.4: ServiceAccount Security](../module-3.4-serviceaccounts/) - Securing pod identities and API access.

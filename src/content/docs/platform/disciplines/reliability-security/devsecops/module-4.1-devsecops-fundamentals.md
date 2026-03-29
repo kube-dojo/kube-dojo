@@ -831,7 +831,7 @@ The shift from "security reviews code" to "developers own security" requires cul
 
 ## Next Module
 
-Continue to [Module 4.2: Shift-Left Security](module-4.2-shift-left-security/) to learn specific techniques for catching vulnerabilities early in development.
+Continue to [Module 4.2: Shift-Left Security](../module-4.2-shift-left-security/) to learn specific techniques for catching vulnerabilities early in development.
 
 ---
 

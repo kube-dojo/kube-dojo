@@ -587,4 +587,4 @@ k delete deploy drill6 sa drill6-sa
 
 ## Next Module
 
-[Module 4.6: Custom Resource Definitions](module-4.6-crds/) - Extend Kubernetes with custom resources.
+[Module 4.6: Custom Resource Definitions](../module-4.6-crds/) - Extend Kubernetes with custom resources.

@@ -650,4 +650,4 @@ az group delete --name "$RG" --yes --no-wait
 
 ## Next Module
 
-[Module 3.8: Azure Functions & Serverless](module-3.8-functions/) --- Learn Azure's function-as-a-service platform with triggers, bindings, and Durable Functions for orchestrating complex serverless workflows.
+[Module 3.8: Azure Functions & Serverless](../module-3.8-functions/) --- Learn Azure's function-as-a-service platform with triggers, bindings, and Durable Functions for orchestrating complex serverless workflows.

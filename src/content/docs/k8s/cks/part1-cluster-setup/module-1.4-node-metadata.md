@@ -526,4 +526,4 @@ kubectl delete namespace metadata-test
 
 ## Next Module
 
-[Module 1.5: GUI Security](module-1.5-gui-security/) - Securing Kubernetes Dashboard and web UIs.
+[Module 1.5: GUI Security](../module-1.5-gui-security/) - Securing Kubernetes Dashboard and web UIs.

@@ -687,7 +687,7 @@ GitOps transforms how you think about deployments: from "push changes to product
 
 ## Next Module
 
-Continue to [Module 3.2: Repository Strategies](module-3.2-repository-strategies/) to learn how to structure your Git repositories for GitOps.
+Continue to [Module 3.2: Repository Strategies](../module-3.2-repository-strategies/) to learn how to structure your Git repositories for GitOps.
 
 ---
 

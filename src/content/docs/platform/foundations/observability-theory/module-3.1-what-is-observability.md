@@ -813,4 +813,4 @@ Write down the steps you'd take to investigate:
 
 ## Next Module
 
-[Module 3.2: The Three Pillars](module-3.2-the-three-pillars/) - Deep dive into logs, metrics, and traces—what each provides and how they work together.
+[Module 3.2: The Three Pillars](../module-3.2-the-three-pillars/) - Deep dive into logs, metrics, and traces—what each provides and how they work together.

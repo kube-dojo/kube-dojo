@@ -892,4 +892,4 @@ sudo sed -i '/vg_practice/d' /etc/fstab
 
 ## Next Module
 
-Continue with [Module 8.2: Network Administration](module-8.2-network-administration/) to cover firewall configuration, NAT, network bonding, and other LFCS networking topics.
+Continue with [Module 8.2: Network Administration](../module-8.2-network-administration/) to cover firewall configuration, NAT, network bonding, and other LFCS networking topics.

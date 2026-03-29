@@ -60,7 +60,7 @@ One binary. Three jobs. 100x latency improvement. That is kube-router.
 
 **Prerequisites**:
 - Kubernetes Services and networking basics (ClusterIP, NodePort, kube-proxy)
-- [Module 5.1: Cilium](module-5.1-cilium/) (helpful for comparison, not required)
+- [Module 5.1: Cilium](../module-5.1-cilium/) (helpful for comparison, not required)
 - Basic understanding of Linux networking (routing tables, iptables)
 - Familiarity with BGP concepts (we will explain what you need)
 
@@ -1152,7 +1152,7 @@ kind delete cluster --name kube-router-lab
 
 ## Next Module
 
-Continue to [Module 5.1: Cilium](module-5.1-cilium/) for the full-featured eBPF-powered CNI, or explore [Module 5.4: MetalLB](module-5.4-metallb/) to pair load balancing with kube-router's BGP capabilities.
+Continue to [Module 5.1: Cilium](../module-5.1-cilium/) for the full-featured eBPF-powered CNI, or explore [Module 5.4: MetalLB](../module-5.4-metallb/) to pair load balancing with kube-router's BGP capabilities.
 
 ---
 

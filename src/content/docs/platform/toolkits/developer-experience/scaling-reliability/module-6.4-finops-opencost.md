@@ -19,7 +19,7 @@ Your cluster is running. Pods are healthy. Alerts are quiet. But nobody can answ
 
 **Prerequisites**:
 - Kubernetes resource requests and limits
-- [Module 6.1: Karpenter](module-6.1-karpenter/) — Node provisioning and spot strategies
+- [Module 6.1: Karpenter](../module-6.1-karpenter/) — Node provisioning and spot strategies
 - Helm basics
 - Namespace and RBAC fundamentals
 
@@ -347,7 +347,7 @@ spec:
       terminationGracePeriodSeconds: 30
 ```
 
-See [Module 6.1: Karpenter](module-6.1-karpenter/) for configuring NodePools that mix spot and on-demand capacity automatically.
+See [Module 6.1: Karpenter](../module-6.1-karpenter/) for configuring NodePools that mix spot and on-demand capacity automatically.
 
 ---
 
@@ -847,8 +847,8 @@ kind delete cluster --name finops-lab
 You have completed the Scaling and Reliability Toolkit. Continue to the [Platforms Toolkit](../../infrastructure-networking/platforms/) to learn about building internal developer platforms with Backstage, Crossplane, and more.
 
 **Related modules**:
-- [Module 6.1: Karpenter](module-6.1-karpenter/) — Configure spot instances and node consolidation that directly reduce compute costs
-- [Module 6.3: Velero](module-6.3-velero/) — Backup strategies that affect storage costs
+- [Module 6.1: Karpenter](../module-6.1-karpenter/) — Configure spot instances and node consolidation that directly reduce compute costs
+- [Module 6.3: Velero](../module-6.3-velero/) — Backup strategies that affect storage costs
 
 ---
 

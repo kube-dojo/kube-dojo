@@ -959,4 +959,4 @@ kind delete cluster --name secrets-lab
 
 ---
 
-**Next Module**: [Module 9.9: Cloud-Native API Gateways & WAF](module-9.9-api-gateways/) -- Learn how cloud API gateways compare to Kubernetes Gateway API, how to integrate WAF protection, and how to handle OAuth2/OIDC proxying for your services.
+**Next Module**: [Module 9.9: Cloud-Native API Gateways & WAF](../module-9.9-api-gateways/) -- Learn how cloud API gateways compare to Kubernetes Gateway API, how to integrate WAF protection, and how to handle OAuth2/OIDC proxying for your services.

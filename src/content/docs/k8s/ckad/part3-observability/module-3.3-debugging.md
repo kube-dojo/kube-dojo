@@ -692,4 +692,4 @@ k delete deploy drill6 svc drill6-svc
 
 ## Next Module
 
-[Module 3.4: Monitoring Applications](module-3.4-monitoring/) - Monitor application health and resource usage.
+[Module 3.4: Monitoring Applications](../module-3.4-monitoring/) - Monitor application health and resource usage.

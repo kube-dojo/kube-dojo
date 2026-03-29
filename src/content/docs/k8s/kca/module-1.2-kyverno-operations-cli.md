@@ -1,6 +1,6 @@
 ---
 title: "Module 1.2: Kyverno Operations & CLI"
-slug: k8s/kca/module-1.2-kyverno-operations-cli/
+slug: k8s/kca/module-1.2-kyverno-operations-cli
 sidebar:
   order: 3
 ---

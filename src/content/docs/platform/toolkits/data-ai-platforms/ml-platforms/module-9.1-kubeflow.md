@@ -802,7 +802,7 @@ Add a third component that takes the processed message and writes it to a file a
 
 ## Next Module
 
-Continue to [Module 9.2: MLflow](module-9.2-mlflow/) to learn about experiment tracking and model registry.
+Continue to [Module 9.2: MLflow](../module-9.2-mlflow/) to learn about experiment tracking and model registry.
 
 ---
 

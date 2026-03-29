@@ -533,4 +533,4 @@ kubectl delete namespace psa-test
 
 ## Next Module
 
-[Module 4.3: Secrets Management](module-4.3-secrets-management/) - Securing Kubernetes secrets.
+[Module 4.3: Secrets Management](../module-4.3-secrets-management/) - Securing Kubernetes secrets.

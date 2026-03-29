@@ -4,7 +4,7 @@ slug: cloud/aks-deep-dive/module-7.3-aks-identity
 sidebar:
   order: 4
 ---
-**Complexity**: [QUICK] | **Time to Complete**: 1.5h | **Prerequisites**: [Module 7.1: AKS Architecture & Node Management](module-7.1-aks-architecture/)
+**Complexity**: [QUICK] | **Time to Complete**: 1.5h | **Prerequisites**: [Module 7.1: AKS Architecture & Node Management](../module-7.1-aks-architecture/)
 
 ## Why This Module Matters
 
@@ -829,4 +829,4 @@ echo "Security boundary verified: pods without proper service account cannot acc
 
 ## Next Module
 
-[Module 7.4: AKS Storage, Observability & Scaling](module-7.4-aks-production/) --- Learn how to choose between Azure Disks and Azure Files for persistent storage, set up Container Insights with Managed Prometheus and Grafana, and implement event-driven autoscaling with the KEDA add-on.
+[Module 7.4: AKS Storage, Observability & Scaling](../module-7.4-aks-production/) --- Learn how to choose between Azure Disks and Azure Files for persistent storage, set up Container Insights with Managed Prometheus and Grafana, and implement event-driven autoscaling with the KEDA add-on.

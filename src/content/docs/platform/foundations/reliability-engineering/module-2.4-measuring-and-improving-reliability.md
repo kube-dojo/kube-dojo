@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 40-45 minutes
 >
-> **Prerequisites**: [Module 2.3: Redundancy and Fault Tolerance](module-2.3-redundancy-and-fault-tolerance/)
+> **Prerequisites**: [Module 2.3: Redundancy and Fault Tolerance](../module-2.3-redundancy-and-fault-tolerance/)
 >
 > **Track**: Foundations
 

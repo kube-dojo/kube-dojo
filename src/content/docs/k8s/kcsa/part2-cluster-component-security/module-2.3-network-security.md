@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 25-30 minutes
 >
-> **Prerequisites**: [Module 2.2: Node Security](module-2.2-node-security/)
+> **Prerequisites**: [Module 2.2: Node Security](../module-2.2-node-security/)
 
 ---
 
@@ -592,4 +592,4 @@ Key patterns:
 
 ## Next Module
 
-[Module 2.4: PKI and Certificates](module-2.4-pki-certificates/) - Understanding Kubernetes certificate management and PKI.
+[Module 2.4: PKI and Certificates](../module-2.4-pki-certificates/) - Understanding Kubernetes certificate management and PKI.

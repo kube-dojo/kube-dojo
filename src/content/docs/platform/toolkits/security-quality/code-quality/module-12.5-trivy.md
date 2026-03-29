@@ -1235,7 +1235,7 @@ Specialized tools might be deeper in one area, but Trivy is "good enough" for mo
 
 - **Related**: [Module 13.1: Harbor](../../cicd-delivery/container-registries/module-13.1-harbor/) - Registry with Trivy integration
 - **Related**: [Module 4.4: Supply Chain Security](../security-tools/module-4.4-supply-chain/) - SBOM and signing
-- **Related**: [Module 12.4: Snyk](module-12.4-snyk/) - Compare with commercial alternative
+- **Related**: [Module 12.4: Snyk](../module-12.4-snyk/) - Compare with commercial alternative
 
 ---
 

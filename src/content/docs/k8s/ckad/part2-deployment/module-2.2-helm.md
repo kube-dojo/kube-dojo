@@ -638,4 +638,4 @@ helm uninstall prod-web
 
 ## Next Module
 
-[Module 2.3: Kustomize](module-2.3-kustomize/) - Customize Kubernetes resources without templates.
+[Module 2.3: Kustomize](../module-2.3-kustomize/) - Customize Kubernetes resources without templates.

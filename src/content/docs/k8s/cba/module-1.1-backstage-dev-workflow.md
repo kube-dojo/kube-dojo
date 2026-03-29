@@ -1,6 +1,6 @@
 ---
 title: "Module 1.1: Backstage Developer Workflow"
-slug: k8s/cba/module-1.1-backstage-dev-workflow/
+slug: k8s/cba/module-1.1-backstage-dev-workflow
 sidebar:
   order: 2
 ---
@@ -710,4 +710,4 @@ cd .. && rm -rf cba-lab
 
 ## Next Module
 
-[Module 2: Backstage Plugins and Extensions](module-1.2-backstage-plugin-development/) - Build your first frontend and backend plugin, understand the plugin API system, and learn how Backstage's dependency injection works.
+[Module 2: Backstage Plugins and Extensions](../module-1.2-backstage-plugin-development/) - Build your first frontend and backend plugin, understand the plugin API system, and learn how Backstage's dependency injection works.

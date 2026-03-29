@@ -1107,4 +1107,4 @@ kind delete cluster --name advanced-operator-lab
 
 ## Next Module
 
-[Module 1.6: Admission Webhooks](module-1.6-admission-webhooks/) - Intercept and modify API requests with mutating and validating webhooks.
+[Module 1.6: Admission Webhooks](../module-1.6-admission-webhooks/) - Intercept and modify API requests with mutating and validating webhooks.

@@ -548,4 +548,4 @@ Key principles:
 
 ## Next Module
 
-[Module 6.2: CIS Benchmarks](module-6.2-cis-benchmarks/) - Understanding and implementing CIS Kubernetes Benchmark.
+[Module 6.2: CIS Benchmarks](../module-6.2-cis-benchmarks/) - Understanding and implementing CIS Kubernetes Benchmark.

@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 35-40 minutes
 >
-> **Prerequisites**: [Module 5.1: What Makes Systems Distributed](module-5.1-what-makes-systems-distributed/)
+> **Prerequisites**: [Module 5.1: What Makes Systems Distributed](../module-5.1-what-makes-systems-distributed/)
 >
 > **Track**: Foundations
 
@@ -1207,4 +1207,4 @@ Before moving on, ensure you understand:
 
 ## Next Module
 
-[Module 5.3: Eventual Consistency](module-5.3-eventual-consistency/) - When you don't need strong consistency, and how to make eventual consistency work.
+[Module 5.3: Eventual Consistency](../module-5.3-eventual-consistency/) - When you don't need strong consistency, and how to make eventual consistency work.

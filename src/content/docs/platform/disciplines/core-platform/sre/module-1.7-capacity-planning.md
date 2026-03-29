@@ -9,9 +9,9 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 1.2: SLOs](module-1.2-slos/) — Understanding service levels
+- **Required**: [Module 1.2: SLOs](../module-1.2-slos/) — Understanding service levels
 - **Required**: [Observability Theory Track](../../../foundations/observability-theory/) — Metrics and monitoring
-- **Recommended**: [Module 1.4: Toil and Automation](module-1.4-toil-automation/) — Automation mindset
+- **Recommended**: [Module 1.4: Toil and Automation](../module-1.4-toil-automation/) — Automation mindset
 - **Helpful**: Basic understanding of cloud infrastructure
 
 ---

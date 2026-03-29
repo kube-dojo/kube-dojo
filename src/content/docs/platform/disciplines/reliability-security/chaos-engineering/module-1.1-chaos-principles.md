@@ -626,4 +626,4 @@ In the next module, you'll put these principles into practice with Chaos Mesh, t
 
 ## Next Module
 
-Continue to [Module 1.2: Chaos Mesh Fundamentals](module-1.2-chaos-mesh/) — Install, configure, and run your first chaos experiments using Chaos Mesh on a real Kubernetes cluster.
+Continue to [Module 1.2: Chaos Mesh Fundamentals](../module-1.2-chaos-mesh/) — Install, configure, and run your first chaos experiments using Chaos Mesh on a real Kubernetes cluster.

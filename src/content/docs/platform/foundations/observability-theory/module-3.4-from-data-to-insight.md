@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 30-35 minutes
 >
-> **Prerequisites**: [Module 3.3: Instrumentation Principles](module-3.3-instrumentation-principles/)
+> **Prerequisites**: [Module 3.3: Instrumentation Principles](../module-3.3-instrumentation-principles/)
 >
 > **Track**: Foundations
 

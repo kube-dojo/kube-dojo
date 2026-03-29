@@ -655,7 +655,7 @@ Configure a cron trigger that scales the app to 5 replicas during work hours (9 
 
 ## Next Module
 
-Continue to [Module 6.3: Velero](module-6.3-velero/) to learn backup and disaster recovery for Kubernetes clusters.
+Continue to [Module 6.3: Velero](../module-6.3-velero/) to learn backup and disaster recovery for Kubernetes clusters.
 
 ---
 

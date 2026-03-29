@@ -12,8 +12,8 @@ sidebar:
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [Module 15.1: CockroachDB](module-15.1-cockroachdb/) - Distributed database concepts
-- [Module 15.2: CloudNativePG](module-15.2-cloudnativepg/) - PostgreSQL fundamentals
+- [Module 15.1: CockroachDB](../module-15.1-cockroachdb/) - Distributed database concepts
+- [Module 15.2: CloudNativePG](../module-15.2-cloudnativepg/) - PostgreSQL fundamentals
 - Basic Git workflow (branches, merges)
 - Understanding of development environments and CI/CD
 
@@ -911,7 +911,7 @@ Serverless databases: The proxy layer handles pooling automatically. Thousands o
 
 ## Next Steps
 
-- **Next Module**: [Module 15.4: Vitess](module-15.4-vitess/) — Self-hosted MySQL sharding at scale
+- **Next Module**: [Module 15.4: Vitess](../module-15.4-vitess/) — Self-hosted MySQL sharding at scale
 - **Related**: [Developer Experience Toolkit](../../developer-experience/) — Preview environments
 - **Related**: [GitOps & Deployments](../../cicd-delivery/gitops-deployments/) — Database GitOps workflows
 

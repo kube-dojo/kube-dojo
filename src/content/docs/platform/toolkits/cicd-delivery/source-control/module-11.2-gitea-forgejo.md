@@ -1205,7 +1205,7 @@ Choose GitLab when:
 
 ## Next Steps
 
-- **Next Module**: [Module 11.3: GitHub Advanced](module-11.3-github-advanced/) - GHAS, Copilot, and enterprise features
+- **Next Module**: [Module 11.3: GitHub Advanced](../module-11.3-github-advanced/) - GHAS, Copilot, and enterprise features
 - **Related**: [Module 12.1: SonarQube](../../security-quality/code-quality/module-12.1-sonarqube/) - Integrate code quality scanning
 - **Related**: [Module 2.1: ArgoCD](../gitops-deployments/module-2.1-argocd/) - GitOps with Gitea
 

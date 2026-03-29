@@ -768,4 +768,4 @@ rm /tmp/tls.key /tmp/tls.crt
 
 ## Next Module
 
-[Module 5.3: NetworkPolicies](module-5.3-networkpolicies/) - Control pod-to-pod communication.
+[Module 5.3: NetworkPolicies](../module-5.3-networkpolicies/) - Control pod-to-pod communication.

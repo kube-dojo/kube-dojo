@@ -1050,4 +1050,4 @@ For each scenario, identify whether to use Deployment, DaemonSet, or StatefulSet
 
 ## Next Module
 
-[Module 2.4: Jobs & CronJobs](module-2.4-jobs-cronjobs/) - Batch workloads and scheduled tasks.
+[Module 2.4: Jobs & CronJobs](../module-2.4-jobs-cronjobs/) - Batch workloads and scheduled tasks.

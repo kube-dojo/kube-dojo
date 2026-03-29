@@ -791,4 +791,4 @@ echo "Cleanup complete."
 
 ## Next Module
 
-Next up: **[Module 2.10: Cloud Operations (Monitoring & Logging)](module-2.10-operations/)** --- Learn Cloud Logging (log routers, sinks, and log-based metrics), Cloud Monitoring (dashboards, PromQL/MQL, alerting), and uptime checks to keep your services observable and reliable.
+Next up: **[Module 2.10: Cloud Operations (Monitoring & Logging)](../module-2.10-operations/)** --- Learn Cloud Logging (log routers, sinks, and log-based metrics), Cloud Monitoring (dashboards, PromQL/MQL, alerting), and uptime checks to keep your services observable and reliable.

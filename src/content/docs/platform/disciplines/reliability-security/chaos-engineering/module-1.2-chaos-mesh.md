@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 1.1: Principles of Chaos Engineering](module-1.1-chaos-principles/) — Understand hypotheses, blast radius, and abort conditions
+- **Required**: [Module 1.1: Principles of Chaos Engineering](../module-1.1-chaos-principles/) — Understand hypotheses, blast radius, and abort conditions
 - **Required**: [Kubernetes Basics](../../../../prerequisites/kubernetes-basics/) — Deployments, Services, Namespaces, RBAC
 - **Recommended**: A running Kubernetes cluster (kind or minikube)
 - **Recommended**: Helm 3 installed
@@ -965,4 +965,4 @@ Key takeaways:
 
 ## Next Module
 
-Continue to [Module 1.3: Advanced Network & Application Fault Injection](module-1.3-network-fault-injection/) — Deep dive into latency injection, DNS failures, HTTP-level chaos, clock skew, and JVM/kernel fault injection.
+Continue to [Module 1.3: Advanced Network & Application Fault Injection](../module-1.3-network-fault-injection/) — Deep dive into latency injection, DNS failures, HTTP-level chaos, clock skew, and JVM/kernel fault injection.

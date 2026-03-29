@@ -580,4 +580,4 @@ kubectl delete pod insecure-pod secure-pod
 
 ## Next Module
 
-[Module 5.2: Image Scanning with Trivy](module-5.2-image-scanning/) - Finding vulnerabilities in container images.
+[Module 5.2: Image Scanning with Trivy](../module-5.2-image-scanning/) - Finding vulnerabilities in container images.

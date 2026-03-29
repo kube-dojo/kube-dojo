@@ -9,8 +9,8 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 1.2 — Apache Kafka on Kubernetes](module-1.2-kafka/) — Understanding event streaming and data pipelines
-- **Required**: [Module 1.4 — Batch Processing & Apache Spark on K8s](module-1.4-spark/) — Spark fundamentals and the Spark Operator
+- **Required**: [Module 1.2 — Apache Kafka on Kubernetes](../module-1.2-kafka/) — Understanding event streaming and data pipelines
+- **Required**: [Module 1.4 — Batch Processing & Apache Spark on K8s](../module-1.4-spark/) — Spark fundamentals and the Spark Operator
 - **Recommended**: SQL proficiency (joins, window functions, CTEs, partitioning)
 - **Recommended**: Familiarity with S3/object storage concepts (buckets, prefixes, object lifecycle)
 

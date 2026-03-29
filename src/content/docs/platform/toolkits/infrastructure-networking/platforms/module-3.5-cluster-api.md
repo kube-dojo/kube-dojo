@@ -445,4 +445,4 @@ ClusterClass solves the problem of verbose, repetitive cluster definitions. With
 
 ---
 
-**Next Module**: [Module 7.1: Backstage](module-7.1-backstage/) - Build an Internal Developer Portal to give developers self-service access to these clusters.
+**Next Module**: [Module 7.1: Backstage](../module-7.1-backstage/) - Build an Internal Developer Portal to give developers self-service access to these clusters.

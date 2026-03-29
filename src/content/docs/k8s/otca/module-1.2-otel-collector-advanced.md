@@ -1,6 +1,6 @@
 ---
 title: "Module 1.2: OTel Collector Advanced"
-slug: k8s/otca/module-1.2-otel-collector-advanced/
+slug: k8s/otca/module-1.2-otel-collector-advanced
 sidebar:
   order: 3
 ---

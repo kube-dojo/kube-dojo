@@ -1030,4 +1030,4 @@ k delete svc challenge-app
 
 ## Next Module
 
-[Module 3.2: Endpoints & EndpointSlices](module-3.2-endpoints/) - Deep-dive into how services track pods.
+[Module 3.2: Endpoints & EndpointSlices](../module-3.2-endpoints/) - Deep-dive into how services track pods.

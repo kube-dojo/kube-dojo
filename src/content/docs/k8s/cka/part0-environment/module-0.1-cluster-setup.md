@@ -692,4 +692,4 @@ kubectl delete pod broken-test
 
 ## Next Module
 
-[Module 0.2: Shell Mastery](module-0.2-shell-mastery/) - Aliases, autocomplete, and shell optimization for speed.
+[Module 0.2: Shell Mastery](../module-0.2-shell-mastery/) - Aliases, autocomplete, and shell optimization for speed.

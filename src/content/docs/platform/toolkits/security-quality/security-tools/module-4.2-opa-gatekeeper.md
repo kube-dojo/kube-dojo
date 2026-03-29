@@ -719,7 +719,7 @@ Add a second constraint that requires all pods to have a `team` label.
 
 ## Next Module
 
-Continue to [Module 4.3: Falco](module-4.3-falco/) to learn runtime security monitoring for detecting threats in running containers.
+Continue to [Module 4.3: Falco](../module-4.3-falco/) to learn runtime security monitoring for detecting threats in running containers.
 
 ---
 

@@ -1,6 +1,6 @@
 ---
 title: "Module 1.1: Why Kubernetes Won"
-slug: prerequisites/philosophy-design/module-1.1-why-kubernetes-won/
+slug: prerequisites/philosophy-design/module-1.1-why-kubernetes-won
 sidebar:
   order: 2
 ---
@@ -335,4 +335,4 @@ The alternatives didn't fail because they were bad—they failed because Kuberne
 
 ## Next Module
 
-[Module 2: Declarative vs Imperative](module-1.2-declarative-vs-imperative/) - The philosophy that makes Kubernetes different.
+[Module 2: Declarative vs Imperative](../module-1.2-declarative-vs-imperative/) - The philosophy that makes Kubernetes different.

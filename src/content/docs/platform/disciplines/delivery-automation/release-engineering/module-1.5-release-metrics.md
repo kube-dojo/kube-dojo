@@ -10,7 +10,7 @@ sidebar:
 
 Before starting this module:
 - **Required**: Prometheus and Grafana basics — PromQL queries, dashboard creation, alert configuration
-- **Required**: [Module 1.1: Release Strategies](module-1.1-release-strategies/) — Understanding of deployment strategies and progressive delivery
+- **Required**: [Module 1.1: Release Strategies](../module-1.1-release-strategies/) — Understanding of deployment strategies and progressive delivery
 - **Recommended**: [SRE Module: SLOs and Error Budgets](../../core-platform/sre/module-1.2-slos/) — SLI/SLO/SLA concepts
 - **Recommended**: Familiarity with CI/CD pipelines and deployment tooling
 

@@ -544,4 +544,4 @@ k delete deploy drill6
 
 ## Next Module
 
-[Module 3.3: Debugging in Kubernetes](module-3.3-debugging/) - Troubleshoot pods, containers, and cluster issues.
+[Module 3.3: Debugging in Kubernetes](../module-3.3-debugging/) - Troubleshoot pods, containers, and cluster issues.

@@ -764,4 +764,4 @@ echo "Cleanup complete."
 
 ## Next Module
 
-Next up: **[Module 2.8: Cloud Functions & Event-Driven Architecture](module-2.8-cloud-functions/)** --- Learn the difference between Gen 1 and Gen 2 functions, trigger types (HTTP, Eventarc, Pub/Sub), and how to build event-driven pipelines that react to Cloud Storage uploads and other events.
+Next up: **[Module 2.8: Cloud Functions & Event-Driven Architecture](../module-2.8-cloud-functions/)** --- Learn the difference between Gen 1 and Gen 2 functions, trigger types (HTTP, Eventarc, Pub/Sub), and how to build event-driven pipelines that react to Cloud Storage uploads and other events.

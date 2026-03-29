@@ -714,4 +714,4 @@ k get volumesnapshot <name> -o jsonpath='{.status.boundVolumeSnapshotContentName
 
 ## Next Module
 
-Continue to [Module 4.5: Storage Troubleshooting](module-4.5-troubleshooting/) to learn how to diagnose and fix common storage problems.
+Continue to [Module 4.5: Storage Troubleshooting](../module-4.5-troubleshooting/) to learn how to diagnose and fix common storage problems.

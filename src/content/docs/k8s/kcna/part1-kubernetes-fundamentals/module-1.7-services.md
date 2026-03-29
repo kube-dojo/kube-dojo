@@ -390,4 +390,4 @@ Services use **Endpoints** to track Pod IPs:
 
 ## Next Module
 
-[Module 1.8: Namespaces and Labels](module-1.8-namespaces-labels/) - Organizing and selecting resources in Kubernetes.
+[Module 1.8: Namespaces and Labels](../module-1.8-namespaces-labels/) - Organizing and selecting resources in Kubernetes.

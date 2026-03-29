@@ -921,4 +921,4 @@ kubectl delete deployment lifecycle-test
 
 ## Next Module
 
-[Module 2.3: DaemonSets & StatefulSets](module-2.3-daemonsets-statefulsets/) - Specialized workload controllers.
+[Module 2.3: DaemonSets & StatefulSets](../module-2.3-daemonsets-statefulsets/) - Specialized workload controllers.

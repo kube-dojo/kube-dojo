@@ -774,4 +774,4 @@ kubectl get sc
 
 ## Next Module
 
-[Module 1.3: Helm](module-1.3-helm/) - Package management for Kubernetes, deploying applications with charts.
+[Module 1.3: Helm](../module-1.3-helm/) - Package management for Kubernetes, deploying applications with charts.

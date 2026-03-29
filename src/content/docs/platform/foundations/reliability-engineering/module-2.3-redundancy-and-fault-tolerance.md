@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 35-40 minutes
 >
-> **Prerequisites**: [Module 2.2: Failure Modes and Effects](module-2.2-failure-modes-and-effects/)
+> **Prerequisites**: [Module 2.2: Failure Modes and Effects](../module-2.2-failure-modes-and-effects/)
 >
 > **Track**: Foundations
 
@@ -1489,4 +1489,4 @@ Simpler redundancy, tested regularly > Complex redundancy, never tested
 
 ## Next Module
 
-[Module 2.4: Measuring and Improving Reliability](module-2.4-measuring-and-improving-reliability/) - SLIs, SLOs, and the practice of continuous reliability improvement.
+[Module 2.4: Measuring and Improving Reliability](../module-2.4-measuring-and-improving-reliability/) - SLIs, SLOs, and the practice of continuous reliability improvement.

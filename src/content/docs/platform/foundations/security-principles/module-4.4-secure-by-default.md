@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 30-35 minutes
 >
-> **Prerequisites**: [Module 4.3: Identity and Access Management](module-4.3-identity-and-access/)
+> **Prerequisites**: [Module 4.3: Identity and Access Management](../module-4.3-identity-and-access/)
 >
 > **Track**: Foundations
 

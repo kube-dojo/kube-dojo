@@ -579,4 +579,4 @@ Total spine bandwidth: 2 × 32 × 100G = 6,400 Gbps
 
 ## Next Module
 
-Continue to [Module 3.2: BGP & Routing for Kubernetes](module-3.2-bgp-routing/) to deep-dive into BGP peering between Kubernetes nodes and datacenter switches.
+Continue to [Module 3.2: BGP & Routing for Kubernetes](../module-3.2-bgp-routing/) to deep-dive into BGP peering between Kubernetes nodes and datacenter switches.

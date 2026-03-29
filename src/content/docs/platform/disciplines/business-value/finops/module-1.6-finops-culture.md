@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 1.5: Storage & Network Cost Management](module-1.5-storage-network-costs/) — Completing the technical FinOps modules
+- **Required**: [Module 1.5: Storage & Network Cost Management](../module-1.5-storage-network-costs/) — Completing the technical FinOps modules
 - **Required**: Understanding of CI/CD pipelines (GitHub Actions, GitLab CI, or similar)
 - **Required**: Basic Terraform familiarity (for Infracost exercise)
 - **Recommended**: Experience with Infrastructure as Code workflows

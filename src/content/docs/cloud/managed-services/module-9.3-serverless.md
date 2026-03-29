@@ -829,4 +829,4 @@ kind delete cluster --name knative-lab
 
 ---
 
-**Next Module**: [Module 9.4: Object Storage Patterns (S3 / GCS / Blob)](module-9.4-object-storage/) -- Learn how to access cloud object storage from Kubernetes pods using CSI drivers, pre-signed URLs, and cross-region replication patterns.
+**Next Module**: [Module 9.4: Object Storage Patterns (S3 / GCS / Blob)](../module-9.4-object-storage/) -- Learn how to access cloud object storage from Kubernetes pods using CSI drivers, pre-signed URLs, and cross-region replication patterns.

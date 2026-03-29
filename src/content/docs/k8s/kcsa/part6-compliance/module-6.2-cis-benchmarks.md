@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 25-30 minutes
 >
-> **Prerequisites**: [Module 6.1: Compliance Frameworks](module-6.1-compliance-frameworks/)
+> **Prerequisites**: [Module 6.1: Compliance Frameworks](../module-6.1-compliance-frameworks/)
 
 ---
 
@@ -621,4 +621,4 @@ Key practices:
 
 ## Next Module
 
-[Module 6.3: Security Assessments](module-6.3-security-assessments/) - Conducting and responding to security assessments.
+[Module 6.3: Security Assessments](../module-6.3-security-assessments/) - Conducting and responding to security assessments.

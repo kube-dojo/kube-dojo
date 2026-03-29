@@ -12,8 +12,8 @@ sidebar:
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [Module 6.1: IaC Fundamentals](module-6.1-iac-fundamentals/) - Core IaC concepts
-- [Module 6.2: IaC Testing](module-6.2-iac-testing/) - Testing strategies
+- [Module 6.1: IaC Fundamentals](../module-6.1-iac-fundamentals/) - Core IaC concepts
+- [Module 6.2: IaC Testing](../module-6.2-iac-testing/) - Testing strategies
 - [Module 4.2: Defense in Depth](../../../foundations/security-principles/module-4.2-defense-in-depth/) - Security principles
 
 ---
@@ -1755,4 +1755,4 @@ EOF
 
 ## Next Module
 
-Continue to [Module 6.4: IaC at Scale](module-6.4-iac-at-scale/) to learn about managing infrastructure as code across large organizations with multiple teams and environments.
+Continue to [Module 6.4: IaC at Scale](../module-6.4-iac-at-scale/) to learn about managing infrastructure as code across large organizations with multiple teams and environments.

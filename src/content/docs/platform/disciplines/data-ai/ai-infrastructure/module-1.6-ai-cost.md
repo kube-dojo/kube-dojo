@@ -9,8 +9,8 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 1.1: GPU Provisioning & Device Plugins](module-1.1-gpu-provisioning/) — GPU resources, DCGM metrics
-- **Required**: [Module 1.5: Serving LLMs at Scale](module-1.5-llm-serving/) — Inference workload patterns
+- **Required**: [Module 1.1: GPU Provisioning & Device Plugins](../module-1.1-gpu-provisioning/) — GPU resources, DCGM metrics
+- **Required**: [Module 1.5: Serving LLMs at Scale](../module-1.5-llm-serving/) — Inference workload patterns
 - **Recommended**: Kubernetes autoscaling concepts (HPA, VPA, Cluster Autoscaler)
 - **Recommended**: Experience with cloud billing (AWS, GCP, or Azure cost explorer)
 

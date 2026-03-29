@@ -559,4 +559,4 @@ kubectl delete pod no-ptrace-pod
 
 ## Next Module
 
-[Module 3.3: Linux Kernel Hardening](module-3.3-kernel-hardening/) - Reducing OS attack surface.
+[Module 3.3: Linux Kernel Hardening](../module-3.3-kernel-hardening/) - Reducing OS attack surface.

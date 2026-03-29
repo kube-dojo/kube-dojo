@@ -7,7 +7,7 @@ sidebar:
 
 > **Complexity**: `[COMPLEX]` | Time: 60 minutes
 >
-> **Prerequisites**: [Module 2.1: Datacenter Fundamentals](module-2.1-datacenter-fundamentals/), [Linux: Kernel Architecture](../../linux/foundations/system-essentials/module-1.1-kernel-architecture/)
+> **Prerequisites**: [Module 2.1: Datacenter Fundamentals](../module-2.1-datacenter-fundamentals/), [Linux: Kernel Architecture](../../linux/foundations/system-essentials/module-1.1-kernel-architecture/)
 
 ---
 
@@ -614,4 +614,4 @@ qemu-system-x86_64 \
 
 ## Next Module
 
-Continue to [Module 2.3: Immutable OS for Kubernetes](module-2.3-immutable-os/) to learn why Talos Linux and Flatcar Container Linux are better choices than traditional distributions for bare metal Kubernetes.
+Continue to [Module 2.3: Immutable OS for Kubernetes](../module-2.3-immutable-os/) to learn why Talos Linux and Flatcar Container Linux are better choices than traditional distributions for bare metal Kubernetes.

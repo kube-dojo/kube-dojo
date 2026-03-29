@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 0.1: The CLI Power User](module-0.1-cli-power-user/)
+- **Required**: [Module 0.1: The CLI Power User](../module-0.1-cli-power-user/)
 - **Environment**: Any Linux system (VM, WSL, or native)
 
 ---
@@ -794,4 +794,4 @@ rm -rf ~/lab-project
 
 ---
 
-**Next Up:** [Module 0.3: Process & Resource Survival Guide](module-0.3-processes-resources/) — Learn how to find running processes, monitor system resources, and stop runaway programs before they cause trouble.
+**Next Up:** [Module 0.3: Process & Resource Survival Guide](../module-0.3-processes-resources/) — Learn how to find running processes, monitor system resources, and stop runaway programs before they cause trouble.

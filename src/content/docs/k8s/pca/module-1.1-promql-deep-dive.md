@@ -1,6 +1,6 @@
 ---
 title: "Module 1.1: PromQL Deep Dive"
-slug: k8s/pca/module-1.1-promql-deep-dive/
+slug: k8s/pca/module-1.1-promql-deep-dive
 sidebar:
   order: 2
 ---
@@ -1096,4 +1096,4 @@ Before moving on, ensure you understand:
 
 ## Next Module
 
-Continue to [Module 2: Instrumentation & Alerting](module-1.2-instrumentation-alerting/) to learn about client libraries, metric naming, exporters, and Alertmanager configuration.
+Continue to [Module 2: Instrumentation & Alerting](../module-1.2-instrumentation-alerting/) to learn about client libraries, metric naming, exporters, and Alertmanager configuration.

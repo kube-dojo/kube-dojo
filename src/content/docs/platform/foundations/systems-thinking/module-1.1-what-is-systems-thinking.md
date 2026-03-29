@@ -800,7 +800,7 @@ Apply the iceberg model:
 
 ## Next Module
 
-[Module 1.2: Feedback Loops](module-1.2-feedback-loops/) — Understanding reinforcing and balancing feedback, and why your autoscaler sometimes makes things worse.
+[Module 1.2: Feedback Loops](../module-1.2-feedback-loops/) — Understanding reinforcing and balancing feedback, and why your autoscaler sometimes makes things worse.
 
 ---
 

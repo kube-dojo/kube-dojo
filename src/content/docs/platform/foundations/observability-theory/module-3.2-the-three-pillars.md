@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 35-40 minutes
 >
-> **Prerequisites**: [Module 3.1: What is Observability?](module-3.1-what-is-observability/)
+> **Prerequisites**: [Module 3.1: What is Observability?](../module-3.1-what-is-observability/)
 >
 > **Track**: Foundations
 
@@ -950,4 +950,4 @@ How will you connect the three pillars?
 
 ## Next Module
 
-[Module 3.3: Instrumentation Principles](module-3.3-instrumentation-principles/) - How to add observability to your code: what to instrument, where, and how.
+[Module 3.3: Instrumentation Principles](../module-3.3-instrumentation-principles/) - How to add observability to your code: what to instrument, where, and how.

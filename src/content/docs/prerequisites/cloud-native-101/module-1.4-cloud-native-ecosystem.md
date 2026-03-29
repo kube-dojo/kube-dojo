@@ -1,6 +1,6 @@
 ---
 title: "Module 1.4: The Cloud Native Ecosystem"
-slug: prerequisites/cloud-native-101/module-1.4-cloud-native-ecosystem/
+slug: prerequisites/cloud-native-101/module-1.4-cloud-native-ecosystem
 sidebar:
   order: 5
 ---
@@ -381,4 +381,4 @@ Key points:
 
 ## Next Module
 
-[Module 5: From Monolith to Microservices](module-1.5-monolith-to-microservices/) - Understanding application architecture evolution.
+[Module 5: From Monolith to Microservices](../module-1.5-monolith-to-microservices/) - Understanding application architecture evolution.

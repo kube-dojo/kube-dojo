@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 25-30 minutes
 >
-> **Prerequisites**: [Module 2.1: Control Plane Security](module-2.1-control-plane-security/)
+> **Prerequisites**: [Module 2.1: Control Plane Security](../module-2.1-control-plane-security/)
 
 ---
 
@@ -442,4 +442,4 @@ Key concepts:
 
 ## Next Module
 
-[Module 2.3: Network Security](module-2.3-network-security/) - CNI plugins, service mesh security, and network-level controls.
+[Module 2.3: Network Security](../module-2.3-network-security/) - CNI plugins, service mesh security, and network-level controls.

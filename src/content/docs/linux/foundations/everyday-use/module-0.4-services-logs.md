@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 0.3: Process & Resource Survival Guide](module-0.3-processes-resources/)
+- **Required**: [Module 0.3: Process & Resource Survival Guide](../module-0.3-processes-resources/)
 - **Helpful**: Have a Linux system available (VM, WSL, or native) with `sudo` access
 
 ---
@@ -722,7 +722,7 @@ systemctl cat nginx
 
 ## What's Next?
 
-In **[Module 0.5: Everyday Networking Tools](module-0.5-networking-tools/)**, you will learn how to check network connectivity, inspect open ports, and troubleshoot DNS -- the essential networking commands every Linux user needs.
+In **[Module 0.5: Everyday Networking Tools](../module-0.5-networking-tools/)**, you will learn how to check network connectivity, inspect open ports, and troubleshoot DNS -- the essential networking commands every Linux user needs.
 
 ---
 

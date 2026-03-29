@@ -9,8 +9,8 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- [Module 5.1: MLOps Fundamentals](module-5.1-mlops-fundamentals/)
-- [Module 5.2: Feature Engineering & Stores](module-5.2-feature-stores/)
+- [Module 5.1: MLOps Fundamentals](../module-5.1-mlops-fundamentals/)
+- [Module 5.2: Feature Engineering & Stores](../module-5.2-feature-stores/)
 - Experience training ML models (any framework)
 - Basic understanding of hyperparameters
 
@@ -781,4 +781,4 @@ Experiment tracking transforms ML from guesswork into science. By tracking param
 
 ## Next Module
 
-Continue to [Module 5.4: Model Serving & Inference](module-5.4-model-serving/) to learn how to deploy trained models for production inference.
+Continue to [Module 5.4: Model Serving & Inference](../module-5.4-model-serving/) to learn how to deploy trained models for production inference.

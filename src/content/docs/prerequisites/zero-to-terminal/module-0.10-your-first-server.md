@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 40-50 minutes
 >
-> **Prerequisites**: [Module 0.1](module-0.1-what-is-a-computer/) through [Module 0.9](module-0.9-what-is-the-cloud/) -- all of them
+> **Prerequisites**: [Module 0.1](../module-0.1-what-is-a-computer/) through [Module 0.9](../module-0.9-what-is-the-cloud/) -- all of them
 
 ---
 

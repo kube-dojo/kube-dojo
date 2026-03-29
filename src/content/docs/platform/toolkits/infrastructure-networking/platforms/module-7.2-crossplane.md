@@ -772,7 +772,7 @@ Modify the Composition to create different resources based on the `size` paramet
 
 ## Next Module
 
-Continue to [Module 7.3: cert-manager](module-7.3-cert-manager/) to learn automated certificate management for Kubernetes.
+Continue to [Module 7.3: cert-manager](../module-7.3-cert-manager/) to learn automated certificate management for Kubernetes.
 
 ---
 

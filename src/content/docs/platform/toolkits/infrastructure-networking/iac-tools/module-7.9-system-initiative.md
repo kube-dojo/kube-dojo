@@ -12,7 +12,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [Module 7.1: Terraform](module-7.1-terraform/) - Traditional IaC concepts
+- [Module 7.1: Terraform](../module-7.1-terraform/) - Traditional IaC concepts
 - [Platform Engineering Discipline](../../../disciplines/core-platform/platform-engineering/) - IDP principles
 - Understanding of reactive programming concepts
 - Experience with DevOps tooling and workflows
@@ -759,7 +759,7 @@ When should you consider adopting System Initiative over traditional IaC?
 
 ## Next Steps
 
-- **Next Module**: [Module 7.10: Nitric](module-7.10-nitric/) — Cloud-native framework
+- **Next Module**: [Module 7.10: Nitric](../module-7.10-nitric/) — Cloud-native framework
 - **Related**: [Platform Engineering](../../../disciplines/core-platform/platform-engineering/) — IDP concepts
 - **Related**: [Platforms Toolkit](../platforms/) — Backstage, Crossplane
 

@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 2.5 hours
 >
-> **Prerequisites**: [Module 4.1: Managed vs Self-Managed Kubernetes](module-4.1-managed-vs-selfmanaged/)
+> **Prerequisites**: [Module 4.1: Managed vs Self-Managed Kubernetes](../module-4.1-managed-vs-selfmanaged/)
 >
 > **Track**: Cloud Architecture Patterns
 
@@ -1069,4 +1069,4 @@ aws cloudtrail lookup-events \
 
 ## Next Module
 
-[Module 4.4: Cloud-Native Networking and VPC Topologies](module-4.4-vpc-topologies/) -- Identity tells you *who* can access resources. Networking tells you *how* traffic flows between them. We'll design VPC architectures that keep your Kubernetes clusters connected, secure, and free from the dreaded IP exhaustion problem.
+[Module 4.4: Cloud-Native Networking and VPC Topologies](../module-4.4-vpc-topologies/) -- Identity tells you *who* can access resources. Networking tells you *how* traffic flows between them. We'll design VPC architectures that keep your Kubernetes clusters connected, secure, and free from the dreaded IP exhaustion problem.

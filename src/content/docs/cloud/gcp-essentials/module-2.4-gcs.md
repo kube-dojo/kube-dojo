@@ -689,4 +689,4 @@ echo "Cleanup complete."
 
 ## Next Module
 
-Next up: **[Module 2.5: Cloud DNS](module-2.5-dns/)** --- Learn how to manage DNS zones (public and private), configure DNS forwarding for hybrid environments, and set up peering zones for cross-VPC name resolution.
+Next up: **[Module 2.5: Cloud DNS](../module-2.5-dns/)** --- Learn how to manage DNS zones (public and private), configure DNS forwarding for hybrid environments, and set up peering zones for cross-VPC name resolution.

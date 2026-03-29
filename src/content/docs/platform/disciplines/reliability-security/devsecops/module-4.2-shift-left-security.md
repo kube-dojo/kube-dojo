@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 4.1: DevSecOps Fundamentals](module-4.1-devsecops-fundamentals/) — Core concepts
+- **Required**: [Module 4.1: DevSecOps Fundamentals](../module-4.1-devsecops-fundamentals/) — Core concepts
 - **Required**: Git basics (commits, branches, hooks)
 - **Recommended**: IDE experience (VS Code, IntelliJ, etc.)
 - **Helpful**: Basic understanding of static analysis
@@ -1038,7 +1038,7 @@ The earlier you catch issues, the cheaper they are to fix—and the more develop
 
 ## Next Module
 
-Continue to [Module 4.3: Security in CI/CD Pipelines](module-4.3-security-cicd/) to learn how to implement comprehensive security scanning in your build and deployment pipelines.
+Continue to [Module 4.3: Security in CI/CD Pipelines](../module-4.3-security-cicd/) to learn how to implement comprehensive security scanning in your build and deployment pipelines.
 
 ---
 

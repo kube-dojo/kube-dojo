@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 2.5 hours
 >
-> **Prerequisites**: [Module 1.2: CDN & Edge Computing](module-1.2-cdn-edge/), basic web security concepts (HTTP methods, SQL, XSS)
+> **Prerequisites**: [Module 1.2: CDN & Edge Computing](../module-1.2-cdn-edge/), basic web security concepts (HTTP methods, SQL, XSS)
 >
 > **Track**: Foundations — Advanced Networking
 
@@ -1492,4 +1492,4 @@ Before moving on, ensure you understand:
 
 ## Next Module
 
-[Module 1.4: BGP & Core Routing](module-1.4-bgp-routing/) — How the internet actually routes packets between networks, and why BGP is both the glue holding the internet together and its biggest vulnerability.
+[Module 1.4: BGP & Core Routing](../module-1.4-bgp-routing/) — How the internet actually routes packets between networks, and why BGP is both the glue holding the internet together and its biggest vulnerability.

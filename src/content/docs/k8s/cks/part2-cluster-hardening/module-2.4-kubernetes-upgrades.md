@@ -525,4 +525,4 @@ echo "6. ✓ Verified NetworkPolicy support"
 
 ## Next Module
 
-[Module 2.5: Restricting API Access](module-2.5-restricting-api-access/) - Network and authentication restrictions for the API server.
+[Module 2.5: Restricting API Access](../module-2.5-restricting-api-access/) - Network and authentication restrictions for the API server.

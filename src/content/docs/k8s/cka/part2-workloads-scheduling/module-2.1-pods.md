@@ -959,4 +959,4 @@ kubectl delete pod challenge
 
 ## Next Module
 
-[Module 2.2: Deployments & ReplicaSets](module-2.2-deployments/) - Rolling updates, rollbacks, and scaling.
+[Module 2.2: Deployments & ReplicaSets](../module-2.2-deployments/) - Rolling updates, rollbacks, and scaling.

@@ -14,7 +14,7 @@ lab:
 >
 > **Time to Complete**: 25-30 minutes
 >
-> **Prerequisites**: [Module 0.6: What is Networking?](module-0.6-what-is-networking/) — You should be comfortable with the terminal, files, and basic networking concepts.
+> **Prerequisites**: [Module 0.6: What is Networking?](../module-0.6-what-is-networking/) — You should be comfortable with the terminal, files, and basic networking concepts.
 
 ---
 

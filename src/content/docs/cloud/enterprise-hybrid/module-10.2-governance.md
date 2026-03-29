@@ -1243,4 +1243,4 @@ rm -rf /tmp/governance-lab /tmp/governance-report.sh
 
 ## Next Module
 
-Now that you understand how to enforce governance across cloud and Kubernetes, it is time to connect these policies to compliance frameworks. Head to [Module 10.3: Continuous Compliance & CSPM](module-10.3-compliance/) to learn how to map your policies to SOC2, PCI-DSS, and HIPAA controls, automate evidence collection, and integrate Trivy and Falco with cloud security hubs.
+Now that you understand how to enforce governance across cloud and Kubernetes, it is time to connect these policies to compliance frameworks. Head to [Module 10.3: Continuous Compliance & CSPM](../module-10.3-compliance/) to learn how to map your policies to SOC2, PCI-DSS, and HIPAA controls, automate evidence collection, and integrate Trivy and Falco with cloud security hubs.

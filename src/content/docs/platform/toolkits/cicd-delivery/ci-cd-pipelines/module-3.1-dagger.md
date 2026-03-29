@@ -1540,7 +1540,7 @@ Before moving on, ensure you can:
 
 ## Next Module
 
-Continue to [Module 3.2: Tekton](module-3.2-tekton/) where we'll explore Kubernetes-native pipelines.
+Continue to [Module 3.2: Tekton](../module-3.2-tekton/) where we'll explore Kubernetes-native pipelines.
 
 ---
 

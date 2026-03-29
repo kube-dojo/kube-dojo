@@ -1,6 +1,6 @@
 ---
 title: "Module 1.3: Pods - The Atomic Unit"
-slug: prerequisites/kubernetes-basics/module-1.3-pods/
+slug: prerequisites/kubernetes-basics/module-1.3-pods
 sidebar:
   order: 4
 lab:
@@ -443,4 +443,4 @@ Pods are the foundation:
 
 ## Next Module
 
-[Module 4: Deployments](module-1.4-deployments/) - Managing applications at scale.
+[Module 4: Deployments](../module-1.4-deployments/) - Managing applications at scale.

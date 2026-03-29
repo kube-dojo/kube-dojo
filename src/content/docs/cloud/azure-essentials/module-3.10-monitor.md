@@ -794,4 +794,4 @@ az group delete --name "$RG" --yes --no-wait
 
 ## Next Module
 
-[Module 3.11: CI/CD with Azure DevOps & GitHub Actions](module-3.11-cicd/) --- Learn how to build automated deployment pipelines that securely deploy to Azure using OIDC authentication, Azure Container Registry, and Container Apps.
+[Module 3.11: CI/CD with Azure DevOps & GitHub Actions](../module-3.11-cicd/) --- Learn how to build automated deployment pipelines that securely deploy to Azure using OIDC authentication, Azure Container Registry, and Container Apps.

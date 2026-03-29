@@ -1008,4 +1008,4 @@ echo "All resources cleaned up successfully."
 
 ## Next Module
 
-Ready to build the network foundation where your identities will operate? Head to [Module 1.2: VPC & Core Networking](module-1.2-vpc/).
+Ready to build the network foundation where your identities will operate? Head to [Module 1.2: VPC & Core Networking](../module-1.2-vpc/).

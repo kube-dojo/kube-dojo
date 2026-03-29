@@ -998,4 +998,4 @@ echo "Cleanup complete."
 
 ## Next Module
 
-Next up: **[Module 6.5: GKE Observability and Fleet Management](module-6.5-gke-fleet/)** --- Learn how to monitor GKE with Cloud Operations Suite and Managed Prometheus, manage multiple clusters with Fleet, enable cross-cluster communication with Multi-Cluster Services, and implement cost allocation.
+Next up: **[Module 6.5: GKE Observability and Fleet Management](../module-6.5-gke-fleet/)** --- Learn how to monitor GKE with Cloud Operations Suite and Managed Prometheus, manage multiple clusters with Fleet, enable cross-cluster communication with Multi-Cluster Services, and implement cost allocation.

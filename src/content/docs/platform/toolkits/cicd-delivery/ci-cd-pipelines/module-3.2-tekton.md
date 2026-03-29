@@ -1363,7 +1363,7 @@ Before moving on, ensure you can:
 
 ## Next Module
 
-Continue to [Module 3.3: Argo Workflows](module-3.3-argo-workflows/) where we'll explore DAG-based workflow orchestration.
+Continue to [Module 3.3: Argo Workflows](../module-3.3-argo-workflows/) where we'll explore DAG-based workflow orchestration.
 
 ---
 

@@ -1125,4 +1125,4 @@ Before moving on, ensure you understand:
 
 ## Next Module
 
-[Module 6.2: IaC Testing](module-6.2-iac-testing/) - How to test infrastructure code before it reaches production.
+[Module 6.2: IaC Testing](../module-6.2-iac-testing/) - How to test infrastructure code before it reaches production.

@@ -656,4 +656,4 @@ rm -f /tmp/audit-policy.yaml /tmp/sample-audit.json
 
 ## Next Module
 
-[Module 6.2: Runtime Security with Falco](module-6.2-falco/) - Detecting suspicious container behavior.
+[Module 6.2: Runtime Security with Falco](../module-6.2-falco/) - Detecting suspicious container behavior.

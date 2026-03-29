@@ -1,6 +1,6 @@
 ---
 title: "Module 1.8: YAML for Kubernetes"
-slug: prerequisites/kubernetes-basics/module-1.8-yaml-kubernetes/
+slug: prerequisites/kubernetes-basics/module-1.8-yaml-kubernetes
 sidebar:
   order: 9
 ---

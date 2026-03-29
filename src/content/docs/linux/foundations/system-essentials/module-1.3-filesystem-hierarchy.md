@@ -9,8 +9,8 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 1.1: Kernel & Architecture](module-1.1-kernel-architecture/)
-- **Helpful**: [Module 1.2: Processes & systemd](module-1.2-processes-systemd/)
+- **Required**: [Module 1.1: Kernel & Architecture](../module-1.1-kernel-architecture/)
+- **Helpful**: [Module 1.2: Processes & systemd](../module-1.2-processes-systemd/)
 
 ---
 

@@ -1,6 +1,6 @@
 ---
 title: "Module 1.4: Observability Fundamentals"
-slug: prerequisites/modern-devops/module-1.4-observability/
+slug: prerequisites/modern-devops/module-1.4-observability
 sidebar:
   order: 5
 ---
@@ -509,4 +509,4 @@ kubectl delete service web
 
 ## Next Module
 
-[Module 5: Platform Engineering Concepts](module-1.5-platform-engineering/) - Building internal developer platforms.
+[Module 5: Platform Engineering Concepts](../module-1.5-platform-engineering/) - Building internal developer platforms.

@@ -657,4 +657,4 @@ k delete deploy webapp
 
 ## Next Module
 
-[Module 1.2: Jobs and CronJobs](module-1.2-jobs-cronjobs/) - Run one-time and scheduled batch workloads.
+[Module 1.2: Jobs and CronJobs](../module-1.2-jobs-cronjobs/) - Run one-time and scheduled batch workloads.

@@ -816,7 +816,7 @@ TRADE-OFF ANALYSIS FRAMEWORK
 
 ## Next Module
 
-[Module 1.5: Stakeholder Communication & Managing Expectations](module-1.5-stakeholders/) --- Translating tech debt into business risk, saying "No" effectively, and communicating during crises to non-technical stakeholders.
+[Module 1.5: Stakeholder Communication & Managing Expectations](../module-1.5-stakeholders/) --- Translating tech debt into business risk, saying "No" effectively, and communicating during crises to non-technical stakeholders.
 
 ---
 

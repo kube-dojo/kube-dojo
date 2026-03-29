@@ -1,6 +1,6 @@
 ---
 title: "Module 1.2: Instrumentation & Alerting"
-slug: k8s/pca/module-1.2-instrumentation-alerting/
+slug: k8s/pca/module-1.2-instrumentation-alerting
 sidebar:
   order: 3
 ---
@@ -10,7 +10,7 @@ sidebar:
 
 Before starting this module:
 - [Prometheus Module](../../platform/toolkits/observability-intelligence/observability/module-1.1-prometheus/) — architecture, metric types, basic alerting
-- [PromQL Deep Dive](module-1.1-promql-deep-dive/) — query fundamentals
+- [PromQL Deep Dive](../module-1.1-promql-deep-dive/) — query fundamentals
 - [Observability 3.3: Instrumentation Principles](../../platform/foundations/observability-theory/module-3.3-instrumentation-principles/)
 - Basic Go, Python, or Java knowledge (for client library examples)
 
@@ -1367,6 +1367,6 @@ Instrumentation is where monitoring begins — without good metrics from your ap
 ## Related Modules
 
 - [PCA README]() — Full exam domain mapping and study strategy
-- [PromQL Deep Dive](module-1.1-promql-deep-dive/) — Complete PromQL for Domain 3
+- [PromQL Deep Dive](../module-1.1-promql-deep-dive/) — Complete PromQL for Domain 3
 - [Prometheus Fundamentals](../../platform/toolkits/observability-intelligence/observability/module-1.1-prometheus/) — Architecture and basics
 - [Grafana](../../platform/toolkits/observability-intelligence/observability/module-1.3-grafana/) — Dashboarding for Domain 5

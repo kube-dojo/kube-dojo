@@ -1108,4 +1108,4 @@ pulumi stack output
 
 ## Next Module
 
-Continue to [Module 7.4: Ansible](module-7.4-ansible/) to learn about configuration management and the differences between infrastructure provisioning and configuration management.
+Continue to [Module 7.4: Ansible](../module-7.4-ansible/) to learn about configuration management and the differences between infrastructure provisioning and configuration management.

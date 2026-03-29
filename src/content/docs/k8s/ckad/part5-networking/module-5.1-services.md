@@ -592,4 +592,4 @@ k delete ns drill6
 
 ## Next Module
 
-[Module 5.2: Ingress](module-5.2-ingress/) - HTTP routing and TLS termination.
+[Module 5.2: Ingress](../module-5.2-ingress/) - HTTP routing and TLS termination.

@@ -1124,4 +1124,4 @@ Test each: `kubectl kustomize challenge/overlays/dev/`
 
 ## Next Module
 
-[Module 1.5: CRDs & Operators](module-1.5-crds-operators/) - Extending Kubernetes with Custom Resource Definitions.
+[Module 1.5: CRDs & Operators](../module-1.5-crds-operators/) - Extending Kubernetes with Custom Resource Definitions.

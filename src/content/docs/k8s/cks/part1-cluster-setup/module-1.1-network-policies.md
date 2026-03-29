@@ -625,4 +625,4 @@ kubectl delete namespace exercise
 
 ## Next Module
 
-[Module 1.2: CIS Benchmarks](module-1.2-cis-benchmarks/) - Auditing cluster security with kube-bench.
+[Module 1.2: CIS Benchmarks](../module-1.2-cis-benchmarks/) - Auditing cluster security with kube-bench.

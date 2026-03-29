@@ -424,4 +424,4 @@ You've completed the Application Observability and Maintenance section:
 
 ## Next Steps
 
-Take the [Part 3 Cumulative Quiz](part3-cumulative-quiz/) to test your understanding, then proceed to [Part 4: Application Environment, Configuration and Security](../part4-environment/module-4.1-configmaps/).
+Take the [Part 3 Cumulative Quiz](../part3-cumulative-quiz/) to test your understanding, then proceed to [Part 4: Application Environment, Configuration and Security](../part4-environment/module-4.1-configmaps/).

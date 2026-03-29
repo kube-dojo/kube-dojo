@@ -928,4 +928,4 @@ k delete svc production
 
 ## Next Module
 
-[Part 2 Cumulative Quiz](part2-cumulative-quiz/) - Test your Application Deployment knowledge.
+[Part 2 Cumulative Quiz](../part2-cumulative-quiz/) - Test your Application Deployment knowledge.

@@ -400,4 +400,4 @@ For **batch and scheduled workloads**:
 
 ## Next Module
 
-[Module 1.7: Services](module-1.7-services/) - How Pods are exposed and discovered within and outside the cluster.
+[Module 1.7: Services](../module-1.7-services/) - How Pods are exposed and discovered within and outside the cluster.

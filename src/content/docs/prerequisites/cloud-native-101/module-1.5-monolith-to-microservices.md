@@ -1,6 +1,6 @@
 ---
 title: "Module 1.5: From Monolith to Microservices"
-slug: prerequisites/cloud-native-101/module-1.5-monolith-to-microservices/
+slug: prerequisites/cloud-native-101/module-1.5-monolith-to-microservices
 sidebar:
   order: 6
 ---

@@ -9,8 +9,8 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- [Module 6.1: AIOps Foundations](module-6.1-aiops-foundations/) — Core AIOps concepts
-- [Module 6.2: Anomaly Detection](module-6.2-anomaly-detection/) — Finding anomalies
+- [Module 6.1: AIOps Foundations](../module-6.1-aiops-foundations/) — Core AIOps concepts
+- [Module 6.2: Anomaly Detection](../module-6.2-anomaly-detection/) — Finding anomalies
 - Understanding of distributed systems architecture
 - Basic graph concepts (nodes, edges)
 
@@ -1096,4 +1096,4 @@ The goal: Your on-call engineer sees one incident at 3AM, not 2,000 alerts.
 
 ## Next Module
 
-Continue to [Module 6.4: Root Cause Analysis](module-6.4-root-cause-analysis/) to learn how to automatically identify probable causes within correlated incidents.
+Continue to [Module 6.4: Root Cause Analysis](../module-6.4-root-cause-analysis/) to learn how to automatically identify probable causes within correlated incidents.

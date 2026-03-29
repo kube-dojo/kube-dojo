@@ -377,4 +377,4 @@ In production, control plane components are replicated:
 
 ## Next Module
 
-[Module 1.4: Kubernetes Architecture - Node Components](module-1.4-node-components/) - Understanding the workers that run your applications.
+[Module 1.4: Kubernetes Architecture - Node Components](../module-1.4-node-components/) - Understanding the workers that run your applications.

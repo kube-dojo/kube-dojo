@@ -10,8 +10,8 @@ sidebar:
 
 Before starting this module:
 - **Required**: [Module 1.2: Processes & systemd](../foundations/system-essentials/module-1.2-processes-systemd/) for understanding services and unit files
-- **Required**: [Module 8.1: Storage Management](module-8.1-storage-management/) for filesystem and mount point knowledge
-- **Helpful**: [Module 2.1: Users & Groups](module-8.3-package-user-management/) for understanding file ownership and permissions
+- **Required**: [Module 8.1: Storage Management](../module-8.1-storage-management/) for filesystem and mount point knowledge
+- **Helpful**: [Module 2.1: Users & Groups](../module-8.3-package-user-management/) for understanding file ownership and permissions
 
 ---
 
@@ -989,4 +989,4 @@ rm -rf ~/lab /tmp/restore-test
 
 ## Next Module
 
-You now have the skills to automate anything on a schedule and protect data with proper backups. Return to the [LFCS Learning Path](../../k8s/lfcs/) to review remaining study areas, or revisit [Module 8.1: Storage Management](module-8.1-storage-management/) if you want to combine LVM snapshots with your backup strategy.
+You now have the skills to automate anything on a schedule and protect data with proper backups. Return to the [LFCS Learning Path](../../k8s/lfcs/) to review remaining study areas, or revisit [Module 8.1: Storage Management](../module-8.1-storage-management/) if you want to combine LVM snapshots with your backup strategy.

@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 3.1: TCP/IP Essentials](module-3.1-tcp-ip-essentials/)
+- **Required**: [Module 3.1: TCP/IP Essentials](../module-3.1-tcp-ip-essentials/)
 - **Helpful**: Understanding of hostname resolution concepts
 
 ---

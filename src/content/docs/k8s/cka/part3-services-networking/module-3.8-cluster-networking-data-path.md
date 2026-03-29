@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: ~35 minutes
 >
-> **Prerequisites**: [Module 3.1 (Services)](module-3.1-services/), [Module 3.6 (Network Policies)](module-3.6-network-policies/), [Module 3.7 (CNI)](module-3.7-cni/)
+> **Prerequisites**: [Module 3.1 (Services)](../module-3.1-services/), [Module 3.6 (Network Policies)](../module-3.6-network-policies/), [Module 3.7 (CNI)](../module-3.7-cni/)
 
 ---
 
@@ -780,13 +780,13 @@ k delete svc trace-svc
 
 ## Further Reading
 
-- [Module 3.1: Services Deep-Dive](module-3.1-services/) - Service types, selectors, and endpoints
-- [Module 3.6: Network Policies](module-3.6-network-policies/) - How policies interact with the data path
-- [Module 3.7: CNI Plugins](module-3.7-cni/) - Deep-dive into CNI architecture and configuration
-- [Module 3.3: DNS in Kubernetes](module-3.3-dns/) - Full CoreDNS configuration and troubleshooting
+- [Module 3.1: Services Deep-Dive](../module-3.1-services/) - Service types, selectors, and endpoints
+- [Module 3.6: Network Policies](../module-3.6-network-policies/) - How policies interact with the data path
+- [Module 3.7: CNI Plugins](../module-3.7-cni/) - Deep-dive into CNI architecture and configuration
+- [Module 3.3: DNS in Kubernetes](../module-3.3-dns/) - Full CoreDNS configuration and troubleshooting
 
 ---
 
 ## Next Module
 
-[Module 3.3: DNS in Kubernetes](module-3.3-dns/) - Deep-dive into CoreDNS configuration, custom DNS policies, and advanced troubleshooting.
+[Module 3.3: DNS in Kubernetes](../module-3.3-dns/) - Deep-dive into CoreDNS configuration, custom DNS policies, and advanced troubleshooting.

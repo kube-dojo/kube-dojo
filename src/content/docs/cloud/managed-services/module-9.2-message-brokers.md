@@ -914,4 +914,4 @@ kind delete cluster --name event-lab
 
 ---
 
-**Next Module**: [Module 9.3: Serverless Interoperability (Lambda / Cloud Functions / Knative)](module-9.3-serverless/) -- Learn when to use serverless alongside Kubernetes, how to trigger cloud functions from K8s events, and how Knative brings the serverless model directly into your cluster.
+**Next Module**: [Module 9.3: Serverless Interoperability (Lambda / Cloud Functions / Knative)](../module-9.3-serverless/) -- Learn when to use serverless alongside Kubernetes, how to trigger cloud functions from K8s events, and how Knative brings the serverless model directly into your cluster.

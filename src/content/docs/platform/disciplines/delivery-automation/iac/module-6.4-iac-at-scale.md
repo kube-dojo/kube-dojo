@@ -12,9 +12,9 @@ sidebar:
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [Module 6.1: IaC Fundamentals](module-6.1-iac-fundamentals/) - Core concepts
-- [Module 6.2: IaC Testing](module-6.2-iac-testing/) - Testing strategies
-- [Module 6.3: IaC Security](module-6.3-iac-security/) - Security practices
+- [Module 6.1: IaC Fundamentals](../module-6.1-iac-fundamentals/) - Core concepts
+- [Module 6.2: IaC Testing](../module-6.2-iac-testing/) - Testing strategies
+- [Module 6.3: IaC Security](../module-6.3-iac-security/) - Security practices
 - Basic understanding of organizational structures
 
 ---
@@ -1443,4 +1443,4 @@ EOF
 
 ## Next Module
 
-Continue to [Module 6.5: Drift Detection and Remediation](module-6.5-drift-remediation/) to learn how to detect, prevent, and automatically fix infrastructure drift from your desired state.
+Continue to [Module 6.5: Drift Detection and Remediation](../module-6.5-drift-remediation/) to learn how to detect, prevent, and automatically fix infrastructure drift from your desired state.

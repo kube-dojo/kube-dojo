@@ -7,7 +7,7 @@ sidebar:
 
 > **Complexity**: `[MEDIUM]` | Time: 45 minutes
 >
-> **Prerequisites**: [Module 3.3: Load Balancing](module-3.3-load-balancing/), [CKA: DNS](../../k8s/cka/part3-services-networking/module-3.3-dns/)
+> **Prerequisites**: [Module 3.3: Load Balancing](../module-3.3-load-balancing/), [CKA: DNS](../../k8s/cka/part3-services-networking/module-3.3-dns/)
 
 ---
 

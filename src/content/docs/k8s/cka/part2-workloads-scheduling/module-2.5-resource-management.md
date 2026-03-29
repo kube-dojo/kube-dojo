@@ -992,4 +992,4 @@ kubectl delete namespace challenge
 
 ## Next Module
 
-[Module 2.6: Scheduling](module-2.6-scheduling/) - Node selection, affinity, taints, and tolerations.
+[Module 2.6: Scheduling](../module-2.6-scheduling/) - Node selection, affinity, taints, and tolerations.

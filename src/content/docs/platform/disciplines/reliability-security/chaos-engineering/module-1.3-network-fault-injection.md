@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 1.2: Chaos Mesh Fundamentals](module-1.2-chaos-mesh/) — PodChaos, NetworkChaos basics, installation
+- **Required**: [Module 1.2: Chaos Mesh Fundamentals](../module-1.2-chaos-mesh/) — PodChaos, NetworkChaos basics, installation
 - **Required**: [Service Mesh basics](../../../toolkits/observability-intelligence/observability/) — Understanding of sidecar proxies, traffic management
 - **Recommended**: Familiarity with circuit breaker patterns (Envoy, Istio)
 - **Recommended**: Basic understanding of TCP/IP, DNS resolution, HTTP headers
@@ -888,4 +888,4 @@ Key takeaways:
 
 ## Next Module
 
-Continue to [Module 1.4: Stateful Chaos — Databases & Storage](module-1.4-stateful-chaos/) — Test database failover, IO delays, split-brain scenarios, and storage detachment in stateful Kubernetes workloads.
+Continue to [Module 1.4: Stateful Chaos — Databases & Storage](../module-1.4-stateful-chaos/) — Test database failover, IO delays, split-brain scenarios, and storage detachment in stateful Kubernetes workloads.

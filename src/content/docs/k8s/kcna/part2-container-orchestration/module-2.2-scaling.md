@@ -373,4 +373,4 @@ You can also scale manually:
 
 ## Next Module
 
-[Module 2.3: Storage Orchestration](module-2.3-storage/) - How Kubernetes manages persistent storage.
+[Module 2.3: Storage Orchestration](../module-2.3-storage/) - How Kubernetes manages persistent storage.

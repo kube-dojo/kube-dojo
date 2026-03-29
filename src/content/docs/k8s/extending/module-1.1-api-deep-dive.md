@@ -991,4 +991,4 @@ go get k8s.io/klog/v2@latest
 
 ## Next Module
 
-[Module 1.2: Custom Resource Definitions Deep Dive](module-1.2-crds-advanced/) - Define your own Kubernetes resource types with advanced validation, versioning, and subresources.
+[Module 1.2: Custom Resource Definitions Deep Dive](../module-1.2-crds-advanced/) - Define your own Kubernetes resource types with advanced validation, versioning, and subresources.

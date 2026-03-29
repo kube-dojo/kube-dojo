@@ -7,7 +7,7 @@ sidebar:
 
 > **Complexity**: `[COMPLEX]` | Time: 60 minutes
 >
-> **Prerequisites**: [Module 3.1: Datacenter Network Architecture](module-3.1-datacenter-networking/), [Advanced Networking: BGP Routing](../../platform/foundations/advanced-networking/module-1.4-bgp-routing/)
+> **Prerequisites**: [Module 3.1: Datacenter Network Architecture](../module-3.1-datacenter-networking/), [Advanced Networking: BGP Routing](../../platform/foundations/advanced-networking/module-1.4-bgp-routing/)
 
 ---
 
@@ -501,4 +501,4 @@ kubectl exec -n kube-system calicoctl -- /calicoctl get bgpPeer -o wide
 
 ## Next Module
 
-Continue to [Module 3.3: Load Balancing Without Cloud](module-3.3-load-balancing/) to learn how MetalLB, kube-vip, and HAProxy replace cloud load balancers on bare metal.
+Continue to [Module 3.3: Load Balancing Without Cloud](../module-3.3-load-balancing/) to learn how MetalLB, kube-vip, and HAProxy replace cloud load balancers on bare metal.

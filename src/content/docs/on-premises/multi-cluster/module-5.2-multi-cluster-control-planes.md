@@ -7,7 +7,7 @@ sidebar:
 
 > **Complexity**: `[ADVANCED]` | Time: 50 minutes
 >
-> **Prerequisites**: [Module 5.1: Private Cloud Platforms](module-5.1-private-cloud/), [Module 1.3: Cluster Topology](../../planning/module-1.3-cluster-topology/)
+> **Prerequisites**: [Module 5.1: Private Cloud Platforms](../module-5.1-private-cloud/), [Module 1.3: Cluster Topology](../../planning/module-1.3-cluster-topology/)
 
 ---
 
@@ -582,4 +582,4 @@ kind delete cluster --name host-cluster
 
 ## Next Module
 
-Continue to [Module 5.3: Cluster API on Bare Metal](module-5.3-cluster-api-bare-metal/) to learn how to manage Kubernetes cluster lifecycle declaratively using Cluster API with Metal3 and vSphere providers.
+Continue to [Module 5.3: Cluster API on Bare Metal](../module-5.3-cluster-api-bare-metal/) to learn how to manage Kubernetes cluster lifecycle declaratively using Cluster API with Metal3 and vSphere providers.

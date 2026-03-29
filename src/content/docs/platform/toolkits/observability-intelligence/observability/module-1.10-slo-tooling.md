@@ -7,7 +7,7 @@ sidebar:
 ## Complexity: [MEDIUM]
 
 **Time to Complete**: 40 minutes
-**Prerequisites**: [SRE Module 1.2: SLOs](../../../disciplines/core-platform/sre/module-1.2-slos/), [SRE Module 1.3: Error Budgets](../../../disciplines/core-platform/sre/module-1.3-error-budgets/), [Module 1.1: Prometheus](module-1.1-prometheus/)
+**Prerequisites**: [SRE Module 1.2: SLOs](../../../disciplines/core-platform/sre/module-1.2-slos/), [SRE Module 1.3: Error Budgets](../../../disciplines/core-platform/sre/module-1.3-error-budgets/), [Module 1.1: Prometheus](../module-1.1-prometheus/)
 **Learning Objectives**:
 - Define SLOs as code using Sloth and the OpenSLO specification
 - Generate Prometheus recording rules and burn-rate alerts automatically

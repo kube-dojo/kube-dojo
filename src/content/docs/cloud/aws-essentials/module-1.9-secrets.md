@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module, ensure you have:
-- Completed [Module 1.1: IAM & Access Management](module-1.1-iam/) (IAM policies, roles, trust relationships)
+- Completed [Module 1.1: IAM & Access Management](../module-1.1-iam/) (IAM policies, roles, trust relationships)
 - An AWS account with admin access (or scoped permissions for SSM, Secrets Manager, KMS)
 - AWS CLI v2 installed and configured
 - Basic understanding of encryption concepts (symmetric vs. asymmetric keys)
@@ -852,4 +852,4 @@ aws ecs delete-cluster --cluster-name secrets-lab
 
 ## Next Module
 
-Continue to [Module 1.10: CloudWatch & Observability](module-1.10-cloudwatch/) -- where you will learn to monitor everything you have built so far. Secrets management tells you *what* your application needs; observability tells you *how* it is behaving.
+Continue to [Module 1.10: CloudWatch & Observability](../module-1.10-cloudwatch/) -- where you will learn to monitor everything you have built so far. Secrets management tells you *what* your application needs; observability tells you *how* it is behaving.

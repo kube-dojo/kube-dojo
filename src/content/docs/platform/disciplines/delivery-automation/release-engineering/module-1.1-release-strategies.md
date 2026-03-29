@@ -893,7 +893,7 @@ The measure of great release engineering is how boring your deployments become.
 
 ## Next Module
 
-Continue to [Module 1.2: Advanced Canary Deployments with Argo Rollouts](module-1.2-argo-rollouts/) to learn how to automate canary deployments with metrics-driven promotion and rollback.
+Continue to [Module 1.2: Advanced Canary Deployments with Argo Rollouts](../module-1.2-argo-rollouts/) to learn how to automate canary deployments with metrics-driven promotion and rollback.
 
 ---
 

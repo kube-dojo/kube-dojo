@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 3.5 hours
 >
-> **Prerequisites**: [Module 4.1: Managed vs Self-Managed Kubernetes](module-4.1-managed-vs-selfmanaged/), [Module 4.2: Multi-Cluster and Multi-Region Architectures](module-4.2-multi-cluster/)
+> **Prerequisites**: [Module 4.1: Managed vs Self-Managed Kubernetes](../module-4.1-managed-vs-selfmanaged/), [Module 4.2: Multi-Cluster and Multi-Region Architectures](../module-4.2-multi-cluster/)
 >
 > **Track**: Cloud Architecture Patterns
 

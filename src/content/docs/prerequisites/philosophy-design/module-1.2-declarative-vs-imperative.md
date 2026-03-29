@@ -1,6 +1,6 @@
 ---
 title: "Module 1.2: Declarative vs Imperative - The Philosophy"
-slug: prerequisites/philosophy-design/module-1.2-declarative-vs-imperative/
+slug: prerequisites/philosophy-design/module-1.2-declarative-vs-imperative
 sidebar:
   order: 3
 ---
@@ -409,4 +409,4 @@ This isn't just a technical choice—it's a philosophy that enables reliable, sc
 
 ## Next Module
 
-[Module 3: What We Don't Cover (and Why)](module-1.3-what-we-dont-cover/) - Understanding KubeDojo's scope and where to go for topics we skip.
+[Module 3: What We Don't Cover (and Why)](../module-1.3-what-we-dont-cover/) - Understanding KubeDojo's scope and where to go for topics we skip.

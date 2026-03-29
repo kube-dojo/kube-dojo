@@ -842,4 +842,4 @@ If you did this exercise with a group, discuss: What would you do differently? W
 
 ## Next Module
 
-[Module 1.2: Blameless Postmortems](module-1.2-postmortems/) — Learn how to turn incidents into organizational learning without blame, fear, or finger-pointing. The postmortem is where incidents stop being crises and start being investments in reliability.
+[Module 1.2: Blameless Postmortems](../module-1.2-postmortems/) — Learn how to turn incidents into organizational learning without blame, fear, or finger-pointing. The postmortem is where incidents stop being crises and start being investments in reliability.

@@ -817,4 +817,4 @@ kubectl delete pod recovery-test
 
 ## Next Module
 
-[Module 1.2: Extension Interfaces (CNI, CSI, CRI)](module-1.2-extension-interfaces/) - How Kubernetes plugs in networking, storage, and container runtimes.
+[Module 1.2: Extension Interfaces (CNI, CSI, CRI)](../module-1.2-extension-interfaces/) - How Kubernetes plugs in networking, storage, and container runtimes.

@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 1.3: Filesystem Hierarchy](module-1.3-filesystem-hierarchy/)
+- **Required**: [Module 1.3: Filesystem Hierarchy](../module-1.3-filesystem-hierarchy/)
 - **Helpful**: Understanding of basic file operations
 
 ---

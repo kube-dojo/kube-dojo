@@ -7,7 +7,7 @@ sidebar:
 
 > **Complexity**: `[MEDIUM]` | Time: 60 minutes
 >
-> **Prerequisites**: [Module 3.2: BGP & Routing](module-3.2-bgp-routing/), [MetalLB](../../platform/toolkits/infrastructure-networking/networking/module-5.4-metallb/)
+> **Prerequisites**: [Module 3.2: BGP & Routing](../module-3.2-bgp-routing/), [MetalLB](../../platform/toolkits/infrastructure-networking/networking/module-5.4-metallb/)
 
 ---
 
@@ -564,4 +564,4 @@ kind delete cluster
 
 ## Next Module
 
-Continue to [Module 3.4: DNS & Certificate Infrastructure](module-3.4-dns-certs/) to learn how to run your own DNS and PKI for on-premises Kubernetes.
+Continue to [Module 3.4: DNS & Certificate Infrastructure](../module-3.4-dns-certs/) to learn how to run your own DNS and PKI for on-premises Kubernetes.

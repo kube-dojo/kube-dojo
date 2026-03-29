@@ -800,4 +800,4 @@ k delete pv lab-pv
 
 ## Next Module
 
-Continue to [Module 4.3: StorageClasses & Dynamic Provisioning](module-4.3-storageclasses/) to learn about automatic PV creation.
+Continue to [Module 4.3: StorageClasses & Dynamic Provisioning](../module-4.3-storageclasses/) to learn about automatic PV creation.

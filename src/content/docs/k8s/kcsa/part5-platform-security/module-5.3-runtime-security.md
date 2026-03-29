@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 25-30 minutes
 >
-> **Prerequisites**: [Module 5.2: Security Observability](module-5.2-observability/)
+> **Prerequisites**: [Module 5.2: Security Observability](../module-5.2-observability/)
 
 ---
 
@@ -694,4 +694,4 @@ Key principles:
 
 ## Next Module
 
-[Module 5.4: Security Tooling](module-5.4-security-tooling/) - Overview of security tools in the Kubernetes ecosystem.
+[Module 5.4: Security Tooling](../module-5.4-security-tooling/) - Overview of security tools in the Kubernetes ecosystem.

@@ -921,4 +921,4 @@ echo "Cleanup complete."
 
 ## Next Module
 
-Next up: **[Module 2.4: Cloud Storage (GCS)](module-2.4-gcs/)** --- Master storage classes, lifecycle management, versioning, signed URLs, and the gsutil/gcloud commands you will use every day.
+Next up: **[Module 2.4: Cloud Storage (GCS)](../module-2.4-gcs/)** --- Master storage classes, lifecycle management, versioning, signed URLs, and the gsutil/gcloud commands you will use every day.

@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 1.1: Kernel & Architecture](module-1.1-kernel-architecture/)
+- **Required**: [Module 1.1: Kernel & Architecture](../module-1.1-kernel-architecture/)
 - **Helpful**: Have a Linux system available (VM, WSL, or native)
 
 ---

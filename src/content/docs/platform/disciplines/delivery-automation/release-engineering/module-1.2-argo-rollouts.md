@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 1.1: Release Strategies](module-1.1-release-strategies/) — Canary concepts, blast radius, progressive delivery
+- **Required**: [Module 1.1: Release Strategies](../module-1.1-release-strategies/) — Canary concepts, blast radius, progressive delivery
 - **Required**: Prometheus basics — PromQL queries, metrics scraping, alerting fundamentals
 - **Required**: Kubernetes Services and Ingress — Traffic routing, selectors, ingress controllers
 - **Recommended**: Familiarity with Helm or Kustomize for templating
@@ -1203,7 +1203,7 @@ Argo Rollouts transforms canary deployments from manual guesswork into automated
 
 ## Next Module
 
-Continue to [Module 1.3: Feature Management at Scale](module-1.3-feature-flags/) to learn how to decouple deployment from release using feature flags, enabling trunk-based development and instant kill switches.
+Continue to [Module 1.3: Feature Management at Scale](../module-1.3-feature-flags/) to learn how to decouple deployment from release using feature flags, enabling trunk-based development and instant kill switches.
 
 ---
 

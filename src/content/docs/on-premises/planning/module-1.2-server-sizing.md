@@ -7,7 +7,7 @@ sidebar:
 
 > **Complexity**: `[COMPLEX]` | Time: 60 minutes
 >
-> **Prerequisites**: [Module 1.1: The Case for On-Premises K8s](module-1.1-case-for-on-prem/), [Linux: Kernel Architecture](../../linux/foundations/system-essentials/module-1.1-kernel-architecture/)
+> **Prerequisites**: [Module 1.1: The Case for On-Premises K8s](../module-1.1-case-for-on-prem/), [Linux: Kernel Architecture](../../linux/foundations/system-essentials/module-1.1-kernel-architecture/)
 
 ---
 
@@ -552,4 +552,4 @@ Monitoring: 15 x 512MB =   7.5 GB
 
 ## Next Module
 
-Continue to [Module 1.3: Cluster Topology Planning](module-1.3-cluster-topology/) to learn how to organize your clusters — how many, where, and what architecture pattern to use.
+Continue to [Module 1.3: Cluster Topology Planning](../module-1.3-cluster-topology/) to learn how to organize your clusters — how many, where, and what architecture pattern to use.

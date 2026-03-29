@@ -978,4 +978,4 @@ kind delete cluster --name scheduler-lab
 
 ## Next Module
 
-[Module 1.8: API Aggregation & Extension API Servers](module-1.8-api-aggregation/) - Build custom API servers that extend the Kubernetes API beyond what CRDs can offer.
+[Module 1.8: API Aggregation & Extension API Servers](../module-1.8-api-aggregation/) - Build custom API servers that extend the Kubernetes API beyond what CRDs can offer.

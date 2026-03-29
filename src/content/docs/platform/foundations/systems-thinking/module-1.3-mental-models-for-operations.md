@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 35-40 minutes
 >
-> **Prerequisites**: [Module 1.2: Feedback Loops](module-1.2-feedback-loops/)
+> **Prerequisites**: [Module 1.2: Feedback Loops](../module-1.2-feedback-loops/)
 >
 > **Track**: Foundations
 
@@ -1144,4 +1144,4 @@ For "cascading failures during traffic spikes," list interventions:
 
 ## Next Module
 
-[Module 1.4: Complexity and Emergent Behavior](module-1.4-complexity-and-emergent-behavior/) - The Cynefin framework for decision-making, why complex systems fail unpredictably, and how to design for resilience in environments you can't fully understand.
+[Module 1.4: Complexity and Emergent Behavior](../module-1.4-complexity-and-emergent-behavior/) - The Cynefin framework for decision-making, why complex systems fail unpredictably, and how to design for resilience in environments you can't fully understand.

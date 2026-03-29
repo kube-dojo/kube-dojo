@@ -514,4 +514,4 @@ EOF
 
 ## Next Module
 
-[Module 0.4: CKS Exam Strategy](module-0.4-exam-strategy/) - Security-focused exam approach.
+[Module 0.4: CKS Exam Strategy](../module-0.4-exam-strategy/) - Security-focused exam approach.

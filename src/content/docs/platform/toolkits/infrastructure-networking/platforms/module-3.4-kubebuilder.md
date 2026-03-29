@@ -725,7 +725,7 @@ Add a `ServiceType` field to the WebApp spec (ClusterIP or NodePort) and make th
 
 - **CRD Foundations**: [CKA Module 1.5: CRDs and Operators](../../../../k8s/cka/part1-cluster-architecture/module-1.5-crds-operators/) covers the Kubernetes extension mechanics that operators build on.
 - **Operator in the Wild**: [Module 15.5: etcd-operator](../../data-ai-platforms/cloud-native-databases/module-15.5-etcd-operator/) shows a production operator managing a distributed database.
-- **Declarative Infrastructure**: [Module 7.2: Crossplane](module-7.2-crossplane/) uses the same controller-runtime reconciliation pattern, but for cloud resources instead of in-cluster workloads.
+- **Declarative Infrastructure**: [Module 7.2: Crossplane](../module-7.2-crossplane/) uses the same controller-runtime reconciliation pattern, but for cloud resources instead of in-cluster workloads.
 
 ---
 

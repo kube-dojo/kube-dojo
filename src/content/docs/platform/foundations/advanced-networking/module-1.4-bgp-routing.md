@@ -1391,4 +1391,4 @@ Before moving on, ensure you understand:
 
 ## Next Module
 
-[Module 1.5: Cloud Load Balancing Deep Dive](module-1.5-load-balancing/) — The mechanics of L4 and L7 load balancers, connection draining, Proxy Protocol, and the architectures behind cloud load balancing services.
+[Module 1.5: Cloud Load Balancing Deep Dive](../module-1.5-load-balancing/) — The mechanics of L4 and L7 load balancers, connection draining, Proxy Protocol, and the architectures behind cloud load balancing services.

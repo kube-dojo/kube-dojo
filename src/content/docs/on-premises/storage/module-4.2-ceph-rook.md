@@ -7,7 +7,7 @@ sidebar:
 
 > **Complexity**: `[COMPLEX]` | Time: 60 minutes
 >
-> **Prerequisites**: [Module 4.1: Storage Architecture](module-4.1-storage-architecture/), [Rook/Ceph Toolkit](../../platform/toolkits/infrastructure-networking/storage/module-16.1-rook-ceph/)
+> **Prerequisites**: [Module 4.1: Storage Architecture](../module-4.1-storage-architecture/), [Rook/Ceph Toolkit](../../platform/toolkits/infrastructure-networking/storage/module-16.1-rook-ceph/)
 
 ---
 
@@ -572,4 +572,4 @@ kind delete cluster
 
 ## Next Module
 
-Continue to [Module 4.3: Local Storage & Alternatives](module-4.3-local-storage/) to learn about lightweight storage options that do not require a distributed storage system.
+Continue to [Module 4.3: Local Storage & Alternatives](../module-4.3-local-storage/) to learn about lightweight storage options that do not require a distributed storage system.

@@ -1488,4 +1488,4 @@ RELIABILITY FUNDAMENTALS CHECKLIST
 
 ## Next Module
 
-[Module 2.2: Failure Modes and Effects](module-2.2-failure-modes-and-effects/) - Now that you understand what reliability means, learn how systems actually fail. Understanding failure modes is the first step to designing for reliability.
+[Module 2.2: Failure Modes and Effects](../module-2.2-failure-modes-and-effects/) - Now that you understand what reliability means, learn how systems actually fail. Understanding failure modes is the first step to designing for reliability.

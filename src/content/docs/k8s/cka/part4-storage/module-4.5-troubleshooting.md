@@ -894,4 +894,4 @@ Congratulations! You've completed Part 4: Storage. You should now be able to:
 - Create and restore from volume snapshots
 - Troubleshoot common storage issues
 
-Continue to the [Part 4 Cumulative Quiz](part4-cumulative-quiz/) to test your knowledge, then proceed to [Part 5: Troubleshooting](../part5-troubleshooting/).
+Continue to the [Part 4 Cumulative Quiz](../part4-cumulative-quiz/) to test your knowledge, then proceed to [Part 5: Troubleshooting](../part5-troubleshooting/).

@@ -12,8 +12,8 @@ sidebar:
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [Module 7.1: Terraform](module-7.1-terraform/) - Traditional IaC concepts
-- [Module 7.3: Pulumi](module-7.3-pulumi/) - Programming language approach to IaC
+- [Module 7.1: Terraform](../module-7.1-terraform/) - Traditional IaC concepts
+- [Module 7.3: Pulumi](../module-7.3-pulumi/) - Programming language approach to IaC
 - Programming fundamentals (any language)
 - [Distributed Systems Foundation](../../../foundations/distributed-systems/) - Cloud architecture
 - AWS or simulator setup for exercises
@@ -895,8 +895,8 @@ Wing was designed to solve these problems with a purpose-built language where cl
 
 ## Next Steps
 
-- **Next Module**: [Module 7.8: SST](module-7.8-sst/) — Serverless Stack
-- **Related**: [Module 7.3: Pulumi](module-7.3-pulumi/) — Compare approaches
+- **Next Module**: [Module 7.8: SST](../module-7.8-sst/) — Serverless Stack
+- **Related**: [Module 7.3: Pulumi](../module-7.3-pulumi/) — Compare approaches
 - **Related**: [Platforms Toolkit](../platforms/) — Platform abstractions
 
 ---

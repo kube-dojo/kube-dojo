@@ -896,4 +896,4 @@ kind delete cluster --name search-lab
 
 ---
 
-**Next Module**: [Module 9.7: Streaming Data Pipelines (MSK / Confluent / Dataflow)](module-9.7-streaming/) -- Learn how to build streaming data pipelines with managed Kafka, compare managed vs in-cluster Strimzi, and process real-time events from Kubernetes workloads.
+**Next Module**: [Module 9.7: Streaming Data Pipelines (MSK / Confluent / Dataflow)](../module-9.7-streaming/) -- Learn how to build streaming data pipelines with managed Kafka, compare managed vs in-cluster Strimzi, and process real-time events from Kubernetes workloads.

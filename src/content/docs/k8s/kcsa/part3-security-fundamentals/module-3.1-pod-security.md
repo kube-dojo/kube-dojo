@@ -516,4 +516,4 @@ Pod Security Standards:
 
 ## Next Module
 
-[Module 3.2: RBAC Fundamentals](module-3.2-rbac/) - Role-based access control for Kubernetes authorization.
+[Module 3.2: RBAC Fundamentals](../module-3.2-rbac/) - Role-based access control for Kubernetes authorization.

@@ -1,6 +1,6 @@
 ---
 title: "Module 1.4: Dead Ends - Technologies We Skip"
-slug: prerequisites/philosophy-design/module-1.4-dead-ends/
+slug: prerequisites/philosophy-design/module-1.4-dead-ends
 sidebar:
   order: 5
 ---

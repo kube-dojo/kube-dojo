@@ -1024,4 +1024,4 @@ Before moving on, ensure you understand:
 
 ## Next Module
 
-[Module 5.2: Consensus and Coordination](module-5.2-consensus-and-coordination/) - How distributed systems agree on anything, and why it's so hard.
+[Module 5.2: Consensus and Coordination](../module-5.2-consensus-and-coordination/) - How distributed systems agree on anything, and why it's so hard.

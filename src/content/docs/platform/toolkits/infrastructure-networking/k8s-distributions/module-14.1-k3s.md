@@ -915,7 +915,7 @@ multipass delete --purge k3s-server-1 k3s-server-2 k3s-server-3 k3s-agent-1 k3s-
 
 ## Next Module
 
-Continue to [Module 14.2: k0s](module-14.2-k0s/) — Zero-dependency Kubernetes with even cleaner architecture.
+Continue to [Module 14.2: k0s](../module-14.2-k0s/) — Zero-dependency Kubernetes with even cleaner architecture.
 
 ---
 

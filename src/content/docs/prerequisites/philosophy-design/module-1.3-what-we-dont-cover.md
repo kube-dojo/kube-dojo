@@ -1,6 +1,6 @@
 ---
 title: "Module 1.3: What We Don't Cover (and Why)"
-slug: prerequisites/philosophy-design/module-1.3-what-we-dont-cover/
+slug: prerequisites/philosophy-design/module-1.3-what-we-dont-cover
 sidebar:
   order: 4
 ---
@@ -326,4 +326,4 @@ Understanding these boundaries helps you set expectations and plan your broader 
 
 ## Next Module
 
-[Module 4: Dead Ends - Technologies We Skip](module-1.4-dead-ends/) - Why certain technologies are deprecated and shouldn't be learned.
+[Module 4: Dead Ends - Technologies We Skip](../module-1.4-dead-ends/) - Why certain technologies are deprecated and shouldn't be learned.

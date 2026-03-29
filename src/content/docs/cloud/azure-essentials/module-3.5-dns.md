@@ -739,4 +739,4 @@ az group delete --name "$RG" --yes --no-wait
 
 ## Next Module
 
-[Module 3.6: Azure Container Registry (ACR)](module-3.6-acr/) --- Learn how to store, manage, and secure your container images with Azure Container Registry, including authentication, ACR Tasks for automated builds, and geo-replication.
+[Module 3.6: Azure Container Registry (ACR)](../module-3.6-acr/) --- Learn how to store, manage, and secure your container images with Azure Container Registry, including authentication, ACR Tasks for automated builds, and geo-replication.

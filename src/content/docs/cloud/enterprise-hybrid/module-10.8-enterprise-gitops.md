@@ -1027,4 +1027,4 @@ rm /tmp/platform-dashboard.sh
 
 ## Next Module
 
-With the GitOps platform in place, it is time to secure it with Zero Trust principles. Head to [Module 10.9: Zero Trust Architecture in Hybrid Cloud](module-10.9-zero-trust/) to learn about BeyondCorp, Identity-Aware Proxies, micro-segmentation, and how to remove VPNs from your enterprise architecture.
+With the GitOps platform in place, it is time to secure it with Zero Trust principles. Head to [Module 10.9: Zero Trust Architecture in Hybrid Cloud](../module-10.9-zero-trust/) to learn about BeyondCorp, Identity-Aware Proxies, micro-segmentation, and how to remove VPNs from your enterprise architecture.

@@ -1205,4 +1205,4 @@ docker run --rm \
 
 ## Next Module
 
-Continue to [Module 12.2: Semgrep](module-12.2-semgrep/) to learn about writing custom security rules in minutes—the developer-friendly alternative to complex SAST tools.
+Continue to [Module 12.2: Semgrep](../module-12.2-semgrep/) to learn about writing custom security rules in minutes—the developer-friendly alternative to complex SAST tools.

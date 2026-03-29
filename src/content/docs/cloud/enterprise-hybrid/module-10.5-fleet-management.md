@@ -932,4 +932,4 @@ rm /tmp/fleet-report.sh
 
 ## Next Module
 
-Now that you can manage a fleet of clusters, it is time to learn how to provision them declaratively. Head to [Module 10.6: Multi-Cloud Provisioning with Cluster API](module-10.6-cluster-api/) to learn how CAPI and its providers (CAPA, CAPZ, CAPG) let you create, upgrade, and scale Kubernetes clusters across any infrastructure using Kubernetes-native APIs.
+Now that you can manage a fleet of clusters, it is time to learn how to provision them declaratively. Head to [Module 10.6: Multi-Cloud Provisioning with Cluster API](../module-10.6-cluster-api/) to learn how CAPI and its providers (CAPA, CAPZ, CAPG) let you create, upgrade, and scale Kubernetes clusters across any infrastructure using Kubernetes-native APIs.

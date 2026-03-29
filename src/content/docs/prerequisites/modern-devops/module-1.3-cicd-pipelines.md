@@ -1,6 +1,6 @@
 ---
 title: "Module 1.3: CI/CD Pipelines"
-slug: prerequisites/modern-devops/module-1.3-cicd-pipelines/
+slug: prerequisites/modern-devops/module-1.3-cicd-pipelines
 sidebar:
   order: 4
 ---
@@ -638,4 +638,4 @@ echo "=== CI Pipeline Complete ==="
 
 ## Next Module
 
-[Module 4: Observability Fundamentals](module-1.4-observability/) - Monitoring, logging, and tracing.
+[Module 4: Observability Fundamentals](../module-1.4-observability/) - Monitoring, logging, and tracing.

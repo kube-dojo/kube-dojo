@@ -510,4 +510,4 @@ curl -k -u admin:password -X POST \
 
 ## Next Module
 
-Continue to [Module 2.2: OS Provisioning & PXE Boot](module-2.2-pxe-provisioning/) to learn how to automatically install operating systems on bare metal servers over the network.
+Continue to [Module 2.2: OS Provisioning & PXE Boot](../module-2.2-pxe-provisioning/) to learn how to automatically install operating systems on bare metal servers over the network.

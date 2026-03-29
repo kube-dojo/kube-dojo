@@ -744,4 +744,4 @@ eBPF programs run very efficiently in the kernel. The typical overhead is around
 
 ## Next Module
 
-Continue to [Module 1.7: Hubble - Network Observability with Cilium](module-1.7-hubble/) to learn about eBPF-based network observability and visualization.
+Continue to [Module 1.7: Hubble - Network Observability with Cilium](../module-1.7-hubble/) to learn about eBPF-based network observability and visualization.

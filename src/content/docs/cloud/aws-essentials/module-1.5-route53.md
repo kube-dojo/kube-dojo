@@ -12,7 +12,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [Module 1.2: VPC & Networking Foundations](module-1.2-vpc/)
+- [Module 1.2: VPC & Networking Foundations](../module-1.2-vpc/)
 - Basic understanding of domain names and how browsers resolve URLs
 - AWS account with at least one registered domain (or willingness to register one ~$12/year)
 - AWS CLI configured with appropriate permissions
@@ -902,4 +902,4 @@ aws sns delete-topic --topic-arn ${TOPIC_ARN}
 
 ## Next Module
 
-Next up: **[Module 1.6: Elastic Container Registry (ECR)](module-1.6-ecr/)** -- Learn to store, manage, and secure your container images with AWS's native registry. You will set up lifecycle policies, vulnerability scanning, and cross-account sharing -- essential foundations before deploying containers to ECS or EKS.
+Next up: **[Module 1.6: Elastic Container Registry (ECR)](../module-1.6-ecr/)** -- Learn to store, manage, and secure your container images with AWS's native registry. You will set up lifecycle policies, vulnerability scanning, and cross-account sharing -- essential foundations before deploying containers to ECS or EKS.

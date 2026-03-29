@@ -1,6 +1,6 @@
 ---
 title: "Module 1.3: Istio Security & Troubleshooting"
-slug: k8s/ica/module-1.3-istio-security-troubleshooting/
+slug: k8s/ica/module-1.3-istio-security-troubleshooting
 sidebar:
   order: 4
 ---
@@ -12,8 +12,8 @@ sidebar:
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [Module 1: Installation & Architecture](module-1.1-istio-installation-architecture/) — istiod, Envoy, sidecar injection
-- [Module 2: Traffic Management](module-1.2-istio-traffic-management/) — VirtualService, DestinationRule, Gateway
+- [Module 1: Installation & Architecture](../module-1.1-istio-installation-architecture/) — istiod, Envoy, sidecar injection
+- [Module 2: Traffic Management](../module-1.2-istio-traffic-management/) — VirtualService, DestinationRule, Gateway
 - Basic understanding of TLS, JWT tokens, and RBAC concepts
 
 ---
@@ -1117,7 +1117,7 @@ kubectl delete namespace istio-system
 
 ## Next Module
 
-Continue to [Module 4: Istio Observability](module-1.4-istio-observability/) to learn about Istio metrics, distributed tracing, access logging, and dashboards with Kiali and Grafana. Observability is **10% of the ICA exam**.
+Continue to [Module 4: Istio Observability](../module-1.4-istio-observability/) to learn about Istio metrics, distributed tracing, access logging, and dashboards with Kiali and Grafana. Observability is **10% of the ICA exam**.
 
 ### Final Exam Prep Checklist
 

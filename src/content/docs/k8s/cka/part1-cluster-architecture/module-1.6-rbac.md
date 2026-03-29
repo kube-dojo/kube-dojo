@@ -994,4 +994,4 @@ kubectl delete clusterrolebinding dm-pods
 
 ## Next Module
 
-[Module 1.7: kubeadm Basics](module-1.7-kubeadm/) - Cluster bootstrap and node management.
+[Module 1.7: kubeadm Basics](../module-1.7-kubeadm/) - Cluster bootstrap and node management.

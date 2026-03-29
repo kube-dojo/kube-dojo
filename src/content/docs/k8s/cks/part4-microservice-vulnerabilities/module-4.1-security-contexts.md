@@ -539,4 +539,4 @@ kubectl delete pod insecure hardened
 
 ## Next Module
 
-[Module 4.2: Pod Security Admission](module-4.2-pod-security-admission/) - Enforcing security standards at namespace level.
+[Module 4.2: Pod Security Admission](../module-4.2-pod-security-admission/) - Enforcing security standards at namespace level.

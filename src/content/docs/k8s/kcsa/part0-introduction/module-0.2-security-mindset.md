@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 20-25 minutes
 >
-> **Prerequisites**: [Module 0.1: KCSA Overview](module-0.1-kcsa-overview/)
+> **Prerequisites**: [Module 0.1: KCSA Overview](../module-0.1-kcsa-overview/)
 
 ---
 

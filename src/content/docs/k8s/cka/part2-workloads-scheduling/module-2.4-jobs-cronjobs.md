@@ -758,4 +758,4 @@ kubectl get job challenge-job -w
 
 ## Next Module
 
-[Module 2.5: Resource Management](module-2.5-resource-management/) - Requests, limits, and QoS classes.
+[Module 2.5: Resource Management](../module-2.5-resource-management/) - Requests, limits, and QoS classes.

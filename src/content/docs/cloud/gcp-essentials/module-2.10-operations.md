@@ -868,4 +868,4 @@ echo "Cleanup complete."
 
 ## Next Module
 
-Next up: **[Module 2.11: Cloud Build & CI/CD](module-2.11-cloud-build/)** --- Learn how to define build pipelines with `cloudbuild.yaml`, use built-in and custom builders, set up triggers from GitHub and GitLab, and orchestrate deployments with Cloud Deploy.
+Next up: **[Module 2.11: Cloud Build & CI/CD](../module-2.11-cloud-build/)** --- Learn how to define build pipelines with `cloudbuild.yaml`, use built-in and custom builders, set up triggers from GitHub and GitLab, and orchestrate deployments with Cloud Deploy.

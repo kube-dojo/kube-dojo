@@ -659,4 +659,4 @@ k delete pod app-complete
 
 ## Next Module
 
-[Module 1.4: Volumes for Developers](module-1.4-volumes/) - Persistent and ephemeral storage patterns.
+[Module 1.4: Volumes for Developers](../module-1.4-volumes/) - Persistent and ephemeral storage patterns.

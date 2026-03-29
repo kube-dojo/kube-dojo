@@ -1,6 +1,6 @@
 ---
 title: "Module 1.6: Security Practices (DevSecOps)"
-slug: prerequisites/modern-devops/module-1.6-devsecops/
+slug: prerequisites/modern-devops/module-1.6-devsecops
 sidebar:
   order: 7
 ---

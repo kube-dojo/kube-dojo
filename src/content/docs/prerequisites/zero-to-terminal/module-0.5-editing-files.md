@@ -14,7 +14,7 @@ lab:
 >
 > **Time to Complete**: 25 minutes
 >
-> **Prerequisites**: [Module 0.3 - First Terminal Commands](module-0.3-first-commands/)
+> **Prerequisites**: [Module 0.3 - First Terminal Commands](../module-0.3-first-commands/)
 
 ---
 
@@ -513,7 +513,7 @@ rm hello.txt kitchen-memo.txt kitchen-report.sh my-first-script.sh
 
 ## What's Next?
 
-In [Module 0.7: Servers and SSH](module-0.7-servers-and-ssh/), you'll learn what a server is and how to connect to one remotely. Everything you've learned so far -- commands, file editing, scripts -- works exactly the same on a remote server. The only difference is that you'll be controlling a kitchen in another building.
+In [Module 0.7: Servers and SSH](../module-0.7-servers-and-ssh/), you'll learn what a server is and how to connect to one remotely. Everything you've learned so far -- commands, file editing, scripts -- works exactly the same on a remote server. The only difference is that you'll be controlling a kitchen in another building.
 
 ---
 

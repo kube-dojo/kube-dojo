@@ -379,4 +379,4 @@ spec:
 
 ## Next Module
 
-[Module 1.6: Workload Resources](module-1.6-workload-resources/) - Deployments, ReplicaSets, and other controllers that manage Pods.
+[Module 1.6: Workload Resources](../module-1.6-workload-resources/) - Deployments, ReplicaSets, and other controllers that manage Pods.

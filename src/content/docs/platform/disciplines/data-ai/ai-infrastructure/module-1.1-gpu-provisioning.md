@@ -840,7 +840,7 @@ GPU provisioning on Kubernetes is a multi-layered problem: drivers, container in
 
 ## Next Module
 
-Continue to [Module 1.2: Advanced GPU Scheduling & Sharing](module-1.2-gpu-scheduling/) to learn how to share GPUs across workloads using MIG, time-slicing, MPS, and Dynamic Resource Allocation.
+Continue to [Module 1.2: Advanced GPU Scheduling & Sharing](../module-1.2-gpu-scheduling/) to learn how to share GPUs across workloads using MIG, time-slicing, MPS, and Dynamic Resource Allocation.
 
 ---
 

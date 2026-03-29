@@ -798,4 +798,4 @@ Prometheus is the foundation of cloud-native observability. Its pull-based model
 
 ## Next Module
 
-Continue to [Module 1.2: OpenTelemetry](module-1.2-opentelemetry/) to learn about vendor-agnostic observability instrumentation.
+Continue to [Module 1.2: OpenTelemetry](../module-1.2-opentelemetry/) to learn about vendor-agnostic observability instrumentation.

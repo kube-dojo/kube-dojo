@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 5.1: USE Method](module-5.1-use-method/)
+- **Required**: [Module 5.1: USE Method](../module-5.1-use-method/)
 - **Required**: [Module 2.2: cgroups](../../foundations/container-primitives/module-2.2-cgroups/)
 - **Helpful**: [Module 1.3: Filesystem Hierarchy](../../foundations/system-essentials/module-1.3-filesystem-hierarchy/)
 

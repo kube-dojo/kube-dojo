@@ -1,6 +1,6 @@
 ---
 title: "Module 1.2: kubectl Basics"
-slug: prerequisites/kubernetes-basics/module-1.2-kubectl-basics/
+slug: prerequisites/kubernetes-basics/module-1.2-kubectl-basics
 sidebar:
   order: 3
 lab:
@@ -453,4 +453,4 @@ Essential kubectl commands:
 
 ## Next Module
 
-[Module 3: Pods](module-1.3-pods/) - The atomic unit of Kubernetes.
+[Module 3: Pods](../module-1.3-pods/) - The atomic unit of Kubernetes.

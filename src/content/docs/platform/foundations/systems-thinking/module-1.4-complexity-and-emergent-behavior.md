@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 40-45 minutes
 >
-> **Prerequisites**: [Module 1.3: Mental Models for Operations](module-1.3-mental-models-for-operations/)
+> **Prerequisites**: [Module 1.3: Mental Models for Operations](../module-1.3-mental-models-for-operations/)
 >
 > **Track**: Foundations
 

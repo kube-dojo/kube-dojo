@@ -757,4 +757,4 @@ k delete ns drill6
 
 ## Next Module
 
-[Part 5 Cumulative Quiz](part5-cumulative-quiz/) - Test your mastery of Services, Ingress, and NetworkPolicies.
+[Part 5 Cumulative Quiz](../part5-cumulative-quiz/) - Test your mastery of Services, Ingress, and NetworkPolicies.

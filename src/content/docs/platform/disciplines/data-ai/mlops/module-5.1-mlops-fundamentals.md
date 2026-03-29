@@ -533,4 +533,4 @@ MLOps brings engineering rigor to machine learning. By treating ML systems as so
 
 ## Next Module
 
-Continue to [Module 5.2: Feature Engineering & Stores](module-5.2-feature-stores/) to learn how feature stores ensure consistency between training and serving.
+Continue to [Module 5.2: Feature Engineering & Stores](../module-5.2-feature-stores/) to learn how feature stores ensure consistency between training and serving.

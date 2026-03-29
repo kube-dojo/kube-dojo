@@ -838,4 +838,4 @@ az group delete --name "$RG" --yes --no-wait
 
 ## Next Module
 
-[Module 3.3: VMs & VM Scale Sets](module-3.3-vms/) --- Learn how to deploy and manage virtual machines in Azure, from choosing the right VM size to building highly available workloads with VM Scale Sets and Availability Zones.
+[Module 3.3: VMs & VM Scale Sets](../module-3.3-vms/) --- Learn how to deploy and manage virtual machines in Azure, from choosing the right VM size to building highly available workloads with VM Scale Sets and Availability Zones.

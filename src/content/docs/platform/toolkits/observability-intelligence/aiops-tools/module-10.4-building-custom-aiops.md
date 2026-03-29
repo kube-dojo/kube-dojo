@@ -10,7 +10,7 @@ sidebar:
 
 Before starting this module:
 - [AIOps Discipline](../../../disciplines/data-ai/aiops/) — Complete conceptual foundation
-- [Module 10.1: Anomaly Detection Tools](module-10.1-anomaly-detection-tools/) — Detection libraries
+- [Module 10.1: Anomaly Detection Tools](../module-10.1-anomaly-detection-tools/) — Detection libraries
 - Python proficiency (pandas, scikit-learn basics)
 - Kubernetes basics (Deployments, Services, ConfigMaps)
 - Basic understanding of Kafka or similar streaming platforms

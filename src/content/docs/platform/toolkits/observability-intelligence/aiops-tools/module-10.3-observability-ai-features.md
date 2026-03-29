@@ -841,4 +841,4 @@ Observability platforms have evolved beyond data collection into intelligent ana
 
 ## Next Module
 
-Continue to [Building Custom AIOps](module-10.4-building-custom-aiops/) to learn how to build your own AIOps pipelines when platform AI isn't enough.
+Continue to [Building Custom AIOps](../module-10.4-building-custom-aiops/) to learn how to build your own AIOps pipelines when platform AI isn't enough.

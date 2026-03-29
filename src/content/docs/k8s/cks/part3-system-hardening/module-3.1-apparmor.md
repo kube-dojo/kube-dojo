@@ -562,4 +562,4 @@ annotations:
 
 ## Next Module
 
-[Module 3.2: Seccomp Profiles](module-3.2-seccomp/) - System call filtering for containers.
+[Module 3.2: Seccomp Profiles](../module-3.2-seccomp/) - System call filtering for containers.

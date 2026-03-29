@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- [Module 5.5: Model Monitoring & Observability](module-5.5-model-monitoring/)
+- [Module 5.5: Model Monitoring & Observability](../module-5.5-model-monitoring/)
 - Understanding of CI/CD concepts
 - Basic Kubernetes knowledge
 - Familiarity with DAGs (Directed Acyclic Graphs)

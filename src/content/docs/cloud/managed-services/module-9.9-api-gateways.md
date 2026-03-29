@@ -1096,4 +1096,4 @@ kind delete cluster --name gateway-lab
 
 ---
 
-**Next Module**: [Module 9.10: Data Warehousing & Analytics from Kubernetes](module-9.10-analytics/) -- Learn how to connect Kubernetes workloads to BigQuery, Redshift, and Snowflake, orchestrate data pipelines with Airflow, and control analytics costs.
+**Next Module**: [Module 9.10: Data Warehousing & Analytics from Kubernetes](../module-9.10-analytics/) -- Learn how to connect Kubernetes workloads to BigQuery, Redshift, and Snowflake, orchestrate data pipelines with Airflow, and control analytics costs.

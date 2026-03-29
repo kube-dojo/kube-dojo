@@ -740,4 +740,4 @@ k get sc standard -o jsonpath='{.volumeBindingMode}'
 
 ## Next Module
 
-Continue to [Module 4.4: Volume Snapshots & Cloning](module-4.4-snapshots/) to learn about backup and data protection features.
+Continue to [Module 4.4: Volume Snapshots & Cloning](../module-4.4-snapshots/) to learn about backup and data protection features.

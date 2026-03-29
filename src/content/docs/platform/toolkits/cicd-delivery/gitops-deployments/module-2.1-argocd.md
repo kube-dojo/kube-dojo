@@ -1300,7 +1300,7 @@ Before moving on, ensure you can:
 
 ## Next Module
 
-Continue to [Module 2.2: Argo Rollouts](module-2.2-argo-rollouts/) where we'll implement progressive delivery with canary and blue-green deployments.
+Continue to [Module 2.2: Argo Rollouts](../module-2.2-argo-rollouts/) where we'll implement progressive delivery with canary and blue-green deployments.
 
 ---
 

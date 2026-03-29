@@ -1073,4 +1073,4 @@ aws efs delete-file-system --file-system-id $EFS_ID
 
 ## Next Module
 
-Your stateful workloads are running with persistent storage. But how do you scale them efficiently, observe their behavior, and control costs? Head to [Module 5.5: EKS Production -- Scaling, Observability & Cost](module-5.5-eks-production/) to master Karpenter, Container Insights, and cost optimization with Kubecost.
+Your stateful workloads are running with persistent storage. But how do you scale them efficiently, observe their behavior, and control costs? Head to [Module 5.5: EKS Production -- Scaling, Observability & Cost](../module-5.5-eks-production/) to master Karpenter, Container Insights, and cost optimization with Kubecost.

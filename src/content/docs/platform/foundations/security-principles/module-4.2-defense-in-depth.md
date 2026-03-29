@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 30-35 minutes
 >
-> **Prerequisites**: [Module 4.1: Security Mindset](module-4.1-security-mindset/)
+> **Prerequisites**: [Module 4.1: Security Mindset](../module-4.1-security-mindset/)
 >
 > **Track**: Foundations
 
@@ -833,4 +833,4 @@ Before moving on, verify you can answer these:
 
 ## Next Module
 
-[Module 4.3: Identity and Access Management](module-4.3-identity-and-access/) - Authentication, authorization, and the principle of least privilege in practice.
+[Module 4.3: Identity and Access Management](../module-4.3-identity-and-access/) - Authentication, authorization, and the principle of least privilege in practice.

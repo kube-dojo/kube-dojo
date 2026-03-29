@@ -781,7 +781,7 @@ Update the secret in Vault and verify ESO syncs the change within the refresh in
 
 ## Next Module
 
-Continue to [Module 4.2: OPA & Gatekeeper](module-4.2-opa-gatekeeper/) to learn policy-as-code for Kubernetes admission control.
+Continue to [Module 4.2: OPA & Gatekeeper](../module-4.2-opa-gatekeeper/) to learn policy-as-code for Kubernetes admission control.
 
 ---
 

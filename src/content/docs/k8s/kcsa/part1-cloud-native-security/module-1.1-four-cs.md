@@ -462,4 +462,4 @@ Key principles:
 
 ## Next Module
 
-[Module 1.2: Cloud Provider Security](module-1.2-cloud-provider-security/) - Deep dive into the Cloud layer, shared responsibility, and infrastructure security.
+[Module 1.2: Cloud Provider Security](../module-1.2-cloud-provider-security/) - Deep dive into the Cloud layer, shared responsibility, and infrastructure security.

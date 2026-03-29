@@ -1716,7 +1716,7 @@ ansible-playbook -i inventory/local.yml playbooks/site.yml
 
 ## Next Module
 
-Continue to [Module 7.5: AWS CloudFormation](module-7.5-cloudformation/) to learn AWS-native infrastructure as code with CloudFormation templates and stacks.
+Continue to [Module 7.5: AWS CloudFormation](../module-7.5-cloudformation/) to learn AWS-native infrastructure as code with CloudFormation templates and stacks.
 
 ---
 

@@ -833,4 +833,4 @@ echo "Cleanup complete!"
 
 ## Next Module
 
-Now that you have stateless compute, you need a place to store massive amounts of unstructured data. Head to [Module 1.4: S3 & Object Storage](module-1.4-s3/).
+Now that you have stateless compute, you need a place to store massive amounts of unstructured data. Head to [Module 1.4: S3 & Object Storage](../module-1.4-s3/).

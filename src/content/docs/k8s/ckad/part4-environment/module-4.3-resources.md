@@ -577,4 +577,4 @@ k delete ns drill6
 
 ## Next Module
 
-[Module 4.4: SecurityContexts](module-4.4-securitycontext/) - Configure pod and container security settings.
+[Module 4.4: SecurityContexts](../module-4.4-securitycontext/) - Configure pod and container security settings.

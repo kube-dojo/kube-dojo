@@ -1,6 +1,6 @@
 ---
 title: "Module 1.1: Istio Installation & Architecture"
-slug: k8s/ica/module-1.1-istio-installation-architecture/
+slug: k8s/ica/module-1.1-istio-installation-architecture
 sidebar:
   order: 2
 ---
@@ -781,4 +781,4 @@ kind delete cluster --name istio-lab
 
 ## Next Module
 
-Continue to [Module 2: Traffic Management](module-1.2-istio-traffic-management/) — the heaviest ICA domain at 35%, covering VirtualService, DestinationRule, Gateway, traffic shifting, fault injection, and more.
+Continue to [Module 2: Traffic Management](../module-1.2-istio-traffic-management/) — the heaviest ICA domain at 35%, covering VirtualService, DestinationRule, Gateway, traffic shifting, fault injection, and more.

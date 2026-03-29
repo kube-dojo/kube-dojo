@@ -386,4 +386,4 @@ The **12-Factor App** methodology is foundational to cloud native:
 
 ## Next Module
 
-[Module 3.2: CNCF Ecosystem](module-3.2-cncf-ecosystem/) - Understanding the Cloud Native Computing Foundation and its landscape.
+[Module 3.2: CNCF Ecosystem](../module-3.2-cncf-ecosystem/) - Understanding the Cloud Native Computing Foundation and its landscape.

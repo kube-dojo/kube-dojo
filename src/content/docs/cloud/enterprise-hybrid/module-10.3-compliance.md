@@ -1040,4 +1040,4 @@ rm /tmp/compliance-score.sh
 
 ## Next Module
 
-With continuous compliance in place, it is time to bridge the gap between cloud and on-premises infrastructure. Head to [Module 10.4: Hybrid Cloud Architecture (On-Prem to Cloud)](module-10.4-hybrid/) to learn about VPN vs Direct Connect, extending cloud identity to on-premises Kubernetes, and building unified control planes with EKS Anywhere and Anthos.
+With continuous compliance in place, it is time to bridge the gap between cloud and on-premises infrastructure. Head to [Module 10.4: Hybrid Cloud Architecture (On-Prem to Cloud)](../module-10.4-hybrid/) to learn about VPN vs Direct Connect, extending cloud identity to on-premises Kubernetes, and building unified control planes with EKS Anywhere and Anthos.

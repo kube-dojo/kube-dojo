@@ -745,4 +745,4 @@ k logs <pod> -c <container> -f
 
 ## Next Module
 
-Continue to [Module 5.2: Application Failures](module-5.2-application-failures/) to learn how to troubleshoot pods, deployments, and application-level issues.
+Continue to [Module 5.2: Application Failures](../module-5.2-application-failures/) to learn how to troubleshoot pods, deployments, and application-level issues.

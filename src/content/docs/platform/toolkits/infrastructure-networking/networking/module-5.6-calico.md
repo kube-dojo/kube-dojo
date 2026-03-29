@@ -53,7 +53,7 @@ This module teaches you Calico from the ground up -- architecture, BGP, IPAM, po
 
 **Prerequisites**:
 - Kubernetes networking basics (Services, Pods, CNI)
-- [Module 5.1: Cilium](module-5.1-cilium/) (for comparison context)
+- [Module 5.1: Cilium](../module-5.1-cilium/) (for comparison context)
 - Basic understanding of BGP (helpful, not required -- we cover it here)
 - [Security Principles Foundations](../../../foundations/security-principles/)
 
@@ -1941,7 +1941,7 @@ rm -f calico-kind-config.yaml
 
 ## Next Module
 
-Continue to [Module 5.1: Cilium](module-5.1-cilium/) if you have not already, or return to the [Networking Toolkit README]() to explore other networking modules.
+Continue to [Module 5.1: Cilium](../module-5.1-cilium/) if you have not already, or return to the [Networking Toolkit README]() to explore other networking modules.
 
 ---
 

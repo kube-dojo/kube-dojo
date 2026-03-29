@@ -12,8 +12,8 @@ sidebar:
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [Module 1.2: VPC & Networking Foundations](module-1.2-vpc/)
-- [Module 1.6: Elastic Container Registry (ECR)](module-1.6-ecr/)
+- [Module 1.2: VPC & Networking Foundations](../module-1.2-vpc/)
+- [Module 1.6: Elastic Container Registry (ECR)](../module-1.6-ecr/)
 - Basic understanding of containers and Docker
 - Familiarity with JSON (ECS task definitions are JSON-heavy)
 - AWS CLI configured with appropriate permissions
@@ -1093,4 +1093,4 @@ echo "Cleanup complete"
 
 ## Next Module
 
-Next up: **[Module 1.8: AWS Lambda & Serverless Patterns](module-1.8-lambda/)** -- Move beyond always-on containers to event-driven computing. You will learn Lambda's execution model, triggers, cold starts, Step Functions for orchestration, and build an S3-triggered image processing pipeline.
+Next up: **[Module 1.8: AWS Lambda & Serverless Patterns](../module-1.8-lambda/)** -- Move beyond always-on containers to event-driven computing. You will learn Lambda's execution model, triggers, cold starts, Step Functions for orchestration, and build an S3-triggered image processing pipeline.

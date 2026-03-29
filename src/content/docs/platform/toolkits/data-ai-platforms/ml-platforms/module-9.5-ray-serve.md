@@ -867,4 +867,4 @@ RayCluster just manages the Ray runtime. RayService also deploys and manages Ser
 
 ## Next Module
 
-Continue to [Module 9.6: LangChain & LlamaIndex](module-9.6-langchain-llamaindex/) to learn about building LLM applications with frameworks for RAG, agents, and chains.
+Continue to [Module 9.6: LangChain & LlamaIndex](../module-9.6-langchain-llamaindex/) to learn about building LLM applications with frameworks for RAG, agents, and chains.

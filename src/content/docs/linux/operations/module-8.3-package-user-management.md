@@ -978,4 +978,4 @@ sudo rm /etc/skel/WELCOME.txt
 
 ## Next Module
 
-Continue with [Module 8.4: Service Configuration & Scheduling](module-8.4-scheduling-backups/) to learn about systemd unit files, cron jobs, and timers — the tools that keep Linux services running and tasks executing on schedule.
+Continue with [Module 8.4: Service Configuration & Scheduling](../module-8.4-scheduling-backups/) to learn about systemd unit files, cron jobs, and timers — the tools that keep Linux services running and tasks executing on schedule.

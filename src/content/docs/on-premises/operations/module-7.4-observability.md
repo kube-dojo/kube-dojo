@@ -7,7 +7,7 @@ sidebar:
 
 > **Complexity**: `[COMPLEX]` | Time: 60 minutes
 >
-> **Prerequisites**: [Module 7.3: Node Failure & Auto-Remediation](module-7.3-node-remediation/), [Module 4.1: Storage Architecture](../storage/module-4.1-storage-architecture/)
+> **Prerequisites**: [Module 7.3: Node Failure & Auto-Remediation](../module-7.3-node-remediation/), [Module 4.1: Storage Architecture](../storage/module-4.1-storage-architecture/)
 
 ---
 

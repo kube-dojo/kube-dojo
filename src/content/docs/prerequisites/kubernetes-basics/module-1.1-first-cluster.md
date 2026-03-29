@@ -1,6 +1,6 @@
 ---
 title: "Module 1.1: Your First Cluster"
-slug: prerequisites/kubernetes-basics/module-1.1-first-cluster/
+slug: prerequisites/kubernetes-basics/module-1.1-first-cluster
 sidebar:
   order: 2
 lab:
@@ -392,4 +392,4 @@ You're ready to start working with Kubernetes!
 
 ## Next Module
 
-[Module 2: kubectl Basics](module-1.2-kubectl-basics/) - Your command-line interface to Kubernetes.
+[Module 2: kubectl Basics](../module-1.2-kubectl-basics/) - Your command-line interface to Kubernetes.

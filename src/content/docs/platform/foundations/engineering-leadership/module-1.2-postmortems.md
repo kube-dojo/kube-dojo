@@ -4,7 +4,7 @@ slug: platform/foundations/engineering-leadership/module-1.2-postmortems
 sidebar:
   order: 3
 ---
-> **Complexity**: `[MEDIUM]` | **Time**: 2 hours | **Prerequisites**: [Module 1.1: Incident Command](module-1.1-incident-command/)
+> **Complexity**: `[MEDIUM]` | **Time**: 2 hours | **Prerequisites**: [Module 1.1: Incident Command](../module-1.1-incident-command/)
 
 ---
 
@@ -1144,4 +1144,4 @@ The alternative --- blame, punishment, and fear --- produces exactly one outcome
 
 ---
 
-> **Next Module**: [Module 1.3: Effective On-Call](module-1.3-oncall/) --- Design on-call rotations that don't burn out your team, build runbooks that actually help at 3 AM, and create escalation paths that work under pressure.
+> **Next Module**: [Module 1.3: Effective On-Call](../module-1.3-oncall/) --- Design on-call rotations that don't burn out your team, build runbooks that actually help at 3 AM, and create escalation paths that work under pressure.

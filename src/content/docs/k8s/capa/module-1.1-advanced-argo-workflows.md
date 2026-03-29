@@ -1,6 +1,6 @@
 ---
 title: "Module 1.1: Advanced Argo Workflows"
-slug: k8s/capa/module-1.1-advanced-argo-workflows/
+slug: k8s/capa/module-1.1-advanced-argo-workflows
 sidebar:
   order: 2
 ---

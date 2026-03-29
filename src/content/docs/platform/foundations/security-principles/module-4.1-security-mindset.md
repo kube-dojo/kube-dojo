@@ -841,4 +841,4 @@ Before moving on, verify you can answer these:
 
 ## Next Module
 
-[Module 4.2: Defense in Depth](module-4.2-defense-in-depth/) - Layered security controls and how to implement them effectively.
+[Module 4.2: Defense in Depth](../module-4.2-defense-in-depth/) - Layered security controls and how to implement them effectively.

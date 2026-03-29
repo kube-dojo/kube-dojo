@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 4.5: Runtime Security](module-4.5-runtime-security/) — Completed DevSecOps technical modules
+- **Required**: [Module 4.5: Runtime Security](../module-4.5-runtime-security/) — Completed DevSecOps technical modules
 - **Required**: Experience working with development teams
 - **Recommended**: Basic understanding of organizational change
 - **Helpful**: Exposure to incident management

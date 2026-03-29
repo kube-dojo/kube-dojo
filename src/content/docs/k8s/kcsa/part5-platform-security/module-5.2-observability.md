@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 25-30 minutes
 >
-> **Prerequisites**: [Module 5.1: Image Security](module-5.1-image-security/)
+> **Prerequisites**: [Module 5.1: Image Security](../module-5.1-image-security/)
 
 ---
 
@@ -595,4 +595,4 @@ Key principles:
 
 ## Next Module
 
-[Module 5.3: Runtime Security](module-5.3-runtime-security/) - Enforcing security policies at runtime.
+[Module 5.3: Runtime Security](../module-5.3-runtime-security/) - Enforcing security policies at runtime.

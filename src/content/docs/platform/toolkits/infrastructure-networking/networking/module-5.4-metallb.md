@@ -479,8 +479,8 @@ If you completed this exercise successfully, you have just solved the exact prob
 
 ## Next Steps
 
-- **[Module 5.1: Cilium](module-5.1-cilium/)** -- MetalLB handles external traffic; Cilium handles everything inside the cluster
-- **[Module 5.2: Service Mesh](module-5.2-service-mesh/)** -- For mTLS and advanced traffic management after traffic enters the cluster
+- **[Module 5.1: Cilium](../module-5.1-cilium/)** -- MetalLB handles external traffic; Cilium handles everything inside the cluster
+- **[Module 5.2: Service Mesh](../module-5.2-service-mesh/)** -- For mTLS and advanced traffic management after traffic enters the cluster
 - **[CKA Module 3.1: Services](../../../../k8s/cka/part3-services-networking/module-3.1-services/)** -- Deep dive into Kubernetes service types
 - **[CKA Module 3.5: Gateway API](../../../../k8s/cka/part3-services-networking/module-3.5-gateway-api/)** -- The next-generation Ingress that pairs well with MetalLB
 - **[Module 14.1: k3s](../k8s-distributions/module-14.1-k3s/)** / **[Module 14.2: k0s](../k8s-distributions/module-14.2-k0s/)** -- Lightweight distros with built-in LB alternatives

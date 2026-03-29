@@ -1,6 +1,6 @@
 ---
 title: "Module 1.3: What Is Kubernetes?"
-slug: prerequisites/cloud-native-101/module-1.3-what-is-kubernetes/
+slug: prerequisites/cloud-native-101/module-1.3-what-is-kubernetes
 sidebar:
   order: 4
 ---
@@ -416,4 +416,4 @@ Key concepts:
 
 ## Next Module
 
-[Module 4: The Cloud Native Ecosystem](module-1.4-cloud-native-ecosystem/) - Understanding the CNCF landscape and where Kubernetes fits.
+[Module 4: The Cloud Native Ecosystem](../module-1.4-cloud-native-ecosystem/) - Understanding the CNCF landscape and where Kubernetes fits.

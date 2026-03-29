@@ -9,8 +9,8 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 2.1: What is Platform Engineering?](module-2.1-what-is-platform-engineering/) — Platform foundations
-- **Required**: [Module 2.2: Developer Experience (DevEx)](module-2.2-developer-experience/) — Understanding DevEx
+- **Required**: [Module 2.1: What is Platform Engineering?](../module-2.1-what-is-platform-engineering/) — Platform foundations
+- **Required**: [Module 2.2: Developer Experience (DevEx)](../module-2.2-developer-experience/) — Understanding DevEx
 - **Recommended**: Experience with Kubernetes, CI/CD, or cloud platforms
 
 ---
@@ -1098,7 +1098,7 @@ The best IDP is invisible—developers just get their work done.
 
 ## Next Module
 
-Continue to [Module 2.4: Golden Paths](module-2.4-golden-paths/) to learn how to design opinionated workflows that guide developers toward success.
+Continue to [Module 2.4: Golden Paths](../module-2.4-golden-paths/) to learn how to design opinionated workflows that guide developers toward success.
 
 ---
 

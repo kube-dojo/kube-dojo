@@ -607,7 +607,7 @@ Set up kube-ps1 to show context/namespace in your prompt, with different colors 
 
 ## Next Module
 
-Continue to [Module 8.2: Telepresence & Tilt](module-8.2-telepresence-tilt/) to learn about local development with remote Kubernetes clusters.
+Continue to [Module 8.2: Telepresence & Tilt](../module-8.2-telepresence-tilt/) to learn about local development with remote Kubernetes clusters.
 
 ---
 

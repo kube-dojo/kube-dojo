@@ -1294,4 +1294,4 @@ git push origin main
 
 ## Next Module
 
-Continue to [Module 11.2: Gitea & Forgejo](module-11.2-gitea-forgejo/) to learn about lightweight, self-hosted Git alternatives that run in a fraction of GitLab's resources.
+Continue to [Module 11.2: Gitea & Forgejo](../module-11.2-gitea-forgejo/) to learn about lightweight, self-hosted Git alternatives that run in a fraction of GitLab's resources.

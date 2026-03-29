@@ -687,7 +687,7 @@ Create a separate NodePool for ARM64/Graviton instances and deploy a workload th
 
 ## Next Module
 
-Continue to [Module 6.2: KEDA](module-6.2-keda/) to learn event-driven autoscaling for workloads based on metrics, queues, and custom triggers.
+Continue to [Module 6.2: KEDA](../module-6.2-keda/) to learn event-driven autoscaling for workloads based on metrics, queues, and custom triggers.
 
 ---
 

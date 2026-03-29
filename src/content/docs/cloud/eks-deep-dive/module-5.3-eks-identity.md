@@ -922,4 +922,4 @@ aws dynamodb delete-table --table-name dojo-orders
 
 ## Next Module
 
-Your pods have identity and can authenticate to AWS services. But where do they store data? Head to [Module 5.4: EKS Storage & Data Management](module-5.4-eks-storage/) to master EBS, EFS, and S3 CSI drivers for stateful workloads.
+Your pods have identity and can authenticate to AWS services. But where do they store data? Head to [Module 5.4: EKS Storage & Data Management](../module-5.4-eks-storage/) to master EBS, EFS, and S3 CSI drivers for stateful workloads.

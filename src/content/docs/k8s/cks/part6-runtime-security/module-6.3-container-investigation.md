@@ -593,4 +593,4 @@ echo "=== Investigation Complete ==="
 
 ## Next Module
 
-[Module 6.4: Immutable Infrastructure](module-6.4-immutable-infrastructure/) - Building containers that can't be modified at runtime.
+[Module 6.4: Immutable Infrastructure](../module-6.4-immutable-infrastructure/) - Building containers that can't be modified at runtime.

@@ -1,6 +1,6 @@
 ---
 title: "Module 1.1: Advanced Cilium for CCA"
-slug: k8s/cca/module-1.1-advanced-cilium/
+slug: k8s/cca/module-1.1-advanced-cilium
 sidebar:
   order: 2
 ---

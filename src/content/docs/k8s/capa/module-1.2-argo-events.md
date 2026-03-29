@@ -1,6 +1,6 @@
 ---
 title: "Module 1.2: Argo Events \u2014 Event-Driven Automation for Kubernetes"
-slug: k8s/capa/module-1.2-argo-events/
+slug: k8s/capa/module-1.2-argo-events
 sidebar:
   order: 3
 ---

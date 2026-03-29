@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 25-30 minutes
 >
-> **Prerequisites**: [Module 2.3: Network Security](module-2.3-network-security/)
+> **Prerequisites**: [Module 2.3: Network Security](../module-2.3-network-security/)
 
 ---
 

@@ -869,4 +869,4 @@ docker network rm db-lab
 
 ---
 
-**Next Module**: [Module 9.2: Managed Message Brokers & Event-Driven Kubernetes](module-9.2-message-brokers/) -- Learn how to integrate SQS, Pub/Sub, and Service Bus with Kubernetes workloads, and use KEDA to autoscale consumers based on queue depth.
+**Next Module**: [Module 9.2: Managed Message Brokers & Event-Driven Kubernetes](../module-9.2-message-brokers/) -- Learn how to integrate SQS, Pub/Sub, and Service Bus with Kubernetes workloads, and use KEDA to autoscale consumers based on queue depth.

@@ -9,8 +9,8 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 3.1: TCP/IP Essentials](module-3.1-tcp-ip-essentials/)
-- **Required**: [Module 3.3: Network Namespaces](module-3.3-network-namespaces/)
+- **Required**: [Module 3.1: TCP/IP Essentials](../module-3.1-tcp-ip-essentials/)
+- **Required**: [Module 3.3: Network Namespaces](../module-3.3-network-namespaces/)
 - **Helpful**: Basic understanding of firewalls
 
 ---

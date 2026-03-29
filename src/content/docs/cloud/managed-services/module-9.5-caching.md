@@ -945,4 +945,4 @@ kind delete cluster --name cache-lab
 
 ---
 
-**Next Module**: [Module 9.6: Search & Analytics Engines (OpenSearch / Elasticsearch)](module-9.6-search/) -- Learn how to ingest Kubernetes logs into managed search engines, configure index lifecycle management, and optimize queries for operational analytics.
+**Next Module**: [Module 9.6: Search & Analytics Engines (OpenSearch / Elasticsearch)](../module-9.6-search/) -- Learn how to ingest Kubernetes logs into managed search engines, configure index lifecycle management, and optimize queries for operational analytics.

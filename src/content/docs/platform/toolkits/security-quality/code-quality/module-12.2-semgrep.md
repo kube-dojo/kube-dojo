@@ -12,7 +12,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [Module 12.1: SonarQube](module-12.1-sonarqube/) - Code quality fundamentals
+- [Module 12.1: SonarQube](../module-12.1-sonarqube/) - Code quality fundamentals
 - [DevSecOps Discipline](../../../disciplines/reliability-security/devsecops/) - Security integration concepts
 - Basic regex understanding
 - Programming experience in at least one language
@@ -1156,4 +1156,4 @@ semgrep --config=.semgrep/ app.py --autofix           # Apply
 
 ## Next Module
 
-Continue to [Module 12.3: CodeQL](module-12.3-codeql/) to learn about semantic code analysis with GitHub's powerful query language for finding complex vulnerabilities.
+Continue to [Module 12.3: CodeQL](../module-12.3-codeql/) to learn about semantic code analysis with GitHub's powerful query language for finding complex vulnerabilities.

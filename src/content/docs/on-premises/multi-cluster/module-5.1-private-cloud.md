@@ -587,4 +587,4 @@ sudo virt-install \
 
 ## Next Module
 
-Continue to [Module 5.2: Multi-Cluster Control Planes](module-5.2-multi-cluster-control-planes/) to learn how vCluster and Kamaji let you run dozens of Kubernetes control planes on limited hardware.
+Continue to [Module 5.2: Multi-Cluster Control Planes](../module-5.2-multi-cluster-control-planes/) to learn how vCluster and Kamaji let you run dozens of Kubernetes control planes on limited hardware.

@@ -355,4 +355,4 @@ The **container runtime** actually runs containers:
 
 ## Next Module
 
-[Module 1.5: Pods](module-1.5-pods/) - The fundamental building block of Kubernetes workloads.
+[Module 1.5: Pods](../module-1.5-pods/) - The fundamental building block of Kubernetes workloads.

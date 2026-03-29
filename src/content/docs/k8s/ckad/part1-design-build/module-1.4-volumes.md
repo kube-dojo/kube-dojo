@@ -831,4 +831,4 @@ k delete cm processing-config
 
 ## Next Module
 
-[Part 1 Cumulative Quiz](part1-cumulative-quiz/) - Test your Application Design and Build knowledge.
+[Part 1 Cumulative Quiz](../part1-cumulative-quiz/) - Test your Application Design and Build knowledge.

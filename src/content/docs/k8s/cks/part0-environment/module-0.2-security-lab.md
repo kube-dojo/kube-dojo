@@ -534,4 +534,4 @@ This lab environment lets you practice every CKS exam domain hands-on.
 
 ## Next Module
 
-[Module 0.3: Security Tool Mastery](module-0.3-security-tools/) - Deep dive into Trivy, Falco, and kube-bench usage.
+[Module 0.3: Security Tool Mastery](../module-0.3-security-tools/) - Deep dive into Trivy, Falco, and kube-bench usage.

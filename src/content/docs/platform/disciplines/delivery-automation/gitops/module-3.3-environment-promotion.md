@@ -9,8 +9,8 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 3.2: Repository Strategies](module-3.2-repository-strategies/) — Repository structure
-- **Required**: [Module 3.1: What is GitOps?](module-3.1-what-is-gitops/) — GitOps fundamentals
+- **Required**: [Module 3.2: Repository Strategies](../module-3.2-repository-strategies/) — Repository structure
+- **Required**: [Module 3.1: What is GitOps?](../module-3.1-what-is-gitops/) — GitOps fundamentals
 - **Recommended**: Experience with multi-environment deployments
 
 ---
@@ -847,7 +847,7 @@ The key insight: promotion is declaring "this environment should have this versi
 
 ## Next Module
 
-Continue to [Module 3.4: Drift Detection and Remediation](module-3.4-drift-detection/) to learn how to detect and handle when cluster state doesn't match Git.
+Continue to [Module 3.4: Drift Detection and Remediation](../module-3.4-drift-detection/) to learn how to detect and handle when cluster state doesn't match Git.
 
 ---
 

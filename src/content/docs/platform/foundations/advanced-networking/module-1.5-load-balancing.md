@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 3 hours
 >
-> **Prerequisites**: [Module 1.1: DNS at Scale](module-1.1-dns-at-scale/), basic understanding of TCP/IP and HTTP
+> **Prerequisites**: [Module 1.1: DNS at Scale](../module-1.1-dns-at-scale/), basic understanding of TCP/IP and HTTP
 >
 > **Track**: Foundations — Advanced Networking
 
@@ -1411,4 +1411,4 @@ Before moving on, ensure you understand:
 
 ## Next Module
 
-[Module 1.6: Zero Trust Networking & VPN Alternatives](module-1.6-zero-trust/) — Moving beyond perimeter security to identity-based access, with practical deployment of identity-aware proxies and SSE solutions.
+[Module 1.6: Zero Trust Networking & VPN Alternatives](../module-1.6-zero-trust/) — Moving beyond perimeter security to identity-based access, with practical deployment of identity-aware proxies and SSE solutions.

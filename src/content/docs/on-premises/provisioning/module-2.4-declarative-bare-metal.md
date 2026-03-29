@@ -7,7 +7,7 @@ sidebar:
 
 > **Complexity**: `[COMPLEX]` | Time: 60 minutes
 >
-> **Prerequisites**: [Module 2.3: Immutable OS](module-2.3-immutable-os/), [Cluster API](../../platform/toolkits/infrastructure-networking/platforms/module-3.5-cluster-api/)
+> **Prerequisites**: [Module 2.3: Immutable OS](../module-2.3-immutable-os/), [Cluster API](../../platform/toolkits/infrastructure-networking/platforms/module-3.5-cluster-api/)
 
 ---
 

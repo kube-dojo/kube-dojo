@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 1.2: Advanced GPU Scheduling & Sharing](module-1.2-gpu-scheduling/) — GPU topology, multi-GPU allocation
+- **Required**: [Module 1.2: Advanced GPU Scheduling & Sharing](../module-1.2-gpu-scheduling/) — GPU topology, multi-GPU allocation
 - **Required**: Kubernetes networking fundamentals (Services, CNI, Pod-to-Pod communication)
 - **Recommended**: Basic understanding of neural network training (forward pass, backward pass, gradient descent)
 - **Recommended**: Familiarity with PyTorch or TensorFlow distributed APIs
@@ -1272,7 +1272,7 @@ Distributed training infrastructure is the highest-stakes platform engineering c
 
 ## Next Module
 
-Continue to [Module 1.4: High-Performance Storage for AI](module-1.4-ai-storage/) to learn how to solve the data pipeline bottleneck with NVMe caching, distributed filesystems, and dataset caching layers.
+Continue to [Module 1.4: High-Performance Storage for AI](../module-1.4-ai-storage/) to learn how to solve the data pipeline bottleneck with NVMe caching, distributed filesystems, and dataset caching layers.
 
 ---
 

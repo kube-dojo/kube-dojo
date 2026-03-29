@@ -12,8 +12,8 @@ sidebar:
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [Module 7.3: Pulumi](module-7.3-pulumi/) - Infrastructure with programming languages
-- [Module 7.7: Wing](module-7.7-winglang/) - Unified infrastructure and code
+- [Module 7.3: Pulumi](../module-7.3-pulumi/) - Infrastructure with programming languages
+- [Module 7.7: Wing](../module-7.7-winglang/) - Unified infrastructure and code
 - Programming fundamentals (TypeScript, Python, Go, or Dart)
 - Understanding of cloud services (functions, buckets, queues)
 
@@ -955,8 +955,8 @@ The key insight: providers are the only cloud-specific code. Your application ne
 ## Next Steps
 
 - **Complete**: [IaC Tools Toolkit](./) ✓
-- **Related**: [Module 7.7: Wing](module-7.7-winglang/) — Similar philosophy
-- **Related**: [Module 7.8: SST](module-7.8-sst/) — AWS serverless comparison
+- **Related**: [Module 7.7: Wing](../module-7.7-winglang/) — Similar philosophy
+- **Related**: [Module 7.8: SST](../module-7.8-sst/) — AWS serverless comparison
 
 ---
 

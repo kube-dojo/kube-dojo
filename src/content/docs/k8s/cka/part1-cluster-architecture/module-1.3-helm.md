@@ -782,4 +782,4 @@ helm uninstall mydb
 
 ## Next Module
 
-[Module 1.4: Kustomize](module-1.4-kustomize/) - Configuration management without templates, Kubernetes-native customization.
+[Module 1.4: Kustomize](../module-1.4-kustomize/) - Configuration management without templates, Kubernetes-native customization.

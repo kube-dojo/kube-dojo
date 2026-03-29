@@ -299,4 +299,4 @@ D) Scheduling GPUs across different time zones
 
 ## Next Module
 
-[Module 3.9: WebAssembly and Cloud Native](module-3.9-webassembly/) - The emerging technology that could complement (or sometimes replace) containers.
+[Module 3.9: WebAssembly and Cloud Native](../module-3.9-webassembly/) - The emerging technology that could complement (or sometimes replace) containers.

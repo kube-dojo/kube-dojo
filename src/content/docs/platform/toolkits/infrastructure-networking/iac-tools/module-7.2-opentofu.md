@@ -12,7 +12,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [Module 7.1: Terraform Deep Dive](module-7.1-terraform/) - Terraform fundamentals
+- [Module 7.1: Terraform Deep Dive](../module-7.1-terraform/) - Terraform fundamentals
 - Basic understanding of open-source licensing
 
 ---
@@ -873,4 +873,4 @@ tofu apply -auto-approve
 
 ## Next Module
 
-Continue to [Module 7.3: Pulumi](module-7.3-pulumi/) to learn about infrastructure as code using general-purpose programming languages.
+Continue to [Module 7.3: Pulumi](../module-7.3-pulumi/) to learn about infrastructure as code using general-purpose programming languages.

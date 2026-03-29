@@ -357,4 +357,4 @@ Resources affect scheduling decisions:
 
 ## Next Module
 
-[Module 2.2: Scaling](module-2.2-scaling/) - How Kubernetes automatically scales applications.
+[Module 2.2: Scaling](../module-2.2-scaling/) - How Kubernetes automatically scales applications.

@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 30-35 minutes
 >
-> **Prerequisites**: [Module 3.2: The Three Pillars](module-3.2-the-three-pillars/)
+> **Prerequisites**: [Module 3.2: The Three Pillars](../module-3.2-the-three-pillars/)
 >
 > **Track**: Foundations
 
@@ -1046,4 +1046,4 @@ How would you find all "out of stock" errors in the last hour?
 
 ## Next Module
 
-[Module 3.4: From Data to Insight](module-3.4-from-data-to-insight/) - Using observability data: alerting, debugging, and building understanding.
+[Module 3.4: From Data to Insight](../module-3.4-from-data-to-insight/) - Using observability data: alerting, debugging, and building understanding.

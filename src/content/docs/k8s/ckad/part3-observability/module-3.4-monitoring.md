@@ -477,4 +477,4 @@ k delete deploy drill6
 
 ## Next Module
 
-[Module 3.5: API Deprecations](module-3.5-api-deprecations/) - Handle API version changes and deprecations.
+[Module 3.5: API Deprecations](../module-3.5-api-deprecations/) - Handle API version changes and deprecations.

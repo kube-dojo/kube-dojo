@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 1.1: Release Strategies](module-1.1-release-strategies/) — Understanding of progressive delivery, deployment vs release separation
+- **Required**: [Module 1.1: Release Strategies](../module-1.1-release-strategies/) — Understanding of progressive delivery, deployment vs release separation
 - **Required**: Kubernetes Deployments and Services — Ability to deploy and expose applications
 - **Recommended**: Basic understanding of trunk-based development and CI/CD pipelines
 - **Recommended**: Familiarity with REST APIs and environment variables
@@ -1079,7 +1079,7 @@ Feature flags transform releases from binary, all-or-nothing events into gradual
 
 ## Next Module
 
-Continue to [Module 1.4: Multi-Region & Global Release Orchestration](module-1.4-global-releases/) to learn how to coordinate releases across geographies, manage blast radius at planetary scale, and use ring deployments with ArgoCD ApplicationSets.
+Continue to [Module 1.4: Multi-Region & Global Release Orchestration](../module-1.4-global-releases/) to learn how to coordinate releases across geographies, manage blast radius at planetary scale, and use ring deployments with ArgoCD ApplicationSets.
 
 ---
 

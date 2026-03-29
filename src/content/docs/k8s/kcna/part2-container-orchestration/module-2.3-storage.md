@@ -417,4 +417,4 @@ spec:
 
 ## Next Module
 
-[Module 2.4: Configuration](module-2.4-configuration/) - Managing application configuration with ConfigMaps and Secrets.
+[Module 2.4: Configuration](../module-2.4-configuration/) - Managing application configuration with ConfigMaps and Secrets.

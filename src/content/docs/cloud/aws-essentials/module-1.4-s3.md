@@ -871,4 +871,4 @@ rm -rf ./backup-exercise lifecycle.json bucket-policy.json empty_bucket.py
 
 ## Next Module
 
-Now that you have mastery over compute and storage, it is time to route users to your applications globally. Head to [Module 1.5: Route 53 & DNS](module-1.5-route53/).
+Now that you have mastery over compute and storage, it is time to route users to your applications globally. Head to [Module 1.5: Route 53 & DNS](../module-1.5-route53/).

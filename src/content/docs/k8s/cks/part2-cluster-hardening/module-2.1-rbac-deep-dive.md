@@ -610,4 +610,4 @@ kubectl delete clusterrole overpermissive
 
 ## Next Module
 
-[Module 2.2: ServiceAccount Security](module-2.2-serviceaccount-security/) - Hardening ServiceAccounts and token management.
+[Module 2.2: ServiceAccount Security](../module-2.2-serviceaccount-security/) - Hardening ServiceAccounts and token management.

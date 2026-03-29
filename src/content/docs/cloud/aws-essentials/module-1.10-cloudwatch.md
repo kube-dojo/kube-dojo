@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module, ensure you have:
-- Completed [Module 1.3: EC2 & Compute Fundamentals](module-1.3-ec2/) (launching instances, security groups, IAM instance profiles)
+- Completed [Module 1.3: EC2 & Compute Fundamentals](../module-1.3-ec2/) (launching instances, security groups, IAM instance profiles)
 - An AWS account with admin access (or scoped permissions for CloudWatch, EC2, IAM)
 - AWS CLI v2 installed and configured
 - At least one running EC2 instance to instrument (or willingness to launch one)
@@ -1020,4 +1020,4 @@ aws iam delete-role --role-name cw-lab-ec2-role
 
 ## Next Module
 
-Continue to [Module 1.11: CI/CD on AWS](module-1.11-cicd/) -- where you will build automated deployment pipelines using AWS CodeBuild, CodeDeploy, and CodePipeline. Now that you can monitor your infrastructure, it is time to automate how code gets there.
+Continue to [Module 1.11: CI/CD on AWS](../module-1.11-cicd/) -- where you will build automated deployment pipelines using AWS CodeBuild, CodeDeploy, and CodePipeline. Now that you can monitor your infrastructure, it is time to automate how code gets there.

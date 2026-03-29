@@ -866,4 +866,4 @@ helm uninstall aws-load-balancer-controller -n kube-system
 
 ## Next Module
 
-Your pods have IP addresses and your traffic flows through load balancers. But how do those pods authenticate to AWS services like S3, DynamoDB, and SQS? Head to [Module 5.3: EKS Identity (IRSA vs Pod Identity)](module-5.3-eks-identity/) to master the transition from IRSA to the simpler Pod Identity system.
+Your pods have IP addresses and your traffic flows through load balancers. But how do those pods authenticate to AWS services like S3, DynamoDB, and SQS? Head to [Module 5.3: EKS Identity (IRSA vs Pod Identity)](../module-5.3-eks-identity/) to master the transition from IRSA to the simpler Pod Identity system.

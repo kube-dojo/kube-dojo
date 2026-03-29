@@ -494,4 +494,4 @@ Verify your answers match the domain breakdown above. This helps you prioritize 
 
 ## Next Module
 
-[Module 0.2: Developer Workflow](module-0.2-developer-workflow/) - Optimize your kubectl patterns for CKAD speed.
+[Module 0.2: Developer Workflow](../module-0.2-developer-workflow/) - Optimize your kubectl patterns for CKAD speed.

@@ -7,7 +7,7 @@ sidebar:
 
 > **Complexity**: `[COMPLEX]` | Time: 60 minutes
 >
-> **Prerequisites**: [Module 7.4: Observability Without Cloud Services](module-7.4-observability/), [Module 1.2: Server Sizing](../planning/module-1.2-server-sizing/)
+> **Prerequisites**: [Module 7.4: Observability Without Cloud Services](../module-7.4-observability/), [Module 1.2: Server Sizing](../planning/module-1.2-server-sizing/)
 
 ---
 

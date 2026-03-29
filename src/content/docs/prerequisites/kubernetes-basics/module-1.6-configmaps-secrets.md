@@ -1,6 +1,6 @@
 ---
 title: "Module 1.6: ConfigMaps and Secrets"
-slug: prerequisites/kubernetes-basics/module-1.6-configmaps-secrets/
+slug: prerequisites/kubernetes-basics/module-1.6-configmaps-secrets
 sidebar:
   order: 7
 ---
@@ -425,4 +425,4 @@ ConfigMaps and Secrets externalize configuration:
 
 ## Next Module
 
-[Module 7: Namespaces and Labels](module-1.7-namespaces-labels/) - Organizing your cluster.
+[Module 7: Namespaces and Labels](../module-1.7-namespaces-labels/) - Organizing your cluster.

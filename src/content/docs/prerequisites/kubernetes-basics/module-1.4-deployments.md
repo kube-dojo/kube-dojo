@@ -1,6 +1,6 @@
 ---
 title: "Module 1.4: Deployments - Managing Applications"
-slug: prerequisites/kubernetes-basics/module-1.4-deployments/
+slug: prerequisites/kubernetes-basics/module-1.4-deployments
 sidebar:
   order: 5
 lab:
@@ -413,4 +413,4 @@ Deployments manage your applications:
 
 ## Next Module
 
-[Module 5: Services](module-1.5-services/) - Stable networking for your Pods.
+[Module 5: Services](../module-1.5-services/) - Stable networking for your Pods.

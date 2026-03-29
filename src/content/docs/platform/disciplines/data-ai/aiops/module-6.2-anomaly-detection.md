@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- [Module 6.1: AIOps Foundations](module-6.1-aiops-foundations/) — Core AIOps concepts
+- [Module 6.1: AIOps Foundations](../module-6.1-aiops-foundations/) — Core AIOps concepts
 - Basic statistics (mean, standard deviation, percentiles)
 - Understanding of time series data
 - Python basics (for exercises)
@@ -922,4 +922,4 @@ The goal isn't zero false positives—it's actionable alerts that surface real p
 
 ## Next Module
 
-Continue to [Module 6.3: Event Correlation](module-6.3-event-correlation/) to learn how to group thousands of alerts into actionable incidents.
+Continue to [Module 6.3: Event Correlation](../module-6.3-event-correlation/) to learn how to group thousands of alerts into actionable incidents.

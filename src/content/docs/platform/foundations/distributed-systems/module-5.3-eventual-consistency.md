@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 30-35 minutes
 >
-> **Prerequisites**: [Module 5.2: Consensus and Coordination](module-5.2-consensus-and-coordination/)
+> **Prerequisites**: [Module 5.2: Consensus and Coordination](../module-5.2-consensus-and-coordination/)
 >
 > **Track**: Foundations
 

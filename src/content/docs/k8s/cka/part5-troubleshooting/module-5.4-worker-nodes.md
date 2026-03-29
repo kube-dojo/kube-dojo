@@ -780,4 +780,4 @@ du -sh /var/lib/containerd/
 
 ## Next Module
 
-Continue to [Module 5.5: Network Troubleshooting](module-5.5-networking/) to learn how to diagnose and fix pod-to-pod, pod-to-service, and external connectivity issues.
+Continue to [Module 5.5: Network Troubleshooting](../module-5.5-networking/) to learn how to diagnose and fix pod-to-pod, pod-to-service, and external connectivity issues.

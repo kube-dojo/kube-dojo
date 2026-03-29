@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 3 hours
 >
-> **Prerequisites**: [Module 4.1: Managed vs Self-Managed Kubernetes](module-4.1-managed-vs-selfmanaged/)
+> **Prerequisites**: [Module 4.1: Managed vs Self-Managed Kubernetes](../module-4.1-managed-vs-selfmanaged/)
 >
 > **Track**: Cloud Architecture Patterns
 
@@ -956,4 +956,4 @@ curl -s https://payments.example.com/healthz/deep | jq .
 
 ## Next Module
 
-[Module 4.3: Cloud IAM Integration for Kubernetes](module-4.3-cloud-iam/) -- Your clusters are designed for resilience, but who gets to access them? We'll explore how cloud IAM integrates with Kubernetes to provide identity-based access without ever passing secrets around.
+[Module 4.3: Cloud IAM Integration for Kubernetes](../module-4.3-cloud-iam/) -- Your clusters are designed for resilience, but who gets to access them? We'll explore how cloud IAM integrates with Kubernetes to provide identity-based access without ever passing secrets around.

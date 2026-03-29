@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 4.3: Security in CI/CD](module-4.3-security-cicd/) — Pipeline security
+- **Required**: [Module 4.3: Security in CI/CD](../module-4.3-security-cicd/) — Pipeline security
 - **Required**: Understanding of container registries and image distribution
 - **Recommended**: Basic cryptography concepts (signing, verification)
 - **Helpful**: Experience with package managers (npm, pip, go modules)
@@ -35,7 +35,7 @@ After this module, you'll understand:
 - SLSA framework for supply chain integrity
 - Practical defenses at each layer
 
-For a ready-to-use checklist you can apply to any project today, see the **[Supply Chain Defense Guide](supply-chain-defense-guide/)**.
+For a ready-to-use checklist you can apply to any project today, see the **[Supply Chain Defense Guide](../supply-chain-defense-guide/)**.
 
 ---
 
@@ -1120,8 +1120,8 @@ The goal is end-to-end integrity: from source code to running container, every s
 
 ## Next Steps
 
-- **[Supply Chain Defense Guide](supply-chain-defense-guide/)** -- Project-agnostic checklist covering CI/CD hardening, dependency management, container security, runtime defense, and incident response preparation
-- **[Module 4.5: Runtime Security](module-4.5-runtime-security/)** -- Protecting running applications and detecting threats in production
+- **[Supply Chain Defense Guide](../supply-chain-defense-guide/)** -- Project-agnostic checklist covering CI/CD hardening, dependency management, container security, runtime defense, and incident response preparation
+- **[Module 4.5: Runtime Security](../module-4.5-runtime-security/)** -- Protecting running applications and detecting threats in production
 
 ---
 

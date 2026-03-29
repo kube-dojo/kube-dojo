@@ -489,4 +489,4 @@ Key points:
 
 ## Next Module
 
-[Module 2.2: Node Security](module-2.2-node-security/) - Securing worker nodes, kubelets, and container runtimes.
+[Module 2.2: Node Security](../module-2.2-node-security/) - Securing worker nodes, kubelets, and container runtimes.

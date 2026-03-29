@@ -639,4 +639,4 @@ k delete crd configs.drill.example.com
 
 ## Next Module
 
-[Part 4 Cumulative Quiz](part4-cumulative-quiz/) - Test your mastery of environment, configuration, and security topics.
+[Part 4 Cumulative Quiz](../part4-cumulative-quiz/) - Test your mastery of environment, configuration, and security topics.

@@ -15,7 +15,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- [Module 2.1: ArgoCD](module-2.1-argocd/) — GitOps fundamentals
+- [Module 2.1: ArgoCD](../module-2.1-argocd/) — GitOps fundamentals
 - [GitOps Discipline](../../../disciplines/delivery-automation/gitops/) — Deployment concepts
 - Understanding of Kubernetes Deployments and Services
 - Basic networking concepts (traffic splitting)
@@ -1393,7 +1393,7 @@ Before moving on, ensure you can:
 
 ## Next Module
 
-Continue to [Module 2.3: Flux](module-2.3-flux/) where we'll explore the alternative GitOps toolkit approach.
+Continue to [Module 2.3: Flux](../module-2.3-flux/) where we'll explore the alternative GitOps toolkit approach.
 
 ---
 

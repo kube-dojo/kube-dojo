@@ -990,4 +990,4 @@ kind delete cluster --name obs-lab
 
 ## Next Module
 
-[Module 8.10: Scaling IaC & State Management](module-8.10-iac-scale/) -- Your clusters are observable, your costs are optimized, and your architecture spans multiple regions. Now learn how to manage the infrastructure code that holds it all together. Large Terraform state, module design, GitOps integration, and drift detection at enterprise scale.
+[Module 8.10: Scaling IaC & State Management](../module-8.10-iac-scale/) -- Your clusters are observable, your costs are optimized, and your architecture spans multiple regions. Now learn how to manage the infrastructure code that holds it all together. Large Terraform state, module design, GitOps integration, and drift detection at enterprise scale.

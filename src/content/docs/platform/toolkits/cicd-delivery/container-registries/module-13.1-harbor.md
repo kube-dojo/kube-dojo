@@ -1321,7 +1321,7 @@ rm -rf /tmp/harbor-test
 
 ## Next Module
 
-Continue to [Module 13.2: Zot](module-13.2-zot/) — The lightweight, OCI-native alternative for minimal footprint requirements.
+Continue to [Module 13.2: Zot](../module-13.2-zot/) — The lightweight, OCI-native alternative for minimal footprint requirements.
 
 ---
 

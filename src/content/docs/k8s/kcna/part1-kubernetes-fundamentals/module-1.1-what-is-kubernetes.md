@@ -309,4 +309,4 @@ This flexibility is a key advantage—no vendor lock-in.
 
 ## Next Module
 
-[Module 1.2: Container Fundamentals](module-1.2-container-fundamentals/) - Understanding containers before diving into Kubernetes architecture.
+[Module 1.2: Container Fundamentals](../module-1.2-container-fundamentals/) - Understanding containers before diving into Kubernetes architecture.

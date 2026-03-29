@@ -10,9 +10,9 @@ sidebar:
 
 Before starting this module, you should:
 
-- Complete [Module 2.1: What is Platform Engineering?](module-2.1-what-is-platform-engineering/) - Platform foundations
-- Complete [Module 2.3: Internal Developer Platforms](module-2.3-internal-developer-platforms/) - IDP architecture
-- Complete [Module 2.4: Golden Paths](module-2.4-golden-paths/) - Template design
+- Complete [Module 2.1: What is Platform Engineering?](../module-2.1-what-is-platform-engineering/) - Platform foundations
+- Complete [Module 2.3: Internal Developer Platforms](../module-2.3-internal-developer-platforms/) - IDP architecture
+- Complete [Module 2.4: Golden Paths](../module-2.4-golden-paths/) - Template design
 - Understand infrastructure-as-code concepts (Terraform, Pulumi, or similar)
 - Familiarity with Kubernetes Custom Resources
 
@@ -1451,6 +1451,6 @@ The goal isn't to give developers AWS root access—it's to give them what they 
 
 ## Next Module
 
-Continue to [Module 2.6: Platform Maturity](module-2.6-platform-maturity/) to learn how to assess your platform's maturity level and plan a roadmap for improvement.
+Continue to [Module 2.6: Platform Maturity](../module-2.6-platform-maturity/) to learn how to assess your platform's maturity level and plan a roadmap for improvement.
 
 ---

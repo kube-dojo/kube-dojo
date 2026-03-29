@@ -7,7 +7,7 @@ sidebar:
 
 > **Complexity**: `[MEDIUM]` | Time: 45 minutes
 >
-> **Prerequisites**: [Module 2.2: OS Provisioning & PXE Boot](module-2.2-pxe-provisioning/), [K8s Distributions](../../platform/toolkits/infrastructure-networking/k8s-distributions/)
+> **Prerequisites**: [Module 2.2: OS Provisioning & PXE Boot](../module-2.2-pxe-provisioning/), [K8s Distributions](../../platform/toolkits/infrastructure-networking/k8s-distributions/)
 
 ---
 
@@ -457,4 +457,4 @@ talosctl cluster destroy --name demo
 
 ## Next Module
 
-Continue to [Module 2.4: Declarative Bare Metal](module-2.4-declarative-bare-metal/) to learn how Sidero and Metal3 bring Cluster API to bare metal, enabling GitOps-driven hardware lifecycle management.
+Continue to [Module 2.4: Declarative Bare Metal](../module-2.4-declarative-bare-metal/) to learn how Sidero and Metal3 bring Cluster API to bare metal, enabling GitOps-driven hardware lifecycle management.

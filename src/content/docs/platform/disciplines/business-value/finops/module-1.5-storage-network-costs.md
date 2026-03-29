@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 1.1: FinOps Fundamentals](module-1.1-finops-fundamentals/) — FinOps lifecycle, billing concepts
+- **Required**: [Module 1.1: FinOps Fundamentals](../module-1.1-finops-fundamentals/) — FinOps lifecycle, billing concepts
 - **Required**: Understanding of Kubernetes Persistent Volumes and StorageClasses
 - **Required**: Basic networking concepts (VPC, subnets, NAT, load balancers)
 - **Recommended**: AWS or GCP experience (examples use AWS terminology)
@@ -959,7 +959,7 @@ Storage and network costs are the silent budget killers in cloud. While compute 
 
 ## Next Module
 
-Continue to [Module 1.6: FinOps Culture & Automation](module-1.6-finops-culture/) to learn how to build organizational habits, automate cost governance, and embed FinOps into your CI/CD pipeline.
+Continue to [Module 1.6: FinOps Culture & Automation](../module-1.6-finops-culture/) to learn how to build organizational habits, automate cost governance, and embed FinOps into your CI/CD pipeline.
 
 ---
 

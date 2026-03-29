@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 1.1 — Stateful Workloads & Storage Deep Dive](module-1.1-stateful-workloads/) — StatefulSets, Operators, storage fundamentals
+- **Required**: [Module 1.1 — Stateful Workloads & Storage Deep Dive](../module-1.1-stateful-workloads/) — StatefulSets, Operators, storage fundamentals
 - **Required**: Understanding of distributed systems concepts (replication, partitioning, consensus)
 - **Recommended**: Experience with any messaging or event system (RabbitMQ, SQS, Pub/Sub, etc.)
 - **Recommended**: Familiarity with TLS certificates and mutual authentication concepts
@@ -1117,7 +1117,7 @@ The key to running Kafka well is understanding the trade-offs: partitions vs ove
 
 ## Next Module
 
-Continue to [Module 1.3: Stream Processing with Apache Flink](module-1.3-flink/) to learn how to process the data flowing through your Kafka topics in real time.
+Continue to [Module 1.3: Stream Processing with Apache Flink](../module-1.3-flink/) to learn how to process the data flowing through your Kafka topics in real time.
 
 ---
 

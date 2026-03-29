@@ -570,4 +570,4 @@ rm -f test-pod.yaml scan-report.json
 
 ## Next Module
 
-[Module 5.3: Static Analysis](module-5.3-static-analysis/) - Analyzing Kubernetes manifests for security issues.
+[Module 5.3: Static Analysis](../module-5.3-static-analysis/) - Analyzing Kubernetes manifests for security issues.

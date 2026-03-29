@@ -1,6 +1,6 @@
 ---
 title: "Module 1.1: Infrastructure as Code"
-slug: prerequisites/modern-devops/module-1.1-infrastructure-as-code/
+slug: prerequisites/modern-devops/module-1.1-infrastructure-as-code
 sidebar:
   order: 2
 ---
@@ -492,4 +492,4 @@ rm deployment.yaml
 
 ## Next Module
 
-[Module 2: GitOps](module-1.2-gitops/) - Using Git as the source of truth for infrastructure.
+[Module 2: GitOps](../module-1.2-gitops/) - Using Git as the source of truth for infrastructure.

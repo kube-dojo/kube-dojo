@@ -12,7 +12,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [Module 6.1: IaC Fundamentals](module-6.1-iac-fundamentals/) - Core IaC concepts
+- [Module 6.1: IaC Fundamentals](../module-6.1-iac-fundamentals/) - Core IaC concepts
 - [Module 4.1: Security Mindset](../../../foundations/security-principles/module-4.1-security-mindset/) - Security principles
 - Basic understanding of unit testing concepts
 
@@ -1416,4 +1416,4 @@ conftest test tfplan.json --policy ../../../policy/
 
 ## Next Module
 
-Continue to [Module 6.3: IaC Security](module-6.3-iac-security/) to learn about security scanning, secrets management, and compliance automation in infrastructure as code.
+Continue to [Module 6.3: IaC Security](../module-6.3-iac-security/) to learn about security scanning, secrets management, and compliance automation in infrastructure as code.

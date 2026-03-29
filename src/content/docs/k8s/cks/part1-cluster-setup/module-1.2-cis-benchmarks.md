@@ -528,4 +528,4 @@ kubectl delete job kube-bench
 
 ## Next Module
 
-[Module 1.3: Ingress Security](module-1.3-ingress-security/) - Securing ingress controllers and TLS termination.
+[Module 1.3: Ingress Security](../module-1.3-ingress-security/) - Securing ingress controllers and TLS termination.

@@ -696,4 +696,4 @@ rm -f /tmp/custom-falco-rules.yaml /tmp/sample-falco-events.json
 
 ## Next Module
 
-[Module 6.3: Container Investigation](module-6.3-container-investigation/) - Analyzing suspicious container behavior.
+[Module 6.3: Container Investigation](../module-6.3-container-investigation/) - Analyzing suspicious container behavior.

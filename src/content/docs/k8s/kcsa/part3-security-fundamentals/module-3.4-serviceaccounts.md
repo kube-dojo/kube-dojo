@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 25-30 minutes
 >
-> **Prerequisites**: [Module 3.3: Secrets Management](module-3.3-secrets/)
+> **Prerequisites**: [Module 3.3: Secrets Management](../module-3.3-secrets/)
 
 ---
 
@@ -495,4 +495,4 @@ Key principles:
 
 ## Next Module
 
-[Module 3.5: Network Policies](module-3.5-network-policies/) - Controlling pod-to-pod network traffic.
+[Module 3.5: Network Policies](../module-3.5-network-policies/) - Controlling pod-to-pod network traffic.

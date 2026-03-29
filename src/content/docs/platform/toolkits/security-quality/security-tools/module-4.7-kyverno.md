@@ -19,7 +19,7 @@ Kyverno is a Kubernetes-native policy engine. Unlike OPA/Gatekeeper which uses R
 
 **Prerequisites**:
 - [Security Principles Foundations](../../../foundations/security-principles/)
-- [Module 4.2: OPA & Gatekeeper](module-4.2-opa-gatekeeper/) (recommended, not required)
+- [Module 4.2: OPA & Gatekeeper](../module-4.2-opa-gatekeeper/) (recommended, not required)
 - Kubernetes admission controllers concept
 
 ---
@@ -398,7 +398,7 @@ jobs:
 
 **Bottom line**: Kyverno wins on simplicity and breadth of actions (validate + mutate + generate). Gatekeeper wins on expressiveness and reach beyond Kubernetes. Many organizations use both.
 
-> See [Module 4.2: OPA & Gatekeeper](module-4.2-opa-gatekeeper/) for Rego-based policies. For CKS exam prep, understand both -- the exam covers admission controllers broadly.
+> See [Module 4.2: OPA & Gatekeeper](../module-4.2-opa-gatekeeper/) for Rego-based policies. For CKS exam prep, understand both -- the exam covers admission controllers broadly.
 
 ---
 
@@ -527,7 +527,7 @@ Write a mutating policy that adds `environment: dev` to all pods in the `develop
 - [Kyverno Documentation](https://kyverno.io/docs/)
 - [Kyverno Policy Library](https://kyverno.io/policies/)
 - [Kyverno Playground](https://playground.kyverno.io/)
-- [Module 4.2: OPA & Gatekeeper](module-4.2-opa-gatekeeper/) - Compare approaches
+- [Module 4.2: OPA & Gatekeeper](../module-4.2-opa-gatekeeper/) - Compare approaches
 
 ---
 

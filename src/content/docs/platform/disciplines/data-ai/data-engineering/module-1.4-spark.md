@@ -11,7 +11,7 @@ sidebar:
 Before starting this module:
 - **Required**: Kubernetes Jobs and CronJobs — Understanding batch workloads on Kubernetes
 - **Required**: Basic Python programming knowledge
-- **Recommended**: [Module 1.1 — Stateful Workloads & Storage](module-1.1-stateful-workloads/) — Storage fundamentals
+- **Recommended**: [Module 1.1 — Stateful Workloads & Storage](../module-1.1-stateful-workloads/) — Storage fundamentals
 - **Recommended**: Familiarity with SQL and data manipulation concepts
 
 ---
@@ -931,7 +931,7 @@ The key to success is understanding Spark's memory model, shuffle behavior, and 
 
 ## Next Module
 
-Continue to [Module 1.5: Data Orchestration with Apache Airflow](module-1.5-airflow/) to learn how to schedule, orchestrate, and monitor complex data pipelines that tie Spark, Flink, and other tools together.
+Continue to [Module 1.5: Data Orchestration with Apache Airflow](../module-1.5-airflow/) to learn how to schedule, orchestrate, and monitor complex data pipelines that tie Spark, Flink, and other tools together.
 
 ---
 

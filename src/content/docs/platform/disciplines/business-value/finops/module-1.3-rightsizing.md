@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 1.2: Kubernetes Cost Allocation](module-1.2-k8s-cost-allocation/) — Cost visibility and attribution
+- **Required**: [Module 1.2: Kubernetes Cost Allocation](../module-1.2-k8s-cost-allocation/) — Cost visibility and attribution
 - **Required**: Understanding of Kubernetes resource requests and limits
 - **Required**: Familiarity with Deployments, Pods, and container resource management
 - **Recommended**: Experience with `kubectl top` and metrics-server
@@ -961,7 +961,7 @@ Rightsizing is the highest-ROI FinOps activity in Kubernetes. By using VPA recom
 
 ## Next Module
 
-Continue to [Module 1.4: Cluster Scaling & Compute Optimization](module-1.4-compute-optimization/) to learn how Karpenter, Spot instances, and node consolidation reduce infrastructure costs at the cluster level.
+Continue to [Module 1.4: Cluster Scaling & Compute Optimization](../module-1.4-compute-optimization/) to learn how Karpenter, Spot instances, and node consolidation reduce infrastructure costs at the cluster level.
 
 ---
 

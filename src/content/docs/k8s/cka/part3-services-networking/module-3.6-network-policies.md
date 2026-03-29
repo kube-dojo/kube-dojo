@@ -1192,4 +1192,4 @@ k delete namespace secure
 
 ## Next Module
 
-[Module 3.7: CNI & Cluster Networking](module-3.7-cni/) - Understanding the Container Network Interface.
+[Module 3.7: CNI & Cluster Networking](../module-3.7-cni/) - Understanding the Container Network Interface.

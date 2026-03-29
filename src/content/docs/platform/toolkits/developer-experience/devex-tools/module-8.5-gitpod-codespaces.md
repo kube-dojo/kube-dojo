@@ -12,7 +12,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [Module 8.4: DevPod](module-8.4-devpod/) - Open source alternative
+- [Module 8.4: DevPod](../module-8.4-devpod/) - Open source alternative
 - Basic Git/GitHub understanding
 - Container fundamentals
 - Understanding of development workflows
@@ -1050,9 +1050,9 @@ Choose Gitpod if:
 
 ## Next Steps
 
-- **Related**: [Module 8.4: DevPod](module-8.4-devpod/) - Open source alternative
+- **Related**: [Module 8.4: DevPod](../module-8.4-devpod/) - Open source alternative
 - **Related**: [Platform Engineering](../../../disciplines/core-platform/platform-engineering/) - Building developer platforms
-- **Related**: [Module 8.3: Local Kubernetes](module-8.3-local-kubernetes/) - When you need local
+- **Related**: [Module 8.3: Local Kubernetes](../module-8.3-local-kubernetes/) - When you need local
 
 ---
 

@@ -958,4 +958,4 @@ kubectl taint nodes $NODE frontend-
 
 ## Next Module
 
-[Module 2.7: ConfigMaps & Secrets](module-2.7-configmaps-secrets/) - Application configuration management.
+[Module 2.7: ConfigMaps & Secrets](../module-2.7-configmaps-secrets/) - Application configuration management.

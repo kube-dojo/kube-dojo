@@ -1,6 +1,6 @@
 ---
 title: "Module 1.1: FinOps Fundamentals"
-slug: k8s/finops/module-1.1-finops-fundamentals/
+slug: k8s/finops/module-1.1-finops-fundamentals
 sidebar:
   order: 2
 ---
@@ -675,4 +675,4 @@ FinOps is the practice of bringing financial accountability to cloud spending. I
 
 ## Next Module
 
-Continue to [Module 2: FinOps in Practice](module-1.2-finops-practice/) to learn the applied skills — cost allocation, budgeting, rate optimization, workload optimization, and Kubernetes-specific FinOps.
+Continue to [Module 2: FinOps in Practice](../module-1.2-finops-practice/) to learn the applied skills — cost allocation, budgeting, rate optimization, workload optimization, and Kubernetes-specific FinOps.

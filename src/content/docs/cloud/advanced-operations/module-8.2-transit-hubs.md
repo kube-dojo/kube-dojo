@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 3 hours
 >
-> **Prerequisites**: [Module 8.1: Multi-Account Architecture & Org Design](module-8.1-multi-account/), basic understanding of VPCs/VNets and CIDR notation
+> **Prerequisites**: [Module 8.1: Multi-Account Architecture & Org Design](../module-8.1-multi-account/), basic understanding of VPCs/VNets and CIDR notation
 >
 > **Track**: Advanced Cloud Operations
 
@@ -981,4 +981,4 @@ aws network-firewall create-firewall \
 
 ## Next Module
 
-[Module 8.3: Cross-Cluster & Cross-Region Networking](module-8.3-cross-cluster-networking/) -- Move from cloud-level networking to Kubernetes-level networking. Learn how pods in different clusters and regions discover and talk to each other using Cilium Cluster Mesh, the Multi-Cluster Services API, and global load balancing.
+[Module 8.3: Cross-Cluster & Cross-Region Networking](../module-8.3-cross-cluster-networking/) -- Move from cloud-level networking to Kubernetes-level networking. Learn how pods in different clusters and regions discover and talk to each other using Cilium Cluster Mesh, the Multi-Cluster Services API, and global load balancing.

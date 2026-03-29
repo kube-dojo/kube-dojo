@@ -974,4 +974,4 @@ rm /tmp/capi-health-check.sh /tmp/capi-export.yaml
 
 ## Next Module
 
-With infrastructure provisioning automated, it is time to connect services across those clusters. Head to [Module 10.7: Multi-Cloud Service Mesh (Istio Multi-Cluster)](module-10.7-multi-cloud-mesh/) to learn how Istio's multi-cluster topologies enable cross-cloud service discovery, failover, and mTLS with a unified root of trust.
+With infrastructure provisioning automated, it is time to connect services across those clusters. Head to [Module 10.7: Multi-Cloud Service Mesh (Istio Multi-Cluster)](../module-10.7-multi-cloud-mesh/) to learn how Istio's multi-cluster topologies enable cross-cloud service discovery, failover, and mTLS with a unified root of trust.

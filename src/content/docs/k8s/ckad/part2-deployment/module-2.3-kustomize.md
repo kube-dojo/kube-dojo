@@ -979,4 +979,4 @@ cd /tmp && rm -rf drill6
 
 ## Next Module
 
-[Module 2.4: Deployment Strategies](module-2.4-deployment-strategies/) - Blue/green, canary, and rolling deployment patterns.
+[Module 2.4: Deployment Strategies](../module-2.4-deployment-strategies/) - Blue/green, canary, and rolling deployment patterns.

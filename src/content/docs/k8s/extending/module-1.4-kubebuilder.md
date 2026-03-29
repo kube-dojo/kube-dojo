@@ -907,4 +907,4 @@ kind delete cluster --name kubebuilder-lab
 
 ## Next Module
 
-[Module 1.5: Advanced Operator Development](module-1.5-advanced-operators/) - Add finalizers, status conditions, Kubernetes events, and comprehensive testing with envtest.
+[Module 1.5: Advanced Operator Development](../module-1.5-advanced-operators/) - Add finalizers, status conditions, Kubernetes events, and comprehensive testing with envtest.

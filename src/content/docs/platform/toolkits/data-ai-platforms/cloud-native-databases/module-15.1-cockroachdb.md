@@ -943,7 +943,7 @@ When a node fails:
 
 ## Next Steps
 
-- **Next Module**: [Module 15.2: CloudNativePG](module-15.2-cloudnativepg/) — PostgreSQL on Kubernetes with operators
+- **Next Module**: [Module 15.2: CloudNativePG](../module-15.2-cloudnativepg/) — PostgreSQL on Kubernetes with operators
 - **Related**: [Distributed Systems Foundation](../../../foundations/distributed-systems/) — Deep dive on consensus
 - **Related**: [Observability Toolkit](../../observability-intelligence/observability/) — Monitoring distributed databases
 

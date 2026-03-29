@@ -1,6 +1,6 @@
 ---
 title: "Module 1.2: Istio Traffic Management"
-slug: k8s/ica/module-1.2-istio-traffic-management/
+slug: k8s/ica/module-1.2-istio-traffic-management
 sidebar:
   order: 3
 ---
@@ -12,7 +12,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [Module 1: Installation & Architecture](module-1.1-istio-installation-architecture/) — Istio installation and sidecar injection
+- [Module 1: Installation & Architecture](../module-1.1-istio-installation-architecture/) — Istio installation and sidecar injection
 - [CKA Module 3.5: Gateway API](../cka/part3-services-networking/module-3.5-gateway-api/) — Kubernetes Gateway API basics
 - Understanding of HTTP routing concepts (headers, paths, methods)
 
@@ -1438,4 +1438,4 @@ kubectl delete destinationrule reviews-cb
 
 ## Next Module
 
-Continue to [Module 3: Security & Troubleshooting](module-1.3-istio-security-troubleshooting/) — covering mTLS, authorization policies, JWT authentication, and essential debugging commands.
+Continue to [Module 3: Security & Troubleshooting](../module-1.3-istio-security-troubleshooting/) — covering mTLS, authorization policies, JWT authentication, and essential debugging commands.

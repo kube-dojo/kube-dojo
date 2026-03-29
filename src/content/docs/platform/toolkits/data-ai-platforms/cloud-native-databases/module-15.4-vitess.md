@@ -12,8 +12,8 @@ sidebar:
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [Module 15.1: CockroachDB](module-15.1-cockroachdb/) - Distributed database concepts
-- [Module 15.3: Neon & PlanetScale](module-15.3-serverless-databases/) - PlanetScale is built on Vitess
+- [Module 15.1: CockroachDB](../module-15.1-cockroachdb/) - Distributed database concepts
+- [Module 15.3: Neon & PlanetScale](../module-15.3-serverless-databases/) - PlanetScale is built on Vitess
 - MySQL fundamentals (basic SQL, replication concepts)
 - Kubernetes fundamentals (StatefulSets, Services, Operators)
 - [Distributed Systems Foundation](../../../foundations/distributed-systems/) - Sharding concepts
@@ -1062,7 +1062,7 @@ Don't use Vitess if:
 
 ## Next Steps
 
-- **Related**: [Module 15.3: PlanetScale](module-15.3-serverless-databases/) — Managed Vitess experience
+- **Related**: [Module 15.3: PlanetScale](../module-15.3-serverless-databases/) — Managed Vitess experience
 - **Related**: [Distributed Systems Foundation](../../../foundations/distributed-systems/) — Sharding theory
 - **Related**: [Observability Toolkit](../../observability-intelligence/observability/) — Monitoring Vitess
 

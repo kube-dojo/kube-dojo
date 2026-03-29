@@ -560,7 +560,7 @@ SRE isn't about perfection — it's about being **reliably good enough** while s
 
 ## Next Module
 
-Continue to [Module 1.2: Service Level Objectives (SLOs)](module-1.2-slos/) to learn how to define and measure reliability targets.
+Continue to [Module 1.2: Service Level Objectives (SLOs)](../module-1.2-slos/) to learn how to define and measure reliability targets.
 
 ---
 

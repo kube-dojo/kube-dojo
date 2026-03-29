@@ -653,4 +653,4 @@ kubectl delete secret pre-encryption post-encryption
 
 ## Next Module
 
-[Module 4.4: Runtime Sandboxing](module-4.4-runtime-sandboxing/) - gVisor and Kata Containers for container isolation.
+[Module 4.4: Runtime Sandboxing](../module-4.4-runtime-sandboxing/) - gVisor and Kata Containers for container isolation.

@@ -713,4 +713,4 @@ Compare your time with vim. Use whichever is faster for you.
 
 ## Next Module
 
-[Module 0.4: kubernetes.io Navigation](module-0.4-k8s-docs/) - Finding documentation fast during the exam.
+[Module 0.4: kubernetes.io Navigation](../module-0.4-k8s-docs/) - Finding documentation fast during the exam.

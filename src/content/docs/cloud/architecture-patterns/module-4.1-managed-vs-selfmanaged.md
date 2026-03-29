@@ -785,4 +785,4 @@ Migrate to Amazon EKS over a 6-week period using parallel clusters with gradual 
 
 ## Next Module
 
-[Module 4.2: Multi-Cluster and Multi-Region Architectures](module-4.2-multi-cluster/) -- Now that you understand the managed vs self-managed decision, we'll explore what happens when one cluster isn't enough. You'll learn to design architectures that span failure domains, regions, and even cloud providers.
+[Module 4.2: Multi-Cluster and Multi-Region Architectures](../module-4.2-multi-cluster/) -- Now that you understand the managed vs self-managed decision, we'll explore what happens when one cluster isn't enough. You'll learn to design architectures that span failure domains, regions, and even cloud providers.

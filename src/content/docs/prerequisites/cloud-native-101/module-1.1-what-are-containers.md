@@ -1,6 +1,6 @@
 ---
 title: "Module 1.1: What Are Containers?"
-slug: prerequisites/cloud-native-101/module-1.1-what-are-containers/
+slug: prerequisites/cloud-native-101/module-1.1-what-are-containers
 sidebar:
   order: 2
 ---
@@ -423,4 +423,4 @@ Containers are:
 
 ## Next Module
 
-[Module 2: Docker Fundamentals](module-1.2-docker-fundamentals/) - Hands-on with building and running containers.
+[Module 2: Docker Fundamentals](../module-1.2-docker-fundamentals/) - Hands-on with building and running containers.

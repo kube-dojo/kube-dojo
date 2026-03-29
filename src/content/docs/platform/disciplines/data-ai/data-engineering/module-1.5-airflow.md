@@ -11,7 +11,7 @@ sidebar:
 Before starting this module:
 - **Required**: Basic Python programming — Variables, functions, decorators, context managers
 - **Required**: Kubernetes fundamentals — Pods, Deployments, Services, ConfigMaps, Secrets
-- **Recommended**: [Module 1.4 — Batch Processing & Apache Spark on K8s](module-1.4-spark/) — Understanding batch job execution
+- **Recommended**: [Module 1.4 — Batch Processing & Apache Spark on K8s](../module-1.4-spark/) — Understanding batch job execution
 - **Recommended**: Familiarity with cron syntax and scheduling concepts
 
 ---
@@ -953,7 +953,7 @@ The most important lesson: keep your DAGs simple, your tasks idempotent, and you
 
 ## Next Module
 
-Continue to [Module 1.6: Building a Data Lakehouse on Kubernetes](module-1.6-lakehouse/) to learn how to combine the best of data lakes and data warehouses into a unified architecture on Kubernetes.
+Continue to [Module 1.6: Building a Data Lakehouse on Kubernetes](../module-1.6-lakehouse/) to learn how to combine the best of data lakes and data warehouses into a unified architecture on Kubernetes.
 
 ---
 

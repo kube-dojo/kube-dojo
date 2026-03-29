@@ -325,4 +325,4 @@ echo "- Missing audit logging"
 
 ## Next Module
 
-[Module 0.2: Security Lab Setup](module-0.2-security-lab/) - Build your CKS practice environment with security tools.
+[Module 0.2: Security Lab Setup](../module-0.2-security-lab/) - Build your CKS practice environment with security tools.

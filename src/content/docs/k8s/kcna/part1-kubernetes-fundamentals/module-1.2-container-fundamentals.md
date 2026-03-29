@@ -380,4 +380,4 @@ Kubernetes doesn't run containers directly—it uses a **container runtime**:
 
 ## Next Module
 
-[Module 1.3: Kubernetes Architecture - Control Plane](module-1.3-control-plane/) - Understanding the brain of Kubernetes.
+[Module 1.3: Kubernetes Architecture - Control Plane](../module-1.3-control-plane/) - Understanding the brain of Kubernetes.

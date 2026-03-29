@@ -1204,4 +1204,4 @@ k delete svc frontend backend admin
 
 ## Next Module
 
-[Module 3.6: Network Policies](module-3.6-network-policies/) - Controlling pod-to-pod communication.
+[Module 3.6: Network Policies](../module-3.6-network-policies/) - Controlling pod-to-pod communication.

@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 1.2: Argo Rollouts](module-1.2-argo-rollouts/) — Canary deployments, automated analysis, progressive delivery
+- **Required**: [Module 1.2: Argo Rollouts](../module-1.2-argo-rollouts/) — Canary deployments, automated analysis, progressive delivery
 - **Required**: Multi-cluster Kubernetes concepts — Understanding of running workloads across multiple clusters
 - **Required**: ArgoCD basics — GitOps principles, Application CRD, sync workflows
 - **Recommended**: DNS and global load balancing concepts
@@ -1057,7 +1057,7 @@ Multi-region release orchestration elevates blast radius control from "percentag
 
 ## Next Module
 
-Continue to [Module 1.5: Release Engineering Metrics & Observability](module-1.5-release-metrics/) to learn how to measure release performance with DORA metrics, build deployment-aware dashboards, and correlate releases with production health.
+Continue to [Module 1.5: Release Engineering Metrics & Observability](../module-1.5-release-metrics/) to learn how to measure release performance with DORA metrics, build deployment-aware dashboards, and correlate releases with production health.
 
 ---
 

@@ -7,7 +7,7 @@ sidebar:
 
 > **Complexity**: `[COMPLEX]` | Time: 60 minutes
 >
-> **Prerequisites**: [Module 7.2: Hardware Lifecycle & Firmware](module-7.2-hardware-lifecycle/), [Module 1.3: Cluster Topology](../planning/module-1.3-cluster-topology/)
+> **Prerequisites**: [Module 7.2: Hardware Lifecycle & Firmware](../module-7.2-hardware-lifecycle/), [Module 1.3: Cluster Topology](../planning/module-1.3-cluster-topology/)
 
 ---
 

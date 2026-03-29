@@ -761,7 +761,7 @@ Create a Software Template that scaffolds a simple Node.js service with a README
 
 ## Next Module
 
-Continue to [Module 7.2: Crossplane](module-7.2-crossplane/) to learn infrastructure provisioning using Kubernetes-native APIs.
+Continue to [Module 7.2: Crossplane](../module-7.2-crossplane/) to learn infrastructure provisioning using Kubernetes-native APIs.
 
 ---
 

@@ -679,7 +679,7 @@ kubectl run b64-test --image=busybox --rm -it --restart=Never -- sh -c "echo aGV
 
 ## Next Module
 
-Continue to [Module 4.4: Supply Chain Security](module-4.4-supply-chain/) to learn about securing container images with signing, SBOMs, and vulnerability scanning.
+Continue to [Module 4.4: Supply Chain Security](../module-4.4-supply-chain/) to learn about securing container images with signing, SBOMs, and vulnerability scanning.
 
 ---
 

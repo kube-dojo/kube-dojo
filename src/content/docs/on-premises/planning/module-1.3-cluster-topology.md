@@ -7,7 +7,7 @@ sidebar:
 
 > **Complexity**: `[COMPLEX]` | Time: 60 minutes
 >
-> **Prerequisites**: [Module 1.2: Server Sizing](module-1.2-server-sizing/), [CKA Part 1: Cluster Architecture](../../k8s/cka/part1-cluster-architecture/)
+> **Prerequisites**: [Module 1.2: Server Sizing](../module-1.2-server-sizing/), [CKA Part 1: Cluster Architecture](../../k8s/cka/part1-cluster-architecture/)
 
 ---
 
@@ -541,4 +541,4 @@ topologySpreadConstraints:
 
 ## Next Module
 
-Continue to [Module 1.4: TCO & Budget Planning](module-1.4-tco-budget/) to learn how to build a comprehensive cost model for your on-premises Kubernetes platform.
+Continue to [Module 1.4: TCO & Budget Planning](../module-1.4-tco-budget/) to learn how to build a comprehensive cost model for your on-premises Kubernetes platform.

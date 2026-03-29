@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 7.3: Practical Scripts](module-7.3-practical-scripts/)
+- **Required**: [Module 7.3: Practical Scripts](../module-7.3-practical-scripts/)
 - **Required**: Basic kubectl knowledge
 - **Helpful**: CI/CD experience
 

@@ -601,4 +601,4 @@ echo "5. ✓ seccompProfile applies syscall filtering"
 
 ## Next Module
 
-[Module 3.4: Network Security](module-3.4-network-security/) - Host-level network hardening.
+[Module 3.4: Network Security](../module-3.4-network-security/) - Host-level network hardening.

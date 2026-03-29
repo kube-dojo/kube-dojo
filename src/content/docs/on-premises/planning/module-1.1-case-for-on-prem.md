@@ -393,4 +393,4 @@ Your company runs a data analytics platform:
 
 ## Next Module
 
-Continue to [Module 1.2: Server Sizing & Hardware Selection](module-1.2-server-sizing/) to learn how to choose the right hardware for your Kubernetes clusters.
+Continue to [Module 1.2: Server Sizing & Hardware Selection](../module-1.2-server-sizing/) to learn how to choose the right hardware for your Kubernetes clusters.

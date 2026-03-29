@@ -9,8 +9,8 @@ sidebar:
 ## Prerequisites
 
 Before starting this module, ensure you have:
-- Completed [Module 1.6: ECR (Container Registry)](module-1.6-ecr/) (pushing/pulling container images)
-- Completed [Module 1.7: ECS (Container Orchestration)](module-1.7-ecs-fargate/) (ECS services, task definitions, Fargate)
+- Completed [Module 1.6: ECR (Container Registry)](../module-1.6-ecr/) (pushing/pulling container images)
+- Completed [Module 1.7: ECS (Container Orchestration)](../module-1.7-ecs-fargate/) (ECS services, task definitions, Fargate)
 - Familiarity with CI/CD concepts (build, test, deploy pipeline stages)
 - A GitHub account and a repository to use for pipeline integration
 - AWS CLI v2 installed and configured
@@ -1079,4 +1079,4 @@ aws ecr delete-repository --repository-name cicd-lab --force
 
 ## Next Module
 
-Continue to [Module 1.12: Infrastructure as Code on AWS](module-1.12-cloudformation/) -- where you will learn to define all of the infrastructure you have been creating manually as declarative templates. Every resource from this CI/CD pipeline -- the IAM roles, CodeBuild project, pipeline definition, and ECS cluster -- can be managed as code.
+Continue to [Module 1.12: Infrastructure as Code on AWS](../module-1.12-cloudformation/) -- where you will learn to define all of the infrastructure you have been creating manually as declarative templates. Every resource from this CI/CD pipeline -- the IAM roles, CodeBuild project, pipeline definition, and ECS cluster -- can be managed as code.

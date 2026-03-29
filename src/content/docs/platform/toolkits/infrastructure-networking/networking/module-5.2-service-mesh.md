@@ -12,7 +12,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [Module 5.1: Cilium](module-5.1-cilium/)
+- [Module 5.1: Cilium](../module-5.1-cilium/)
 - Kubernetes Services and Ingress
 - Basic understanding of proxies and TLS
 

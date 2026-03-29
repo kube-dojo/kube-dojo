@@ -1268,4 +1268,4 @@ kind delete cluster --name controller-lab
 
 ## Next Module
 
-[Module 1.4: The Operator Pattern & Kubebuilder](module-1.4-kubebuilder/) - Use the Kubebuilder framework to build operators with less boilerplate and more structure.
+[Module 1.4: The Operator Pattern & Kubebuilder](../module-1.4-kubebuilder/) - Use the Kubebuilder framework to build operators with less boilerplate and more structure.

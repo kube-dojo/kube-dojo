@@ -12,7 +12,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [Module 1.1: IAM & Security Foundations](module-1.1-iam/)
+- [Module 1.1: IAM & Security Foundations](../module-1.1-iam/)
 - Docker fundamentals (building and tagging images)
 - Docker installed locally and running
 - AWS CLI configured with appropriate permissions
@@ -907,4 +907,4 @@ echo "Cleanup complete"
 
 ## Next Module
 
-Next up: **[Module 1.7: Elastic Container Service (ECS) & Fargate](module-1.7-ecs-fargate/)** -- Now that you can store container images, it is time to run them. You will learn to deploy containers on AWS using ECS with both EC2 and Fargate launch types, integrate with load balancers, and debug running containers with ECS Exec.
+Next up: **[Module 1.7: Elastic Container Service (ECS) & Fargate](../module-1.7-ecs-fargate/)** -- Now that you can store container images, it is time to run them. You will learn to deploy containers on AWS using ECS with both EC2 and Fargate launch types, integrate with load balancers, and debug running containers with ECS Exec.

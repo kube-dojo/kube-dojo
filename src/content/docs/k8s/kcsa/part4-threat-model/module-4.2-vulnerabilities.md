@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 25-30 minutes
 >
-> **Prerequisites**: [Module 4.1: Attack Surfaces](module-4.1-attack-surfaces/)
+> **Prerequisites**: [Module 4.1: Attack Surfaces](../module-4.1-attack-surfaces/)
 
 ---
 
@@ -452,4 +452,4 @@ Key practices:
 
 ## Next Module
 
-[Module 4.3: Container Escape](module-4.3-container-escape/) - Understanding and preventing container breakout scenarios.
+[Module 4.3: Container Escape](../module-4.3-container-escape/) - Understanding and preventing container breakout scenarios.

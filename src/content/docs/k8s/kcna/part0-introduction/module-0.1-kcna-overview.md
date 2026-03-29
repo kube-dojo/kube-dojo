@@ -305,4 +305,4 @@ This curriculum follows the exam domains:
 
 ## Next Module
 
-[Module 0.2: Study Strategy](module-0.2-study-strategy/) - How to effectively prepare for a multiple-choice Kubernetes exam.
+[Module 0.2: Study Strategy](../module-0.2-study-strategy/) - How to effectively prepare for a multiple-choice Kubernetes exam.

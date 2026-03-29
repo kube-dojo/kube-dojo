@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 1.1: What is SRE?](module-1.1-what-is-sre/) — Understanding SRE fundamentals
+- **Required**: [Module 1.1: What is SRE?](../module-1.1-what-is-sre/) — Understanding SRE fundamentals
 - **Recommended**: [Systems Thinking Track](../../../foundations/systems-thinking/) — Understanding system leverage
 - **Helpful**: Some experience with scripting or automation
 
@@ -709,7 +709,7 @@ The goal isn't to eliminate all operational work — it's to eliminate the grind
 
 ## Next Module
 
-Continue to [Module 1.5: Incident Management](module-1.5-incident-management/) to learn how to respond effectively when things go wrong.
+Continue to [Module 1.5: Incident Management](../module-1.5-incident-management/) to learn how to respond effectively when things go wrong.
 
 ---
 

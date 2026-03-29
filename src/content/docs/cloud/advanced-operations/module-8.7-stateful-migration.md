@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 2.5 hours
 >
-> **Prerequisites**: [Module 8.5: Disaster Recovery](module-8.5-disaster-recovery/), experience with PersistentVolumes and at least one database
+> **Prerequisites**: [Module 8.5: Disaster Recovery](../module-8.5-disaster-recovery/), experience with PersistentVolumes and at least one database
 >
 > **Track**: Advanced Cloud Operations
 
@@ -969,4 +969,4 @@ kind delete cluster --name migration-lab
 
 ## Next Module
 
-[Module 8.8: Cloud Cost Optimization (Advanced)](module-8.8-cloud-cost/) -- Your workloads are migrated, replicated, and running across regions. Now learn how to stop hemorrhaging money. Multi-tenant cost allocation, spot instances, savings plans, and the tools that give you visibility into where every dollar goes.
+[Module 8.8: Cloud Cost Optimization (Advanced)](../module-8.8-cloud-cost/) -- Your workloads are migrated, replicated, and running across regions. Now learn how to stop hemorrhaging money. Multi-tenant cost allocation, spot instances, savings plans, and the tools that give you visibility into where every dollar goes.

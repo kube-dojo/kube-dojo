@@ -9,8 +9,8 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 0.2 — Environment & Permissions](module-0.2-environment-permissions/) (you need to be comfortable with sudo and basic file paths)
-- **Helpful**: [Module 0.4 — Services & Logs Demystified](module-0.4-services-logs/) (the exercise references checking services with `ss`)
+- **Required**: [Module 0.2 — Environment & Permissions](../module-0.2-environment-permissions/) (you need to be comfortable with sudo and basic file paths)
+- **Helpful**: [Module 0.4 — Services & Logs Demystified](../module-0.4-services-logs/) (the exercise references checking services with `ss`)
 
 ---
 

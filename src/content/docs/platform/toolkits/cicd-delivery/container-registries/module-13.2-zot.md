@@ -1316,7 +1316,7 @@ kind delete cluster --name zot-lab
 
 ## Next Module
 
-Continue to [Module 13.3: Dragonfly](module-13.3-dragonfly/) — P2P image distribution for massive-scale deployments.
+Continue to [Module 13.3: Dragonfly](../module-13.3-dragonfly/) — P2P image distribution for massive-scale deployments.
 
 ---
 

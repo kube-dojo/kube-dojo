@@ -424,4 +424,4 @@ Key principles:
 
 ## Next Module
 
-[Module 4.2: Common Vulnerabilities](module-4.2-vulnerabilities/) - Understanding CVEs and misconfigurations in Kubernetes.
+[Module 4.2: Common Vulnerabilities](../module-4.2-vulnerabilities/) - Understanding CVEs and misconfigurations in Kubernetes.

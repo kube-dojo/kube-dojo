@@ -1020,4 +1020,4 @@ kubectl delete crd backups.backup.example.com
 
 ## Next Module
 
-[Module 1.6: RBAC](module-1.6-rbac/) - Role-Based Access Control for securing your cluster.
+[Module 1.6: RBAC](../module-1.6-rbac/) - Role-Based Access Control for securing your cluster.

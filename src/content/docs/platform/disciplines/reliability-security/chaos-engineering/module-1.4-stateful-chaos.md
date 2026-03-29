@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Module 1.2: Chaos Mesh Fundamentals](module-1.2-chaos-mesh/) — PodChaos, NetworkChaos, StressChaos
+- **Required**: [Module 1.2: Chaos Mesh Fundamentals](../module-1.2-chaos-mesh/) — PodChaos, NetworkChaos, StressChaos
 - **Required**: [Kubernetes Basics — StatefulSets](../../../../prerequisites/kubernetes-basics/) — PVs, PVCs, StatefulSets, headless Services
 - **Recommended**: Basic PostgreSQL or MySQL administration experience
 - **Recommended**: Understanding of database replication concepts (primary/replica, WAL shipping)
@@ -978,4 +978,4 @@ Key takeaways:
 
 ## Next Module
 
-Continue to [Module 1.5: Automating Chaos & Game Days](module-1.5-automating-chaos/) — Integrate chaos experiments into CI/CD pipelines, structure Game Days for maximum learning, and build automated abort mechanisms tied to Prometheus alerts.
+Continue to [Module 1.5: Automating Chaos & Game Days](../module-1.5-automating-chaos/) — Integrate chaos experiments into CI/CD pipelines, structure Game Days for maximum learning, and build automated abort mechanisms tied to Prometheus alerts.

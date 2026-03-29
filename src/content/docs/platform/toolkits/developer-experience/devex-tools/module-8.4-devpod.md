@@ -12,7 +12,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [Module 8.3: Local Kubernetes](module-8.3-local-kubernetes/)
+- [Module 8.3: Local Kubernetes](../module-8.3-local-kubernetes/)
 - Container fundamentals (Docker)
 - Basic understanding of Dev Containers specification
 - SSH basics
@@ -1003,8 +1003,8 @@ Use Kubernetes when:
 
 ## Next Steps
 
-- **Next Module**: [Module 8.5: Gitpod & Codespaces](module-8.5-gitpod-codespaces/) - Cloud alternatives
-- **Related**: [Module 8.3: Local Kubernetes](module-8.3-local-kubernetes/) - Local K8s for DevPod
+- **Next Module**: [Module 8.5: Gitpod & Codespaces](../module-8.5-gitpod-codespaces/) - Cloud alternatives
+- **Related**: [Module 8.3: Local Kubernetes](../module-8.3-local-kubernetes/) - Local K8s for DevPod
 - **Related**: [Platform Engineering](../../../disciplines/core-platform/platform-engineering/) - Building developer platforms
 
 ---

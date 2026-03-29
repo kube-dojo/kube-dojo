@@ -872,4 +872,4 @@ rm /tmp/mesh-service-map.sh /tmp/istio-cluster1.yaml /tmp/istio-cluster2.yaml 2>
 
 ## Next Module
 
-With services connected across clusters, it is time to manage the deployment lifecycle at enterprise scale. Head to [Module 10.8: Enterprise GitOps & Platform Engineering](module-10.8-enterprise-gitops/) to learn how Backstage, ArgoCD ApplicationSets, and multi-tenant repository strategies enable self-service platform engineering for large organizations.
+With services connected across clusters, it is time to manage the deployment lifecycle at enterprise scale. Head to [Module 10.8: Enterprise GitOps & Platform Engineering](../module-10.8-enterprise-gitops/) to learn how Backstage, ArgoCD ApplicationSets, and multi-tenant repository strategies enable self-service platform engineering for large organizations.

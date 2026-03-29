@@ -939,4 +939,4 @@ When this metric is consistently high, requests are waiting in queue, indicating
 
 ## Next Module
 
-Continue to [Module 9.5: Ray Serve](module-9.5-ray-serve/) to learn about distributed inference and scaling LLM serving across multiple nodes.
+Continue to [Module 9.5: Ray Serve](../module-9.5-ray-serve/) to learn about distributed inference and scaling LLM serving across multiple nodes.

@@ -410,4 +410,4 @@ Beyond basic concepts, cloud native includes patterns for solving complex proble
 
 ## Next Module
 
-[Module 3.4: Observability Fundamentals](module-3.4-observability-fundamentals/) - Understanding the three pillars of observability: metrics, logs, and traces.
+[Module 3.4: Observability Fundamentals](../module-3.4-observability-fundamentals/) - Understanding the three pillars of observability: metrics, logs, and traces.

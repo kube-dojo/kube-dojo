@@ -9,8 +9,8 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- [Module 6.4: Root Cause Analysis](module-6.4-root-cause-analysis/) — Understanding probable causes
-- [Module 6.5: Predictive Operations](module-6.5-predictive-operations/) — Proactive detection
+- [Module 6.4: Root Cause Analysis](../module-6.4-root-cause-analysis/) — Understanding probable causes
+- [Module 6.5: Predictive Operations](../module-6.5-predictive-operations/) — Proactive detection
 - Familiarity with runbook automation concepts
 - Understanding of Kubernetes basics (for exercises)
 

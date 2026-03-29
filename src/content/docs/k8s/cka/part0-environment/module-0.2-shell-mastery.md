@@ -643,4 +643,4 @@ kubectl config get-contexts
 
 ## Next Module
 
-[Module 0.3: Vim for YAML](module-0.3-vim-yaml/) - Essential Vim configuration for editing YAML files efficiently.
+[Module 0.3: Vim for YAML](../module-0.3-vim-yaml/) - Essential Vim configuration for editing YAML files efficiently.

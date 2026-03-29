@@ -13,7 +13,7 @@ sidebar:
 
 Before starting this module, you should have completed:
 - [Module 6.1: IaC Fundamentals](../../../disciplines/delivery-automation/iac/module-6.1-iac-fundamentals/)
-- [Module 7.1: Terraform Deep Dive](module-7.1-terraform/) (for comparison)
+- [Module 7.1: Terraform Deep Dive](../module-7.1-terraform/) (for comparison)
 - AWS account with administrator access
 - Basic understanding of AWS services
 
@@ -1637,7 +1637,7 @@ aws cloudformation describe-stack-resource-drifts --stack-name webapp-dev
 
 ## Next Module
 
-Continue to [Module 7.6: Azure Bicep](module-7.6-bicep/) to learn Azure's native infrastructure as code language—a modern alternative to ARM templates.
+Continue to [Module 7.6: Azure Bicep](../module-7.6-bicep/) to learn Azure's native infrastructure as code language—a modern alternative to ARM templates.
 
 ---
 
