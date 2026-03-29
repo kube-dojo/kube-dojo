@@ -199,32 +199,39 @@ spec:
 - Deletes namespace + all resources
 - Logs session metrics (duration, steps completed, resource usage)
 
-## 6. Data Layer (Supabase)
+## 6. Data Layer (Phased)
 
-User data must be stored even during the Killercoda-only phase (progress, completions, streaks). **Supabase free tier** provides this with zero backend code.
+Progress tracking evolves in three phases: localStorage → Supabase → custom backend.
 
-### Why Supabase
-- GitHub OAuth built-in (our chosen auth method)
-- PostgreSQL database with auto-generated REST API
-- Row-level security (users can only access their own data)
-- Called directly from the browser — no backend server needed
-- Free tier: 500MB DB, 50K monthly API requests, unlimited auth users
-
-### Killercoda Phase Flow
+### Phase 1: localStorage (Killercoda launch — $0, no auth)
 ```
 User clicks "Launch Lab" on KubeDojo
-  → GitHub OAuth via Supabase (if not logged in)
-  → Save "lab_started" event to Supabase
-  → Redirect to Killercoda scenario
-  → User completes lab on Killercoda
+  → Opens Killercoda scenario in new tab
   → Returns to KubeDojo, clicks "Mark Complete"
-  → Save completion to Supabase
-  → Dashboard reads progress from Supabase
+  → Progress saved to browser localStorage
+  → Dashboard reads from localStorage
 ```
 
-Note: Killercoda has no webhook for auto-completion detection. Users self-report via "Mark Complete" button. This becomes automatic when we build the custom platform (validator sidecar detects completion).
+- Zero dependencies — no backend, no auth, no accounts
+- Progress persists across page navigations within the same browser
+- Limitation: lost on browser/device switch, no aggregate metrics
+- Export/import JSON for manual backup
 
-### Custom Platform Phase Flow
+### Phase 2: Supabase (When pitching investors)
+```
+User clicks "Sign in with GitHub"
+  → GitHub OAuth via Supabase
+  → localStorage auto-migrates to Supabase on first login
+  → Dual-write: localStorage (cache) + Supabase (source of truth)
+  → Dashboard reads from Supabase
+  → Aggregate metrics available for investor demos
+```
+
+- Free tier: 500MB DB, 50K monthly API requests, unlimited auth users
+- Row-level security (users can only access their own data)
+- Called directly from the browser — no backend server needed
+
+### Phase 3: Custom Platform
 ```
 User clicks "Launch Lab"
   → GitHub OAuth via Supabase
@@ -234,12 +241,12 @@ User clicks "Launch Lab"
   → No manual "Mark Complete" needed
 ```
 
-### Supabase Cost Projection
-| Phase | Tier | Monthly Cost |
-|-------|------|:---:|
-| Killercoda (0-100 users) | Free | $0 |
-| Custom platform (100-1000 users) | Free | $0 |
-| Scaling (1000+ users) | Pro | $25/mo |
+### Cost Projection
+| Phase | Storage | Auth | Monthly Cost |
+|-------|---------|------|:---:|
+| localStorage (launch) | Browser | None | $0 |
+| Supabase (investors) | PostgreSQL | GitHub OAuth | $0 (free tier) |
+| Supabase (1000+ users) | PostgreSQL | GitHub OAuth | $25/mo |
 
 ## 7. Infrastructure
 
@@ -331,7 +338,7 @@ Start Hetzner (cheapest PoC), migrate to Scaleway or AWS only when you need auto
 | Resource | Provider | Cost |
 |---|---|:---:|
 | Static site | GitHub Pages | $0 |
-| Database + Auth | Supabase free | $0 |
+| Progress tracking | localStorage (browser) | $0 |
 | Labs | Killercoda | $0 |
 | **Total** | | **$0/mo** |
 
@@ -340,7 +347,7 @@ Start Hetzner (cheapest PoC), migrate to Scaleway or AWS only when you need auto
 |---|---|:---:|
 | 1x CX43 node (8vCPU/16GB) | Hetzner | €12 |
 | Managed K8s control plane | Hetzner | Free |
-| Supabase | Free tier | €0 |
+| Progress | localStorage | €0 |
 | Load Balancer | Hetzner | €6 |
 | **Total** | | **~€18/mo** |
 
@@ -349,7 +356,7 @@ Start Hetzner (cheapest PoC), migrate to Scaleway or AWS only when you need auto
 |---|---|:---:|
 | 3x CCX23 nodes (4vCPU/16GB dedicated) | Hetzner | €94 |
 | Managed K8s control plane | Hetzner | Free |
-| Supabase | Free tier | €0 |
+| Progress | localStorage | €0 |
 | Load Balancer | Hetzner | €6 |
 | Block storage (100GB) | Hetzner | €5 |
 | **Total (Hetzner)** | | **~€105/mo** |
@@ -359,7 +366,7 @@ Start Hetzner (cheapest PoC), migrate to Scaleway or AWS only when you need auto
 |---|---|:---:|
 | 3-10x PRO2-XS nodes (autoscaling) | Scaleway | €241-800 |
 | Kapsule control plane | Scaleway | Free |
-| Supabase | Pro tier | €25 |
+| Progress | Supabase Pro | €25 |
 | Load Balancer + Storage | Scaleway | €18 |
 | **Total (Scaleway)** | | **~€284-843/mo** |
 
@@ -513,8 +520,9 @@ Progress (per user per scenario)
 | Virtual Clusters | vCluster (open source, Loft Labs) |
 | Validation | Go sidecar + shell commands |
 | Auth | GitHub OAuth 2.0 + JWT |
-| Data (Killercoda phase) | Supabase free tier (PostgreSQL + Auth + REST API) |
-| Data (Custom phase) | Supabase + Redis (session state) |
+| Data (launch) | localStorage (browser) — zero dependencies |
+| Data (investors) | Supabase free tier (PostgreSQL + Auth + REST API) |
+| Data (custom phase) | Supabase + Redis (session state) |
 | Monitoring | Prometheus + Grafana |
 | Infrastructure | Hetzner (PoC/prod) → Scaleway/AWS EU (scale) |
 | CI/CD | GitHub Actions |
