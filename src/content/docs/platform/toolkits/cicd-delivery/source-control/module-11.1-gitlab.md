@@ -12,8 +12,8 @@ sidebar:
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [DevSecOps Discipline](../../disciplines/reliability-security/devsecops/) - CI/CD and security concepts
-- [GitOps Discipline](../../disciplines/delivery-automation/gitops/) - Git-centric workflows
+- [DevSecOps Discipline](../../../disciplines/reliability-security/devsecops/) - CI/CD and security concepts
+- [GitOps Discipline](../../../disciplines/delivery-automation/gitops/) - Git-centric workflows
 - Basic Docker/Kubernetes experience
 - Git fundamentals (branches, merges, remotes)
 

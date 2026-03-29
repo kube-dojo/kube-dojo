@@ -17,7 +17,7 @@ sidebar:
 - Plugin ecosystem and customization
 
 **Prerequisites**:
-- [Platform Engineering Discipline](../../disciplines/core-platform/platform-engineering/)
+- [Platform Engineering Discipline](../../../disciplines/core-platform/platform-engineering/)
 - Node.js basics (for customization)
 - Kubernetes fundamentals
 

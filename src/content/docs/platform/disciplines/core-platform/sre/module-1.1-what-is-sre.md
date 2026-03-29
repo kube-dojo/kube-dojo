@@ -9,8 +9,8 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Reliability Engineering Track](../../foundations/reliability-engineering/) — Understanding failure and resilience
-- **Required**: [Systems Thinking Track](../../foundations/systems-thinking/) — See systems as wholes
+- **Required**: [Reliability Engineering Track](../../../foundations/reliability-engineering/) — Understanding failure and resilience
+- **Required**: [Systems Thinking Track](../../../foundations/systems-thinking/) — See systems as wholes
 - **Recommended**: Some experience operating production systems
 - **Recommended**: Understanding of software development lifecycle
 

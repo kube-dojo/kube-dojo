@@ -12,8 +12,8 @@ sidebar:
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [Distributed Systems Foundation](../../foundations/distributed-systems/) - Replication, fault tolerance
-- [Reliability Engineering Foundation](../../foundations/reliability-engineering/) - Backup, disaster recovery
+- [Distributed Systems Foundation](../../../foundations/distributed-systems/) - Replication, fault tolerance
+- [Reliability Engineering Foundation](../../../foundations/reliability-engineering/) - Backup, disaster recovery
 - Kubernetes fundamentals (PVCs, StorageClasses, StatefulSets)
 - [Module 16.1: Rook/Ceph](module-16.1-rook-ceph/) (recommended for comparison)
 - [Module 16.2: MinIO](module-16.2-minio/) (recommended for backup target understanding)
@@ -736,7 +736,7 @@ Use snapshots for quick rollback within the same cluster. Use backups for disast
 
 - **Previous Module**: [Module 16.2: MinIO](module-16.2-minio/) — S3 object storage (great backup target for Longhorn)
 - **Previous Module**: [Module 16.1: Rook/Ceph](module-16.1-rook-ceph/) — Full storage platform comparison
-- **Related**: [Scaling & Reliability - Velero](../scaling-reliability/module-6.3-velero/) — Kubernetes-level backup alongside Longhorn volume backup
+- **Related**: [Scaling & Reliability - Velero](../../developer-experience/scaling-reliability/module-6.3-velero/) — Kubernetes-level backup alongside Longhorn volume backup
 - **Related**: [K8s Distributions - K3s](../k8s-distributions/module-14.1-k3s/) — Longhorn is the recommended storage for K3s
 
 ---

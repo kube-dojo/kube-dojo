@@ -55,7 +55,7 @@ This module teaches you Calico from the ground up -- architecture, BGP, IPAM, po
 - Kubernetes networking basics (Services, Pods, CNI)
 - [Module 5.1: Cilium](module-5.1-cilium/) (for comparison context)
 - Basic understanding of BGP (helpful, not required -- we cover it here)
-- [Security Principles Foundations](../../foundations/security-principles/)
+- [Security Principles Foundations](../../../foundations/security-principles/)
 
 ---
 

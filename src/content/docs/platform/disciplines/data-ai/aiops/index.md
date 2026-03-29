@@ -17,8 +17,8 @@ This track covers the complete AIOps journey—from understanding what it is to 
 ## Prerequisites
 
 Before starting this track:
-- [Observability Theory Track](../../foundations/observability-theory/) — Data sources for ML
-- [SRE Discipline](../sre/) — Incident management context
+- [Observability Theory Track](../../../foundations/observability-theory/) — Data sources for ML
+- [SRE Discipline](../../core-platform/sre/) — Incident management context
 - [MLOps Discipline](../mlops/) — ML fundamentals (recommended)
 - Basic statistics (mean, standard deviation, distributions)
 
@@ -136,12 +136,12 @@ Module 6.6: Auto-Remediation
 
 ## Related Tracks
 
-- **Before**: [Observability Theory](../../foundations/observability-theory/) — Data collection
-- **Before**: [SRE Discipline](../sre/) — Operational practices
-- **Related**: [IaC Discipline](../iac/) — Infrastructure automation for AIOps platforms
+- **Before**: [Observability Theory](../../../foundations/observability-theory/) — Data collection
+- **Before**: [SRE Discipline](../../core-platform/sre/) — Operational practices
+- **Related**: [IaC Discipline](../../delivery-automation/iac/) — Infrastructure automation for AIOps platforms
 - **Related**: [MLOps Discipline](../mlops/) — ML fundamentals
-- **After**: [AIOps Tools Toolkit](../../toolkits/observability-intelligence/aiops-tools/) — Hands-on implementations
-- **After**: [IaC Tools Toolkit](../../toolkits/infrastructure-networking/iac-tools/) — Automated infrastructure provisioning
+- **After**: [AIOps Tools Toolkit](../../../toolkits/observability-intelligence/aiops-tools/) — Hands-on implementations
+- **After**: [IaC Tools Toolkit](../../../toolkits/infrastructure-networking/iac-tools/) — Automated infrastructure provisioning
 
 ---
 

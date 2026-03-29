@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- [Module 6.2: Anomaly Detection](../../disciplines/data-ai/aiops/module-6.2-anomaly-detection/) — Conceptual foundation
+- [Module 6.2: Anomaly Detection](../../../disciplines/data-ai/aiops/module-6.2-anomaly-detection/) — Conceptual foundation
 - Python proficiency
 - Basic understanding of time series data
 - pip/conda for package installation

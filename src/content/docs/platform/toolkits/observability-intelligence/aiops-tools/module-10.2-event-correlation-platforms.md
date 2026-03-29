@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- [Module 6.3: Event Correlation](../../disciplines/data-ai/aiops/module-6.3-event-correlation/) — Correlation concepts
+- [Module 6.3: Event Correlation](../../../disciplines/data-ai/aiops/module-6.3-event-correlation/) — Correlation concepts
 - Understanding of ITSM/incident management
 - Familiarity with enterprise monitoring tools
 

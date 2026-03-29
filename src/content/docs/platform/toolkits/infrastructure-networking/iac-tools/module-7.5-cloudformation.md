@@ -12,7 +12,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [Module 6.1: IaC Fundamentals](../../disciplines/delivery-automation/iac/module-6.1-iac-fundamentals/)
+- [Module 6.1: IaC Fundamentals](../../../disciplines/delivery-automation/iac/module-6.1-iac-fundamentals/)
 - [Module 7.1: Terraform Deep Dive](module-7.1-terraform/) (for comparison)
 - AWS account with administrator access
 - Basic understanding of AWS services

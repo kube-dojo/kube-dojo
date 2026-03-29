@@ -26,6 +26,6 @@ Chaos Engineering is the discipline of proactively injecting failures into your 
 
 ## Prerequisites
 
-- [Release Engineering](../release-engineering/) — progressive delivery mechanisms are what chaos tests validate
+- [Release Engineering](../../delivery-automation/release-engineering/) — progressive delivery mechanisms are what chaos tests validate
 - Kubernetes basics (Pods, Deployments, Services)
 - Prometheus/Grafana basics (for automated abort conditions)

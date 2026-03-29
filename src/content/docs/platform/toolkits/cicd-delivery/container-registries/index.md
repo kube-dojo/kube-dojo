@@ -10,14 +10,14 @@ sidebar:
 
 The Container Registries Toolkit covers self-hosted container image storage beyond DockerHub. When rate limits, security requirements, or air-gapped environments make public registries impractical, you need your own. Harbor is the enterprise standard, Zot is the lightweight alternative, and Dragonfly solves the "deploy to 1000 nodes" problem.
 
-This toolkit applies concepts from [DevSecOps Discipline](../../disciplines/reliability-security/devsecops/) and [Security Tools Toolkit](../security-tools/).
+This toolkit applies concepts from [DevSecOps Discipline](../../../disciplines/reliability-security/devsecops/) and [Security Tools Toolkit](../../security-quality/security-tools/).
 
 ## Prerequisites
 
 Before starting this toolkit:
 - Docker fundamentals (building, pushing images)
 - Basic Kubernetes experience
-- [DevSecOps Discipline](../../disciplines/reliability-security/devsecops/) - Supply chain security
+- [DevSecOps Discipline](../../../disciplines/reliability-security/devsecops/) - Supply chain security
 - Understanding of OCI image format
 
 ## Modules
@@ -367,11 +367,11 @@ WHEN MANAGED WINS:
 
 ## Related Tracks
 
-- **Before**: [DevSecOps Discipline](../../disciplines/reliability-security/devsecops/) — Supply chain security
-- **Before**: [Security Tools Toolkit](../security-tools/) — Image scanning concepts
+- **Before**: [DevSecOps Discipline](../../../disciplines/reliability-security/devsecops/) — Supply chain security
+- **Before**: [Security Tools Toolkit](../../security-quality/security-tools/) — Image scanning concepts
 - **Related**: [CI/CD Pipelines Toolkit](../ci-cd-pipelines/) — Building images
 - **Related**: [GitOps & Deployments](../gitops-deployments/) — Deploying images
-- **After**: [K8s Distributions Toolkit](../k8s-distributions/) — Running workloads
+- **After**: [K8s Distributions Toolkit](../../infrastructure-networking/k8s-distributions/) — Running workloads
 
 ---
 

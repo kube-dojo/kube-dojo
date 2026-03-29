@@ -819,4 +819,4 @@ This requires L7 visibility to be enabled. You can also use ranges like `--http-
 
 ## Next Module
 
-Continue to [Module 1.8: Coroot](module-1.8-coroot/) to learn about auto-instrumentation observability platforms, or move to [Module 4.5: Tetragon](../security-tools/module-4.5-tetragon/) to explore eBPF-based security.
+Continue to [Module 1.8: Coroot](module-1.8-coroot/) to learn about auto-instrumentation observability platforms, or move to [Module 4.5: Tetragon](../../security-quality/security-tools/module-4.5-tetragon/) to explore eBPF-based security.

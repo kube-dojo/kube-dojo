@@ -11,7 +11,7 @@ The platform architect presented the migration proposal to the CTO with unexpect
 ## Prerequisites
 
 Before starting this module:
-- [DevSecOps Discipline](../../disciplines/reliability-security/devsecops/) — CI/CD concepts
+- [DevSecOps Discipline](../../../disciplines/reliability-security/devsecops/) — CI/CD concepts
 - Kubernetes basics (Pods, Services, CRDs)
 - Container fundamentals
 - YAML proficiency

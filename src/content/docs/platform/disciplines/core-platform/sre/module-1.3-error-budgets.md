@@ -10,7 +10,7 @@ sidebar:
 
 Before starting this module:
 - **Required**: [Module 1.2: Service Level Objectives](module-1.2-slos/) — Understanding SLOs
-- **Required**: [Reliability Engineering Track](../../foundations/reliability-engineering/) — Reliability concepts
+- **Required**: [Reliability Engineering Track](../../../foundations/reliability-engineering/) — Reliability concepts
 - **Recommended**: Experience with software releases and deployment
 
 ---

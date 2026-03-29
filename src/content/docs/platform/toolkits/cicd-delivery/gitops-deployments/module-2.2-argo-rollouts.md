@@ -16,7 +16,7 @@ sidebar:
 
 Before starting this module:
 - [Module 2.1: ArgoCD](module-2.1-argocd/) — GitOps fundamentals
-- [GitOps Discipline](../../disciplines/delivery-automation/gitops/) — Deployment concepts
+- [GitOps Discipline](../../../disciplines/delivery-automation/gitops/) — Deployment concepts
 - Understanding of Kubernetes Deployments and Services
 - Basic networking concepts (traffic splitting)
 

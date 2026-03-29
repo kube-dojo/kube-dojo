@@ -12,7 +12,7 @@ Before starting this module:
 - **Required**: [Module 1.4: Adoption & Migration Strategy](../module-1.4-adoption-migration/) — Driving adoption, managing change
 - **Required**: [Module 1.1: Building Platform Teams](../module-1.1-platform-team-building/) — Team topologies and Conway's Law
 - **Recommended**: [SRE: Service Level Objectives](../sre/module-1.2-slos/) — Defining measurable reliability targets
-- **Recommended**: [FinOps Discipline](../finops/) — Cloud cost management
+- **Recommended**: [FinOps Discipline](../../business-value/finops/) — Cloud cost management
 - **Recommended**: Experience managing multi-team engineering organizations
 
 ---
@@ -928,8 +928,8 @@ Congratulations on completing the Platform Leadership discipline. You now have f
 **Recommended next steps**:
 - [Platform Engineering Discipline](../platform-engineering/) — Technical depth for the platforms you lead
 - [SRE Discipline](../sre/) — Reliability practices your platform must embody
-- [FinOps Discipline](../finops/) — Cost management at scale
-- [GitOps Discipline](../gitops/) — Delivery patterns your platform enables
+- [FinOps Discipline](../../business-value/finops/) — Cost management at scale
+- [GitOps Discipline](../../delivery-automation/gitops/) — Delivery patterns your platform enables
 
 ---
 

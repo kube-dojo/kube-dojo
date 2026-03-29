@@ -6,7 +6,7 @@ sidebar:
 ---
 **The infrastructure side of AI — GPU scheduling, distributed training, and LLM serving at scale.**
 
-This discipline focuses on the infrastructure challenges of running AI workloads on Kubernetes. It complements the existing [MLOps discipline](../mlops/) (model lifecycle) and [ML Platforms toolkit](../../toolkits/data-ai-platforms/ml-platforms/) (tools like Kubeflow, MLflow). Here you'll learn to provision GPUs, schedule them efficiently, run distributed training, and serve models in production.
+This discipline focuses on the infrastructure challenges of running AI workloads on Kubernetes. It complements the existing [MLOps discipline](../mlops/) (model lifecycle) and [ML Platforms toolkit](../../../toolkits/data-ai-platforms/ml-platforms/) (tools like Kubeflow, MLflow). Here you'll learn to provision GPUs, schedule them efficiently, run distributed training, and serve models in production.
 
 ---
 

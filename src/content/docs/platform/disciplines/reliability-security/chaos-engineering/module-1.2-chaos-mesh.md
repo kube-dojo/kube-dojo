@@ -10,7 +10,7 @@ sidebar:
 
 Before starting this module:
 - **Required**: [Module 1.1: Principles of Chaos Engineering](module-1.1-chaos-principles/) — Understand hypotheses, blast radius, and abort conditions
-- **Required**: [Kubernetes Basics](../../../prerequisites/kubernetes-basics/) — Deployments, Services, Namespaces, RBAC
+- **Required**: [Kubernetes Basics](../../../../prerequisites/kubernetes-basics/) — Deployments, Services, Namespaces, RBAC
 - **Recommended**: A running Kubernetes cluster (kind or minikube)
 - **Recommended**: Helm 3 installed
 

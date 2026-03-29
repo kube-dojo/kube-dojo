@@ -10,13 +10,13 @@ sidebar:
 
 The Security Tools Toolkit covers the essential tools for securing Kubernetes clusters and workloads. From secrets management to runtime detection to supply chain integrity—these tools form the defense-in-depth security stack that production clusters require.
 
-This toolkit applies concepts from [Security Principles](../../foundations/security-principles/) and [DevSecOps Discipline](../../disciplines/reliability-security/devsecops/).
+This toolkit applies concepts from [Security Principles](../../../foundations/security-principles/) and [DevSecOps Discipline](../../../disciplines/reliability-security/devsecops/).
 
 ## Prerequisites
 
 Before starting this toolkit:
-- [DevSecOps Discipline](../../disciplines/reliability-security/devsecops/) — Security concepts and practices
-- [Security Principles Foundations](../../foundations/security-principles/)
+- [DevSecOps Discipline](../../../disciplines/reliability-security/devsecops/) — Security concepts and practices
+- [Security Principles Foundations](../../../foundations/security-principles/)
 - Kubernetes RBAC basics
 - Container fundamentals
 
@@ -231,11 +231,11 @@ Each module includes practical exercises:
 
 ## Related Tracks
 
-- **Before**: [DevSecOps Discipline](../../disciplines/reliability-security/devsecops/) — Security concepts
-- **Before**: [Security Principles](../../foundations/security-principles/) — Theory
-- **Related**: [GitOps & Deployments](../gitops-deployments/) — Secure deployments
-- **Related**: [IaC Tools](../iac-tools/) — IaC security scanning with Checkov, tfsec
-- **After**: [Networking Toolkit](../networking/) — Network security
+- **Before**: [DevSecOps Discipline](../../../disciplines/reliability-security/devsecops/) — Security concepts
+- **Before**: [Security Principles](../../../foundations/security-principles/) — Theory
+- **Related**: [GitOps & Deployments](../../cicd-delivery/gitops-deployments/) — Secure deployments
+- **Related**: [IaC Tools](../../infrastructure-networking/iac-tools/) — IaC security scanning with Checkov, tfsec
+- **After**: [Networking Toolkit](../../infrastructure-networking/networking/) — Network security
 
 ---
 

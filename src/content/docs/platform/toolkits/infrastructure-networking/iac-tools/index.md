@@ -10,13 +10,13 @@ sidebar:
 
 The IaC Tools Toolkit covers the major infrastructure as code tools in depth. From HashiCorp's Terraform to OpenTofu, from Pulumi's programming language approach to Ansible's configuration management, from CloudFormation to Bicep—this toolkit gives you hands-on experience with the tools that define modern infrastructure.
 
-This toolkit applies concepts from [IaC Discipline](../../disciplines/delivery-automation/iac/).
+This toolkit applies concepts from [IaC Discipline](../../../disciplines/delivery-automation/iac/).
 
 ## Prerequisites
 
 Before starting this toolkit:
-- [IaC Discipline](../../disciplines/delivery-automation/iac/) — IaC fundamentals, testing, security
-- [IaC Fundamentals](../../disciplines/delivery-automation/iac/module-6.1-iac-fundamentals/) — Core concepts (minimum)
+- [IaC Discipline](../../../disciplines/delivery-automation/iac/) — IaC fundamentals, testing, security
+- [IaC Fundamentals](../../../disciplines/delivery-automation/iac/module-6.1-iac-fundamentals/) — Core concepts (minimum)
 - Cloud provider account (AWS, Azure, or GCP for exercises)
 - Basic command-line experience
 
@@ -244,10 +244,10 @@ Module 7.10: Nitric
 
 ## Related Tracks
 
-- **Before**: [IaC Discipline](../../disciplines/delivery-automation/iac/) — IaC fundamentals (essential)
-- **Related**: [GitOps & Deployments](../gitops-deployments/) — GitOps for infrastructure delivery
-- **Related**: [Security Tools](../security-tools/) — Security scanning for IaC
-- **Related**: [CI/CD Pipelines](../ci-cd-pipelines/) — IaC in pipelines
+- **Before**: [IaC Discipline](../../../disciplines/delivery-automation/iac/) — IaC fundamentals (essential)
+- **Related**: [GitOps & Deployments](../../cicd-delivery/gitops-deployments/) — GitOps for infrastructure delivery
+- **Related**: [Security Tools](../../security-quality/security-tools/) — Security scanning for IaC
+- **Related**: [CI/CD Pipelines](../../cicd-delivery/ci-cd-pipelines/) — IaC in pipelines
 - **Related**: [Platforms Toolkit](../platforms/) — Crossplane as Kubernetes-native IaC
 
 ---

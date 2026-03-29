@@ -17,7 +17,7 @@ sidebar:
 - Policy testing and CI/CD integration
 
 **Prerequisites**:
-- [Security Principles Foundations](../../foundations/security-principles/)
+- [Security Principles Foundations](../../../foundations/security-principles/)
 - Kubernetes admission controllers concept
 - Basic programming logic
 

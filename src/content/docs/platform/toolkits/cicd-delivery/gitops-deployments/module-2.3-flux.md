@@ -12,7 +12,7 @@ The platform engineer stared at the dashboard in disbelief. At 2:47 AM, their mu
 
 Before starting this module:
 - [Module 2.1: ArgoCD](module-2.1-argocd/) — GitOps concepts (for comparison)
-- [GitOps Discipline](../../disciplines/delivery-automation/gitops/) — GitOps principles
+- [GitOps Discipline](../../../disciplines/delivery-automation/gitops/) — GitOps principles
 - Kubernetes basics
 - Git fundamentals
 

@@ -10,12 +10,12 @@ sidebar:
 
 The Platforms Toolkit covers the building blocks of Internal Developer Platforms. Backstage provides the developer portal, Crossplane enables self-service infrastructure, and cert-manager automates TLS certificate management. Together, they form the foundation of a modern platform engineering stack.
 
-This toolkit applies concepts from [Platform Engineering Discipline](../../disciplines/core-platform/platform-engineering/).
+This toolkit applies concepts from [Platform Engineering Discipline](../../../disciplines/core-platform/platform-engineering/).
 
 ## Prerequisites
 
 Before starting this toolkit:
-- [Platform Engineering Discipline](../../disciplines/core-platform/platform-engineering/)
+- [Platform Engineering Discipline](../../../disciplines/core-platform/platform-engineering/)
 - Kubernetes CRD concepts
 - Basic cloud provider knowledge
 - TLS/PKI fundamentals
@@ -55,7 +55,7 @@ WHICH PLATFORM TOOL?
 
 "I need self-service infrastructure for developers"
 └──▶ Crossplane
-     • Kubernetes-native IaC (see [IaC Discipline](../../disciplines/delivery-automation/iac/))
+     • Kubernetes-native IaC (see [IaC Discipline](../../../disciplines/delivery-automation/iac/))
      • Custom APIs with Compositions
      • GitOps-friendly
      • Multi-cloud
@@ -267,12 +267,12 @@ COMPLETE PLATFORM ARCHITECTURE
 
 ## Related Tracks
 
-- **Before**: [Platform Engineering Discipline](../../disciplines/core-platform/platform-engineering/)
-- **Before**: [IaC Discipline](../../disciplines/delivery-automation/iac/) — Infrastructure as Code fundamentals
-- **Related**: [GitOps & Deployments](../gitops-deployments/) — Deploy platform resources
-- **Related**: [Security Tools](../security-tools/) — Secure the platform
+- **Before**: [Platform Engineering Discipline](../../../disciplines/core-platform/platform-engineering/)
+- **Before**: [IaC Discipline](../../../disciplines/delivery-automation/iac/) — Infrastructure as Code fundamentals
+- **Related**: [GitOps & Deployments](../../cicd-delivery/gitops-deployments/) — Deploy platform resources
+- **Related**: [Security Tools](../../security-quality/security-tools/) — Secure the platform
 - **Related**: [IaC Tools](../iac-tools/) — Terraform, OpenTofu, Pulumi hands-on
-- **After**: [Developer Experience](../developer-experience/) — Day-to-day tools
+- **After**: [Developer Experience](../../developer-experience/) — Day-to-day tools
 
 ---
 

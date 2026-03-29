@@ -12,8 +12,8 @@ sidebar:
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [Module 6.1: IaC Fundamentals](../../disciplines/delivery-automation/iac/module-6.1-iac-fundamentals/) - Core IaC concepts
-- [Module 6.2: IaC Testing](../../disciplines/delivery-automation/iac/module-6.2-iac-testing/) - Testing strategies
+- [Module 6.1: IaC Fundamentals](../../../disciplines/delivery-automation/iac/module-6.1-iac-fundamentals/) - Core IaC concepts
+- [Module 6.2: IaC Testing](../../../disciplines/delivery-automation/iac/module-6.2-iac-testing/) - Testing strategies
 - Basic command-line experience
 
 ---

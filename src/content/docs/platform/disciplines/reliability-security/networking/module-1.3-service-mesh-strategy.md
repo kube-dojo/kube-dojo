@@ -11,7 +11,7 @@ sidebar:
 Before starting this module:
 - **Required**: [Module 1.1: CNI Architecture](../module-1.1-cni-architecture/) — Understanding Pod networking fundamentals
 - **Required**: [Module 1.2: Network Policy Design](../module-1.2-network-policy-design/) — L3/L4 segmentation knowledge
-- **Recommended**: [Reliability Engineering foundations](../../foundations/reliability-engineering/) — Circuit breaking, retries, load balancing concepts
+- **Recommended**: [Reliability Engineering foundations](../../../foundations/reliability-engineering/) — Circuit breaking, retries, load balancing concepts
 - **Helpful**: Experience deploying and debugging microservices
 
 ---

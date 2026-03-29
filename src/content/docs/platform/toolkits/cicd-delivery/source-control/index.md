@@ -10,15 +10,15 @@ sidebar:
 
 The Source Control & Collaboration Toolkit goes beyond "just use GitHub." Modern platform engineering requires understanding the full landscape: GitLab's integrated DevOps platform, self-hosted alternatives for data sovereignty, and GitHub's advanced security features that most teams never enable.
 
-This toolkit applies concepts from [DevSecOps Discipline](../../disciplines/reliability-security/devsecops/) and [GitOps Discipline](../../disciplines/delivery-automation/gitops/).
+This toolkit applies concepts from [DevSecOps Discipline](../../../disciplines/reliability-security/devsecops/) and [GitOps Discipline](../../../disciplines/delivery-automation/gitops/).
 
 ## Prerequisites
 
 Before starting this toolkit:
 - Basic Git proficiency (commits, branches, merges)
 - Understanding of CI/CD concepts
-- [DevSecOps Discipline](../../disciplines/reliability-security/devsecops/) - Security integration
-- [GitOps Discipline](../../disciplines/delivery-automation/gitops/) - Git-centric workflows
+- [DevSecOps Discipline](../../../disciplines/reliability-security/devsecops/) - Security integration
+- [GitOps Discipline](../../../disciplines/delivery-automation/gitops/) - Git-centric workflows
 
 ## Modules
 
@@ -285,11 +285,11 @@ Note: Costs vary significantly by usage patterns and scale
 
 ## Related Tracks
 
-- **Before**: [DevSecOps Discipline](../../disciplines/reliability-security/devsecops/) — Security integration concepts
-- **Before**: [GitOps Discipline](../../disciplines/delivery-automation/gitops/) — Git-centric workflows
+- **Before**: [DevSecOps Discipline](../../../disciplines/reliability-security/devsecops/) — Security integration concepts
+- **Before**: [GitOps Discipline](../../../disciplines/delivery-automation/gitops/) — Git-centric workflows
 - **Related**: [CI/CD Pipelines Toolkit](../ci-cd-pipelines/) — Pipeline implementation
-- **Related**: [Code Quality Toolkit](../code-quality/) — Scanning and analysis tools
-- **After**: [Security Tools Toolkit](../security-tools/) — Runtime security
+- **Related**: [Code Quality Toolkit](../../security-quality/code-quality/) — Scanning and analysis tools
+- **After**: [Security Tools Toolkit](../../security-quality/security-tools/) — Runtime security
 
 ---
 

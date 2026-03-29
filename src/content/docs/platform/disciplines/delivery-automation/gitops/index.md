@@ -135,17 +135,17 @@ Module 3.6: Multi-Cluster GitOps
 ## Related Tracks
 
 **Foundations** (Start here if new to these concepts):
-- [Systems Thinking](../../foundations/systems-thinking/) - Feedback loops and emergent behavior
-- [Reliability Engineering](../../foundations/reliability-engineering/) - Change management principles
+- [Systems Thinking](../../../foundations/systems-thinking/) - Feedback loops and emergent behavior
+- [Reliability Engineering](../../../foundations/reliability-engineering/) - Change management principles
 
 **Disciplines** (Apply GitOps in context):
-- [SRE Discipline](../sre/) - Operationalizing GitOps for reliability
-- [DevSecOps Discipline](../devsecops/) - Security in GitOps pipelines
-- [Platform Engineering](../platform-engineering/) - Self-service GitOps platforms
+- [SRE Discipline](../../core-platform/sre/) - Operationalizing GitOps for reliability
+- [DevSecOps Discipline](../../reliability-security/devsecops/) - Security in GitOps pipelines
+- [Platform Engineering](../../core-platform/platform-engineering/) - Self-service GitOps platforms
 - [IaC Discipline](../iac/) - Infrastructure as Code with GitOps delivery
 
 **Toolkits** (Deep dive into specific tools):
-- [GitOps Tools](../../toolkits/cicd-delivery/gitops-deployments/) - ArgoCD, Flux, and related tools
+- [GitOps Tools](../../../toolkits/cicd-delivery/gitops-deployments/) - ArgoCD, Flux, and related tools
 
 ## Tools You'll Encounter
 

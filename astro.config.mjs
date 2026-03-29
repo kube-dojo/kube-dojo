@@ -115,26 +115,98 @@ export default defineConfig({
             { label: 'Overview', link: '/platform/' },
             { label: 'Foundations', autogenerate: { directory: 'platform/foundations' }, collapsed: true },
             {
-              label: 'Disciplines',
+              label: 'Core Platform',
               collapsed: true,
               items: [
-                { label: 'Core Platform', autogenerate: { directory: 'platform/disciplines/core-platform' }, collapsed: true },
-                { label: 'Delivery & Automation', autogenerate: { directory: 'platform/disciplines/delivery-automation' }, collapsed: true },
-                { label: 'Reliability & Security', autogenerate: { directory: 'platform/disciplines/reliability-security' }, collapsed: true },
-                { label: 'Data & AI', autogenerate: { directory: 'platform/disciplines/data-ai' }, collapsed: true },
-                { label: 'Business Value', autogenerate: { directory: 'platform/disciplines/business-value' }, collapsed: true },
+                { label: 'SRE', autogenerate: { directory: 'platform/disciplines/core-platform/sre' }, collapsed: true },
+                { label: 'Platform Engineering', autogenerate: { directory: 'platform/disciplines/core-platform/platform-engineering' }, collapsed: true },
+                { label: 'Platform Leadership', autogenerate: { directory: 'platform/disciplines/core-platform/leadership' }, collapsed: true },
               ],
             },
             {
-              label: 'Toolkits',
+              label: 'Delivery & Automation',
               collapsed: true,
               items: [
-                { label: 'CI/CD & Delivery', autogenerate: { directory: 'platform/toolkits/cicd-delivery' }, collapsed: true },
-                { label: 'Observability & Intelligence', autogenerate: { directory: 'platform/toolkits/observability-intelligence' }, collapsed: true },
-                { label: 'Infrastructure & Networking', autogenerate: { directory: 'platform/toolkits/infrastructure-networking' }, collapsed: true },
-                { label: 'Security & Quality', autogenerate: { directory: 'platform/toolkits/security-quality' }, collapsed: true },
-                { label: 'Developer Experience', autogenerate: { directory: 'platform/toolkits/developer-experience' }, collapsed: true },
-                { label: 'Data & AI Platforms', autogenerate: { directory: 'platform/toolkits/data-ai-platforms' }, collapsed: true },
+                { label: 'Release Engineering', autogenerate: { directory: 'platform/disciplines/delivery-automation/release-engineering' }, collapsed: true },
+                { label: 'GitOps', autogenerate: { directory: 'platform/disciplines/delivery-automation/gitops' }, collapsed: true },
+                { label: 'Infrastructure as Code', autogenerate: { directory: 'platform/disciplines/delivery-automation/iac' }, collapsed: true },
+              ],
+            },
+            {
+              label: 'Reliability & Security',
+              collapsed: true,
+              items: [
+                { label: 'Networking', autogenerate: { directory: 'platform/disciplines/reliability-security/networking' }, collapsed: true },
+                { label: 'Chaos Engineering', autogenerate: { directory: 'platform/disciplines/reliability-security/chaos-engineering' }, collapsed: true },
+                { label: 'DevSecOps', autogenerate: { directory: 'platform/disciplines/reliability-security/devsecops' }, collapsed: true },
+              ],
+            },
+            {
+              label: 'Data & AI',
+              collapsed: true,
+              items: [
+                { label: 'Data Engineering', autogenerate: { directory: 'platform/disciplines/data-ai/data-engineering' }, collapsed: true },
+                { label: 'MLOps', autogenerate: { directory: 'platform/disciplines/data-ai/mlops' }, collapsed: true },
+                { label: 'AIOps', autogenerate: { directory: 'platform/disciplines/data-ai/aiops' }, collapsed: true },
+                { label: 'AI Infrastructure', autogenerate: { directory: 'platform/disciplines/data-ai/ai-infrastructure' }, collapsed: true },
+              ],
+            },
+            {
+              label: 'FinOps',
+              autogenerate: { directory: 'platform/disciplines/business-value/finops' },
+              collapsed: true,
+            },
+            {
+              label: 'CI/CD & Delivery Tools',
+              collapsed: true,
+              items: [
+                { label: 'CI/CD Pipelines', autogenerate: { directory: 'platform/toolkits/cicd-delivery/ci-cd-pipelines' }, collapsed: true },
+                { label: 'GitOps & Deployments', autogenerate: { directory: 'platform/toolkits/cicd-delivery/gitops-deployments' }, collapsed: true },
+                { label: 'Source Control', autogenerate: { directory: 'platform/toolkits/cicd-delivery/source-control' }, collapsed: true },
+                { label: 'Container Registries', autogenerate: { directory: 'platform/toolkits/cicd-delivery/container-registries' }, collapsed: true },
+              ],
+            },
+            {
+              label: 'Observability Tools',
+              collapsed: true,
+              items: [
+                { label: 'Observability', autogenerate: { directory: 'platform/toolkits/observability-intelligence/observability' }, collapsed: true },
+                { label: 'AIOps Tools', autogenerate: { directory: 'platform/toolkits/observability-intelligence/aiops-tools' }, collapsed: true },
+              ],
+            },
+            {
+              label: 'Infrastructure Tools',
+              collapsed: true,
+              items: [
+                { label: 'IaC Tools', autogenerate: { directory: 'platform/toolkits/infrastructure-networking/iac-tools' }, collapsed: true },
+                { label: 'K8s Distributions', autogenerate: { directory: 'platform/toolkits/infrastructure-networking/k8s-distributions' }, collapsed: true },
+                { label: 'Networking', autogenerate: { directory: 'platform/toolkits/infrastructure-networking/networking' }, collapsed: true },
+                { label: 'Platforms', autogenerate: { directory: 'platform/toolkits/infrastructure-networking/platforms' }, collapsed: true },
+                { label: 'Storage', autogenerate: { directory: 'platform/toolkits/infrastructure-networking/storage' }, collapsed: true },
+              ],
+            },
+            {
+              label: 'Security & Quality Tools',
+              collapsed: true,
+              items: [
+                { label: 'Security Tools', autogenerate: { directory: 'platform/toolkits/security-quality/security-tools' }, collapsed: true },
+                { label: 'Code Quality', autogenerate: { directory: 'platform/toolkits/security-quality/code-quality' }, collapsed: true },
+              ],
+            },
+            {
+              label: 'Developer Experience Tools',
+              collapsed: true,
+              items: [
+                { label: 'DevEx Tools', autogenerate: { directory: 'platform/toolkits/developer-experience/devex-tools' }, collapsed: true },
+                { label: 'Scaling & Reliability', autogenerate: { directory: 'platform/toolkits/developer-experience/scaling-reliability' }, collapsed: true },
+              ],
+            },
+            {
+              label: 'Data & AI Platforms',
+              collapsed: true,
+              items: [
+                { label: 'ML Platforms', autogenerate: { directory: 'platform/toolkits/data-ai-platforms/ml-platforms' }, collapsed: true },
+                { label: 'Cloud-Native Databases', autogenerate: { directory: 'platform/toolkits/data-ai-platforms/cloud-native-databases' }, collapsed: true },
               ],
             },
           ],

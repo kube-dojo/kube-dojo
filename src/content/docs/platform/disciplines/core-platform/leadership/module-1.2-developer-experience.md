@@ -10,7 +10,7 @@ sidebar:
 
 Before starting this module:
 - **Required**: [Module 1.1: Building Platform Teams](./module-1.1-platform-team-building/) — Team structures and organizational design
-- **Required**: [Engineering Leadership Track](../../foundations/engineering-leadership/) — Stakeholder communication and ADRs
+- **Required**: [Engineering Leadership Track](../../../foundations/engineering-leadership/) — Stakeholder communication and ADRs
 - **Recommended**: [SRE: Service Level Objectives](../sre/module-1.2-slos/) — Measuring outcomes with SLIs/SLOs
 - **Recommended**: Experience using internal developer platforms (as a consumer)
 

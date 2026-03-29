@@ -612,7 +612,7 @@ k delete pod gpu-pod-1 gpu-pod-2 gpu-pod-3 gpu-pod-4
 | **Run.ai** | GPU virtualization and scheduling | Enterprise multi-tenant GPU sharing |
 | **Volcano** | Batch/gang scheduling for K8s | Distributed training (production-ready today) |
 | **Kueue** | K8s-native job queueing | GPU job queuing with fair sharing |
-| **Karpenter** | Node autoscaling | Auto-provision GPU nodes on demand ([Module 6.1](../scaling-reliability/module-6.1-karpenter/)) |
+| **Karpenter** | Node autoscaling | Auto-provision GPU nodes on demand ([Module 6.1](../../developer-experience/scaling-reliability/module-6.1-karpenter/)) |
 
 For MLOps pipeline integration with GPU workloads, see [Module 9.1: Kubeflow](module-9.1-kubeflow/).
 
@@ -644,4 +644,4 @@ For MLOps pipeline integration with GPU workloads, see [Module 9.1: Kubeflow](mo
 
 ## Next Module
 
-[Module 10.1: Anomaly Detection Tools](../aiops-tools/module-10.1-anomaly-detection-tools/) - Apply AI to your infrastructure with AIOps.
+[Module 10.1: Anomaly Detection Tools](../../observability-intelligence/aiops-tools/module-10.1-anomaly-detection-tools/) - Apply AI to your infrastructure with AIOps.

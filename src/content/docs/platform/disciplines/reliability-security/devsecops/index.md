@@ -15,8 +15,8 @@ This track covers the complete DevSecOps journey—from shift-left practices and
 ## Prerequisites
 
 Before starting this track:
-- [Security Principles Track](../../foundations/security-principles/) — Defense in depth, least privilege
-- [GitOps Track](../gitops/) — Modern deployment practices
+- [Security Principles Track](../../../foundations/security-principles/) — Defense in depth, least privilege
+- [GitOps Track](../../delivery-automation/gitops/) — Modern deployment practices
 - Basic CI/CD concepts (pipelines, builds, deployments)
 - Container basics (Docker, registries)
 
@@ -91,7 +91,7 @@ After completing this track, you will be able to:
 | **SAST** | Semgrep, CodeQL, Bandit, SonarQube |
 | **SCA** | Trivy, Snyk, Dependabot, Grype |
 | **Container Scanning** | Trivy, Grype, Docker Scout |
-| **IaC Scanning** | Checkov, tfsec, Kubesec (see [IaC Security](../iac/module-6.3-iac-security/)) |
+| **IaC Scanning** | Checkov, tfsec, Kubesec (see [IaC Security](../../delivery-automation/iac/module-6.3-iac-security/)) |
 | **Supply Chain** | Cosign, Sigstore, Syft |
 | **Runtime** | Falco, Kyverno, OPA/Gatekeeper |
 
@@ -121,11 +121,11 @@ Module 4.6: Security Culture & Automation
 
 ## Related Tracks
 
-- **Before**: [Security Principles](../../foundations/security-principles/) — Foundational theory
-- **Related**: [GitOps](../gitops/) — Deployment practices that support DevSecOps
-- **Related**: [IaC Discipline](../iac/) — Infrastructure as Code security and testing
-- **After**: [Security Tools Toolkit](../../toolkits/security-quality/security-tools/) — Hands-on implementations
-- **After**: [IaC Tools](../../toolkits/infrastructure-networking/iac-tools/) — Terraform, OpenTofu, Pulumi hands-on
+- **Before**: [Security Principles](../../../foundations/security-principles/) — Foundational theory
+- **Related**: [GitOps](../../delivery-automation/gitops/) — Deployment practices that support DevSecOps
+- **Related**: [IaC Discipline](../../delivery-automation/iac/) — Infrastructure as Code security and testing
+- **After**: [Security Tools Toolkit](../../../toolkits/security-quality/security-tools/) — Hands-on implementations
+- **After**: [IaC Tools](../../../toolkits/infrastructure-networking/iac-tools/) — Terraform, OpenTofu, Pulumi hands-on
 
 ---
 

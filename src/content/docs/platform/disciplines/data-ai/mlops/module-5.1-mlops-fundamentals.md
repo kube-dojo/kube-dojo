@@ -10,7 +10,7 @@ sidebar:
 
 Before starting this module:
 - Basic machine learning concepts (training, inference, models)
-- [DevOps fundamentals](../devsecops/module-4.1-devsecops-fundamentals/)
+- [DevOps fundamentals](../../reliability-security/devsecops/module-4.1-devsecops-fundamentals/)
 - Understanding of CI/CD pipelines
 - Python basics
 

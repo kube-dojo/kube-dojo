@@ -19,10 +19,10 @@ SPIFFE (Secure Production Identity Framework for Everyone) is an open standard f
 - How SPIFFE compares to ServiceAccount tokens, cert-manager, and service mesh identity
 
 **Prerequisites**:
-- [Security Principles Foundations](../../foundations/security-principles/)
+- [Security Principles Foundations](../../../foundations/security-principles/)
 - Kubernetes security fundamentals (ServiceAccounts, RBAC)
 - TLS and mTLS basics (what certificates are, how mutual authentication works)
-- [Module 7.3: cert-manager](../platforms/module-7.3-cert-manager/) (recommended)
+- [Module 7.3: cert-manager](../../infrastructure-networking/platforms/module-7.3-cert-manager/) (recommended)
 
 ---
 
@@ -375,7 +375,7 @@ No certificate files. No CA paths. No renewal cron jobs. SPIRE handles rotation,
 
 **When Istio is better**: You already run a service mesh and want identity, traffic management, and observability in one package. Istio actually uses SPIFFE IDs internally -- SPIRE can serve as a pluggable CA for Istio.
 
-> See [Module 5.2: Service Mesh](../networking/module-5.2-service-mesh/) for how Istio handles identity through Envoy sidecars. See [Module 7.3: cert-manager](../platforms/module-7.3-cert-manager/) for certificate lifecycle management. For CKS exam topics on workload identity, refer to the [CKS Security Track](../../../k8s/cks/).
+> See [Module 5.2: Service Mesh](../../infrastructure-networking/networking/module-5.2-service-mesh/) for how Istio handles identity through Envoy sidecars. See [Module 7.3: cert-manager](../../infrastructure-networking/platforms/module-7.3-cert-manager/) for certificate lifecycle management. For CKS exam topics on workload identity, refer to the [CKS Security Track](../../../../k8s/cks/).
 
 ---
 
@@ -559,7 +559,7 @@ kubectl exec -n spire-system spire-server-0 -- \
 
 ### Bonus Challenge
 
-Configure the SPIRE Server to use cert-manager as an upstream CA instead of the built-in self-signed CA. This integrates SPIRE into your existing PKI. Refer to the [SPIRE upstream authority documentation](https://spiffe.io/docs/latest/deploying/spire_server/#upstream-authority) and [Module 7.3: cert-manager](../platforms/module-7.3-cert-manager/).
+Configure the SPIRE Server to use cert-manager as an upstream CA instead of the built-in self-signed CA. This integrates SPIRE into your existing PKI. Refer to the [SPIRE upstream authority documentation](https://spiffe.io/docs/latest/deploying/spire_server/#upstream-authority) and [Module 7.3: cert-manager](../../infrastructure-networking/platforms/module-7.3-cert-manager/).
 
 ---
 
@@ -570,15 +570,15 @@ Configure the SPIRE Server to use cert-manager as an upstream CA instead of the 
 - [SPIRE Helm Charts](https://github.com/spiffe/helm-charts-hardened)
 - [go-spiffe Library](https://github.com/spiffe/go-spiffe) -- mTLS in a few lines of Go
 - [CNCF SPIFFE Project Page](https://www.cncf.io/projects/spiffe/)
-- [Module 5.2: Service Mesh](../networking/module-5.2-service-mesh/) -- Istio uses SPIFFE IDs internally
-- [Module 7.3: cert-manager](../platforms/module-7.3-cert-manager/) -- Certificate lifecycle management
-- CKS Exam: [Workload Identity](../../../k8s/cks/) -- ServiceAccount tokens and identity concepts
+- [Module 5.2: Service Mesh](../../infrastructure-networking/networking/module-5.2-service-mesh/) -- Istio uses SPIFFE IDs internally
+- [Module 7.3: cert-manager](../../infrastructure-networking/platforms/module-7.3-cert-manager/) -- Certificate lifecycle management
+- CKS Exam: [Workload Identity](../../../../k8s/cks/) -- ServiceAccount tokens and identity concepts
 
 ---
 
 ## Next Module
 
-Return to the [Security Tools README]() to review all security toolkit modules, or continue to the [Networking Toolkit](../networking/) for service mesh and Cilium.
+Return to the [Security Tools README]() to review all security toolkit modules, or continue to the [Networking Toolkit](../../infrastructure-networking/networking/) for service mesh and Cilium.
 
 ---
 

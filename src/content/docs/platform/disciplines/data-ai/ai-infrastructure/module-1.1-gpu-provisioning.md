@@ -11,7 +11,7 @@ sidebar:
 Before starting this module:
 - **Required**: Kubernetes administration experience (Deployments, DaemonSets, RBAC, Helm)
 - **Required**: Basic Linux hardware awareness (PCI devices, drivers, kernel modules)
-- **Recommended**: [Observability Theory](../../foundations/observability-theory/) — Understanding metrics pipelines
+- **Recommended**: [Observability Theory](../../../foundations/observability-theory/) — Understanding metrics pipelines
 - **Recommended**: Access to a node with at least one NVIDIA GPU (even a modest T4 or RTX 3060 works)
 
 ---

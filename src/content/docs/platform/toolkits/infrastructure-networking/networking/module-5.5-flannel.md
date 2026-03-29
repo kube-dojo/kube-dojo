@@ -63,7 +63,7 @@ This module will make sure you never burn three days on that problem. By the end
 
 **Prerequisites**:
 - Kubernetes networking basics (Pods, Services, CNI)
-- [Linux Networking fundamentals](../../../linux/foundations/networking/)
+- [Linux Networking fundamentals](../../../../linux/foundations/networking/)
 - Basic understanding of TCP/IP and Ethernet frames
 - A kind cluster for the hands-on exercise
 
@@ -1032,7 +1032,7 @@ There is nothing wrong with starting at Flannel. Just know where the road leads.
 - **[Module 5.2: Service Mesh](module-5.2-service-mesh/)** -- mTLS and advanced traffic management at Layer 7
 - **[Module 5.3: DNS Deep Dive](module-5.3-dns-deep-dive/)** -- How pod DNS resolution works after packets can flow
 - **[Module 5.4: MetalLB](module-5.4-metallb/)** -- Load balancing for bare-metal clusters where Flannel provides the underlay
-- **[CKA Module 3.2: Networking Fundamentals](../../../k8s/cka/part3-services-networking/module-3.2-endpoints/)** -- The Kubernetes networking model that CNIs implement
+- **[CKA Module 3.2: Networking Fundamentals](../../../../k8s/cka/part3-services-networking/module-3.2-endpoints/)** -- The Kubernetes networking model that CNIs implement
 
 ---
 

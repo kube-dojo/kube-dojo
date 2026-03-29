@@ -10,8 +10,8 @@ sidebar:
 
 Before starting this module:
 - **Required**: [Module 1.1: CNI Architecture](../module-1.1-cni-architecture/) — Understanding which CNIs support policies
-- **Required**: [Kubernetes Basics](../../../prerequisites/kubernetes-basics/) — Namespaces, labels, selectors
-- **Recommended**: [Security Principles foundations](../../foundations/security-principles/) — Zero trust, defense in depth
+- **Required**: [Kubernetes Basics](../../../../prerequisites/kubernetes-basics/) — Namespaces, labels, selectors
+- **Recommended**: [Security Principles foundations](../../../foundations/security-principles/) — Zero trust, defense in depth
 - **Helpful**: Experience with firewall rules or security groups
 
 ---

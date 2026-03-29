@@ -16,7 +16,7 @@ This module teaches you to deploy, configure, and operate Harbor for enterprise 
 
 - Docker fundamentals (building, pushing, tagging)
 - Kubernetes basics (Deployments, Services, PVCs)
-- [DevSecOps Discipline](../../disciplines/reliability-security/devsecops/) - Supply chain security concepts
+- [DevSecOps Discipline](../../../disciplines/reliability-security/devsecops/) - Supply chain security concepts
 - Understanding of image registries and OCI format
 
 ## Why This Module Matters

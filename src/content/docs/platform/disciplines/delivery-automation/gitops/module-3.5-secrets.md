@@ -10,7 +10,7 @@ sidebar:
 
 Before starting this module:
 - **Required**: [Module 3.1: What is GitOps?](module-3.1-what-is-gitops/) — GitOps fundamentals
-- **Required**: [Security Principles Track](../../foundations/security-principles/) — Security fundamentals
+- **Required**: [Security Principles Track](../../../foundations/security-principles/) — Security fundamentals
 - **Recommended**: Understanding of Kubernetes Secrets
 - **Helpful**: Basic cryptography concepts (encryption, keys)
 

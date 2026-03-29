@@ -15,7 +15,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- [GitOps Discipline](../../disciplines/delivery-automation/gitops/) — GitOps principles and practices
+- [GitOps Discipline](../../../disciplines/delivery-automation/gitops/) — GitOps principles and practices
 - Kubernetes basics (Deployments, Services, Namespaces)
 - Git fundamentals
 - kubectl experience

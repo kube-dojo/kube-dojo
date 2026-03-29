@@ -10,7 +10,7 @@ sidebar:
 
 The Cloud-Native Databases Toolkit covers running databases on Kubernetes—something that went from "don't do it" to "actually, it's great now" in just a few years. Modern operators, distributed architectures, and serverless models have made stateful workloads on Kubernetes not just viable, but often preferable to traditional deployments.
 
-This toolkit applies concepts from [Distributed Systems Foundation](../../foundations/distributed-systems/) and [Reliability Engineering Foundation](../../foundations/reliability-engineering/).
+This toolkit applies concepts from [Distributed Systems Foundation](../../../foundations/distributed-systems/) and [Reliability Engineering Foundation](../../../foundations/reliability-engineering/).
 
 ## Prerequisites
 
@@ -18,8 +18,8 @@ Before starting this toolkit:
 - Solid Kubernetes fundamentals (StatefulSets, PVCs, Services)
 - Basic SQL and database concepts
 - Understanding of replication and high availability
-- [Distributed Systems Foundation](../../foundations/distributed-systems/) - Consensus, consistency
-- [Reliability Engineering Foundation](../../foundations/reliability-engineering/) - SLOs, failure modes
+- [Distributed Systems Foundation](../../../foundations/distributed-systems/) - Consensus, consistency
+- [Reliability Engineering Foundation](../../../foundations/reliability-engineering/) - SLOs, failure modes
 
 ## Modules
 
@@ -472,11 +472,11 @@ WHEN MANAGED/SERVERLESS WINS:
 
 ## Related Tracks
 
-- **Before**: [Distributed Systems Foundation](../../foundations/distributed-systems/) — Consensus, consistency
-- **Before**: [Reliability Engineering Foundation](../../foundations/reliability-engineering/) — SLOs, failure modes
-- **Related**: [Observability Toolkit](../observability/) — Database monitoring
-- **Related**: [GitOps & Deployments](../gitops-deployments/) — Database GitOps
-- **Related**: [Security Tools](../security-tools/) — Database encryption, access control
+- **Before**: [Distributed Systems Foundation](../../../foundations/distributed-systems/) — Consensus, consistency
+- **Before**: [Reliability Engineering Foundation](../../../foundations/reliability-engineering/) — SLOs, failure modes
+- **Related**: [Observability Toolkit](../../observability-intelligence/observability/) — Database monitoring
+- **Related**: [GitOps & Deployments](../../cicd-delivery/gitops-deployments/) — Database GitOps
+- **Related**: [Security Tools](../../security-quality/security-tools/) — Database encryption, access control
 
 ---
 

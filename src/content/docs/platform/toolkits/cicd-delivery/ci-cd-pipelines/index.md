@@ -10,12 +10,12 @@ sidebar:
 
 The CI/CD Pipelines Toolkit covers modern pipeline orchestration beyond traditional CI systems. These tools represent the next generation of build and deployment automation—programmable, Kubernetes-native, and designed for complex workflows.
 
-This toolkit builds on concepts from [DevSecOps Discipline](../../disciplines/reliability-security/devsecops/) and complements the [GitOps & Deployments Toolkit](../gitops-deployments/).
+This toolkit builds on concepts from [DevSecOps Discipline](../../../disciplines/reliability-security/devsecops/) and complements the [GitOps & Deployments Toolkit](../gitops-deployments/).
 
 ## Prerequisites
 
 Before starting this toolkit:
-- [DevSecOps Discipline](../../disciplines/reliability-security/devsecops/) — CI/CD concepts
+- [DevSecOps Discipline](../../../disciplines/reliability-security/devsecops/) — CI/CD concepts
 - Container fundamentals
 - Kubernetes basics
 - Programming experience (for Dagger)
@@ -186,10 +186,10 @@ Tool: Dagger and Argo Workflows
 
 ## Related Tracks
 
-- **Before**: [DevSecOps Discipline](../../disciplines/reliability-security/devsecops/) — CI/CD concepts
-- **Related**: [IaC Tools Toolkit](../iac-tools/) — Terraform for pipeline infrastructure
+- **Before**: [DevSecOps Discipline](../../../disciplines/reliability-security/devsecops/) — CI/CD concepts
+- **Related**: [IaC Tools Toolkit](../../infrastructure-networking/iac-tools/) — Terraform for pipeline infrastructure
 - **Related**: [GitOps & Deployments Toolkit](../gitops-deployments/) — Deploy what CI builds
-- **After**: [Security Tools Toolkit](../security-tools/) — Secure the pipeline
+- **After**: [Security Tools Toolkit](../../security-quality/security-tools/) — Secure the pipeline
 
 ---
 

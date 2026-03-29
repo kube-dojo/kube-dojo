@@ -17,7 +17,7 @@ Admission control stops bad configurations, but what about runtime attacks? A co
 - Integration with incident response
 
 **Prerequisites**:
-- [Security Principles Foundations](../../foundations/security-principles/)
+- [Security Principles Foundations](../../../foundations/security-principles/)
 - Linux basics (processes, files, networking)
 - Kubernetes networking concepts
 

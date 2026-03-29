@@ -7,7 +7,7 @@ sidebar:
 ## Complexity: [MEDIUM]
 
 **Time to Complete**: 40 minutes
-**Prerequisites**: [SRE Module 1.2: SLOs](../../disciplines/core-platform/sre/module-1.2-slos/), [SRE Module 1.3: Error Budgets](../../disciplines/core-platform/sre/module-1.3-error-budgets/), [Module 1.1: Prometheus](module-1.1-prometheus/)
+**Prerequisites**: [SRE Module 1.2: SLOs](../../../disciplines/core-platform/sre/module-1.2-slos/), [SRE Module 1.3: Error Budgets](../../../disciplines/core-platform/sre/module-1.3-error-budgets/), [Module 1.1: Prometheus](module-1.1-prometheus/)
 **Learning Objectives**:
 - Define SLOs as code using Sloth and the OpenSLO specification
 - Generate Prometheus recording rules and burn-rate alerts automatically
@@ -532,8 +532,8 @@ A page alert means the error budget is burning at a rate that will exhaust it we
 - [Pyrra GitHub Repository](https://github.com/pyrra-dev/pyrra) -- Installation and CRD reference
 - [OpenSLO Specification](https://openslo.com/) -- The vendor-neutral SLO standard
 - [Google SRE Workbook: Alerting on SLOs](https://sre.google/workbook/alerting-on-slos/) -- The theory behind multi-window burn-rate alerting
-- [KubeDojo SRE Module 1.2: SLOs](../../disciplines/core-platform/sre/module-1.2-slos/) -- SLO theory foundations
-- [KubeDojo SRE Module 1.3: Error Budgets](../../disciplines/core-platform/sre/module-1.3-error-budgets/) -- Error budget concepts and policies
+- [KubeDojo SRE Module 1.2: SLOs](../../../disciplines/core-platform/sre/module-1.2-slos/) -- SLO theory foundations
+- [KubeDojo SRE Module 1.3: Error Budgets](../../../disciplines/core-platform/sre/module-1.3-error-budgets/) -- Error budget concepts and policies
 
 ---
 

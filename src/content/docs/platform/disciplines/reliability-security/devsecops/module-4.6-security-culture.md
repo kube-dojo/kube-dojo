@@ -1241,7 +1241,7 @@ The goal is a world where security is "how we build," not "what blocks us."
 - Apply these concepts to your organization
 - Start a security champions program
 - Implement the metrics discussed
-- Continue to the [DevSecOps Toolkit](../../toolkits/security-quality/security-tools/) for hands-on tool implementations
+- Continue to the [DevSecOps Toolkit](../../../toolkits/security-quality/security-tools/) for hands-on tool implementations
 
 ---
 

@@ -9,7 +9,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- [AIOps Discipline](../../disciplines/data-ai/aiops/) — Conceptual foundation
+- [AIOps Discipline](../../../disciplines/data-ai/aiops/) — Conceptual foundation
 - [Observability Toolkit](../observability/) — Platform fundamentals
 - Basic understanding of observability platforms (Datadog, Dynatrace, New Relic)
 

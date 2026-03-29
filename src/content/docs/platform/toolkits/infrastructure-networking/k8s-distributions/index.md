@@ -10,7 +10,7 @@ sidebar:
 
 The Kubernetes Distributions Toolkit covers lightweight Kubernetes alternatives for edge, IoT, development, and resource-constrained environments. When vanilla Kubernetes is too heavy—requiring too much RAM, too many nodes, or too complex to manage—these distributions deliver Kubernetes-compatible APIs with dramatically lower overhead.
 
-This toolkit applies concepts from [Systems Thinking](../../foundations/systems-thinking/) and [Platform Engineering](../../disciplines/core-platform/platform-engineering/).
+This toolkit applies concepts from [Systems Thinking](../../../foundations/systems-thinking/) and [Platform Engineering](../../../disciplines/core-platform/platform-engineering/).
 
 ## Prerequisites
 
@@ -436,10 +436,10 @@ CPU                2 cores     2 cores     2 cores     2 cores
 
 ## Related Tracks
 
-- **Before**: [Container Registries Toolkit](../container-registries/) — Store images for your cluster
-- **Related**: [Developer Experience Toolkit](../developer-experience/) — Local K8s options
+- **Before**: [Container Registries Toolkit](../../cicd-delivery/container-registries/) — Store images for your cluster
+- **Related**: [Developer Experience Toolkit](../../developer-experience/) — Local K8s options
 - **Related**: [IaC Tools Toolkit](../iac-tools/) — Automate cluster provisioning
-- **After**: [CI/CD Pipelines Toolkit](../ci-cd-pipelines/) — Deploy to your clusters
+- **After**: [CI/CD Pipelines Toolkit](../../cicd-delivery/ci-cd-pipelines/) — Deploy to your clusters
 
 ---
 

@@ -10,7 +10,7 @@ sidebar:
 
 Before starting this module:
 - **Required**: [Module 1.2: SLOs](module-1.2-slos/) — Understanding service levels
-- **Required**: [Observability Theory Track](../../foundations/observability-theory/) — Metrics and monitoring
+- **Required**: [Observability Theory Track](../../../foundations/observability-theory/) — Metrics and monitoring
 - **Recommended**: [Module 1.4: Toil and Automation](module-1.4-toil-automation/) — Automation mindset
 - **Helpful**: Basic understanding of cloud infrastructure
 
@@ -952,9 +952,9 @@ You've learned:
 | Track | Why |
 |-------|-----|
 | [Platform Engineering Discipline](../platform-engineering/) | Build internal developer platforms |
-| [GitOps Discipline](../gitops/) | Declarative operations |
-| [Observability Toolkit](../../toolkits/observability-intelligence/observability/) | Implement monitoring and tracing |
-| [CKA Certification](../../../k8s/cka/) | Apply SRE to Kubernetes |
+| [GitOps Discipline](../../delivery-automation/gitops/) | Declarative operations |
+| [Observability Toolkit](../../../toolkits/observability-intelligence/observability/) | Implement monitoring and tracing |
+| [CKA Certification](../../../../k8s/cka/) | Apply SRE to Kubernetes |
 
 ---
 

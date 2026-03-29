@@ -15,7 +15,7 @@ Before starting this module, you should have completed:
 - [Module 15.1: CockroachDB](module-15.1-cockroachdb/) - Distributed database concepts
 - PostgreSQL fundamentals (basic SQL, replication concepts)
 - Kubernetes fundamentals (StatefulSets, PVCs, Operators)
-- [Reliability Engineering Foundation](../../foundations/reliability-engineering/) - HA concepts
+- [Reliability Engineering Foundation](../../../foundations/reliability-engineering/) - HA concepts
 
 ---
 
@@ -945,8 +945,8 @@ Single-instance clusters have no failover capability. Two instances can't provid
 ## Next Steps
 
 - **Next Module**: [Module 15.3: Neon & PlanetScale](module-15.3-serverless-databases/) — Serverless databases
-- **Related**: [GitOps & Deployments](../gitops-deployments/) — Managing database config with GitOps
-- **Related**: [Observability Toolkit](../observability/) — Monitoring PostgreSQL
+- **Related**: [GitOps & Deployments](../../cicd-delivery/gitops-deployments/) — Managing database config with GitOps
+- **Related**: [Observability Toolkit](../../observability-intelligence/observability/) — Monitoring PostgreSQL
 
 ---
 

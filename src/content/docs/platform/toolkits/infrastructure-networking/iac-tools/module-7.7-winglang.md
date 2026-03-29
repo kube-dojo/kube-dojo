@@ -15,7 +15,7 @@ Before starting this module, you should have completed:
 - [Module 7.1: Terraform](module-7.1-terraform/) - Traditional IaC concepts
 - [Module 7.3: Pulumi](module-7.3-pulumi/) - Programming language approach to IaC
 - Programming fundamentals (any language)
-- [Distributed Systems Foundation](../../foundations/distributed-systems/) - Cloud architecture
+- [Distributed Systems Foundation](../../../foundations/distributed-systems/) - Cloud architecture
 - AWS or simulator setup for exercises
 
 ---

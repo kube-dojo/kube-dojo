@@ -9,9 +9,9 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Security Principles Track](../../foundations/security-principles/) — Defense in depth, least privilege
+- **Required**: [Security Principles Track](../../../foundations/security-principles/) — Defense in depth, least privilege
 - **Required**: Basic CI/CD concepts (build, test, deploy pipelines)
-- **Recommended**: [GitOps Track](../gitops/) — Modern deployment practices
+- **Recommended**: [GitOps Track](../../delivery-automation/gitops/) — Modern deployment practices
 - **Helpful**: Experience with security scanning tools
 
 ---

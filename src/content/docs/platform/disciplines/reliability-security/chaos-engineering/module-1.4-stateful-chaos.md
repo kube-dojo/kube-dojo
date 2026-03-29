@@ -10,7 +10,7 @@ sidebar:
 
 Before starting this module:
 - **Required**: [Module 1.2: Chaos Mesh Fundamentals](module-1.2-chaos-mesh/) — PodChaos, NetworkChaos, StressChaos
-- **Required**: [Kubernetes Basics — StatefulSets](../../../prerequisites/kubernetes-basics/) — PVs, PVCs, StatefulSets, headless Services
+- **Required**: [Kubernetes Basics — StatefulSets](../../../../prerequisites/kubernetes-basics/) — PVs, PVCs, StatefulSets, headless Services
 - **Recommended**: Basic PostgreSQL or MySQL administration experience
 - **Recommended**: Understanding of database replication concepts (primary/replica, WAL shipping)
 

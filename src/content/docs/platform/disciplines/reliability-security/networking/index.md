@@ -12,13 +12,13 @@ Kubernetes networking is deceptively simple on the surface — every Pod gets an
 
 This discipline covers the applied networking decisions platform engineers face daily: choosing and operating CNI plugins, designing network policies for zero-trust segmentation, evaluating service mesh trade-offs, configuring Gateway API for traffic management, and connecting clusters across regions and clouds.
 
-**This is NOT general networking theory.** For DNS fundamentals, CDN architecture, WAF concepts, BGP routing, and zero-trust networking principles, see the [Advanced Networking foundation track](../../foundations/advanced-networking/). This discipline assumes you understand those concepts and focuses on how they manifest inside Kubernetes.
+**This is NOT general networking theory.** For DNS fundamentals, CDN architecture, WAF concepts, BGP routing, and zero-trust networking principles, see the [Advanced Networking foundation track](../../../foundations/advanced-networking/). This discipline assumes you understand those concepts and focuses on how they manifest inside Kubernetes.
 
 ## Prerequisites
 
 Before starting this track:
-- [Kubernetes Basics](../../../prerequisites/kubernetes-basics/) — Pods, Services, Deployments, Namespaces
-- [Advanced Networking foundations](../../foundations/advanced-networking/) — DNS, load balancing, TLS, network models
+- [Kubernetes Basics](../../../../prerequisites/kubernetes-basics/) — Pods, Services, Deployments, Namespaces
+- [Advanced Networking foundations](../../../foundations/advanced-networking/) — DNS, load balancing, TLS, network models
 - Container networking basics (network namespaces, veth pairs, bridges)
 - Comfort with `kubectl`, YAML manifests, and Helm charts
 
@@ -127,17 +127,16 @@ Every Kubernetes networking implementation must satisfy three fundamental requir
 ## Related Tracks
 
 **Foundations** (Start here if new to these concepts):
-- [Advanced Networking](../../foundations/advanced-networking/) — DNS, CDN, WAF, BGP, load balancing, zero trust
-- [Security Principles](../../foundations/security-principles/) — Defense in depth, least privilege
+- [Advanced Networking](../../../foundations/advanced-networking/) — DNS, CDN, WAF, BGP, load balancing, zero trust
+- [Security Principles](../../../foundations/security-principles/) — Defense in depth, least privilege
 
 **Disciplines** (Apply networking in context):
 - [DevSecOps Discipline](../devsecops/) — Network security in CI/CD
-- [SRE Discipline](../sre/) — Network reliability and incident response
-- [Platform Engineering](../platform-engineering/) — Self-service networking abstractions
+- [SRE Discipline](../../core-platform/sre/) — Network reliability and incident response
+- [Platform Engineering](../../core-platform/platform-engineering/) — Self-service networking abstractions
 
 **Toolkits** (Deep dive into specific tools):
-- [Service Mesh Tools](../../toolkits/service-mesh/) — Istio, Linkerd implementation guides
-- [Ingress & Load Balancing](../../toolkits/ingress-load-balancing/) — Controller-specific configuration
+- [Networking Toolkit](../../../toolkits/infrastructure-networking/networking/) — Cilium, service mesh, DNS, and more
 
 ## Tools You'll Encounter
 

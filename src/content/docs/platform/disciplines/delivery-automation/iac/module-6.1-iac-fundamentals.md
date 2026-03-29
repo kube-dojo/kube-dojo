@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 35-40 minutes
 >
-> **Prerequisites**: [Module 1: Infrastructure as Code](../../../prerequisites/modern-devops/module-1.1-infrastructure-as-code/)
+> **Prerequisites**: [Module 1: Infrastructure as Code](../../../../prerequisites/modern-devops/module-1.1-infrastructure-as-code/)
 >
 > **Track**: Platform Engineering - IaC Discipline
 

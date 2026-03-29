@@ -16,7 +16,7 @@ Before starting this module, you should have completed:
 - [Module 14.2: k0s](module-14.2-k0s/) - Alternative distributions
 - Linux fundamentals (boot process, systemd concepts)
 - Understanding of immutable infrastructure
-- [Security Principles Foundation](../../foundations/security-principles/) - Defense in depth
+- [Security Principles Foundation](../../../foundations/security-principles/) - Defense in depth
 
 ---
 
@@ -959,7 +959,7 @@ Store configs in Git, apply via CI/CD, and you have GitOps for your entire infra
 ## Next Steps
 
 - **Next Module**: [Module 14.5: OpenShift](module-14.5-openshift/) — Enterprise Kubernetes
-- **Related**: [Security Tools Toolkit](../security-tools/) — Runtime security
+- **Related**: [Security Tools Toolkit](../../security-quality/security-tools/) — Runtime security
 - **Related**: [IaC Tools Toolkit](../iac-tools/) — Automate Talos deployment
 
 ---

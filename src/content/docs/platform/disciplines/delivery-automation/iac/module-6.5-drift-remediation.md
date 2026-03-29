@@ -1176,7 +1176,7 @@ chmod +x detect-drift.sh
 
 ## Related Modules
 
-> **GitOps Drift**: For GitOps-specific drift detection (ArgoCD sync, Flux reconciliation), see [GitOps Drift Detection](../../disciplines/delivery-automation/gitops/module-3.4-drift-detection/).
+> **GitOps Drift**: For GitOps-specific drift detection (ArgoCD sync, Flux reconciliation), see [GitOps Drift Detection](../gitops/module-3.4-drift-detection/).
 
 ---
 

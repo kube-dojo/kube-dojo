@@ -10,7 +10,7 @@ sidebar:
 
 The Developer Experience Toolkit covers tools that make daily Kubernetes work faster and more productive. k9s provides a terminal UI for rapid cluster navigation, Telepresence and Tilt enable local development against remote clusters, and local Kubernetes options (kind, minikube) give you disposable environments for testing.
 
-These tools apply concepts from [Platform Engineering Discipline](../../disciplines/core-platform/platform-engineering/) to improve developer productivity.
+These tools apply concepts from [Platform Engineering Discipline](../../../disciplines/core-platform/platform-engineering/) to improve developer productivity.
 
 ## Prerequisites
 
@@ -289,11 +289,11 @@ Best for           Debugging      Development      CI/CD
 
 ## Related Tracks
 
-- **Before**: [Platforms Toolkit](../platforms/) — Portal and infrastructure
-- **Applies**: [Platform Engineering Discipline](../../disciplines/core-platform/platform-engineering/) — Developer experience concepts
-- **Related**: [IaC Discipline](../../disciplines/delivery-automation/iac/) — Infrastructure provisioning patterns
-- **Related**: [CI/CD Pipelines Toolkit](../ci-cd-pipelines/) — Build and deploy automation
-- **Related**: [GitOps & Deployments Toolkit](../gitops-deployments/) — Deployment workflows
+- **Before**: [Platforms Toolkit](../../infrastructure-networking/platforms/) — Portal and infrastructure
+- **Applies**: [Platform Engineering Discipline](../../../disciplines/core-platform/platform-engineering/) — Developer experience concepts
+- **Related**: [IaC Discipline](../../../disciplines/delivery-automation/iac/) — Infrastructure provisioning patterns
+- **Related**: [CI/CD Pipelines Toolkit](../../cicd-delivery/ci-cd-pipelines/) — Build and deploy automation
+- **Related**: [GitOps & Deployments Toolkit](../../cicd-delivery/gitops-deployments/) — Deployment workflows
 
 ---
 

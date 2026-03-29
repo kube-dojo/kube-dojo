@@ -568,4 +568,4 @@ kind delete cluster --name capi-mgmt
 
 ## Next Module
 
-This is the final module in the Multi-Cluster & Platform section. Continue to [Module 6.1: Security Hardening](../../security/module-6.1-security-hardening/) to learn how to secure on-premises Kubernetes clusters from network to workload layer.
+This is the final module in the Multi-Cluster & Platform section. Continue to [Module 6.1: Physical Security & Air-Gapped Environments](../security/module-6.1-air-gapped/) to learn how to secure on-premises Kubernetes clusters from network to workload layer.

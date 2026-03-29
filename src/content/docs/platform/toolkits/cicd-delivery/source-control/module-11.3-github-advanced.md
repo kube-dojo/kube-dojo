@@ -12,8 +12,8 @@ sidebar:
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [DevSecOps Discipline](../../disciplines/reliability-security/devsecops/) - Security scanning concepts
-- [GitOps Discipline](../../disciplines/delivery-automation/gitops/) - Git-centric workflows
+- [DevSecOps Discipline](../../../disciplines/reliability-security/devsecops/) - Security scanning concepts
+- [GitOps Discipline](../../../disciplines/delivery-automation/gitops/) - Git-centric workflows
 - Basic GitHub experience (repos, PRs, issues)
 - Understanding of CI/CD fundamentals
 
@@ -1183,8 +1183,8 @@ When GitHub detects a secret (like an AWS key or Stripe API key), it notifies th
 
 ## Next Steps
 
-- **Related**: [Module 12.3: CodeQL](../code-quality/module-12.3-codeql/) - Deep dive into query writing
-- **Related**: [Module 4.4: Supply Chain Security](../security-tools/module-4.4-supply-chain/) - SBOM and signing
+- **Related**: [Module 12.3: CodeQL](../../security-quality/code-quality/module-12.3-codeql/) - Deep dive into query writing
+- **Related**: [Module 4.4: Supply Chain Security](../../security-quality/security-tools/module-4.4-supply-chain/) - SBOM and signing
 - **Related**: [Module 2.1: ArgoCD](../gitops-deployments/module-2.1-argocd/) - GitOps deployments from GitHub
 
 ---

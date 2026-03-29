@@ -22,7 +22,7 @@ You have 200 microservices running in your cluster. Most of them sit idle 80% of
 **Prerequisites**:
 - Kubernetes Deployments, Services, and Ingress basics
 - [KEDA](./module-6.2-keda/) -- Understanding scale-to-zero concepts
-- [Reliability Engineering](../../foundations/reliability-engineering/) -- SLO awareness
+- [Reliability Engineering](../../../foundations/reliability-engineering/) -- SLO awareness
 - Familiarity with Helm and kubectl
 
 ---

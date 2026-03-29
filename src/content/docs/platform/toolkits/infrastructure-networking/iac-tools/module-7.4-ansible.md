@@ -12,7 +12,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [Module 6.1: IaC Fundamentals](../../disciplines/delivery-automation/iac/module-6.1-iac-fundamentals/)
+- [Module 6.1: IaC Fundamentals](../../../disciplines/delivery-automation/iac/module-6.1-iac-fundamentals/)
 - Basic SSH and Linux administration
 - Understanding of YAML syntax
 

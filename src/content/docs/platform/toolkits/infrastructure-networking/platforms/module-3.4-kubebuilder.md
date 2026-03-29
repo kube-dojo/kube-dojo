@@ -19,7 +19,7 @@ A fintech team ran 200+ PostgreSQL instances across three cloud providers. Every
 - Packaging and deploying operators
 
 **Prerequisites**:
-- [CKA Module 1.5: CRDs and Operators](../../../k8s/cka/part1-cluster-architecture/module-1.5-crds-operators/)
+- [CKA Module 1.5: CRDs and Operators](../../../../k8s/cka/part1-cluster-architecture/module-1.5-crds-operators/)
 - Go programming basics (structs, interfaces, error handling)
 - Familiarity with `kubectl` and YAML manifests
 
@@ -34,7 +34,7 @@ Kubebuilder is the official SDK for building operators in Go. It generates the b
 > **Did You Know?**
 > - Kubebuilder is maintained by the Kubernetes SIG API Machinery team -- the same people who design the Kubernetes API itself. It is the upstream foundation that Operator SDK builds on top of.
 > - The controller-runtime library (which Kubebuilder uses) powers over 500 open-source operators, including Istio, Knative, and Cluster API. If you learn it once, you can read the source code of almost any major Kubernetes project.
-> - A single reconciliation loop can replace thousands of lines of bash scripts. The etcd-operator (see [Module 15.5](../../toolkits/data-ai-platforms/cloud-native-databases/module-15.5-etcd-operator/)) reduced cluster management from a multi-day manual process to a single CRD apply.
+> - A single reconciliation loop can replace thousands of lines of bash scripts. The etcd-operator (see [Module 15.5](../../data-ai-platforms/cloud-native-databases/module-15.5-etcd-operator/)) reduced cluster management from a multi-day manual process to a single CRD apply.
 > - Kubebuilder v4 (current) generates projects that conform to the Kubernetes API conventions document, meaning your CRDs behave exactly like built-in resources -- including strategic merge patch, server-side apply, and proper status subresources.
 
 ---
@@ -723,8 +723,8 @@ Add a `ServiceType` field to the WebApp spec (ClusterIP or NodePort) and make th
 
 ## Cross-References
 
-- **CRD Foundations**: [CKA Module 1.5: CRDs and Operators](../../../k8s/cka/part1-cluster-architecture/module-1.5-crds-operators/) covers the Kubernetes extension mechanics that operators build on.
-- **Operator in the Wild**: [Module 15.5: etcd-operator](../../toolkits/data-ai-platforms/cloud-native-databases/module-15.5-etcd-operator/) shows a production operator managing a distributed database.
+- **CRD Foundations**: [CKA Module 1.5: CRDs and Operators](../../../../k8s/cka/part1-cluster-architecture/module-1.5-crds-operators/) covers the Kubernetes extension mechanics that operators build on.
+- **Operator in the Wild**: [Module 15.5: etcd-operator](../../data-ai-platforms/cloud-native-databases/module-15.5-etcd-operator/) shows a production operator managing a distributed database.
 - **Declarative Infrastructure**: [Module 7.2: Crossplane](module-7.2-crossplane/) uses the same controller-runtime reconciliation pattern, but for cloud resources instead of in-cluster workloads.
 
 ---

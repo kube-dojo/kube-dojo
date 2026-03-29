@@ -17,7 +17,7 @@ Terraform in CI pipelines. CloudFormation templates. Manual console clicks. Infr
 - GitOps for infrastructure
 
 **Prerequisites**:
-- [Platform Engineering Discipline](../../disciplines/core-platform/platform-engineering/)
+- [Platform Engineering Discipline](../../../disciplines/core-platform/platform-engineering/)
 - Kubernetes Custom Resource Definitions (CRDs)
 - Basic cloud provider knowledge (AWS/GCP/Azure)
 

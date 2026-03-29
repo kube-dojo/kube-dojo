@@ -13,7 +13,7 @@ sidebar:
 
 Before starting this module, you should have completed:
 - [Module 12.1: SonarQube](module-12.1-sonarqube/) - Code quality fundamentals
-- [DevSecOps Discipline](../../disciplines/reliability-security/devsecops/) - Security integration concepts
+- [DevSecOps Discipline](../../../disciplines/reliability-security/devsecops/) - Security integration concepts
 - Basic regex understanding
 - Programming experience in at least one language
 

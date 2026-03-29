@@ -18,7 +18,7 @@ Kubernetes HPA scales on CPU and memory. But what if your app's bottleneck is qu
 
 **Prerequisites**:
 - Kubernetes HPA basics
-- [SRE Discipline](../../disciplines/core-platform/sre/) — Scaling concepts
+- [SRE Discipline](../../../disciplines/core-platform/sre/) — Scaling concepts
 - Understanding of message queues (nice to have)
 
 ---

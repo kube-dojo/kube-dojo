@@ -9,8 +9,8 @@ sidebar:
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Kubernetes Basics](../../../prerequisites/kubernetes-basics/) — Pod, Service, and Namespace concepts
-- **Required**: [Advanced Networking foundations](../../foundations/advanced-networking/) — IP addressing, routing, overlay networks
+- **Required**: [Kubernetes Basics](../../../../prerequisites/kubernetes-basics/) — Pod, Service, and Namespace concepts
+- **Required**: [Advanced Networking foundations](../../../foundations/advanced-networking/) — IP addressing, routing, overlay networks
 - **Recommended**: Linux networking fundamentals (network namespaces, iptables, bridges)
 - **Helpful**: Experience running a Kubernetes cluster (kind, minikube, or kubeadm)
 

@@ -10,13 +10,13 @@ sidebar:
 
 The Networking Toolkit covers advanced Kubernetes networking beyond basic Services and Ingress. Cilium brings eBPF-powered networking with identity-based security and deep observability. Service mesh adds traffic management and mTLS for complex microservice architectures.
 
-This toolkit builds on [Security Principles](../../foundations/security-principles/) and complements the [Security Tools Toolkit](../security-tools/).
+This toolkit builds on [Security Principles](../../../foundations/security-principles/) and complements the [Security Tools Toolkit](../../security-quality/security-tools/).
 
 ## Prerequisites
 
 Before starting this toolkit:
 - Kubernetes Services, Pods, and basic networking
-- [Security Principles Foundations](../../foundations/security-principles/)
+- [Security Principles Foundations](../../../foundations/security-principles/)
 - Linux networking basics (TCP/IP, DNS)
 - Container fundamentals
 
@@ -188,11 +188,11 @@ No traffic mgmt  Basic             Basic             Advanced
 
 ## Related Tracks
 
-- **Before**: [Security Tools Toolkit](../security-tools/) — Security context
-- **Before**: [Security Principles](../../foundations/security-principles/) — Theory
+- **Before**: [Security Tools Toolkit](../../security-quality/security-tools/) — Security context
+- **Before**: [Security Principles](../../../foundations/security-principles/) — Theory
 - **Related**: [IaC Tools Toolkit](../iac-tools/) — Terraform modules for Cilium, Istio
-- **Related**: [DevSecOps Discipline](../../disciplines/reliability-security/devsecops/) — Security practices
-- **After**: [Scaling & Reliability](../scaling-reliability/) — Autoscaling
+- **Related**: [DevSecOps Discipline](../../../disciplines/reliability-security/devsecops/) — Security practices
+- **After**: [Scaling & Reliability](../../developer-experience/scaling-reliability/) — Autoscaling
 
 ---
 

@@ -15,7 +15,7 @@ This track covers the complete ML lifecycle—from experiment tracking and featu
 ## Prerequisites
 
 Before starting this track:
-- [Observability Theory Track](../../foundations/observability-theory/) — Monitoring fundamentals
+- [Observability Theory Track](../../../foundations/observability-theory/) — Monitoring fundamentals
 - Basic machine learning concepts (training, inference, models)
 - Python programming experience
 - Understanding of CI/CD concepts
@@ -132,11 +132,11 @@ Module 5.6: ML Pipelines & Automation
 
 ## Related Tracks
 
-- **Before**: [Observability Theory](../../foundations/observability-theory/) — Monitoring foundations
-- **Related**: [IaC Discipline](../iac/) — Infrastructure provisioning for ML platforms
-- **Related**: [DevSecOps](../devsecops/) — Security for ML pipelines
-- **After**: [ML Platforms Toolkit](../../toolkits/data-ai-platforms/ml-platforms/) — Hands-on implementations
-- **After**: [IaC Tools Toolkit](../../toolkits/infrastructure-networking/iac-tools/) — Terraform modules for ML infrastructure
+- **Before**: [Observability Theory](../../../foundations/observability-theory/) — Monitoring foundations
+- **Related**: [IaC Discipline](../../delivery-automation/iac/) — Infrastructure provisioning for ML platforms
+- **Related**: [DevSecOps](../../reliability-security/devsecops/) — Security for ML pipelines
+- **After**: [ML Platforms Toolkit](../../../toolkits/data-ai-platforms/ml-platforms/) — Hands-on implementations
+- **After**: [IaC Tools Toolkit](../../../toolkits/infrastructure-networking/iac-tools/) — Terraform modules for ML infrastructure
 
 ---
 

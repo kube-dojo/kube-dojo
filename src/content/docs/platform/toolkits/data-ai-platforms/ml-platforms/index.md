@@ -10,12 +10,12 @@ sidebar:
 
 The ML Platforms Toolkit covers the infrastructure for production machine learning on Kubernetes. From traditional ML pipelines with Kubeflow and MLflow to the LLM revolution with vLLM and LangChain—this toolkit provides the complete foundation for modern AI/ML infrastructure. Whether you're running batch training, serving real-time predictions, or building RAG applications, these tools form the backbone of production AI systems.
 
-This toolkit applies concepts from [MLOps Discipline](../../disciplines/data-ai/mlops/).
+This toolkit applies concepts from [MLOps Discipline](../../../disciplines/data-ai/mlops/).
 
 ## Prerequisites
 
 Before starting this toolkit:
-- [MLOps Discipline](../../disciplines/data-ai/mlops/)
+- [MLOps Discipline](../../../disciplines/data-ai/mlops/)
 - Kubernetes fundamentals
 - Basic ML concepts (training, inference)
 - Python familiarity
@@ -412,12 +412,12 @@ RECOMMENDATION: Use all three together
 
 ## Related Tracks
 
-- **Before**: [MLOps Discipline](../../disciplines/data-ai/mlops/) — MLOps concepts and practices
-- **Related**: [IaC Discipline](../../disciplines/delivery-automation/iac/) — Infrastructure provisioning for ML platforms
-- **Related**: [IaC Tools Toolkit](../iac-tools/) — Terraform modules for ML infrastructure
-- **Related**: [Observability Toolkit](../observability/) — Monitor ML systems
-- **Related**: [GitOps & Deployments Toolkit](../gitops-deployments/) — Deploy ML infrastructure
-- **Related**: [Scaling & Reliability Toolkit](../scaling-reliability/) — Scale ML workloads
+- **Before**: [MLOps Discipline](../../../disciplines/data-ai/mlops/) — MLOps concepts and practices
+- **Related**: [IaC Discipline](../../../disciplines/delivery-automation/iac/) — Infrastructure provisioning for ML platforms
+- **Related**: [IaC Tools Toolkit](../../infrastructure-networking/iac-tools/) — Terraform modules for ML infrastructure
+- **Related**: [Observability Toolkit](../../observability-intelligence/observability/) — Monitor ML systems
+- **Related**: [GitOps & Deployments Toolkit](../../cicd-delivery/gitops-deployments/) — Deploy ML infrastructure
+- **Related**: [Scaling & Reliability Toolkit](../../developer-experience/scaling-reliability/) — Scale ML workloads
 
 ---
 

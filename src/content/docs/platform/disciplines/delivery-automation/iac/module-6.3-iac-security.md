@@ -14,7 +14,7 @@ sidebar:
 Before starting this module, you should have completed:
 - [Module 6.1: IaC Fundamentals](module-6.1-iac-fundamentals/) - Core IaC concepts
 - [Module 6.2: IaC Testing](module-6.2-iac-testing/) - Testing strategies
-- [Module 4.2: Defense in Depth](../../foundations/security-principles/module-4.2-defense-in-depth/) - Security principles
+- [Module 4.2: Defense in Depth](../../../foundations/security-principles/module-4.2-defense-in-depth/) - Security principles
 
 ---
 

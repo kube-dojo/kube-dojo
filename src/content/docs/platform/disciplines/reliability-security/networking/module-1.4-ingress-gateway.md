@@ -10,7 +10,7 @@ sidebar:
 
 Before starting this module:
 - **Required**: [Module 1.1: CNI Architecture](../module-1.1-cni-architecture/) — Pod networking and Service concepts
-- **Required**: [Advanced Networking foundations](../../foundations/advanced-networking/) — TLS, DNS, HTTP, load balancing
+- **Required**: [Advanced Networking foundations](../../../foundations/advanced-networking/) — TLS, DNS, HTTP, load balancing
 - **Recommended**: [Module 1.2: Network Policy Design](../module-1.2-network-policy-design/) — Understanding traffic flow
 - **Helpful**: Experience with reverse proxies (NGINX, Traefik, HAProxy, or Envoy)
 

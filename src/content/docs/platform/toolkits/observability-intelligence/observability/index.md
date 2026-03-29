@@ -10,13 +10,13 @@ sidebar:
 
 The Observability Toolkit covers the essential tools for monitoring, logging, and tracing cloud-native applications. These are the instruments you'll use daily to understand what's happening in your systems.
 
-This toolkit builds on the theoretical foundations from [Observability Theory](../../foundations/observability-theory/) and shows you how to implement those concepts with production-grade tools.
+This toolkit builds on the theoretical foundations from [Observability Theory](../../../foundations/observability-theory/) and shows you how to implement those concepts with production-grade tools.
 
 ## Prerequisites
 
 Before starting this toolkit:
-- [Observability Theory Track](../../foundations/observability-theory/) — Conceptual foundation
-- [SRE Discipline](../../disciplines/core-platform/sre/) — Where observability fits (recommended)
+- [Observability Theory Track](../../../foundations/observability-theory/) — Conceptual foundation
+- [SRE Discipline](../../../disciplines/core-platform/sre/) — Where observability fits (recommended)
 - Basic Kubernetes knowledge
 - Command-line familiarity
 
@@ -159,10 +159,10 @@ INVESTIGATING AN INCIDENT:
 
 ## Related Tracks
 
-- **Before**: [Observability Theory](../../foundations/observability-theory/) — Why these tools exist
-- **Related**: [SRE Discipline](../../disciplines/core-platform/sre/) — How to apply observability
-- **Related**: [IaC Tools Toolkit](../iac-tools/) — Deploy observability stack with Terraform
-- **After**: [GitOps & Deployments Toolkit](../gitops-deployments/) — Deploy observable apps
+- **Before**: [Observability Theory](../../../foundations/observability-theory/) — Why these tools exist
+- **Related**: [SRE Discipline](../../../disciplines/core-platform/sre/) — How to apply observability
+- **Related**: [IaC Tools Toolkit](../../infrastructure-networking/iac-tools/) — Deploy observability stack with Terraform
+- **After**: [GitOps & Deployments Toolkit](../../cicd-delivery/gitops-deployments/) — Deploy observable apps
 
 ---
 

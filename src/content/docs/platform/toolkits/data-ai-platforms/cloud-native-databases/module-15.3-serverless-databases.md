@@ -912,8 +912,8 @@ Serverless databases: The proxy layer handles pooling automatically. Thousands o
 ## Next Steps
 
 - **Next Module**: [Module 15.4: Vitess](module-15.4-vitess/) — Self-hosted MySQL sharding at scale
-- **Related**: [Developer Experience Toolkit](../developer-experience/) — Preview environments
-- **Related**: [GitOps & Deployments](../gitops-deployments/) — Database GitOps workflows
+- **Related**: [Developer Experience Toolkit](../../developer-experience/) — Preview environments
+- **Related**: [GitOps & Deployments](../../cicd-delivery/gitops-deployments/) — Database GitOps workflows
 
 ---
 

@@ -12,7 +12,7 @@ sidebar:
 ## Prerequisites
 
 Before starting this module, you should have completed:
-- [DevSecOps Discipline](../../disciplines/reliability-security/devsecops/) - Security scanning concepts
+- [DevSecOps Discipline](../../../disciplines/reliability-security/devsecops/) - Security scanning concepts
 - Basic understanding of dependency management (npm, pip, maven)
 - Container basics (Dockerfile, images)
 - CI/CD fundamentals
@@ -1037,7 +1037,7 @@ This prevents alert fatigue while still catching new issues.
 
 - **Next Module**: [Module 12.5: Trivy](module-12.5-trivy/) - Open source alternative
 - **Related**: [Module 4.4: Supply Chain Security](../security-tools/module-4.4-supply-chain/) - SBOM and signing
-- **Related**: [Module 13.1: Harbor](../container-registries/module-13.1-harbor/) - Registry with Snyk integration
+- **Related**: [Module 13.1: Harbor](../../cicd-delivery/container-registries/module-13.1-harbor/) - Registry with Snyk integration
 
 ---
 

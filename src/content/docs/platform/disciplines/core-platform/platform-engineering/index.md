@@ -28,7 +28,7 @@ Before starting this track, you should:
 
 - Understand Kubernetes fundamentals (deployments, services, namespaces)
 - Be familiar with CI/CD concepts and tools
-- Have experience with infrastructure-as-code (or complete [IaC Discipline](../iac/))
+- Have experience with infrastructure-as-code (or complete [IaC Discipline](../../delivery-automation/iac/))
 - Complete the **Systems Thinking** foundation track (recommended)
 
 ## Modules
@@ -139,19 +139,19 @@ Platform teams treat developers as customers:
 ## Related Tracks
 
 **Foundations** (Start here if new to these concepts):
-- [Systems Thinking](../../foundations/systems-thinking/) - Feedback loops and emergent behavior
-- [Reliability Engineering](../../foundations/reliability-engineering/) - Change management principles
+- [Systems Thinking](../../../foundations/systems-thinking/) - Feedback loops and emergent behavior
+- [Reliability Engineering](../../../foundations/reliability-engineering/) - Change management principles
 
 **Disciplines** (Apply platform engineering in context):
 - [SRE Discipline](../sre/) - Reliability practices for platforms
-- [GitOps Discipline](../gitops/) - GitOps for platform delivery
-- [DevSecOps Discipline](../devsecops/) - Security in platform workflows
-- [IaC Discipline](../iac/) - Infrastructure as Code patterns and practices
+- [GitOps Discipline](../../delivery-automation/gitops/) - GitOps for platform delivery
+- [DevSecOps Discipline](../../reliability-security/devsecops/) - Security in platform workflows
+- [IaC Discipline](../../delivery-automation/iac/) - Infrastructure as Code patterns and practices
 
 **Toolkits** (Deep dive into specific tools):
-- [GitOps Tools](../../toolkits/cicd-delivery/gitops-deployments/) - ArgoCD, Flux implementation
-- [Platforms Toolkit](../../toolkits/infrastructure-networking/platforms/) - Backstage, Crossplane hands-on
-- [IaC Tools](../../toolkits/infrastructure-networking/iac-tools/) - Terraform, OpenTofu, Pulumi, Ansible
+- [GitOps Tools](../../../toolkits/cicd-delivery/gitops-deployments/) - ArgoCD, Flux implementation
+- [Platforms Toolkit](../../../toolkits/infrastructure-networking/platforms/) - Backstage, Crossplane hands-on
+- [IaC Tools](../../../toolkits/infrastructure-networking/iac-tools/) - Terraform, OpenTofu, Pulumi, Ansible
 
 ## Tools You'll Encounter
 

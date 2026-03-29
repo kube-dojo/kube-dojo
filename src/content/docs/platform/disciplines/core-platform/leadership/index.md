@@ -122,8 +122,8 @@ Discipline
 
 ## Prerequisites
 
-- **Required**: [Engineering Leadership Track](../../foundations/engineering-leadership/) — Incident command, postmortems, ADRs, stakeholder communication
-- **Required**: [Systems Thinking Track](../../foundations/systems-thinking/) — Understanding organizational systems
+- **Required**: [Engineering Leadership Track](../../../foundations/engineering-leadership/) — Incident command, postmortems, ADRs, stakeholder communication
+- **Required**: [Systems Thinking Track](../../../foundations/systems-thinking/) — Understanding organizational systems
 - **Recommended**: [SRE Discipline](../sre/) — SLOs, error budgets, operational maturity
 - **Recommended**: [Platform Engineering Discipline](../platform-engineering/) — Technical platform concepts
 - **Helpful**: Experience working on or with infrastructure/platform teams
@@ -139,9 +139,9 @@ After completing Platform Leadership, you're ready for:
 |-------|-----|
 | [Platform Engineering Discipline](../platform-engineering/) | Technical depth for platforms you lead |
 | [SRE Discipline](../sre/) | Reliability practices your platform must embody |
-| [FinOps Discipline](../finops/) | Cost management for platforms at scale |
-| [GitOps Discipline](../gitops/) | Delivery patterns your platform enables |
-| [IaC Discipline](../iac/) | Infrastructure automation your platform wraps |
+| [FinOps Discipline](../../business-value/finops/) | Cost management for platforms at scale |
+| [GitOps Discipline](../../delivery-automation/gitops/) | Delivery patterns your platform enables |
+| [IaC Discipline](../../delivery-automation/iac/) | Infrastructure automation your platform wraps |
 
 ---
 
