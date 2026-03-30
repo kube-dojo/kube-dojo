@@ -34,8 +34,11 @@ function getAll(): LabProgress {
 }
 
 function saveAll(data: LabProgress): void {
-  if (typeof localStorage === 'undefined') return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch {
+    // SSR or restricted environment
+  }
 }
 
 /** Mark a lab as started (no-op if already started or completed). */
@@ -108,6 +111,10 @@ export function importProgress(json: string): number {
 
 /** Reset all progress. */
 export function resetProgress(): void {
-  if (typeof localStorage === 'undefined') return;
-  localStorage.removeItem(STORAGE_KEY);
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Fallback: overwrite with empty
+    try { localStorage.setItem(STORAGE_KEY, '{}'); } catch { /* noop */ }
+  }
 }
