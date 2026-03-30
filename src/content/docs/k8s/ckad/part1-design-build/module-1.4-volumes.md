@@ -3,6 +3,12 @@ title: "Module 1.4: Volumes for Developers"
 slug: k8s/ckad/part1-design-build/module-1.4-volumes
 sidebar:
   order: 4
+lab:
+  id: ckad-1.4-volumes
+  url: https://killercoda.com/kubedojo/scenario/ckad-1.4-volumes
+  duration: "30 min"
+  difficulty: intermediate
+  environment: kubernetes
 ---
 > **Complexity**: `[MEDIUM]` - Essential for stateful applications
 >

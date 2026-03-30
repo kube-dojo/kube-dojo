@@ -3,6 +3,12 @@ title: "Module 4.3: Resource Requirements and Limits"
 slug: k8s/ckad/part4-environment/module-4.3-resources
 sidebar:
   order: 3
+lab:
+  id: ckad-4.3-resources
+  url: https://killercoda.com/kubedojo/scenario/ckad-4.3-resources
+  duration: "30 min"
+  difficulty: intermediate
+  environment: kubernetes
 ---
 > **Complexity**: `[MEDIUM]` - Critical for production, affects scheduling
 >

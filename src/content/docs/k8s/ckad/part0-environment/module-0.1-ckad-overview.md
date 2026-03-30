@@ -3,6 +3,12 @@ title: "Module 0.1: CKAD Overview & Strategy"
 slug: k8s/ckad/part0-environment/module-0.1-ckad-overview
 sidebar:
   order: 1
+lab:
+  id: ckad-0.1-ckad-overview
+  url: https://killercoda.com/kubedojo/scenario/ckad-0.1-ckad-overview
+  duration: "30 min"
+  difficulty: intermediate
+  environment: kubernetes
 ---
 > **Complexity**: `[QUICK]` - Orientation and strategy
 >

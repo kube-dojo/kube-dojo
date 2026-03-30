@@ -3,6 +3,12 @@ title: "Module 2.1: Deployments Deep Dive"
 slug: k8s/ckad/part2-deployment/module-2.1-deployments
 sidebar:
   order: 1
+lab:
+  id: ckad-2.1-deployments
+  url: https://killercoda.com/kubedojo/scenario/ckad-2.1-deployments
+  duration: "30 min"
+  difficulty: intermediate
+  environment: kubernetes
 ---
 > **Complexity**: `[MEDIUM]` - Core CKAD skill with multiple operations
 >

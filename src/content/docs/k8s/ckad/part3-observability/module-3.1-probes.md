@@ -3,6 +3,12 @@ title: "Module 3.1: Application Probes"
 slug: k8s/ckad/part3-observability/module-3.1-probes
 sidebar:
   order: 1
+lab:
+  id: ckad-3.1-probes
+  url: https://killercoda.com/kubedojo/scenario/ckad-3.1-probes
+  duration: "30 min"
+  difficulty: intermediate
+  environment: kubernetes
 ---
 > **Complexity**: `[MEDIUM]` - Critical exam topic with multiple probe types
 >

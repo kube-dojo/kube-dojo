@@ -3,6 +3,12 @@ title: "Module 5.3: NetworkPolicies"
 slug: k8s/ckad/part5-networking/module-5.3-networkpolicies
 sidebar:
   order: 3
+lab:
+  id: ckad-5.3-networkpolicies
+  url: https://killercoda.com/kubedojo/scenario/ckad-5.3-networkpolicies
+  duration: "40 min"
+  difficulty: advanced
+  environment: kubernetes
 ---
 > **Complexity**: `[MEDIUM]` - Important for security, requires understanding selectors
 >

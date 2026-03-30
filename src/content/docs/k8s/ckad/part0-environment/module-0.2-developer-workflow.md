@@ -3,6 +3,12 @@ title: "Module 0.2: Developer Workflow"
 slug: k8s/ckad/part0-environment/module-0.2-developer-workflow
 sidebar:
   order: 2
+lab:
+  id: ckad-0.2-developer-workflow
+  url: https://killercoda.com/kubedojo/scenario/ckad-0.2-developer-workflow
+  duration: "30 min"
+  difficulty: intermediate
+  environment: kubernetes
 ---
 > **Complexity**: `[QUICK]` - Essential kubectl patterns
 >

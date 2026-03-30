@@ -3,6 +3,12 @@ title: "Module 2.2: Helm Package Manager"
 slug: k8s/ckad/part2-deployment/module-2.2-helm
 sidebar:
   order: 2
+lab:
+  id: ckad-2.2-helm
+  url: https://killercoda.com/kubedojo/scenario/ckad-2.2-helm
+  duration: "30 min"
+  difficulty: intermediate
+  environment: kubernetes
 ---
 > **Complexity**: `[MEDIUM]` - Essential tool added to CKAD 2025
 >

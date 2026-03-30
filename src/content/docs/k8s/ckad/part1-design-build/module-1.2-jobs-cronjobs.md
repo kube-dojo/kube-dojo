@@ -3,6 +3,12 @@ title: "Module 1.2: Jobs and CronJobs"
 slug: k8s/ckad/part1-design-build/module-1.2-jobs-cronjobs
 sidebar:
   order: 2
+lab:
+  id: ckad-1.2-jobs-cronjobs
+  url: https://killercoda.com/kubedojo/scenario/ckad-1.2-jobs-cronjobs
+  duration: "30 min"
+  difficulty: intermediate
+  environment: kubernetes
 ---
 > **Complexity**: `[MEDIUM]` - Essential CKAD skill with specific patterns
 >

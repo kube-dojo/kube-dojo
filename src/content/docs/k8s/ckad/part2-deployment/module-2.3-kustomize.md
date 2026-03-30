@@ -3,6 +3,12 @@ title: "Module 2.3: Kustomize"
 slug: k8s/ckad/part2-deployment/module-2.3-kustomize
 sidebar:
   order: 3
+lab:
+  id: ckad-2.3-kustomize
+  url: https://killercoda.com/kubedojo/scenario/ckad-2.3-kustomize
+  duration: "30 min"
+  difficulty: intermediate
+  environment: kubernetes
 ---
 > **Complexity**: `[MEDIUM]` - Template-free customization for Kubernetes
 >

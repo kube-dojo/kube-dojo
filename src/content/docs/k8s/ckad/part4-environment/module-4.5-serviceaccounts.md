@@ -3,6 +3,12 @@ title: "Module 4.5: ServiceAccounts"
 slug: k8s/ckad/part4-environment/module-4.5-serviceaccounts
 sidebar:
   order: 5
+lab:
+  id: ckad-4.5-serviceaccounts
+  url: https://killercoda.com/kubedojo/scenario/ckad-4.5-serviceaccounts
+  duration: "30 min"
+  difficulty: intermediate
+  environment: kubernetes
 ---
 > **Complexity**: `[MEDIUM]` - Important for API access and identity
 >

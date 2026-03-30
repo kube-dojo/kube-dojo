@@ -3,6 +3,12 @@ title: "Module 3.3: Debugging in Kubernetes"
 slug: k8s/ckad/part3-observability/module-3.3-debugging
 sidebar:
   order: 3
+lab:
+  id: ckad-3.3-debugging
+  url: https://killercoda.com/kubedojo/scenario/ckad-3.3-debugging
+  duration: "40 min"
+  difficulty: advanced
+  environment: kubernetes
 ---
 > **Complexity**: `[MEDIUM]` - Critical exam skill requiring systematic approach
 >

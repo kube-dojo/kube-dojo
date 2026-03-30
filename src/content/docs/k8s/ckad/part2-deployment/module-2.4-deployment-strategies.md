@@ -3,6 +3,12 @@ title: "Module 2.4: Deployment Strategies"
 slug: k8s/ckad/part2-deployment/module-2.4-deployment-strategies
 sidebar:
   order: 4
+lab:
+  id: ckad-2.4-deployment-strategies
+  url: https://killercoda.com/kubedojo/scenario/ckad-2.4-deployment-strategies
+  duration: "40 min"
+  difficulty: advanced
+  environment: kubernetes
 ---
 > **Complexity**: `[MEDIUM]` - Conceptual understanding with practical implementation
 >

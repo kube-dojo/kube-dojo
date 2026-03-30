@@ -3,6 +3,12 @@ title: "Module 1.3: Multi-Container Pods"
 slug: k8s/ckad/part1-design-build/module-1.3-multi-container-pods
 sidebar:
   order: 3
+lab:
+  id: ckad-1.3-multi-container-pods
+  url: https://killercoda.com/kubedojo/scenario/ckad-1.3-multi-container-pods
+  duration: "30 min"
+  difficulty: intermediate
+  environment: kubernetes
 ---
 > **Complexity**: `[MEDIUM]` - Essential CKAD skill requiring pattern recognition
 >

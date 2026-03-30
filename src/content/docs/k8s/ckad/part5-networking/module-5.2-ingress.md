@@ -3,6 +3,12 @@ title: "Module 5.2: Ingress"
 slug: k8s/ckad/part5-networking/module-5.2-ingress
 sidebar:
   order: 2
+lab:
+  id: ckad-5.2-ingress
+  url: https://killercoda.com/kubedojo/scenario/ckad-5.2-ingress
+  duration: "30 min"
+  difficulty: intermediate
+  environment: kubernetes
 ---
 > **Complexity**: `[MEDIUM]` - Important for external access, multiple concepts
 >

@@ -3,6 +3,12 @@ title: "Module 4.2: Secrets"
 slug: k8s/ckad/part4-environment/module-4.2-secrets
 sidebar:
   order: 2
+lab:
+  id: ckad-4.2-secrets
+  url: https://killercoda.com/kubedojo/scenario/ckad-4.2-secrets
+  duration: "30 min"
+  difficulty: intermediate
+  environment: kubernetes
 ---
 > **Complexity**: `[MEDIUM]` - Similar to ConfigMaps but with security considerations
 >

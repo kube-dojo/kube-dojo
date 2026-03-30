@@ -3,6 +3,12 @@ title: "Module 3.5: API Deprecations"
 slug: k8s/ckad/part3-observability/module-3.5-api-deprecations
 sidebar:
   order: 5
+lab:
+  id: ckad-3.5-api-deprecations
+  url: https://killercoda.com/kubedojo/scenario/ckad-3.5-api-deprecations
+  duration: "30 min"
+  difficulty: intermediate
+  environment: kubernetes
 ---
 > **Complexity**: `[QUICK]` - Conceptual understanding with practical commands
 >

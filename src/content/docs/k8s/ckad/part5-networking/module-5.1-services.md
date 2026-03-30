@@ -3,6 +3,12 @@ title: "Module 5.1: Services"
 slug: k8s/ckad/part5-networking/module-5.1-services
 sidebar:
   order: 1
+lab:
+  id: ckad-5.1-services
+  url: https://killercoda.com/kubedojo/scenario/ckad-5.1-services
+  duration: "30 min"
+  difficulty: intermediate
+  environment: kubernetes
 ---
 > **Complexity**: `[MEDIUM]` - Core networking concept, multiple types to understand
 >

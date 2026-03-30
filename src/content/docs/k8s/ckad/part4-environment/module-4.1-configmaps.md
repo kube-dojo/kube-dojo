@@ -3,6 +3,12 @@ title: "Module 4.1: ConfigMaps"
 slug: k8s/ckad/part4-environment/module-4.1-configmaps
 sidebar:
   order: 1
+lab:
+  id: ckad-4.1-configmaps
+  url: https://killercoda.com/kubedojo/scenario/ckad-4.1-configmaps
+  duration: "30 min"
+  difficulty: intermediate
+  environment: kubernetes
 ---
 > **Complexity**: `[MEDIUM]` - Multiple ways to create and consume
 >

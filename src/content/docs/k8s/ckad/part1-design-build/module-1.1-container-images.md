@@ -3,6 +3,12 @@ title: "Module 1.1: Container Images"
 slug: k8s/ckad/part1-design-build/module-1.1-container-images
 sidebar:
   order: 1
+lab:
+  id: ckad-1.1-container-images
+  url: https://killercoda.com/kubedojo/scenario/ckad-1.1-container-images
+  duration: "30 min"
+  difficulty: intermediate
+  environment: kubernetes
 ---
 > **Complexity**: `[MEDIUM]` - Requires understanding of Dockerfile and image registries
 >

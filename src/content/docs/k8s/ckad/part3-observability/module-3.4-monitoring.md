@@ -3,6 +3,12 @@ title: "Module 3.4: Monitoring Applications"
 slug: k8s/ckad/part3-observability/module-3.4-monitoring
 sidebar:
   order: 4
+lab:
+  id: ckad-3.4-monitoring
+  url: https://killercoda.com/kubedojo/scenario/ckad-3.4-monitoring
+  duration: "30 min"
+  difficulty: intermediate
+  environment: kubernetes
 ---
 > **Complexity**: `[QUICK]` - Basic commands, conceptual understanding
 >
