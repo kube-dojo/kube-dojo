@@ -10,7 +10,10 @@
     "preview": "astro preview",
     "astro": "astro",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "lint": "eslint src/ tests/",
+    "audit": "npm audit --omit=dev",
+    "check": "npm run build && npm test && npm run lint && python3 scripts/check_site_health.py"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.38.2",
@@ -18,6 +21,9 @@
     "sharp": "^0.34.2"
   },
   "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.57.2",
+    "@typescript-eslint/parser": "^8.57.2",
+    "eslint": "^10.1.0",
     "happy-dom": "^20.8.9",
     "vitest": "^4.1.2"
   }
