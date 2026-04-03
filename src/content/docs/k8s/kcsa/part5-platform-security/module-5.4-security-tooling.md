@@ -67,6 +67,8 @@ KCSA tests your awareness of common security tools and their purposes.
 
 ---
 
+> **Stop and think**: You could buy a commercial security platform that handles scanning, policy, runtime detection, and compliance in one product. Or you could assemble open-source tools (Trivy + Kyverno + Falco + kube-bench). What are the trade-offs beyond cost?
+
 ## Image Scanning Tools
 
 ### Trivy
@@ -305,6 +307,8 @@ KCSA tests your awareness of common security tools and their purposes.
 ```
 
 ---
+
+> **Pause and predict**: Your team deploys Kyverno in `Audit` mode and discovers 200 policy violations across the cluster. Management wants to switch to `Enforce` mode immediately. What could go wrong?
 
 ## Policy Enforcement Tools
 
@@ -585,34 +589,34 @@ KCSA tests your awareness of common security tools and their purposes.
 
 ## Quiz
 
-1. **What's the difference between Trivy and kube-bench?**
+1. **Your company runs 50 microservices on EKS. Currently you have no security tooling. Management asks you to implement "the minimum viable security toolchain." What three tools would you deploy first, in what order, and why?**
    <details>
    <summary>Answer</summary>
-   Trivy scans container images and code for vulnerabilities. kube-bench checks cluster configuration against the CIS Kubernetes Benchmark. Trivy focuses on what you're deploying; kube-bench focuses on how your cluster is configured.
+   (1) Trivy in CI/CD pipeline first — it prevents known vulnerable images from reaching the cluster, provides immediate value with minimal operational risk, and is the cheapest to implement (add one line to your pipeline). (2) Kyverno in Audit mode — discovers existing security misconfigurations across all 50 services without breaking anything, providing a prioritized remediation list. Switch to Enforce after fixing violations. (3) Falco as DaemonSet — provides runtime threat detection for attacks that bypass build-time controls. This order follows the security lifecycle: prevent (Trivy), enforce (Kyverno), detect (Falco). Add kube-bench next for cluster-level compliance, and Cosign later for supply chain integrity.
    </details>
 
-2. **When would you use Kyverno vs OPA/Gatekeeper?**
+2. **Your team uses Kyverno in Audit mode and discovers 200 policy violations across the cluster. Management wants to switch to Enforce mode immediately to "fix the security problem." Explain why this is risky and propose a safer migration path.**
    <details>
    <summary>Answer</summary>
-   Kyverno uses YAML for policies (easier for teams familiar with Kubernetes), while Gatekeeper uses Rego (more powerful, steeper learning curve). Choose Kyverno for simpler use cases and teams wanting to stay in YAML; choose Gatekeeper for complex policies or if already using OPA elsewhere.
+   Switching to Enforce immediately would block pod creation for any deployment that violates a policy — potentially causing outages across 200 workloads simultaneously. Pods that restart, scale, or redeploy would fail to start. Safer migration: (1) Categorize the 200 violations by severity and team ownership; (2) Work with each team to fix their violations — some may be trivial (adding resource limits), others may require architectural changes; (3) Switch to Enforce per-namespace, starting with non-production namespaces; (4) Use Kyverno's `Warn` mode as an intermediate step — developers see warnings but pods still deploy; (5) Move production namespaces to Enforce only after confirming zero violations in Audit mode. This prevents the "big bang" enforcement that could cause widespread outages.
    </details>
 
-3. **What does Cosign do?**
+3. **A team runs both kube-bench and kubeaudit on the same cluster. kube-bench reports 45 PASS, 10 FAIL. kubeaudit reports 30 findings. Only 3 findings overlap. Why do the results differ so much, and do you need both tools?**
    <details>
    <summary>Answer</summary>
-   Cosign signs and verifies container images. It stores signatures in OCI registries alongside images and supports keyless signing using OIDC identities. It's part of the Sigstore project for software supply chain security.
+   They check different things: kube-bench audits cluster infrastructure configuration against CIS Benchmarks (API server flags, etcd TLS, kubelet settings, file permissions) — these are node and control plane configurations. kubeaudit checks workload configurations (privileged containers, running as root, missing capabilities drops, service account token mounts, missing network policies). The 3 overlaps are likely policy-level checks that both tools cover. You need both: kube-bench secures the platform, kubeaudit secures the workloads running on it. Alternatively, Trivy can now scan Kubernetes clusters for both infrastructure misconfigurations and workload issues, potentially replacing both with a single tool.
    </details>
 
-4. **How does Sealed Secrets enable GitOps for secrets?**
+4. **Your organization uses HashiCorp Vault for secrets but one team insists on using Sealed Secrets for their GitOps workflow. Should you allow this, or enforce a single tool? What are the trade-offs?**
    <details>
    <summary>Answer</summary>
-   Sealed Secrets encrypts Kubernetes Secrets with a cluster-specific public key. The encrypted SealedSecret can be safely committed to Git. When applied to the cluster, the Sealed Secrets controller decrypts it back to a regular Secret.
+   Both are legitimate approaches with different strengths. Vault provides: centralized management, dynamic secrets, automatic rotation, detailed audit logging, and access policies — ideal for production secrets that change frequently. Sealed Secrets provides: GitOps-native workflow (secrets version-controlled alongside application manifests), simpler setup, and no external dependency — ideal for less-sensitive configuration that follows a GitOps deployment model. The risk of allowing both: operational complexity, inconsistent secret management practices, and harder auditing. A pragmatic approach: use the External Secrets Operator as a bridge — it syncs Vault secrets to Kubernetes Secrets, giving teams a GitOps workflow while keeping Vault as the single source of truth.
    </details>
 
-5. **What's the difference between Falco and Tetragon?**
+5. **After deploying Falco, your team receives 500 alerts per day. Most are "shell spawned in container" alerts from legitimate maintenance cron jobs. Alert fatigue sets in and the team starts ignoring Falco entirely. How do you fix this without reducing security coverage?**
    <details>
    <summary>Answer</summary>
-   Both use eBPF for runtime security monitoring. Falco is more mature with a larger rule library and focuses on detection. Tetragon (from Cilium) focuses more on enforcement and has tighter integration with Cilium network policies. Choose based on existing stack and enforcement needs.
+   Alert fatigue is a security tool failure — ignored alerts are as bad as no monitoring. Fixes: (1) Tune the Falco rule — add exceptions for known legitimate shell processes: exclude specific container images (maintenance cron), process names, or pod labels from the shell-in-container rule; (2) Create tiered alerting — shell in a production web server = CRITICAL (PagerDuty), shell in a maintenance cron job = INFO (log only); (3) Use Falco macros to build precise conditions that distinguish legitimate from suspicious activity; (4) Reduce the alert to WARNING for known maintenance pods and keep CRITICAL for all others; (5) Review and tune rules weekly during the first month until false positive rate drops below 5%. The goal is high-signal alerting where every alert requires action.
    </details>
 
 ---

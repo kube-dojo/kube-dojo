@@ -103,6 +103,8 @@ CNI plugins implement Kubernetes networking and often provide network policy enf
 
 ---
 
+> **Stop and think**: By default, all pods in a Kubernetes cluster can communicate with every other pod. If you deploy a network policy that selects only your frontend pods, what happens to pods that are NOT selected by any policy?
+
 ## Network Policies
 
 Network policies are Kubernetes' built-in mechanism for traffic control.
@@ -314,6 +316,8 @@ Service mesh adds a sidecar proxy to each pod, providing security features beyon
 
 ---
 
+> **Pause and predict**: Network policies control which pods can talk to each other, but they don't encrypt traffic. If an attacker compromises a node, can they sniff traffic between pods on that node even with network policies in place?
+
 ## Encrypting Traffic
 
 ### mTLS (Mutual TLS)
@@ -401,36 +405,35 @@ Service mesh adds a sidecar proxy to each pod, providing security features beyon
 
 ## Quiz
 
-1. **What is the default network policy behavior in Kubernetes?**
+1. **During a security review, you discover pods in the default namespace can communicate with pods in every other namespace. No network policies exist anywhere in the cluster. What Kubernetes resource would you use to restrict this, and what is the critical first step?**
    <details>
    <summary>Answer</summary>
-   Allow all traffic. By default, all pods can communicate with all other pods and external endpoints. Network policies must be explicitly created to restrict traffic.
+   Use NetworkPolicy resources to restrict traffic. The critical first step is to verify your CNI plugin supports network policies — if you're using Flannel, NetworkPolicy resources will be accepted by the API server but never enforced, creating a false sense of security. After confirming CNI support (Calico, Cilium, Weave), implement default-deny NetworkPolicies in each namespace with an empty podSelector and policyTypes: [Ingress, Egress]. Then add explicit allow rules for required traffic flows. Don't forget to allow DNS egress (port 53 to kube-dns) or applications will break immediately.
    </details>
 
-2. **How do network policies behave when multiple policies apply to a pod?**
+2. **A team creates two network policies for their backend pod: Policy A allows ingress from pods labeled `app: frontend` on port 8080, and Policy B allows ingress from pods labeled `app: monitoring` on port 9090. A pod labeled `app: frontend` tries to reach the backend on port 9090. Is this allowed?**
    <details>
    <summary>Answer</summary>
-   Network policies are additive. The allowed traffic is the union of all applicable policies. If any policy allows traffic, it's allowed.
+   No, this is denied. Network policies are additive — the allowed traffic is the union of all policies. Policy A allows frontend on port 8080, Policy B allows monitoring on port 9090. The union allows: frontend→8080 OR monitoring→9090. Frontend on port 9090 is neither of these, so it's denied. Within each policy rule, the `from` selectors and `ports` are combined with AND logic (must match both source AND port). This is a common source of confusion — policies are OR'd together, but within each rule, conditions are AND'd.
    </details>
 
-3. **What does a network policy with an empty podSelector do?**
+3. **Your cluster uses Cilium as the CNI. A compliance requirement mandates that all pod-to-pod communication for PCI-scoped workloads must be encrypted. Network policies alone don't encrypt traffic. What solution would you recommend and why?**
    <details>
    <summary>Answer</summary>
-   It selects all pods in the namespace where the policy is created. This is used for default deny policies.
+   Implement a service mesh with mTLS (Istio, Linkerd, or Cilium's built-in encryption). Network policies control which traffic is allowed but transmit it in plaintext — a compromised node or network tap could read the data. mTLS provides both encryption (protecting confidentiality) and mutual authentication (verifying both parties' identities). For Cilium specifically, you can use its WireGuard-based transparent encryption, which encrypts node-to-node traffic without a full service mesh. This satisfies PCI-DSS Requirement 4 (encrypt transmission of cardholder data over open/public networks) and supports zero-trust principles.
    </details>
 
-4. **Why might network policies not work in your cluster?**
+4. **A developer adds egress network policies to restrict outbound traffic from their application pods. After deploying, the application can't resolve any service names and crashes. What did they forget, and why is this such a common mistake?**
    <details>
    <summary>Answer</summary>
-   The CNI plugin might not support network policies. Flannel, for example, doesn't enforce network policies. You need a CNI like Calico, Cilium, or Weave that supports policy enforcement.
+   They forgot to allow DNS egress. When you create an egress NetworkPolicy, it creates an implicit deny-all for egress traffic from selected pods. DNS resolution requires UDP port 53 (and sometimes TCP 53) to the kube-dns pods in the kube-system namespace. Without this exception, pods can't resolve service names like `my-service.production.svc.cluster.local`. This is the most common egress policy mistake because DNS is invisible infrastructure — developers don't think about it until it breaks. The fix: add an egress rule allowing UDP/TCP port 53 to pods with label `k8s-app: kube-dns` across all namespaces.
    </details>
 
-5. **What security feature does mTLS provide that regular TLS doesn't?**
+5. **A security architect proposes using both Kubernetes NetworkPolicies AND Istio AuthorizationPolicies. A colleague says this is redundant. Who is right?**
    <details>
    <summary>Answer</summary>
-   Mutual authentication. In regular TLS, only the client verifies the server. In mTLS, both parties verify each other's identity, preventing impersonation attacks.
+   The security architect is right — they're complementary, not redundant. NetworkPolicies operate at Layer 3/4 (IP addresses, ports) and are enforced by the CNI plugin at the network level. Istio AuthorizationPolicies operate at Layer 7 (HTTP methods, paths, headers) and are enforced by the sidecar proxy. Example: a NetworkPolicy might allow frontend to reach backend on port 8080, while an Istio policy further restricts to only GET and POST methods on specific URL paths. This is defense in depth — even if one layer is misconfigured or bypassed, the other still provides protection. NetworkPolicies also protect non-mesh traffic that Istio sidecars don't handle.
    </details>
-
 ---
 
 ## Hands-On Exercise: Network Policy Design

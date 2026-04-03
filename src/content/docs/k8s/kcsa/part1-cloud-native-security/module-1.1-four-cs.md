@@ -65,6 +65,8 @@ The Kubernetes documentation itself uses this model, and it appears directly in 
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Stop and think**: If a vulnerability exists at the Cloud layer (e.g., leaked AWS credentials), can strong Kubernetes RBAC or pod security at the Cluster and Container layers protect you? Why or why not?
+
 ### The Critical Insight
 
 **You can only be as secure as your weakest layer.**
@@ -306,6 +308,8 @@ The innermost layer—your application and its dependencies.
 
 ---
 
+> **Pause and predict**: A developer says "we use distroless images and drop all capabilities, so our containers are secure." Which layers of the 4 Cs model does this address, and which are still unprotected?
+
 ## How the Layers Interact
 
 ### Security Cascades Downward
@@ -387,36 +391,35 @@ attackers and limits blast radius.
 
 ## Quiz
 
-1. **What are the 4 Cs of cloud native security in order from outermost to innermost?**
+1. **A security audit reveals that your team has invested heavily in container hardening (non-root, dropped capabilities, read-only filesystem) but hasn't configured any network policies or RBAC. Using the 4 Cs model, explain why this is problematic.**
    <details>
    <summary>Answer</summary>
-   Cloud, Cluster, Container, Code. From infrastructure to application.
+   The team has secured the Container layer but neglected the Cluster layer. The 4 Cs model shows that each layer must be secured independently — strong container security cannot compensate for weak cluster security. Without RBAC, any authenticated user could have excessive permissions. Without network policies, a compromised container can reach any other pod in the cluster. An attacker who exploits an application vulnerability bypasses container hardening and exploits the unprotected Cluster layer for lateral movement.
    </details>
 
-2. **If an attacker compromises the Cluster layer, which layers are affected?**
+2. **Your company runs a managed Kubernetes service (EKS). A junior engineer asks: "Since AWS manages the control plane, do we still need to worry about the Cluster layer?" How would you respond?**
    <details>
    <summary>Answer</summary>
-   Container and Code layers above it. The Cloud layer below remains protected (though the attacker may be able to request cloud resources through the cluster).
+   Yes, absolutely. In the shared responsibility model, AWS manages control plane infrastructure (API server availability, etcd backups), but customers are responsible for Cluster-layer configuration: RBAC policies, network policies, Pod Security Standards, admission controllers, audit policy, and secrets management. The Cloud provider secures the infrastructure "of" the cluster, but how the cluster is configured is entirely the customer's responsibility. Misconfigured RBAC or missing network policies are Cluster-layer vulnerabilities regardless of who hosts the control plane.
    </details>
 
-3. **Which layer includes Kubernetes RBAC?**
+3. **An application team reports that their pods were compromised through a vulnerable Log4j dependency. Which layer of the 4 Cs did the attack enter through, and how could defenses at other layers have limited the damage?**
    <details>
    <summary>Answer</summary>
-   Cluster layer. RBAC is a Kubernetes authorization mechanism.
+   The attack entered at the Code layer (vulnerable dependency). However, defenses at other layers could limit blast radius: Container layer — running as non-root with read-only filesystem and dropped capabilities prevents the attacker from installing tools or escalating; Cluster layer — network policies restrict lateral movement, and minimal RBAC on the service account prevents API abuse; Cloud layer — private subnets and egress controls prevent data exfiltration. This demonstrates defense in depth: even when one layer is breached, others contain the damage.
    </details>
 
-4. **What does "security cascades downward" mean in the 4 Cs model?**
+4. **You're categorizing security controls for a compliance audit. Where in the 4 Cs model does "image vulnerability scanning" belong, and where does "image signing verification at admission" belong?**
    <details>
    <summary>Answer</summary>
-   A breach at a lower layer (like Cloud) compromises all layers above it (Cluster, Container, Code). You can only be as secure as your weakest layer.
+   Image vulnerability scanning belongs to the Container layer — it assesses the security of the container image itself (packages, libraries, OS components). Image signing verification at admission belongs to the Cluster layer — it's a Kubernetes admission control mechanism that validates image provenance before allowing pods to run. This distinction matters because scanning addresses "what's in the container" while admission control addresses "what's allowed to run in the cluster." Both are needed for defense in depth.
    </details>
 
-5. **In the shared responsibility model for managed Kubernetes, what is the customer typically responsible for?**
+5. **In the shared responsibility model for managed Kubernetes, who is typically responsible for encrypting secrets at rest in etcd — the cloud provider or the customer?**
    <details>
    <summary>Answer</summary>
-   Workloads, RBAC configuration, network policies, pod security, secrets management, and application security. The cloud provider manages the control plane infrastructure.
+   This varies by provider but is typically the customer's responsibility to enable, even though the provider manages the etcd infrastructure. In EKS, customers must configure envelope encryption with AWS KMS. In GKE, application-layer encryption for secrets is a customer opt-in. The provider ensures the storage infrastructure is secure, but the decision to encrypt Kubernetes secrets at rest (and with which keys) falls to the customer. This is a common shared-responsibility misunderstanding that leads to unencrypted secrets in production.
    </details>
-
 ---
 
 ## Hands-On Exercise: Mapping Security Controls

@@ -120,6 +120,8 @@ Certificate fields map to Kubernetes identity:
 
 ## Certificate Generation
 
+> **Stop and think**: If the cluster CA private key is compromised, the attacker can generate certificates for any identity. Kubernetes has no built-in certificate revocation. How would you respond to a CA key compromise?
+
 ### Cluster CA
 
 The cluster CA is the root of trust:
@@ -256,6 +258,8 @@ Service accounts use a different mechanism than certificates:
 
 ---
 
+> **Pause and predict**: A new node needs a certificate to communicate with the API server, but it can't authenticate without a certificate. How does Kubernetes solve this chicken-and-egg problem?
+
 ## TLS Bootstrap
 
 How new nodes join the cluster securely:
@@ -373,36 +377,35 @@ Certificate Signing Requests can be approved:
 
 ## Quiz
 
-1. **What happens when a certificate's CN is set to "system:node:worker-1" and O is set to "system:nodes"?**
+1. **A certificate with CN=system:node:worker-5 and O=system:nodes expires at midnight. The kubelet on worker-5 has certificate rotation disabled. What symptoms will the cluster exhibit after midnight, and what's the blast radius?**
    <details>
    <summary>Answer</summary>
-   The certificate authenticates as username "system:node:worker-1" in the group "system:nodes". This is the standard identity format for kubelet certificates.
+   After expiry, worker-5's kubelet cannot authenticate to the API server — TLS handshakes fail. Symptoms: pods scheduled on worker-5 continue running but become "orphaned" (no status updates), new pods won't be scheduled to that node, and the node enters NotReady status. Existing pods keep serving traffic but can't be managed (no exec, no log streaming, no deletion by the control plane). The blast radius is limited to worker-5 — other nodes are unaffected. Fix: manually renew the certificate (`kubeadm certs renew`) or enable `rotateCertificates: true` in kubelet config to prevent future occurrences. This is why certificate lifecycle monitoring is critical.
    </details>
 
-2. **Why can't Kubernetes revoke certificates?**
+2. **A security audit discovers that multiple clusters in your organization share the same cluster CA. The auditor flags this as a finding. Explain why sharing CAs across clusters is a security risk.**
    <details>
    <summary>Answer</summary>
-   Kubernetes has no built-in Certificate Revocation List (CRL) or OCSP support. Once a certificate is signed, it remains valid until expiration. This is why short-lived certificates and certificate rotation are important.
+   If clusters share a CA, a certificate signed for one cluster is valid in all clusters sharing that CA. A compromised certificate from cluster-dev (e.g., a developer's kubeconfig) could authenticate to cluster-prod because the API server trusts the same CA. This violates the principle of blast radius minimization — a breach in one cluster's PKI compromises all clusters. Each cluster should have its own independent CA so that certificates are only valid within their intended cluster. This is especially critical because Kubernetes lacks certificate revocation — a compromised cert remains valid until expiry.
    </details>
 
-3. **What is the purpose of TLS bootstrap?**
+3. **Your cluster still has legacy ServiceAccount tokens (stored as Secrets, never expiring) from before the Kubernetes 1.24 upgrade. A security scan flags 200+ such tokens. What risk do they pose, and what's your remediation plan?**
    <details>
    <summary>Answer</summary>
-   TLS bootstrap allows new nodes to securely join the cluster. The node uses a bootstrap token to request a certificate signing, and once approved, receives a proper certificate for ongoing API server communication.
+   Legacy tokens are dangerous because they never expire, are not audience-bound (can be used against any service), and persist even after the pod that used them is deleted. If any legacy token is leaked (through logs, etcd access, or RBAC over-permission), the attacker has permanent API access until the token Secret is manually deleted. Remediation: identify all legacy token Secrets (`kubectl get secrets --field-selector type=kubernetes.io/service-account-token`), verify no running workloads depend on them (check volume mounts), delete the Secrets, and ensure all pods use bound service account tokens (projected volumes) which are time-limited, audience-bound, and auto-rotated.
    </details>
 
-4. **What's the key difference between legacy service account tokens and bound tokens?**
+4. **An engineer creates a certificate signing request (CSR) with O=system:masters. Explain why approving this CSR is equivalent to granting cluster-admin access and what safeguards should exist.**
    <details>
    <summary>Answer</summary>
-   Legacy tokens never expire and are stored in Secrets. Bound tokens are time-limited (typically 1 hour), audience-bound, and projected into pods via volumes. Bound tokens are more secure.
+   The O (Organization) field in X.509 certificates maps to Kubernetes groups. The system:masters group is bound to the cluster-admin ClusterRole by default — any certificate with this group grants unrestricted access to all resources in all namespaces. Approving this CSR creates a permanent cluster-admin credential that's valid until the certificate expires (typically 1 year). Safeguards: restrict who can approve CSRs via RBAC (the `certificatesigningrequests/approval` subresource), implement manual review for any CSR containing system:masters, use short validity periods, and audit all approved CSRs. Most users should use group memberships that map to appropriately scoped roles, not system:masters.
    </details>
 
-5. **What group grants full cluster-admin access via certificate authentication?**
+5. **Kubernetes cannot revoke certificates once signed. Given this limitation, what strategies can you use to minimize the damage if a client certificate is compromised?**
    <details>
    <summary>Answer</summary>
-   system:masters. Any certificate with O=system:masters in the subject has full administrative access to the cluster.
+   Since there's no CRL or OCSP in Kubernetes, strategies include: (1) use short-lived certificates — shorter validity means the compromise window is smaller; (2) enable kubelet certificate rotation so node certs are frequently replaced; (3) for human users, prefer OIDC authentication over certificates — OIDC tokens are short-lived and can be revoked at the identity provider; (4) if a certificate is compromised, you can remove the user's RBAC bindings to deny authorization even though authentication succeeds; (5) rotate the cluster CA as a last resort — this invalidates ALL certificates but requires re-issuing every component certificate and is highly disruptive.
    </details>
-
 ---
 
 ## Hands-On Exercise: Certificate Analysis

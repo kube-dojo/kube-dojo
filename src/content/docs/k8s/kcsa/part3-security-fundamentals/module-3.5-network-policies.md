@@ -143,6 +143,8 @@ spec:
 
 ---
 
+> **Stop and think**: You deploy a default-deny ingress NetworkPolicy in a namespace. Existing pods continue working and receiving traffic. Why? When does the deny actually take effect for existing connections?
+
 ## Common Patterns
 
 ### Default Deny All
@@ -355,6 +357,8 @@ ingress:
 
 ---
 
+> **Pause and predict**: Two network policies both select the same pod. Policy A allows ingress from `app: frontend` on port 80. Policy B allows ingress from `app: monitoring` on port 9090. Can a `frontend` pod reach this pod on port 9090?
+
 ## Egress Control
 
 ```
@@ -467,34 +471,44 @@ spec:
 
 ## Quiz
 
-1. **What happens when no network policies exist in a namespace?**
+1. **You deploy a default-deny ingress NetworkPolicy to the production namespace. Immediately after, the frontend team reports their pods can still reach the backend. What could explain this, and how would you investigate?**
    <details>
    <summary>Answer</summary>
-   All traffic is allowed. Pods can communicate with any other pod in the cluster and with external endpoints. Network policies create restrictions; without them, there are none.
+   Several possibilities: (1) The CNI plugin doesn't support NetworkPolicies (e.g., Flannel) — the policy is accepted by the API server but never enforced; (2) The default-deny policy has a podSelector that doesn't match all pods (should be `podSelector: {}`); (3) Existing TCP connections may persist briefly until they're reset — NetworkPolicies apply to new connections. Investigation: verify CNI support, check policy selectors with `kubectl describe netpol`, confirm the policy is in the correct namespace, and test with a new connection from a fresh pod.
    </details>
 
-2. **How do you create a "default deny all ingress" policy?**
+2. **A developer writes this ingress rule intending to allow traffic from pods labeled `app: web` in the `production` namespace. But it actually allows much more traffic than intended. What's wrong?**
+   ```yaml
+   ingress:
+   - from:
+     - podSelector:
+         matchLabels:
+           app: web
+     - namespaceSelector:
+         matchLabels:
+           env: production
+   ```
    <details>
    <summary>Answer</summary>
-   Create a NetworkPolicy with empty podSelector (matches all pods), policyTypes including Ingress, and no ingress rules. The empty rules list means no ingress is allowed.
+   The two selectors are separate list items (separate `-` entries), making them an OR condition. This allows traffic from: (a) any pod with `app: web` in the same namespace, OR (b) ALL pods in any namespace labeled `env: production`. To apply AND logic (only `app: web` pods from the production namespace), they must be in the same list item without the second `-`: `from: [{ podSelector: {matchLabels: {app: web}}, namespaceSelector: {matchLabels: {env: production}} }]`. This AND vs OR confusion is the most common NetworkPolicy mistake.
    </details>
 
-3. **Why must egress policies usually allow DNS?**
+3. **After adding egress NetworkPolicies to a namespace, all applications crash with DNS resolution failures. The policies correctly allow egress to the backend services each app needs. What was forgotten, and why is this the most common egress policy mistake?**
    <details>
    <summary>Answer</summary>
-   Most applications need DNS to resolve service names. Without DNS egress, pods can't resolve hostnames for services they need to reach, breaking most applications.
+   DNS egress was not allowed. When an egress NetworkPolicy is applied to pods, it creates an implicit deny for ALL egress traffic. DNS resolution requires UDP (and sometimes TCP) port 53 to the kube-dns pods in kube-system namespace. Without this exception, pods can connect to IP addresses but cannot resolve service names like `backend.production.svc.cluster.local`. This is the most common egress mistake because DNS is invisible infrastructure — developers specify service names, not IPs, so DNS resolution is a hidden dependency. Fix: add an egress rule allowing UDP/TCP port 53 to pods with label `k8s-app: kube-dns` across all namespaces.
    </details>
 
-4. **What's the difference between having podSelector AND namespaceSelector in the same list item vs separate list items?**
+4. **A pod with `hostNetwork: true` is deployed in a namespace that has strict default-deny NetworkPolicies. Can other pods in the namespace communicate with this hostNetwork pod, and can this pod reach pods that are protected by NetworkPolicies?**
    <details>
    <summary>Answer</summary>
-   Same list item = AND (must match both). Separate list items = OR (match either). This is a common source of policy bugs.
+   Pods with `hostNetwork: true` bypass NetworkPolicies entirely because they use the host's network namespace, not the pod network namespace where policies are enforced. The hostNetwork pod can reach any pod in the cluster regardless of their NetworkPolicies. Additionally, other pods' egress policies may not block traffic to the hostNetwork pod effectively because the traffic goes to the node's IP, not a pod IP. This makes hostNetwork pods a significant security gap in otherwise well-segmented clusters. This is why Pod Security Standards (Baseline) block `hostNetwork: true` — it undermines network segmentation.
    </details>
 
-5. **Can network policies block traffic to/from pods using hostNetwork: true?**
+5. **Your cluster has 20 namespaces but only 5 have NetworkPolicies. A compliance auditor says this means 75% of your cluster has no network segmentation. You argue that the 5 secured namespaces are the ones with sensitive workloads. Who is right, and what is the risk of the unsecured namespaces?**
    <details>
    <summary>Answer</summary>
-   No. Pods using hostNetwork bypass network policies because they use the host's network namespace, not the pod network namespace where policies are enforced.
+   The auditor raises a valid concern. Unsecured namespaces can be used as lateral movement paths: if an attacker compromises any pod in the 15 unprotected namespaces, they can freely scan and communicate with every other pod in those namespaces AND attempt to reach pods in the secured namespaces (ingress policies protect the secured namespaces, but the attacker has unrestricted egress from their namespace). The correct approach is default-deny in ALL namespaces, then explicitly allow required traffic. Even "non-sensitive" namespaces should have policies to prevent them from becoming stepping stones in an attack chain.
    </details>
 
 ---

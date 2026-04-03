@@ -104,6 +104,8 @@ Threat modeling is a core security skill, and KCSA tests your ability to identif
 
 ---
 
+> **Stop and think**: Your cluster has strong RBAC, encrypted secrets, and Pod Security Standards enforced. But the API server has a public endpoint. How does this single exposure point undermine all your other controls?
+
 ## External Attack Surface
 
 ### API Server Exposure
@@ -229,6 +231,8 @@ Threat modeling is a core security skill, and KCSA tests your ability to identif
 
 ---
 
+> **Pause and predict**: An attacker compromises a pod that has `automountServiceAccountToken: false` and runs as non-root with no capabilities. What attack surface remains available to them from inside this hardened container?
+
 ## Attack Surface by Actor
 
 ```
@@ -326,34 +330,34 @@ Threat modeling is a core security skill, and KCSA tests your ability to identif
 
 ## Quiz
 
-1. **What constitutes the external attack surface of a Kubernetes cluster?**
+1. **A penetration tester discovers that your cluster's API server is publicly accessible, the kubelet read-only port (10255) is open on all nodes, and several services use NodePort. Rank these three exposures by risk and explain your reasoning.**
    <details>
    <summary>Answer</summary>
-   Entry points accessible from outside the cluster: API server, ingress controllers, LoadBalancer services, NodePort services, SSH access to nodes, and any other externally exposed endpoints.
+   (1) Public API server is highest risk — it's the gateway to full cluster control. With stolen or brute-forced credentials, an attacker gains cluster access. Even without credentials, anonymous auth or API vulnerabilities could be exploited. (2) Kubelet read-only port is second — it exposes pod names, namespaces, container info, and resource usage without authentication, providing reconnaissance data and potentially revealing secrets in environment variables. (3) NodePort services are lower risk — they expose specific applications, not cluster infrastructure, and the attack surface is limited to the exposed application's vulnerabilities. Remediation order: make API private, disable read-only kubelet port (set to 0), then convert NodePorts to ClusterIP with ingress.
    </details>
 
-2. **Why is the kubelet API a significant attack surface?**
+2. **An attacker compromises a pod that has `automountServiceAccountToken: false`, runs as non-root, has no capabilities, and has a read-only filesystem. What attack options remain available from inside this hardened container?**
    <details>
    <summary>Answer</summary>
-   The kubelet API allows executing commands in containers, reading logs, and listing pods. If not properly secured (anonymous auth disabled, network restricted), it can be exploited to control any container on the node.
+   Even in a hardened container, the attacker can: (1) Scan the flat pod network to discover other services (unless egress NetworkPolicies are in place); (2) Attempt to reach the cloud metadata service (169.254.169.254) for cloud credentials; (3) Read environment variables that might contain secrets; (4) Access any mounted volumes; (5) Attempt kernel exploits (the container shares the host kernel); (6) Use the application's own credentials and network connections for data exfiltration. This illustrates why defense in depth is essential — NetworkPolicies, metadata service blocking, and monitoring are needed even when pod security is strong.
    </details>
 
-3. **How does a compromised pod typically expand its attack surface?**
+3. **Your team reduced the external attack surface by making the API server private and using an ingress controller. A security consultant says you've "shifted risk, not eliminated it." What do they mean?**
    <details>
    <summary>Answer</summary>
-   By accessing the ServiceAccount token to query the Kubernetes API, scanning the network for other services, reading mounted secrets/volumes, and if misconfigured, escaping to the host through privileged settings.
+   The ingress controller itself is now the external attack surface — it's internet-facing and routes traffic to backend pods. Any vulnerability in the ingress controller (e.g., Nginx CVEs, misrouted traffic, header injection) becomes the entry point. The API server is safer, but VPN or bastion access introduces its own risks (VPN credential theft, bastion compromise). The consultant means that attack surface can be reduced and shaped, but never fully eliminated. The right approach is to minimize exposure AND harden what remains exposed: keep the ingress controller updated, use WAF, implement strict routing rules, and monitor for anomalies.
    </details>
 
-4. **What's the difference between external and internal attack surfaces?**
+4. **A supply chain attacker plants a malicious image that looks identical to your legitimate application. It passes all your runtime security controls — no privileged access, no shell spawns, no suspicious syscalls. It simply exfiltrates data through normal HTTPS connections. Which attack surface category does this exploit, and what controls could detect it?**
    <details>
    <summary>Answer</summary>
-   External attack surface is what's accessible from outside the cluster (internet-facing). Internal attack surface is what's accessible from within the cluster (pod-to-pod, API from pods). Both need protection.
+   This exploits the supply chain attack surface — the malicious code enters through a trusted artifact. Runtime security tools (Falco, seccomp) see nothing abnormal because the attack uses normal application behavior. Detection controls: image signing verification at admission (would reject unsigned/untampered images), SBOM analysis (would detect unexpected dependencies), egress NetworkPolicies restricting which external endpoints the pod can reach, network traffic anomaly detection (unusual data volumes to unexpected destinations), and DNS monitoring for connections to unknown domains. This scenario illustrates why supply chain security and network controls complement runtime security.
    </details>
 
-5. **Why do minimal container images reduce attack surface?**
+5. **Compare the attack surface of a pod running with `hostNetwork: true` versus one running with standard pod networking behind a default-deny NetworkPolicy. What specific capabilities does each have?**
    <details>
    <summary>Answer</summary>
-   Fewer packages mean fewer potential vulnerabilities, fewer tools for attackers to use if they compromise the container, and less complexity to audit and patch.
+   Standard pod with default-deny: can only reach explicitly allowed destinations, subject to all NetworkPolicies, uses a pod IP visible to the CNI, and all traffic is filterable. The attack surface is minimal — only the allowed traffic paths. Pod with hostNetwork: uses the node's IP and network stack, can bind to any port on the node (impersonate node services), sniff all node traffic, bypass all NetworkPolicies (they only apply to pod network), reach services listening on localhost on the node (kubelet, node-level agents), and potentially access the cloud metadata service. The attack surface difference is enormous — hostNetwork effectively gives network-level access equivalent to a compromised node.
    </details>
 
 ---

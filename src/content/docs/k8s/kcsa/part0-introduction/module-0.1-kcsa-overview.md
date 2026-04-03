@@ -121,6 +121,8 @@ KCSA is perfect for:
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Stop and think**: Looking at the domain weights, if you only had two weeks to prepare, which domains would you prioritize and why? Consider both the weight percentages and how the domains build on each other.
+
 ### Where to Focus
 
 **44% of the exam** comes from two domains:
@@ -165,6 +167,8 @@ Master these, and you're nearly halfway there.
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+> **Pause and predict**: The KCSA is multiple-choice while CKS is hands-on. How does this difference change what you need to study? What depth of understanding is "enough" for a concept-based security exam?
 
 ### You Don't Need to Know
 
@@ -243,34 +247,34 @@ B) Container escape and host compromise. These settings allow the container to a
 
 ## Quiz
 
-1. **How long is the KCSA exam?**
+1. **A colleague holds a CKA certification and asks whether they should skip KCSA and go straight to CKS. What would you advise, and why?**
    <details>
    <summary>Answer</summary>
-   90 minutes for approximately 60 multiple choice questions.
+   It depends on their security knowledge. CKS focuses on hands-on security implementation and requires an active CKA, which they have. However, KCSA covers security concepts, threat modeling, and compliance frameworks that CKS does not emphasize. If they lack a strong security conceptual foundation — understanding threats, the 4 Cs model, and compliance — KCSA would fill that gap. CKS tests "how to configure," while KCSA tests "why this matters and what could go wrong."
    </details>
 
-2. **What percentage of the exam covers Kubernetes Security Fundamentals?**
+2. **You have 90 minutes and roughly 60 questions on exam day. After 45 minutes you've answered 25 questions. Should you be worried? What strategy would you apply for the remaining time?**
    <details>
    <summary>Answer</summary>
-   22% - tied with Cluster Component Security as the largest domain.
+   At that pace you'd finish about 55 questions, which is slightly behind. The three-pass strategy helps: use the first pass for quick, confident answers (1-2 min each), mark harder questions for a second pass (3-4 min each), and use remaining time for any questions you flagged. Since the passing score is 75% (~45 correct), you can afford to miss about 15 questions. Focus on answering the ones you know well rather than spending too long on uncertain ones.
    </details>
 
-3. **What's the minimum passing score for KCSA?**
+3. **The two highest-weighted KCSA domains together account for 44% of the exam. A study group member suggests ignoring the 10% Compliance domain entirely. Is this a sound strategy?**
    <details>
    <summary>Answer</summary>
-   75%. You need to answer approximately 45 out of 60 questions correctly.
+   No. With a 75% passing threshold, every domain matters. The 10% Compliance domain represents roughly 6 questions — ignoring them means you'd need to score nearly perfectly on everything else. A better approach is to spend proportionally more time on the 22% domains (Cluster Components and Security Fundamentals) while still covering Compliance at a conceptual level. The domains also reinforce each other: understanding compliance frameworks helps contextualize why specific security controls exist.
    </details>
 
-4. **Does KCSA require CKA as a prerequisite?**
+4. **Your team wants to validate that all members understand Kubernetes security basics before working on a production cluster. Which certification would you recommend and why — KCNA, KCSA, or CKS?**
    <details>
    <summary>Answer</summary>
-   No. KCSA has no prerequisites, unlike CKS which requires an active CKA.
+   KCSA is the best fit. KCNA covers general Kubernetes knowledge but lacks security depth. CKS requires hands-on security implementation skills and a CKA prerequisite, which is overkill for baseline awareness. KCSA validates understanding of security concepts, threats, defenses, and compliance without requiring CLI expertise — exactly the "security awareness" level appropriate for team members who work with production clusters.
    </details>
 
-5. **Is KCSA a hands-on or multiple choice exam?**
+5. **A KCSA exam question asks about a security concept you've never encountered. You can eliminate two of the four options. What reasoning approach should you use to choose between the remaining two?**
    <details>
    <summary>Answer</summary>
-   Multiple choice. You won't use a terminal or configure anything during the exam.
+   Apply core security principles: choose the option that follows least privilege (most restrictive access), defense in depth (multiple layers), or default-deny (block unless explicitly allowed). KCSA questions are designed to test security thinking, so the "more secure" option that limits exposure is usually correct. Also consider which C layer (Cloud, Cluster, Container, Code) the question targets — the answer should address the correct layer.
    </details>
 
 ---

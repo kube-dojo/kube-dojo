@@ -63,6 +63,8 @@ Understanding SecurityContext and Pod Security Standards is essential for both t
 
 ---
 
+> **Stop and think**: A developer argues that their container needs `privileged: true` because it must bind to port 80. Is this a valid justification? What's the minimum-privilege alternative?
+
 ## SecurityContext
 
 The SecurityContext defines privilege and access control settings:
@@ -310,6 +312,8 @@ metadata:
 
 ---
 
+> **Pause and predict**: Your cluster enforces the Baseline Pod Security Standard. A team submits a pod that runs as root (UID 0) but does not set `privileged: true`. Will the pod be admitted? Why or why not?
+
 ## Privileged Containers
 
 ```
@@ -343,6 +347,8 @@ metadata:
 ```
 
 ---
+
+> **Stop and think**: If you set `allowPrivilegeEscalation: false` on a container, but the container image contains setuid binaries, what happens when those binaries try to run? How does this interact with the `capabilities` settings?
 
 ## Seccomp Profiles
 
@@ -406,34 +412,34 @@ Seccomp filters which system calls a container can make:
 
 ## Quiz
 
-1. **What's the difference between runAsNonRoot and runAsUser?**
+1. **A container image is configured to run as root by default (USER not set in Dockerfile). You deploy it with `runAsNonRoot: true` but without specifying `runAsUser`. What happens, and how would you fix it without modifying the image?**
    <details>
    <summary>Answer</summary>
-   runAsNonRoot is a boolean that makes the container fail to start if the image would run as root (UID 0). runAsUser explicitly sets the UID to run as. They work together - runAsUser: 1000 sets the UID, runAsNonRoot: true verifies it's not 0.
+   The pod fails to start because runAsNonRoot checks the container's configured user and rejects UID 0. Since the image defaults to root, the admission check fails. Fix: add `runAsUser: 1000` (or any non-zero UID) in the securityContext. This overrides the image default without requiring image changes. Both fields work together: runAsUser sets the UID, and runAsNonRoot provides an additional safety check to catch misconfigurations.
    </details>
 
-2. **What does allowPrivilegeEscalation: false prevent?**
+2. **Your team migrates a namespace from Privileged to Baseline Pod Security Standard. After enabling enforcement, several monitoring agents fail to deploy. Investigation reveals they use `hostNetwork: true`. What is the correct remediation approach?**
    <details>
    <summary>Answer</summary>
-   It prevents processes from gaining more privileges than their parent, blocking setuid and setgid binaries from working. This stops common privilege escalation techniques.
+   Baseline blocks hostNetwork, hostPID, and hostIPC. Monitoring agents legitimately need hostNetwork for node-level metric collection. The correct approach: create a dedicated namespace for system/monitoring workloads with Privileged PSS (e.g., `monitoring-system`), while keeping application namespaces at Baseline or Restricted. This follows the principle of least privilege at the namespace level — trusted system workloads get the exceptions they need without relaxing security for application pods.
    </details>
 
-3. **Which Pod Security Standard is appropriate for most production applications?**
+3. **During a security review, you find a pod running with `capabilities: { add: [SYS_ADMIN] }` but without `privileged: true`. The developer says "it's not privileged, so it's fine." Is this accurate? What risk does CAP_SYS_ADMIN introduce?**
    <details>
    <summary>Answer</summary>
-   Baseline for most applications (prevents known privilege escalations), Restricted for security-sensitive workloads. Start with Restricted and relax if needed.
+   This is dangerously inaccurate. CAP_SYS_ADMIN is nearly equivalent to full root privileges — it allows mounting filesystems, using ptrace, managing namespaces, and many other operations that can break container isolation. An attacker who compromises this container could use CAP_SYS_ADMIN to mount the host filesystem or manipulate kernel parameters. The Baseline PSS blocks dangerous capabilities including SYS_ADMIN. The secure approach: drop ALL capabilities and add back only the specific one the application needs (e.g., NET_BIND_SERVICE for port 80).
    </details>
 
-4. **What's the difference between PSA modes enforce, warn, and audit?**
+4. **A namespace has PSA configured with `enforce: baseline` and `warn: restricted`. A developer deploys a pod that runs as root but passes Baseline. What feedback do they receive, and why is this combination of PSA modes useful?**
    <details>
    <summary>Answer</summary>
-   Enforce blocks non-compliant pods from being created. Warn allows the pod but shows a warning to the user. Audit allows the pod but logs the violation. You can use different modes at different levels.
+   The pod is admitted (it passes Baseline enforcement) but the developer receives a warning that the pod violates the Restricted standard — specifically, it would fail on runAsNonRoot, missing seccomp profile, and potentially capabilities. This combination is useful because it enforces a minimum security bar (Baseline blocks privilege escalation) while educating developers about the stricter standard (Restricted). Teams can gradually migrate toward Restricted by addressing warnings without breaking existing deployments. Adding `audit: restricted` logs violations for security teams to track progress.
    </details>
 
-5. **Why is privileged: true dangerous?**
+5. **An application needs to write temporary files at runtime but you want to enforce `readOnlyRootFilesystem: true`. How would you design the pod to satisfy both requirements, and why is a read-only root filesystem important for security?**
    <details>
    <summary>Answer</summary>
-   It gives the container all Linux capabilities and access to all host devices. A compromised privileged container can mount the host filesystem, access all host resources, and effectively has root access to the host.
+   Mount an emptyDir volume at the writable path (e.g., `/tmp` or `/var/cache`) while keeping the root filesystem read-only. The emptyDir is ephemeral and scoped to the pod's lifecycle. Read-only root filesystem is important because it prevents attackers from modifying container binaries, dropping malicious tools, installing backdoors, or creating persistence mechanisms within the container. Combined with dropping all capabilities and running as non-root, it severely limits what an attacker can do after gaining code execution inside the container.
    </details>
 
 ---

@@ -102,6 +102,8 @@ KCSA tests your knowledge of CIS Benchmark categories and key recommendations.
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Stop and think**: Your organization uses EKS (managed Kubernetes). A colleague runs kube-bench with the default (self-managed) benchmark and gets 30 FAIL findings for control plane components. Are these findings valid? Why or why not?
+
 ### 2. etcd
 
 ```
@@ -387,6 +389,8 @@ kubectl apply -f https://raw.githubusercontent.com/aquasecurity/kube-bench/main/
 
 ---
 
+> **Pause and predict**: kube-bench reports a WARN for "Ensure that the admission control plugin PodSecurityPolicy is set." But PodSecurityPolicy was removed in Kubernetes 1.25. Does this mean the benchmark is wrong, or something else?
+
 ## Remediation Prioritization
 
 ```
@@ -490,34 +494,34 @@ kubectl apply -f https://raw.githubusercontent.com/aquasecurity/kube-bench/main/
 
 ## Quiz
 
-1. **What is the CIS Kubernetes Benchmark?**
+1. **Your kube-bench scan on an EKS cluster shows 30 FAIL findings for control plane components (API server flags, etcd configuration). Your colleague starts creating tickets to fix each one. What's wrong with this approach?**
    <details>
    <summary>Answer</summary>
-   A prescriptive security configuration guideline for Kubernetes developed by the Center for Internet Security. It provides specific recommendations for hardening Kubernetes clusters across control plane components, etcd, worker nodes, and policies.
+   On EKS, the control plane is managed by AWS — customers cannot configure API server flags, etcd settings, or controller-manager parameters directly. These FAIL findings are false positives from running the self-managed Kubernetes benchmark against a managed cluster. The correct approach: use the EKS-specific benchmark (`kube-bench --benchmark eks-1.0`), which only checks controls that EKS customers are responsible for (worker nodes, workload policies, RBAC configuration). The control plane findings are AWS's responsibility under the shared responsibility model. This is why choosing the correct benchmark profile matters — mismatched benchmarks waste effort and create misleading compliance reports.
    </details>
 
-2. **What's the difference between Level 1 and Level 2 benchmarks?**
+2. **kube-bench reports 10 FAIL, 5 WARN, and 45 PASS findings. A manager asks for the "pass rate" (45/60 = 75%). Is this a useful metric? What would you report instead?**
    <details>
    <summary>Answer</summary>
-   Level 1 provides basic security with minimal impact on system operation or functionality. Level 2 provides defense-in-depth with potentially more restrictive settings that may affect functionality. Level 1 is the minimum bar; Level 2 is for more secure environments.
+   A raw pass rate is misleading because it treats all findings equally — a FAIL on "anonymous auth enabled" (critical risk) counts the same as a FAIL on "file permissions not 600" (low risk). More useful reporting: (1) Categorize FAILs by risk level (Critical: 3, High: 4, Medium: 3) — this shows actual security posture; (2) Track trends over time (were we at 15 FAIL last month? Improvement is happening); (3) Report WARN items separately — they require manual verification and may be passes or fails; (4) Map findings to compliance requirements (these 3 FAILs affect PCI-DSS requirements X, Y, Z); (5) Include remediation timeline for each severity level. Compliance reporting should communicate risk, not just percentages.
    </details>
 
-3. **Why should you disable anonymous authentication on the API server?**
+3. **The CIS Benchmark Level 2 recommends enabling `protectKernelDefaults: true` on the kubelet. After enabling it on a test node, the kubelet fails to start. What happened, and how should you approach Level 2 controls?**
    <details>
    <summary>Answer</summary>
-   Anonymous authentication allows unauthenticated requests to the API server. Even with authorization in place, it increases attack surface and may leak information through unauthenticated endpoints. Disabling it ensures all API requests must be authenticated.
+   `protectKernelDefaults: true` makes the kubelet check that kernel parameters match its expected values. If the node OS has different sysctl settings (common with custom AMIs or OS configurations), the kubelet refuses to start because the kernel state doesn't match. This is exactly why Level 2 is described as "may affect functionality." Approach: (1) Always test Level 2 controls in non-production first; (2) For this specific control, identify which kernel parameters differ and align them with kubelet expectations before enabling the flag; (3) Start with Level 1 (basic security, minimal disruption) and progressively add Level 2 controls after testing each one; (4) Document which Level 2 controls are deferred and why — this shows auditors you've evaluated them, not ignored them.
    </details>
 
-4. **Why does managed Kubernetes have different benchmarks?**
+4. **kube-bench flags that the PodSecurityPolicy admission plugin is not enabled. But your cluster runs Kubernetes 1.27 where PSP was removed. Should you mark this finding as "accepted risk" or remediated?**
    <details>
    <summary>Answer</summary>
-   In managed Kubernetes (EKS, GKE, AKS), the cloud provider manages the control plane. Customers can't configure many API server, etcd, or controller-manager settings. The managed benchmarks focus on what customers can control: worker nodes, workloads, and policies.
+   This is an outdated benchmark check, not a genuine finding. PSP was deprecated in 1.21 and removed in 1.25 — the replacement is Pod Security Admission (PSA). The finding should be marked as "not applicable" with a note that PSA is enabled instead. This happens when the kube-bench version lags behind the Kubernetes version or when using a benchmark version that predates PSP removal. Resolution: (1) Use the latest kube-bench version and benchmark matching your Kubernetes version; (2) If the check persists, document that PSA with the appropriate standard (Baseline/Restricted) replaces PSP; (3) Verify PSA labels are applied to namespaces (`pod-security.kubernetes.io/enforce: restricted`). This is a common situation with evolving benchmarks.
    </details>
 
-5. **How does kube-bench help with compliance?**
+5. **You run kube-bench as a daily CronJob. Monday's scan shows 5 FAIL findings. Tuesday's scan shows 8 FAIL — three new ones appeared overnight despite no intentional changes. What could cause findings to appear and disappear between scans?**
    <details>
    <summary>Answer</summary>
-   kube-bench automates CIS Benchmark checks. It scans cluster components against benchmark recommendations, reports PASS/FAIL/WARN status, and provides remediation guidance. It can run on nodes or as a pod, supports different Kubernetes versions and managed platforms, and outputs reports for compliance documentation.
+   Several causes: (1) Configuration drift — an operator or automation tool modified a kubelet config, API server manifest, or file permission outside of version control; (2) Node scaling — new nodes joined the cluster with different configurations (different AMI, different kubelet settings); (3) Cluster upgrade — a Kubernetes version upgrade changed default settings; (4) kube-bench database update — the tool updated its check definitions, adding new checks; (5) Transient state — a node was being rebuilt during the scan. This is why continuous CIS compliance matters: (a) version-control all node configurations so drift is detectable; (b) use immutable infrastructure (Bottlerocket, Talos) where node configs can't drift; (c) alert on new FAIL findings rather than just running reports; (d) compare scan results between runs to identify exactly what changed.
    </details>
 
 ---

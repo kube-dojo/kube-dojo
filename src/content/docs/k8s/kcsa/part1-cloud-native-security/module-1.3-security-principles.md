@@ -187,6 +187,8 @@ KCSA questions often test whether you can apply these principles to specific sce
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Stop and think**: If RBAC only allows additive permissions (no deny rules), how would you prevent a specific user from accessing Secrets in a namespace where they have a broad Role?
+
 ### 5. Fail Secure
 
 **When a security control fails, default to a secure state.**
@@ -288,6 +290,8 @@ The sum of all points where an attacker can try to enter or extract data:
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Pause and predict**: Consider two compromised pods — one running with a cluster-admin ServiceAccount, and one with a namespace-scoped read-only ServiceAccount. How does the blast radius differ, and what principle explains this?
+
 ### Blast Radius
 
 The extent of damage if a component is compromised:
@@ -382,36 +386,35 @@ The extent of damage if a component is compromised:
 
 ## Quiz
 
-1. **What does "defense in depth" mean?**
+1. **A Kubernetes cluster has RBAC configured and network policies in place, but all pods run as root with no seccomp profiles. An application vulnerability allows remote code execution inside a container. Walk through how defense in depth would limit the impact compared to having only RBAC.**
    <details>
    <summary>Answer</summary>
-   Using multiple layers of security controls so that if one layer fails, other layers still provide protection. No single point of security failure.
+   With only RBAC: the attacker has root inside the container and can potentially exploit kernel vulnerabilities for container escape. Once on the host, they can access all pods on that node. With defense in depth: RBAC limits API access, network policies prevent lateral movement to other pods, but running as root and lacking seccomp still leaves the container layer weak. If non-root, read-only filesystem, dropped capabilities, and seccomp were also applied, the attacker would be severely constrained even after gaining code execution — unable to install tools, write to filesystem, or make dangerous system calls. Each layer reduces what the attacker can achieve.
    </details>
 
-2. **According to the principle of least privilege, how should RBAC roles be scoped?**
+2. **During an incident, your authorization webhook service goes down for 10 minutes. Pods that don't need API access continue running normally, but new pod creation requests are failing. Is the cluster exhibiting "fail open" or "fail secure" behavior, and is this the correct response?**
    <details>
    <summary>Answer</summary>
-   As narrowly as possible. Prefer namespace-scoped Roles over ClusterRoles, and grant only the specific verbs and resources needed for the task.
+   This is fail-secure behavior — when the authorization service is unavailable, requests are denied rather than allowed. This is the correct response because failing open would allow unauthenticated or unauthorized requests during the outage, which could be exploited by an attacker who intentionally caused the outage. The trade-off is temporary operational impact (can't create new pods), but existing workloads are unaffected. This demonstrates why fail-secure is preferred for security controls: availability of the authorization service is an operational concern, while failing open is a security vulnerability.
    </details>
 
-3. **What's the difference between "fail open" and "fail secure"?**
+3. **A developer needs temporary access to production secrets to debug an issue. The team lead suggests adding them to a group with permanent "get secrets" access. Which security principles does this violate, and what's a better approach?**
    <details>
    <summary>Answer</summary>
-   Fail open allows access when a security control fails (dangerous). Fail secure denies access when a control fails (correct). Default deny is an example of fail secure.
+   This violates least privilege (permanent access exceeds what's needed for a temporary task), separation of duties (the developer shouldn't have standing production access), and creates a large blast radius (if their credentials are compromised, all secrets are exposed). Better approach: use time-bound access through a tool like Teleport or a custom approval workflow that grants a temporary RoleBinding with an expiration, requires approval from a second person (separation of duties), and is logged for audit. The access should be scoped to the specific secrets needed, not all secrets in the namespace.
    </details>
 
-4. **What are the three components of the CIA triad?**
+4. **Your cluster uses "deny all" default network policies in every namespace. A new monitoring tool is deployed and can't scrape metrics from pods in other namespaces. The team wants to create a blanket "allow all from monitoring namespace" rule. Evaluate this against security principles.**
    <details>
    <summary>Answer</summary>
-   Confidentiality (only authorized access), Integrity (data is accurate and unmodified), and Availability (systems accessible when needed).
+   A blanket allow-all rule from the monitoring namespace violates least privilege — the monitoring tool only needs access to specific metrics ports (e.g., port 9090 for Prometheus), not all ports on all pods. It also violates defense in depth by creating an overly broad exception that an attacker who compromises the monitoring namespace could exploit for full cluster network access. The correct approach: create network policies that allow ingress only on the metrics port, only from pods with the monitoring label, in each namespace. This follows the principle of minimal, specific access rather than broad exceptions.
    </details>
 
-5. **How does Zero Trust differ from traditional perimeter security?**
+5. **The CIA triad includes Confidentiality, Integrity, and Availability. A pod running without resource limits can consume all CPU on a node, starving other pods. Which pillar of the CIA triad is violated, and what Kubernetes controls address it?**
    <details>
    <summary>Answer</summary>
-   Traditional security trusts everything inside the network perimeter. Zero Trust verifies every request regardless of source, assumes breach, and encrypts all traffic.
+   Availability is violated — other pods on the node can't get the CPU resources they need to serve requests. Kubernetes controls: resource limits (spec.containers[].resources.limits) cap how much CPU/memory a container can use; ResourceQuotas limit total resource consumption per namespace; LimitRanges set default limits for pods that don't specify them; PodDisruptionBudgets protect minimum replica counts. Together, these ensure no single workload can monopolize node resources, maintaining availability for all workloads. This is also a denial-of-service concern from a security perspective — a compromised pod could intentionally consume resources.
    </details>
-
 ---
 
 ## Hands-On Exercise: Principle Application

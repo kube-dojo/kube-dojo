@@ -98,6 +98,8 @@ KCSA tests your understanding of runtime security concepts, including seccomp, A
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Stop and think**: Seccomp filters system calls, AppArmor restricts file/network access, and capabilities limit root privileges. If you could only enable ONE of these for all pods, which would provide the broadest security improvement and why?
+
 ### Seccomp in Pods
 
 ```yaml
@@ -455,6 +457,8 @@ spec:
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Pause and predict**: Your cluster runs both trusted internal microservices and untrusted third-party plugins. All currently use the default runc runtime. What would change if you assigned the plugins to a gVisor RuntimeClass?
+
 ### RuntimeClass Configuration
 
 ```yaml
@@ -541,34 +545,34 @@ spec:
 
 ## Quiz
 
-1. **What does seccomp do?**
+1. **After enabling seccomp RuntimeDefault profile on all pods, an application that was working perfectly starts failing with "operation not permitted" errors. The application uses `ptrace` for debugging child processes. How would you resolve this without disabling seccomp entirely?**
    <details>
    <summary>Answer</summary>
-   Seccomp (Secure Computing Mode) filters which system calls a process can make. It allows you to define a whitelist or blacklist of syscalls, blocking dangerous ones like mount, ptrace, and reboot that could be used for container escape or privilege escalation.
+   The RuntimeDefault seccomp profile blocks `ptrace` because it's a dangerous syscall used in container escape techniques. Resolution: create a custom seccomp profile (Localhost type) that starts with the RuntimeDefault allowed syscalls and adds `ptrace` specifically for this application. Apply it only to this pod using `seccompProfile: { type: Localhost, localhostProfile: "profiles/debug-app.json" }`. This follows least privilege — the specific pod gets the specific syscall it needs, while all other pods remain on RuntimeDefault. Additionally, consider whether the application truly needs ptrace in production, or if it's a development-only requirement that should be disabled in production builds.
    </details>
 
-2. **What's the difference between AppArmor and SELinux?**
+2. **Your cluster runs on Ubuntu nodes (AppArmor available) and you need to restrict a container from accessing `/etc/shadow` and making raw network connections. Would seccomp or AppArmor be more appropriate for these specific restrictions?**
    <details>
    <summary>Answer</summary>
-   Both provide Mandatory Access Control (MAC). AppArmor uses path-based rules and profiles per program (common on Ubuntu/Debian). SELinux uses label-based rules where every file and process has a security context (common on RHEL/CentOS). They're mutually exclusive—a system uses one or the other.
+   AppArmor is more appropriate for these specific restrictions. Seccomp operates at the syscall level — it can block the `open` syscall entirely, but cannot distinguish between opening `/etc/shadow` vs. opening `/var/log/app.log`. AppArmor operates at the path level — you can write `deny /etc/shadow rw` to block that specific file while allowing other file access. Similarly, AppArmor's `deny network raw` blocks raw sockets specifically while allowing TCP/UDP. Seccomp and AppArmor are complementary: seccomp provides broad syscall filtering, AppArmor provides fine-grained file and network path restrictions. Use both for defense in depth.
    </details>
 
-3. **Why should you drop all capabilities and add back only what's needed?**
+3. **A multi-tenant SaaS platform runs customer-provided code in containers. The platform team uses runc (standard runtime) with strict seccomp profiles and dropped capabilities. A security consultant recommends switching to gVisor. What specific threat does gVisor mitigate that seccomp+capabilities cannot?**
    <details>
    <summary>Answer</summary>
-   Capabilities break root privileges into discrete units. By dropping all and adding back only required ones, you minimize what an attacker can do if they compromise the container. For example, a web server might only need NET_BIND_SERVICE to bind to port 80.
+   Kernel vulnerabilities. With runc, all containers share the host kernel. A kernel zero-day (like Dirty Pipe or Dirty COW) allows container escape regardless of seccomp profiles or capability restrictions — these are kernel features that the exploit bypasses. gVisor runs a user-space kernel (Sentry) that intercepts syscalls before they reach the host kernel, so kernel vulnerabilities aren't directly exploitable. The trade-off: gVisor has performance overhead (varies by workload, typically 5-50%) and doesn't support all syscalls (~70% coverage). For a multi-tenant platform running untrusted customer code, the kernel isolation justifies the performance cost — a single tenant's container escape would compromise all tenants on that node.
    </details>
 
-4. **When would you use gVisor vs Kata Containers?**
+4. **A Kyverno policy blocks all pods without `seccompProfile: RuntimeDefault`. Your cluster also has OPA/Gatekeeper installed for other policies. A developer asks: "Why do we need both Kyverno and Gatekeeper? Isn't that redundant?" How would you respond?**
    <details>
    <summary>Answer</summary>
-   gVisor is good for untrusted workloads with moderate isolation needs—it has lower overhead but doesn't cover all syscalls. Kata Containers provides maximum isolation using VMs with separate kernels—better for compliance requirements or highly sensitive workloads but with more overhead.
+   Having both is defense in depth at the admission layer, but it introduces operational complexity. The question of whether to use both depends on context: if Kyverno handles pod security policies and Gatekeeper handles organizational policies (labeling requirements, resource naming), they serve different purposes and aren't redundant. If they enforce overlapping policies, you risk conflicts, harder debugging, and doubled maintenance. The better question is: what happens if one fails? If Kyverno's webhook goes down, does Gatekeeper still catch the violation? If so, the overlap provides resilience. Best practice: use one primary policy engine consistently, and if using a second, ensure clear responsibility boundaries (Kyverno for security, Gatekeeper for governance, for example).
    </details>
 
-5. **What's the role of a RuntimeClass?**
+5. **You need to design a runtime security strategy for three workload tiers: (1) public-facing web servers, (2) internal microservices processing PII, and (3) batch jobs running third-party data transformation scripts. What combination of runtime, seccomp, capabilities, and monitoring would you assign to each tier?**
    <details>
    <summary>Answer</summary>
-   RuntimeClass allows you to select different container runtimes (like runc, runsc for gVisor, or kata for Kata Containers) for different pods. This lets you run trusted workloads on fast runc while running untrusted workloads on sandboxed runtimes.
+   Tier 1 (web servers): runc runtime, seccomp RuntimeDefault, drop all capabilities except NET_BIND_SERVICE, AppArmor profile restricting file access to web content only, Falco monitoring for shell spawns and unexpected network connections. Tier 2 (PII microservices): runc runtime, custom seccomp profile (tighter than RuntimeDefault — block everything the app doesn't need), drop ALL capabilities, AppArmor with strict file and network restrictions, Falco with enhanced rules for sensitive data access, egress NetworkPolicies restricting data flow. Tier 3 (third-party scripts): gVisor runtime (untrusted code needs kernel isolation), strictest seccomp profile possible, drop ALL capabilities, dedicated namespace with Privileged PSS exemption only for gVisor's needs, intensive Falco monitoring, strict egress controls to prevent data exfiltration. Each tier's controls match its threat level — higher risk workloads get stronger isolation.
    </details>
 
 ---

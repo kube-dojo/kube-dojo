@@ -55,6 +55,8 @@ To defend effectively, you must understand how attackers think:
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Stop and think**: If both attackers and defenders ask the same questions from different angles, why do attackers often succeed? What advantage does the attacker have that defenders must compensate for?
+
 ### The Attacker's Playbook
 
 Most attacks follow a predictable pattern:
@@ -250,6 +252,8 @@ When you see a question, ask: "Which C is this about?"
 
 Security always involves trade-offs. KCSA tests your understanding of these:
 
+> **Pause and predict**: A developer argues that running containers as root is fine because "the container is isolated anyway." Using the security mindset, what questions would you ask to challenge this assumption?
+
 ### Security vs. Usability
 
 ```
@@ -314,34 +318,34 @@ KCSA asks: Does added complexity provide meaningful security?
 
 ## Quiz
 
-1. **What does "defense in depth" mean?**
+1. **Your team has deployed a web application with RBAC configured but no network policies. An attacker exploits an application vulnerability and gains shell access inside the container. Which security principle was violated, and what could the attacker do next?**
    <details>
    <summary>Answer</summary>
-   Using multiple layers of security controls so that if one fails, others still protect the system. No single point of failure.
+   Defense in depth was violated — RBAC alone is a single layer of defense. Without network policies, the attacker can scan the entire cluster network, reach databases, other services, and potentially the Kubernetes API. Even if RBAC limits API access, the flat network allows lateral movement to any pod. Adding network policies (default deny + explicit allow) would have limited the blast radius by restricting which pods the compromised container could communicate with.
    </details>
 
-2. **What is the principle of least privilege?**
+2. **A security review reveals that developers in namespace "team-alpha" have ClusterRole "cluster-admin" bound via a ClusterRoleBinding. The team lead says they need it because "sometimes they need to debug pods in other namespaces." Which principles does this violate and what would you recommend?**
    <details>
    <summary>Answer</summary>
-   Granting only the minimum permissions necessary to perform a required task, nothing more.
+   This violates the principle of least privilege — cluster-admin grants full control over the entire cluster, far exceeding what debugging requires. It also undermines zero trust by granting implicit trust based on team membership. The recommendation: create a namespace-scoped Role with only get, list, and watch on pods and pods/log in the specific namespaces they need to debug, bound via RoleBindings. If they need cross-namespace access, use a ClusterRole with limited verbs bound per namespace.
    </details>
 
-3. **In the 4 Cs model, what does the innermost 'C' (Code) cover?**
+3. **An exam question presents a pod with hostNetwork: true, runAsUser: 0, and no network policies. The question asks which is the "most significant" security concern. How would you reason through this using the security mindset?**
    <details>
    <summary>Answer</summary>
-   Application-level security including authentication, authorization, input validation, dependencies, and secure coding practices.
+   Apply the "think like an attacker" mindset: hostNetwork: true is the most significant concern because it places the pod on the host's network stack, allowing it to sniff all node traffic, bind to any port, and bypass network policies entirely. Running as root (runAsUser: 0) increases the damage an attacker can do inside the container, but hostNetwork breaks the isolation boundary more fundamentally. Missing network policies is a concern but is moot for this pod since hostNetwork pods bypass them anyway. The attacker's priority would be hostNetwork access because it enables the broadest attack surface.
    </details>
 
-4. **What's the key difference between traditional perimeter security and Zero Trust?**
+4. **During incident response, you discover that an attacker compromised a pod, read the service account token, and used it to list secrets across the cluster. Map this to the attacker's playbook stages and identify where defenses could have broken the chain.**
    <details>
    <summary>Answer</summary>
-   Traditional security trusts everything inside the network perimeter. Zero Trust verifies every request regardless of source, assuming the network may already be compromised.
+   The attack chain: Initial access (pod compromise) -> Lateral movement (read SA token, query API) -> Impact (secret extraction). Defenses that could break the chain: (1) automountServiceAccountToken: false would prevent token access after initial compromise; (2) minimal RBAC on the service account would prevent listing secrets even with the token; (3) namespace-scoped roles instead of cluster-wide would limit blast radius; (4) audit logging on secret access would enable faster detection. Breaking the chain at any step stops the full attack.
    </details>
 
-5. **When evaluating security options, which approach is typically most secure?**
+5. **A compliance officer insists that encrypting all pod-to-pod traffic with a service mesh is mandatory. The engineering team pushes back, citing the performance overhead. How would you frame this as a security trade-off decision?**
    <details>
    <summary>Answer</summary>
-   Deny by default and explicitly allow only what's needed (allowlist approach), rather than allow by default and try to block bad things (denylist approach).
+   This is a security vs. performance trade-off. Frame it by asking: What data flows between pods? If sensitive data (credentials, PII, payment info) crosses pod boundaries, mTLS is likely worth the overhead — a compromised node could sniff unencrypted traffic. If the traffic is non-sensitive (health checks, public data), the overhead may not be justified. The zero trust principle says "assume the network is compromised," which favors encryption. A practical middle ground: enable mTLS for namespaces handling sensitive data while leaving non-sensitive internal traffic unencrypted. The decision should be risk-based, not all-or-nothing.
    </details>
 
 ---

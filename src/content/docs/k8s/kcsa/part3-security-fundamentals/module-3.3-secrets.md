@@ -136,6 +136,8 @@ spec:
         path: db-password
 ```
 
+> **Stop and think**: A colleague says "our secrets are safe because we enabled RBAC and only admins can access them." What other paths could an attacker use to read secrets even without direct RBAC permission?
+
 ### Which Method is Better?
 
 ```
@@ -280,6 +282,8 @@ resources:
 
 ---
 
+> **Pause and predict**: You enable encryption at rest for etcd secrets using `aescbc`. A developer uses `kubectl get secret db-creds -o yaml` and sees the secret value in base64. Does this mean encryption at rest isn't working?
+
 ## External Secrets Management
 
 For production, consider external secrets managers:
@@ -406,34 +410,34 @@ spec:
 
 ## Quiz
 
-1. **Why is base64 encoding not sufficient protection for secrets?**
+1. **A compliance audit discovers that your team stores database passwords as Kubernetes Secrets without encryption at rest. The team lead says "base64 encoding protects them." Explain why this is wrong and what the actual risk is if etcd is compromised.**
    <details>
    <summary>Answer</summary>
-   Base64 is encoding, not encryption. It's trivially reversible—anyone who can read the base64 value can decode it. It provides no security, only convenience for handling binary data.
+   Base64 is encoding, not encryption — it's trivially reversible with `echo "value" | base64 -d`. If etcd is compromised (through direct access, backup exposure, or etcd API access), all secrets are readable in plaintext. Base64 provides zero security; it's just a data format for handling binary data in YAML. The fix is enabling encryption at rest with an EncryptionConfiguration that uses aescbc or KMS. With encryption, even if etcd storage is stolen, secrets are encrypted and require the encryption key to read.
    </details>
 
-2. **What happens to secrets when encryption at rest is enabled?**
+2. **Your application uses environment variables to inject database credentials into pods. During incident response, you discover the credentials appeared in application crash dumps and container inspection output. What happened, and what delivery method would prevent this?**
    <details>
    <summary>Answer</summary>
-   Secrets are encrypted before being stored in etcd. Even if etcd storage is compromised, the secrets are protected by encryption. You need the encryption key to decrypt them.
+   Environment variables are visible through multiple paths: `/proc/<pid>/environ` inside the container, `kubectl describe pod` output, container runtime inspection, crash dumps, and child processes that inherit all environment variables. They're also commonly logged accidentally by debugging middleware. The safer alternative is volume mounts: mount the secret as a file at a specific path (e.g., `/etc/secrets/db-password`), set it as read-only, and have the application read from the file. Volume mounts don't appear in process listings, aren't inherited by child processes, and can be updated when secrets rotate.
    </details>
 
-3. **Why are volume mounts preferred over environment variables for secrets?**
+3. **You enable encryption at rest for secrets using the `aescbc` provider with `identity` as a fallback. After enabling it, a colleague runs `kubectl get secret -o yaml` and sees the value in base64. They claim encryption isn't working. Are they correct?**
    <details>
    <summary>Answer</summary>
-   Environment variables are visible in /proc/<pid>/environ, often logged accidentally, inherited by child processes, and don't update when secrets change. Volume mounts are more secure and update when secrets change.
+   They are incorrect. Encryption at rest protects data stored in etcd, not data returned by the API server. When `kubectl get secret` retrieves a secret, the API server decrypts it from etcd and returns the base64-encoded value to the authorized user. The base64 output is expected — it's the API's response format. To verify encryption is working, you'd need to read directly from etcd (bypassing the API server) and confirm the data is encrypted. The `identity` fallback allows reading pre-existing unencrypted secrets; after enabling encryption, you should re-encrypt all secrets and can then optionally remove the identity fallback.
    </details>
 
-4. **What is envelope encryption in the context of KMS?**
+4. **Your organization uses HashiCorp Vault for secrets management but a team continues creating native Kubernetes Secrets manually. What risks does this dual approach create, and how would you enforce a single source of truth?**
    <details>
    <summary>Answer</summary>
-   Envelope encryption uses two keys: a Data Encryption Key (DEK) encrypts the data, and a Key Encryption Key (KEK) in KMS encrypts the DEK. This allows key rotation without re-encrypting all data and keeps the master key in secure hardware.
+   Dual management creates risks: manually created secrets lack Vault's audit logging, automatic rotation, and access policies. They may not be encrypted at rest if the cluster isn't configured for it. There's no centralized visibility into which secrets exist or who accessed them. Enforcement approach: use an admission controller (Kyverno or OPA) to block creation of Opaque secrets that don't originate from the External Secrets Operator or Vault CSI driver. Allow only the Vault operator's ServiceAccount to create/update secrets. This forces all secrets through Vault's management lifecycle — providing rotation, audit trails, and centralized access control.
    </details>
 
-5. **What RBAC permission allows reading all secrets in a namespace?**
+5. **A namespace has 50 secrets. Three different ServiceAccounts need access to different subsets: SA-A needs the database credentials, SA-B needs the API keys, and SA-C needs TLS certificates. How would you implement this given that Kubernetes RBAC for secrets is all-or-nothing within a namespace?**
    <details>
    <summary>Answer</summary>
-   The `get` verb on `secrets` resource. There's no per-secret access control in Kubernetes RBAC—you either can read secrets or you can't. Use namespace isolation to scope access.
+   Kubernetes RBAC cannot grant access to individual secrets within a namespace — `get secrets` grants access to all secrets in scope. Solutions: (1) Split secrets into separate namespaces by category (database-ns, api-keys-ns, tls-ns) and grant each SA access only to its namespace; (2) Use `resourceNames` in RBAC rules to restrict to specific secret names (e.g., `resourceNames: ["db-creds"]`), though this is brittle and requires maintenance as secrets change; (3) Use an external secrets manager (Vault) with per-path access policies that provide fine-grained access control Kubernetes RBAC cannot. Option 3 is the most robust for production environments.
    </details>
 
 ---

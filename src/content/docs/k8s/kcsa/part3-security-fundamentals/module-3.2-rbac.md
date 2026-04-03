@@ -93,6 +93,8 @@ Understanding RBAC is essential for both the exam and real-world Kubernetes admi
 
 ---
 
+> **Stop and think**: If RBAC only allows additive permissions (no deny rules), how would you prevent a specific user from accessing Secrets in a namespace where they have a broad Role?
+
 ## Role Definition
 
 ```yaml
@@ -297,6 +299,8 @@ Kubernetes includes default ClusterRoles:
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Pause and predict**: A ServiceAccount has `create` permission on Pods but not on Secrets. Can it still access secrets in the namespace? Think about what a newly created pod can do.
+
 ### Dangerous Permissions
 
 ```
@@ -410,6 +414,8 @@ rules: []  # Populated by controller
 
 The built-in `admin`, `edit`, and `view` roles use aggregation.
 
+> **Stop and think**: Aggregated ClusterRoles automatically include rules from any ClusterRole with a matching label. What security risk does this introduce if an attacker can create ClusterRoles with arbitrary labels?
+
 ---
 
 ## Did You Know?
@@ -438,34 +444,34 @@ The built-in `admin`, `edit`, and `view` roles use aggregation.
 
 ## Quiz
 
-1. **What's the difference between a Role and a ClusterRole?**
+1. **A new team needs read access to Deployments and Services across five namespaces. Should you create five separate Roles or one ClusterRole? What binding strategy would you use, and why?**
    <details>
    <summary>Answer</summary>
-   A Role is namespace-scoped and can only grant permissions within a single namespace. A ClusterRole is cluster-scoped and can grant permissions to cluster-wide resources or be used across multiple namespaces.
+   Create one ClusterRole with get/list/watch on Deployments and Services, then create five RoleBindings (one per namespace) referencing that ClusterRole. This avoids duplicating the Role definition while keeping access scoped to specific namespaces. Using a ClusterRoleBinding would be wrong — it grants cluster-wide access. The RoleBinding+ClusterRole pattern gives you reusable permission definitions with namespace-scoped access control.
    </details>
 
-2. **Can a RoleBinding reference a ClusterRole?**
+2. **During a security audit, you discover a ServiceAccount with `create` permission on Pods and `get` permission on Secrets. The team says they need pod creation for their CI/CD pipeline. Explain the privilege escalation risk and propose a safer approach.**
    <details>
    <summary>Answer</summary>
-   Yes. A RoleBinding can bind a ClusterRole to subjects within its namespace. This grants the ClusterRole's permissions but only within the RoleBinding's namespace. This is useful for reusable roles.
+   With `create pods` permission, the CI/CD ServiceAccount can create a pod that mounts any secret in the namespace as a volume — effectively escalating from "get specific secrets" to "read all secrets." It can also create privileged pods, enabling container escape. Safer approach: use a dedicated namespace for CI/CD with only the secrets it needs, enforce Pod Security Standards (Restricted) to prevent privilege escalation, and restrict the ServiceAccount to only `create` Deployments (not raw Pods) so that admission controllers can validate the pod spec.
    </details>
 
-3. **What permissions does the built-in `view` ClusterRole grant?**
+3. **The built-in `view` ClusterRole deliberately excludes access to Secrets. A developer binds `view` to their ServiceAccount but also creates a second Role granting `get secrets`. What is the resulting effective permission, and what RBAC principle does this demonstrate?**
    <details>
    <summary>Answer</summary>
-   Read-only access to most namespace-scoped resources (get, list, watch). It explicitly excludes secrets and does not include any write permissions.
+   The ServiceAccount gets both the `view` permissions AND `get secrets` because RBAC is additive — the union of all granted permissions applies. There are no deny rules in Kubernetes RBAC. This demonstrates why you must audit all bindings for a subject, not just individual roles. The `view` ClusterRole's exclusion of secrets is a design choice, not an enforcement mechanism. Any additional Role or ClusterRole binding can override this intent. Prevention: restrict who can create Roles and RoleBindings via RBAC, and audit bindings regularly.
    </details>
 
-4. **Why is granting `create pods` permission dangerous?**
+4. **A cluster has 30 namespaces. You need to grant a monitoring tool read-only access to pods, services, and endpoints in ALL namespaces. Compare two approaches: (a) a ClusterRoleBinding to a ClusterRole, vs (b) 30 RoleBindings to a ClusterRole. When would you choose each?**
    <details>
    <summary>Answer</summary>
-   A user who can create pods can potentially create privileged pods, mount host filesystems, or access any secret by mounting them as volumes. This can lead to container escape and cluster compromise.
+   Approach (a) is simpler — one ClusterRoleBinding covers all namespaces including future ones. Choose this when the monitoring tool legitimately needs cluster-wide access and you trust it. Approach (b) requires maintaining 30 bindings but provides explicit control — new namespaces are NOT automatically included, and you can revoke access to specific namespaces. Choose this when some namespaces contain sensitive workloads that monitoring should not access, or when compliance requires explicit per-namespace authorization. The trade-off is operational simplicity vs. security granularity.
    </details>
 
-5. **How does Kubernetes RBAC handle deny rules?**
+5. **You want to prevent a specific group from ever being granted `cluster-admin`. Since RBAC has no deny rules, what strategies could you use to enforce this policy?**
    <details>
    <summary>Answer</summary>
-   Kubernetes RBAC doesn't have deny rules. It's additive - permissions are granted, never revoked. To restrict access, you remove the granting rule or don't create it. If no rule grants permission, access is denied by default.
+   Since RBAC is additive-only, you cannot deny permissions directly. Strategies: (1) Use an admission controller (Kyverno or OPA/Gatekeeper) to block creation of ClusterRoleBindings that bind `cluster-admin` to that group; (2) Restrict who can create/modify ClusterRoleBindings via RBAC — only a small set of admins should have `create` and `update` on `clusterrolebindings`; (3) Use audit logging to alert when cluster-admin bindings are created and trigger automated remediation; (4) Implement a policy-as-code approach where RBAC manifests are reviewed in Git before applying.
    </details>
 
 ---

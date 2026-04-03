@@ -117,6 +117,8 @@ KCSA tests your understanding of threat modeling, security assessments, and audi
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Stop and think**: STRIDE identifies threats but doesn't tell you which are most dangerous. If you applied STRIDE to a Kubernetes ingress controller and found threats in all 6 categories, how would you decide which to address first?
+
 ### Threat Modeling Process
 
 ```
@@ -371,6 +373,8 @@ kube-hunter --report yaml
 
 ---
 
+> **Pause and predict**: A penetration test finds that kube-hunter can reach the kubelet API from inside a pod. The kubelet has anonymous auth disabled and uses webhook authorization. Is this still a finding, or has the defense worked as intended?
+
 ## Risk Assessment
 
 ### Risk Calculation
@@ -522,34 +526,34 @@ kube-hunter --report yaml
 
 ## Quiz
 
-1. **What does STRIDE stand for?**
-   <details markdown="1">
+1. **You're threat-modeling a new microservice that processes customer PII. Using STRIDE, you identify 18 potential threats. Your team has capacity to address 6 before the launch deadline. How do you prioritize, and what do you do about the remaining 12?**
+   <details>
    <summary>Answer</summary>
-   Spoofing, Tampering, Repudiation, Information Disclosure, Denial of Service, and Elevation of Privilege. It's a threat modeling framework that categorizes common security threats to help systematically identify potential attacks.
+   Prioritize using Risk = Likelihood x Impact: rank each threat by how easily exploitable it is and how severe the consequences are. Focus on: Elevation of Privilege threats first (container escape, RBAC escalation — highest impact), then Information Disclosure for PII data (directly affects compliance and customers), then Spoofing of identity (enables other attacks). For the remaining 12: document them as known residual risks with specific owners and target dates, implement compensating controls where possible (e.g., monitoring to detect threats you can't prevent yet), and add them to the next sprint's backlog. Never treat unaddressed threats as "accepted" without explicit risk acceptance from management with awareness of the consequences.
    </details>
 
-2. **What's the difference between vulnerability assessment and penetration testing?**
-   <details markdown="1">
+2. **A penetration tester runs kube-hunter from inside a pod and reports: "kubelet API reachable on port 10250." The kubelet has anonymous auth disabled and webhook authorization enabled. The tester marks this as a Medium finding. Your team argues it should be Informational since authentication is required. Who is correct?**
+   <details>
    <summary>Answer</summary>
-   Vulnerability assessment uses automated tools to identify known vulnerabilities without exploiting them. Penetration testing actively attempts to exploit vulnerabilities to demonstrate real-world impact. Vulnerability assessment is broader but shallower; penetration testing is deeper but more focused.
+   Both have valid points, but the tester's Medium rating is more appropriate. While the kubelet's authentication prevents unauthorized access, network reachability to the kubelet API is still a finding because: (1) it increases attack surface — any future kubelet CVE (authentication bypass) is exploitable from any pod; (2) an attacker who obtains valid node credentials can access the kubelet; (3) the principle of least privilege says pods shouldn't reach infrastructure APIs they don't need. The defense is working (authentication blocks unauthorized access), but the exposure still exists. Proper remediation: NetworkPolicies blocking pod egress to node IP port 10250. This demonstrates that security assessments evaluate both current exploitability AND potential future risk.
    </details>
 
-3. **Why is threat modeling done at design time?**
-   <details markdown="1">
+3. **Your organization conducts an annual penetration test and a quarterly vulnerability scan. Between assessments, a critical misconfiguration is introduced (default ServiceAccount given cluster-admin). It exists for 4 months before the next pentest finds it. How would you prevent this detection gap?**
+   <details>
    <summary>Answer</summary>
-   It's cheaper and easier to address security issues during design than after deployment. Threat modeling identifies attack paths early when changes are less costly. It also ensures security is considered from the start rather than bolted on afterward.
+   The 4-month gap illustrates why periodic assessments alone are insufficient. Prevention: (1) Continuous policy enforcement — Kyverno/OPA policy blocking cluster-admin bindings to default ServiceAccounts would prevent the misconfiguration from being created; (2) Continuous scanning — daily kube-bench or kubeaudit runs would detect it within 24 hours; (3) Git-based RBAC management — if all RBAC changes require PR review, the misconfiguration would be caught in code review; (4) Audit log alerting — a real-time alert on ClusterRoleBinding creation for cluster-admin would trigger within minutes; (5) Admission webhook — block the creation entirely. The best security programs combine periodic deep assessments (pentests) with continuous automated monitoring to eliminate blind spots between assessments.
    </details>
 
-4. **What makes a finding "Critical" vs "High"?**
-   <details markdown="1">
+4. **An auditor asks for evidence that your Kubernetes cluster's access controls are effective. You provide a list of RBAC Roles and RoleBindings. The auditor says this is insufficient. What additional evidence demonstrates that access controls are not just configured but actually working?**
+   <details>
    <summary>Answer</summary>
-   Risk = Likelihood × Impact. Critical findings have both high likelihood and high impact—they're easily exploitable and would cause significant damage. High findings may have slightly lower likelihood or impact but still require urgent attention.
+   RBAC configuration shows intent, not effectiveness. Additional evidence needed: (1) Audit logs showing access requests being denied (proves authorization is enforced) and allowed requests matching expected patterns; (2) Access review records showing regular RBAC reviews with specific changes made (outdated bindings removed); (3) Failed authentication logs showing unauthorized attempts are blocked; (4) Test results showing that a user without permissions actually receives "forbidden" errors; (5) Policy engine reports showing blocked admission requests (Kyverno/OPA violation counts); (6) Before/after evidence from a penetration test showing RBAC prevented escalation attempts. Auditors need evidence of control effectiveness over time (operational evidence), not just that controls are configured (design evidence). This is the difference between SOC 2 Type I (design) and Type II (operational effectiveness).
    </details>
 
-5. **What evidence do auditors typically need?**
-   <details markdown="1">
+5. **After completing a security assessment, you have findings across four categories: 3 Critical, 7 High, 15 Medium, and 25 Low. The total remediation estimate is 6 months of work. Management wants everything fixed in 3 months. How do you negotiate a realistic remediation plan?**
+   <details>
    <summary>Answer</summary>
-   Configuration exports (RBAC, policies), audit logs showing security controls working, scan reports (vulnerability, compliance), documentation (policies, procedures), and sometimes interviews with personnel. Evidence should demonstrate that controls exist and are effective over time.
+   Present a risk-based remediation plan: (1) Month 1: Fix all 3 Critical findings (these represent imminent compromise risk) and the 3 highest-impact High findings; (2) Month 2: Fix remaining 4 High findings and the 5 highest-risk Medium findings; (3) Month 3: Fix remaining 10 Medium findings with compensating controls for any that can't be completed; (4) Months 4-6: Address Low findings in normal sprint cycles. For findings that can't meet the 3-month deadline: implement compensating controls (monitoring to detect exploitation), document accepted residual risk with management sign-off, and track them on a compliance dashboard. Key negotiation points: Critical/High MUST be fixed within 3 months (regulatory risk), Medium/Low can follow an SLA (30/90 days) rather than a hard deadline. Risk acceptance decisions should come from business leadership, not the security team alone.
    </details>
 
 ---

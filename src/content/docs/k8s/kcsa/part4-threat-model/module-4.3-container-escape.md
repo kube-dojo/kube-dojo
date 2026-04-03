@@ -96,6 +96,8 @@ KCSA tests your ability to identify configurations that enable container escape 
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Stop and think**: A container running as root inside the container does NOT necessarily have root access on the host. What determines the boundary between container root and host root?
+
 ### 2. Host Namespace Sharing
 
 ```
@@ -217,6 +219,8 @@ KCSA tests your ability to identify configurations that enable container escape 
 ```
 
 ---
+
+> **Pause and predict**: If a container has `hostPath: { path: /var/run/docker.sock }` mounted but runs as non-root with all capabilities dropped, can an attacker still escape to the host? Why or why not?
 
 ## Prevention Strategies
 
@@ -344,34 +348,34 @@ KCSA tests your ability to identify configurations that enable container escape 
 
 ## Quiz
 
-1. **What makes a privileged container easy to escape?**
+1. **A security review finds a debugging pod in production with `privileged: true`, `hostPID: true`, and a `hostPath` mount to `/`. The ops team says "it's only used during incidents." Explain the risk even if the pod is only deployed temporarily, and propose a safer alternative for production debugging.**
    <details>
    <summary>Answer</summary>
-   Privileged containers have all Linux capabilities, access to all host devices, no seccomp filtering, and bypass SELinux/AppArmor. This allows trivial escape by mounting the host filesystem or accessing host devices directly.
+   Even temporary privileged pods are dangerous: the time window of exposure is a risk (an attacker who compromises any other pod during that time can pivot to the debugging pod), the pod's ServiceAccount token grants API access, and if the pod spec is stored in a manifest or Helm chart, anyone with access can deploy it. With privileged + hostPID + hostPath:/, an attacker has trivial full host access. Safer alternative: use `kubectl debug` with ephemeral containers (requires no privileged pod spec), or create a dedicated debugging namespace with time-limited RBAC access that requires approval. If host access is truly needed, use a minimal set of capabilities (not full privileged mode) and limit the hostPath to the specific directory needed.
    </details>
 
-2. **Why is hostPID: true a container escape risk?**
+2. **A container image mounts `/var/run/docker.sock` as a hostPath volume but runs as non-root (UID 1000) with all capabilities dropped. An attacker compromises the application. Can they still escape to the host through the Docker socket?**
    <details>
    <summary>Answer</summary>
-   With hostPID, the container can see all host processes. Combined with capabilities like CAP_SYS_PTRACE or CAP_SYS_ADMIN, an attacker could inspect or interact with host processes, potentially gaining host-level access. Pod Security Standards (Baseline and above) block this setting.
+   Yes, likely. The Docker socket is a UNIX socket that grants full control over the container runtime. If the socket's file permissions allow the container's UID to access it (which is common), the attacker can use the Docker API to create a new privileged container that mounts the host filesystem — effectively escaping to the host through a two-step process. Dropping capabilities and running non-root don't protect against this because the escape happens through the Docker API, not through Linux kernel mechanisms. This is why Docker socket mounts are one of the most dangerous configurations — they bypass nearly all container security hardening.
    </details>
 
-3. **Why is mounting the Docker socket dangerous, and how would you prevent it?**
+3. **Your cluster runs standard containerd runtime. A kernel vulnerability (like Dirty Pipe, CVE-2022-0847) is announced. All your containers run non-root with dropped capabilities, seccomp RuntimeDefault, and read-only filesystems. Are you still vulnerable, and what additional defense could help?**
    <details>
    <summary>Answer</summary>
-   The Docker socket gives full control over the container runtime. An attacker could use it to launch new privileged containers with host filesystem access, effectively escaping to the host. Prevent it by enforcing Pod Security Standards that block sensitive hostPath mounts and avoiding Docker socket mounts in pod specs entirely.
+   You are still potentially vulnerable. Kernel vulnerabilities bypass all container security settings because containers share the host kernel — namespaces, cgroups, seccomp, and capabilities are all kernel features that a kernel exploit can circumvent. Seccomp helps if the exploit requires a syscall that's blocked by the RuntimeDefault profile, but sophisticated kernel exploits often use allowed syscalls. Additional defense: sandboxed runtimes (gVisor or Kata Containers) provide protection because they don't share the host kernel directly. gVisor intercepts syscalls in user-space, so the kernel vulnerability isn't reachable. Kata Containers use a separate VM kernel. For high-security workloads, these are the only reliable defense against kernel zero-days.
    </details>
 
-4. **How do sandboxed runtimes like gVisor prevent escape?**
+4. **A pod has `hostNetwork: true` but no other dangerous settings (non-root, no capabilities, read-only filesystem). The team says it's needed for a network monitoring agent. What specific escape-adjacent risks does `hostNetwork` alone introduce?**
    <details>
    <summary>Answer</summary>
-   gVisor runs a user-space kernel that intercepts and emulates system calls. The container never directly interacts with the host kernel, so kernel vulnerabilities can't be exploited for escape.
+   hostNetwork alone (without privileged/hostPID) doesn't enable direct container escape, but it significantly expands the attack surface: the pod can bind to any port on the node (potentially impersonating the kubelet or other services), sniff all network traffic on the node, access services listening on localhost (kubelet health endpoints, cloud metadata service at 169.254.169.254), bypass all NetworkPolicies (which only apply to pod-network traffic), and communicate with any endpoint without egress restrictions. If combined with a code vulnerability, these capabilities dramatically increase the attacker's ability to move laterally. The network monitoring use case is legitimate, but should use a dedicated namespace with strict RBAC and audit logging.
    </details>
 
-5. **What Pod Security Standard level prevents most container escape techniques?**
+5. **You enforce the Restricted Pod Security Standard across all production namespaces. A new third-party monitoring tool requires `privileged: true` to function. The vendor says there's no alternative. How would you handle this without relaxing security for the entire production environment?**
    <details>
    <summary>Answer</summary>
-   Baseline prevents the most dangerous settings (privileged, host namespaces). Restricted adds additional protections (non-root, seccomp, dropped capabilities) for stronger prevention.
+   Never relax the production namespace PSS. Instead: (1) Create a dedicated `monitoring-system` namespace with Privileged PSS — isolate the privileged workload away from application pods; (2) Apply strict NetworkPolicies so the monitoring namespace can only reach the specific ports it needs to scrape; (3) Use a dedicated ServiceAccount with minimal RBAC; (4) Enable enhanced audit logging for all actions in this namespace; (5) Deploy runtime monitoring (Falco) with extra scrutiny on this namespace; (6) Evaluate alternatives — many modern monitoring tools (Prometheus node-exporter, Tetragon) don't actually need privileged mode. The vendor claim should be challenged: what specific capability do they need? Often it's a specific capability (NET_ADMIN, SYS_PTRACE) rather than full privileged mode.
    </details>
 
 ---

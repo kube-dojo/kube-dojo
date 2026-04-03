@@ -63,6 +63,8 @@ Cloud security is a partnership. You and your cloud provider each have responsib
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Stop and think**: If your company moves from self-managed Kubernetes to EKS, which security tasks can you stop worrying about, and which new responsibilities emerge that didn't exist before?
+
 ### How Responsibility Shifts
 
 ```
@@ -222,6 +224,8 @@ Cloud IAM integrates with Kubernetes in two key ways:
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Pause and predict**: A pod needs to read from an S3 bucket. Your team stores the AWS access key as a Kubernetes Secret. What could go wrong with this approach, and what alternative would be more secure?
+
 ### Workload Identity Benefits
 
 Why use workload identity instead of static credentials?
@@ -362,36 +366,35 @@ When multiple teams or applications share infrastructure:
 
 ## Quiz
 
-1. **In the shared responsibility model, who is responsible for Kubernetes RBAC configuration in managed Kubernetes?**
+1. **During a security review, you discover that a development team has been storing AWS access keys as Kubernetes Secrets to give their pods S3 access. The keys were created 18 months ago and have never been rotated. What risks does this create, and what should replace this approach?**
    <details>
    <summary>Answer</summary>
-   The customer (you). Cloud providers manage the control plane infrastructure, but you configure how it's used (RBAC, network policies, etc.).
+   Multiple risks: the long-lived static credentials could be leaked through etcd access, RBAC over-permission, backup exposure, or accidental logging. If compromised, the attacker has persistent S3 access until the keys are manually revoked. The replacement is workload identity (AWS IRSA for EKS): annotate the Kubernetes ServiceAccount with an IAM role ARN, and pods automatically receive short-lived, auto-rotated credentials with no static secrets stored in the cluster. This eliminates key management, limits blast radius to per-pod identity, and provides automatic rotation.
    </details>
 
-2. **What is workload identity?**
+2. **Your organization uses EKS with a public API server endpoint. A security consultant recommends switching to a private endpoint. What threat does this mitigate, and what operational changes are required?**
    <details>
    <summary>Answer</summary>
-   A feature that allows Kubernetes pods to assume cloud IAM roles without static credentials. The pod's ServiceAccount is mapped to a cloud identity, providing short-lived, automatically rotated credentials.
+   A public endpoint exposes the API server to internet-based attacks: brute force authentication attempts, credential stuffing, API exploitation, and reconnaissance. Switching to a private endpoint means the API server is only accessible within the VPC. Operational changes: developers need VPN or bastion host access to run kubectl, CI/CD pipelines must run within the VPC or use VPC peering, and monitoring tools need network access to the private endpoint. The trade-off is reduced attack surface at the cost of access complexity, but this is standard practice for production clusters.
    </details>
 
-3. **Why should worker nodes be in private subnets?**
+3. **A multi-tenant SaaS platform runs all customer workloads in a single Kubernetes cluster using namespace isolation. A security audit flags this as insufficient. Using the multi-tenancy isolation levels, explain why and suggest alternatives.**
    <details>
    <summary>Answer</summary>
-   To reduce attack surface. Worker nodes don't need direct internet access (they can use NAT for outbound). Private subnets prevent direct inbound access from the internet.
+   Namespace isolation is "moderate" strength — it relies on RBAC, network policies, and resource quotas, but all tenants share the same control plane, API server, and potentially node resources. A vulnerability in the control plane or a container escape compromises all tenants. For stronger isolation: separate clusters per tenant (strong — independent control planes, separate RBAC), or separate cloud accounts per tenant (strongest — complete blast radius isolation, independent IAM). The right choice depends on compliance requirements, cost tolerance, and how sensitive each tenant's data is.
    </details>
 
-4. **What encryption should be enabled for Kubernetes secrets stored in etcd?**
+4. **Encryption at rest is enabled for your EKS cluster's etcd, but a colleague says "our secrets are safe now." What assumption are they making that could be wrong?**
    <details>
    <summary>Answer</summary>
-   Encryption at rest for etcd. By default, secrets are base64 encoded but not encrypted. Enabling encryption at rest protects secrets if the etcd storage is compromised.
+   They're assuming encryption at rest is the only protection secrets need. Encryption at rest protects secrets if the underlying storage is physically compromised, but secrets are still accessible in plaintext to anyone with sufficient RBAC permissions (get secrets). They're also decrypted when read by the API server and delivered in plaintext to pods. Additional protections needed: minimize RBAC access to secrets, use namespace isolation, prefer volume mounts over environment variables, consider external secret managers (Vault, AWS Secrets Manager) for rotation and audit logging, and enable API audit logging to track who accesses which secrets.
    </details>
 
-5. **In a multi-tenant environment, what provides the strongest isolation?**
+5. **Your company operates in a hybrid model: some workloads run on-premises and others on GKE. From a shared responsibility perspective, what security tasks differ between these two environments?**
    <details>
    <summary>Answer</summary>
-   Separate cloud accounts provide the strongest isolation, with independent IAM boundaries and complete blast radius separation. Separate clusters provide strong isolation within an account.
+   On-premises, you are responsible for everything: physical security, network infrastructure, hardware, OS patching, Kubernetes control plane (API server, etcd, scheduler, controller-manager), node management, and workloads. On GKE, Google manages physical security, network backbone, control plane availability, etcd backups, and control plane patching. You remain responsible for workload security, RBAC, network policies, pod security, node OS patching (though GKE auto-upgrade helps), secrets management, and application security. The key gap is that on-premises requires significantly more security investment in infrastructure layers that managed Kubernetes abstracts away.
    </details>
-
 ---
 
 ## Hands-On Exercise: Responsibility Mapping

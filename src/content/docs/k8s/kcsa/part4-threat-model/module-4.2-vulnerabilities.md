@@ -98,6 +98,8 @@ KCSA tests your awareness of common vulnerability patterns and their mitigations
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Stop and think**: CVE-2019-5736 affected runc — the container runtime used by Docker, containerd, and CRI-O. If your cluster uses containerd, does patching Kubernetes itself fix this vulnerability? What component actually needs updating?
+
 ### Kubernetes Core CVEs
 
 ```
@@ -226,6 +228,8 @@ KCSA tests your awareness of common vulnerability patterns and their mitigations
 ```
 
 ---
+
+> **Pause and predict**: Your vulnerability scanner reports 150 CVEs in a container image: 2 Critical, 8 High, 40 Medium, 100 Low. Management wants all 150 fixed before deployment. Is this realistic, and how would you prioritize?
 
 ## Vulnerability Scoring (CVSS)
 
@@ -358,34 +362,34 @@ KCSA tests your awareness of common vulnerability patterns and their mitigations
 
 ## Quiz
 
-1. **What's the difference between a CVE and a misconfiguration?**
+1. **A vulnerability scan reports CVE-2019-5736 (runc container escape, CVSS 8.6) on your nodes, and separately a misconfiguration finding that 40% of pods run as root. Your team can only address one this week. Which should you prioritize and why?**
    <details>
    <summary>Answer</summary>
-   A CVE is a code vulnerability (bug) that requires a software patch. A misconfiguration is an insecure setting that requires configuration changes. Misconfigurations are more common but easier to fix.
+   Prioritize the runc CVE first. While misconfigurations are more common, CVE-2019-5736 enables container escape through a malicious image — an attacker can overwrite the host runc binary and gain root on the node. It affects the container runtime itself, meaning all containers on affected nodes are vulnerable regardless of their security settings. The root-running pods are concerning but require an additional exploit to cause harm beyond the container. Fix order: patch runc immediately (runtime update, not Kubernetes update), then address the root container misconfiguration by enforcing Pod Security Standards.
    </details>
 
-2. **Why was CVE-2019-5736 (runc) significant?**
+2. **Your kube-bench scan shows 10 FAIL findings. Three are authentication issues (anonymous auth enabled), four are file permission problems, and three are missing audit configurations. A colleague says "fix all 10 this weekend." Why might a staged approach be safer?**
    <details>
    <summary>Answer</summary>
-   It allowed container escape by overwriting the host's runc binary through a malicious container image. This affected all major container runtimes (Docker, containerd, CRI-O) and required runtime updates.
+   Changing authentication settings (disabling anonymous auth) could break workloads that unknowingly rely on anonymous access, monitoring systems, or health check endpoints. Applying all changes simultaneously means if something breaks, you can't identify which change caused it. Staged approach: (1) Enable audit logging first — this is additive and won't break anything; (2) Fix file permissions — low risk, immediate security improvement; (3) Disable anonymous auth during a maintenance window after verifying no workloads depend on it by enabling audit logging first to see what anonymous requests exist. Test each change in a staging environment first. This demonstrates that vulnerability remediation requires operational planning, not just security urgency.
    </details>
 
-3. **What CVSS score range is considered "Critical"?**
+3. **A container image scan reveals a Critical CVE in OpenSSL, but the application inside the container is written in Go and doesn't use OpenSSL at all. The library was included by the base image. Should this block deployment?**
    <details>
    <summary>Answer</summary>
-   9.0-10.0. Critical vulnerabilities typically require immediate action due to high impact and ease of exploitation.
+   It depends on context. If the vulnerable OpenSSL is installed but never loaded by any process in the container, the exploitability is very low — the CVSS base score doesn't account for whether the library is actually reachable. However, it should still be addressed because: an attacker who gains code execution might use the vulnerable library, a future application change might introduce OpenSSL usage, and audit compliance often doesn't distinguish unused vulnerabilities. Best approach: use a minimal base image (distroless, scratch) that doesn't include OpenSSL at all — this eliminates the finding entirely. Don't block deployment, but track it and rebuild with a patched base image within the defined SLA.
    </details>
 
-4. **Why are RBAC wildcards (*) considered a vulnerability?**
+4. **CVE-2018-1002105 allowed any authenticated user to escalate to cluster-admin through the API server. Your cluster is on a version that's affected. You can't upgrade immediately due to application compatibility concerns. What short-term mitigations could reduce the risk?**
    <details>
    <summary>Answer</summary>
-   Wildcards grant access to all resources or verbs, including ones that don't exist yet. This violates least privilege and can expose unintended access to new resource types.
+   Short-term mitigations: (1) Restrict who can authenticate — remove unnecessary user accounts, audit all ClusterRoleBindings, and limit the number of authenticated users who could exploit this; (2) Enable and monitor audit logging to detect exploitation attempts; (3) Make the API server private (VPN/bastion only) to reduce who can reach it; (4) Use network policies to restrict pod access to the API server; (5) Disable the aggregation layer if not in use (the vulnerability exploited API aggregation). These reduce likelihood while you plan the upgrade. However, for a CVSS 9.8 vulnerability with a public exploit, the upgrade should be prioritized over application compatibility — the risk of cluster compromise outweighs the risk of temporary application disruption.
    </details>
 
-5. **What type of vulnerability is more common: CVEs or misconfigurations?**
+5. **Your organization has both a vulnerability scanning tool (Trivy) and a configuration auditing tool (kube-bench). Explain what each tool catches that the other misses, and why you need both.**
    <details>
    <summary>Answer</summary>
-   Misconfigurations are far more common. Most Kubernetes security issues come from insecure settings rather than code vulnerabilities.
+   Trivy scans container images for CVEs in OS packages and language dependencies — it finds code vulnerabilities like Log4Shell, OpenSSL flaws, and vulnerable libraries. It misses cluster configuration issues entirely. kube-bench checks Kubernetes cluster configuration against CIS Benchmarks — it finds misconfigurations like anonymous auth enabled, missing audit logging, and kubelet insecure settings. It doesn't scan container images at all. Together they cover both categories: Trivy protects against "what you're deploying" vulnerabilities, while kube-bench protects against "how your cluster is configured" vulnerabilities. Most breaches involve misconfigurations (kube-bench territory) but the highest-impact incidents involve code vulnerabilities (Trivy territory). Both are essential layers in defense in depth.
    </details>
 
 ---

@@ -145,6 +145,8 @@ Threat modeling is a structured way to answer: *"What can go wrong, and what sho
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Stop and think**: Traditional attacks work outside-in (network to cluster to container). Supply chain attacks work inside-out (code to container to cluster). Why does this inversion make supply chain attacks harder to detect with standard security tools?
+
 ### STRIDE Applied to Kubernetes
 
 STRIDE is a classic threat modeling framework. Here is how each category maps to Kubernetes:
@@ -240,6 +242,8 @@ Provenance answers the fundamental question: *can you prove this artifact is wha
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+> **Pause and predict**: Your pipeline signs all images and verifies signatures at admission. But the signing key is stored in the CI/CD system. If the CI/CD system itself is compromised (like SolarWinds), the attacker can sign malicious images. What additional control addresses this gap?
 
 ### Policy Gates: Enforcing Trust at the Cluster Boundary
 

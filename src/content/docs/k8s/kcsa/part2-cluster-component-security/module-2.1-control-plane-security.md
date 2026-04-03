@@ -106,6 +106,8 @@ Who is making this request?
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Stop and think**: The API server processes every request through authentication, authorization, and admission — in that order. Why does order matter? What would happen if admission ran before authentication?
+
 ### Authorization
 
 Is this identity allowed to perform this action?
@@ -271,6 +273,8 @@ resources:
 
 ---
 
+> **Pause and predict**: If an attacker compromises the scheduler, they can influence where pods are placed. How could this be exploited even without modifying the pods themselves?
+
 ## Scheduler Security
 
 The scheduler decides where pods run. Its compromise could place pods strategically.
@@ -402,36 +406,35 @@ The controller manager runs control loops that maintain desired state.
 
 ## Quiz
 
-1. **What are the three stages of API server request processing?**
+1. **During a security audit, you discover the API server is configured with `--authorization-mode=AlwaysAllow`. The cluster has been running for months in production. What is the immediate risk, and what steps would you take to remediate without causing an outage?**
    <details>
    <summary>Answer</summary>
-   Authentication (who is this?), Authorization (are they allowed?), and Admission Control (should this be allowed/modified?).
+   AlwaysAllow means every authenticated request is authorized — any user or service account can perform any action, including reading all secrets, creating privileged pods, or modifying RBAC. Immediate risk is full cluster compromise if any credential is stolen. Remediation: first, audit existing RBAC roles and bindings to ensure they cover current needs. Then switch to `--authorization-mode=Node,RBAC` during a maintenance window. Node mode restricts kubelets to their own pods' resources, and RBAC enforces role-based permissions. Test in a staging cluster first, as switching modes may break workloads relying on implicit permissions.
    </details>
 
-2. **Why is etcd encryption at rest important?**
+2. **Your team wants to enable encryption at rest for secrets in etcd. They configure the EncryptionConfiguration with `aescbc` as the first provider and `identity` as the fallback. A colleague asks: "Why keep `identity` at all?" Explain.**
    <details>
    <summary>Answer</summary>
-   By default, Kubernetes secrets are only base64 encoded in etcd, not encrypted. If etcd storage is compromised, all secrets are exposed. Encryption at rest protects secrets even if the underlying storage is accessed.
+   The `identity` provider as fallback allows the API server to read secrets that were stored before encryption was enabled — these older secrets are still in plaintext (identity-encoded) in etcd. Without the identity fallback, the API server would fail to decrypt any pre-existing unencrypted secrets, potentially breaking workloads. After enabling encryption, you should re-encrypt all existing secrets (`kubectl get secrets --all-namespaces -o json | kubectl replace -f -`) and then can optionally remove the identity fallback. The provider order matters: the first provider is used for writing (new secrets encrypted with aescbc), while all providers are tried for reading.
    </details>
 
-3. **What authorization mode limits kubelets to only accessing resources for pods on their node?**
+3. **A penetration tester reports that they can query the etcd database directly from a compromised pod, bypassing the API server entirely. What misconfiguration allowed this, and what is the impact?**
    <details>
    <summary>Answer</summary>
-   Node authorization mode. It's specifically designed to limit kubelet access and should be used alongside RBAC (`--authorization-mode=Node,RBAC`).
+   etcd is not properly network-isolated — it should only be accessible from the API server. The misconfiguration is either missing firewall rules between worker nodes and etcd, or etcd listening on a network interface accessible to pods. The impact is catastrophic: etcd contains all cluster state including secrets (potentially unencrypted), RBAC configuration, and service account tokens. The attacker can read every secret, modify cluster state, or destroy the cluster entirely. Fix: restrict etcd access to only the API server via network policies/firewalls, require mTLS client certificates for etcd access, and use private network interfaces.
    </details>
 
-4. **Which component is the ONLY one that should have direct access to etcd?**
+4. **The NodeRestriction admission controller limits what kubelets can modify. If a node is compromised, explain what the attacker can and cannot do with the kubelet's credentials when NodeRestriction is enabled vs. disabled.**
    <details>
    <summary>Answer</summary>
-   The API server. All other components (scheduler, controller manager, kubelets, users) access cluster state through the API server.
+   With NodeRestriction enabled: the compromised kubelet can only access resources for pods scheduled on that specific node — it can read secrets mounted to those pods and modify those pods' status, but cannot access secrets for pods on other nodes, modify other nodes' pods, or change cluster-wide resources. Without NodeRestriction: the kubelet credentials can potentially access any pod's secrets, modify pods on other nodes, and the blast radius extends to the entire cluster. NodeRestriction implements least privilege for node credentials, making each node compromise a single-node incident rather than a cluster-wide one.
    </details>
 
-5. **What's the difference between mutating and validating admission controllers?**
+5. **You notice that mutating admission webhooks run before validating admission webhooks in the API server request flow. A security team member asks whether a malicious mutating webhook could bypass a validating webhook's security checks. Is this possible?**
    <details>
    <summary>Answer</summary>
-   Mutating admission controllers can modify requests (add labels, inject sidecars). Validating admission controllers can only accept or reject requests without modifying them.
+   Yes, this is a real risk. A malicious or compromised mutating webhook could modify a request to pass validation — for example, removing a `privileged: true` field before the validating webhook checks for it, then re-adding it through another mechanism. However, validating webhooks see the final mutated request, so they validate what will actually be stored. The real risk is a mutating webhook that adds dangerous fields after all validation. Mitigation: restrict who can create/modify webhook configurations via RBAC, use the `reinvocationPolicy: IfNeeded` to re-validate after mutations, and audit webhook configurations regularly. This is why webhook security is critical.
    </details>
-
 ---
 
 ## Hands-On Exercise: Control Plane Security Assessment

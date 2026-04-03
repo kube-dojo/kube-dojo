@@ -95,6 +95,8 @@ KCSA tests your understanding of software supply chain risks and the controls to
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Stop and think**: Your CI/CD pipeline scans images for vulnerabilities before deployment. A supply chain attacker inserts a backdoor that contains no known CVEs — it's custom malicious code. Would your scanning catch it? What additional control is needed?
+
 ### 2. Compromised Dependencies
 
 ```
@@ -372,6 +374,8 @@ KCSA tests your understanding of software supply chain risks and the controls to
 
 ## Supply Chain Frameworks
 
+> **Pause and predict**: You enforce that all images must come from your private registry. An attacker compromises a developer's machine and pushes a malicious image to your private registry with a legitimate tag. What supply chain control would catch this?
+
 ### SLSA (Supply-chain Levels for Software Artifacts)
 
 ```
@@ -467,34 +471,34 @@ KCSA tests your understanding of software supply chain risks and the controls to
 
 ## Quiz
 
-1. **What is a supply chain attack?**
+1. **A critical vulnerability (like Log4Shell) is announced. You have 500 container images in your registry. Without an SBOM, how would you identify which images are affected? With an SBOM? Explain why this difference matters for incident response time.**
    <details>
    <summary>Answer</summary>
-   An attack that compromises software at some point in its creation or delivery chain—such as malicious dependencies, compromised build systems, or tampered images—before it reaches the target environment. The malicious code runs with full trust because it's embedded in trusted artifacts.
+   Without SBOM: you must scan every single image with a vulnerability scanner, waiting for each scan to complete and hoping your scanner's database includes the CVE. For 500 images, this could take hours. Images no longer running but still in the registry might be missed. With SBOM: query your SBOM database for any image containing the affected library (e.g., "which images contain log4j-core?"). This is a database query that returns results in seconds, including exact versions. You immediately know which running workloads need patching and which images need rebuilding. The difference is hours vs. seconds for identification, which is critical when a zero-day is being actively exploited.
    </details>
 
-2. **Why is tag mutability a security risk?**
+2. **Your team uses `npm install` during the Docker build. An attacker publishes a package called `lodash-utils` to the public npm registry, similar to your internal package `@company/lodash-utils`. One of your developers accidentally references `lodash-utils` without the scope. What attack is this, and what controls prevent it?**
    <details>
    <summary>Answer</summary>
-   Tags can be overwritten. An attacker who gains registry access can replace a tagged image with a malicious version. New pods pulling that tag get the malicious image. Using digests prevents this because digests are content-addressable and immutable.
+   This is a dependency confusion (or namespace confusion) attack. The public package takes priority over the unscoped internal name, so the build pulls the attacker's malicious package. Prevention: (1) Always use scoped package names (`@company/lodash-utils`) that can't be hijacked on the public registry; (2) Configure `.npmrc` to route scoped packages to your private registry; (3) Use `npm ci` with a lockfile (`package-lock.json`) to pin exact versions and registries; (4) Claim your package names on the public registry even if you don't publish to them; (5) Use a registry proxy (Artifactory, Nexus) that can block unknown public packages.
    </details>
 
-3. **What is an SBOM and why is it important?**
+3. **Your admission controller enforces that all images must come from your private registry (gcr.io/my-project). An attacker compromises a CI/CD service account and pushes a backdoored image to gcr.io/my-project/backend:v2.1. The image passes the registry allowlist. What additional supply chain control would detect this?**
    <details>
    <summary>Answer</summary>
-   Software Bill of Materials is an inventory of all components in software—packages, versions, licenses. It enables vulnerability response (quickly find what's affected by a new CVE), license compliance, and dependency tracking.
+   Image signing verification. If your CI/CD pipeline signs images with Cosign after a successful build and security scan, and the admission controller verifies signatures before allowing pods, the attacker's manually pushed image would be unsigned (or signed with different credentials) and would be rejected at admission. Additional controls: (1) Only the CI/CD pipeline's identity should be authorized to sign images; (2) Use keyless signing tied to the CI/CD OIDC identity so you can verify WHO built the image; (3) Require provenance attestation (SLSA) proving the image came from a specific git commit through a specific build process; (4) Immutable tags in the registry would prevent overwriting existing tags.
    </details>
 
-4. **How does keyless signing (Sigstore) work?**
+4. **Your Dockerfile uses `FROM node:20` as the base image. Over a weekend, the `node:20` tag is updated with a new build. Monday's deployments use a different base image than Friday's, despite no code changes. Explain the risk and the fix.**
    <details>
    <summary>Answer</summary>
-   Instead of managing keys, signers authenticate with an OIDC identity provider (GitHub, Google). Fulcio issues a short-lived certificate based on that identity. The signature and identity are recorded in Rekor transparency log. Verifiers check the signature against the recorded identity.
+   Mutable tags mean the image content can change without the tag changing. Risks: (1) The new base image might introduce vulnerabilities or breaking changes; (2) Different nodes may pull different versions of `node:20`, causing inconsistent behavior; (3) If the tag was overwritten by an attacker (registry compromise), you'd pull a malicious image; (4) You can't reproduce Friday's builds because the base image is different. Fix: pin to digest — `FROM node:20@sha256:abc123...`. Digests are content-addressable and immutable — the exact same bytes are pulled every time. Update the digest explicitly when you want a new base image, after scanning and testing. This makes builds reproducible and tamper-evident.
    </details>
 
-5. **What are the SLSA levels?**
+5. **A compliance audit requires that you can prove the provenance of every container image running in production. You use GitHub Actions for CI/CD and ECR for image storage. Design the minimal set of supply chain controls that would satisfy this requirement.**
    <details>
    <summary>Answer</summary>
-   SLSA (Supply-chain Levels for Software Artifacts) defines progressive security levels: Level 0 (no guarantees), Level 1 (provenance exists), Level 2 (hosted build platform), Level 3 (hardened, isolated builds). Higher levels provide stronger supply chain integrity guarantees.
+   Minimal provenance controls: (1) Sign images with Cosign using keyless signing — this ties each image to the GitHub Actions OIDC identity that built it, proving WHO built it and WHEN; (2) Generate SLSA provenance attestation during the build, recording the git commit SHA, repository URL, and build workflow — proving WHAT source was used; (3) Store signatures and attestations alongside images in ECR (OCI artifacts); (4) Deploy a Kyverno or Connaisseur admission policy that verifies the Cosign signature and checks that provenance matches expected values (correct repository, correct workflow); (5) Generate and attach SBOMs to prove WHAT'S INSIDE. Together, this creates an auditable chain: git commit → GitHub Actions build → signed image with provenance → verified at admission → running in production.
    </details>
 
 ---

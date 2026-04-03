@@ -92,6 +92,8 @@ Misconfigured ServiceAccounts are a common attack vector for lateral movement wi
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Stop and think**: Every pod gets a ServiceAccount token mounted by default. If most of your pods never call the Kubernetes API, what is the security cost of leaving auto-mounting enabled?
+
 ### Token Request API
 
 Create tokens programmatically:
@@ -211,6 +213,8 @@ automountServiceAccountToken: false
 ```
 
 ---
+
+> **Pause and predict**: Bound service account tokens expire after 1 hour by default. What happens to a long-running pod when its token expires? Does the pod crash?
 
 ## Workload Identity
 
@@ -359,34 +363,34 @@ spec:
 
 ## Quiz
 
-1. **What happens if you don't specify a serviceAccountName in a pod?**
+1. **An attacker compromises a web application pod and finds a ServiceAccount token at `/var/run/secrets/kubernetes.io/serviceaccount/token`. The pod uses the `default` ServiceAccount, which has no explicit RBAC bindings. Can the attacker still do damage with this token?**
    <details>
    <summary>Answer</summary>
-   The pod uses the `default` ServiceAccount in its namespace. A token for the default SA is mounted into the pod unless automountServiceAccountToken is false.
+   Yes, potentially. Even without explicit bindings, the default ServiceAccount can perform API discovery (listing API groups and resources). The attacker can enumerate the cluster's API surface, check their permissions with `kubectl auth can-i --list`, and discover any system:authenticated bindings that grant additional permissions. In some clusters, default ServiceAccounts have been given unintended access through broad ClusterRoleBindings. The token also reveals the cluster's internal DNS and API server address, aiding further reconnaissance. Prevention: set `automountServiceAccountToken: false` on pods that don't need API access.
    </details>
 
-2. **What's the key difference between legacy and bound ServiceAccount tokens?**
+2. **Your cluster was upgraded from Kubernetes 1.23 to 1.26. A security scan reveals 200+ legacy ServiceAccount token Secrets still exist. Why are these more dangerous than the bound tokens used by current pods, and how would you remediate?**
    <details>
    <summary>Answer</summary>
-   Legacy tokens never expire and are stored in Secrets. Bound tokens are time-limited (typically 1 hour), audience-bound, and projected into pods via volumes. Bound tokens are automatically rotated.
+   Legacy tokens are dangerous because they never expire (valid indefinitely), are not audience-bound (usable against any API), and persist even after the pod that created them is deleted — they remain as Secret objects. If any were leaked (through etcd access, RBAC over-permission, or backup exposure), the attacker has permanent API access. Remediation: identify all legacy token Secrets (`kubectl get secrets --field-selector type=kubernetes.io/service-account-token`), check if any running workloads still reference them via volume mounts, migrate those workloads to use projected bound tokens, then delete the legacy Secret objects.
    </details>
 
-3. **Why should you disable auto-mounting of ServiceAccount tokens?**
+3. **A team stores AWS credentials as Kubernetes Secrets for their pods to access S3. You recommend switching to IRSA (IAM Roles for Service Accounts). They push back: "What's wrong with Secrets? They work fine." Articulate the security advantages of workload identity.**
    <details>
    <summary>Answer</summary>
-   If a container doesn't need to access the Kubernetes API, having a token is unnecessary attack surface. A compromised container could use the token to query the API and potentially escalate privileges.
+   Static credentials in Secrets are long-lived (never rotate automatically), shared across all pods using that Secret (same blast radius), accessible to anyone with `get secrets` RBAC permission, stored in etcd (vulnerable to etcd compromise), and require manual rotation. IRSA provides: short-lived tokens (auto-rotated, typically 1-hour expiry), per-pod identity (each pod gets its own credential), no static secrets in the cluster, automatic credential management by the cloud provider, and audit trails through IAM CloudTrail logging. If a pod is compromised with IRSA, the stolen token expires quickly; with static credentials, the attacker has indefinite S3 access.
    </details>
 
-4. **What is workload identity?**
+4. **You set `automountServiceAccountToken: false` on both the ServiceAccount and the Pod spec. But a specific pod in the namespace legitimately needs API access for leader election. How would you grant it a token while keeping other pods token-free?**
    <details>
    <summary>Answer</summary>
-   Workload identity maps Kubernetes ServiceAccounts to cloud provider IAM roles. Pods get short-lived cloud credentials without storing static secrets. Examples: AWS IRSA, GCP Workload Identity, Azure Workload Identity.
+   Create a dedicated ServiceAccount for that pod (e.g., `leader-election-sa`) with `automountServiceAccountToken: false` at the SA level. In the specific pod spec, use a projected volume to explicitly request a bound token: define a `projected` volume with `serviceAccountToken` source, set a short `expirationSeconds` (e.g., 3600), and specify the appropriate `audience`. This gives the pod a time-limited, audience-bound token without auto-mounting. Pair this with a minimal RBAC Role that only grants the verbs and resources needed for leader election (create/get/update on leases).
    </details>
 
-5. **How can having `create pods` permission on a ServiceAccount lead to privilege escalation?**
+5. **During incident response, you discover a pod was compromised and the attacker used its ServiceAccount to create a new privileged pod in the same namespace. Trace the attack chain and identify which controls at each step would have prevented it.**
    <details>
    <summary>Answer</summary>
-   With create pods permission, you can create a privileged pod that mounts the host filesystem or uses hostPID/hostNetwork. This can lead to container escape and node compromise.
+   Attack chain: (1) Application compromised -> (2) Read auto-mounted SA token -> (3) SA had `create pods` permission -> (4) Created privileged pod -> (5) Container escape to host. Prevention at each step: (1) Application security, image scanning; (2) `automountServiceAccountToken: false` would block token access; (3) Minimal RBAC — the SA should not have had `create pods` permission; (4) Pod Security Standards (Baseline/Restricted) enforcement would reject the privileged pod at admission; (5) seccomp/AppArmor would limit escape even if the pod were somehow created. Defense in depth means any single control could have broken this chain.
    </details>
 
 ---

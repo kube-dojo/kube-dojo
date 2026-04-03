@@ -97,6 +97,8 @@ KCSA tests your understanding of Kubernetes security monitoring, audit logging, 
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Stop and think**: If you log everything at the RequestResponse level, you capture maximum detail but generate enormous log volumes. What security events are worth the storage cost of full request+response logging, and which are safe to log at just Metadata level?
+
 ### Audit Policy Configuration
 
 ```yaml
@@ -328,6 +330,8 @@ rules:
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Pause and predict**: Falco detects a shell spawned inside a container and fires an alert. But the alert goes to a Slack channel that the on-call engineer checks every few hours. Is this monitoring effective? What determines whether detection leads to protection?
+
 ### Detection Queries
 
 ```
@@ -464,34 +468,34 @@ rules:
 
 ## Quiz
 
-1. **What are the four audit log levels in Kubernetes?**
+1. **During an incident investigation, you need to determine who accessed a specific secret in the production namespace last Tuesday. Your audit policy logs secrets at `Metadata` level. Can you answer the question? What if it were logged at `Request` level instead?**
    <details>
    <summary>Answer</summary>
-   None (don't log), Metadata (request metadata only), Request (metadata + request body), RequestResponse (metadata + request + response body). Higher levels provide more detail but use more storage.
+   At Metadata level: yes, you can identify WHO accessed the secret (username, source IP, groups), WHEN (timestamp), and the outcome (response code). This is sufficient for the "who accessed it" question. At Request level: you additionally get the request body, which for `get` operations shows which specific secret was requested. For `create/update`, you'd see the new secret values — which is useful for investigation but means secret values appear in audit logs, creating a new exposure risk. The trade-off: Request level provides better investigation data but requires securing the audit log storage as carefully as you secure secrets themselves. For most organizations, Metadata level for `get` operations and Request level for `create/update/delete` operations is the right balance.
    </details>
 
-2. **What does Falco monitor and how?**
+2. **Falco detects a shell spawned in a production container and sends an alert. The on-call engineer sees it 2 hours later. By then, the attacker has exfiltrated data and cleaned up. What gap does this reveal, and how would you close it?**
    <details>
    <summary>Answer</summary>
-   Falco monitors system calls using eBPF or a kernel module. It applies rules to detect anomalous behavior like shell spawns in containers, sensitive file access, privilege escalation, and network anomalies. It provides Kubernetes context (pod name, namespace) with alerts.
+   The gap is between detection time and response time (MTTD vs MTTR). Detection without timely response is ineffective. Closing the gap: (1) Route critical Falco alerts to PagerDuty or equivalent immediate-notification system, not just Slack; (2) Create automated response playbooks — for shell-in-container, automatically kill the pod or quarantine it by applying a deny-all NetworkPolicy; (3) Use Tetragon instead of (or alongside) Falco for enforcement — Tetragon can kill processes that match policy violations, not just alert; (4) Define severity-based SLAs: shell-in-production = 5-minute response, policy violation = 1-hour response; (5) Conduct tabletop exercises so the team practices responding to alerts quickly.
    </details>
 
-3. **Why should you log access to secrets?**
+3. **Your audit logs show 10,000 requests per minute. Storage costs are high and searching is slow. A colleague suggests setting everything to `None` except secrets and RBAC. What security events would you lose visibility into, and what's a better approach?**
    <details>
    <summary>Answer</summary>
-   Secrets contain sensitive data (passwords, API keys, certificates). Logging access helps detect unauthorized access attempts, enables incident investigation, supports compliance requirements, and provides accountability for who accessed what and when.
+   Setting most resources to None loses visibility into: pod creation (can't detect privileged pod launches), exec/attach operations (can't detect someone entering containers), ServiceAccount changes, namespace creation/deletion, and admission webhook modifications. All of these are critical attack indicators. Better approach: use tiered logging — `RequestResponse` for exec/attach and RBAC changes, `Request` for secrets and pod mutations, `Metadata` for most other mutations, and `None` only for genuinely noisy, low-value operations (endpoints updates, node heartbeats, kube-proxy reads). Also filter out system components (`system:kube-proxy`, `system:nodes` for read operations) to reduce volume while keeping security-relevant events.
    </details>
 
-4. **What's the difference between audit logs and runtime security monitoring?**
+4. **An audit log entry shows a user accessed a secret, but the `sourceIPs` field shows an internal pod IP rather than a developer's workstation. What does this suggest about the access pattern, and should it trigger an alert?**
    <details>
    <summary>Answer</summary>
-   Audit logs capture API server activity (who did what via the API). Runtime security monitoring (Falco) captures system-level activity inside containers (processes, file access, network). Both are needed for complete visibility.
+   A pod IP as the source means the API request came from inside the cluster — a pod is using its ServiceAccount token to access secrets via the Kubernetes API. This could be legitimate (an application reading its own configuration secrets) or malicious (a compromised pod's attacker using the stolen SA token to enumerate secrets). It should trigger an alert if: the pod's ServiceAccount shouldn't have secret access, the secret isn't in the pod's own namespace, the access pattern is unusual (listing all secrets vs. getting one specific secret), or the pod typically doesn't make API calls. Baseline normal API access patterns for each ServiceAccount so anomalies are detectable.
    </details>
 
-5. **What events should trigger immediate alerts?**
+5. **Your cluster has API audit logging enabled but no runtime security monitoring (no Falco/Tetragon). An attacker compromises an application, reads environment variables containing a database password, connects directly to the database, and exfiltrates data — all without making any Kubernetes API calls. Would your audit logs detect this attack?**
    <details>
    <summary>Answer</summary>
-   Privileged pod creation, exec into production pods, cluster-admin role changes, anonymous API access, shell spawns in containers, sensitive file access, and authentication from unexpected sources. These indicate potential active attacks.
+   No. Kubernetes audit logs only capture API server activity. This attack never touches the API — it operates entirely within the container (reading env vars) and at the network level (database connection). Audit logs would show the initial pod creation and any secret access, but not the in-container activity or network connections. This is precisely the gap that runtime security monitoring fills: Falco would detect unusual database connection patterns, unexpected outbound data transfers, and processes reading environment files. Network monitoring would detect the data exfiltration volume. This illustrates why audit logs and runtime monitoring are complementary, not substitutes — you need both for complete security observability.
    </details>
 
 ---

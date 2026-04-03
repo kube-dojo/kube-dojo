@@ -102,6 +102,8 @@ KCSA tests your knowledge of image security practices and vulnerability manageme
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Stop and think**: A Go application compiled as a static binary has zero runtime dependencies. Why would you still choose `gcr.io/distroless/static` over `scratch` as the base image?
+
 ### Multi-Stage Builds
 
 ```dockerfile
@@ -342,6 +344,8 @@ imagePullSecrets:
 
 ---
 
+> **Pause and predict**: Your CI pipeline scans images and blocks builds with Critical CVEs. But images already in your registry develop new Critical CVEs as new vulnerabilities are discovered. How do you handle this gap between build-time and runtime scanning?
+
 ## Admission Control for Images
 
 ### Policy Enforcement
@@ -471,34 +475,34 @@ spec:
 
 ## Quiz
 
-1. **Why are distroless images more secure than Alpine?**
+1. **An application team deploys an image based on `ubuntu:22.04` with 147 CVEs (2 Critical). They say they need Ubuntu for `apt-get` access during debugging. How would you reduce the attack surface while addressing their debugging needs?**
    <details>
    <summary>Answer</summary>
-   Distroless images contain only the application and its runtime dependencies—no shell, no package manager, no utilities. This means even if an attacker gets code execution, they can't easily run commands or install tools. Alpine includes a shell and package manager, which can be used by attackers.
+   Use a multi-stage build: build stage uses Ubuntu with all necessary tools, runtime stage uses a distroless or Alpine base image containing only the compiled application. For debugging, use `kubectl debug` with ephemeral containers (which can attach a debug image temporarily) rather than bloating the production image. If shell access is truly needed, Alpine (~7MB, ~15 CVEs) is dramatically smaller than Ubuntu (~77MB, 100+ CVEs). The 2 Critical CVEs alone justify the migration — distroless images typically have 0-5 CVEs. The debugging argument is a common anti-pattern: production images should be minimal, and debugging tools should be brought in temporarily.
    </details>
 
-2. **What's the benefit of multi-stage Docker builds?**
+2. **Your admission controller blocks images not from your private registry. A developer pushes `myregistry.io/app:v2.0` at 2 PM. At 4 PM, a new node joins the cluster and needs to pull the same image. But between 2 PM and 4 PM, an attacker replaced the image behind the `v2.0` tag. Would the new node get the compromised image? What prevents this?**
    <details>
    <summary>Answer</summary>
-   Multi-stage builds separate the build environment from the runtime environment. The final image contains only the compiled application and runtime dependencies, not build tools, source code, or test dependencies. This dramatically reduces image size and attack surface.
+   Yes, the new node would pull the compromised image because `v2.0` is a mutable tag — it now points to the attacker's image. Existing nodes may still have the original cached, but new nodes pull fresh. Prevention: (1) Pull by digest (`myregistry.io/app@sha256:abc123...`) — the digest is content-addressed and immutable; (2) Enable immutable tags in the registry so tags cannot be overwritten; (3) Use image signing — the attacker's replacement wouldn't have a valid signature from your CI pipeline; (4) Use `imagePullPolicy: IfNotPresent` to avoid re-pulls, though this doesn't protect new nodes. The combination of digest + signing provides the strongest protection.
    </details>
 
-3. **Why should you pull images by digest instead of tag?**
+3. **Your Dockerfile contains `ENV DATABASE_URL=postgres://admin:password@db:5432/prod`. The image was built, pushed, and deployed to 50 pods. You've since rotated the database password. Is the old password still accessible, and where?**
    <details>
    <summary>Answer</summary>
-   Tags are mutable—they can be overwritten to point to different images. Digests are content-addressable and immutable. Pulling by digest ensures you always get the exact same image, preventing attacks where tags are replaced with malicious versions.
+   Yes, the old password persists in multiple places: (1) Every layer of the Docker image — even if you add a subsequent layer removing the ENV, the original layer with the secret is still accessible via `docker history` or direct layer inspection; (2) In the registry where the image is stored; (3) On every node that cached the image; (4) In any CI/CD logs that show the build output; (5) Via `kubectl describe pod` which shows environment variables. This is why secrets must never be in Dockerfiles. The correct approach: use Kubernetes Secrets or external secret managers injected at runtime, and use `.dockerignore` to exclude `.env` files from COPY commands.
    </details>
 
-4. **When should image scanning happen?**
+4. **Your registry continuously scans stored images. A scan at 9 AM shows zero Critical CVEs. At 2 PM, a new CVE is published affecting OpenSSL. At 3 PM, the next scan reveals 30 images with this new Critical CVE. What should happen automatically, and what should require human decision?**
    <details>
    <summary>Answer</summary>
-   At multiple points: during build (fail builds with critical CVEs), in the registry (continuous scanning of stored images), and at runtime (alert on new CVEs affecting running containers). This provides defense in depth through the image lifecycle.
+   Automatic actions: alert the security team and affected image owners, mark affected images in the registry dashboard, trigger rebuild pipelines for images with automated rebuild processes, and update vulnerability tracking systems. Human decisions needed: prioritizing which images to rebuild first (based on exposure and data sensitivity), deciding whether to roll back running deployments or wait for patched images, evaluating whether the CVE is exploitable in your specific context, and approving deployment of patched images. The key insight is that continuous scanning closes the gap between build-time scanning (which can't predict future CVEs) and the moment a new vulnerability is published.
    </details>
 
-5. **What does readOnlyRootFilesystem prevent?**
+5. **A Kyverno policy requires all images to be from `gcr.io/my-project/*`. A developer needs to use an open-source sidecar (like Envoy) from `docker.io`. How would you handle this without weakening the registry restriction?**
    <details>
    <summary>Answer</summary>
-   It prevents the container from writing to its root filesystem. This blocks attackers from modifying binaries, dropping tools, or creating persistence mechanisms within the container. Applications needing writable storage use separate volumes (emptyDir, PVC).
+   Mirror the Envoy image to your private registry: pull `docker.io/envoyproxy/envoy:v1.28`, scan it for vulnerabilities, sign it with your organization's key, and push it to `gcr.io/my-project/envoy:v1.28@sha256:...`. The developer references the mirrored image, which passes the admission policy. Benefits: you control when images are updated (preventing surprise upstream changes), the image is scanned before entering your registry, you have a local copy if Docker Hub has rate limits or outages, and the signing ensures it hasn't been tampered with. This is the image promotion pattern — external images are vetted and promoted to your trusted registry before use.
    </details>
 
 ---
