@@ -95,6 +95,8 @@ The traditional datacenter network (access → aggregation → core) was designe
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Pause and predict**: Looking at the spine-leaf diagram above, count the number of hops a packet takes from a server in rack 1 to a server in rack 4. Now count the hops in the traditional 3-tier topology. Why does this difference matter for Kubernetes east-west traffic?
+
 ### Spine-Leaf Sizing
 
 | Component | Speed | Ports | Use Case |
@@ -155,6 +157,8 @@ For Kubernetes east-west heavy workloads:
 │                                                               │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+> **Stop and think**: You are designing VLANs for a new cluster. A colleague suggests putting storage traffic (Ceph replication) and Kubernetes pod traffic on the same VLAN to simplify the network. What problems would this cause during a Ceph rebalancing event, and how would it affect application latency?
 
 ### Server NIC Assignment
 
@@ -311,7 +315,11 @@ ip link set bond0 mtu 9000
 
 ## CNI Integration with Datacenter Fabric
 
+> **Pause and predict**: Your cluster uses VXLAN overlay networking (the default for most CNIs). Each packet adds 50 bytes of overhead. At 1 million packets per second (common for microservices), how much bandwidth is wasted on headers alone? Would switching to BGP native routing eliminate this overhead?
+
 ### Calico BGP Mode (No Overlay)
+
+The diagram below shows Calico peering directly with the datacenter ToR switches via BGP. This eliminates the VXLAN encapsulation layer entirely -- pod IPs become first-class citizens in the datacenter routing table, meaning external systems can reach pods without NAT or proxy:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐

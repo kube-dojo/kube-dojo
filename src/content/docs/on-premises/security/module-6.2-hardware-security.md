@@ -116,7 +116,11 @@ Measured boot uses the TPM to create a chain of trust from firmware to the runni
 └──────────────────────────────────────────────────────────────┘
 ```
 
+> **Pause and predict**: If an attacker replaces the kernel on a Kubernetes node, which PCR values will change? How does the TPM detect this without any network connectivity or external verification service?
+
 ### Verifying TPM and Measured Boot on Kubernetes Nodes
+
+These commands check whether TPM 2.0 hardware is present and read the Platform Configuration Registers that store the hash chain from boot. If any PCR value is all zeros, measured boot is not active.
 
 ```bash
 # Check if TPM 2.0 is available
@@ -197,7 +201,11 @@ Vault is the standard secrets manager for Kubernetes. In cloud environments, Vau
 └──────────────────────────────────────────────────────────────┘
 ```
 
+> **Stop and think**: Without HSM auto-unseal, Vault requires multiple keyholders to perform a "key ceremony" every time Vault restarts. In a Kubernetes environment where pods can be rescheduled at any time, why is this operationally untenable?
+
 ### Configure Vault with HSM Auto-Unseal
+
+The following Vault configuration uses PKCS#11 to communicate with an HSM for automatic unsealing. The `seal "pkcs11"` stanza replaces cloud KMS -- the master key never leaves the HSM boundary.
 
 ```hcl
 # vault-config.hcl
@@ -290,7 +298,11 @@ kms-vault-provider \
 
 Every Kubernetes node should have encrypted disks. LUKS (Linux Unified Key Setup) provides disk encryption, and TPM can automatically unseal the disk at boot -- but only if the boot chain is unmodified.
 
+> **Pause and predict**: LUKS encryption with TPM auto-unlock means the disk decrypts automatically at boot. If someone steals the entire server (disk + TPM together), does the encryption still protect the data? Why or why not?
+
 ### Setting Up LUKS with TPM Auto-Unlock
+
+The `systemd-cryptenroll` command seals the LUKS decryption key to specific TPM PCR values. The key is only released when the boot chain matches the expected measurements -- a modified kernel or bootloader will cause the unlock to fail.
 
 ```bash
 # Encrypt a data partition with LUKS2

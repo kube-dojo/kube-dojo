@@ -70,7 +70,9 @@ Physical security is the foundation. If someone can touch the hardware, every so
 
 ### Port Control on Bare Metal Nodes
 
-Disable unused physical ports at the BIOS and OS level:
+Disable unused physical ports at the BIOS and OS level. The following commands prevent USB storage devices from being used to exfiltrate data or introduce malware, and isolate BMC interfaces on a management-only VLAN.
+
+> **Stop and think**: Why does the script use `install usb-storage /bin/false` instead of `blacklist usb-storage`? What is the security difference between these two approaches?
 
 ```bash
 # Disable USB storage at the kernel level (Linux)
@@ -200,7 +202,9 @@ HARBOREOF
 
 ### Mirror Images for Transfer
 
-On the connected side, use `skopeo` or `crane` to create portable image bundles:
+On the connected side, use `skopeo` or `crane` to create portable image bundles. The workflow creates a list of every image needed, exports each to a portable OCI archive format, and generates checksums for integrity verification on the air-gapped side.
+
+> **Pause and predict**: Why does the transfer process use SHA256 checksums AND GPG signatures? What attack does each one protect against?
 
 ```bash
 # Create a manifest of required images
@@ -238,6 +242,8 @@ sha256sum *.tar > SHA256SUMS
 ```
 
 ### Import Images on the Air-Gapped Side
+
+After physical transfer, the first step is always integrity verification. Only after confirming checksums should you push images to the internal Harbor registry, retagging them to match the internal registry naming convention.
 
 ```bash
 # Verify checksums after transfer

@@ -86,7 +86,11 @@ kubectl get nodes -o custom-columns=\
 
 ## kubeadm Upgrade Workflow
 
+> **Pause and predict**: Before reading the upgrade steps, think about why the first control plane node uses `kubeadm upgrade apply` while subsequent control plane nodes use `kubeadm upgrade node`. What is different about the first node?
+
 ### Step 1: Upgrade the First Control Plane Node
+
+The first control plane upgrade is special: `kubeadm upgrade apply` upgrades the cluster-wide components (API server, controller manager, scheduler manifests) and etcd. Subsequent nodes only need to update their local kubelet and static pod manifests.
 
 ```bash
 # Check available versions
@@ -179,7 +183,11 @@ kubectl get nodes -o json | jq -r '
 kubectl get pdb --all-namespaces
 ```
 
+> **Stop and think**: Your cluster runs at 80% CPU utilization. You need to drain a node for upgrade. Where do those pods go? What happens if the remaining nodes cannot absorb the evicted workloads?
+
 ### Safe Drain Procedure
+
+The drain process happens in stages: first cordon the node to prevent new pods from scheduling, then inspect what will be evicted, and finally drain with explicit safety rails. Never use `--force` unless you have a specific reason and understand the consequences.
 
 ```bash
 # Step 1: Cordon the node (prevent new scheduling)
@@ -323,7 +331,11 @@ mv /var/lib/etcd-restored /var/lib/etcd
 cp /backup/manifests-pre-upgrade/* /etc/kubernetes/manifests/
 ```
 
+> **Pause and predict**: You are about to upgrade your control plane. The etcd snapshot is your safety net. If you skip this step and the upgrade corrupts etcd's WAL format, what are your options for recovery?
+
 ### The etcd Backup Rule
+
+This is the single most important step before any control plane upgrade. etcd's Write-Ahead Log format can change between versions, making downgrades impossible without a pre-upgrade snapshot.
 
 ```bash
 # ALWAYS back up etcd before ANY control plane upgrade

@@ -126,7 +126,11 @@ PXE (Preboot Execution Environment) solves this by booting servers over the netw
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Pause and predict**: You have 20 new servers that just arrived in the datacenter. They have no operating system. You need them running Ubuntu with containerd by end of day. If you used USB sticks, how long would it take? What if a server fails next month and needs reprovisioning -- how does PXE change that recovery time?
+
 ### Quick PXE Server with dnsmasq
+
+We use dnsmasq rather than separate DHCP and TFTP servers because it handles both protocols in a single lightweight process. This simplifies the PXE infrastructure to a single daemon that manages IP assignment and boot file delivery:
 
 ```bash
 # Install dnsmasq (handles DHCP + TFTP)
@@ -164,7 +168,11 @@ EOF
 systemctl restart dnsmasq
 ```
 
+> **Stop and think**: The dnsmasq configuration above responds to any DHCP request on the PXE network with a boot image. What would happen if a production server accidentally rebooted with PXE as its first boot device? How would you prevent this?
+
 ### Ubuntu Autoinstall Configuration
+
+The autoinstall file below answers every question the Ubuntu installer would normally ask interactively. This is what makes the installation fully hands-off -- from disk partitioning to user creation to Kubernetes prerequisite packages. The `late-commands` section runs after the OS is installed and configures the kernel modules and sysctl settings that Kubernetes requires:
 
 ```yaml
 # /srv/http/autoinstall/user-data
@@ -333,7 +341,11 @@ Tinkerbell is a CNCF project for declarative bare metal provisioning — it trea
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Pause and predict**: Tinkerbell defines provisioning steps as container actions. How does this differ from a traditional kickstart/autoinstall approach? What advantage does containerized provisioning give you for reproducibility and testing?
+
 ### Tinkerbell Workflow Example
+
+The Tinkerbell workflow below shows the declarative approach to provisioning. Each action is a container image that performs one step -- streaming the OS image, writing configuration files, or setting up networking. Because these are standard OCI containers, you can test and version them independently:
 
 ```yaml
 # Hardware definition (like a cloud instance profile)

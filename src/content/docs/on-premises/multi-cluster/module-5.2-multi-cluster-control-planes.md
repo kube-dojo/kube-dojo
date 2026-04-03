@@ -107,6 +107,8 @@ To use external etcd with kubeadm, configure `etcd.external.endpoints` in the `C
 
 ---
 
+> **Pause and predict**: A traditional HA control plane with stacked etcd requires 12 CPU and 24 GB RAM per cluster. If you need 10 clusters on 12 bare-metal servers, how much of your total hardware would be consumed by control planes alone? What approach could recover most of that capacity?
+
 ## vCluster: Virtual Clusters
 
 vCluster creates lightweight virtual Kubernetes clusters inside a host cluster. Each vCluster has its own API server and data store but shares the host cluster's worker nodes and container runtime.
@@ -152,6 +154,8 @@ vCluster creates lightweight virtual Kubernetes clusters inside a host cluster. 
 ```
 
 ### vCluster Deployment
+
+The following commands install the vCluster CLI, create a virtual cluster using the lightweight k3s backend, and demonstrate how resources inside a vCluster are mapped to the host cluster's namespace through the syncer component.
 
 ```bash
 # Install vCluster CLI
@@ -241,7 +245,11 @@ Kamaji takes a different approach than vCluster. Instead of running a full virtu
 └──────────────────────────────────────────────────────────────┘
 ```
 
+> **Stop and think**: vCluster shares worker nodes between tenants -- pods from different vClusters run on the same physical nodes. Kamaji gives each tenant dedicated worker nodes. Under what circumstances would shared workers be unacceptable, and when is the hardware savings worth the isolation trade-off?
+
 ### Kamaji Deployment
+
+The Kamaji operator runs on a management cluster and manages tenant control planes as pods. Each tenant gets a dedicated API server, controller manager, and scheduler, but they share a centralized etcd cluster by default.
 
 ```bash
 # Install Kamaji operator
@@ -285,6 +293,8 @@ spec:
     serviceCidr: "10.96.0.0/12"
     podCidr: "10.244.0.0/16"
 EOF
+
+After the TenantControlPlane resource is created, Kamaji generates a kubeconfig. Worker nodes then join the tenant cluster using standard `kubeadm join`, connecting to the API server endpoint specified in `networkProfile`.
 
 # Get the tenant kubeconfig
 kubectl -n kamaji-system get secret tenant-alpha-admin-kubeconfig \

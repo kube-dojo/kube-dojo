@@ -71,6 +71,8 @@ After completing this module, you will be able to:
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Pause and predict**: A developer deploys a new service and creates a Kubernetes Service with a MetalLB VIP. Other pods in the cluster can reach it via its ClusterIP. But when they try `curl https://myservice.internal.company.com`, it fails with "could not resolve host." What is missing from the DNS chain, and at which layer does the resolution break?
+
 ### Split-Horizon DNS
 
 Internal and external clients resolve the same name to different IPs:
@@ -192,7 +194,11 @@ On bare metal, there is no AWS ACM, no GCP Certificate Manager. You need TLS cer
 - **Service mesh** (mTLS between pods)
 - **Internal tools** (Grafana, ArgoCD, Vault, Harbor)
 
+> **Stop and think**: Your team has been using `curl --insecure` and `kubectl --insecure-skip-tls-verify` everywhere because internal services use self-signed certificates. Beyond the inconvenience, what specific security risks does this create? How does a proper CA chain (shown below) eliminate these risks?
+
 ### Option 1: cert-manager with Internal CA
+
+The cert-manager setup below creates a two-tier certificate hierarchy: a self-signed root CA that signs an intermediate issuer, which then signs individual service certificates. This mirrors how public CAs work and allows you to rotate the intermediate without redistributing the root:
 
 ```yaml
 # Install cert-manager
@@ -330,6 +336,8 @@ spec:
         serviceAccountRef:
           name: cert-manager
 ```
+
+> **Pause and predict**: You have just created a beautiful internal CA and issued certificates for all your services. A new pod tries to connect to `registry.internal.company.com` over HTTPS and gets "certificate signed by unknown authority." The certificate is valid and the CA signed it correctly. What step did you miss?
 
 ### Distributing the Internal CA
 

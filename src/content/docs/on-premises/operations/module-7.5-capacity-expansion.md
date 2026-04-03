@@ -74,7 +74,11 @@ The lesson: adding hardware to a Kubernetes cluster is not just racking and stac
 +---------------------------------------------------------------+
 ```
 
+> **Pause and predict**: You are adding 40 new AMD EPYC servers to a cluster running Intel Xeon nodes. The Kubernetes scheduler sees "32 cores available" on both, but the AMD cores are 44% faster per-core. How would you prevent latency-sensitive pods from being scheduled on slower Intel nodes without hardcoding node names?
+
 ### Node Provisioning Script for New Rack
+
+This script automates the most error-prone part of rack expansion: waiting for each server to PXE boot, joining it to the cluster, and applying the correct topology labels. Labels for rack, hardware generation, and CPU model enable scheduling policies that account for heterogeneous hardware.
 
 ```bash
 #!/bin/bash
@@ -237,6 +241,8 @@ Kubernetes sees all CPU cores as equal, but they are not. Use benchmark scores (
 
 When you have multiple hardware generations across multiple racks, topology spread constraints ensure workloads are distributed to survive rack failures and hardware-specific issues.
 
+> **Stop and think**: You have a critical service with 6 replicas spread across 3 racks. You add a 4th rack. New pods will not schedule on the 4th rack because `maxSkew: 1` with `DoNotSchedule` cannot be satisfied. How would you rebalance pods across all 4 racks?
+
 ### Multi-Dimensional Topology Spread
 
 ```yaml
@@ -309,7 +315,11 @@ spec:
 
 Removing nodes requires careful capacity planning to avoid overloading the remaining cluster.
 
+> **Pause and predict**: Before decommissioning 20 nodes, you need to verify the remaining cluster can handle the load. But Kubernetes reports CPU in cores -- and not all cores are equal. A 2023 AMD core delivers 44% more throughput than a 2019 Intel core. How do you calculate the true capacity impact of removing 20 Intel nodes?
+
 ### Decommission Checklist
+
+This script performs safety checks before removing a node: verifying remaining capacity will stay below 80%, checking for local PersistentVolumes that would be lost, and then draining and deleting the node.
 
 ```bash
 #!/bin/bash

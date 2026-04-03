@@ -72,11 +72,15 @@ An automated remediation system would have detected the node failure within seco
 
 ---
 
+> **Pause and predict**: Kubernetes marks a node as NotReady only when the kubelet stops sending heartbeats -- which takes 40 seconds by default. During those 40 seconds, pods on the node are running but potentially broken. What types of hardware failures would be invisible to the kubelet heartbeat mechanism?
+
 ## Node Problem Detector
 
 Node Problem Detector (NPD) is a DaemonSet that monitors system logs and reports problems as Kubernetes node conditions. Without NPD, Kubernetes only knows a node is unhealthy when kubelet stops reporting -- which can take minutes.
 
 ### Deploying Node Problem Detector
+
+NPD runs with `hostNetwork` and `hostPID` access so it can read kernel logs (`/dev/kmsg`), system logs, and detect hardware-level issues that the kubelet cannot see. It translates these low-level signals into Kubernetes node conditions that Machine Health Checks can act on.
 
 ```yaml
 # node-problem-detector.yaml
@@ -208,7 +212,11 @@ spec:
 
 Not every environment uses Cluster API. Here is a lightweight auto-remediation approach using a custom controller.
 
+> **Stop and think**: The MHC remediation flow deletes and reprovisions machines, which works with Cluster API. But many bare-metal clusters do not use CAPI. How would you build automatic remediation without CAPI? What is the simplest approach?
+
 ### Simple Node Watchdog
+
+This lightweight script provides automatic remediation without Cluster API. It runs as a CronJob, finds nodes that have been NotReady beyond a threshold, and attempts a BMC power cycle. A cooldown timer prevents reboot loops.
 
 ```bash
 #!/bin/bash
@@ -311,6 +319,8 @@ On bare metal, you cannot create new nodes on demand. Spare nodes must be physic
 |                                                                |
 +---------------------------------------------------------------+
 ```
+
+> **Pause and predict**: Why are spare nodes kept cordoned but powered on, rather than powered off? What is the trade-off in power cost versus recovery time?
 
 ### Managing Spare Nodes
 

@@ -116,7 +116,11 @@ Non-Uniform Memory Access (NUMA) means each CPU socket has "local" memory that i
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Pause and predict**: You are running Redis (an in-memory database) on a dual-socket server. The Redis process is scheduled on CPU socket 0, but half of its allocated memory lands on NUMA node 1. What performance impact would you expect, and how would you verify it?
+
 **Kubernetes NUMA awareness:**
+
+The following kubelet configuration tells Kubernetes to pin all of a pod's resources to a single NUMA node. This is essential for latency-sensitive workloads like in-memory databases where cross-NUMA memory access would add 100ns per access -- enough to degrade throughput by 30-50%:
 
 ```bash
 # Check NUMA topology on a node
@@ -168,7 +172,11 @@ etcd is the most resource-sensitive component. It requires:
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Stop and think**: Your team is debating whether to save $8,000 per control plane node by using SATA SSDs instead of NVMe. The SATA SSDs have 80K IOPS and 2ms p99 latency. Based on what you know about etcd's fsync requirements, would you approve this cost saving? What specific metric would you test before making the decision?
+
 **Test your storage before deploying etcd:**
+
+The fio benchmark below simulates etcd's Write-Ahead Log pattern -- small sequential writes with an fsync after each one. This is the single most important benchmark for control plane hardware because etcd's performance directly determines API server responsiveness:
 
 ```bash
 # Install fio for storage benchmarking
@@ -305,6 +313,8 @@ Different workloads need different server configurations:
 | K8s recommendation | Good for latency-sensitive | Better for density |
 
 **For most Kubernetes workloads, AMD EPYC offers better value** — more cores per dollar, more PCIe lanes for NVMe and NICs, and competitive power efficiency. Intel wins for specific workloads that benefit from higher single-thread performance (some databases, compilation).
+
+> **Pause and predict**: You have two server options at the same price: (A) a single-socket AMD EPYC 9654 with 96 cores and 384GB RAM, or (B) a dual-socket Intel Xeon 6430 with 64 total cores and 512GB RAM. Your workload is 200 Java microservices averaging 0.5 CPU and 2GB RAM each. Which server gives you better pod density, and why?
 
 ### How Many Pods Per Node?
 

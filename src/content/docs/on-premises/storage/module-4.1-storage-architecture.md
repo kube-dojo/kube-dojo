@@ -98,6 +98,8 @@ After completing this module, you will be able to:
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Pause and predict**: You need to provide storage for three workloads: (1) PostgreSQL with streaming replication, (2) a shared ML training dataset read by 8 pods simultaneously, and (3) etcd. Before looking at the decision matrix below, assign each workload to DAS, NAS, or SDS and explain your reasoning.
+
 ### Decision Matrix
 
 | Workload | Storage Type | Why |
@@ -144,6 +146,8 @@ After completing this module, you will be able to:
 ```
 
 ---
+
+> **Stop and think**: A team proposes running Ceph OSD processes on the same servers as their Kubernetes worker pods to save money on hardware. Their cluster is 40 nodes running a mix of web services and a PostgreSQL database. What happens to PostgreSQL I/O latency when a Ceph OSD node fails and triggers data rebalancing? Would your recommendation change if the cluster had 200 nodes?
 
 ## Dedicated Storage Nodes vs Hyper-Converged
 
@@ -202,9 +206,11 @@ After completing this module, you will be able to:
 
 ---
 
+> **Pause and predict**: Your vendor claims their enterprise SATA SSD delivers "100K IOPS." Based on the storage tier guide above, would this drive be suitable for etcd? What specific metric would you benchmark to verify, and what threshold would you consider a pass or fail?
+
 ## Benchmarking Storage
 
-Always benchmark before deploying workloads:
+Always benchmark before deploying workloads. The three tests below cover the three most important storage patterns for Kubernetes: sequential writes (log files, WAL), random reads (database queries), and fsync-heavy writes (etcd). Running all three tells you which storage tier your hardware actually belongs to, regardless of what the vendor's datasheet claims:
 
 ```bash
 # Install fio

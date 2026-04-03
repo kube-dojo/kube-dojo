@@ -81,6 +81,8 @@ One-time costs that are depreciated over the asset's life (typically 3-5 years):
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Pause and predict**: A team presents their on-premises budget to the CFO showing only the CapEx line items above. The CFO approves. What categories are missing from this budget that will cause the project to exceed estimates? List at least four before reading the OpEx section below.
+
 ### Operating Expenditure (OpEx)
 
 Recurring monthly or annual costs:
@@ -174,6 +176,8 @@ Your effective power cost = IT power cost × PUE
 
 ## Staffing Models
 
+> **Stop and think**: Your organization currently manages 80 nodes with 2 engineers using Ansible and shell scripts. You want to grow to 200 nodes. Should you hire 2 more engineers, or invest in Cluster API and GitOps automation? What factors beyond cost would influence this decision?
+
 ### The Nodes-Per-Engineer Ratio
 
 | Automation Level | Nodes per Engineer | Tools |
@@ -203,6 +207,8 @@ Your effective power cost = IT power cost × PUE
 ```
 
 ---
+
+> **Pause and predict**: Before looking at the TCO model below, estimate what percentage of total 3-year on-premises cost is hardware vs. staffing for a 100-node cluster. Write down your guess, then check it against the model.
 
 ## 3-Year TCO Model
 

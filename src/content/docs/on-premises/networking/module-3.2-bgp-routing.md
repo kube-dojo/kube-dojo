@@ -92,6 +92,8 @@ BGP won the datacenter because:
 
 ## Calico BGP Configuration
 
+> **Pause and predict**: With 100 nodes in a full BGP mesh, each node maintains 99 BGP sessions. Calculate the total number of sessions cluster-wide. Now imagine one node restarts -- how many BGP sessions need to reconverge? This is why the first step below is critical.
+
 ### Step 1: Disable Node-to-Node Mesh
 
 By default, Calico creates a full mesh of iBGP sessions between all nodes. At 100+ nodes, this means 4,950 BGP sessions. Replace with route reflectors:
@@ -153,6 +155,8 @@ spec:
 
 ### Step 3: Peer with ToR Switches
 
+The next step configures eBGP peering between Kubernetes nodes and the datacenter ToR switches. We use eBGP (different AS numbers) rather than iBGP because the Kubernetes nodes and the datacenter switches are different administrative domains -- this gives cleaner route filtering at the network boundary and prevents Kubernetes routing changes from accidentally leaking into the wider datacenter fabric:
+
 ```yaml
 # Peer all nodes in rack-a with their ToR switch
 apiVersion: projectcalico.org/v3
@@ -176,7 +180,11 @@ spec:
   nodeSelector: rack == 'rack-b'
 ```
 
+> **Stop and think**: In the ToR switch configuration below, notice the `route-map ACCEPT-K8S` and `prefix-list K8S-PODS`. These restrict which routes the switch will accept from Kubernetes nodes. What would happen if you skipped this filtering and accepted all routes from K8s nodes? (Hint: think about what happens if a misconfigured Calico node advertises a default route.)
+
 ### Step 4: Configure the ToR Switch (Example: Cumulus/SONiC)
+
+The switch-side configuration mirrors the Calico peering. The prefix-list is critical -- it acts as a safety net that only accepts pod CIDR and service CIDR routes from Kubernetes nodes, preventing a misconfiguration from hijacking datacenter routing:
 
 ```bash
 # /etc/frr/frr.conf on the ToR switch (FRRouting)

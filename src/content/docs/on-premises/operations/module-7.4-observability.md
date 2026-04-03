@@ -85,7 +85,11 @@ A single Prometheus instance cannot scale to large bare metal clusters. Thanos e
 +---------------------------------------------------------------+
 ```
 
+> **Pause and predict**: A single Prometheus instance with 15-day retention crashed under 800K samples/second. What architectural change would prevent this from happening again, and how would you handle the need for 1-year retention?
+
 ### Prometheus Configuration for Bare Metal
+
+This configuration is optimized for bare-metal clusters: a 30-second scrape interval (15s is overkill for most infrastructure metrics), HA labeling for Thanos deduplication, and scrape targets that include IPMI and SMART exporters unique to physical infrastructure.
 
 ```yaml
 # prometheus.yaml — optimized for bare metal
@@ -200,7 +204,11 @@ Loki replaces CloudWatch Logs and Stackdriver Logging. Unlike Elasticsearch, Lok
 +---------------------------------------------------------------+
 ```
 
+> **Stop and think**: Loki indexes only labels (namespace, pod, container), not the full log text. This makes it 10-100x cheaper than Elasticsearch. What is the trade-off? When would this design choice make troubleshooting harder?
+
 ### Loki Deployment
+
+This configuration uses S3-compatible storage (MinIO) for log chunks and the TSDB index format for efficient queries. The `retention_period` controls how long logs are kept, and `per_stream_rate_limit` prevents a single noisy application from overwhelming the ingestion pipeline.
 
 ```yaml
 # loki-config.yaml
@@ -351,7 +359,11 @@ The monitoring stack itself needs resources. Undersizing it leads to the monitor
 +---------------------------------------------------------------+
 ```
 
+> **Pause and predict**: Your monitoring stack itself needs 30 CPU and 90 GB RAM for a 100-node cluster. If monitoring runs on the same nodes as workloads and a major incident causes resource contention, what happens to your ability to diagnose the incident?
+
 ### Prometheus Cardinality Management
+
+High cardinality (too many unique time series) is the primary cause of Prometheus OOM crashes. Each unique combination of metric name and label values creates a separate time series. On bare metal, common offenders are metrics with per-disk, per-NIC, or per-container labels.
 
 ```bash
 # Find high-cardinality metrics (top 20)

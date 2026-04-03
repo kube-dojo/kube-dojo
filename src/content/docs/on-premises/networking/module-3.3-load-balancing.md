@@ -123,6 +123,8 @@ MetalLB is the de facto standard load balancer for bare metal Kubernetes. It ass
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Pause and predict**: You create a Service of type LoadBalancer on your bare-metal cluster. It stays in "Pending" forever. Before reading the solution below, explain what is missing and why this works automatically on AWS but not on bare metal.
+
 ### MetalLB Installation and Configuration
 
 ```bash
@@ -163,7 +165,11 @@ spec:
     - bond0  # Only respond on the production bond
 ```
 
+> **Stop and think**: L2 mode sends all traffic through a single elected node. For a service handling 500 requests/second, this might be fine. But what if the service handles 50,000 requests/second at 1KB each -- that is 400 Mbps through a single node. At what point does this single-node bottleneck become a problem, and how does BGP mode solve it?
+
 ### BGP Mode Configuration
+
+BGP mode eliminates the single-node bottleneck by having every node announce the VIP via BGP. The upstream switch uses ECMP (Equal-Cost Multi-Path) to distribute traffic across all announcing nodes, giving you true horizontal scaling of ingress bandwidth:
 
 ```yaml
 # IP address pool
@@ -311,7 +317,11 @@ For high-traffic production environments, an external load balancer in front of 
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Pause and predict**: You need to expose your Kubernetes API server for external kubectl access, route HTTPS traffic to your ingress controller, and provide a VIP that survives node failures. Which combination of kube-vip, MetalLB, and HAProxy would you use for each requirement?
+
 ### HAProxy Configuration
+
+The HAProxy configuration below serves two purposes: it load-balances Kubernetes API server traffic across all control plane nodes (with health checking), and it fronts the ingress controller pods for HTTP/HTTPS traffic. The `check-ssl verify none` option on the API backend tells HAProxy to verify the backend is alive via HTTPS without validating the certificate (since K8s uses self-signed certs for health endpoints):
 
 ```bash
 # /etc/haproxy/haproxy.cfg

@@ -134,6 +134,8 @@ Every production server has two power supply units (PSUs). Each connects to a di
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Pause and predict**: Your rack has two 30A/208V PDUs in an A+B redundant configuration. An engineer suggests you can safely run 10kW of servers because "we have 12kW total across both PDUs." Why is this reasoning dangerous? What is the actual safe limit?
+
 ### PDU Types
 
 | Type | Description | Use Case |
@@ -258,7 +260,11 @@ Every enterprise server has a dedicated management processor (BMC — Baseboard 
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Stop and think**: Your monitoring alerts you that a server in rack 7 is unreachable -- the OS is not responding to SSH or pings. You are 45 minutes away from the datacenter. What options does out-of-band management give you that in-band management does not? List at least three actions you could take remotely.
+
 ### Common BMC Operations
+
+The BMC operates independently of the server's main OS, which means you can interact with the hardware even when the operating system has crashed. The ipmitool commands below connect over a dedicated management network to the BMC processor, bypassing the production network entirely:
 
 ```bash
 # Using ipmitool (legacy, works with all vendors)
@@ -297,6 +303,8 @@ curl -k -u admin:password -X PATCH \
 ---
 
 ## Cabling
+
+> **Pause and predict**: You need to connect 8 servers in a rack to the ToR switch (within 2 meters) and the ToR switch to a spine switch in a different row (40 meters away). For each connection, would you choose DAC, Cat6a, or OM4 fiber? Consider both cost and performance.
 
 ### Structured Cabling Standards
 

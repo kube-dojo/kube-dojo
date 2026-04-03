@@ -112,7 +112,11 @@ Talos Linux is purpose-built for Kubernetes. There is no SSH, no shell, no packa
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Stop and think**: An engineer on your team says "I need SSH access to debug networking issues on the nodes." With Talos Linux, SSH does not exist. Before reading the operations below, think about how you would debug a networking problem on a node with no shell access. What tools or approaches would you use?
+
 ### Talos Key Operations
+
+Every operation below is performed through the Talos gRPC API via `talosctl`, not SSH. This is a fundamental paradigm shift -- instead of connecting to a node and running commands, you send API requests from your workstation. The API enforces what operations are allowed, creating an auditable, reproducible management model:
 
 ```bash
 # Install talosctl
@@ -196,6 +200,8 @@ cluster:
 
 Flatcar is the community successor to CoreOS Container Linux. It uses systemd and Ignition for configuration, and provides a familiar Linux environment with an immutable root filesystem.
 
+> **Pause and predict**: Your team is split: half want Talos (maximum security, no SSH) and half want Flatcar (familiar Linux, SSH available). The team has 2 engineers with deep Linux experience and 3 with mostly Kubernetes experience. Which would you recommend as a starting point, and what would your migration path look like?
+
 ### Flatcar vs Talos
 
 | Feature | Talos Linux | Flatcar Container Linux |
@@ -273,6 +279,8 @@ RHCOS is the immutable OS for OpenShift. It is not used standalone — it is tig
 If you are running OpenShift, RHCOS is your OS. If you are running vanilla Kubernetes, use Talos or Flatcar.
 
 ---
+
+> **Pause and predict**: A defense contractor needs an air-gapped Kubernetes cluster with Secure Boot, no SSH access, and FIPS-compliant cryptography. Which immutable OS would you recommend and why? What if they also need to run legacy applications that require custom kernel modules?
 
 ## Choosing the Right Immutable OS
 

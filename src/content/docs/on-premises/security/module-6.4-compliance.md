@@ -114,7 +114,9 @@ SOC 2 (Service Organization Control 2) is an audit framework based on five Trust
 
 ### SOC 2 Evidence Collection
 
-Automate monthly evidence collection with a script that exports:
+> **Stop and think**: An auditor will not accept "we have RBAC configured" as evidence. They need proof that specific controls were in place at specific times over the audit period. How does automated monthly evidence collection differ from simply exporting your current configuration?
+
+Automate monthly evidence collection with a script that exports the current state of access controls, network policies, vulnerability reports, and deployment history. Each month's export creates a timestamped snapshot that proves controls were consistently operating.
 
 ```bash
 #!/bin/bash
@@ -183,7 +185,11 @@ PCI DSS requires strict isolation of the Cardholder Data Environment (CDE). On K
 └──────────────────────────────────────────────────────────────────┘
 ```
 
+> **Stop and think**: PCI DSS scope isolation means fewer namespaces to audit, which reduces compliance cost. What is the incentive for engineering teams to keep their workloads OUT of PCI scope? How would you enforce this organizationally?
+
 ### Dedicated Nodes for CDE (PCI DSS Req 2.2.1)
+
+Taints prevent non-payment pods from landing on CDE nodes, while node affinity ensures payment pods only run on CDE hardware. Together with admission control, this creates defense-in-depth isolation.
 
 ```bash
 # Taint CDE nodes so only payment workloads schedule there
@@ -202,6 +208,8 @@ Payment workload Deployments must include:
 ## Kubernetes Audit Policy Design
 
 The Kubernetes audit policy controls what the API server logs. A well-designed policy captures compliance-relevant events without generating excessive noise.
+
+> **Pause and predict**: The audit policy below uses `Metadata` level for Secrets instead of `RequestResponse`. Why would logging Secret access at `RequestResponse` level actually make your cluster LESS secure, even though it captures more information?
 
 ### Compliance-Grade Audit Policy
 
@@ -287,7 +295,7 @@ rules:
 
 ### Configure the API Server
 
-Add these flags to `kube-apiserver` in `/etc/kubernetes/manifests/kube-apiserver.yaml`:
+After designing the audit policy, configure the API server to use it. These flags control where audit logs are written, how long they are retained on disk, and the output format.
 
 ```bash
 --audit-policy-file=/etc/kubernetes/audit-policy.yaml

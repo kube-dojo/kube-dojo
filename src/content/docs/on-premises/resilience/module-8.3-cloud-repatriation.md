@@ -75,6 +75,8 @@ They completed the migration in early 2023 with a 60% infrastructure cost reduct
 
 ---
 
+> **Pause and predict**: 37signals spent $3.2M/year on AWS and estimated on-prem would cost $776K/year. But they also hired 2 additional engineers. At what cloud spend level does the engineering cost make repatriation not worthwhile?
+
 ## Translating Cloud Load Balancers to MetalLB
 
 ```
@@ -140,7 +142,11 @@ spec:
   └────────────────┘              └────────────────┘
 ```
 
+> **Stop and think**: You need to migrate 50TB of data from AWS S3 to on-premises Ceph RGW over a 1 Gbps Direct Connect. At best, that is ~7 days of continuous transfer. During that time, the application is still writing new data to S3. How do you handle the gap between the initial sync and the final cutover?
+
 ### EBS to Ceph RBD
+
+The migration pattern for block storage is: snapshot the EBS volume, mount it on a transfer instance, rsync the data to a migration pod on the on-premises cluster that writes to a Ceph RBD PVC. For databases, stop the application first to ensure consistency.
 
 ```bash
 # On AWS: snapshot and mount to a transfer instance
@@ -188,6 +194,8 @@ EOF
 ```
 
 ### S3 to Ceph RGW
+
+`rclone` provides an idempotent sync operation that can resume after interruptions and run incremental syncs to catch up with new data written during the migration period.
 
 ```bash
 # Configure rclone for both endpoints
@@ -337,39 +345,79 @@ rclone sync ceph-rgw:production-data aws-s3:production-data --progress
 ## Quiz
 
 ### Question 1
-Company spends $800K/year on AWS (50 nodes). CFO wants repatriation. On-prem estimate: $600K/year + 2 engineers. Should you recommend it?
+Your company spends $800K/year on AWS running a 50-node Kubernetes cluster. The CFO reads about 37signals saving millions through cloud repatriation and asks you to plan a move to on-premises. Your estimate: $600K/year operating cost plus 2 additional SRE hires at $200K each. Should you recommend proceeding?
 
 <details>
 <summary>Answer</summary>
 
-No. At 50 nodes, savings are marginal (~$137K/year after hardware amortization) with a 1.5-3 year payback. Migration itself costs $200-400K in engineering time. Better approach: optimize cloud spend with reserved instances (30-40% savings) and right-sizing (10-20%), reducing the bill to $480-560K/year -- cheaper than on-prem. Revisit repatriation at 150+ nodes.
+**No. At 50 nodes, the economics do not justify repatriation.**
+
+**The math**: On-premises operating cost is $600K/year + $400K/year for 2 SREs = $1M/year ongoing. Add $500K in hardware CapEx (amortized over 4 years = $125K/year) and $200-400K in migration engineering costs. First-year total: $1.5-1.7M. Ongoing: $1.125M/year. This is MORE expensive than the $800K/year cloud bill.
+
+**The better approach**: Optimize cloud spend without migrating. Reserved Instances or Savings Plans reduce EC2 costs by 30-40%. Right-sizing instances (most are over-provisioned) saves another 10-20%. Spot instances for batch workloads save 60-90%. These optimizations can reduce the $800K bill to $480-560K/year with minimal engineering effort.
+
+**When to revisit**: If the company grows to 150+ nodes and the cloud bill exceeds $2M/year, repatriation economics become compelling because the infrastructure staff cost is fixed while cloud costs scale linearly. The breakeven point where on-prem becomes cheaper is typically 50-100 nodes, depending on workload density, cloud discounts, and staff costs.
+
+**Key insight from 37signals**: They spent $3.2M/year on cloud (hundreds of servers). At that scale, the $400K/year SRE cost is 12% of savings. At $800K/year, the same SRE cost is 50% of the total -- a completely different equation.
 </details>
 
 ### Question 2
-Migrating from AWS ALB with `certificate-arn`, `wafv2-acl-arn`, and `ssl-redirect`. How do you replicate each on-prem?
+Your AWS-hosted application uses an ALB with three annotations: `certificate-arn` (for TLS termination), `wafv2-acl-arn` (for web application firewall), and `ssl-redirect: "443"` (for HTTPS redirect). You are migrating to on-premises Kubernetes with NGINX Ingress. How do you replicate each capability?
 
 <details>
 <summary>Answer</summary>
 
-**certificate-arn**: Deploy cert-manager with a ClusterIssuer (Let's Encrypt ACME or internal CA). Reference via `cert-manager.io/cluster-issuer` annotation on Ingress. **wafv2-acl-arn**: Enable ModSecurity in NGINX Ingress ConfigMap with `enable-modsecurity: "true"` and `enable-owasp-modsecurity-crs: "true"`. **ssl-redirect**: Set `nginx.ingress.kubernetes.io/force-ssl-redirect: "true"` on the Ingress.
+**Each AWS-managed capability maps to a specific on-premises tool:**
+
+1. **`certificate-arn` (TLS certificates)**: Deploy cert-manager with a ClusterIssuer. For internet-facing services, use Let's Encrypt ACME. For internal services, use an internal CA. Reference the issuer via `cert-manager.io/cluster-issuer` annotation on the Ingress resource. cert-manager handles certificate issuance, renewal, and rotation automatically -- replacing the manual ACM certificate management workflow.
+
+2. **`wafv2-acl-arn` (Web Application Firewall)**: Enable ModSecurity in the NGINX Ingress ConfigMap with `enable-modsecurity: "true"` and `enable-owasp-modsecurity-crs: "true"`. The OWASP Core Rule Set provides protection against SQL injection, XSS, and other common attacks. For more advanced WAF needs, deploy a dedicated WAF like Coraza (the successor to ModSecurity) as a sidecar or upstream proxy.
+
+3. **`ssl-redirect: "443"` (HTTPS redirect)**: Set `nginx.ingress.kubernetes.io/force-ssl-redirect: "true"` on the Ingress resource. This configures NGINX to return a 308 redirect for all HTTP requests to their HTTPS equivalent.
+
+**Key difference from AWS**: On AWS, these three features are a few annotations on a single ALB resource. On-premises, they require three separate systems (cert-manager, ModSecurity, NGINX config) that you must install, configure, and maintain. This operational overhead is often underestimated during migration planning.
 </details>
 
 ### Question 3
-Using rclone to migrate 50TB over 1 Gbps Direct Connect. How long, and what are the risks?
+You are using rclone to migrate 50TB of data from AWS S3 to on-premises Ceph RGW over a 1 Gbps Direct Connect. How long will the transfer take, what are the risks, and how do you handle data that changes during the migration?
 
 <details>
 <summary>Answer</summary>
 
-At ~80% throughput (0.1 GB/s), raw transfer: ~5.8 days. With overhead, expect 7-10 days. Risks: (1) Connection interruption -- use `rclone sync` (idempotent, resumes). (2) Data changing during transfer -- run final sync in maintenance window. (3) S3 API rate limits (5,500 GET/s per prefix) -- monitor for 503 SlowDown. (4) Bandwidth contention with production traffic -- use `--bwlimit` or schedule off-peak. Strategy: start bulk sync 2-3 weeks early, incremental nightly syncs, final sync at cutover.
+**Transfer time calculation**: At 80% effective throughput (accounting for protocol overhead, TCP windowing, and S3 API latency), you get ~100 MB/s. 50 TB / 100 MB/s = ~500,000 seconds = ~5.8 days. With retries, throttling, and real-world variability, plan for 7-10 days.
+
+**Risks and mitigations**:
+
+1. **Connection interruption**: Direct Connect circuits can experience brief outages. Use `rclone sync` (idempotent -- only transfers changed/missing files on retry) rather than `rclone copy`. If interrupted, re-running the same command resumes from where it left off.
+
+2. **Data changing during transfer**: The application continues writing new objects to S3 during the 7-10 day initial sync. Solution: start the bulk sync 2-3 weeks before cutover. Run incremental `rclone sync` nightly to catch new and modified objects. The final sync before cutover will only transfer the delta from the last 24 hours -- typically minutes, not days.
+
+3. **S3 API rate limits**: AWS throttles to 5,500 GET requests per second per prefix. With 50TB of small files, you may hit this limit. Monitor for 503 SlowDown errors and use `--transfers 16` (not 64) to stay within limits.
+
+4. **Bandwidth contention**: If production traffic also uses the Direct Connect, the migration competes for bandwidth. Use `--bwlimit 500M` during business hours and remove the limit overnight.
+
+**Strategy**: Start bulk sync 2-3 weeks early. Nightly incremental syncs. Final sync in a 2-hour maintenance window. Verify with `rclone check` before cutover.
 </details>
 
 ### Question 4
-After migrating from AWS IAM (IRSA) to Keycloak, pods cannot authenticate to PostgreSQL. Most likely cause?
+After migrating from AWS to on-premises, your application pods cannot authenticate to the self-managed PostgreSQL database. On AWS, the application used IRSA (IAM Roles for Service Accounts) to obtain temporary credentials for RDS IAM database authentication. What broke, and how do you fix it?
 
 <details>
 <summary>Answer</summary>
 
-The app used IRSA to get temporary AWS credentials for RDS IAM database authentication. On-prem, there is no STS, no IRSA webhook, and self-managed PostgreSQL does not support IAM auth. The entire authentication chain breaks. Fix: switch to standard PostgreSQL auth (credentials in Kubernetes Secrets), or configure Keycloak OIDC for service identity. Use External Secrets Operator to manage credential rotation. Key lesson: IRSA is deeply AWS-specific; any app using it needs code or config changes.
+**The entire authentication chain is AWS-specific and breaks completely on-premises.**
+
+**What broke**: IRSA works through a mutating webhook that injects AWS STS tokens into pods based on their ServiceAccount annotation (`eks.amazonaws.com/role-arn`). The application SDK (e.g., AWS SDK) uses these tokens to call AWS STS and receive temporary credentials, which are then presented to RDS for IAM-based database authentication. On-premises, there is no STS endpoint, no IRSA webhook, and self-managed PostgreSQL does not support AWS IAM authentication. Every link in the chain is missing.
+
+**Fix options (in order of preference)**:
+
+1. **Standard PostgreSQL authentication**: Create database users with password authentication. Store credentials in Kubernetes Secrets. The application needs a configuration change (connection string) but no code change if using standard database drivers.
+
+2. **External Secrets Operator + Vault**: Use Vault to generate dynamic PostgreSQL credentials with automatic rotation. ESO syncs credentials to Kubernetes Secrets. This provides similar security properties to IRSA (short-lived credentials, automatic rotation) without AWS dependencies.
+
+3. **Keycloak OIDC for service identity**: If the application supports OIDC-based database authentication (e.g., via a custom auth plugin), configure Keycloak to issue tokens for service accounts. This is the most complex option and rarely necessary.
+
+**Key lesson**: Before migration, audit all pods for `eks.amazonaws.com/role-arn` annotations. Every pod with this annotation requires a migration plan for its authentication mechanism. IRSA is the single most common "hidden" AWS dependency.
 </details>
 
 ---

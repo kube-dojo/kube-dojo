@@ -157,6 +157,8 @@ After Keycloak is running, configure AD federation through the Admin Console or 
 
 ---
 
+> **Pause and predict**: Keycloak requires PostgreSQL, 512MB-2GB RAM, and Java expertise to operate. Under what circumstances would this overhead be justified over the simpler Dex alternative?
+
 ## Option 2: Dex as a Lightweight Alternative
 
 Dex is a CNCF project that acts as an OIDC provider by proxying to upstream identity providers. It is lighter than Keycloak -- a single Go binary with YAML configuration.
@@ -209,9 +211,11 @@ staticClients:
 
 ---
 
+> **Stop and think**: The API server validates OIDC tokens locally using cached JWKS public keys. What happens to existing kubectl sessions if Keycloak goes down for 30 minutes? How does this differ from webhook-based authentication?
+
 ## Configuring kube-apiserver for OIDC
 
-Regardless of whether you use Keycloak or Dex, the API server configuration is the same:
+Regardless of whether you use Keycloak or Dex, the API server configuration is the same. These flags tell the API server where to find the OIDC provider's signing keys and which JWT claims to extract for username and group information.
 
 ```bash
 # Add these flags to kube-apiserver (in /etc/kubernetes/manifests/kube-apiserver.yaml)
@@ -272,6 +276,10 @@ OU=K8s Groups,DC=corp,DC=internal
 ```
 
 ### RBAC Bindings
+
+These bindings map AD groups (with the `oidc:` prefix) to Kubernetes ClusterRoles and Roles. When a user authenticates via OIDC, the API server extracts their group memberships from the JWT token and matches them against these bindings.
+
+> **Pause and predict**: What would happen if you forgot to set `--oidc-groups-prefix` and someone in your organization created an AD group named `system:masters`?
 
 ```yaml
 # cluster-admins -- full cluster access

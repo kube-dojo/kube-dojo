@@ -81,6 +81,8 @@ Rancher's local-path-provisioner is the simplest dynamic provisioner. It creates
 - Edge deployments where simplicity outweighs durability
 - Workloads that already handle their own replication (etcd, CockroachDB, Kafka)
 
+> **Pause and predict**: Your cluster has a mix of workloads: some are stateless web services, some are databases with built-in replication (like CockroachDB), and some are single-instance PostgreSQL databases. Which of these need distributed storage (like Ceph), and which can use local storage? What happens to a local-path PVC when its node fails?
+
 ### How It Works
 
 ```
@@ -247,6 +249,8 @@ OpenEBS also offers **LocalPV-ZFS** for workloads needing data integrity guarant
 
 Longhorn occupies a unique position: it provides cross-node replication (like Ceph) but with drastically simpler operations. Each volume is an independent replicated block device. There is no global storage pool, no placement groups, no CRUSH map.
 
+> **Stop and think**: A team is debating between Ceph and Longhorn for a 5-node cluster running 10 stateful services. Ceph would require 3 MON pods, 2 MGR pods, and at least 5 OSD pods (13 storage pods total). Longhorn requires a single DaemonSet (5 pods). Beyond operational complexity, what is the architectural difference that makes Longhorn simpler per-volume but potentially less efficient at scale?
+
 ### Architecture
 
 ```
@@ -334,6 +338,8 @@ EOF
 | Best for | Dev/edge | Prod local | Prod local | Data integrity | Replicated local |
 
 ---
+
+> **Pause and predict**: You deploy a StatefulSet with 3 replicas using a local storage StorageClass, but the binding mode is set to `Immediate` instead of `WaitForFirstConsumer`. What happens? (Hint: the PVs are created before the scheduler decides where to place the pods.)
 
 ## Topology-Aware Provisioning
 

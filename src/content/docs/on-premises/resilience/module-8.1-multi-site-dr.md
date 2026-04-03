@@ -76,6 +76,8 @@ ACTIVE-ACTIVE                          ACTIVE-PASSIVE
 
 ---
 
+> **Pause and predict**: Your two datacenters are 50km apart with 3ms RTT. Your payment system requires RPO=0 (zero data loss). Can you use a stretched etcd cluster across both sites, or do you need a different approach?
+
 ## Stretched Clusters and the etcd Latency Wall
 
 A stretched cluster runs a single Kubernetes control plane across two sites. The etcd quorum spans both. Every write must be acknowledged by a majority of etcd members before it is committed.
@@ -150,7 +152,11 @@ spec:
   └──────────────────┘                └──────────────────┘
 ```
 
+> **Stop and think**: Velero backs up at the Kubernetes API level (resources and optionally PV data). etcd snapshots capture the entire cluster state at the storage level. Why would you use both? What recovery scenario does each one handle that the other cannot?
+
 ### Install and Configure
+
+Velero uses the S3 API to store backups on MinIO at the DR site. The `--use-node-agent` flag enables file-system-level PV backups, and `--default-volumes-to-fs-backup` ensures PersistentVolume data is included in every backup.
 
 ```bash
 # Create Velero credentials
@@ -191,6 +197,8 @@ velero restore create --from-backup full-cluster-20260325060000
 Velero backs up at the API level. etcd snapshots capture the entire cluster state at the storage level. Use both -- they serve different recovery scenarios. Velero lets you restore individual namespaces or resources. etcd snapshots restore the entire cluster state in one operation.
 
 ### Taking and Verifying Snapshots
+
+Always verify snapshot integrity immediately after creation. A corrupt snapshot is worse than no snapshot -- it gives a false sense of security. The `snapshot status` command confirms the hash, revision, key count, and size.
 
 ```bash
 # Take a snapshot on a control plane node
@@ -332,30 +340,57 @@ sudo systemctl restart kubelet
 ## Quiz
 
 ### Question 1
-Two datacenters 300km apart, 12ms RTT. You want zero-RPO DR. Is stretched etcd appropriate?
+Your company operates two datacenters 300km apart with 12ms RTT. The CTO demands zero-RPO disaster recovery for your Kubernetes-based payment processing system. An architect proposes a stretched etcd cluster across both sites. Should you approve this design?
 
 <details>
 <summary>Answer</summary>
 
-No. 12ms exceeds the 10ms limit. Under load, etcd will miss heartbeats and trigger leader elections. For this distance, use active-passive with RPO of 1-5 minutes via frequent Velero backups and etcd snapshots shipped to the remote site. For zero RPO on data, consider application-level replication (PostgreSQL streaming, Ceph stretch mode).
+**No. A stretched etcd cluster at 12ms RTT will be unstable and should not be used.**
+
+The 12ms round-trip time exceeds etcd's practical 10ms limit. Every write to etcd requires a quorum acknowledgment from members at the remote site. Under load, the added latency causes the etcd leader to miss heartbeat deadlines, triggering leader elections. Frequent leader elections cause API server timeouts, failed pod scheduling, and degraded cluster health -- the opposite of high availability.
+
+**For zero RPO on the payment data specifically**, use application-level synchronous replication (PostgreSQL streaming replication or CockroachDB) rather than trying to achieve it at the Kubernetes infrastructure level. Kubernetes state (Deployments, Services) can tolerate 1-5 minutes of RPO because it is declarative and can be reapplied.
+
+**Recommended architecture**: active-passive with Velero backups every 15 minutes to MinIO at the remote site, etcd snapshots replicated every 15 minutes, and DNS-based failover with a 30-second TTL. This gives RPO of 15 minutes for Kubernetes state and RPO of 0 for the payment database via synchronous replication.
 </details>
 
 ### Question 2
-Velero runs hourly backups. A developer deletes `production` namespace at 10:42. Last backup: 10:00. What is the data loss and how do you improve?
+Your on-premises cluster uses Velero with hourly backup schedules. At 10:42 AM, a developer accidentally runs `kubectl delete namespace production`, wiping all resources in the production namespace. The last Velero backup completed at 10:00 AM. What is the data loss, and how would you prevent this from happening again?
 
 <details>
 <summary>Answer</summary>
 
-Data loss: 42 minutes of changes. Improvements: (1) increase backup frequency for critical namespaces to every 15 minutes, (2) add RBAC preventing namespace deletion by developers, (3) deploy a ValidatingWebhook rejecting deletion of namespaces labeled `protected: "true"`, (4) complement with etcd snapshots every 15 minutes.
+**Data loss: 42 minutes of changes to the production namespace** -- any Deployments, ConfigMaps, Secrets, or PVCs created or modified between 10:00 and 10:42 are gone from the backup. PersistentVolume data depends on whether `--default-volumes-to-fs-backup` was enabled.
+
+**Immediate recovery**: Restore from the 10:00 backup targeting only the production namespace: `velero restore create --from-backup <latest> --include-namespaces production`. This restores resources to their 10:00 state. Any changes made between 10:00-10:42 must be reapplied manually or via GitOps reconciliation.
+
+**Prevention (defense in depth)**:
+1. **Increase backup frequency** for critical namespaces to every 15 minutes, reducing maximum data loss from 60 to 15 minutes.
+2. **RBAC**: Remove namespace deletion permission from developer roles. Only platform-admin roles should be able to delete namespaces.
+3. **Admission control**: Deploy a ValidatingWebhookConfiguration or Kyverno policy that rejects deletion of namespaces labeled `protected: "true"`.
+4. **etcd snapshots**: Run every 15 minutes as a complementary backup mechanism for full cluster state recovery.
+5. **GitOps**: If all manifests are in Git (Flux/ArgoCD), the reconciliation loop will automatically recreate deleted resources -- though PV data is still lost.
 </details>
 
 ### Question 3
-After Velero restore to DR cluster, pods run but services return 503. Most likely causes?
+During a DR drill, you restore your on-premises cluster from a Velero backup to the DR site. Pods start running, but services return 503 errors. Users cannot access the application. Walk through your troubleshooting process.
 
 <details>
 <summary>Answer</summary>
 
-(1) EndpointSlices not yet populated -- pods still starting. (2) PV data not restored if `--default-volumes-to-fs-backup` was not set. (3) CoreDNS not operational yet. (4) Missing Secrets/ConfigMaps if backup excluded namespaces. (5) Node affinity constraints failing on different node labels. (6) External dependencies still pointing to primary site.
+**503 errors after Velero restore indicate that traffic is reaching the cluster but services cannot serve requests.** Troubleshoot layer by layer:
+
+1. **EndpointSlices not populated yet**: Pods may be starting but not yet Ready. The Kubernetes endpoints controller only adds pods to EndpointSlices when their readiness probes pass. Check: `kubectl get endpointslices -n production` -- if empty, wait for pods to pass readiness checks.
+
+2. **PV data not restored**: If `--default-volumes-to-fs-backup` was not set during the original backup, PVCs were restored as empty volumes. Databases, caches, and file-based services would start with no data. Check: `kubectl get pvc -n production` and verify the volumes contain data.
+
+3. **CoreDNS not operational**: If CoreDNS pods are still starting, in-cluster DNS resolution fails, so services cannot find their backends. Check: `kubectl get pods -n kube-system -l k8s-app=kube-dns`.
+
+4. **Missing Secrets/ConfigMaps**: If the backup excluded certain namespaces (e.g., `kube-system`), TLS certificates or configuration may be missing. Check: `kubectl get secrets -n production` and compare against what the application expects.
+
+5. **Node affinity mismatches**: The DR cluster may have different node labels than the primary. Pods with node affinity rules may be stuck in Pending. Check: `kubectl get pods -A --field-selector status.phase=Pending`.
+
+6. **External dependencies**: Applications may hardcode primary-site endpoints (databases, APIs, external services). These endpoints are unreachable from the DR site. Check application logs for connection timeouts.
 </details>
 
 ### Question 4

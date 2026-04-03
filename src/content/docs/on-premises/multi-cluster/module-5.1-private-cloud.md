@@ -47,6 +47,8 @@ This module covers when to virtualize, when to stay on bare metal, and how to ch
 
 ## Bare Metal vs Virtualized Kubernetes
 
+> **Pause and predict**: If virtualization adds 5-15% CPU overhead, why do most organizations with more than 10 servers still choose to virtualize their Kubernetes nodes instead of running on bare metal?
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │          BARE METAL vs VIRTUALIZED KUBERNETES                    │
@@ -125,7 +127,7 @@ VMware vSphere is the dominant enterprise hypervisor. Tanzu Kubernetes Grid (TKG
 
 ### vSphere CSI Driver
 
-The vSphere CSI driver creates VMDK (Virtual Machine Disk) files on vSphere datastores and attaches them to Kubernetes nodes as block devices.
+The vSphere CSI driver creates VMDK (Virtual Machine Disk) files on vSphere datastores and attaches them to Kubernetes nodes as block devices. This StorageClass tells the CSI driver which vSphere storage policy and datastore to use when dynamically provisioning volumes for Kubernetes PVCs.
 
 ```yaml
 # vSphere StorageClass
@@ -141,6 +143,8 @@ reclaimPolicy: Delete
 allowVolumeExpansion: true
 volumeBindingMode: WaitForFirstConsumer
 ```
+
+Once the StorageClass is defined, verify that the CSI driver pods are running and then create a PVC to confirm that vSphere can provision storage dynamically.
 
 ```bash
 # Verify vSphere CSI is running
@@ -208,6 +212,10 @@ OpenStack is the open-source alternative to vSphere. It provides compute (Nova),
 
 ### Magnum Cluster Creation
 
+> **Stop and think**: OpenStack Magnum uses Heat templates under the hood to orchestrate VM creation. How does this compare to Tanzu's approach of using a Supervisor Cluster? What are the implications for debugging when something goes wrong during cluster provisioning?
+
+Magnum provides a two-step workflow: first define a cluster template (the "blueprint" specifying OS image, flavors, networking, and orchestration engine), then create clusters from that template. The template is reusable across environments.
+
 ```bash
 # Create a cluster template
 openstack coe cluster template create k8s-template \
@@ -238,6 +246,8 @@ kubectl get sc
 ```
 
 ### OpenStack Cinder CSI
+
+Magnum automatically configures the Cinder CSI driver when creating Kubernetes clusters. You can define additional StorageClasses that map to specific Cinder volume types (SSD, HDD, or tiered storage) for different performance requirements.
 
 ```yaml
 # Cinder StorageClass with SSD backend
@@ -346,6 +356,8 @@ spec:
 ```
 
 ---
+
+> **Pause and predict**: Given that Harvester is free and simpler than OpenStack, why would a 200-server deployment still choose OpenStack? What capabilities does OpenStack have at that scale that Harvester lacks?
 
 ## Platform Comparison
 

@@ -166,7 +166,11 @@ echo "=== Node ${NODE} returned to service ==="
 
 Redfish is the modern replacement for IPMI for out-of-band server management. It provides a RESTful API for firmware updates, power control, and hardware inventory.
 
+> **Pause and predict**: BIOS updates require a server reboot. On bare metal, a reboot means the Kubernetes node goes offline. How would you update BIOS on 40 servers without any cluster downtime?
+
 ### Querying Firmware Inventory
+
+Before any firmware update, you need to know what versions are currently running. Redfish provides a REST API to query this information from the BMC without logging into the server's OS.
 
 ```bash
 # Get current firmware versions via Redfish
@@ -181,6 +185,8 @@ curl -sk -u admin:password \
 ```
 
 ### Staging a BIOS Update
+
+Staging a firmware update via Redfish means uploading the firmware image to the BMC, which stores it locally and applies it on the next reboot. This two-step process (stage now, apply on reboot) lets you stage firmware on all nodes in parallel without any downtime, then reboot them one at a time.
 
 ```bash
 # Stage firmware via Redfish SimpleUpdate (Dell iDRAC example)
@@ -241,7 +247,11 @@ done
 +---------------------------------------------------------------+
 ```
 
+> **Stop and think**: The SMART data shows `Reallocated_Sector_Count = 47` and `Current_Pending_Sector = 3`. The disk is part of a Ceph OSD. Should you replace it now or wait for it to fail completely? What is the risk of waiting?
+
 ### Disk Replacement Workflow (Ceph OSD)
+
+This procedure safely removes a failing disk from a Ceph cluster, replaces it, and re-adds the new disk. The critical step is `ceph osd set noout` -- it prevents Ceph from starting a full rebalance while you are swapping the disk, which would add unnecessary I/O load during the maintenance window.
 
 ```bash
 # Step 1: Identify the failing disk
@@ -306,7 +316,11 @@ ceph -w  # watch rebalancing progress
 
 ---
 
+> **Pause and predict**: The "bathtub curve" predicts high failure rates in the first 90 days and again in years 4-5 of a server's lifecycle. How should your spare inventory strategy differ between a brand-new hardware deployment and a fleet entering year 4?
+
 ## Prometheus Alerts for Hardware Health
+
+These alerting rules turn SMART data and IPMI sensor readings into actionable notifications. The severity levels map to response times: critical means act within hours, warning means plan a replacement within days.
 
 ```yaml
 # hardware-alerts.yaml — Prometheus alerting rules

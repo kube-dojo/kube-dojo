@@ -137,7 +137,11 @@ kubectl -n rook-ceph wait --for=condition=Ready pod \
   -l app=rook-ceph-operator --timeout=300s
 ```
 
+> **Pause and predict**: The CephCluster definition below explicitly lists which devices on which nodes to use as OSDs, rather than setting `useAllDevices: true`. Why is explicit device listing safer? What could go wrong with `useAllDevices: true` on a server that has both OS drives and data drives?
+
 ### Step 2: Create CephCluster
+
+The CephCluster CRD below configures a production-grade Ceph deployment. Notice three critical design decisions: (1) `allowMultiplePerNode: false` for MONs ensures that a single node failure cannot lose quorum, (2) `provider: host` for networking bypasses container networking overhead for storage I/O, and (3) resource limits on OSDs prevent them from consuming all CPU and memory during recovery operations:
 
 ```yaml
 apiVersion: ceph.rook.io/v1
@@ -212,6 +216,8 @@ spec:
                   operator: In
                   values: ["storage"]
 ```
+
+> **Stop and think**: The CephBlockPool below sets `failureDomain: host` with `replicated.size: 3`. This means each block is copied to 3 different servers. If you accidentally set `failureDomain: osd` instead of `host`, two replicas could land on different drives of the same server. What happens when that server loses power?
 
 ### Step 3: Create StorageClasses
 
@@ -318,9 +324,13 @@ kubectl -n rook-ceph exec -it deploy/rook-ceph-tools -- ceph osd pool stats
 
 ---
 
+> **Pause and predict**: After a storage node failure, Ceph starts rebuilding data replicas on surviving nodes. This recovery traffic can consume 80% of available I/O bandwidth. Your production database is on the same Ceph cluster. How would you balance the trade-off between fast recovery (data safety) and application performance?
+
 ## Performance Tuning
 
 ### Key Tuning Parameters
+
+The tuning parameters below control the tension between recovery speed and client I/O performance. Setting `osd_recovery_max_active` to 1 means only one recovery operation per OSD runs at a time -- slower recovery, but application latency stays predictable. Setting it to 3 recovers faster but can spike I/O latency by 5-10x during the recovery window:
 
 ```bash
 # Inside rook-ceph-tools pod:

@@ -104,7 +104,9 @@ Metal3 (pronounced "metal-cubed") is the Cluster API infrastructure provider for
 
 ### BareMetalHost Inventory
 
-Before you can create clusters, you register your bare-metal servers as `BareMetalHost` resources. This is your hardware inventory.
+Before you can create clusters, you register your bare-metal servers as `BareMetalHost` resources. This is your hardware inventory. Each BareMetalHost describes how to reach the server's BMC (for power management) and which disk to install the OS on.
+
+> **Pause and predict**: What would happen if you registered a BareMetalHost with incorrect BMC credentials? At what stage of the lifecycle would the failure be detected?
 
 ```yaml
 # Register a bare-metal server
@@ -140,6 +142,8 @@ stringData:
 The state machine is: **Registering** (BMC credentials validated) -> **Inspecting** (Ironic discovers CPU, RAM, disks, NICs) -> **Available** (ready to be claimed by a Machine) -> **Provisioning** (PXE boot, OS install, cloud-init; 5-15 min) -> **Provisioned** (kubelet joined cluster) -> **Deprovisioning** (wipe disks, power off when Machine is deleted) -> **Available** (back in the pool for reuse).
 
 ### Creating a Cluster with CAPM3
+
+The following manifests define a complete bare-metal Kubernetes cluster declaratively. The resource hierarchy mirrors Kubernetes workload resources: Cluster (top-level) references a KubeadmControlPlane and MachineDeployment, each pointing to Metal3MachineTemplates that specify the OS image and host selection criteria.
 
 ```yaml
 # 1. Cluster definition
@@ -263,6 +267,8 @@ If you run vSphere (Module 5.1), CAPV (Cluster API Provider vSphere) manages Kub
 
 ---
 
+> **Stop and think**: The MachineHealthCheck has a `maxUnhealthy` field set to 40%. Why is this safety valve critical for bare-metal environments? What would happen if it were set to 100% and a network switch failed, making 6 out of 10 nodes appear NotReady?
+
 ## MachineHealthCheck: Automatic Remediation
 
 MachineHealthCheck watches node conditions and automatically replaces unhealthy nodes. This is the most valuable CAPI feature for on-premises operations.
@@ -326,6 +332,8 @@ spec:
 ```
 
 ---
+
+> **Pause and predict**: If you store Cluster API manifests in Git and use Flux to sync them, what would happen if someone accidentally deleted the `clusters/production/` directory from the Git repository with `prune: true` enabled in Flux?
 
 ## GitOps-Driven Cluster Management
 

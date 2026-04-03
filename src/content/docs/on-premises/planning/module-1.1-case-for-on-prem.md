@@ -81,6 +81,8 @@ Some data cannot leave your physical control. Period.
 | ITAR (US Defense) | Classified data cannot leave US sovereign infrastructure | GovCloud or on-prem only |
 | China CSL | Critical data must stay in mainland China; security review for cross-border transfer | On-prem or domestic cloud only |
 
+> **Pause and predict**: A gaming company with 2 million daily active users runs their matchmaking service on AWS. They experience 15ms p50 latency to their nearest region. Their competitor, hosted in a colocation 5ms from major ISPs, has 3ms p50 latency. Which of the five drivers is most relevant here, and would you recommend they move on-prem or optimize their cloud region strategy first?
+
 ### 2. Latency and Performance
 
 Physics does not care about your architecture.
@@ -108,6 +110,8 @@ Physics does not care about your architecture.
 - **Real-time video processing**: Surveillance, autonomous vehicles, quality inspection.
 - **Gaming servers**: Players notice >20ms. Regional bare metal is standard.
 - **Database-heavy applications**: Joins across millions of rows. NVMe on bare metal is 10x faster than cloud EBS.
+
+> **Stop and think**: Your company runs a video surveillance system that processes 10,000 camera feeds in real-time. Each feed requires 50ms end-to-end processing. The nearest cloud region adds 12ms of network latency per round trip. Would you deploy this workload on-premises, in the cloud, or as a hybrid? What factors beyond latency would influence your decision?
 
 ### 3. Economics at Scale
 
@@ -205,6 +209,8 @@ On-prem is wrong when:
 > A Series A fintech startup (18 engineers) decided to run on-premises Kubernetes to save money. They leased a quarter-rack in a colocation facility, bought 6 servers, and spent 4 months building their platform. Then their lead infrastructure engineer quit. Nobody else knew how to replace a failed disk, upgrade the OS, or troubleshoot BGP peering with the colo's network. They migrated everything to GKE in 3 weeks and shut down the colo contract — eating the remaining 18 months of the lease ($54K). Total cost of the on-prem experiment: ~$180K in hardware, colo fees, and lost engineering time. The CTO's postmortem: "We optimized for the wrong constraint. We needed speed to market, not infrastructure cost savings."
 
 ---
+
+> **Pause and predict**: Before looking at the decision framework below, write down the three most important questions you would ask a CTO who wants to move from cloud to on-premises. Then compare your questions to the framework. Did you miss anything?
 
 ## The Decision Framework
 

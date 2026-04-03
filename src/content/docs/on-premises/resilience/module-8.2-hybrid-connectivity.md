@@ -66,7 +66,11 @@ After completing this module, you will be able to:
 | **Cloud native support** | Manual setup | Native (AWS/Azure VPN Gateway) |
 | **Key rotation** | Built-in (every 2 minutes) | Manual or via IKE rekey |
 
+> **Pause and predict**: WireGuard uses ~4,000 lines of code while IPsec uses ~400,000. Both encrypt traffic. Why would the smaller codebase matter for a security-critical component like a VPN tunnel?
+
 ### WireGuard Configuration
+
+This configuration creates an encrypted tunnel between the on-premises gateway and a cloud-side gateway. The `AllowedIPs` field acts as both an access control list and a routing table -- only traffic destined for the specified CIDRs enters the tunnel.
 
 ```bash
 # On the on-prem gateway node
@@ -138,7 +142,11 @@ Submariner connects Kubernetes clusters so pods and services in one cluster can 
   └──────────────────────┘              └──────────────────────┘
 ```
 
+> **Stop and think**: Submariner requires non-overlapping pod and service CIDRs between clusters. Both your on-prem and EKS clusters use the default 10.244.0.0/16 pod CIDR. What are your options, and which one avoids rebuilding either cluster?
+
 ### Install Submariner
+
+Submariner uses a broker (deployed on one cluster) for service discovery metadata exchange. Each cluster then joins the broker, establishing encrypted tunnels for pod-to-pod traffic and a Lighthouse DNS service for cross-cluster name resolution.
 
 ```bash
 # Install subctl
@@ -182,7 +190,11 @@ Istio adds traffic management, observability, and mTLS security across clusters.
 
 A shared root CA is required for cross-cluster mTLS. Without it, sidecars in different clusters cannot verify each other's certificates and all cross-cluster traffic fails with 503 errors even though network connectivity works.
 
+> **Pause and predict**: Istio uses mTLS between sidecars in different clusters. Why does each cluster need a certificate derived from the same root CA? What symptom would you see if the root CAs were different?
+
 ### Setting Up Multi-Cluster Istio
+
+The shared root CA is the foundation of cross-cluster mTLS. Each cluster gets its own intermediate CA (derived from the shared root), so certificates can be validated across cluster boundaries.
 
 ```bash
 # 1. Generate a shared root CA
@@ -344,30 +356,60 @@ Sync policies to all clusters via ArgoCD Applications pointing to the same Git r
 ## Quiz
 
 ### Question 1
-On-prem K8s uses pod CIDR 10.244.0.0/16. Your EKS cluster also uses 10.244.0.0/16. What breaks when you connect them via WireGuard?
+Your on-premises Kubernetes cluster uses pod CIDR 10.244.0.0/16. Your EKS cluster also uses the default 10.244.0.0/16. You connect them via WireGuard and developers report that cross-cluster service calls randomly fail. What is happening and how do you fix it?
 
 <details>
 <summary>Answer</summary>
 
-CIDR overlap. Traffic to 10.244.x.x routes locally instead of through the tunnel. Fix options: (1) Rebuild one cluster with a different CIDR (cleanest). (2) Use Submariner with Globalnet, which assigns virtual global IPs from a non-overlapping range. (3) NAT at the gateway (fragile, breaks source IP visibility). Lesson: always plan unique CIDRs across all clusters.
+**The CIDR overlap causes routing ambiguity.** When a pod on the on-prem cluster sends traffic to 10.244.50.3 (intending to reach a pod on the EKS cluster), the local routing table matches it to the local pod CIDR and routes it locally -- it never enters the WireGuard tunnel. The same happens in reverse. Cross-cluster traffic is essentially impossible because both clusters claim ownership of the same IP range.
+
+**Fix options (in order of preference):**
+
+1. **Rebuild one cluster with a different CIDR** (e.g., 10.100.0.0/16 for EKS). This is the cleanest solution but requires recreating the cluster and migrating workloads. For EKS, this means creating a new cluster with `--kubernetes-network-config serviceIpv4Cidr` and a custom VPC CNI configuration.
+
+2. **Use Submariner with Globalnet**, which assigns virtual global IPs from a non-overlapping range (e.g., 242.0.0.0/8). Submariner handles the NAT transparently, and cross-cluster DNS resolves to global IPs. This avoids rebuilding either cluster but adds complexity.
+
+3. **NAT at the gateway** (fragile, last resort). Configure SNAT/DNAT rules on the WireGuard gateways to translate pod IPs. This breaks source IP visibility, complicates network policy enforcement, and is operationally painful to maintain.
+
+**Prevention**: Always plan unique pod and service CIDRs across all clusters before deployment. Document them in a central IPAM registry.
 </details>
 
 ### Question 2
-Your VPN tunnel has 50ms RTT and 200 Mbps. The DB team wants PostgreSQL streaming replication to cloud. What concerns should you raise?
+Your on-premises to cloud VPN tunnel has 50ms RTT and 200 Mbps bandwidth. The database team wants to set up PostgreSQL streaming replication from the on-premises primary to a cloud replica for disaster recovery. What concerns should you raise, and what would you recommend instead?
 
 <details>
 <summary>Answer</summary>
 
-(1) **Bandwidth**: A write-heavy DB generating 50-100 MB/s of WAL would saturate 200 Mbps. Lag grows unbounded. (2) **Latency**: Synchronous replication adds 50ms per transaction commit -- impractical at scale. (3) **Reliability**: VPN over internet has variable latency; reconnections cause lag spikes. Recommendations: upgrade to Direct Connect (1 Gbps+), use asynchronous replication, or consider logical replication for lower bandwidth.
+**Three critical concerns:**
+
+1. **Bandwidth saturation**: A write-heavy PostgreSQL database generating 50-100 MB/s of WAL (Write-Ahead Log) data would consume 400-800 Mbps -- far exceeding the 200 Mbps tunnel capacity. Replication lag would grow unbounded until the tunnel is upgraded or write volume decreases. This means the DR replica is perpetually behind, defeating the purpose.
+
+2. **Latency impact on synchronous replication**: Synchronous replication adds the full 50ms RTT to every transaction commit. For a workload doing 1,000 transactions/second, this adds 50 seconds of cumulative latency per second -- transactions would queue up, causing application timeouts. Synchronous replication at 50ms RTT is impractical for any write-intensive workload.
+
+3. **VPN reliability**: VPN tunnels over the public internet have variable latency (50ms average but 200ms+ during congestion). Reconnections after tunnel drops cause replication lag spikes and potentially require WAL replay to catch up.
+
+**Recommendations**: Upgrade to a Direct Connect or ExpressRoute (1-10 Gbps, <5ms latency) if synchronous replication is needed. If budget does not allow a dedicated interconnect, use asynchronous replication (accepting RPO of seconds to minutes) or consider logical replication (lower bandwidth, replicates only specific tables).
 </details>
 
 ### Question 3
-Submariner is deployed. `curl nginx.production.svc.clusterset.local` fails with DNS error. Debugging steps?
+Submariner is deployed between your on-premises and cloud clusters. A developer runs `curl nginx.production.svc.clusterset.local` from a pod on the on-premises cluster and gets a DNS resolution error. The nginx service is running fine on the cloud cluster. Walk through your debugging process.
 
 <details>
 <summary>Answer</summary>
 
-(1) Check Submariner pods are Running: `kubectl get pods -n submariner-operator`. (2) Check ServiceExport exists on source cluster and ServiceImport on destination. (3) Verify Lighthouse plugin is in CoreDNS config. (4) Check `subctl show connections` for "connected" status. (5) Test full DNS name with `nslookup`. (6) Check for CIDR overlap if Globalnet is not enabled.
+**Systematic debugging from network layer up to DNS:**
+
+1. **Check Submariner components are Running**: `kubectl get pods -n submariner-operator`. If the gateway engine or Lighthouse pods are in CrashLoopBackOff, the tunnel or DNS integration is broken.
+
+2. **Verify ServiceExport and ServiceImport**: On the cloud cluster, check `kubectl get serviceexport nginx -n production`. On the on-premises cluster, check `kubectl get serviceimport -n submariner-operator`. If the ServiceImport does not exist, Submariner has not synced the service metadata across clusters.
+
+3. **Check Lighthouse DNS integration**: Verify the CoreDNS configmap includes the Lighthouse plugin: `kubectl get cm coredns -n kube-system -o yaml | grep lighthouse`. If missing, Lighthouse did not inject itself into CoreDNS configuration.
+
+4. **Check tunnel connectivity**: Run `subctl show connections` -- the status should show "connected" for the remote cluster. If "connecting" or "error," check firewall rules for UDP ports 500 and 4500 (IPsec) or the WireGuard port.
+
+5. **Test DNS directly**: `kubectl exec -it test-pod -- nslookup nginx.production.svc.clusterset.local`. If this returns NXDOMAIN, the issue is DNS. If it resolves but curl fails, the issue is network connectivity through the tunnel.
+
+6. **Check for CIDR overlap**: If Globalnet is not enabled and pod CIDRs overlap, traffic cannot be routed correctly even if the tunnel is up.
 </details>
 
 ### Question 4

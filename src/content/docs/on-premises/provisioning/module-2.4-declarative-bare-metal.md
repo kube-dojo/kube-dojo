@@ -132,7 +132,11 @@ Metal3 uses IPMI/Redfish to control bare metal servers. It integrates with Ironi
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Pause and predict**: In the traditional workflow described in the war story above, creating a cluster took 3 days and involved a shared spreadsheet. With Cluster API, you define a cluster in YAML and `kubectl apply` it. What are the prerequisites that must be in place before this "kubectl apply" can actually provision physical servers? List at least three infrastructure components.
+
 ### BareMetalHost Definition
+
+The BareMetalHost CRD is how Metal3 knows about your physical servers. Each server gets a manifest that includes its BMC address and credentials -- this is how CAPI can power-cycle the machine, set the boot device to PXE, and initiate OS installation without anyone touching the hardware:
 
 ```yaml
 apiVersion: metal3.io/v1alpha1
@@ -349,6 +353,8 @@ kubectl --kubeconfig production.kubeconfig get nodes
 
 ---
 
+> **Stop and think**: A worker node's NVMe drive fails at 3 AM. With the traditional approach, an on-call engineer gets paged, SSH's into the node, cordons it, drains pods, and files a hardware ticket. With MachineHealthCheck below, what happens instead? What is still a manual step even with full automation?
+
 ## Machine Health Checks
 
 Automatically remediate failed nodes by replacing them with fresh hardware from the pool:
@@ -382,6 +388,8 @@ When a node is unhealthy for >5 minutes:
 5. The new node joins the cluster automatically
 
 ---
+
+> **Pause and predict**: Your team manages 5 Kubernetes clusters across 2 datacenters. Currently, cluster changes are made by running `kubectl` commands manually. What specific risks does this create, and how does the GitOps approach below eliminate each one?
 
 ## GitOps-Driven Cluster Lifecycle
 

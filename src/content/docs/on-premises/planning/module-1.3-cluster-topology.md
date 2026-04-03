@@ -107,6 +107,8 @@ How many clusters should you run? Where should the control planes live? Should c
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Pause and predict**: Your company has 120 nodes, 6 teams, and a mix of PCI-scoped payment processing and general web applications. Before reading the decision matrix, would you recommend a single cluster or multiple clusters? What is the single biggest factor driving your decision?
+
 ### Decision Matrix
 
 | Factor | Single Cluster | Multi-Cluster |
@@ -255,6 +257,10 @@ On-premises, you must design for physical failure domains that cloud abstracts a
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Stop and think**: You have 3 racks, each with its own PDU and ToR switch. Your cluster has 3 control plane nodes. If you put all 3 CP nodes in rack A (to simplify cabling), what happens when rack A loses power? Now consider: what happens if you spread them one per rack and rack A loses power?
+
+Kubernetes topology labels map physical datacenter layout into the scheduling system. By labeling nodes with their rack, row, and room, you enable the scheduler to spread replicas across failure domains -- so a single rack failure does not take down all instances of a critical service:
+
 ### Kubernetes Topology Labels
 
 ```yaml
@@ -330,6 +336,8 @@ spec:
 ## etcd Topology Patterns
 
 etcd is a distributed consensus system. Its topology determines your cluster's durability and performance.
+
+> **Pause and predict**: Your CTO wants to deploy 6 etcd members "for extra safety." Based on how Raft consensus works, would 6 members be more or less resilient than 5? What is the downside of even-numbered membership?
 
 ### Quorum and Failure Tolerance
 
