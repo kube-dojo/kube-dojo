@@ -91,6 +91,8 @@ spec:
 | `completions` | Required successful completions | 1 |
 | `parallelism` | Max parallel pods | 1 |
 
+> **Pause and predict**: A Job requires `restartPolicy` to be set to either `Never` or `OnFailure`. Why can't you use `Always` -- the default for Deployments? Think about what a Job is supposed to do, then read the explanation.
+
 ### restartPolicy Explained
 
 ```yaml
@@ -264,6 +266,8 @@ spec:
 
 ## CronJob Policies
 
+> **Stop and think**: You have a CronJob that runs a database backup every hour, but sometimes the backup takes 75 minutes. What happens when the next scheduled run triggers while the previous one is still running? What policy would you choose: `Allow`, `Forbid`, or `Replace`?
+
 ### concurrencyPolicy
 
 What happens if a new schedule triggers while a Job is still running?
@@ -370,6 +374,8 @@ k describe job my-job
 k logs $(k get pods -l job-name=my-job -o jsonpath='{.items[0].metadata.name}')
 ```
 
+> **What would happen if**: You create a Job with `backoffLimit: 6` (the default) and `restartPolicy: Never`. The container's script has a bug that always exits with code 1. How many pods will Kubernetes create before giving up?
+
 ### Job Keeps Retrying
 
 ```bash
@@ -422,30 +428,28 @@ k patch cronjob my-cronjob -p '{"spec":{"suspend":false}}'
 
 ## Quiz
 
-1. **What's the valid restartPolicy values for a Job?**
+1. **A developer writes a Job YAML with `restartPolicy: Always` and runs `kubectl apply`. What happens, and what should they use instead?**
    <details>
    <summary>Answer</summary>
-   `Never` or `OnFailure`. `Always` is not allowed for Jobs because the container would never terminate.
+   The API server rejects the Job with a validation error. Jobs require `restartPolicy` set to either `Never` or `OnFailure` -- never `Always`. The reason is that Jobs are designed to run to completion and exit. `Always` would restart the container forever, defeating the purpose of a Job. Use `Never` if you want a new pod on each failure (easier to debug via separate pod logs), or `OnFailure` if you want the same pod to retry (uses fewer resources and preserves pod identity).
    </details>
 
-2. **How do you create a CronJob that runs every 15 minutes?**
+2. **Your operations team needs a log cleanup script to run at 4:30 AM on weekdays only. Write the CronJob schedule expression and explain what concurrency policy you'd choose if the cleanup sometimes takes over 24 hours.**
    <details>
    <summary>Answer</summary>
-   `kubectl create cronjob myj --image=busybox --schedule="*/15 * * * *" -- echo done`
-
-   The `*/15` means "every 15 minutes".
+   The schedule is `"30 4 * * 1-5"` -- minute 30, hour 4, any day of month, any month, Monday through Friday (1-5). If cleanup can exceed 24 hours, use `concurrencyPolicy: Forbid` to skip the next scheduled run while the current one is still going. `Replace` would kill the long-running cleanup mid-operation, potentially leaving data in an inconsistent state. `Allow` would stack up concurrent cleanups competing for the same resources.
    </details>
 
-3. **A Job has `parallelism: 3` and `completions: 10`. What happens?**
+3. **You need to process 100 images through a thumbnail generator. Each image takes about 10 seconds. You want to finish as fast as possible but your cluster can only handle 5 extra pods at a time. How do you configure the Job?**
    <details>
    <summary>Answer</summary>
-   The Job runs up to 3 pods simultaneously until 10 pods have completed successfully. It processes in batches: 3 pods run, when one completes another starts, until 10 completions.
+   Set `completions: 100` and `parallelism: 5`. Kubernetes will run 5 pods simultaneously, and as each completes, it launches another to maintain 5 active pods until all 100 completions are reached. Total time is roughly 100/5 * 10 seconds = ~200 seconds (about 3.3 minutes), compared to ~1000 seconds (16.7 minutes) if run sequentially. Each pod can use the `JOB_COMPLETION_INDEX` environment variable to know which image to process.
    </details>
 
-4. **What does `concurrencyPolicy: Forbid` do?**
+4. **Your CronJob runs every 5 minutes, but you notice completed Job pods are piling up -- there are now 200+ finished pods cluttering your namespace. What two settings should you add to prevent this?**
    <details>
    <summary>Answer</summary>
-   If a CronJob triggers while a previous Job is still running, the new run is skipped. This prevents overlapping executions that might cause resource contention.
+   Add `successfulJobsHistoryLimit: 3` and `failedJobsHistoryLimit: 1` to the CronJob spec to retain only recent Job history. Additionally, add `ttlSecondsAfterFinished: 100` to the Job template spec so completed Job pods are automatically garbage-collected after 100 seconds. The history limits control how many CronJob-created Jobs are kept, while TTL controls when individual Job pods are cleaned up. Without these, Kubernetes keeps all completed Jobs indefinitely by default.
    </details>
 
 ---

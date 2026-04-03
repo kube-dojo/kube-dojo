@@ -201,6 +201,8 @@ helm upgrade --install my-release bitnami/nginx
 helm upgrade my-release bitnami/nginx --reuse-values --set image.tag=1.21
 ```
 
+> **Stop and think**: You run `helm upgrade my-release bitnami/nginx --set replicaCount=5` without `--reuse-values`. What happens to all the other custom values you set during the initial install? This is a very common mistake.
+
 ### Rolling Back
 
 ```bash
@@ -230,6 +232,8 @@ helm uninstall my-release -n production
 ---
 
 ## Working with Values
+
+> **Pause and predict**: If you pass both a values file with `replicaCount: 2` AND use `--set replicaCount=5` on the same `helm install` command, which value wins? Think about why Helm would design it this way.
 
 ### Values Hierarchy (Lowest to Highest Priority)
 
@@ -374,6 +378,8 @@ You won't create charts in the CKAD exam, but understanding structure helps with
 
 ---
 
+> **What would happen if**: You run `helm install my-app bitnami/nginx` in the `default` namespace, then later run `helm list` in the `production` namespace. Would you see `my-app` in the output? Why does this matter during the exam?
+
 ## Troubleshooting Helm
 
 ### Common Issues
@@ -432,30 +438,28 @@ helm get notes my-release
 
 ## Quiz
 
-1. **How do you install a chart and set `replicaCount` to 3?**
+1. **Your CI/CD pipeline needs to deploy a chart that may or may not already be installed in the cluster. It should install on first run and upgrade on subsequent runs, without error. What single Helm command handles both cases?**
    <details>
    <summary>Answer</summary>
-   `helm install my-release bitnami/nginx --set replicaCount=3`
+   Use `helm upgrade --install my-release bitnami/nginx`. The `--install` flag makes the command idempotent -- it installs if the release doesn't exist and upgrades if it does. This is the standard pattern for CI/CD pipelines because it eliminates the need for conditional logic to check whether a release exists. Add `--atomic` to automatically roll back if the upgrade fails, ensuring the pipeline never leaves a broken release behind.
    </details>
 
-2. **How do you see what values a release is using?**
+2. **A teammate upgraded a Helm release with `helm upgrade my-app bitnami/nginx --set replicaCount=5` but now reports that the `service.type` they set during initial install has reverted to the chart default `LoadBalancer` instead of their custom `ClusterIP`. What happened and how do they fix future upgrades?**
    <details>
    <summary>Answer</summary>
-   `helm get values my-release`
-
-   Add `--all` to see computed values including defaults.
+   Without `--reuse-values`, `helm upgrade` resets all values to chart defaults except those explicitly passed in the current command. Only `replicaCount=5` was set, so `service.type` reverted to the default. Fix with: `helm rollback my-app` to restore the previous state, then `helm upgrade my-app bitnami/nginx --reuse-values --set replicaCount=5`. The `--reuse-values` flag carries forward all values from the previous revision. Better yet, maintain a values file with all customizations and always pass it: `helm upgrade my-app bitnami/nginx -f values.yaml --set replicaCount=5`.
    </details>
 
-3. **How do you rollback to revision 2?**
+3. **During the CKAD exam, you're told to "find what values the release `web-prod` is using in the `frontend` namespace." You run `helm get values web-prod` and get "release not found." The release definitely exists. What's wrong?**
    <details>
    <summary>Answer</summary>
-   `helm rollback my-release 2`
+   Helm releases are namespace-scoped. You need to specify the namespace: `helm get values web-prod -n frontend`. By default, Helm looks in the current kubectl context namespace. This is a common exam pitfall -- always include `-n <namespace>` when working with Helm releases outside the default namespace. Use `helm list -A` to find releases across all namespaces when you're not sure where a release lives.
    </details>
 
-4. **What does `helm upgrade --install` do?**
+4. **You installed a Helm chart but the pods are crash-looping. You need to inspect the exact Kubernetes manifests that Helm generated to see if the configuration is correct. How do you view the rendered YAML without uninstalling and reinstalling?**
    <details>
    <summary>Answer</summary>
-   It installs the release if it doesn't exist, or upgrades it if it does. This makes the command idempotent—safe to run multiple times.
+   Run `helm get manifest web-prod` to see the exact rendered Kubernetes YAML that was applied. This shows every resource (Deployments, Services, ConfigMaps, etc.) as they were sent to the API server. For debugging before deploying, use `helm template my-release bitnami/nginx -f values.yaml` to render templates locally without contacting the cluster, or `helm install my-release bitnami/nginx --dry-run --debug` to simulate the install with server-side validation.
    </details>
 
 ---

@@ -62,6 +62,8 @@ If you did the CKA, you can breeze through:
 - Helm and Kustomize basics
 - RBAC fundamentals
 
+> **Pause and predict**: You already know ~60% of CKAD content from CKA. Before looking at the table below, list three topics you think the CKAD emphasizes MORE than the CKA. Then check your intuition against the comparison.
+
 ### What's New/Emphasized in CKAD
 
 The CKAD puts extra weight on developer-specific topics:
@@ -173,6 +175,8 @@ Time is your enemy. The same strategy applies:
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+> **Stop and think**: The three-pass strategy says to tackle "quick wins" first. Which of these tasks would you classify as a quick win vs a medium task: creating a NetworkPolicy, running a pod with a specific image, adding a sidecar container, exposing a deployment? Categorize them before reading the speed tips.
 
 ### CKAD-Specific Speed Tips
 
@@ -293,30 +297,32 @@ k run test --image=busybox --rm -it --restart=Never -- wget -qO- http://service
 
 ---
 
+> **What would happen if**: You spend your first 30 minutes on complex debugging tasks and leave simple pod creation for the end. How would that affect your score compared to using the three-pass method?
+
 ## Quiz
 
-1. **What percentage of the CKAD exam is dedicated to "Application Environment, Configuration and Security"?**
+1. **You have 2 hours for the CKAD exam and 17 tasks remaining. A colleague suggests spending equal time on each. Why is that a poor strategy, and which domain's tasks should you prioritize completing first?**
    <details>
    <summary>Answer</summary>
-   25% - the largest domain. This includes ConfigMaps, Secrets, ServiceAccounts, resource requirements, and SecurityContexts.
+   Equal time allocation is poor because tasks vary widely in complexity. You should tackle quick-win tasks first (simple pod/deployment creation, labeling, exposing services) regardless of domain. The three-pass strategy maximizes points: Pass 1 collects easy points in 1-3 minutes each, Pass 2 handles medium tasks, and Pass 3 uses remaining time for complex debugging. The "Application Environment, Configuration and Security" domain (25%) carries the most weight, so if you must prioritize by domain, focus there -- but speed on easy tasks across all domains matters more.
    </details>
 
-2. **Name the three multi-container pod patterns you need to know for CKAD.**
+2. **A developer on your team says "I passed CKA, so CKAD should be easy -- it's the same stuff." What 2-3 topics would you warn them to study that CKA barely covers?**
    <details>
    <summary>Answer</summary>
-   Sidecar, Init container, and Ambassador. Sidecar runs alongside the main container, Init runs before main containers start, Ambassador handles proxying.
+   Multi-container pod patterns (sidecar, init, ambassador) are barely mentioned in CKA but are a CKAD signature topic appearing in 2-4 questions. API deprecation awareness is CKAD-specific and not tested in CKA at all. Container image building and Dockerfile understanding is another area CKA skips but CKAD tests. Additionally, deployment strategies like blue/green and canary go well beyond the basic rolling updates covered in CKA.
    </details>
 
-3. **What's the key difference in perspective between CKA and CKAD?**
+3. **During the CKAD exam, you encounter a task requiring a pod with an init container that waits for a database, a main container running your app, and a sidecar shipping logs. You estimate it will take 8-10 minutes. You have 45 minutes left and 5 tasks remaining. What do you do?**
    <details>
    <summary>Answer</summary>
-   CKA focuses on cluster administration (ops perspective), while CKAD focuses on application development (developer perspective). Both require hands-on Kubernetes skills but from different viewpoints.
+   Skip this task for now and scan the remaining 4 tasks for quicker wins. Multi-container patterns with init + sidecar + main are complex (Pass 3 material). With 45 minutes and 5 tasks, you likely have simpler tasks worth more points-per-minute. Complete those first, then return to this task with whatever time remains. If you start with this complex task and get stuck, you risk losing easy points on simpler tasks.
    </details>
 
-4. **Which CKAD topic is NOT part of the CKA exam?**
+4. **Your team is preparing for CKAD and asks which domain to study last if they're running out of time. The domains are: Design & Build (20%), Deployment (20%), Observability (15%), Environment/Config/Security (25%), Services & Networking (20%). Which domain and why?**
    <details>
    <summary>Answer</summary>
-   API deprecations awareness is CKAD-specific. Understanding how to check for and handle deprecated APIs is an exam topic.
+   Study "Application Observability and Maintenance" (15%) last since it has the lowest weight. However, don't skip it entirely -- debugging and probes appear frequently. If time is truly limited, focus most effort on "Application Environment, Configuration and Security" (25%) since it's the highest-weighted domain and covers ConfigMaps, Secrets, ServiceAccounts, resource requirements, and SecurityContexts. A strong showing in this single domain can make or break your passing score.
    </details>
 
 ---

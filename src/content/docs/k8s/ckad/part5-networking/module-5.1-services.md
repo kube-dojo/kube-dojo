@@ -127,6 +127,8 @@ k get svc my-loadbalancer
 # EXTERNAL-IP column shows the LB IP
 ```
 
+> **Pause and predict**: You have a Deployment with 3 replicas labeled `app: web`. You create a Service with selector `app: webapp`. How many endpoints will the Service have? Why?
+
 ### ExternalName
 
 Maps to external DNS name (no proxying):
@@ -243,6 +245,8 @@ k get endpoints my-service
 # Describe shows pod IPs
 k describe endpoints my-service
 ```
+
+> **Stop and think**: What is the difference between `port`, `targetPort`, and `nodePort` in a Service spec? If you only specify `port: 80` and omit `targetPort`, what value does `targetPort` default to?
 
 ### No Matching Pods?
 
@@ -378,28 +382,28 @@ k run tmp --image=busybox --rm -it --restart=Never -- wget -qO- my-service:80
 
 ## Quiz
 
-1. **What's the difference between `port` and `targetPort` in a Service?**
+1. **A developer creates a Service with `port: 80` and `targetPort: 8080`. Clients connect to the Service on port 80 but get "connection refused." The pods are Running and the application listens on port 80 (not 8080). What's wrong and how do you fix it?**
    <details>
    <summary>Answer</summary>
-   `port` is the Service's port (what clients connect to). `targetPort` is the container's port (where traffic is forwarded). Example: Service listens on 80, forwards to container's 8080.
+   The `targetPort` is where the Service forwards traffic to — it must match the port the application actually listens on inside the container. The Service is forwarding to port 8080 but the app listens on port 80, so the connection is refused at the pod level. Fix by changing `targetPort: 80` to match the application's listening port. Remember: `port` is what clients use to reach the Service, and `targetPort` is what the pod is actually listening on. They can be the same or different values.
    </details>
 
-2. **How do you find out which pods a Service is routing to?**
+2. **After deploying a new application, `kubectl get endpoints myservice` shows `<none>` even though 3 pods are Running and Ready. The Service was created with `kubectl expose deployment myapp --port=80`. What is the most likely cause?**
    <details>
    <summary>Answer</summary>
-   `kubectl get endpoints <service-name>` shows the pod IPs and ports that the Service routes to.
+   The Service selector doesn't match the pod labels. `kubectl expose` creates a Service with a selector matching the deployment's pod template labels. If the deployment name is `myapp`, the pods have `app: myapp` labels, and the Service selector is `app: myapp`. But if the pods were created separately or the labels were changed, the selector won't match. Debug by comparing: `kubectl describe svc myservice | grep Selector` and `kubectl get pods --show-labels`. Fix by patching the Service selector to match the actual pod labels, or correcting the pod labels to match the Service selector.
    </details>
 
-3. **What happens if a Service's selector matches no pods?**
+3. **A microservice in the `orders` namespace needs to call a service named `payments` in the `billing` namespace. The developer tries `curl http://payments:80` from inside a pod and gets a DNS resolution failure. What URL should they use?**
    <details>
    <summary>Answer</summary>
-   The Service exists but has no endpoints. Connections will fail. `kubectl get endpoints` will show `<none>`.
+   Short DNS names (like `payments`) only resolve within the same namespace. To reach a Service in a different namespace, use `payments.billing` or the full FQDN `payments.billing.svc.cluster.local`. The DNS hierarchy in Kubernetes is `<service>.<namespace>.svc.cluster.local`. When you omit the namespace, the pod's own namespace is used for resolution. This is a very common debugging scenario — cross-namespace communication always requires the namespace in the DNS name.
    </details>
 
-4. **How can pods in namespace A access a Service in namespace B?**
+4. **A team exposes their application with a NodePort Service. External users can reach the app on `node1:30080` but not on `node2:30080`, even though both nodes are healthy. What should you check?**
    <details>
    <summary>Answer</summary>
-   Use the DNS name with namespace: `service-name.namespace-b` or full FQDN `service-name.namespace-b.svc.cluster.local`.
+   NodePort Services listen on ALL nodes in the cluster, regardless of where the pods run. If `node2:30080` doesn't respond, the issue is likely a firewall or cloud security group rule blocking port 30080 on node2. Check: (1) `kubectl get svc` to confirm the NodePort is correctly assigned, (2) cloud provider security groups or firewall rules for all nodes, (3) `kubectl get endpoints` to verify the Service has healthy endpoints. kube-proxy configures iptables/IPVS on every node to forward NodePort traffic to the correct pod, even if the pod runs on a different node. The network path from client to node to pod is the key thing to trace.
    </details>
 
 ---

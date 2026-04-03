@@ -178,6 +178,8 @@ ingress:
         role: frontend
 ```
 
+> **Pause and predict**: Look at the two YAML examples below — "Combined (AND Logic)" and "Separate Items (OR Logic)." The only difference is indentation. Can you explain what each one allows before reading the descriptions?
+
 ### Separate Items (OR Logic)
 
 Traffic allowed from either selector:
@@ -311,6 +313,8 @@ spec:
   ingress:
   - {}                     # Empty rule = allow all
 ```
+
+> **Stop and think**: You apply a default-deny egress policy to a namespace. Suddenly, all your pods can't resolve DNS names and Service connections fail. What did you forget to allow, and why is DNS so critical for Kubernetes networking?
 
 ### Allow DNS Egress
 
@@ -460,36 +464,28 @@ k get pods -n kube-system | grep -E 'calico|cilium|weave'
 
 ## Quiz
 
-1. **What happens to pods that have no NetworkPolicy selecting them?**
+1. **After applying a default-deny ingress NetworkPolicy to the `production` namespace, the backend pods can no longer receive traffic from the frontend pods in the same namespace. Both frontend and backend pods are correctly labeled. What do you need to create to restore communication while keeping the default deny in place?**
    <details>
    <summary>Answer</summary>
-   All traffic is allowed to and from those pods (default open).
+   Create an additional NetworkPolicy that explicitly allows ingress to the backend pods from the frontend pods. The default-deny policy selects all pods and provides no ingress rules, blocking everything. Since NetworkPolicies are additive, you add a new policy that selects the backend pods (`podSelector: matchLabels: tier: backend`) and allows ingress from frontend pods (`from: - podSelector: matchLabels: tier: frontend`). Both policies apply simultaneously — the deny policy blocks all traffic by default, and the allow policy opens the specific path needed. You don't need to modify or delete the deny policy.
    </details>
 
-2. **How do you block all incoming traffic to pods in a namespace?**
+2. **A developer creates a NetworkPolicy with this `from` rule and is confused about what it allows. The policy has one `from` item containing both `namespaceSelector: matchLabels: env: staging` and `podSelector: matchLabels: role: api`. Does this allow traffic from ALL pods in staging namespaces OR only `role: api` pods in staging namespaces?**
    <details>
    <summary>Answer</summary>
-   Create a default deny ingress policy:
-   ```yaml
-   spec:
-     podSelector: {}
-     policyTypes:
-     - Ingress
-   ```
-   With no ingress rules, all ingress is denied.
+   When `namespaceSelector` and `podSelector` are in the SAME `from` list item (same YAML block, same indentation level under a single dash), they combine with AND logic. This allows traffic only from pods labeled `role: api` that are in namespaces labeled `env: staging`. If they were separate items (each under its own dash), it would be OR logic — allowing traffic from any pod in staging namespaces OR any `role: api` pod in the local namespace. This AND vs OR distinction is one of the most common sources of NetworkPolicy bugs, and it hinges entirely on YAML indentation.
    </details>
 
-3. **What's the difference between AND and OR logic in NetworkPolicy selectors?**
+3. **You apply a default-deny egress NetworkPolicy to a namespace. Immediately, all pods lose the ability to connect to any Service by name, even Services within the same namespace. Connections by IP address still work. What is happening and how do you fix it?**
    <details>
    <summary>Answer</summary>
-   - **AND**: Selectors in the same `from/to` item (namespaceSelector + podSelector together)
-   - **OR**: Separate items in the `from/to` list
+   DNS resolution is blocked. When pods connect to a Service by name (e.g., `http://my-service`), they first make a DNS query to kube-dns (CoreDNS) on UDP port 53. The default-deny egress policy blocks all outgoing traffic, including DNS queries. Connections by IP bypass DNS so they still work. Fix by adding an egress NetworkPolicy that allows UDP port 53 to the kube-dns pods: allow egress to `namespaceSelector: {}` with `podSelector: matchLabels: k8s-app: kube-dns` on port 53 UDP. This is so common that you should always pair a default-deny egress policy with a DNS allow policy.
    </details>
 
-4. **Why might pods not be able to resolve DNS names after applying a default deny egress policy?**
+4. **Your cluster uses Flannel as the CNI plugin. You create a NetworkPolicy to isolate your database pods, but when you test, any pod can still connect to the database. The NetworkPolicy YAML is correct and `kubectl get netpol` shows it exists. What is wrong?**
    <details>
    <summary>Answer</summary>
-   DNS queries (port 53 UDP) are blocked. You need to explicitly allow egress to kube-dns pods.
+   Flannel does not support NetworkPolicies. NetworkPolicies are a Kubernetes API concept, but enforcement is handled by the CNI plugin. If the CNI doesn't support them, the policies are stored in the API server (so `kubectl get netpol` shows them) but completely ignored at the network level. You need a CNI that supports NetworkPolicies — Calico, Cilium, or Weave are the most common choices. Some teams run Calico alongside Flannel specifically for NetworkPolicy support. This is a critical detail because everything looks correct from the Kubernetes API perspective, but no enforcement happens at the network layer.
    </details>
 
 ---

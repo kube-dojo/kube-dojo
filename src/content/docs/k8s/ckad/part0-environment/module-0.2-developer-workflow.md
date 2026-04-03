@@ -124,6 +124,8 @@ k create deploy web --image=nginx $kdr > deploy.yaml
 
 ---
 
+> **Pause and predict**: What happens if you run `k run nginx --image=nginx` without `--restart=Never`? What resource type does Kubernetes actually create? Think about it before reading on.
+
 ## Multi-Container Pod YAML Generation
 
 This is a CKAD signature skill. You can't create multi-container pods imperatively—you need YAML. Here's the fastest approach:
@@ -211,6 +213,8 @@ k exec pod-name -- cat /etc/config/app.conf
 
 ---
 
+> **Stop and think**: You need to verify that a Service called `backend` is reachable from within the cluster. What one-liner kubectl command would you use to test this without leaving any resources behind?
+
 ## JSON Path for Quick Data Extraction
 
 Some CKAD questions ask for specific values. JSONPath helps:
@@ -264,6 +268,8 @@ k get pods -n prod
 # All namespaces
 k get pods -A
 ```
+
+> **What would happen if**: You forget to switch namespaces between two consecutive exam tasks. The first task uses `dev` namespace and the second uses `prod`. What goes wrong, and how long might it take you to realize the mistake?
 
 ### Pro Tip: Check Namespace First
 
@@ -359,28 +365,28 @@ When adding a sidecar container, you'll copy an existing container spec:
 
 ## Quiz
 
-1. **What command generates a Job YAML without creating the resource?**
+1. **Your team lead asks you to quickly generate the YAML for a new batch Job without actually running it in the cluster. You need to hand off the YAML file for code review. What's the fastest approach?**
    <details>
    <summary>Answer</summary>
-   `kubectl create job myjob --image=busybox -- echo done --dry-run=client -o yaml`
+   Use `kubectl create job myjob --image=busybox -- echo done --dry-run=client -o yaml > job.yaml`. The `--dry-run=client` flag generates valid YAML without contacting the API server, and `-o yaml` outputs it in YAML format. This is the standard generate-then-edit workflow for CKAD -- you generate a skeleton imperatively, then customize the YAML as needed. This saves significant time compared to writing YAML from scratch.
    </details>
 
-2. **How do you create a test pod that auto-deletes after running wget?**
+2. **After deploying a new Service called `api-gateway`, you need to verify it's reachable from inside the cluster -- but you don't want to leave any debug resources behind. How do you test this cleanly?**
    <details>
    <summary>Answer</summary>
-   `kubectl run test --image=busybox --rm -it --restart=Never -- wget -qO- http://service`
+   Run `kubectl run test --image=busybox --rm -it --restart=Never -- wget -qO- http://api-gateway`. The `--rm` flag automatically deletes the pod when it exits, `--restart=Never` ensures a bare Pod (not a Deployment) is created, and `-it` gives you interactive output. This one-liner is essential for CKAD -- you'll use it repeatedly to verify Services, DNS resolution, and connectivity without polluting the cluster.
    </details>
 
-3. **What's the JSONPath to get the first container's image from a pod?**
+3. **A CKAD exam task says: "Write the image used by the first container in pod `web-app` to the file `/opt/answer.txt`." You need to extract just the image string, not the full pod spec. How do you do this efficiently?**
    <details>
    <summary>Answer</summary>
-   `kubectl get pod podname -o jsonpath='{.spec.containers[0].image}'`
+   Use `kubectl get pod web-app -o jsonpath='{.spec.containers[0].image}' > /opt/answer.txt`. JSONPath lets you drill into the pod spec and extract exactly the field you need. The `{.spec.containers[0].image}` path navigates to the first container's image field. This is faster than `describe` + manual copy and less error-prone than `grep` on YAML output.
    </details>
 
-4. **How do you set the default namespace for your current context?**
+4. **You just completed a task in the `payments` namespace and moved to the next task, which requires working in `inventory`. You create a Deployment, but `kubectl get pods` shows nothing. What likely went wrong, and what's the fastest fix?**
    <details>
    <summary>Answer</summary>
-   `kubectl config set-context --current --namespace=namespace-name`
+   You're still in the `payments` namespace. Your Deployment was created in `payments` instead of `inventory`, or you're looking in the wrong namespace. Fix with `kubectl config set-context --current --namespace=inventory`, then verify with `kubectl get pods`. To prevent this, always check or set your namespace at the start of every exam task. Many candidates lose points to namespace errors -- it's one of the most common exam mistakes.
    </details>
 
 ---

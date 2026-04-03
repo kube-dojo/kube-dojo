@@ -149,6 +149,8 @@ kubectl convert -f old-deployment.yaml --output-version apps/v1
 
 Note: `kubectl convert` may not be available in all environments.
 
+> **Stop and think**: You find a working Kubernetes manifest in your company's git repo that was last modified in 2020. Would you trust its `apiVersion` field on a 2026 cluster? What's the fastest way to verify it?
+
 ### Manual Check
 
 ```bash
@@ -211,6 +213,8 @@ spec:
             port:
               number: 80
 ```
+
+> **Pause and predict**: Looking at the old and new Ingress specs above, can you spot all three structural changes? Try listing them before reading the summary below.
 
 ### Key Changes Often Required
 

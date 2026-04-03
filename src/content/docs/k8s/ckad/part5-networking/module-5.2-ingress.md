@@ -104,6 +104,8 @@ path: /api
 # Matches: /api, /api/, /api/users, /api/users/123
 ```
 
+> **Pause and predict**: You create an Ingress resource with routing rules, but visiting the URL returns nothing. `kubectl get ingress` shows no ADDRESS. What is most likely missing from the cluster?
+
 ### Exact
 
 Matches exact path only:
@@ -185,6 +187,8 @@ spec:
             port:
               number: 80
 ```
+
+> **Stop and think**: An Ingress has two path rules: `/api` with `pathType: Prefix` and `/api/v2` with `pathType: Prefix`. A request comes in for `/api/v2/users`. Which backend receives the traffic? Why?
 
 ### Default Backend
 
@@ -412,52 +416,28 @@ k logs -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx
 
 ## Quiz
 
-1. **What's the difference between an Ingress resource and an Ingress controller?**
+1. **A developer creates an Ingress resource with correct rules and applies it successfully. But when they visit the URL, nothing happens — no response at all. `kubectl get ingress` shows the resource exists but the ADDRESS column is empty. Other teams' Ingress resources work fine. What should the developer check?**
    <details>
    <summary>Answer</summary>
-   An Ingress resource is a Kubernetes object defining routing rules. An Ingress controller is a running pod that reads Ingress resources and configures actual routing (like NGINX configuration).
+   The Ingress resource exists as data in the API server, but an Ingress controller pod must be running to read those rules and configure actual routing. Since other Ingresses work, the controller is installed — the issue is likely that the developer's Ingress doesn't specify the correct `ingressClassName` (or uses a different class than the installed controller). Check `kubectl get ingressclass` to see available classes, then add `spec.ingressClassName: <correct-class>` to the Ingress. Also verify the backend Service exists and has endpoints with `kubectl get endpoints <service-name>`.
    </details>
 
-2. **How do you route traffic to different services based on URL path?**
+2. **Users report 503 errors when accessing `app.example.com/api`. The Ingress exists and the controller is working. `kubectl describe ingress` shows the backend is `api-service:80`. What are the most likely causes and how do you debug them?**
    <details>
    <summary>Answer</summary>
-   Use multiple paths in the Ingress rules:
-   ```yaml
-   paths:
-   - path: /api
-     pathType: Prefix
-     backend:
-       service:
-         name: api-service
-         port:
-           number: 80
-   - path: /web
-     pathType: Prefix
-     backend:
-       service:
-         name: web-service
-         port:
-           number: 80
-   ```
+   A 503 from the Ingress controller typically means the backend Service has no healthy endpoints. Debug systematically: (1) Check `kubectl get endpoints api-service` — if empty, the Service selector doesn't match any pods or no pods are Ready. (2) Check `kubectl get pods -l <selector>` to see if pods exist and are Running/Ready. (3) Verify the Service port (80) matches what the Ingress specifies. (4) Verify the Service's `targetPort` matches what the application actually listens on. (5) Check the Ingress controller logs: `kubectl logs -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx` for specific error messages. The chain is: Ingress -> Service -> Endpoints -> Pods, and any break in that chain produces 503s.
    </details>
 
-3. **What's required for HTTPS termination in Ingress?**
+3. **A team needs HTTPS for their application. They create a TLS Secret and reference it in their Ingress, but browsers show a certificate warning. The Ingress spec has `tls: - hosts: [app.example.com]` and `secretName: app-tls`. What are two common reasons for the certificate warning?**
    <details>
    <summary>Answer</summary>
-   A TLS Secret containing the certificate and key, referenced in the Ingress spec:
-   ```yaml
-   spec:
-     tls:
-     - hosts:
-       - example.com
-       secretName: tls-secret
-   ```
+   Two common causes: (1) The TLS Secret is in a different namespace than the Ingress resource. Kubernetes TLS Secrets must be in the same namespace as the Ingress that references them — cross-namespace Secret references are not allowed. Check with `kubectl get secret app-tls` in the Ingress's namespace. (2) The certificate's Common Name (CN) or Subject Alternative Names (SANs) don't match the hostname in the Ingress rule. If the cert was issued for `www.example.com` but the Ingress uses `app.example.com`, browsers will warn about the mismatch. Verify with `openssl x509 -in cert.pem -text | grep -A1 "Subject Alternative Name"`.
    </details>
 
-4. **What happens if no Ingress controller is installed?**
+4. **You need to route `shop.example.com` to one Service and `blog.example.com` to another, both through a single Ingress. The blog should also be accessible at `shop.example.com/blog`. How would you structure the Ingress rules?**
    <details>
    <summary>Answer</summary>
-   Ingress resources are created but have no effect. No routing happens because there's nothing watching and implementing the rules.
+   Use a combination of host-based and path-based routing. Define two host rules: one for `blog.example.com` routing `/` to the blog-service, and one for `shop.example.com` with two path entries — `/blog` routing to blog-service and `/` (catch-all) routing to shop-service. The more specific path `/blog` takes priority over the prefix `/`. Order the paths from most specific to least specific. Both host rules can be in a single Ingress resource. The key detail is `pathType: Prefix` — the `/blog` prefix rule will match `/blog`, `/blog/`, and `/blog/posts/123`, forwarding all to the blog service.
    </details>
 
 ---

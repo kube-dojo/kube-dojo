@@ -173,6 +173,8 @@ k describe pod POD
 #    → Create matching PV
 ```
 
+> **Pause and predict**: A pod is stuck in `Pending` state. You check `kubectl describe pod` and see the event "0/3 nodes are available: 3 Insufficient cpu." Is this a pod problem or a cluster problem? What are your options?
+
 ### ImagePullBackOff / ErrImagePull
 
 **Can't pull container image.**
@@ -209,6 +211,8 @@ k describe pod POD | grep "Last State"
 # 3. Wrong command/args
 # 4. Liveness probe killing healthy app
 ```
+
+> **Stop and think**: A pod shows `CrashLoopBackOff` with exit code 137. Before looking at the answer section, what does exit code 137 tell you about the cause? What would you check first?
 
 ### Running but Not Ready
 
@@ -256,6 +260,8 @@ k exec POD -- curl -s http://service:port
 k exec POD -- ls -la /app
 k exec POD -- cat /etc/config/file
 ```
+
+> **Pause and predict**: You need to test network connectivity from inside a distroless container that has no shell, no curl, no wget. How would you approach this?
 
 ### When Shell Isn't Available
 
@@ -423,28 +429,28 @@ k run test --image=busybox --rm -it -- wget -qO- http://myservice
 
 ## Quiz
 
-1. **What command shows logs from a crashed container's previous instance?**
+1. **A pod named `api-server` is in CrashLoopBackOff. You run `kubectl logs api-server` but see only a fresh startup message — no errors. How do you find out what caused the crash, and what is your systematic next step?**
    <details>
    <summary>Answer</summary>
-   `kubectl logs POD --previous` or `kubectl logs POD -p`
+   The current logs are from the freshly restarted instance, which hasn't crashed yet. Run `kubectl logs api-server --previous` to see the logs from the instance that actually crashed. If that doesn't reveal the issue, run `kubectl describe pod api-server` and check the "Last State" section for the exit code and reason. Exit code 1 means the application threw an error (check logs more carefully), exit code 137 means OOMKilled (increase memory limits), and exit code 0 means the process exited successfully but shouldn't have (likely a wrong command).
    </details>
 
-2. **How do you get events sorted by timestamp?**
+2. **A developer deployed a new version of their app. The pods show `ImagePullBackOff`. They swear the image exists because they pushed it 10 minutes ago. What are the three most common causes, and how do you investigate each one?**
    <details>
    <summary>Answer</summary>
-   `kubectl get events --sort-by='.lastTimestamp'`
+   Run `kubectl describe pod` and check the Events section for the exact error message. The three most common causes: (1) Typo in image name or tag — verify by comparing the pod spec image with what's in the registry. (2) Private registry without imagePullSecrets — the image exists but the node can't authenticate. Check if the pod spec has `imagePullSecrets` and if the secret contains valid credentials. (3) The image was pushed to a different registry or repository than what's in the manifest. The describe output usually includes the registry's error message, which tells you exactly which of these is the problem.
    </details>
 
-3. **What does exit code 137 typically indicate?**
+3. **Users report they can't reach your application through a Service, but all pods show Running and Ready (1/1). You run `kubectl get endpoints myservice` and see `<none>`. What is the most likely root cause and how do you fix it?**
    <details>
    <summary>Answer</summary>
-   OOMKilled - the container exceeded its memory limit and was killed by the kernel.
+   Empty endpoints with Running pods means the Service's label selector doesn't match the pods' labels. Debug by comparing: run `kubectl describe svc myservice | grep Selector` to see what the Service expects, then `kubectl get pods --show-labels` to see actual pod labels. The fix is to either patch the Service selector to match the pod labels (`kubectl patch svc myservice -p '{"spec":{"selector":{"app":"correct-label"}}}'`) or update the pod/deployment labels to match the Service selector. This is one of the most common debugging scenarios in the CKAD exam.
    </details>
 
-4. **How do you add an ephemeral debug container to a running pod?**
+4. **You need to debug a network issue from inside a running pod, but the container image is distroless (no shell, no curl, no network tools). The pod is serving production traffic and you cannot restart it. What do you do?**
    <details>
    <summary>Answer</summary>
-   `kubectl debug POD -it --image=busybox --target=container-name`
+   Use an ephemeral debug container: `kubectl debug pod-name -it --image=nicolaka/netshoot --target=container-name`. This attaches a new container to the running pod that shares the pod's network namespace, so you can use tools like `curl`, `dig`, `nslookup`, and `tcpdump` to diagnose the issue. The `--target` flag shares the process namespace with the specified container. The original container continues running unaffected. Alternatively, `kubectl debug pod-name -it --copy-to=debug-pod --image=busybox` creates a copy of the pod for investigation without touching the original.
    </details>
 
 ---

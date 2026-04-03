@@ -77,6 +77,8 @@ Most applications need more than one container. A web server needs a log shipper
 
 ---
 
+> **Pause and predict**: You have a pod that needs to (a) wait for a database to be ready, (b) run a web server, and (c) continuously ship logs to Elasticsearch. Which of the three patterns -- init, sidecar, or ambassador -- would you use for each task? Decide before reading the details below.
+
 ## Init Containers
 
 Init containers run **before** application containers start. They run sequentially, each must complete successfully before the next starts.
@@ -180,6 +182,8 @@ spec:
     emptyDir: {}
 ```
 
+> **Stop and think**: Two containers in the same pod need to communicate. One approach is shared volumes; another is localhost networking. When would you choose one over the other? What kind of data flows better through files vs network calls?
+
 ### Sharing Data Between Containers
 
 Containers in a pod can share:
@@ -262,6 +266,8 @@ When do you use each pattern?
 | Collect Prometheus metrics | Sidecar | Continuous operation |
 
 ---
+
+> **What would happen if**: An init container has a bug and runs `sleep 3600` instead of completing. What state would the pod be stuck in, and how would you diagnose it?
 
 ## Creating Multi-Container Pods Quickly
 
@@ -373,28 +379,28 @@ k get pod multi -o jsonpath='{range .status.containerStatuses[*]}{.name}{"\t"}{.
 
 ## Quiz
 
-1. **In what order do init containers run?**
+1. **Your pod has two init containers: `init-db` (waits for database) and `init-config` (downloads configuration). The pod is stuck showing `Init:1/2`. Which init container succeeded and which is still running? How do you find out what's wrong?**
    <details>
    <summary>Answer</summary>
-   Sequentially, one after another. Each must complete successfully (exit 0) before the next starts. App containers only start after all init containers complete.
+   `Init:1/2` means the first init container (`init-db`) completed successfully, but the second (`init-config`) is still running or failing. Init containers run sequentially -- `init-config` can't start until `init-db` exits 0. Diagnose with `kubectl logs <pod> -c init-config` to see its output, and `kubectl describe pod <pod>` to check Events for errors like image pull failures or command errors. If `init-config` is stuck in a retry loop (e.g., downloading from an unreachable URL), fix the URL or the network issue.
    </details>
 
-2. **How do containers in the same pod share files?**
+2. **A microservice team deploys their API with a sidecar that ships logs to Elasticsearch. After deployment, `kubectl get pod api-pod` shows `1/2 Ready`. The main container is fine but the sidecar keeps crashing. What are the most likely causes, and does this affect the main application?**
    <details>
    <summary>Answer</summary>
-   Through shared volumes. Define a volume (like `emptyDir`) and mount it in both containers. They can then read/write to the same path.
+   The sidecar is likely crashing because: (1) its command exits immediately -- sidecar containers need a long-running process like `tail -F` or a proper log shipper daemon; (2) the Elasticsearch endpoint is unreachable and the shipper exits on connection failure; or (3) there's no shared volume, so the sidecar can't read the main container's logs. Check with `kubectl logs api-pod -c log-shipper`. While the main app continues running, the pod's Ready status stays `1/2`, which affects Service endpoints -- if readiness checks are configured, traffic may stop routing to this pod.
    </details>
 
-3. **Which pattern would you use to wait for a database to be ready before your app starts?**
+3. **You're building an application that needs to: (1) clone a git repository before starting, (2) serve the repo content via nginx, and (3) have a background process that pulls git updates every 60 seconds. Which multi-container pattern(s) do you use, and how do the containers share the git data?**
    <details>
    <summary>Answer</summary>
-   Init container. It runs before the main container and can loop until the database is reachable, then exit successfully.
+   Use an init container for the initial git clone (one-time setup task), nginx as the main container to serve content, and a sidecar for the periodic git pull (continuous background operation). All three share an `emptyDir` volume mounted at the same path. The init container clones into `/data`, nginx serves from `/data`, and the sidecar runs `git pull` in `/data` every 60 seconds. This is a classic combination of init + sidecar patterns working together through shared volumes.
    </details>
 
-4. **How do you view logs from a specific container in a multi-container pod?**
+4. **During the CKAD exam, you need to add a sidecar container to an existing pod. You run `kubectl logs mypod` and get an error asking you to specify a container name. Why does this happen, and what's the fastest way to find the container names?**
    <details>
    <summary>Answer</summary>
-   `kubectl logs pod-name -c container-name`. The `-c` flag specifies which container's logs to retrieve.
+   When a pod has multiple containers, `kubectl logs` doesn't know which container's logs you want and requires the `-c` flag. The fastest way to find container names is `kubectl get pod mypod -o jsonpath='{.spec.containers[*].name}'`, which prints all container names on one line. Alternatively, `kubectl describe pod mypod` shows containers under the "Containers:" section. Once you have the name, use `kubectl logs mypod -c container-name`. In the exam, always use `-c` for multi-container pods to avoid wasting time on this error.
    </details>
 
 ---

@@ -88,6 +88,8 @@ data:
   password: bXlzZWNyZXQ=  # base64 of 'mysecret'
 ```
 
+> **Pause and predict**: If you run `echo 'mypassword' | base64` versus `echo -n 'mypassword' | base64`, you get different results. Why? Which one would cause your application to fail authentication?
+
 ### From YAML (Plain Text with stringData)
 
 ```yaml
@@ -246,6 +248,8 @@ k get secret db-secret -o jsonpath='{.data.password}' | base64 -d
 - **RBAC protection** - control who can read secrets
 - **Limited exposure** - not shown in `kubectl get` output
 
+> **Stop and think**: A colleague says "Kubernetes Secrets are encrypted, so our passwords are safe." Are they correct? What exactly does Kubernetes do with Secret data?
+
 ### What Secrets Don't Provide
 
 - **Encryption by default** - base64 is encoding, not encryption
@@ -370,28 +374,28 @@ k delete secret NAME
 
 ## Quiz
 
-1. **How do you create a secret with username and password?**
+1. **A developer creates a Secret with `echo 'dbpass123' | base64` and puts the result in a Secret YAML under `data.password`. Their application connects to the database but authentication fails every time, even though the password is correct. What went wrong?**
    <details>
    <summary>Answer</summary>
-   `kubectl create secret generic my-secret --from-literal=username=admin --from-literal=password=secret`
+   The developer forgot the `-n` flag on `echo`. Without it, `echo` appends a newline character (`\n`) to the string, so the base64 encoding includes the newline. When the Secret is decoded and passed to the application, the password becomes `dbpass123\n` instead of `dbpass123`. The database rejects it because the trailing newline is part of the string. Fix: always use `echo -n 'dbpass123' | base64`, or better yet, use `stringData` in the YAML which handles encoding automatically, or create it imperatively with `kubectl create secret generic --from-literal=password=dbpass123`.
    </details>
 
-2. **How do you decode a secret value?**
+2. **An application pod mounts a Secret as environment variables via `envFrom`. During a security incident, the team discovers the database password appears in application crash dump logs. How did this happen, and what is a more secure approach?**
    <details>
    <summary>Answer</summary>
-   `kubectl get secret my-secret -o jsonpath='{.data.password}' | base64 -d`
+   Environment variables are part of the process environment and are captured in crash dumps, core files, and often logged by application frameworks during startup or errors. They can also be viewed with `kubectl exec pod -- env` by anyone with exec access. A more secure approach is to mount the Secret as a volume file (e.g., at `/etc/secrets/db-password`) with `readOnly: true` and restrictive permissions (`defaultMode: 0400`). The application reads the file at startup instead of relying on environment variables. File-mounted secrets don't appear in crash dumps or process environment listings, reducing the attack surface.
    </details>
 
-3. **What's the difference between `data` and `stringData` in a Secret YAML?**
+3. **You run `kubectl get secret app-creds -o yaml` and see values under `data:` that look like gibberish. A junior developer asks if this means the secrets are encrypted. What do you tell them, and what would you recommend for actual security?**
    <details>
    <summary>Answer</summary>
-   `data` requires base64-encoded values. `stringData` accepts plain text and Kubernetes encodes it automatically. `stringData` is write-only and converts to `data` when stored.
+   The values are base64-encoded, not encrypted. Anyone can decode them with `echo 'value' | base64 -d`. Base64 is just an encoding scheme to safely represent binary data in YAML — it provides zero security. For actual protection: (1) enable etcd encryption at rest via EncryptionConfiguration so secrets are encrypted in storage, (2) use RBAC to restrict who can read secrets (`get`, `list`, `watch` on secrets), (3) consider external secret management (HashiCorp Vault, AWS Secrets Manager) for production-critical credentials, and (4) never commit Secret YAMLs to git repositories.
    </details>
 
-4. **Is base64 encoding the same as encryption?**
+4. **You need to provide your pod with Docker registry credentials to pull a private image. You create a generic Secret with the registry username and password. The pod still fails with `ImagePullBackOff`. What type of Secret should you have created instead?**
    <details>
    <summary>Answer</summary>
-   No. Base64 is reversible encoding, not encryption. Anyone can decode it. For actual encryption, you need etcd encryption at rest or external secret management.
+   Image pull credentials require a `kubernetes.io/dockerconfigjson` type Secret, not a generic `Opaque` Secret. Create it with: `kubectl create secret docker-registry my-registry --docker-server=registry.example.com --docker-username=user --docker-password=pass --docker-email=user@example.com`. Then reference it in the pod spec under `imagePullSecrets: - name: my-registry`. A generic Secret doesn't have the correct format that the kubelet expects when authenticating with a container registry. The docker-registry type encodes the credentials in the specific `.dockerconfigjson` format that container runtimes understand.
    </details>
 
 ---

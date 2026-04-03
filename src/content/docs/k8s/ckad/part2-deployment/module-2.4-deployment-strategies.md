@@ -66,6 +66,8 @@ You'll face questions like:
 
 ---
 
+> **Pause and predict**: Before reading the details, consider this scenario: your application has 4 replicas and you need to update to a new version. Rank the four strategies (rolling update, recreate, blue/green, canary) by resource cost during the transition. Which one needs the most extra pods?
+
 ## Rolling Update (Default)
 
 Kubernetes gradually replaces old pods with new ones.
@@ -336,6 +338,8 @@ spec:
         image: myapp:2.0
 ```
 
+> **Stop and think**: In the canary setup below, the Service selector uses `app: myapp` which matches BOTH the stable and canary pods. How does Kubernetes distribute traffic between them? Is it exactly 90/10, or approximately? What controls the ratio?
+
 **Service (Routes to Both)**
 
 ```yaml
@@ -426,6 +430,8 @@ rollingUpdate:
 ```
 
 ---
+
+> **What would happen if**: You deploy a new version using a rolling update, but you forgot to add a readiness probe. The new version takes 30 seconds to start accepting requests, but Kubernetes considers the pod "ready" immediately. What happens to user requests during those 30 seconds?
 
 ## Readiness Gates and Probes
 
@@ -543,29 +549,28 @@ k patch svc myapp -p '{"spec":{"selector":{"version":"green"}}}'
 
 ## Quiz
 
-1. **What deployment strategy kills all old pods before creating new ones?**
+1. **Your company's payment processing application can't handle two different versions running simultaneously because of database schema differences. You need to update it with minimal downtime. Which strategy do you choose, and what precaution should you take before starting?**
    <details>
    <summary>Answer</summary>
-   `Recreate`. All existing pods are terminated before new pods are created, causing downtime.
+   Use `strategy: type: Recreate`. This terminates all old pods before creating new ones, ensuring only one version runs at a time. Before starting, warn stakeholders about the brief downtime window and schedule the update during low-traffic hours. Apply the database schema migration first (if needed), then update the Deployment. While `Recreate` causes downtime, it's the safest choice when two versions can't coexist. The alternative -- running a blue/green with database migrations -- is complex and risky for schema-dependent applications.
    </details>
 
-2. **How do you switch traffic instantly in blue/green?**
+2. **You've deployed a blue/green setup: `app-blue` (v1) with 3 replicas is receiving all traffic via a Service. You deploy `app-green` (v2) with 3 replicas and switch the Service selector. Users immediately report errors. What's the fastest way to recover, and what should you have done before switching?**
    <details>
    <summary>Answer</summary>
-   Patch the Service selector to point to the new deployment's labels:
-   `kubectl patch svc myapp -p '{"spec":{"selector":{"version":"green"}}}'`
+   Instant recovery: `kubectl patch svc myapp -p '{"spec":{"selector":{"version":"blue"}}}'` -- this switches traffic back to blue in seconds, which is the main advantage of blue/green. Before switching, you should have: (1) verified green pods are all Running and Ready; (2) tested green directly via port-forward or a temporary test Service; (3) run smoke tests against the green deployment. Blue/green's strength is instant rollback, but its weakness is that you don't catch issues until 100% of traffic hits the new version -- unlike canary, which exposes issues at a small percentage.
    </details>
 
-3. **With 10 replicas and maxSurge=2, maxUnavailable=1, how many pods can exist during update?**
+3. **Your SRE team wants to deploy a new recommendation engine version that might have performance issues under load. They want to expose it to only ~10% of real traffic first, monitor for 30 minutes, then gradually increase. Describe how you'd set this up using only Kubernetes-native resources (no Istio or service mesh).**
    <details>
    <summary>Answer</summary>
-   Maximum 12 pods (10 + maxSurge of 2). Minimum 9 pods available (10 - maxUnavailable of 1).
+   Create two Deployments with a shared label: `app-stable` with 9 replicas (image v1) and `app-canary` with 1 replica (image v2). Both must have a common label like `app: recommender` in their pod templates. Create a Service with `selector: {app: recommender}` to route to both. Kubernetes distributes traffic roughly proportional to pod count -- ~90% stable, ~10% canary. After 30 minutes, if metrics look good, scale canary to 3 and stable to 7 (~30% canary). Continue until canary reaches 10 replicas and stable reaches 0. The limitation: traffic split is approximate and controlled by pod ratio, not precise percentage routing.
    </details>
 
-4. **How do you achieve 10% canary traffic with pod counts?**
+4. **A Deployment has `replicas: 6`, `maxSurge: 50%`, and `maxUnavailable: 0`. You trigger a rolling update, but after 3 new pods are created, the rollout stalls. All 3 new pods are in `Pending` state due to insufficient cluster resources. Meanwhile, the 6 old pods are still running. What's the total pod count right now, and why can't Kubernetes make progress?**
    <details>
    <summary>Answer</summary>
-   Run 9 stable pods and 1 canary pod, with a Service selecting both. Traffic distributes roughly proportional to pod count: ~90% stable, ~10% canary.
+   There are 9 pods total: 6 old (running) + 3 new (pending). `maxSurge: 50%` of 6 = 3 extra pods allowed, so the surge limit is reached. `maxUnavailable: 0` means Kubernetes can't terminate any old pods until new ones are Ready. Since the new pods are Pending (not Ready), no old pods can be removed to free resources. This creates a deadlock: the cluster can't schedule new pods, and old pods can't be removed. Fix by either adding node capacity, setting `maxUnavailable: 1` to allow removing an old pod, or reducing the surge percentage. This demonstrates why `maxUnavailable: 0` is conservative but can deadlock on resource-constrained clusters.
    </details>
 
 ---

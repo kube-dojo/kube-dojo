@@ -146,6 +146,8 @@ Result:
 └── api_url       # Contains "http://api.example.com"
 ```
 
+> **Pause and predict**: When you mount a ConfigMap as a volume to `/etc/app`, what happens to any existing files already at `/etc/app` inside the container image? What if you only want to add one file without wiping out the rest?
+
 ### Mount Specific Keys
 
 ```yaml
@@ -234,6 +236,8 @@ spec:
       storage: 1Gi
   # storageClassName: fast  # Optional: specific class
 ```
+
+> **Stop and think**: You're designing a pod that writes user uploads to a volume. If the pod crashes and gets rescheduled to a different node, what happens to the uploaded files with `emptyDir` vs `PersistentVolumeClaim`? This distinction is critical for the exam.
 
 ### Access Modes
 
@@ -384,6 +388,8 @@ spec:
 
 ---
 
+> **What would happen if**: You update a ConfigMap that's mounted as a volume in a running pod using `subPath`. Does the pod see the updated values? What about without `subPath`? Understanding this difference can save you debugging time in the exam.
+
 ## Troubleshooting Volumes
 
 ### Check Volume Status
@@ -447,37 +453,35 @@ spec:
 
 ## Quiz
 
-1. **What happens to data in an emptyDir when the pod is deleted?**
+1. **A developer's pod caches processed thumbnails in `/tmp/cache`. Every time the pod restarts, the cache is lost and thumbnails must be regenerated, causing a 5-minute warmup period. They're using an `emptyDir` volume. Is `emptyDir` the right choice here, or should they switch to a PVC?**
    <details>
    <summary>Answer</summary>
-   The data is deleted. emptyDir storage is tied to pod lifecycle—it's created when the pod starts and deleted when the pod is removed.
+   It depends on whether the cache needs to survive pod restarts. `emptyDir` is tied to the pod lifecycle -- data is lost when the pod is deleted or rescheduled. If the 5-minute warmup is unacceptable, switch to a `PersistentVolumeClaim` with `ReadWriteOnce` access mode. However, if the pod rarely restarts and the cache can be rebuilt, `emptyDir` is simpler and doesn't consume persistent storage. For a middle ground, use `emptyDir` with `medium: Memory` for faster cache performance during the pod's lifetime, accepting that restarts clear it.
    </details>
 
-2. **How do you mount only one key from a ConfigMap as a specific filename?**
+2. **Your application needs its config file at `/etc/app/config.yaml`, but mounting the ConfigMap at `/etc/app` wipes out other files already in that directory. How do you mount just the single config file without overwriting the directory contents?**
    <details>
    <summary>Answer</summary>
-   Use the `items` field with `path`:
+   Use `subPath` in the volume mount:
    ```yaml
-   volumes:
+   volumeMounts:
    - name: config
-     configMap:
-       name: my-config
-       items:
-       - key: app.conf
-         path: application.conf
+     mountPath: /etc/app/config.yaml
+     subPath: config.yaml
    ```
+   This mounts only the specific key as a single file, preserving all other files in `/etc/app`. However, be aware of the trade-off: `subPath` mounts don't receive automatic updates when the ConfigMap changes. If you need live config updates, mount the entire ConfigMap to a different directory (e.g., `/config`) and have your app read from there instead.
    </details>
 
-3. **What access mode allows multiple nodes to mount a volume read-write?**
+3. **You're deploying a web application across 3 replicas that all need to read and write to the same shared file storage for user uploads. Your PVC uses `ReadWriteOnce`. Users report that uploads sometimes disappear. What's wrong?**
    <details>
    <summary>Answer</summary>
-   `ReadWriteMany` (RWX). This is required for shared storage across pods on different nodes, like NFS or cloud file shares.
+   `ReadWriteOnce` (RWO) only allows a single node to mount the volume read-write. If your 3 replicas are on different nodes, only pods on one node can actually write. Pods on other nodes either fail to mount or mount read-only, causing lost uploads. Switch to `ReadWriteMany` (RWX) access mode, which requires a storage backend that supports it (NFS, EFS, Azure Files, etc.). Not all storage classes support RWX -- check with `kubectl get storageclass` and your cluster's documentation.
    </details>
 
-4. **How do containers in the same pod share files?**
+4. **A pod has both a `configMap` volume and a `secret` volume mounted. After updating the Secret with `kubectl edit secret`, the pod still shows the old secret values. The ConfigMap volume in the same pod DOES auto-update. What explains this inconsistency?**
    <details>
    <summary>Answer</summary>
-   Through a shared volume. Define an `emptyDir` (or other volume type) and mount it in both containers. They can then read/write the same files.
+   The Secret is likely mounted using `subPath`, while the ConfigMap is mounted as a full directory. `subPath` mounts are snapshots taken at pod start time and never auto-update -- this applies to both ConfigMaps and Secrets. Full directory mounts are eventually consistent and update within roughly 60 seconds. To fix, either remove the `subPath` mount, or restart the pod to pick up the new Secret values. In production, many teams use `kubectl rollout restart` to force pods to remount updated Secrets.
    </details>
 
 ---

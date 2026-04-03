@@ -177,6 +177,8 @@ spec:
 >     maxUnavailable: 2  # Update 2 pods at a time instead of 1
 > ```
 
+> **Pause and predict**: With `maxSurge: 1` and `maxUnavailable: 0` on a 4-replica Deployment, what's the maximum number of pods that can exist during an update? What about the minimum number of available pods? Work it out before checking the strategy types below.
+
 ### Strategy Types
 
 ```yaml
@@ -220,6 +222,8 @@ k rollout history deploy/web-app --revision=2
 # Check current revision
 k describe deploy web-app | grep -i revision
 ```
+
+> **Stop and think**: You need to change both the image AND the resource limits of a Deployment simultaneously. If you run two separate `kubectl set` commands, Kubernetes triggers two separate rollouts. How can you batch these into a single rollout?
 
 ### Pause and Resume
 
@@ -294,6 +298,8 @@ k describe deploy web-app | grep -A10 Conditions
 | `Available` | Minimum replicas are available |
 | `Progressing` | Deployment is updating |
 | `ReplicaFailure` | Couldn't create pods |
+
+> **What would happen if**: You run `kubectl set image deploy/web-app nginx=nginx:nonexistent-tag`. The rollout starts but new pods can't pull the image. Does Kubernetes automatically roll back, or does it just stall? What's the safest recovery action?
 
 ### Deployment Progress Deadline
 
@@ -396,28 +402,28 @@ k rollout restart deploy/NAME
 
 ## Quiz
 
-1. **How do you rollback a Deployment to revision 3?**
+1. **After a deployment update, your application is throwing errors. You check `kubectl rollout history deploy/api-server` and see revisions 1 through 4. Revision 2 was the last known-good version. How do you roll back specifically to revision 2, and what happens to the revision numbering afterward?**
    <details>
    <summary>Answer</summary>
-   `kubectl rollout undo deploy/NAME --to-revision=3`
+   Run `kubectl rollout undo deploy/api-server --to-revision=2`. This doesn't "go back in time" -- it creates a NEW revision (revision 5) that uses the same pod template as revision 2. The old revision 2 disappears from history (since its ReplicaSet is now the active one again). This is important to understand: rollbacks don't rewrite history, they create new revisions. Always run `kubectl rollout status deploy/api-server` afterward to confirm the rollback completed successfully.
    </details>
 
-2. **What's the difference between `RollingUpdate` and `Recreate` strategies?**
+2. **Your team runs a legacy application that writes to a local SQLite database file. Two versions of the app can't access the database simultaneously without corruption. Which deployment strategy should you use, and what's the trade-off?**
    <details>
    <summary>Answer</summary>
-   `RollingUpdate` gradually replaces pods (zero downtime), while `Recreate` terminates all existing pods before creating new ones (causes downtime but ensures only one version runs).
+   Use `strategy: type: Recreate`. This kills all existing pods before creating new ones, ensuring only one version accesses the database at a time. The trade-off is downtime -- there's a gap between old pods terminating and new pods becoming ready. `RollingUpdate` would cause data corruption since both old and new pods would access SQLite concurrently. For production, consider migrating to a proper database (PostgreSQL, MySQL) that handles concurrent access, which lets you use `RollingUpdate` for zero-downtime deployments.
    </details>
 
-3. **How do you trigger a rolling restart without changing the image?**
+3. **You updated a ConfigMap that your Deployment's pods consume as environment variables. Running `kubectl get pods` shows all pods are still running the old config. `kubectl rollout restart` isn't working because your cluster RBAC restricts that command. What alternative approach triggers a pod recreation?**
    <details>
    <summary>Answer</summary>
-   `kubectl rollout restart deploy/NAME`. This adds a timestamp annotation that triggers pod recreation.
+   Use `kubectl set env deploy/NAME RESTART_TRIGGER=$(date +%s)` to add a dummy environment variable with a timestamp. Any change to the pod template triggers a rolling update, which recreates all pods with the fresh ConfigMap values. Alternatively, you could patch the deployment to add an annotation: `kubectl patch deploy NAME -p '{"spec":{"template":{"metadata":{"annotations":{"restart":"'$(date +%s)'"}}}}}'`. Both approaches force pod recreation without the `rollout restart` command.
    </details>
 
-4. **What happens if selector labels don't match template labels?**
+4. **You create a Deployment with `replicas: 5`, `maxSurge: 2`, and `maxUnavailable: 0`. During a rolling update, you notice the rollout stalls -- new pods are stuck in `Pending` because the cluster has no capacity for extra pods. What went wrong with your strategy configuration?**
    <details>
    <summary>Answer</summary>
-   The Deployment won't be able to find or manage its pods. The API server will reject the Deployment with a validation error.
+   With `maxSurge: 2` and `maxUnavailable: 0`, Kubernetes must create 2 extra pods (total 7) before it can terminate any old ones. If the cluster can't schedule 7 pods, the rollout deadlocks. The fix is either: (1) set `maxUnavailable: 1` so Kubernetes can remove an old pod first to make room; (2) reduce `maxSurge` to 1; or (3) ensure the cluster has capacity for `replicas + maxSurge` pods. The `maxUnavailable: 0` + insufficient capacity combination is a common rollout trap. Setting `progressDeadlineSeconds` helps detect this automatically.
    </details>
 
 ---

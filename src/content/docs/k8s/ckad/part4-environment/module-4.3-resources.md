@@ -129,6 +129,8 @@ spec:
 
 ## What Happens at Limits
 
+> **Pause and predict**: A pod has `requests.cpu: 100m` and `limits.cpu: 500m`. The node has 1 CPU core available. Can this pod use 500m? What if three other pods on the same node also have `limits.cpu: 500m`?
+
 ### Memory Limit Exceeded
 
 ```
@@ -160,6 +162,8 @@ Kubernetes assigns Quality of Service classes based on resource settings:
 | **Guaranteed** | Requests = Limits for all containers | Last (protected) |
 | **Burstable** | Requests < Limits (or only one set) | Middle |
 | **BestEffort** | No requests or limits set | First (evicted first) |
+
+> **Stop and think**: A pod has requests but no limits set. Which QoS class will it receive — Guaranteed, Burstable, or BestEffort? What about a pod with limits but no requests?
 
 ### Guaranteed Example
 
@@ -332,28 +336,28 @@ k get pod POD -o jsonpath='{.status.qosClass}'
 
 ## Quiz
 
-1. **What's the difference between requests and limits?**
+1. **A pod keeps getting OOMKilled — you see `Last State: Terminated, Reason: OOMKilled` in `kubectl describe`. The pod has `limits.memory: 128Mi`. The developer says "but the app only uses 80MB." What is likely happening and how do you fix it?**
    <details>
    <summary>Answer</summary>
-   Requests are guaranteed resources used for scheduling decisions. Limits are maximum allowed resources enforced at runtime. Requests must be ≤ Limits.
+   The application likely uses more memory than the developer thinks. Memory usage includes the runtime overhead (JVM heap, Go GC, Python interpreter), shared libraries, and any temporary allocations. The developer might be measuring only heap or RSS, not the full container memory. Use `kubectl top pod` to see actual usage approaching the limit. The fix is to increase the memory limit based on observed peak usage (with ~25% headroom), or profile the application to find memory leaks. Also check if the container runs multiple processes — each contributes to the container's memory total. The 128Mi limit might be appropriate for the app code but not for the runtime + app combined.
    </details>
 
-2. **What happens when a container exceeds its memory limit?**
+2. **A pod is stuck in Pending state. `kubectl describe` shows: "0/3 nodes are available: 3 Insufficient cpu." The pod requests 2 CPU cores. Each node has 4 cores but already runs several pods. What are your options to get this pod scheduled?**
    <details>
    <summary>Answer</summary>
-   The container is OOMKilled (terminated) and may be restarted depending on the restart policy.
+   The scheduler can't find a node where allocatable CPU minus already-requested CPU is >= 2 cores. Options: (1) Reduce the pod's CPU request if the application doesn't truly need 2 cores — check actual usage with `kubectl top` on similar pods. (2) Scale down or delete other pods to free up capacity. (3) Add more nodes to the cluster. (4) Check if other pods are over-requesting — their requests might be higher than actual usage, wasting schedulable capacity. Run `kubectl describe node` on each node and look at "Allocated resources" to see where CPU is committed. Requests affect scheduling, not actual usage, so over-requesting is a common cause of scheduling failures.
    </details>
 
-3. **What happens when a container exceeds its CPU limit?**
+3. **A deployment runs 5 replicas with no resource requests or limits set. During a node memory pressure event, all 5 pods are evicted before pods from other deployments. Why were these pods targeted first?**
    <details>
    <summary>Answer</summary>
-   The container is throttled (slowed down) but NOT killed. CPU is compressible.
+   Pods without resource requests or limits receive the BestEffort QoS class, which has the lowest priority during eviction. When a node runs low on memory, the kubelet evicts pods in QoS order: BestEffort first, then Burstable, then Guaranteed last. The other deployments likely had requests and/or limits set, giving them Burstable or Guaranteed QoS class. The fix is to always set at least resource requests on production pods. Setting requests equal to limits gives Guaranteed QoS (highest protection), while having requests lower than limits gives Burstable QoS (middle tier).
    </details>
 
-4. **What QoS class does a pod get if requests equal limits?**
+4. **A namespace has a LimitRange with `default.cpu: 200m` and `default.memory: 256Mi`. A developer creates a pod without specifying any resources. They later notice the pod has resource limits they didn't set. What happened, and how does this interact with ResourceQuota?**
    <details>
    <summary>Answer</summary>
-   Guaranteed. This is the highest priority class and pods are evicted last.
+   LimitRange automatically injects default resource requests and limits into containers that don't specify them. The developer's pod received `limits.cpu: 200m` and `limits.memory: 256Mi` from the LimitRange defaults. If a ResourceQuota also exists in the namespace, every pod must have resource requests (so the quota can track usage). The LimitRange defaults ensure pods aren't rejected for missing resource specifications when a ResourceQuota is active. Check with `kubectl get pod -o jsonpath='{.spec.containers[0].resources}'` to see the injected values, and `kubectl describe limitrange` to see the namespace defaults.
    </details>
 
 ---

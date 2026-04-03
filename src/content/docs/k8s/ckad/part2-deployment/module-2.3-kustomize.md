@@ -165,6 +165,8 @@ All resources will be deployed to this namespace.
 
 ---
 
+> **Pause and predict**: You add `namePrefix: prod-` to your kustomization.yaml. A Deployment named `web-app` references a Service named `web-app` by name. After applying Kustomize, will the Service reference inside the Deployment also get the prefix? Think about what would break if it didn't.
+
 ## ConfigMaps and Secrets
 
 ### Generate ConfigMap
@@ -210,6 +212,8 @@ secretGenerator:
   - tls.key
   type: kubernetes.io/tls
 ```
+
+> **Stop and think**: Kustomize appends a hash suffix to generated ConfigMaps (e.g., `app-config-abc123`). Why would this be useful? Hint: think about what happens when you update a ConfigMap and need pods to pick up the change.
 
 ### ConfigMap/Secret Behavior
 
@@ -304,6 +308,8 @@ patches:
       path: /metadata/labels/version
       value: v2
 ```
+
+> **What would happen if**: Your overlay references `../../base` but the base directory was renamed to `common`. What error do you get, and how quickly can you diagnose it?
 
 ### Patch All Deployments
 
@@ -505,35 +511,47 @@ configMapGenerator:
 
 ## Quiz
 
-1. **How do you apply a Kustomize directory?**
+1. **Your team has a base deployment that works perfectly in dev. For production, you need to: change the namespace to `production`, increase replicas to 5, and use image tag `v2.1.0` instead of `latest`. You want to do this without modifying the base files. How do you set this up with Kustomize?**
    <details>
    <summary>Answer</summary>
-   `kubectl apply -k ./directory/`
-
-   The `-k` flag tells kubectl to process the kustomization.yaml in that directory.
-   </details>
-
-2. **How do you add a prefix to all resource names?**
-   <details>
-   <summary>Answer</summary>
-   Add `namePrefix: prefix-` to kustomization.yaml. All resources will have this prefix added to their names.
-   </details>
-
-3. **What's the difference between base and overlay?**
-   <details>
-   <summary>Answer</summary>
-   Base contains the original, unmodified resources. Overlay references the base and adds customizations (different replicas, namespaces, labels) for specific environments like dev/staging/prod.
-   </details>
-
-4. **How do you override an image tag?**
-   <details>
-   <summary>Answer</summary>
+   Create an overlay directory (e.g., `overlays/prod/kustomization.yaml`) that references the base and adds customizations:
    ```yaml
+   apiVersion: kustomize.config.k8s.io/v1beta1
+   kind: Kustomization
+   resources:
+   - ../../base
+   namespace: production
    images:
    - name: nginx
-     newTag: "1.21"
+     newTag: "v2.1.0"
+   patches:
+   - patch: |-
+       apiVersion: apps/v1
+       kind: Deployment
+       metadata:
+         name: web-app
+       spec:
+         replicas: 5
    ```
-   This changes all references to `nginx` to use tag `1.21`.
+   Apply with `kubectl apply -k overlays/prod/`. The base files remain untouched, and each environment gets its own overlay with specific customizations.
+   </details>
+
+2. **You run `kubectl apply -k ./` but get an error: "no such file or directory" for a resource listed in kustomization.yaml. The file definitely exists when you `ls` the directory. What are the two most common causes of this error?**
+   <details>
+   <summary>Answer</summary>
+   The two most common causes are: (1) a path mismatch -- the filename in `resources:` doesn't match the actual filename (case sensitivity, typo, or `.yaml` vs `.yml` extension); (2) the `kustomization.yaml` references a base using a relative path like `../../base` but you're running the command from the wrong directory. Always run `kubectl kustomize ./` first to preview and debug before applying. Check that paths in `resources:` match exactly, including case. On the exam, typos in resource paths are a common time waster.
+   </details>
+
+3. **A colleague asks: "Why not just use Helm for everything? Why would I use Kustomize?" Give them two concrete scenarios where Kustomize is the better choice.**
+   <details>
+   <summary>Answer</summary>
+   Kustomize is better when: (1) You have existing YAML manifests and just need environment-specific variations (dev/staging/prod) without learning a template language -- Kustomize works directly with valid Kubernetes YAML, no `{{ .Values }}` syntax needed, making it simpler and less error-prone for straightforward overlays. (2) You want to customize a third-party tool's generated YAML without forking it -- Kustomize can patch any Kubernetes resource as a post-processing step. Additionally, Kustomize is built into kubectl (no extra tooling to install), which matters in restricted environments and on the CKAD exam where Helm may not always be the expected approach.
+   </details>
+
+4. **You use `configMapGenerator` in your kustomization.yaml to create a ConfigMap. After updating a literal value and reapplying, you notice TWO ConfigMaps in the namespace -- the old one and a new one with a different hash suffix. Your Deployment picked up the new one, but the old ConfigMap is still there. Is this a bug?**
+   <details>
+   <summary>Answer</summary>
+   This is not a bug -- it's by design. Kustomize generates ConfigMaps with a content-based hash suffix (e.g., `app-config-abc123`). When content changes, a new ConfigMap with a new hash is created, and the Deployment reference is automatically updated to point to the new one, triggering a rolling update. The old ConfigMap remains for rollback safety -- if you roll back the Deployment, it still references the old ConfigMap. Clean up orphaned ConfigMaps manually with `kubectl delete cm <old-name>` or use a garbage collection tool. This hash-based approach guarantees pods always get the correct config version.
    </details>
 
 ---

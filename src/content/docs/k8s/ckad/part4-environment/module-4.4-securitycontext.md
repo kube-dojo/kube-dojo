@@ -135,6 +135,8 @@ securityContext:
 | `SYS_PTRACE` | Debug other processes |
 | `CHOWN` | Change file ownership |
 
+> **Pause and predict**: A pod has `runAsNonRoot: true` set at the pod level, but one container sets `runAsUser: 0` (root). Will the container start? Which setting wins?
+
 ### Best Practice: Drop All, Add Specific
 
 ```yaml
@@ -187,6 +189,8 @@ spec:
   - name: run
     emptyDir: {}
 ```
+
+> **Stop and think**: You set `readOnlyRootFilesystem: true` on a container. The application needs to write temporary files to `/tmp`. How would you solve this without disabling the read-only filesystem?
 
 ### Pod with Volume Permissions
 
@@ -310,32 +314,28 @@ containers:
 
 ## Quiz
 
-1. **What's the difference between pod-level and container-level securityContext?**
+1. **A security team requires all pods to run as non-root. A developer deploys a pod with `runAsNonRoot: true` but the container immediately fails with "container has runAsNonRoot and image will run as root." The developer is confused because they set the flag. What is the problem and how do they fix it?**
    <details>
    <summary>Answer</summary>
-   Pod-level settings apply to all containers in the pod. Container-level settings override pod-level settings for that specific container.
+   `runAsNonRoot: true` is a validation check, not a configuration — it tells Kubernetes to reject the container if it would run as root, but it doesn't change the user. The container image (e.g., nginx) defaults to running as root (UID 0), so the check fails. The fix is to also set `runAsUser: 1000` (or another non-zero UID) in the securityContext, which forces the container to run as that user regardless of the image default. Some images may need additional adjustments (file permissions, writable directories) to work as non-root.
    </details>
 
-2. **What does `fsGroup` control?**
+2. **After enabling `readOnlyRootFilesystem: true` on an nginx pod, the container crashes on startup with "Permission denied" errors when trying to write to `/var/cache/nginx/`. How do you fix this while keeping the read-only filesystem security benefit?**
    <details>
    <summary>Answer</summary>
-   `fsGroup` sets the group ownership of files in mounted volumes. Processes run with this as a supplementary group.
+   Mount emptyDir volumes at the paths where the application needs to write. For nginx, you typically need writable directories at `/var/cache/nginx`, `/var/run`, and `/tmp`. Add each as an emptyDir volume mount. This gives you the security benefit of an immutable root filesystem (attackers can't modify application binaries or config) while still allowing the application to write temporary data to specific, ephemeral locations. The emptyDir volumes are cleaned up when the pod is deleted.
    </details>
 
-3. **What happens if you set `runAsNonRoot: true` but the image defaults to root?**
+3. **A pod has `securityContext.runAsUser: 1000` at the pod level. Container A does not set any securityContext. Container B sets `runAsUser: 2000`. What user does each container run as, and what user owns files in a volume mounted with `fsGroup: 3000`?**
    <details>
    <summary>Answer</summary>
-   The container fails to start. You must also set `runAsUser` to a non-zero UID.
+   Container A runs as UID 1000 (inherits from the pod-level setting). Container B runs as UID 2000 (container-level overrides pod-level). Files in the volume are owned by GID 3000 (the fsGroup), and both containers have GID 3000 as a supplementary group, so both can access the volume files. The key takeaway is that container-level securityContext overrides pod-level for that specific container, but fsGroup is pod-level only and applies to all containers' volume mounts.
    </details>
 
-4. **How do you allow a container to bind to port 80 without running as root?**
+4. **A developer needs their container to perform network configuration (setting up iptables rules). The security team won't allow `privileged: true`. What is the minimum-privilege approach to grant only the network capabilities needed?**
    <details>
    <summary>Answer</summary>
-   Add the `NET_BIND_SERVICE` capability:
-   ```yaml
-   capabilities:
-     add: ["NET_BIND_SERVICE"]
-   ```
+   Use Linux capabilities to grant only what's needed: drop all capabilities first with `capabilities.drop: ["ALL"]`, then add only `NET_ADMIN` (for network configuration and iptables). This follows the principle of least privilege — the container gets network administration rights without full root/privileged access. `privileged: true` grants every capability plus host device access, which is vastly more access than needed. Always prefer targeted capabilities over privileged mode. If the container also needs to bind to low ports (< 1024), add `NET_BIND_SERVICE` as well.
    </details>
 
 ---

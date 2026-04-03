@@ -144,6 +144,8 @@ spec:
         name: app-config
 ```
 
+> **Pause and predict**: You update a ConfigMap that a pod consumes via `envFrom`. Will the pod automatically pick up the new values? What if it was mounted as a volume instead?
+
 ### As Volume Files
 
 **Mount entire ConfigMap:**
@@ -186,6 +188,8 @@ spec:
       - key: app.properties
         path: application.properties
 ```
+
+> **Stop and think**: When you mount a ConfigMap as a volume at `/etc/config`, what happens to any files that were already in `/etc/config` inside the container image? How would you avoid this problem?
 
 **Mount to specific file:**
 ```yaml
@@ -351,42 +355,28 @@ k delete configmap NAME
 
 ## Quiz
 
-1. **How do you create a ConfigMap from multiple key-value pairs?**
+1. **A developer updates a ConfigMap with new database connection settings. They confirm the ConfigMap is correct with `kubectl get cm -o yaml`. But their pod still uses the old values. The pod consumes the ConfigMap via `envFrom`. What is happening and how do they fix it?**
    <details>
    <summary>Answer</summary>
-   `kubectl create configmap NAME --from-literal=KEY1=VAL1 --from-literal=KEY2=VAL2`
+   Environment variables from ConfigMaps are injected at pod startup time and are never updated afterward, even if the underlying ConfigMap changes. The developer must restart the pods to pick up the new values — for a Deployment, `kubectl rollout restart deployment/name` is the cleanest approach. If the team needs live config reloading, they should switch to volume-mounted ConfigMaps, which the kubelet automatically syncs within ~1 minute. However, the application must also be written to watch for file changes and reload.
    </details>
 
-2. **How do you inject all ConfigMap keys as environment variables?**
+2. **You mount a ConfigMap as a volume at `/etc/nginx/conf.d/`. After the pod starts, nginx fails because it can't find its default configuration files. Before adding the ConfigMap mount, the directory had `default.conf` provided by the nginx image. What went wrong?**
    <details>
    <summary>Answer</summary>
-   Use `envFrom` with `configMapRef`:
-   ```yaml
-   envFrom:
-   - configMapRef:
-       name: configmap-name
-   ```
+   Mounting a ConfigMap (or any volume) at a directory path completely replaces the directory's contents. The original files from the container image at `/etc/nginx/conf.d/` are hidden by the mount. The fix is to use `subPath` to mount a specific file instead of the entire directory: `mountPath: /etc/nginx/conf.d/my-custom.conf` with `subPath: my-custom.conf`. This preserves the existing files in the directory. The trade-off is that subPath mounts do not auto-update when the ConfigMap changes.
    </details>
 
-3. **Do environment variables from ConfigMaps update automatically?**
+3. **A team stores their database password in a ConfigMap alongside other non-sensitive application settings. During a security audit, this is flagged. Why is this a problem, and what should they do differently?**
    <details>
    <summary>Answer</summary>
-   No. Environment variables are set at pod startup and don't update. You must restart the pod to pick up changes.
+   ConfigMap data is stored as plain text in etcd and is visible to anyone who can run `kubectl get cm -o yaml`. It also appears unobfuscated in `kubectl describe`, pod environment listings, and API responses. Sensitive data like passwords should be stored in Secrets, which provide base64 encoding (not encryption, but not human-readable at a glance), can be encrypted at rest with EncryptionConfiguration, and have stricter RBAC controls. Move the password to a Secret and reference it via `secretKeyRef` in the pod spec, keeping only non-sensitive settings in the ConfigMap.
    </details>
 
-4. **How do you mount only specific keys from a ConfigMap?**
+4. **You create a ConfigMap from a file: `kubectl create configmap app-config --from-file=settings.conf`. When you mount it as a volume, you expect a file called `settings.conf` at the mount path. Instead, the application can't find it. You check and the file is there but the application config parser is looking for `app.conf`. How do you make the ConfigMap mount use a different filename?**
    <details>
    <summary>Answer</summary>
-   Use `items` in the volume definition:
-   ```yaml
-   volumes:
-   - name: config
-     configMap:
-       name: my-config
-       items:
-       - key: specific-key
-         path: filename
-   ```
+   Use the `items` field in the volume definition to remap the key to a different file path: `volumes: - name: config, configMap: name: app-config, items: - key: settings.conf, path: app.conf`. This tells Kubernetes to take the ConfigMap key `settings.conf` and project it as a file named `app.conf` in the mounted volume directory. Alternatively, you could create the ConfigMap with a custom key name from the start: `kubectl create configmap app-config --from-file=app.conf=settings.conf`.
    </details>
 
 ---

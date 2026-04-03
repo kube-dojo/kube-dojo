@@ -138,6 +138,8 @@ CMD ["python", "app.py"]
 | `CMD` | Default command to run | `CMD ["nginx", "-g", "daemon off;"]` |
 | `ENTRYPOINT` | Main executable | `ENTRYPOINT ["python"]` |
 
+> **Pause and predict**: In a Kubernetes Pod spec, `command` overrides one Dockerfile instruction and `args` overrides another. Which is which? Many developers get this backwards. Think about it before reading the mapping below.
+
 ### CMD vs ENTRYPOINT
 
 ```dockerfile
@@ -218,6 +220,8 @@ spec:
 | `Always` | Pull every time | Using `latest` tag, need freshest image |
 | `IfNotPresent` | Pull only if not cached | Specific tags, save bandwidth |
 | `Never` | Never pull, use cached | Local development, air-gapped |
+
+> **Stop and think**: If you specify `image: nginx` (no tag) in a pod spec, what `imagePullPolicy` does Kubernetes use by default? What about `image: nginx:1.21.0`? The defaults are different -- why does that make sense?
 
 ### Default Behavior
 
@@ -309,6 +313,8 @@ k get secret regcred
 # Test pull manually (if docker available)
 docker pull myregistry.com/team/myapp:v1.0.0
 ```
+
+> **What would happen if**: A pod references a private registry image but has no `imagePullSecrets`. The image exists and is correctly tagged. What error would you see, and how would you distinguish it from a simple typo in the image name?
 
 ### Example: Fixing ImagePullBackOff
 
@@ -423,34 +429,28 @@ spec:
 
 ## Quiz
 
-1. **What's the default image tag if none is specified?**
+1. **A developer pushes a fix to their app and deploys it using `image: myapp` (no tag). The pod restarts, but the old version is still running. They swear they pushed the new image. What's going on?**
    <details>
    <summary>Answer</summary>
-   `latest`. For example, `nginx` is equivalent to `nginx:latest`.
+   Without a tag, Kubernetes defaults to `:latest` and sets `imagePullPolicy: Always`. However, the developer likely pushed without tagging as `latest`, or the node has a cached version. The real problem is using `latest` in the first place -- it's ambiguous and unreproducible. The fix is to use specific version tags (e.g., `myapp:v1.2.3`) so each deployment references an exact image. This also makes rollbacks predictable since you know exactly which version each revision used.
    </details>
 
-2. **A Pod is stuck in ImagePullBackOff. What's the first debugging step?**
+2. **Your colleague deployed a pod that's stuck in `ImagePullBackOff`. They say the image name is correct because they can `docker pull` it on their laptop. What are the three most likely causes, and how do you systematically diagnose which one?**
    <details>
    <summary>Answer</summary>
-   Run `kubectl describe pod <name>` and check the Events section. It will show the specific pull error, like image not found or authentication failure.
+   Run `kubectl describe pod <name>` and check the Events section. The three most likely causes are: (1) the image name has a typo (e.g., `ngix` instead of `nginx`) -- the Events will say "not found"; (2) it's a private registry and the pod is missing `imagePullSecrets` -- the Events will show "unauthorized" or "authentication required"; (3) the tag doesn't exist in the registry -- Events will say "manifest unknown". Their laptop works because Docker is logged into the registry locally. The cluster nodes need separate authentication via `imagePullSecrets` or a ServiceAccount with registry credentials.
    </details>
 
-3. **How do you override a Dockerfile's CMD in a Kubernetes Pod spec?**
+3. **You have a Dockerfile with `ENTRYPOINT ["python"]` and `CMD ["app.py"]`. In your Kubernetes pod spec, you want to run `python test.py` instead. Should you override `command`, `args`, or both?**
    <details>
    <summary>Answer</summary>
-   Use the `args` field in the container spec:
-   ```yaml
-   containers:
-   - name: app
-     image: myimage
-     args: ["new", "command", "here"]
-   ```
+   Override only `args: ["test.py"]`. In Kubernetes, `command` maps to Docker's `ENTRYPOINT` and `args` maps to `CMD`. Since you still want `python` as the entrypoint, leave `command` alone and just change `args`. If you set `command: ["python"]` AND `args: ["test.py"]`, it works but is redundant. If you only set `command: ["test.py"]`, it would try to execute `test.py` directly without the Python interpreter, which would fail.
    </details>
 
-4. **What's the difference between `imagePullPolicy: Always` and `IfNotPresent`?**
+4. **Your production cluster pulls images slowly because every pod restart re-downloads from the registry. All your images use specific version tags like `v2.1.0`. A teammate suggests setting `imagePullPolicy: Never` to fix it. Why is that dangerous, and what's the correct solution?**
    <details>
    <summary>Answer</summary>
-   `Always` pulls the image on every pod start, even if cached locally. `IfNotPresent` only pulls if the image isn't already on the node. Use `Always` for `latest` tags; use `IfNotPresent` for specific version tags to save bandwidth.
+   `Never` means pods will fail to start on any node that doesn't already have the image cached -- this breaks scaling to new nodes and disaster recovery. The correct solution is `imagePullPolicy: IfNotPresent`, which is actually the default for specific version tags. If pods are still re-pulling, check whether someone has overridden the policy to `Always` in the pod spec. With `IfNotPresent`, the image is pulled once per node and cached, giving you fast restarts without the risk of `Never`.
    </details>
 
 ---

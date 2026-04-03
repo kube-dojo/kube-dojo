@@ -163,6 +163,8 @@ k exec my-pod -- cat /var/run/secrets/kubernetes.io/serviceaccount/token
 | `ca.crt` | CA certificate to verify API server |
 | `namespace` | Pod's namespace |
 
+> **Pause and predict**: Every pod gets the `default` ServiceAccount's token mounted automatically. Why might this be a security concern for pods that never call the Kubernetes API?
+
 ### Disabling Automatic Token Mount
 
 For pods that don't need API access:
@@ -307,6 +309,8 @@ k create token my-app-sa --duration=1h
 
 ## ServiceAccounts and RBAC
 
+> **Stop and think**: You create a ServiceAccount called `pod-manager` and assign it to your pod. When the pod tries to list other pods via the API, it gets a 403 Forbidden error. What's missing?
+
 ServiceAccounts alone don't grant permissions. You need RBAC:
 
 ```yaml
@@ -396,28 +400,28 @@ k get pod POD -o jsonpath='{.spec.serviceAccountName}'
 
 ## Quiz
 
-1. **How do you assign a ServiceAccount to a pod?**
+1. **A developer creates a ServiceAccount called `deployer-sa` and assigns it to a pod that needs to list Deployments. The pod starts successfully, but when it calls the Kubernetes API to list deployments, it gets a 403 Forbidden error. What is missing and what steps are needed to fix it?**
    <details>
    <summary>Answer</summary>
-   Add `serviceAccountName: my-sa` to the pod's spec.
+   A ServiceAccount by itself has no permissions — it's just an identity. You need three things: (1) a Role that grants the `list` verb on `deployments` in the `apps` apiGroup, (2) a RoleBinding that binds that Role to the `deployer-sa` ServiceAccount. Without RBAC, the ServiceAccount is like an employee badge that gets you through the front door but doesn't open any office doors. You can verify what the SA can do with `kubectl auth can-i list deployments --as=system:serviceaccount:default:deployer-sa`.
    </details>
 
-2. **Where is the ServiceAccount token mounted in a pod?**
+2. **During a security audit, the team discovers that a frontend pod (which never calls the Kubernetes API) has a ServiceAccount token mounted at `/var/run/secrets/kubernetes.io/serviceaccount/`. An attacker who compromises this pod could use the token to query the API server. How do you eliminate this attack surface?**
    <details>
    <summary>Answer</summary>
-   `/var/run/secrets/kubernetes.io/serviceaccount/` containing `token`, `ca.crt`, and `namespace` files.
+   Set `automountServiceAccountToken: false` in the pod spec (or on the ServiceAccount itself). This prevents Kubernetes from mounting the token, CA certificate, and namespace file into the pod. For pods that don't need API access — which is most application pods — this is a security best practice. You can set it on the pod spec level (affects just that pod) or on the ServiceAccount definition (affects all pods using that SA). Pod-level setting takes precedence if both are specified.
    </details>
 
-3. **How do you prevent a pod from getting API access?**
+3. **A pod is configured with `serviceAccountName: custom-sa`, but `kubectl describe pod` shows it's using the `default` ServiceAccount instead. What could have gone wrong?**
    <details>
    <summary>Answer</summary>
-   Set `automountServiceAccountToken: false` in the pod spec or ServiceAccount.
+   The most likely cause is that the ServiceAccount `custom-sa` doesn't exist in the pod's namespace. When you specify a non-existent ServiceAccount, the behavior depends on the cluster configuration — some clusters reject the pod, others fall back to the default SA. Check with `kubectl get sa custom-sa` in the correct namespace. If it doesn't exist, create it with `kubectl create sa custom-sa`. Another possibility: the pod was created in a different namespace than where the SA exists (ServiceAccounts are namespaced). Always verify both the SA and pod are in the same namespace.
    </details>
 
-4. **Does creating a ServiceAccount automatically grant it permissions?**
+4. **Your team manages two applications: an internal monitoring tool that needs to list pods across all namespaces, and a web frontend that only needs to read ConfigMaps in its own namespace. How would you set up ServiceAccounts and RBAC for each following least-privilege principles?**
    <details>
    <summary>Answer</summary>
-   No. ServiceAccounts have no permissions by default. You must create RBAC rules (Role/ClusterRole + RoleBinding/ClusterRoleBinding) to grant permissions.
+   For the monitoring tool: create a ServiceAccount (e.g., `monitor-sa`), a ClusterRole with `list` and `get` verbs on `pods` resources, and a ClusterRoleBinding connecting them. ClusterRole + ClusterRoleBinding is needed because it must work across all namespaces. For the web frontend: create a ServiceAccount (e.g., `frontend-sa`), a Role (namespace-scoped) with `get` and `list` on `configmaps`, and a RoleBinding in the frontend's namespace. This follows least privilege — each SA gets exactly the permissions it needs, no more. The monitoring tool can only list pods (not delete or create), and the frontend can only read ConfigMaps in its own namespace.
    </details>
 
 ---

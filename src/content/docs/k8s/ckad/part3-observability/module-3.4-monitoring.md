@@ -107,6 +107,8 @@ k top pods --sort-by=memory
 k top pod my-pod
 ```
 
+> **Pause and predict**: `kubectl top pods` shows a pod using 450m CPU with a limit of 500m. Is this pod in danger? What about a pod using 240Mi memory with a limit of 256Mi?
+
 ### Container Metrics
 
 ```bash
@@ -201,6 +203,8 @@ k top nodes
 k top pods --sort-by=cpu
 k top pods --sort-by=memory
 ```
+
+> **Stop and think**: A pod has resource requests of `cpu: 100m, memory: 128Mi` but `kubectl top` shows actual usage of `cpu: 50m, memory: 300Mi`. The pod hasn't been OOMKilled. How is this possible?
 
 ### Find Resource Hogs
 
@@ -302,28 +306,28 @@ k top pods --containers -l app=myapp
 
 ## Quiz
 
-1. **What command shows CPU and memory usage per pod?**
+1. **A pod with `limits.memory: 256Mi` shows memory usage of 240Mi in `kubectl top pods`. The application is a Java service that loads data into an in-memory cache. Should you be concerned? What would you recommend?**
    <details>
    <summary>Answer</summary>
-   `kubectl top pods`
+   Yes, this is critical. The pod is at 94% of its memory limit and will be OOMKilled if it allocates even a small amount more. Unlike CPU (which just throttles), exceeding the memory limit is fatal — the kernel kills the container immediately. Recommend increasing the memory limit with headroom (e.g., to 512Mi), and investigate whether the cache size can be bounded. Also check `kubectl describe pod` for any previous OOMKill events in the "Last State" section, as the pod may have already been killed and restarted.
    </details>
 
-2. **What does 250m CPU mean?**
+2. **You run `kubectl top pods --sort-by=cpu` and notice one pod in a 3-replica deployment using 400m CPU while the other two use only 50m each. The deployment has no CPU limits set. What is happening and what is the risk?**
    <details>
    <summary>Answer</summary>
-   250 millicores, which equals 0.25 of a CPU core (25% of one core).
+   Without CPU limits, a pod can consume as much CPU as the node has available. One pod receiving disproportionately more traffic (or running a computationally expensive operation) will burst its CPU usage. The immediate risk is that this pod could starve other pods on the same node for CPU time, especially BestEffort pods. The broader risk is unpredictable performance across the cluster. The fix is to set appropriate CPU limits on the deployment, and investigate why traffic is unevenly distributed (possibly a session affinity issue or a hot-key problem).
    </details>
 
-3. **How do you see resource usage per container in multi-container pods?**
+3. **You try to run `kubectl top nodes` but get the error "Metrics API not available." The cluster was just set up. What component is missing, and is it something a CKAD candidate would install?**
    <details>
    <summary>Answer</summary>
-   `kubectl top pods --containers`
+   The Metrics Server is not installed. It's a lightweight cluster add-on that collects CPU and memory metrics from kubelets and exposes them through the Metrics API. Without it, `kubectl top` has no data source, and HPA (Horizontal Pod Autoscaler) also won't function. In a CKAD exam environment, Metrics Server is typically pre-installed. In a real cluster, a cluster admin installs it with `kubectl apply -f` from the metrics-server GitHub releases. As a CKAD candidate, you need to know how to use `kubectl top`, but not how to install the metrics server itself.
    </details>
 
-4. **What happens if metrics server isn't installed?**
+4. **A multi-container pod has an nginx container and a logging sidecar. `kubectl top pods` shows the pod using 200m CPU total. How do you determine which container is consuming the most CPU, and why does this matter?**
    <details>
    <summary>Answer</summary>
-   `kubectl top` fails with an error because there's no source of metrics data.
+   Run `kubectl top pods POD_NAME --containers` to see per-container CPU and memory breakdown. This matters because the aggregate pod-level metric can mask a problem: if the sidecar is consuming 180m of the 200m CPU, that's a sidecar bug, not an application issue. Knowing per-container usage is essential for setting accurate resource requests and limits on each container, since resource limits are set per-container, not per-pod. A sidecar consuming unexpected resources could throttle the main container if both share a tight pod resource budget.
    </details>
 
 ---

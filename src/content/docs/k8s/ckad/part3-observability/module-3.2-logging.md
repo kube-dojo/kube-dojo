@@ -83,6 +83,8 @@ k logs pod-name --all-containers=true
 k get pod pod-name -o jsonpath='{.spec.containers[*].name}'
 ```
 
+> **Pause and predict**: You run `kubectl logs my-pod` and get no output, but the application is definitely running and processing requests. What is the most likely cause?
+
 ### Previous Container Instance
 
 ```bash
@@ -132,6 +134,8 @@ k logs -l app=myapp --max-log-requests=5
 k logs -l app=myapp --tail=50
 ```
 
+> **Stop and think**: A pod has two containers: `app` and `sidecar`. You run `kubectl logs my-pod` and get an error. Why? What do you need to add to the command?
+
 ### Combining Filters
 
 ```bash
@@ -158,6 +162,8 @@ k logs -f pod-name | grep -i error
 # Stream from multiple pods
 k logs -f -l app=myapp --all-containers
 ```
+
+> **Pause and predict**: A pod has been restarting due to CrashLoopBackOff. You need to see what the application printed before it crashed. What flag do you add to `kubectl logs`?
 
 ### Exporting Logs
 
@@ -304,28 +310,28 @@ k logs POD --timestamps         # With timestamps
 
 ## Quiz
 
-1. **How do you view logs from a previous container instance?**
+1. **A pod named `payment-service` has been crashing and restarting. You need to find out what error caused the last crash, but `kubectl logs payment-service` only shows the current (freshly started) instance's logs. How do you retrieve the crash logs?**
    <details>
    <summary>Answer</summary>
-   `kubectl logs pod-name --previous` or `kubectl logs pod-name -p`
+   Use `kubectl logs payment-service --previous` (or `-p`). This retrieves logs from the previous container instance before the restart. Kubernetes keeps one previous set of logs per container. If the pod has restarted multiple times, you only get the immediately prior instance's logs — earlier crash logs are lost. This is why log aggregation tools (Fluentd, Loki) are essential in production.
    </details>
 
-2. **How do you view logs from a specific container in a multi-container pod?**
+2. **A developer reports that `kubectl logs my-pod` returns an error: "a]container name must be specified." The pod is Running and has no restarts. What is the issue and how do they fix it?**
    <details>
    <summary>Answer</summary>
-   `kubectl logs pod-name -c container-name`
+   The pod has multiple containers (likely a sidecar pattern), and `kubectl logs` requires you to specify which container when there's more than one. Fix by adding `-c container-name` to the command. To find available container names, run `kubectl get pod my-pod -o jsonpath='{.spec.containers[*].name}'`. Alternatively, use `--all-containers=true` to see logs from every container in the pod.
    </details>
 
-3. **How do you view the last 50 lines of logs from the past hour?**
+3. **You're debugging a production issue and need to see only the last 30 minutes of logs from all pods in a deployment with label `app=checkout`. The deployment has 8 replicas. What command do you use, and what pitfall should you watch out for?**
    <details>
    <summary>Answer</summary>
-   `kubectl logs pod-name --since=1h --tail=50`
+   Use `kubectl logs -l app=checkout --since=30m --tail=100`. The pitfall is that by default `kubectl logs` with a label selector only follows up to 5 pods. If you have 8 replicas, you'll miss 3 pods worth of logs. Add `--max-log-requests=10` to increase the limit. Also consider adding `--timestamps` to correlate log entries across pods when debugging timing-sensitive issues.
    </details>
 
-4. **How do you stream logs from all pods with label `app=web`?**
+4. **An application writes its logs to `/var/log/app.log` inside the container instead of stdout. When you run `kubectl logs`, you see nothing. The application is confirmed to be running and writing logs. What is wrong and what are two ways to fix it?**
    <details>
    <summary>Answer</summary>
-   `kubectl logs -l app=web -f` (add `--max-log-requests=N` if many pods)
+   `kubectl logs` only captures stdout and stderr output. Logs written to files inside the container are invisible to Kubernetes. Two fixes: (1) Reconfigure the application to log to stdout/stderr instead of files — this is the recommended Kubernetes pattern. (2) If you can't change the app, add a sidecar container that tails the log file and streams it to its own stdout (e.g., `command: ['sh', '-c', 'tail -F /var/log/app.log']` with a shared volume). Then use `kubectl logs pod -c sidecar` to access the logs.
    </details>
 
 ---

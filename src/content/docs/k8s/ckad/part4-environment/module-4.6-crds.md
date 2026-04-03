@@ -81,6 +81,8 @@ spec:
     - db
 ```
 
+> **Pause and predict**: You see `kubectl get certificates` being used in a cluster. Is `Certificate` a built-in Kubernetes resource? How would you find out whether it's a CRD?
+
 ### What is a Custom Resource (CR)?
 
 Once the CRD exists, you can create instances—Custom Resources:
@@ -260,6 +262,8 @@ An **Operator** = CRD + Controller
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Stop and think**: A CRD for `Database` exists in the cluster, and you create a `Database` custom resource. But no actual database gets provisioned. What's missing? A CRD alone doesn't do anything — why not?
+
 ### Why Use Operators?
 
 | Benefit | Example |
@@ -363,28 +367,28 @@ k get crd myresource.example.com
 
 ## Quiz
 
-1. **What's the difference between a CRD and a Custom Resource?**
+1. **A team installs a `Database` CRD and creates a custom resource `kind: Database` with `spec.engine: postgres`. Nothing happens — no StatefulSet, no Service, no PVC is created. The CRD is correctly installed (confirmed with `kubectl get crd`). What is wrong?**
    <details>
    <summary>Answer</summary>
-   A CRD (Custom Resource Definition) defines a new resource type (like a schema). A Custom Resource (CR) is an instance of that type (actual data). CRD is the definition, CR is the object created from it.
+   A CRD only defines the schema — it tells Kubernetes how to store and validate the custom resource, but it doesn't contain any logic to act on it. What's missing is a controller (operator) that watches for Database CRs and creates the actual Kubernetes resources (StatefulSet, Service, PVC, Secret, etc.). The CRD is the "form," and the operator is the "clerk that processes the form." You need to install the database operator (a pod that runs the controller logic) alongside the CRD for anything to actually happen.
    </details>
 
-2. **What happens when you delete a CRD?**
+2. **A colleague accidentally runs `kubectl delete crd databases.example.com` thinking it would just clean up the definition. The team immediately discovers that all 15 Database custom resources across 5 namespaces are gone. Why did this happen and how can you prevent it?**
    <details>
    <summary>Answer</summary>
-   All Custom Resources of that type are also deleted. This is cascading deletion.
+   Deleting a CRD triggers cascading deletion of all Custom Resources of that type cluster-wide. Kubernetes treats the CRD as the "owner" of all its CRs — removing the definition removes all instances. To prevent this: (1) use RBAC to restrict who can delete CRDs (they're cluster-scoped resources), (2) back up CRs before any CRD operations, (3) consider adding the `foregroundDeletion` finalizer pattern in your operator to handle cleanup gracefully. This is one of the most dangerous operations in Kubernetes because a single command can wipe data across all namespaces.
    </details>
 
-3. **What is an Operator?**
+3. **You join a new team and need to understand what custom resources are installed in the cluster. You run `kubectl get pods` and see several pods with names like `cert-manager-controller` and `prometheus-operator`. How do you discover all CRDs and which ones are actively being used?**
    <details>
    <summary>Answer</summary>
-   An Operator is a pattern combining a CRD with a controller. The CRD defines the resource structure, and the controller watches for CRs and takes automated actions (creating pods, managing state, etc.).
+   Run `kubectl get crd` to list all installed CRDs — this shows every custom resource type available. To see which ones have actual instances, iterate through them: `kubectl get crd -o name | while read crd; do echo "$crd:"; kubectl get $(echo $crd | sed 's/customresourcedefinitions.apiextensions.k8s.io\///') -A 2>/dev/null | head -5; done`. You can also use `kubectl api-resources` to see all resources (including CRD-backed ones) and their short names. CRDs from well-known operators are easy to identify by their group names: `cert-manager.io`, `monitoring.coreos.com`, `gateway.networking.k8s.io`, etc.
    </details>
 
-4. **How do you list all CRDs in a cluster?**
+4. **You create a CRD with `scope: Namespaced` and a custom resource in the `production` namespace. A developer in the `staging` namespace tries `kubectl get databases` and sees nothing. They think the CRD is broken. What do you tell them?**
    <details>
    <summary>Answer</summary>
-   `kubectl get crd` or `kubectl get customresourcedefinitions`
+   The CRD is working correctly. Because it's defined as `scope: Namespaced`, custom resources exist within specific namespaces — just like ConfigMaps or Secrets. The Database CR was created in `production`, so it's only visible there. The developer needs to either create a Database CR in `staging` or look in the right namespace with `kubectl get databases -n production`. If the resource should be visible cluster-wide (like a shared configuration), the CRD should use `scope: Cluster` instead, but that's a design decision with trade-offs — cluster-scoped resources can't be isolated by namespace RBAC.
    </details>
 
 ---

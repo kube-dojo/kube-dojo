@@ -66,6 +66,8 @@ livenessProbe:
 - Restart would fix the issue
 - You need automatic recovery from application bugs
 
+> **Pause and predict**: If you configure a liveness probe with `initialDelaySeconds: 0` on an app that takes 30 seconds to start, what will happen? Think through the timeline before reading on.
+
 ### Readiness Probe
 
 **Question it answers**: "Is the application ready to receive traffic?"
@@ -174,6 +176,8 @@ livenessProbe:
 | `successThreshold` | Successes needed after failure | 1 |
 | `failureThreshold` | Failures before action | 3 |
 
+> **Stop and think**: You have an app that connects to a database on startup. Should you use the same endpoint for liveness and readiness probes? What could go wrong if you do?
+
 ### Calculating Probe Timing
 
 **Time before first probe**: `initialDelaySeconds`
@@ -236,6 +240,8 @@ livenessProbe:
   initialDelaySeconds: 30
   periodSeconds: 10
 ```
+
+> **Pause and predict**: For a Redis container, would you use an HTTP, TCP, or exec probe for liveness? Why might one be better than the others?
 
 ### gRPC Health Check
 
@@ -347,28 +353,28 @@ k get endpoints myservice
 
 ## Quiz
 
-1. **What happens when a liveness probe fails?**
+1. **A developer deploys a pod with a liveness probe pointing to `/healthz`. The pod starts, runs for about 30 seconds, then restarts. The restart count keeps climbing. The application logs show no errors. What is likely wrong and how do you fix it?**
    <details>
    <summary>Answer</summary>
-   Kubernetes kills the container and restarts it. The restart count increases.
+   The liveness probe is likely failing because the `/healthz` endpoint is returning a non-2xx status code or timing out, even though the application itself is running fine. This commonly happens when the probe path doesn't exist in the app, the wrong port is specified, or `timeoutSeconds` is too low for the health endpoint's response time. Check with `kubectl describe pod` to see the probe failure events, verify the endpoint exists by exec-ing into the pod and curling it, and adjust the probe path, port, or timing parameters accordingly.
    </details>
 
-2. **What happens when a readiness probe fails?**
+2. **After deploying a new version, users report that the application is intermittently unavailable. You check and see all pods are Running with 0 restarts. However, `kubectl get endpoints` for the Service shows pods appearing and disappearing. What probe is likely misconfigured and why?**
    <details>
    <summary>Answer</summary>
-   The pod is removed from Service endpoints (stops receiving traffic). The container is NOT restarted.
+   The readiness probe is failing intermittently, causing pods to be removed from and re-added to Service endpoints. This creates the appearance of intermittent availability even though the pods never restart (readiness failures remove traffic, not kill containers). The fix depends on the root cause: the readiness probe might be checking an external dependency that's flaky, or the thresholds might be too aggressive. Investigate with `kubectl describe pod` to see readiness probe failure messages, and consider whether the readiness endpoint is checking something the pod actually controls versus an external service.
    </details>
 
-3. **When would you use a startup probe instead of a high `initialDelaySeconds`?**
+3. **A legacy Java application takes between 60 and 180 seconds to start. The team has set `initialDelaySeconds: 200` on the liveness probe to compensate. What is the problem with this approach and what is a better solution?**
    <details>
    <summary>Answer</summary>
-   Use startup probe for applications with variable or long startup times. Startup probe allows liveness to use aggressive settings after startup, while high `initialDelaySeconds` delays all failure detection.
+   Setting `initialDelaySeconds: 200` means that if the application genuinely crashes after startup, Kubernetes won't detect it for over 3 minutes (200s delay + failureThreshold * periodSeconds). This delays recovery from real failures. The better solution is to use a startup probe with a high `failureThreshold` and reasonable `periodSeconds` (e.g., `failureThreshold: 30, periodSeconds: 10` gives 300 seconds of startup time). Once the startup probe succeeds, the liveness probe kicks in with aggressive settings (e.g., `periodSeconds: 10, failureThreshold: 3`) for fast failure detection.
    </details>
 
-4. **What's the default `failureThreshold` for probes?**
+4. **You create a pod with all three probe types. The startup probe uses `failureThreshold: 30` and `periodSeconds: 10`. How long does Kubernetes wait before killing the pod if the app never starts? What happens to the liveness and readiness probes during this time?**
    <details>
    <summary>Answer</summary>
-   3 consecutive failures before taking action.
+   Kubernetes waits up to 300 seconds (30 failures x 10 seconds) before killing the container due to startup probe failure. During this entire startup period, the liveness and readiness probes are completely disabled — they don't run at all until the startup probe succeeds at least once. This is the key advantage of startup probes: they gate the other probes, preventing premature liveness kills during slow startups while still allowing aggressive liveness checking after startup completes.
    </details>
 
 ---
