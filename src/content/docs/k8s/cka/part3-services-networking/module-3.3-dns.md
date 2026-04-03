@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Resolve** service names to IPs using Kubernetes DNS conventions (service.namespace.svc.cluster.local)
+- **Debug** DNS failures by checking CoreDNS pods, configmap, and testing resolution from pods
+- **Configure** custom DNS entries and upstream DNS forwarding in CoreDNS
+- **Explain** how DNS-based service discovery enables microservice communication
+
+---
+
 ## Why This Module Matters
 
 DNS is how pods find services. Every time a pod makes a request to `my-service`, DNS resolves that name to an IP address. If DNS breaks, your entire cluster's service discovery breaks. Understanding CoreDNS is essential for troubleshooting connectivity issues.

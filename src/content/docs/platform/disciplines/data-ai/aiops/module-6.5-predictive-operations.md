@@ -14,6 +14,15 @@ Before starting this module:
 - Basic statistics (regression, forecasting concepts)
 - Familiarity with capacity planning
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement predictive models that forecast resource exhaustion, capacity limits, and potential failures**
+- **Design early warning systems that alert teams before SLO violations occur**
+- **Build capacity prediction pipelines using time-series forecasting on operational metrics**
+- **Evaluate predictive accuracy and tune models to minimize false alarms while catching real predictions**
+
 ## Why This Module Matters
 
 Reactive operations mean you're always behind. By the time you see the alert, users are already impacted. Predictive operations flip the script—you fix problems before they happen.

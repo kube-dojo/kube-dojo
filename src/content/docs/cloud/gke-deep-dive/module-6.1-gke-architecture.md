@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: GCP Essentials, Cloud Architecture Patterns
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure GKE Standard and Autopilot clusters with release channels, regional topology, and node auto-provisioning**
+- **Evaluate GKE Standard vs Autopilot mode for workload requirements including GPU, DaemonSet, and cost constraints**
+- **Implement GKE cluster upgrade strategies using release channels, maintenance windows, and surge upgrades**
+- **Design regional GKE clusters with multi-zonal node pools for high-availability production workloads**
+
+---
+
 ## Why This Module Matters
 
 In March 2023, a Series B fintech startup migrated their payment processing platform from a self-managed Kubernetes cluster on Compute Engine VMs to Google Kubernetes Engine. The migration took three weeks. On day one of production traffic, an engineer noticed that GKE had automatically upgraded the control plane from 1.26 to 1.27 during a peak traffic window. A deprecated API that their Helm charts still referenced---`autoscaling/v2beta2`---was removed in 1.26. The rolling update caused 14 minutes of degraded service for their checkout flow, impacting an estimated $340,000 in transactions. The post-mortem revealed two failures: first, they had enrolled in the Rapid release channel without understanding its upgrade cadence. Second, they had never tested their manifests against the next Kubernetes minor version. The CTO's summary: "We chose a managed service to avoid operational surprises, and then we did not read the manual."

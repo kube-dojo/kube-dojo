@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Create** pods imperatively and declaratively with resource requests, probes, and security contexts
+- **Debug** pod failures systematically (Pending → check scheduling, CrashLoop → check logs, ImagePull → check registry)
+- **Configure** liveness, readiness, and startup probes and explain when to use each
+- **Explain** the pod lifecycle (init containers → main containers → termination) with grace periods
+
+---
+
 ## Why This Module Matters
 
 Pods are the **atomic unit of deployment** in Kubernetes. Every container you run lives inside a pod. Every Deployment, StatefulSet, DaemonSet, and Job creates pods. If you don't understand pods deeply, you'll struggle with everything else.

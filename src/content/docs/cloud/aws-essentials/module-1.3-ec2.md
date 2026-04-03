@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [MEDIUM] | **Time to Complete**: 2.5h | **Prerequisites**: Module 1.2
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure Auto Scaling Groups with launch templates to build self-healing, elastic compute clusters**
+- **Implement Application Load Balancers with health checks and target groups for zero-downtime deployments**
+- **Evaluate EC2 instance families and purchasing options (On-Demand, Spot, Reserved) to optimize cost and performance**
+- **Deploy EC2 instances with User Data scripts and custom AMIs to automate application bootstrapping**
+
+---
+
 ## Why This Module Matters
 
 In late 2021, an e-commerce startup launched their highly anticipated Black Friday sale. They had built their application on large EC2 instances and anticipated heavy traffic, so they provisioned twenty massive servers manually the night before. However, the traffic surge was three times larger than expected. The servers hit 100% CPU utilization within minutes. By the time the engineering team logged in, spun up new instances manually, installed the application dependencies, and registered them with the load balancer, two hours had passed. The website was unresponsive, carts were abandoned, and the startup lost an estimated two million dollars in sales.

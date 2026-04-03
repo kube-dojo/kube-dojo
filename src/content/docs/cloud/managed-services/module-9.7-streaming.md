@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [COMPLEX] | **Time to Complete**: 3h | **Prerequisites**: Module 9.2 (Message Brokers), Module 9.6 (Search & Analytics), distributed systems basics
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure Kubernetes consumers for managed streaming platforms (Amazon MSK, Confluent Cloud, Azure Event Hubs with Kafka protocol)**
+- **Implement exactly-once processing patterns with Kafka transactions and Kubernetes StatefulSet consumer groups**
+- **Deploy stream processing applications (Kafka Streams, Flink) on Kubernetes with managed streaming backends**
+- **Design data pipeline architectures that combine managed streaming with Kubernetes batch and real-time processing workloads**
+
+---
+
 ## Why This Module Matters
 
 In February 2024, an online marketplace processed 850,000 orders per day. Their event pipeline -- order-placed, payment-confirmed, inventory-updated, shipment-created -- ran through a self-managed Kafka cluster on EKS. Six brokers, each on r6i.2xlarge instances with 2 TB of gp3 storage. Total monthly cost: $9,400. The platform team spent 15 hours per week on Kafka operations: broker rolling restarts, partition rebalancing, disk monitoring, ZooKeeper maintenance, and upgrading between Kafka versions.

@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Compare** assessment types: vulnerability scans, penetration tests, security audits, and threat models
+2. **Evaluate** Kubernetes security posture using structured assessment methodologies
+3. **Assess** findings from security assessments to prioritize remediation by risk
+4. **Design** an ongoing security assessment program for Kubernetes environments
+
+---
+
 ## Why This Module Matters
 
 Security assessments evaluate your Kubernetes security posture through systematic analysis, testing, and review. Understanding assessment types and processes helps you identify gaps, prioritize improvements, and demonstrate security to stakeholders.

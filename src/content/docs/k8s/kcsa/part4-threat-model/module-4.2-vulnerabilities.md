@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Identify** common Kubernetes vulnerability categories: CVEs, misconfigurations, and insecure defaults
+2. **Assess** vulnerability severity using CVSS scores and exploitability context
+3. **Evaluate** the difference between code vulnerabilities and configuration vulnerabilities
+4. **Explain** mitigation strategies for the most common Kubernetes vulnerability patterns
+
+---
+
 ## Why This Module Matters
 
 Understanding common vulnerabilities helps you anticipate attacks and prioritize defenses. Kubernetes vulnerabilities come in two forms: code vulnerabilities (CVEs) and misconfigurations. Both can lead to cluster compromise, but misconfigurations are far more common.

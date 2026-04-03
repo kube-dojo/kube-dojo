@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Compare** Horizontal Pod Autoscaler, Vertical Pod Autoscaler, and Cluster Autoscaler
+2. **Explain** how HPA uses metrics to make scaling decisions
+3. **Identify** which scaling approach fits a given workload pattern (CPU-bound, memory-bound, event-driven)
+4. **Evaluate** trade-offs between over-provisioning and autoscaling for cost and reliability
+
+---
+
 ## Why This Module Matters
 
 One of Kubernetes' superpowers is automatic scaling—adding or removing resources based on demand. Understanding scaling concepts helps you design applications that handle variable workloads efficiently. KCNA tests your understanding of scaling mechanisms.

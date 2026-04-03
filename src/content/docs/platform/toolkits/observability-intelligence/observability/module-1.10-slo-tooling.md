@@ -16,6 +16,16 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure SLO definitions using Sloth or Pyrra with error budget calculations and burn rate alerts**
+- **Implement multi-window burn rate alerting for reliable SLO breach detection without alert fatigue**
+- **Deploy SLO dashboards that communicate service reliability status to engineering and business stakeholders**
+- **Evaluate SLO tooling approaches and integrate them with existing Prometheus monitoring infrastructure**
+
+
 ## Why This Module Matters
 
 The SRE lead at a mid-size fintech company had done everything by the book. She had SLOs documented in Confluence. The team agreed on 99.9% availability for the payment API and a 200ms p99 latency target for the checkout flow. Error budget policies were signed off by engineering leadership. Textbook SRE.

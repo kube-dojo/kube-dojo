@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Assess** the security limitations of Kubernetes Secrets (base64 encoding, etcd storage)
+2. **Evaluate** secrets management strategies: encryption at rest, external secret stores, sealed secrets
+3. **Identify** common secrets exposure risks: environment variable leaks, RBAC over-access, unencrypted etcd
+4. **Explain** how to implement encryption at rest and integrate external secret management tools
+
+---
+
 ## Why This Module Matters
 
 Secrets—passwords, API keys, certificates—are prime targets for attackers. Kubernetes has built-in Secrets resources, but they're not encrypted by default. Understanding the limitations and best practices for secrets management is critical for securing sensitive data.

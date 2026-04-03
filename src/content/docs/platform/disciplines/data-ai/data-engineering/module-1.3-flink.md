@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement Apache Flink on Kubernetes using the Flink Operator for stream processing workloads**
+- **Design Flink job architectures with proper checkpointing, savepoints, and state backend configuration**
+- **Configure Flink cluster scaling policies that adjust parallelism based on event throughput**
+- **Build monitoring dashboards that track Flink job health, backpressure, and processing latency**
+
 ## Why This Module Matters
 
 Kafka gives you a firehose of data. But raw data flowing through topics is not insight — it is noise. You need something that can read millions of events per second, transform them, aggregate them, join them with other streams, and output results in real time.

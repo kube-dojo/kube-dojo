@@ -20,6 +20,17 @@ CRDs are the easy path to extending the Kubernetes API: define a schema, apply i
 
 When CRDs are not enough, API Aggregation is the answer.
 
+---
+
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Build** a custom aggregated API server that serves resources from an external data source (database, SaaS API, computed metrics)
+2. **Register** an APIService object and configure the kube-aggregator to route requests to your custom server
+3. **Implement** authentication delegation and authorization so your aggregated API respects cluster RBAC
+4. **Evaluate** when to use API Aggregation vs. CRDs by comparing storage, authorization, and subresource requirements
+
 > **The Embassy Analogy**
 >
 > If the Kubernetes API Server is a country's government building, CRDs are like adding new departments inside the building -- they use the existing infrastructure (etcd, RBAC, admission). An aggregated API server is like an embassy of another country inside the same building. Visitors (kubectl, controllers) enter through the same front door and follow the same protocols, but when they request something from the embassy, their request is routed to the embassy staff (your custom server) who handle it with their own rules, their own database, and their own logic. The building (kube-aggregator) just handles the routing.

@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Explain** service mesh architecture and when it adds value over plain Kubernetes networking
+2. **Compare** serverless, service mesh, and GitOps patterns by use case and trade-offs
+3. **Identify** which architectural pattern addresses a given distributed systems challenge
+4. **Evaluate** the overhead vs. benefit of adopting patterns like service mesh or event-driven architecture
+
+---
+
 ## Why This Module Matters
 
 Beyond basic concepts, cloud native includes patterns for solving complex problems—service mesh for microservice communication, serverless for event-driven workloads, GitOps for deployment automation. KCNA tests your understanding of these architectural patterns.

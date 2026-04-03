@@ -14,6 +14,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Design** multi-pipeline Collector configurations that route traces, metrics, and logs through distinct receiver/processor/exporter chains
+2. **Configure** advanced processors (filter, transform, tail-sampling, batch) to reduce volume while preserving critical signals
+3. **Deploy** the Collector as a DaemonSet (agent) and Deployment (gateway) with proper resource limits, health checks, and scaling
+4. **Debug** pipeline issues using the debug exporter, zpages, and Collector internal metrics to identify data loss or bottlenecks
+
+---
+
 ## Why This Module Matters
 
 The OpenTelemetry Collector is the **backbone of every production observability pipeline**. It receives, processes, and exports telemetry data — traces, metrics, and logs — and it does so at scale, reliably, and vendor-neutrally. Domain 3 accounts for 26% of your OTCA exam. You cannot pass without mastering the Collector.

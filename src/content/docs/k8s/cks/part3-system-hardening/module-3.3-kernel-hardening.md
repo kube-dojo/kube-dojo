@@ -18,6 +18,17 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Configure** sysctl parameters to harden kernel settings on Kubernetes nodes
+2. **Implement** host-level protections including minimal OS images and automatic updates
+3. **Audit** node configurations for dangerous kernel parameters and missing hardening
+4. **Evaluate** container runtime isolation options to reduce kernel attack surface
+
+---
+
 ## Why This Module Matters
 
 Containers share the host kernel. A vulnerability in the kernel can compromise all containers on that host. Hardening the host OS and kernel settings reduces the attack surface that containers can exploit.

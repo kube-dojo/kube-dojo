@@ -15,6 +15,15 @@ Before starting this module, ensure you have:
 - At least one running EC2 instance to instrument (or willingness to launch one)
 - Basic understanding of metrics, logs, and alerting concepts
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure the CloudWatch Agent to collect custom metrics including memory utilization, disk I/O, and application-level telemetry**
+- **Deploy CloudWatch Alarms with composite alarm logic and SNS notification routing for multi-signal alerting**
+- **Implement CloudWatch Logs Insights queries to diagnose application errors across distributed services**
+- **Design CloudWatch dashboards with metric math expressions to visualize service health and cost trends**
+
 ---
 
 ## Why This Module Matters

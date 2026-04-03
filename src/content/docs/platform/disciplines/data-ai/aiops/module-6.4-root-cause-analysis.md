@@ -14,6 +14,15 @@ Before starting this module:
 - Basic causal reasoning concepts
 - Familiarity with distributed systems
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement automated root cause analysis workflows that correlate symptoms across metrics, logs, and traces**
+- **Design dependency graph analysis that traces failures from user-facing symptoms to infrastructure causes**
+- **Build RCA playbooks that combine automated analysis with structured human investigation**
+- **Evaluate causal inference techniques that distinguish root causes from correlated symptoms**
+
 ## Why This Module Matters
 
 Correlation tells you alerts are related. Root Cause Analysis (RCA) tells you *why*. When 47 services alert simultaneously, which one actually failed? Is it the database, the network, or a misconfigured deployment?

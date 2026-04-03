@@ -19,6 +19,16 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Rook-Ceph on Kubernetes for distributed block, file, and object storage**
+- **Configure Ceph storage pools with replication, erasure coding, and performance tuning**
+- **Implement Rook-Ceph monitoring with Prometheus alerts and capacity management dashboards**
+- **Evaluate Rook-Ceph against cloud-native storage alternatives for on-premises Kubernetes clusters**
+
+
 ## Why This Module Matters
 
 **The $3.8 Million Bare-Metal Bet**

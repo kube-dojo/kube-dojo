@@ -16,6 +16,16 @@ Before starting this module:
 - Kubernetes basics
 - Git fundamentals
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Flux controllers and configure GitRepository, Kustomization, and HelmRelease resources**
+- **Implement multi-cluster GitOps with Flux's toolkit approach and dependency ordering**
+- **Configure image automation to detect new container images and update Git repositories automatically**
+- **Compare Flux's controller-based architecture against ArgoCD for different organizational patterns**
+
+
 ## Why This Module Matters
 
 Flux is the GitOps Toolkit—a set of specialized controllers that each do one thing well. While ArgoCD is an application, Flux is a framework. This gives you incredible flexibility but requires understanding how the pieces fit together.

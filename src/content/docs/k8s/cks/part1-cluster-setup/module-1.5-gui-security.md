@@ -18,6 +18,17 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Configure** Kubernetes Dashboard with authentication and least-privilege RBAC
+2. **Audit** dashboard deployments for exposed services and overly permissive ServiceAccounts
+3. **Implement** network-level restrictions to limit dashboard access to authorized users
+4. **Evaluate** whether to deploy, restrict, or remove GUI components in production clusters
+
+---
+
 ## Why This Module Matters
 
 The Kubernetes Dashboard has been a notorious attack vector. In 2018, Tesla's Kubernetes cluster was compromised through an exposed dashboard—attackers used it to mine cryptocurrency. A misconfigured dashboard gives attackers full cluster control with a nice GUI.

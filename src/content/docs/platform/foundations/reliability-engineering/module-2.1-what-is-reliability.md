@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Foundations
 
+### What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Explain** the difference between availability, durability, and reliability and why each requires distinct engineering strategies
+2. **Evaluate** a system's reliability posture by identifying single points of failure and hidden dependencies
+3. **Design** reliability requirements for a service by mapping user expectations to concrete engineering constraints
+4. **Compare** reactive vs. proactive reliability approaches and justify when to invest in each
+
 ---
 
 ## The Incident That Changed Everything

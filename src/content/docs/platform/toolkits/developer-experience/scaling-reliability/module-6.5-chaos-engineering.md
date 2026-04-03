@@ -25,6 +25,16 @@ Your monitoring says everything is fine. Your dashboards are green. Your runbook
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Chaos Mesh or Litmus for controlled chaos experiments on Kubernetes workloads**
+- **Configure chaos experiments targeting pod failures, network partitions, and resource stress scenarios**
+- **Implement steady-state hypothesis validation to measure system resilience during chaos injection**
+- **Evaluate chaos engineering frameworks and design progressive chaos maturity programs for teams**
+
+
 ## Why This Module Matters
 
 In 2011, Netflix was preparing to migrate from its own data centers to AWS. The engineering team had a worry that kept them up at night: what happens when an EC2 instance just vanishes? They could test it manually, once, and move on. Instead, they built Chaos Monkey -- a tool that randomly terminated production instances during business hours, every single day. The early results were brutal. Services crashed. Pages fired. Engineers scrambled. But within months, every Netflix team had built retry logic, graceful degradation, and proper health checks into their services. When a real AWS region outage hit in 2012, Netflix stayed up while competitors went down. The chaos had made them antifragile. Analysts estimated that the avoided downtime saved Netflix tens of millions in lost revenue and customer churn.

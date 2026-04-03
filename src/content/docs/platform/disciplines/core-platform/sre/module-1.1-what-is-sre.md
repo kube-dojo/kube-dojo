@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Evaluate whether SRE practices are appropriate for your organization's reliability needs**
+- **Design an SRE team structure with clear roles, responsibilities, and engagement models**
+- **Implement the core SRE principles — SLOs, error budgets, toil reduction — in a real service**
+- **Analyze the gap between traditional ops and SRE to build a credible adoption roadmap**
+
 ## Why This Module Matters
 
 You've learned reliability principles. Now you need a **framework** to apply them.

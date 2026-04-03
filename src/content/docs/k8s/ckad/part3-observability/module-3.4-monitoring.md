@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## Learning Outcomes
+
+After completing this module, you will be able to:
+- **Diagnose** resource pressure using `kubectl top pods` and `kubectl top nodes`
+- **Explain** the relationship between resource requests, limits, and actual usage metrics
+- **Configure** metrics-server and verify it is collecting data from cluster nodes
+- **Evaluate** whether an application needs more resources based on observed CPU and memory consumption
+
+---
+
 ## Why This Module Matters
 
 Monitoring tells you how your applications are performing right now. While logging shows what happened, monitoring shows current state—CPU usage, memory consumption, and whether your app is struggling.

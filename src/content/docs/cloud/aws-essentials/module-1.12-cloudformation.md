@@ -15,6 +15,15 @@ Before starting this module, ensure you have:
 - An AWS account with permissions to create VPCs, subnets, security groups, and CloudFormation stacks
 - Comfortable reading YAML (JSON also works, but YAML is the standard for CloudFormation templates)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy multi-resource CloudFormation stacks with parameters, mappings, and conditional logic**
+- **Implement CloudFormation change sets and stack policies to prevent accidental deletion of stateful resources**
+- **Design nested stacks and cross-stack references to modularize infrastructure templates at scale**
+- **Diagnose CloudFormation rollback failures and resolve dependency conflicts in stack updates**
+
 ---
 
 ## Why This Module Matters

@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement software supply chain security using SLSA framework, Sigstore signing, and SBOM generation**
+- **Design artifact verification pipelines that validate image provenance and integrity before deployment**
+- **Build admission controllers that enforce signed image policies on Kubernetes clusters**
+- **Evaluate supply chain attack vectors — dependency confusion, typosquatting, compromised builds — and implement countermeasures**
+
 ## Why This Module Matters
 
 You've locked down your code. Your pipeline has security gates. Your containers are scanned.

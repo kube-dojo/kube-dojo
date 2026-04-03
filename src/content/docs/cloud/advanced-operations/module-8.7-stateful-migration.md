@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Advanced Cloud Operations
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement live migration strategies for stateful workloads (databases, message queues) between cloud regions**
+- **Configure data replication pipelines using cloud-native tools (DMS, Datastream, Azure Migrate) for zero-downtime migration**
+- **Design migration runbooks that address data gravity, consistency guarantees, and rollback procedures**
+- **Evaluate migration approaches (lift-and-shift, re-platform, re-architect) based on workload state and data volume**
+
 ---
 
 ## Why This Module Matters

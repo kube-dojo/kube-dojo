@@ -17,6 +17,16 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy cloud infrastructure using Pulumi with TypeScript, Python, or Go instead of domain-specific languages**
+- **Implement Pulumi stacks with state management, secrets encryption, and policy-as-code enforcement**
+- **Configure Pulumi's Kubernetes provider for cluster provisioning and application deployment**
+- **Compare Pulumi's programming language approach against Terraform's HCL for team adoption trade-offs**
+
+
 ## Why This Module Matters
 
 **When HCL Isn't Enough**

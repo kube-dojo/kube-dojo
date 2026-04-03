@@ -16,6 +16,16 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Ray Serve on Kubernetes for scalable model serving with dynamic batching and autoscaling**
+- **Configure Ray Serve deployments with resource allocation, replica management, and traffic routing**
+- **Implement multi-model serving pipelines with Ray Serve's composition API for inference graphs**
+- **Compare Ray Serve's unified compute framework against dedicated serving solutions for ML workloads**
+
+
 ## Why This Module Matters
 
 Single-node inference hits limits fast. Your LLM needs 4 GPUs, your embedding model needs 1, and your reranker needs 2. You can't fit them on one machine. And when traffic spikes, you need to scale each component independently.

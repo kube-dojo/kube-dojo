@@ -21,6 +21,17 @@ The rebuild took six weeks: Prometheus with Thanos for long-term storage and hig
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Deploy** a production-grade observability stack (Prometheus/Thanos, Loki, Alertmanager) sized for bare-metal cluster scale
+2. **Configure** IPMI and hardware-level exporters to monitor physical infrastructure alongside Kubernetes metrics
+3. **Design** a high-availability monitoring architecture that survives the failures it is meant to detect
+4. **Implement** on-call alerting pipelines with proper severity classification, escalation policies, and runbook integration
+
+---
+
 ## What You'll Learn
 
 - Self-hosted Prometheus architecture with Thanos for long-term storage

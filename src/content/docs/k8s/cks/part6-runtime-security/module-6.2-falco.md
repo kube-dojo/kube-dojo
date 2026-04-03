@@ -18,6 +18,17 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Write** custom Falco rules to detect specific runtime threats like shell spawns and sensitive file reads
+2. **Configure** Falco output channels to route alerts to logging systems and incident response tools
+3. **Diagnose** Falco alerts to distinguish true security incidents from benign application behavior
+4. **Deploy** Falco as a DaemonSet with appropriate kernel module or eBPF configuration
+
+---
+
 ## Why This Module Matters
 
 Audit logs tell you what happened via the API. Falco tells you what's happening inside containers at runtime. It detects suspicious system calls, file access, and network activity that could indicate a breach.

@@ -17,6 +17,15 @@ Before starting this module, you should have completed:
 - Basic Python or Node.js knowledge (Lambda examples use Python)
 - AWS CLI configured with appropriate permissions
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Lambda functions with event source mappings for S3, SQS, API Gateway, and EventBridge triggers**
+- **Optimize Lambda cold start performance by configuring provisioned concurrency, memory allocation, and runtime selection**
+- **Implement Lambda-based event processing pipelines using dead-letter queues and error handling patterns**
+- **Evaluate when to use Lambda versus containers by comparing cost, latency, and operational complexity tradeoffs**
+
 ---
 
 ## Why This Module Matters

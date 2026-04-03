@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Foundations
 
+### What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Design** redundancy architectures (active-active, active-passive, N+1) appropriate for different failure domains and cost constraints
+2. **Evaluate** whether redundant components are truly independent or share hidden common-cause failure modes
+3. **Implement** fault-tolerance patterns including leader election, quorum-based writes, and cross-region failover
+4. **Analyze** the tradeoffs between redundancy cost, recovery time, and data durability for a given service tier
+
 ---
 
 ## The $150 Million Lesson in Independence

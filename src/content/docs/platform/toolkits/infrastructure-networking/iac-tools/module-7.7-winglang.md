@@ -20,6 +20,16 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy cloud applications using Wing's cloud-oriented programming model with local simulation**
+- **Implement Wing preflight and inflight code patterns for compile-time infrastructure and runtime logic**
+- **Configure Wing's platform providers to target AWS, Azure, GCP, or Kubernetes from a single codebase**
+- **Evaluate Wing's unified cloud abstraction against traditional IaC tools for full-stack cloud development**
+
+
 ## Why This Module Matters
 
 **What If Infrastructure and Application Code Were One?**

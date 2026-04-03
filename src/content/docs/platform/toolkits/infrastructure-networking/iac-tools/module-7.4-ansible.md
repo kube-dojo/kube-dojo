@@ -18,6 +18,16 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure Ansible playbooks with roles and collections for Kubernetes node provisioning**
+- **Implement Ansible's kubernetes.core collection for declarative cluster resource management**
+- **Deploy multi-tier applications using Ansible with inventory management and vault-encrypted secrets**
+- **Integrate Ansible with Terraform for infrastructure provisioning and configuration management workflows**
+
+
 ## Why This Module Matters
 
 *The configuration management console showed 2,847 servers in "unknown" state.*

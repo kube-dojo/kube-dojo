@@ -16,6 +16,16 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy vLLM on Kubernetes for high-throughput large language model inference with PagedAttention**
+- **Configure vLLM serving with model parallelism, quantization, and continuous batching for GPU efficiency**
+- **Implement vLLM's OpenAI-compatible API for drop-in replacement of commercial LLM endpoints**
+- **Optimize GPU memory utilization and throughput with vLLM's KV cache management strategies**
+
+
 ## Why This Module Matters
 
 Large Language Models (LLMs) are expensive to serve. A single Llama-70B inference can use 140GB of GPU memory and take 30+ seconds. Naive serving approaches waste 50-90% of GPU capacity because of how attention memory is managed.

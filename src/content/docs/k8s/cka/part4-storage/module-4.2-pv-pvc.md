@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Create** PersistentVolumes and PersistentVolumeClaims with appropriate access modes and storage classes
+- **Explain** the PV lifecycle (Available → Bound → Released → Deleted) and reclaim policies
+- **Debug** PVC stuck in Pending by checking StorageClass, capacity, access modes, and node affinity
+- **Implement** static provisioning for local storage and dynamic provisioning with StorageClasses
+
+---
+
 ## Why This Module Matters
 
 PersistentVolumes (PV) and PersistentVolumeClaims (PVC) are the foundation of persistent storage in Kubernetes. They separate storage provisioning from consumption, allowing administrators to manage storage independently from developers who consume it. The CKA exam heavily tests PV/PVC creation, binding, and troubleshooting.

@@ -19,6 +19,16 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy cloud applications using Nitric's framework-based approach with automatic infrastructure provisioning**
+- **Configure Nitric resources (APIs, queues, storage, schedules) using language-native SDK declarations**
+- **Implement custom Nitric providers to target different cloud platforms from a single application codebase**
+- **Compare Nitric's application-centric model against traditional IaC for cloud-native service development**
+
+
 ## Why This Module Matters
 
 **What If You Could Swap Clouds Without Rewriting Code?**

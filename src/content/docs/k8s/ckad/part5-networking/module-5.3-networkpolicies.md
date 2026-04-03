@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## Learning Outcomes
+
+After completing this module, you will be able to:
+- **Write** NetworkPolicies that restrict ingress and egress traffic using pod, namespace, and CIDR selectors
+- **Debug** blocked traffic by analyzing NetworkPolicy rules and verifying label matches
+- **Design** a default-deny network posture with explicit allow rules for required communication paths
+- **Explain** how NetworkPolicy rules combine and why order of rules does not matter
+
+---
+
 ## Why This Module Matters
 
 By default, all pods can communicate with all other pods. NetworkPolicies let you control which pods can talk to which, implementing the principle of least privilege for network access. This is critical for security and multi-tenant clusters.

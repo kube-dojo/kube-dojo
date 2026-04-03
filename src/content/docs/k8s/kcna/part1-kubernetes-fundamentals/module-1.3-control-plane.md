@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Explain** the role of each control plane component: API server, etcd, scheduler, and controller manager
+2. **Trace** how a pod creation request flows through the control plane components
+3. **Identify** which component is responsible for a given cluster behavior or failure
+4. **Compare** single control plane vs. high-availability control plane architectures
+
+---
+
 ## Why This Module Matters
 
 The control plane is the **brain of Kubernetes**. Understanding what each component does is essential for KCNA—expect multiple questions about control plane architecture.

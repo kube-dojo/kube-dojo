@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [COMPLEX] | **Time to Complete**: 3h | **Prerequisites**: Kubernetes Networking, Service Mesh Basics, Hybrid Cloud Architecture (Module 10.4)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Istio multi-cluster mesh across EKS, GKE, and AKS clusters with cross-cloud service discovery**
+- **Configure mTLS-encrypted communication between services running in different cloud providers**
+- **Implement traffic management policies (fault injection, traffic shifting, circuit breaking) across multi-cloud meshes**
+- **Design multi-cloud mesh architectures that balance latency, security, and operational complexity trade-offs**
+
+---
+
 ## Why This Module Matters
 
 In October 2023, a ride-sharing company operated two Kubernetes clusters: their primary on AWS in us-east-1 and a disaster recovery cluster on GCP in us-central1. When AWS us-east-1 experienced a partial outage affecting their EKS control plane, their failover plan -- a manual DNS switch to GCP -- took 43 minutes to execute. During those 43 minutes, the booking service was down for 12 million users. Post-incident analysis revealed that the DNS failover was slow because it required three teams to coordinate: the platform team to verify GCP was ready, the networking team to switch DNS records, and the on-call lead to approve the switch. They estimated the outage cost $3.8 million in lost bookings and $1.2 million in rider credits issued to angry customers.

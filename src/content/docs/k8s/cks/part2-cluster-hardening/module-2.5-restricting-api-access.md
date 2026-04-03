@@ -18,6 +18,17 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Configure** API server network restrictions using firewall rules and CIDR allowlists
+2. **Implement** authentication webhooks and OIDC integration for API access control
+3. **Audit** API access patterns to detect unauthorized or anomalous requests
+4. **Design** multi-layer API access controls combining network, authentication, and RBAC
+
+---
+
 ## Why This Module Matters
 
 The Kubernetes API is the crown jewel—access to it means control over everything. While RBAC controls what authenticated users can do, restricting WHO can even reach the API is equally important.

@@ -18,6 +18,17 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Create** hardened Dockerfiles using multi-stage builds, minimal base images, and non-root users
+2. **Configure** image pull policies and private registry authentication for clusters
+3. **Implement** image digest pinning to prevent tag-based supply chain attacks
+4. **Audit** container images for unnecessary packages, setuid binaries, and embedded secrets
+
+---
+
 ## Why This Module Matters
 
 Container images are the foundation of your workloads. A vulnerable base image, malicious package, or misconfigured Dockerfile can compromise your entire cluster. Supply chain attacks target the software before it even runs.

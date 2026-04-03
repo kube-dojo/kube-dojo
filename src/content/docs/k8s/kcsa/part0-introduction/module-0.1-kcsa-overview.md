@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Explain** the KCSA exam format, domains, and how it fits in the Kubernetes certification path
+2. **Evaluate** your readiness by mapping current skills against the six KCSA exam domains
+3. **Compare** KCSA scope with KCNA (general knowledge) and CKS (hands-on security specialist)
+4. **Design** a study plan that prioritizes high-weight security domains
+
+---
+
 ## Why This Module Matters
 
 The KCSA (Kubernetes and Cloud Native Security Associate) fills a crucial gap in the Kubernetes certification landscape. Before KCSA, you had to choose between general knowledge (KCNA) or jump straight into hands-on security specialist work (CKS). Now there's a bridge.

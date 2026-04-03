@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Configure** nodeSelector, node affinity, and pod affinity/anti-affinity rules
+- **Use** taints and tolerations to control which pods can run on specific nodes
+- **Implement** pod topology spread constraints for high availability across zones
+- **Debug** Pending pods by reading scheduler events and matching them to node constraints
+
+---
+
 ## Why This Module Matters
 
 By default, the scheduler places pods on any node with available resources. But in production, you need control:

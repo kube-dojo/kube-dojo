@@ -18,6 +18,15 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement drift detection pipelines that identify when infrastructure state diverges from IaC definitions**
+- **Design automated remediation workflows that reconcile drift without manual intervention**
+- **Build alerting and escalation procedures for drift that cannot be automatically resolved**
+- **Analyze drift root causes — manual changes, incomplete IaC coverage, provider bugs — to prevent recurrence**
+
 ## Why This Module Matters
 
 **The Silent Security Group**

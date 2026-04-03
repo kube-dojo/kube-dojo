@@ -20,6 +20,16 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Vitess on Kubernetes for horizontal scaling of MySQL with transparent sharding**
+- **Configure Vitess VSchema and sharding strategies for distributing data across multiple MySQL instances**
+- **Implement Vitess schema migrations, resharding operations, and backup/restore workflows**
+- **Evaluate Vitess's MySQL-compatible sharding against CockroachDB and TiDB for relational scale-out needs**
+
+
 ## Why This Module Matters
 
 **The MySQL That Wouldn't Die**

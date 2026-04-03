@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement DORA metrics collection to measure deployment frequency, lead time, MTTR, and change failure rate**
+- **Design release quality dashboards that give engineering leadership actionable visibility into delivery health**
+- **Build automated release scorecards that track reliability and velocity trends over time**
+- **Analyze release metric patterns to identify bottlenecks in your software delivery pipeline**
+
 ## Why This Module Matters
 
 A VP of Engineering walks into a meeting and asks three questions:

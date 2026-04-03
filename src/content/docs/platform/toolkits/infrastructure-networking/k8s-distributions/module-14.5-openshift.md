@@ -20,6 +20,16 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy OpenShift clusters and configure project-based multi-tenancy with integrated developer workflows**
+- **Implement OpenShift's built-in CI/CD pipelines, image streams, and source-to-image builds**
+- **Configure OpenShift operators and OperatorHub for automated application lifecycle management**
+- **Compare OpenShift's enterprise platform against vanilla Kubernetes for regulated industry requirements**
+
+
 ## Why This Module Matters
 
 **When Kubernetes Alone Isn't Enough**

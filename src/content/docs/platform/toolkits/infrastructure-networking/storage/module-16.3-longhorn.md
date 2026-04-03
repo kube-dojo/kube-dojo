@@ -20,6 +20,16 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Longhorn for distributed block storage with built-in backup and disaster recovery**
+- **Configure Longhorn volume replication, snapshots, and recurring backup schedules**
+- **Implement Longhorn's DR capabilities with cross-cluster volume replication and restore workflows**
+- **Compare Longhorn's simplicity against Rook-Ceph for teams needing lightweight distributed storage**
+
+
 ## Why This Module Matters
 
 **The $680K Edge Computing Rescue**

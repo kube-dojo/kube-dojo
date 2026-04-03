@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Deploy** DaemonSets for node-level services and StatefulSets for stateful applications
+- **Explain** how StatefulSet pod naming, PVC binding, and ordered deployment differ from Deployments
+- **Configure** DaemonSet tolerations to run on control plane nodes when needed
+- **Troubleshoot** StatefulSet issues (stuck PVC binding, ordered rollout failures, headless service DNS)
+
+---
+
 ## Why This Module Matters
 
 Deployments work great for stateless applications, but not everything is stateless. Some workloads have special requirements:

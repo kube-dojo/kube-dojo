@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [COMPLEX] | **Time to Complete**: 3h | **Prerequisites**: Module 5.1 (EKS Architecture), Module 5.2 (EKS Networking)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure Karpenter for intelligent, constraint-based node autoscaling that optimizes cost and bin-packing on EKS**
+- **Implement EKS observability with CloudWatch Container Insights, AWS Distro for OpenTelemetry, and Prometheus**
+- **Deploy cost optimization strategies combining Spot instances, Savings Plans, and right-sizing for EKS workloads**
+- **Design production EKS upgrade runbooks that safely roll clusters through Kubernetes version upgrades**
+
+---
+
 ## Why This Module Matters
 
 In September 2023, a video streaming company running on EKS launched a new series that went viral. Their backend scaled from 200 pods to 1,800 pods in under 20 minutes. The Horizontal Pod Autoscaler did its job -- it created the pods. But the Cluster Autoscaler did not keep up. It took 8 minutes to detect the need for new nodes, 3 minutes to provision them through the Auto Scaling Group, and another 2 minutes for the nodes to join the cluster and become Ready. By the time capacity caught up, users had experienced 13 minutes of degraded service: buffering, failed playback starts, and error pages. Their social media mentions during that window were overwhelmingly negative.

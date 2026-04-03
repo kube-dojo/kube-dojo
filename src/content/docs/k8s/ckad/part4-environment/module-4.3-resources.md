@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## Learning Outcomes
+
+After completing this module, you will be able to:
+- **Configure** resource requests and limits for CPU and memory in pod specifications
+- **Diagnose** OOMKilled and CPU throttling issues by correlating limits with observed behavior
+- **Design** resource allocations that balance performance, cost, and scheduling reliability
+- **Explain** how requests affect scheduling and limits affect runtime enforcement
+
+---
+
 ## Why This Module Matters
 
 Resource requests and limits control how much CPU and memory your containers can use. Without them, a single container could consume all node resources, starving other pods. Proper resource management is essential for cluster stability.

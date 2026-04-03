@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Instrument** an application with the OpenTelemetry SDK, configuring TracerProvider, MeterProvider, and LoggerProvider pipelines
+2. **Implement** custom spans with attributes, events, and status codes that capture business-meaningful telemetry
+3. **Configure** exporters (OTLP, Prometheus, console) and processors (batch, filter) to control how signals leave your application
+4. **Evaluate** the tradeoffs between automatic and manual instrumentation and select the right approach for each service
+
+---
+
 ## Why This Module Matters
 
 A team at a mid-size fintech company had Jaeger deployed, Prometheus scraping, and Fluentd shipping logs. Three separate instrumentation libraries, three configuration surfaces, three vendor lock-in vectors. When they needed to switch from Jaeger to Grafana Tempo, it took six weeks to re-instrument 40 services. Then OpenTelemetry arrived, and the next migration — Tempo to an OTLP-native backend — took an afternoon. One SDK, one wire protocol, swap the exporter.

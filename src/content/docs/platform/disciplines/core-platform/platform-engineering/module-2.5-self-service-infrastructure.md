@@ -16,6 +16,15 @@ Before starting this module, you should:
 - Understand infrastructure-as-code concepts (Terraform, Pulumi, or similar)
 - Familiarity with Kubernetes Custom Resources
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design self-service infrastructure workflows with appropriate guardrails and approval gates**
+- **Implement infrastructure request APIs that provision resources in minutes instead of days**
+- **Build policy-as-code controls that enforce organizational standards without blocking developer autonomy**
+- **Evaluate self-service adoption patterns to identify gaps in your platform's capabilities**
+
 ## Why This Module Matters
 
 The promise of cloud computing was "infrastructure in minutes." The reality for most developers:

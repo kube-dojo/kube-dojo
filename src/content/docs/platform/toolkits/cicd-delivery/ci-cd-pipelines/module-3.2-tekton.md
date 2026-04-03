@@ -16,6 +16,16 @@ Before starting this module:
 - Container fundamentals
 - YAML proficiency
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Tekton on Kubernetes and configure Tasks, Pipelines, and PipelineRuns for CI/CD workflows**
+- **Implement reusable Tekton task catalogs with parameterized inputs and workspace sharing**
+- **Configure event-driven pipeline triggers using Tekton Triggers and interceptors**
+- **Evaluate Tekton's Kubernetes-native approach against hosted CI services for cost and control trade-offs**
+
+
 ## Why This Module Matters
 
 Tekton is a Kubernetes-native CI/CD framework. Unlike hosted CI services, Tekton runs in your cluster—giving you full control, no vendor lock-in, and the ability to scale pipelines like any other Kubernetes workload.

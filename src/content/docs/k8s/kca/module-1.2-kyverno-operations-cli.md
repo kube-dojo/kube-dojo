@@ -14,6 +14,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Install** Kyverno with production-grade configuration: multiple replicas, pod anti-affinity, resource limits, and appropriate failure policies
+2. **Validate** policies in CI/CD pipelines using the Kyverno CLI (`kyverno apply`, `kyverno test`) before they reach a cluster
+3. **Monitor** Kyverno health and policy enforcement using PolicyReports, Prometheus metrics, and admission controller logs
+4. **Operate** Kyverno upgrades safely by testing policy compatibility, managing CRD migrations, and configuring webhook timeouts
+
+---
+
 ## Why This Module Matters
 
 Writing Kyverno policies is only half the job. The other half is **operating Kyverno in production**: installing it reliably, testing policies before they hit a cluster, monitoring what policies are doing, and upgrading without breaking your admission pipeline.

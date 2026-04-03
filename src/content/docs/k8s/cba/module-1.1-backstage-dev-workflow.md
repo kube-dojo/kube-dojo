@@ -14,6 +14,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Set up** a Backstage project from scratch using `@backstage/create-app`, configure app-config.yaml layering, and run the local development loop
+2. **Navigate** the Backstage monorepo structure and explain how packages, plugins, and the app shell relate to each other
+3. **Configure** authentication providers, PostgreSQL backends, and environment-specific overrides for staging and production deployments
+4. **Diagnose** common Backstage startup failures by interpreting build errors, dependency conflicts, and configuration validation messages
+
+---
+
 ## Why This Module Matters
 
 Backstage is the backbone of the CBA certification. Before you can build plugins, design software catalogs, or integrate with Kubernetes, you need to understand how the Backstage project itself works---its monorepo layout, its build pipeline, its configuration system, and its local development loop.

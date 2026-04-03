@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## Learning Outcomes
+
+After completing this module, you will be able to:
+- **Deploy** applications using `helm install` with custom values and namespace targeting
+- **Create** value overrides to customize chart behavior for different environments
+- **Debug** failed Helm releases using `helm status`, `helm history`, and rollback operations
+- **Explain** Helm chart structure including templates, values, and the release lifecycle
+
+---
+
 ## Why This Module Matters
 
 Helm is the package manager for Kubernetes. Instead of managing dozens of YAML files, Helm bundles them into "charts" that can be installed, upgraded, and rolled back as a unit. The 2025 CKAD exam added Helm as a required skill.

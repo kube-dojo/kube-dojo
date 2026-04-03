@@ -19,6 +19,15 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design IaC module registries and versioning strategies that support hundreds of consuming teams**
+- **Implement state management patterns — workspaces, accounts, backends — for large multi-team environments**
+- **Build dependency management workflows that prevent breaking changes across shared IaC modules**
+- **Evaluate monorepo versus multi-repo strategies for IaC at organizational scale**
+
 ## Why This Module Matters
 
 **The Great Terraform Migration Crisis**

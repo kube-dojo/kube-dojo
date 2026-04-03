@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Advanced Cloud Operations
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design large-scale observability architectures that handle millions of time series and terabytes of log data**
+- **Implement centralized logging pipelines using Fluentd/Fluent Bit, cloud-native log services, and retention policies**
+- **Configure distributed tracing with OpenTelemetry across multi-cluster Kubernetes environments**
+- **Optimize observability costs by implementing sampling strategies, metric aggregation, and tiered storage retention**
+
 ---
 
 ## Why This Module Matters

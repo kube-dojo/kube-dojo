@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Identify** configurations that enable container escape: privileged mode, hostPID, hostNetwork, writable hostPath
+2. **Assess** the blast radius of a container escape based on node-level access and RBAC
+3. **Evaluate** prevention strategies: security contexts, PSA enforcement, and runtime sandboxing
+4. **Explain** real-world container escape scenarios and the defense layers that block them
+
+---
+
 ## Why This Module Matters
 
 Container escape—breaking out of a container to access the host—is the most severe container security failure. Understanding which configurations make escape possible helps you build secure defaults and recognize dangerous settings before they reach production.

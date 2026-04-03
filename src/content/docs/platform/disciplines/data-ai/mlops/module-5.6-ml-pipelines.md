@@ -14,6 +14,15 @@ Before starting this module:
 - Basic Kubernetes knowledge
 - Familiarity with DAGs (Directed Acyclic Graphs)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design end-to-end ML pipelines that orchestrate data preparation, training, evaluation, and deployment**
+- **Implement pipeline DAGs using Kubeflow Pipelines, Argo Workflows, or Airflow on Kubernetes**
+- **Build pipeline versioning and reproducibility practices that enable reliable model iteration**
+- **Configure pipeline triggers that automate retraining based on data changes, schedule, or performance alerts**
+
 ## Why This Module Matters
 
 Manual ML workflows don't scale. Running notebooks by hand, copying models to S3, updating serving configs—it's error-prone, slow, and doesn't work when you have 100 models in production.

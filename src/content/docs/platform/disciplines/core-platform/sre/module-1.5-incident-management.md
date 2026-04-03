@@ -15,6 +15,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design an incident response framework with clear roles, severities, and escalation paths**
+- **Lead an incident as Incident Commander — coordinating communication, diagnosis, and resolution**
+- **Implement incident communication templates that keep stakeholders informed without slowing response**
+- **Build runbooks that reduce mean time to resolution for recurring incident categories**
+
 ## Why This Module Matters
 
 It's 3 AM. Your phone buzzes. The dashboard is red. Customers are complaining on Twitter.

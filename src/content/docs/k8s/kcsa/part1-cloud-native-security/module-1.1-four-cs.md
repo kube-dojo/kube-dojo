@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Explain** the 4 Cs model (Cloud, Cluster, Container, Code) and how each layer builds on the one below
+2. **Evaluate** which security layer a given vulnerability or misconfiguration belongs to
+3. **Assess** whether a security control addresses the correct layer in the 4 Cs hierarchy
+4. **Design** a layered security approach using the 4 Cs as an organizing framework
+
+---
+
 ## Why This Module Matters
 
 The 4 Cs is the foundational mental model for cloud native security. Every security decision in Kubernetes maps back to one of these layers. Master this framework, and you'll have a structured way to think about any security question on the KCSA exam.

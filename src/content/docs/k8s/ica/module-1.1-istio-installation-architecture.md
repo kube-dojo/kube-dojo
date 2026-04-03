@@ -18,6 +18,17 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Install** Istio using istioctl, Helm, and the Istio Operator, selecting the correct profile for each environment
+2. **Configure** automatic and manual sidecar injection and troubleshoot pods that fail to receive an Envoy proxy
+3. **Analyze** Istio's control plane architecture (istiod, Pilot, Citadel, Galley) and explain how configuration flows from CRDs to Envoy proxies
+4. **Diagnose** installation and mesh connectivity issues using `istioctl analyze`, `istioctl proxy-status`, and control plane logs
+
+---
+
 ## Why This Module Matters
 
 Installation & Architecture is **20% of the ICA exam**. You'll be expected to install Istio using different methods, understand when to use each installation profile, configure sidecar injection, and troubleshoot installation issues.

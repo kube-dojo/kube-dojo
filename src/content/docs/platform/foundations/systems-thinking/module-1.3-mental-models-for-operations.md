@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Foundations
 
+### What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Apply** at least five mental models (constraint theory, queue theory, Swiss cheese, OODA loop, Cynefin) to operational decision-making
+2. **Evaluate** which mental model best fits a given incident scenario and explain why others fall short
+3. **Diagnose** production incidents faster by selecting the appropriate reasoning framework before diving into logs
+4. **Compare** competing hypotheses during incidents using structured mental models rather than intuition alone
+
 ---
 
 ## The Incident That Revealed Everything

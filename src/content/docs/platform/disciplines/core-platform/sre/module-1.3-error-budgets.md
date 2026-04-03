@@ -15,6 +15,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement error budget policies that balance feature velocity with reliability goals**
+- **Design escalation procedures triggered by error budget burn rate thresholds**
+- **Analyze error budget consumption patterns to identify systemic reliability issues**
+- **Build automated error budget tracking that informs release and deployment decisions**
+
 ## Why This Module Matters
 
 Here's the fundamental tension in every software organization:

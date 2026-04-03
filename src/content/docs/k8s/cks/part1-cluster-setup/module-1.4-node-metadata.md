@@ -18,6 +18,17 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Create** NetworkPolicies that block pod access to cloud metadata endpoints
+2. **Audit** cluster workloads for metadata service exposure risks
+3. **Implement** IMDS v2 enforcement and metadata service restrictions on cloud providers
+4. **Trace** privilege escalation paths from metadata credentials to cloud resource access
+
+---
+
 ## Why This Module Matters
 
 Cloud provider metadata services (like AWS's 169.254.169.254) expose sensitive information: IAM credentials, instance identity, and configuration data. A compromised pod can query this endpoint and potentially escalate privileges or access cloud resources.

@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design ingress and gateway architectures using Gateway API, Nginx, Envoy, or cloud load balancers**
+- **Implement TLS termination, rate limiting, and authentication at the gateway layer**
+- **Configure traffic routing policies — path-based, header-based, weighted — for canary and blue-green deployments**
+- **Build high-availability gateway configurations that handle failover and horizontal scaling**
+
 ## Why This Module Matters
 
 In September 2023, a retail company's entire storefront went down for 22 minutes during a flash sale because their single NGINX Ingress controller ran out of file descriptors. They had configured the Ingress for 50 backend services but never increased `worker_rlimit_nofile` beyond the default of 8192. At 140,000 concurrent connections, NGINX stopped accepting new connections. The Pods were healthy, the backends were fast, but no external traffic could reach them.

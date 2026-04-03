@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Foundations
 
+### What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Explain** why observability differs fundamentally from monitoring and when each approach is appropriate
+2. **Evaluate** a system's observability maturity by assessing whether engineers can answer novel questions about system behavior without deploying new code
+3. **Design** an observability strategy that enables debugging unknown-unknowns rather than only alerting on predefined failure conditions
+4. **Compare** observability tooling approaches (metrics-first, logs-first, traces-first) and justify the right starting point for a given architecture
+
 ---
 
 ## The Dashboard That Showed Green While the Company Lost Millions

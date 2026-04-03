@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Evaluate** the Kubernetes flat network model and its security implications
+2. **Assess** NetworkPolicy coverage to identify unprotected namespaces and pods
+3. **Explain** how service mesh mTLS provides encryption and identity verification for pod traffic
+4. **Compare** CNI plugin security capabilities and their support for network policy enforcement
+
+---
+
 ## Why This Module Matters
 
 By default, all pods in Kubernetes can communicate with all other pods. This flat network model is convenient but dangerous—a compromised pod can reach any other pod in the cluster. Understanding network security is essential for implementing Zero Trust principles in Kubernetes.

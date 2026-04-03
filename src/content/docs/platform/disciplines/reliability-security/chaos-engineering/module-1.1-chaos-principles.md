@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design chaos engineering experiments with clear hypotheses, blast radius controls, and abort conditions**
+- **Evaluate system resilience by identifying failure modes that monitoring and testing alone cannot catch**
+- **Implement a chaos engineering program with incremental adoption from simple to complex experiments**
+- **Build organizational buy-in for chaos engineering by communicating risk reduction in business terms**
+
 ## Why This Module Matters
 
 On October 22, 2012, an engineer at Netflix pushed a routine configuration change to a critical microservice. Within 45 minutes, the entire streaming platform was down for millions of users worldwide. The postmortem revealed something uncomfortable: nobody had tested what would happen when that exact service failed during peak traffic.

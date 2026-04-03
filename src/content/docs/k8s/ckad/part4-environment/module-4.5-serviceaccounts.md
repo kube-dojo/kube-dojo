@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## Learning Outcomes
+
+After completing this module, you will be able to:
+- **Configure** pods to use specific ServiceAccounts for API server authentication
+- **Explain** how ServiceAccount tokens are mounted and used by applications inside pods
+- **Debug** API permission errors by tracing from pod to ServiceAccount to Role bindings
+- **Design** a least-privilege ServiceAccount setup that limits pod access to only required resources
+
+---
+
 ## Why This Module Matters
 
 ServiceAccounts provide identity for pods to interact with the Kubernetes API. When your application needs to list pods, create ConfigMaps, or access other cluster resources, it uses its ServiceAccount's credentials.

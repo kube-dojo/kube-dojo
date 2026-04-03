@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [COMPLEX] | **Time to Complete**: 3h | **Prerequisites**: Module 6.1 (GKE Architecture)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure GKE Dataplane V2 (Cilium-based) with network policies, FQDN filtering, and bandwidth management**
+- **Implement Gateway API on GKE for multi-cluster ingress, traffic splitting, and header-based routing**
+- **Deploy Private Service Connect and internal load balancers for secure service-to-service connectivity on GKE**
+- **Diagnose GKE networking issues related to IP exhaustion, firewall rules, and pod-to-service communication failures**
+
+---
+
 ## Why This Module Matters
 
 In September 2023, a healthcare SaaS company running on GKE discovered that their network policies were not being enforced. A penetration tester demonstrated that a compromised pod in the `staging` namespace could freely communicate with pods in the `production` namespace, despite NetworkPolicy resources that should have blocked cross-namespace traffic. The root cause: the cluster was using the legacy iptables-based kube-proxy dataplane, which does not enforce Kubernetes NetworkPolicy at all. The team had assumed that creating NetworkPolicy resources was sufficient---they did not realize that enforcement requires a CNI that supports it. The compliance violation cost them a SOC 2 audit failure, delaying a $2.3 million enterprise deal by four months. The fix took 30 minutes: enable Dataplane V2 on their next cluster creation. The business impact lasted a quarter.

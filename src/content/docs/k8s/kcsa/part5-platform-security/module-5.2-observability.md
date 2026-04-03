@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Evaluate** audit logging configurations for completeness of security-relevant event capture
+2. **Assess** which observability signals (logs, metrics, events) detect which threat categories
+3. **Identify** gaps in security monitoring that would leave attacks undetected
+4. **Explain** how to correlate audit logs, runtime alerts, and network telemetry during incident investigation
+
+---
+
 ## Why This Module Matters
 
 You can't protect what you can't see. Security observability—logs, metrics, traces, and events—provides visibility into cluster behavior, enabling detection of threats, investigation of incidents, and verification of security controls.

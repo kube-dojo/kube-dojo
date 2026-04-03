@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: Module 2.6 (Artifact Registry), Module 2.7 (Cloud Run)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Cloud Build pipelines with multi-step build configurations, container image builds, and Artifact Registry integration**
+- **Configure Cloud Build triggers for GitHub, Cloud Source Repositories, and Pub/Sub event-driven builds**
+- **Implement Cloud Deploy delivery pipelines with promotion, approval, and canary rollout strategies for GKE**
+- **Secure CI/CD pipelines with Binary Authorization, Workload Identity, and VPC-SC protected build environments**
+
+---
+
 ## Why This Module Matters
 
 In September 2022, a fast-growing startup's deployment process consisted of a senior engineer SSH-ing into a VM, running `git pull`, building a Docker image, and pushing it to the registry manually. This worked when the team had 3 engineers and deployed once a week. By the time the team grew to 15 engineers deploying multiple times per day, the process had become the bottleneck. One Friday afternoon, the "deploy engineer" accidentally ran a production deploy with a debug flag that logged all customer request payloads to stdout. The issue was not caught until Monday morning because there was no automated testing in the deployment pipeline, no approval gates for production, and no way to quickly roll back. The company's security officer estimated that 72 hours of customer data was exposed in plain-text logs. The post-incident review identified the root cause as the absence of a CI/CD pipeline---the entire deployment process depended on a human remembering every step correctly, every time.

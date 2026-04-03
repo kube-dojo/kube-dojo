@@ -18,6 +18,15 @@ Before starting this module, you should have completed:
 - Familiarity with JSON (ECS task definitions are JSON-heavy)
 - AWS CLI configured with appropriate permissions
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy containerized applications on ECS Fargate with task definitions, services, and load balancer integration**
+- **Configure ECS service auto-scaling policies based on CPU, memory, and custom CloudWatch metrics**
+- **Design ECS networking with awsvpc mode, security groups, and private subnets for production workloads**
+- **Implement blue/green deployments using CodeDeploy with ECS to achieve zero-downtime releases**
+
 ---
 
 ## Why This Module Matters

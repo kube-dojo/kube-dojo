@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [COMPLEX] | **Time to Complete**: 2.5h | **Prerequisites**: GitOps Basics (ArgoCD/Flux), Kubernetes RBAC, Multi-Cloud Fleet Management (Module 10.5)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design enterprise GitOps architectures using Argo CD or Flux with multi-tenant repository structures**
+- **Implement progressive delivery pipelines with Argo Rollouts for canary and blue/green deployments at scale**
+- **Configure GitOps promotion workflows across dev, staging, and production environments with approval gates**
+- **Deploy GitOps-based platform engineering patterns that enable self-service application deployment for development teams**
+
+---
+
 ## Why This Module Matters
 
 In 2024, a major European bank had 160 development teams deploying to 42 Kubernetes clusters. They had adopted ArgoCD two years earlier, and it had been a success -- at first. But as adoption grew, so did the chaos. Every team had their own ArgoCD instance. Some teams had 3 ArgoCD instances for dev, staging, and prod. The bank was running 87 ArgoCD installations, each configured slightly differently. When a critical ArgoCD CVE was announced, patching took 11 weeks because each instance was managed independently. Their GitOps had become "87 small GitOps islands" instead of one unified platform.

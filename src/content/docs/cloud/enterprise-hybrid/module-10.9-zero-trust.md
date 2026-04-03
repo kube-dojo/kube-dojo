@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [COMPLEX] | **Time to Complete**: 2.5h | **Prerequisites**: Kubernetes Networking, Identity & Access Management, Service Mesh Basics
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement zero trust network architectures for Kubernetes using service mesh mTLS, network policies, and SPIFFE identities**
+- **Configure workload identity verification with SPIFFE/SPIRE across multi-cluster and multi-cloud environments**
+- **Deploy micro-segmentation policies that enforce least-privilege network access at the pod and service level**
+- **Design end-to-end zero trust architectures that cover ingress, east-west, and egress traffic in Kubernetes clusters**
+
+---
+
 ## Why This Module Matters
 
 In February 2024, a pharmaceutical company with 4,500 employees and a traditional perimeter-based security model was breached through a contractor's compromised VPN credentials. The attacker used the VPN to access the internal network, then moved laterally across 14 systems over 18 days before being detected. They exfiltrated clinical trial data, patient records, and intellectual property valued at an estimated $340 million. The investigation revealed that once inside the VPN perimeter, the attacker had access to 83% of internal services because the security model assumed that anything inside the network was trusted.

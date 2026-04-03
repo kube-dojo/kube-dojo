@@ -16,6 +16,16 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Coroot for automated Kubernetes observability with eBPF-based service map discovery**
+- **Configure Coroot's SLO monitoring with automatic latency, error rate, and availability tracking**
+- **Implement Coroot's continuous profiling integration for performance bottleneck identification**
+- **Compare Coroot's automated approach against manual Prometheus/Grafana setups for operational efficiency**
+
+
 ## Why This Module Matters
 
 The engineering director stared at the spreadsheet, calculating the true cost of their "modern" observability stack. Fifty-three microservices. Each one needed instrumentation.

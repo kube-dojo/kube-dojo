@@ -11,6 +11,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Design** server configurations matched to specific workload profiles (CPU-bound, memory-bound, storage-bound, GPU-accelerated)
+2. **Evaluate** hardware vendors and SKUs using benchmark data, TCO projections, and workload requirements
+3. **Configure** control plane nodes with appropriate NVMe storage, ECC RAM, and CPU specifications for etcd performance
+4. **Plan** hardware procurement that accounts for 3-5 year growth projections and avoids stranded capacity
+
+---
+
 ## Why This Module Matters
 
 In September 2022, a logistics company ordered twelve Dell PowerEdge R750xs servers for their new Kubernetes platform. Each server had dual 24-core Intel Xeon Gold 5317 processors, 256GB of RAM, and four 1.92TB SATA SSDs. The hardware cost $216,000. When the platform team deployed their first workloads — a real-time vehicle tracking system processing 50,000 GPS events per second — they discovered two critical mistakes.

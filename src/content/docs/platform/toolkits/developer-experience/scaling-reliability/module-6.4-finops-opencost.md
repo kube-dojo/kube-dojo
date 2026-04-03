@@ -25,6 +25,16 @@ Your cluster is running. Pods are healthy. Alerts are quiet. But nobody can answ
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy OpenCost for real-time Kubernetes cost allocation with namespace and workload-level granularity**
+- **Configure cost allocation reports that attribute shared resources to teams and business units accurately**
+- **Implement FinOps practices with rightsizing recommendations and idle resource identification**
+- **Integrate OpenCost with Prometheus and Grafana for cost visibility dashboards and budget alerting**
+
+
 ## Why This Module Matters
 
 A platform team at a Series B startup ran 14 microservices on EKS. Monthly bill: $38,000. After one week of FinOps analysis with OpenCost, they discovered three things. A forgotten load-test namespace was burning $4,200/month. The payments service requested 4 CPU but averaged 0.3 CPU utilization. And the staging cluster ran 24/7 for a team that worked 9-to-5. They cut their bill to $17,000 in a single sprint. No features removed. No performance degraded. Just waste, made visible and eliminated.

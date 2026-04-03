@@ -21,6 +21,17 @@ In the cloud, you never think about BIOS versions or disk firmware. The cloud pr
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Implement** rolling firmware update pipelines using Redfish/IPMI APIs that patch BIOS and BMC without cluster downtime
+2. **Design** a hardware lifecycle management process covering procurement, deployment, maintenance, and decommissioning
+3. **Configure** automated hardware health monitoring with IPMI sensors, SMART disk checks, and predictive failure alerts
+4. **Plan** disk replacement and memory upgrade procedures that integrate with Kubernetes node drain and cordon workflows
+
+---
+
 ## What You'll Learn
 
 - BIOS and firmware update strategies without cluster downtime

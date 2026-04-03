@@ -66,6 +66,16 @@ One binary. Three jobs. 100x latency improvement. That is kube-router.
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy kube-router as an all-in-one networking solution with routing, firewall, and service proxy**
+- **Configure kube-router's BGP-based pod networking with route redistribution to external routers**
+- **Implement IPVS-based service proxy with kube-router for high-performance load balancing**
+- **Compare kube-router's unified approach against separate CNI and kube-proxy implementations**
+
+
 ## Why This Module Matters
 
 There is a quiet revolution happening in Kubernetes networking, and it is not about eBPF or service meshes. It is about simplicity.

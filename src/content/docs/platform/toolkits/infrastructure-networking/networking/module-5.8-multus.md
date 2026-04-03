@@ -60,6 +60,16 @@ Multus breaks the "one network per pod" assumption. By the end of this module, y
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Multus CNI to attach multiple network interfaces to Kubernetes pods**
+- **Configure NetworkAttachmentDefinitions for SR-IOV, Macvlan, and IPVLAN secondary networks**
+- **Implement Multus with Whereabouts IPAM for consistent IP address management across interfaces**
+- **Evaluate multi-network pod architectures for NFV, telco, and data-intensive workload requirements**
+
+
 ## Why This Module Matters
 
 Kubernetes was designed for web applications. The networking model reflects this: every pod gets one IP address on one flat network, and Services handle load balancing. For microservices serving HTTP APIs, this is perfect.

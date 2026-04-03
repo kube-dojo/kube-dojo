@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [MEDIUM] | **Time to Complete**: 2.5h | **Prerequisites**: AWS Essentials, Cloud Architecture Patterns
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure EKS clusters with private API endpoints, managed node groups, and Fargate profiles for production workloads**
+- **Design EKS control plane connectivity (public, private, dual-stack) based on security and availability requirements**
+- **Implement EKS Access Entries to replace the legacy aws-auth ConfigMap for cluster authentication**
+- **Evaluate Managed Node Groups vs self-managed nodes vs Fargate for different workload isolation and cost profiles**
+
+---
+
 ## Why This Module Matters
 
 In December 2021, a Series C fintech startup running 340 microservices on Amazon EKS experienced a cascading failure that took down their entire payment processing platform for nearly four hours. The root cause was not a bug in their code. It was not a misconfigured Kubernetes manifest. The engineering team had deployed their EKS cluster with a public API server endpoint and no private endpoint. When a regional AWS API throttling event occurred, their worker nodes -- running in private subnets -- could not reach the Kubernetes API server through the NAT Gateway because the NAT Gateway itself was overwhelmed by unrelated outbound traffic from a data pipeline that had gone haywire. Nodes lost contact with the control plane, pods were evicted, and the entire fleet entered a crash loop. A private endpoint configuration would have kept node-to-control-plane traffic entirely within the VPC, completely bypassing the NAT Gateway and the public internet.

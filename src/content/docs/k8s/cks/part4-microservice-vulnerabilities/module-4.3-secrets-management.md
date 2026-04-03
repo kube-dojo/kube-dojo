@@ -18,6 +18,17 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Configure** etcd encryption at rest for Kubernetes Secrets
+2. **Implement** external secrets management using Vault or cloud provider secret stores
+3. **Audit** RBAC permissions to identify overly broad access to Secret resources
+4. **Design** a secrets management strategy that eliminates base64-only storage risks
+
+---
+
 ## Why This Module Matters
 
 Kubernetes Secrets store sensitive data like passwords, API keys, and certificates. By default, they're only base64-encoded (not encrypted!) and accessible to anyone with RBAC permissions. Proper secrets management prevents credential leaks and privilege escalation.

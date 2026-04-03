@@ -17,6 +17,16 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy infrastructure using OpenTofu as a drop-in replacement for Terraform with license freedom**
+- **Configure OpenTofu state encryption and client-side encryption for sensitive infrastructure state**
+- **Migrate existing Terraform configurations and state files to OpenTofu without disruption**
+- **Compare OpenTofu's feature roadmap and community governance against Terraform's BSL licensing model**
+
+
 ## Why This Module Matters
 
 **The License Change That Shook Infrastructure**

@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Cloud Architecture Patterns
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design cloud-native VPC/VNet topologies optimized for Kubernetes cluster networking across availability zones**
+- **Configure CIDR planning strategies that accommodate pod networking, service ranges, and future cluster growth**
+- **Implement private cluster architectures with private API endpoints and VPC-native routing**
+- **Compare overlay vs native CNI networking models across EKS (VPC CNI), GKE (Dataplane V2), and AKS (Azure CNI)**
+
 ---
 
 ## Why This Module Matters

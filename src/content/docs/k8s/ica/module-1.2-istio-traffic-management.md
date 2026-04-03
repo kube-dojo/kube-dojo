@@ -18,6 +18,17 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Configure** VirtualService routing rules for header-based, path-based, and weighted traffic splitting across service versions
+2. **Implement** canary and blue-green deployment patterns using DestinationRules with traffic policies and subset definitions
+3. **Apply** resilience patterns (circuit breaking, retries, timeouts, fault injection) to harden service-to-service communication
+4. **Debug** traffic routing issues using `istioctl proxy-config routes`, Kiali service graphs, and Envoy access logs
+
+---
+
 ## Why This Module Matters
 
 Traffic Management is **35% of the ICA exam** — the single largest domain. Combined with Resilience and Fault Injection (10%), traffic-related topics account for nearly half the exam. You must be able to write VirtualService, DestinationRule, and Gateway resources from memory, configure traffic splitting, inject faults, and set up resilience policies.

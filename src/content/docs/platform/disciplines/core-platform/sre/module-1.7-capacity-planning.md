@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design capacity models that predict resource needs based on traffic growth patterns**
+- **Implement load testing strategies that validate capacity assumptions before production impact**
+- **Analyze resource utilization trends to optimize cost while maintaining SLO compliance**
+- **Build automated capacity alerts that trigger scaling decisions before user impact occurs**
+
 ## Why This Module Matters
 
 Your service is growing. Traffic is increasing. Revenue is up.

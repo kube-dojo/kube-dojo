@@ -11,6 +11,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Implement** automated node remediation with MachineHealthChecks, BMC power cycling, and fencing for unresponsive nodes
+2. **Configure** Node Problem Detector and custom health checks that detect hardware failures before they cascade
+3. **Design** failure blast radius containment using rack-aware scheduling, topology spread constraints, and storage isolation
+4. **Optimize** node failure recovery times by tuning taint tolerations, pod eviction timeouts, and Ceph recovery throttling
+
+---
+
 ## Why This Module Matters
 
 In June 2023, a logistics company running an 80-node bare metal Kubernetes cluster experienced a cascade failure that started with a single faulty power supply. At 2:47 AM, worker-34's redundant PSU failed. The server continued on its remaining PSU. Nobody noticed because there was no hardware-level alerting. At 3:12 AM, the second PSU tripped due to a power surge on the same circuit. Worker-34 went offline. Kubernetes marked the node as `NotReady` after 40 seconds and began rescheduling pods -- but only after the default 5-minute taint toleration expired. During those 5 minutes, 23 pods were unavailable.

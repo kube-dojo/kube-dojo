@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Evaluate** network policy coverage to identify unprotected pods and namespaces
+2. **Assess** whether network policies implement default-deny and least-privilege traffic rules
+3. **Identify** gaps in network segmentation that allow lateral movement between workloads
+4. **Explain** how ingress and egress policies combine to control pod-to-pod and external traffic
+
+---
+
 ## Why This Module Matters
 
 By default, all pods can talk to all other pods in Kubernetes. This flat network is convenient but dangerous—a compromised pod can scan your entire cluster and reach any service. Network policies are your firewall within the cluster.

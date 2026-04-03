@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [MEDIUM] | **Time to Complete**: 2.5h | **Prerequisites**: Module 3.3 (VMs), Module 3.1 (Entra ID)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure Azure Monitor with Log Analytics workspaces, diagnostic settings, and custom metric collection**
+- **Implement alert rules with action groups, dynamic thresholds, and multi-resource metric alerts**
+- **Deploy Application Insights for distributed tracing, dependency mapping, and performance anomaly detection**
+- **Design centralized monitoring architectures using Azure Monitor across multiple subscriptions and resource types**
+
+---
+
 ## Why This Module Matters
 
 In April 2023, a logistics company running a fleet management application on Azure noticed that their customer complaints had tripled over two weeks. Drivers were reporting slow load times and intermittent errors. The engineering team had no idea what was happening because they had not configured any monitoring beyond the default Azure portal metrics. When they finally investigated, they discovered that their SQL database had been running at 98% DTU utilization for 11 days. A new reporting query, deployed two weeks earlier as part of a routine release, was running every 5 minutes and consuming massive database resources. Two weeks of degraded customer experience, a 15% spike in customer churn, and an estimated $180,000 in lost contracts---all because nobody was watching the metrics and nobody had set up an alert for "database utilization exceeds 80%."

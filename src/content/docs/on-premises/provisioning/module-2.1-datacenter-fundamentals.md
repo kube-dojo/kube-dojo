@@ -11,6 +11,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Evaluate** datacenter facility requirements including power redundancy, cooling capacity, and physical security for Kubernetes deployments
+2. **Design** rack layouts with proper power distribution, cable management, and network connectivity for bare-metal clusters
+3. **Diagnose** physical infrastructure failures (PDU trips, cooling issues, network cabling) that manifest as Kubernetes outages
+4. **Plan** colocation facility selection criteria and negotiate SLAs that align with your availability targets
+
+---
+
 ## Why This Module Matters
 
 At 2:47 AM on a Tuesday in 2019, an SRE at a fintech company received an alert: "API server unreachable." She SSH'd into the jump box — connection refused. Tried the VPN — timeout. Called the colocation facility. The night operator confirmed: "Your rack is dark. Both PDU feeds tripped." A firmware bug in the rack PDU had caused a cascading overcurrent shutdown when a scheduled firmware update ran on the UPS during a power test. The UPS entered bypass mode, the PDU detected an overvoltage condition, and both A and B feeds tripped simultaneously.

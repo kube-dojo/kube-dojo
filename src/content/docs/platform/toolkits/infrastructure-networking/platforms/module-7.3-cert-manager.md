@@ -23,6 +23,16 @@ TLS certificates expire. When they do, your site goes down and users see scary w
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy cert-manager and configure ACME issuers for automated Let's Encrypt certificate management**
+- **Implement certificate lifecycle automation with renewal, revocation, and secret rotation**
+- **Configure cert-manager with DNS01 and HTTP01 challenge solvers across multiple ingress controllers**
+- **Secure internal services with private CA certificates using cert-manager's CA and Vault issuers**
+
+
 ## Why This Module Matters
 
 A single expired certificate can cause a production outage. Manual certificate management doesn't scale—especially with microservices where you might have hundreds of internal certificates. cert-manager makes "set and forget" TLS possible, automatically renewing certificates 30 days before expiry.

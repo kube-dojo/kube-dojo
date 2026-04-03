@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Deploy** applications using Helm charts (install, upgrade, rollback, uninstall)
+- **Customize** Helm releases with values files and --set overrides
+- **Debug** a failed Helm release by inspecting release history and template rendering
+- **Explain** the Helm architecture (charts, releases, repositories) and when to use Helm vs raw manifests
+
+---
+
 ## Why This Module Matters
 
 Helm is **new to the CKA 2025 curriculum**. You will be tested on it.

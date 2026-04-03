@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Cloud Architecture Patterns
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure Kubernetes RBAC integrated with cloud provider IAM (AWS IRSA, GCP Workload Identity, Azure Workload Identity)**
+- **Design pod-level identity architectures that map Kubernetes service accounts to cloud IAM roles**
+- **Implement least-privilege access for workloads accessing cloud services (S3, GCS, Blob Storage) from pods**
+- **Diagnose IAM-to-Kubernetes authentication failures across trust policy, OIDC provider, and annotation misconfigurations**
+
 ---
 
 ## Why This Module Matters

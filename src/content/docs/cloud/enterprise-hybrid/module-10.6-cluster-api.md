@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [COMPLEX] | **Time to Complete**: 3h | **Prerequisites**: Multi-Cloud Fleet Management (Module 10.5), Kubernetes Custom Resources, Infrastructure as Code Basics
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Cluster API management clusters to provision and lifecycle-manage Kubernetes clusters across multiple clouds**
+- **Configure Cluster API providers (CAPA, CAPG, CAPZ) for automated cluster creation on AWS, GCP, and Azure**
+- **Implement cluster templates and ClusterClasses for standardized, self-service cluster provisioning**
+- **Design multi-cloud provisioning pipelines that use Cluster API with GitOps for declarative cluster fleet management**
+
+---
+
 ## Why This Module Matters
 
 In early 2024, a fintech company with 28 Kubernetes clusters across AWS, Azure, and on-premises hit a crisis. Their Kubernetes version matrix looked like a horror movie: 6 clusters on 1.28, 9 on 1.29, 8 on 1.30, 3 on 1.31, and 2 still on 1.27 (which had lost upstream security support three months earlier). Each cluster had been provisioned using a different method: some with eksctl, some with Terraform, some with Azure CLI scripts, and the on-premises clusters with kubeadm. Upgrading a single cluster was a bespoke operation that took 2-4 days of an engineer's time, because each provisioning method had its own upgrade procedure, its own state management, and its own failure modes.

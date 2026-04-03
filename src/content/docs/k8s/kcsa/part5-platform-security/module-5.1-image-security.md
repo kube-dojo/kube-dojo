@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Evaluate** container image security across the build-store-deploy-run lifecycle
+2. **Assess** image hardening practices: minimal base images, non-root users, multi-stage builds
+3. **Identify** vulnerable image patterns: latest tags, unscanned registries, embedded secrets
+4. **Explain** how image scanning, signing, and admission control form a defense-in-depth pipeline
+
+---
+
 ## Why This Module Matters
 
 Container images are the packaging format for all Kubernetes workloads. Every vulnerability, misconfiguration, or malicious code in an image becomes part of your runtime environment. Securing images throughout their lifecycle—build, store, deploy, run—is fundamental to Kubernetes security.

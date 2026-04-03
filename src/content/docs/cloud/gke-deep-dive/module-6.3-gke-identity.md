@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [MEDIUM] | **Time to Complete**: 2.5h | **Prerequisites**: Module 6.1 (GKE Architecture)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure GKE Workload Identity to map Kubernetes service accounts to GCP IAM service accounts**
+- **Implement Binary Authorization to enforce container image provenance and deploy-time attestation policies**
+- **Deploy GKE security posture features including Security Command Center integration and vulnerability scanning**
+- **Design namespace-level identity isolation using Workload Identity with least-privilege IAM bindings**
+
+---
+
 ## Why This Module Matters
 
 In January 2024, a logistics company discovered that every pod in their GKE cluster had read/write access to every Cloud Storage bucket and every Pub/Sub topic in their project. A junior developer had deployed a debug pod that scraped all Pub/Sub messages from the production order queue and wrote them to a personal GCS bucket for "testing." The data included customer addresses, phone numbers, and delivery instructions for 2.1 million orders. The root cause was depressingly common: when the cluster was created, the default node service account was granted the `Editor` role on the project, and every pod on the cluster inherited that identity. No one had configured Workload Identity. The remediation cost $890,000 in legal fees, notification costs, and a GDPR fine. The fix---configuring Workload Identity and scoping IAM permissions per pod---took two days.

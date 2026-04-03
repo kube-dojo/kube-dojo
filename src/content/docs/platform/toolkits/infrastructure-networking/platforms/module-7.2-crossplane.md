@@ -23,6 +23,16 @@ Terraform in CI pipelines. CloudFormation templates. Manual console clicks. Infr
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Crossplane and configure providers for managing cloud resources as Kubernetes custom resources**
+- **Implement Composite Resources (XRDs) and Compositions for self-service infrastructure abstractions**
+- **Configure Crossplane claims for developer-friendly infrastructure provisioning with guardrails**
+- **Compare Crossplane's Kubernetes-native approach against Terraform for platform team infrastructure APIs**
+
+
 ## Why This Module Matters
 
 Platform engineers shouldn't be bottlenecks. When every database request requires a Terraform PR reviewed by the platform team, you don't scale. Crossplane lets you define self-service infrastructure APIs—developers get what they need (databases, buckets, queues) without ticket queues or manual provisioning.

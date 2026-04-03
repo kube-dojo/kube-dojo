@@ -18,6 +18,17 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Configure** Pod Security Admission labels on namespaces for enforce, audit, and warn modes
+2. **Implement** baseline and restricted security profiles across cluster namespaces
+3. **Diagnose** PSA rejection messages and adjust pod specs to comply with security standards
+4. **Design** a namespace-level security strategy using PSA profiles appropriate to workload sensitivity
+
+---
+
 ## Why This Module Matters
 
 Pod Security Admission (PSA) enforces security standards at the namespace level. Instead of manually checking every pod's security context, PSA automatically validates pods against defined security profiles and blocks non-compliant ones.

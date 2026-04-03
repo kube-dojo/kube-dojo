@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Explain** the role of each control plane component (API server, etcd, scheduler, controller manager) and how they interact
+- **Diagnose** control plane failures by checking static pod manifests, component logs, and health endpoints
+- **Trace** a kubectl request from client through API server to etcd and back
+- **Recover** a control plane component by restoring its static pod manifest
+
+---
+
 ## Why This Module Matters
 
 Every `kubectl` command you run talks to the control plane. Every pod that schedules, every service that routes traffic, every secret that stores credentials—it all happens because control plane components are working together.

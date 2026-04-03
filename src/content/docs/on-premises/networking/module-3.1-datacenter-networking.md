@@ -11,6 +11,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Design** leaf-spine network topologies with appropriate oversubscription ratios for Kubernetes east-west traffic patterns
+2. **Evaluate** switch selection, uplink bandwidth, and ECMP configuration for bare-metal cluster networking
+3. **Configure** VLANs, jumbo frames, and network segmentation to isolate management, storage, and pod traffic
+4. **Diagnose** network bottlenecks caused by oversubscription, MTU mismatches, and switch fabric limitations
+
+---
+
 ## Why This Module Matters
 
 In March 2022, a media streaming company deployed a 60-node Kubernetes cluster on bare metal in their colocation facility. They connected all servers to a single pair of 48-port top-of-rack switches. For the first three months, everything worked. Then they deployed a real-time video transcoding pipeline that generated 8 Gbps of east-west traffic between pods. The ToR switches — rated for 48x 10GbE ports with a 480 Gbps switching fabric — became the bottleneck. The uplinks to the core switches were only 2x 40GbE, creating a 6:1 oversubscription ratio. During peak transcoding, packet drops hit 3%, causing TCP retransmissions that increased video processing latency from 200ms to 4 seconds. Viewers saw buffering. Revenue dropped $12,000/hour during prime time.

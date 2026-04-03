@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: Module 3.6 (ACR), Module 3.7 (Container Apps), Module 3.1 (Entra ID)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Azure DevOps pipelines with YAML-based multi-stage builds, tests, and release approvals**
+- **Configure GitHub Actions workflows with Azure login, container builds, and AKS deployment steps**
+- **Implement deployment strategies (blue/green, canary, ring-based) using Azure DevOps environments and gates**
+- **Secure CI/CD pipelines with service connections, managed identities, and environment protection rules**
+
+---
+
 ## Why This Module Matters
 
 In February 2023, a major CI/CD platform disclosed that an attacker had gained access to customer repositories by compromising a shared runner environment. The attacker injected malicious code into the build process, which exfiltrated environment variables---including service principal credentials that customers had stored as pipeline secrets. Over 35,000 repositories were potentially affected. Several Azure production environments were compromised because teams had stored long-lived service principal secrets in their pipeline variables, and those secrets had full Contributor access to production subscriptions.

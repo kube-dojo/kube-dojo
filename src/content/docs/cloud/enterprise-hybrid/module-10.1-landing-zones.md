@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [COMPLEX] | **Time to Complete**: 3h | **Prerequisites**: Cloud Essentials (AWS/Azure/GCP), Kubernetes Basics, Cloud Architecture Patterns
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design enterprise landing zones using AWS Control Tower, Azure Landing Zones, and GCP Organization Hierarchy**
+- **Implement automated account vending machines that provision cloud accounts with Kubernetes clusters in under 30 minutes**
+- **Configure guardrails (SCPs, Azure Policy, Organization Policies) that enforce security baselines across all accounts**
+- **Deploy landing zone customizations that integrate Kubernetes cluster bootstrapping with GitOps from day zero**
+
+---
+
 ## Why This Module Matters
 
 In March 2023, a Fortune 500 insurance company attempted to launch a new Kubernetes-based claims processing platform. The development team had been building for nine months. When they requested a production AWS account, the cloud team told them the wait time was fourteen weeks. The reason: every account was manually provisioned. A senior cloud architect had to create the VPC, configure the Transit Gateway attachment, set up IAM roles, create the SCPs, register the account in the CMDB, provision the DNS delegation, and configure logging to the central SIEM. This architect handled three accounts per week. There were twenty-two teams in the queue.

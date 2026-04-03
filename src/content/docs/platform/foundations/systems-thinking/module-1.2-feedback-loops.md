@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Foundations
 
+### What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Identify** reinforcing and balancing feedback loops in production systems and predict their behavior under load
+2. **Diagnose** runaway cascades caused by positive feedback loops such as retry storms, autoscaler thrashing, and connection pool exhaustion
+3. **Design** damping mechanisms (circuit breakers, backoff strategies, rate limiters) that interrupt destructive feedback cycles
+4. **Evaluate** whether a system's feedback loops will stabilize or amplify under failure conditions
+
 ---
 
 ## The Black Friday Meltdown

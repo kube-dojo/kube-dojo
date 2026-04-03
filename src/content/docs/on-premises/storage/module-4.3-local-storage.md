@@ -11,6 +11,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Evaluate** when local storage, Longhorn, OpenEBS, or LVM-based solutions are appropriate vs. full distributed storage
+2. **Implement** local-path-provisioner and TopoLVM for workloads that tolerate node-local storage semantics
+3. **Deploy** Longhorn as a lightweight replicated storage solution with automated backups and snapshot capabilities
+4. **Design** a storage strategy that matches each workload tier to the right storage backend based on persistence and performance needs
+
+---
+
 ## Why This Module Matters
 
 A fintech startup ran six microservices on three bare-metal servers. They deployed Rook-Ceph because "everyone uses Ceph." Within a week, the Ceph monitors consumed 2 GB of RAM each, the OSD recovery traffic saturated their 10 GbE links during a node reboot, and a junior engineer accidentally deleted the mon keyring while debugging. Total downtime: 14 hours.

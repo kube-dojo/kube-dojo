@@ -10,6 +10,15 @@ sidebar:
 | **Time to Complete** | 2.5 hours |
 | **Prerequisites** | None |
 
+### What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Implement** the Incident Commander role by establishing communication channels, assigning workstreams, and controlling the pace of response
+2. **Design** an incident response framework with clear escalation paths, severity definitions, and role assignments before a crisis occurs
+3. **Evaluate** incident response effectiveness by identifying coordination failures, communication gaps, and decision bottlenecks in post-incident reviews
+4. **Apply** crisis management techniques (stabilize-before-fix, controlled communication, parallel workstreams) to reduce mean time to recovery
+
 ---
 
 ## Why This Module Matters

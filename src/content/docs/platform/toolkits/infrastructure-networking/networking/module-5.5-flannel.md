@@ -69,6 +69,16 @@ This module will make sure you never burn three days on that problem. By the end
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Flannel as a simple overlay network for Kubernetes clusters using VXLAN or host-gw backends**
+- **Configure Flannel's network backends and MTU settings for optimal performance across environments**
+- **Implement Flannel with network policy enforcement using Calico's policy-only mode**
+- **Compare Flannel's simplicity against Cilium and Calico for clusters that prioritize operational ease**
+
+
 ## Why This Module Matters
 
 Flannel is the simplest Kubernetes CNI plugin that actually works in production. It was one of the first CNI plugins ever created for Kubernetes, built by CoreOS in 2014, and it remains one of the most widely deployed. If you have ever used kubeadm to bootstrap a cluster and followed the official documentation, there is a good chance your first cluster ran Flannel.

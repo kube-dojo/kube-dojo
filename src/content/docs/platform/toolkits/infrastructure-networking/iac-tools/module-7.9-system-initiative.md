@@ -19,6 +19,16 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy infrastructure using System Initiative's visual modeling and reactive change engine**
+- **Configure System Initiative's component graph for real-time infrastructure collaboration**
+- **Implement custom qualifications and actions to extend System Initiative's infrastructure models**
+- **Evaluate System Initiative's collaborative approach against file-based IaC tools for team workflows**
+
+
 ## Why This Module Matters
 
 **What If Your Infrastructure Understood Itself?**

@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Assess** ServiceAccount configurations for excessive API access and auto-mounted tokens
+2. **Evaluate** the risk of default ServiceAccount usage across cluster namespaces
+3. **Identify** lateral movement paths enabled by misconfigured ServiceAccount permissions
+4. **Explain** bound token volume projection and how it reduces token exposure risks
+
+---
+
 ## Why This Module Matters
 
 ServiceAccounts are how pods authenticate to the Kubernetes API. Every pod runs with a ServiceAccount, and by default, that account may have more access than needed. Understanding ServiceAccount security is crucial for implementing least privilege for workloads.

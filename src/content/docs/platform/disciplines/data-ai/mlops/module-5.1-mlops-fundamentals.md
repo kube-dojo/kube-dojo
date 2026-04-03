@@ -14,6 +14,15 @@ Before starting this module:
 - Understanding of CI/CD pipelines
 - Python basics
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Evaluate your organization's MLOps maturity and identify gaps in the ML lifecycle**
+- **Design an MLOps architecture that covers experiment tracking, model registry, and deployment pipelines**
+- **Implement version control practices for ML artifacts — data, code, models, and configurations**
+- **Analyze the differences between MLOps levels 0-2 to build a realistic adoption roadmap**
+
 ## Why This Module Matters
 
 Most machine learning projects never make it to production. Not because the models aren't good enough—but because teams don't know how to operationalize them. Data scientists build great prototypes in Jupyter notebooks, then hand them off expecting someone else to "just deploy it."

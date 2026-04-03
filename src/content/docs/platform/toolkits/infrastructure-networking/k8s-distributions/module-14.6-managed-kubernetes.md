@@ -20,6 +20,16 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy managed Kubernetes clusters on EKS, GKE, and AKS with production-ready configurations**
+- **Configure managed cluster networking, node pools, and autoscaling across cloud providers**
+- **Implement multi-cloud Kubernetes strategies with consistent tooling across EKS, GKE, and AKS**
+- **Evaluate managed Kubernetes pricing models and feature sets for different workload requirements**
+
+
 ## Why This Module Matters
 
 **The $50,000 Question: Build or Buy?**

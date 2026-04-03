@@ -18,6 +18,17 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Configure** Trivy to scan images for CVEs, misconfigurations, and embedded secrets
+2. **Implement** image scanning in CI/CD pipelines to block vulnerable images before deployment
+3. **Evaluate** vulnerability severity using CVSS scores to prioritize remediation
+4. **Diagnose** scan results to distinguish actionable vulnerabilities from false positives
+
+---
+
 ## Why This Module Matters
 
 Container images often contain vulnerable packages that attackers can exploit. Image scanning detects known vulnerabilities (CVEs) before images reach production. Trivy is the de-facto standard for container security scanning.

@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Foundations
 
+### What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Design** SLIs that measure what users actually experience rather than what infrastructure dashboards report
+2. **Implement** SLOs that translate business requirements into concrete reliability targets with meaningful thresholds
+3. **Apply** error budget policies to make data-driven decisions about when to ship features vs. invest in reliability
+4. **Evaluate** whether an existing SLO framework correctly aligns engineering incentives with user satisfaction
+
 ---
 
 ## The Team With 99.99% Uptime and Angry Users

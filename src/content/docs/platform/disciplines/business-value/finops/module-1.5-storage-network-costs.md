@@ -17,6 +17,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement storage cost optimization through lifecycle policies, tiering, and right-sized volume claims**
+- **Design network cost reduction strategies that minimize cross-AZ traffic and egress charges**
+- **Analyze storage and network spending to identify the largest cost drivers in your Kubernetes environment**
+- **Build monitoring dashboards that track storage utilization and network transfer costs by namespace and service**
+
 ## Why This Module Matters
 
 Everyone optimizes compute. It's the obvious line item — the big EC2 or GCE charges that dominate the bill. But lurking beneath are two cost categories that grow silently and are far harder to control: **storage** and **networking**.

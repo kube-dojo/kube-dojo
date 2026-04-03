@@ -119,8 +119,11 @@
 ## TODO
 
 - [x] Prerequisites: all 33 modules improved (outcomes, inline prompts, quiz upgrades, emoji fixes) — EN + UK complete
-- [x] Linux: all 37 modules improved (outcomes added) — EN complete, UK syncing
-- [ ] Remaining tracks: CKA (47), CKAD (30), CKS (30), KCNA (28), KCSA (26), Cloud (84), Platform (209), On-Prem (30) — #180
+- [x] Linux: all 37 modules improved (outcomes added) — EN + UK complete
+- [x] CKA: all 41 modules improved (outcomes + inline prompts on Part 0 and troubleshooting) — EN complete, UK syncing
+- [ ] CKAD: 24 modules — outcomes being added (agent running)
+- [ ] CKS/KCNA/KCSA: 84 modules — outcomes being added (agent running)
+- [ ] Remaining: Cloud (84), Platform (209), On-Prem (30) — #180
 - [ ] Lab quality audit and improvements — #179
 - [ ] Gemini adversary review remaining on-prem + discipline modules
 - [ ] Ukrainian translations: CKS (30), KCNA (28), KCSA (26)

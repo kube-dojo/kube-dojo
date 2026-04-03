@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement pre-commit security scanning that catches vulnerabilities before code enters the repository**
+- **Design IDE-integrated security tools that give developers real-time feedback on security issues**
+- **Build threat modeling practices that identify security risks during design rather than after deployment**
+- **Configure dependency scanning that blocks known vulnerable packages from entering your supply chain**
+
 ## Why This Module Matters
 
 You've adopted DevSecOps. You have security scans in your pipeline. Great!

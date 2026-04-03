@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [MEDIUM] | **Time to Complete**: 1.5h | **Prerequisites**: Module 3.1 (Entra ID & RBAC)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure Azure Key Vault with access policies and RBAC for secrets, keys, and certificate management**
+- **Implement automatic secret rotation using Key Vault with Event Grid notifications and Azure Functions**
+- **Deploy Key Vault integration patterns for App Service, Azure Functions, AKS, and VM workloads**
+- **Design multi-region Key Vault architectures with soft delete, purge protection, and HSM-backed keys**
+
+---
+
 ## Why This Module Matters
 
 In December 2022, a widely-used password management company disclosed a major breach. Attackers had stolen encrypted vault data and the encryption keys needed to decrypt it. The root cause was traced back to a developer's home computer that had an old, vulnerable version of a media player installed. The attacker exploited the vulnerability, captured the developer's master credentials, and used them to access the company's cloud storage containing encrypted customer data. The breach affected 25 million users and resulted in an estimated $100 million in damages.

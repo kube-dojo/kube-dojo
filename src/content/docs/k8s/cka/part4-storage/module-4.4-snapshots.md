@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Create** VolumeSnapshots and restore PVCs from snapshots for backup and recovery
+- **Configure** VolumeSnapshotClasses and explain how they relate to StorageClasses
+- **Implement** a snapshot-based backup strategy for stateful workloads
+- **Debug** snapshot failures by checking snapshot controller logs and CSI driver capabilities
+
+---
+
 ## Why This Module Matters
 
 Volume snapshots provide point-in-time copies of your persistent data - essential for backups, disaster recovery, and creating test environments. Volume cloning lets you create new volumes from existing ones. The CKA exam may test your understanding of these data protection primitives, especially as they become more common in production Kubernetes environments.

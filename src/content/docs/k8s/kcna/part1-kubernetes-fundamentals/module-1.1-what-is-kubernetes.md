@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Explain** what Kubernetes is, the problems it solves, and why it became the industry standard
+2. **Compare** Kubernetes with traditional deployment, VM-based, and other orchestration approaches
+3. **Identify** the key capabilities Kubernetes provides: self-healing, scaling, service discovery, and rollouts
+4. **Evaluate** whether a given workload scenario would benefit from Kubernetes orchestration
+
+---
+
 ## Why This Module Matters
 
 "What is Kubernetes?" might seem like a simple question, but understanding it deeply is crucial. KCNA tests whether you truly understand Kubernetes' purpose, not just its features.

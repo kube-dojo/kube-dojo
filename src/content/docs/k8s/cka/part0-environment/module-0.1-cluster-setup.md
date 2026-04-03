@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Build** a multi-node kubeadm cluster from scratch (control plane + 2 workers)
+- **Diagnose** a node stuck in NotReady by checking kubelet, CNI, and system pod health
+- **Recover** from cluster failures (missing scheduler, crashed worker, expired token)
+- **Explain** the kubeadm init/join workflow and what each component does during bootstrap
+
+---
+
 ## Why This Module Matters
 
 You can't practice Kubernetes administration without a Kubernetes cluster. Sounds obvious, right? Yet many CKA candidates rely entirely on managed clusters (EKS, GKE, AKS) or single-node setups (minikube, kind) and then freeze when the exam asks them to troubleshoot kubelet on a worker node.
@@ -308,6 +318,8 @@ cp-node   NotReady   control-plane   1m    v1.35.0
 
 The node shows `NotReady` because we haven't installed a network plugin yet.
 
+> **Pause and predict**: Why would a freshly initialized Kubernetes node be NotReady? It has an API server, etcd, scheduler, and controller manager — all running. What's missing? The answer: without a CNI (network plugin), pods can't get IP addresses, and the node can't report as healthy. This is the #1 "gotcha" for first-time kubeadm users, and it's a common CKA troubleshooting scenario.
+
 ---
 
 ## Part 3: Install Network Plugin (CNI)
@@ -548,6 +560,8 @@ kubectl delete pod test
 ---
 
 ## Practice Drills
+
+> **Before you drill**: These drills simulate real CKA exam scenarios. Time yourself — the exam gives you ~5 minutes per question on average. If Drill 1 takes you 10 minutes now, that's fine. By exam day, it should take 2.
 
 ### Drill 1: Node Health Check (Target: 2 minutes)
 

@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Diagnose** service connectivity failures using the endpoint → selector → pod readiness chain
+- **Fix** services with no endpoints by correcting label selectors, checking pod readiness, and verifying ports
+- **Debug** NodePort and LoadBalancer services by checking external access, firewall rules, and cloud provider integration
+- **Trace** a service request through kube-proxy rules to the backend pod
+
+---
+
 ## Why This Module Matters
 
 Services are how applications are exposed in Kubernetes - both internally and externally. When a service isn't working, applications become unreachable. Understanding the different service types and their failure modes is essential for keeping applications accessible.

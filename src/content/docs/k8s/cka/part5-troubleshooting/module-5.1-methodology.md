@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Apply** a systematic troubleshooting methodology (symptoms → hypotheses → verify → fix → validate)
+- **Triage** CKA troubleshooting questions by identifying the failure layer (application, service, node, control plane)
+- **Use** kubectl commands (describe, logs, events, get -o yaml) in the correct diagnostic order
+- **Avoid** the #1 troubleshooting mistake: making changes before understanding the problem
+
+---
+
 ## Why This Module Matters
 
 Troubleshooting is 30% of the CKA exam - the largest single domain. More importantly, troubleshooting is what separates Kubernetes operators from Kubernetes experts. When a production cluster is down at 3 AM, systematic debugging is the difference between a 5-minute fix and a 5-hour nightmare.
@@ -48,6 +58,8 @@ By the end of this module, you'll be able to:
 ---
 
 ## Part 1: The Troubleshooting Framework
+
+> **Before you read**: Think about what you do when something breaks. Do you immediately start changing things? Most people do. But random changes make things worse — you lose the ability to tell what fixed it (or what broke it more). The framework below forces you to understand BEFORE you act. It feels slower at first, but it's faster in the long run because you fix the right thing the first time.
 
 ### 1.1 The Four-Step Process
 
@@ -290,6 +302,8 @@ k get endpointslices -l kubernetes.io/service-name=<service>
 ---
 
 ## Part 4: Reading Pod Status
+
+> **Quick quiz for yourself**: A pod shows `Running` but your application isn't working. Is the pod healthy? Not necessarily — `Running` means at least one container started, but it doesn't mean the application is serving traffic. The pod could be in a crash loop (restarting), failing readiness probes (excluded from service), or running but returning errors. Status ≠ health. This distinction trips up even experienced engineers.
 
 ### 4.1 Pod Phase Meanings
 

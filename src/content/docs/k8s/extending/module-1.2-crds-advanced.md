@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Design** a CRD schema with structural validation, CEL rules, and default values that reject invalid input at admission time
+2. **Implement** CRD versioning with storage versions and conversion webhooks so v1alpha1 and v1 objects coexist safely
+3. **Configure** subresources (status, scale) and additional printer columns so `kubectl get` displays meaningful operational data
+4. **Diagnose** CRD validation failures and version-skew issues using API discovery and dry-run requests
+
+---
+
 ## Why This Module Matters
 
 Custom Resource Definitions (CRDs) are the foundation of every Kubernetes extension. When you install Istio, Argo CD, Prometheus Operator, or Cert-Manager, the first thing they do is register CRDs. These CRDs define new resource types -- `VirtualService`, `Application`, `ServiceMonitor`, `Certificate` -- that extend the Kubernetes API without modifying a single line of API Server code.

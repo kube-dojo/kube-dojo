@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Build** Kustomize overlays for multi-environment deployments (dev, staging, production)
+- **Apply** patches, name prefixes, labels, and resource transformations without modifying base manifests
+- **Compare** Kustomize vs Helm and choose the right tool for different scenarios
+- **Debug** Kustomize output by rendering manifests with `kubectl kustomize` before applying
+
+---
+
 ## Why This Module Matters
 
 Kustomize is **new to the CKA 2025 curriculum**. You will be tested on it.

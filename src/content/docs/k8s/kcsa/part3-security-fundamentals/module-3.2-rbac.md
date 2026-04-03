@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Evaluate** RBAC policies for over-permissioned roles and privilege escalation risks
+2. **Assess** whether a given Role or ClusterRole follows the principle of least privilege
+3. **Identify** dangerous RBAC patterns: wildcard verbs, cluster-admin bindings, escalation paths
+4. **Explain** how Roles, ClusterRoles, RoleBindings, and ClusterRoleBindings interact
+
+---
+
 ## Why This Module Matters
 
 RBAC (Role-Based Access Control) is Kubernetes' primary authorization mechanism. It determines who can do what in your cluster. Misconfigured RBAC is one of the most common security issues in Kubernetes—either too permissive (security risk) or too restrictive (operational issues).

@@ -18,6 +18,17 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Audit** RBAC configurations to identify over-permissioned roles and privilege escalation paths
+2. **Implement** least-privilege Roles and ClusterRoles for specific workload requirements
+3. **Trace** effective permissions for any user or ServiceAccount through RoleBindings
+4. **Diagnose** RBAC-related access denials and fix them without granting excessive permissions
+
+---
+
 ## Why This Module Matters
 
 RBAC is the access control mechanism for Kubernetes. CKA taught you to create Roles and RoleBindings. CKS goes deeper: you must audit RBAC for over-permissioned accounts, understand escalation paths, and implement least privilege.

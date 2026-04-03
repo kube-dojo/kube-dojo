@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## Learning Outcomes
+
+After completing this module, you will be able to:
+- **Explain** the CKAD exam structure, domains, and how it differs from CKA
+- **Create** a personalized study plan based on domain weights and your existing strengths
+- **Deploy** a practice environment with all tools needed for CKAD preparation
+- **Debug** common exam-environment pitfalls such as context switching and time management
+
+---
+
 ## Why This Module Matters
 
 The CKAD (Certified Kubernetes Application Developer) certification proves you can design, build, configure, and expose cloud-native applications for Kubernetes. Unlike the CKA which focuses on cluster administration, the CKAD is all about **the developer experience**—how to package, deploy, debug, and run applications.

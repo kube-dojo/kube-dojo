@@ -21,6 +21,17 @@ Rook is the Kubernetes operator that manages Ceph. It turns Ceph deployment from
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Deploy** a production-grade Ceph cluster via Rook with properly sized MON, OSD, and MDS components
+2. **Configure** Ceph storage classes for block (RBD), filesystem (CephFS), and object (RGW) storage in Kubernetes
+3. **Optimize** Ceph performance by tuning OSD placement, replication factors, CRUSH rules, and network separation
+4. **Troubleshoot** Ceph health warnings, slow OSD recovery, and PG degradation during node failures
+
+---
+
 ## What You'll Learn
 
 - Ceph architecture (MON, OSD, MDS, MGR, RADOS)

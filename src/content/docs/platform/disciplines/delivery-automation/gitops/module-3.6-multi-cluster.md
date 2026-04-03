@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design multi-cluster GitOps architectures that manage dozens of clusters from a single control plane**
+- **Implement fleet management patterns using Argo CD ApplicationSets or Flux Kustomization controllers**
+- **Build cluster-specific configuration overlays that customize shared baselines per environment or region**
+- **Evaluate multi-cluster sync strategies to handle network partitions and cluster-level failures gracefully**
+
 ## Why This Module Matters
 
 Single-cluster GitOps is just the beginning. Real organizations run dozens—sometimes hundreds—of clusters across different regions, environments, and cloud providers. Managing them individually doesn't scale.

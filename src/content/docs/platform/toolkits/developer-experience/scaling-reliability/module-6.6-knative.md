@@ -27,6 +27,16 @@ You have 200 microservices running in your cluster. Most of them sit idle 80% of
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Knative Serving for serverless workloads with automatic scaling and revision management**
+- **Configure Knative traffic splitting for canary deployments and A/B testing across service revisions**
+- **Implement Knative Eventing with brokers, triggers, and event sources for event-driven architectures**
+- **Compare Knative's serverless model against traditional Kubernetes Deployments for variable-traffic workloads**
+
+
 ## Why This Module Matters
 
 A mid-size fintech company was running 200 microservices on EKS. The team had sized every deployment for peak load because nobody wanted to be the person whose service fell over during the monthly billing run. The result: 80% of services sat idle most of the day, consuming reserved CPU and memory. The monthly cloud bill was $45,000.

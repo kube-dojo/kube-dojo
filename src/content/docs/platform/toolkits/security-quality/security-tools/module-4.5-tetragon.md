@@ -16,6 +16,16 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Tetragon for eBPF-based runtime security enforcement with kernel-level visibility**
+- **Configure TracingPolicy resources to monitor and block process execution, file access, and network connections**
+- **Implement Tetragon's real-time enforcement to kill processes violating security policies at the kernel level**
+- **Compare Tetragon's eBPF enforcement approach against Falco's detection-only model for defense-in-depth**
+
+
 ## Why This Module Matters
 
 Traditional runtime security tools like Falco detect threats by watching syscalls from userspace and alerting after the fact. By the time you see the alert, the malicious command has already executed. You're always one step behind the attacker.

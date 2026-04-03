@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [MEDIUM] | **Time to Complete**: 1.5h | **Prerequisites**: Module 3.1 (Entra ID), basic Azure CLI
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Azure resources using Bicep templates with parameters, modules, and conditional logic**
+- **Implement Bicep modules and template specs for reusable infrastructure components across teams**
+- **Configure deployment stacks and what-if operations to preview and protect Bicep deployments**
+- **Compare Bicep with ARM templates and Terraform to evaluate the right IaC tool for Azure environments**
+
+---
+
 ## Why This Module Matters
 
 In March 2022, a platform engineering team at a mid-size SaaS company needed to rebuild their staging environment after a catastrophic misconfiguration. The environment consisted of 23 Azure resources: a VNet with 4 subnets, 3 App Services, a SQL database, a Redis cache, a Key Vault, an ACR, storage accounts, and various networking components. The original environment had been built by clicking through the Azure portal over several months, with configuration decisions documented in a Confluence wiki that nobody had updated in 8 months. Rebuilding took 5 engineers 3 full days, during which they discovered 14 configuration discrepancies between the wiki and the actual deployment. When the "rebuilt" environment was finally tested, 6 services failed because of subtle differences in settings---a missed NSG rule here, a wrong SKU there. Total cost of the rebuild: approximately $15,000 in engineering time.

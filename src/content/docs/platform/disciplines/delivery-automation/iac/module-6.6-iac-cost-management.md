@@ -18,6 +18,15 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement cost estimation in IaC pipelines using Infracost or cloud-native pricing APIs**
+- **Design cost governance policies that flag expensive infrastructure changes before approval**
+- **Build cost tagging strategies that attribute IaC-provisioned resources to teams and projects**
+- **Optimize IaC templates to use cost-effective resource configurations by default**
+
 ## Why This Module Matters
 
 **The $847,000 Friday Afternoon Deploy**

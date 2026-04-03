@@ -19,6 +19,16 @@ This module teaches you to deploy, configure, and operate Harbor for enterprise 
 - [DevSecOps Discipline](../../../disciplines/reliability-security/devsecops/) - Supply chain security concepts
 - Understanding of image registries and OCI format
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Harbor with high availability and configure project-based access control for multi-team environments**
+- **Implement automated vulnerability scanning and image signing policies for production registries**
+- **Configure replication rules between Harbor instances for geo-distributed container distribution**
+- **Integrate Harbor with Kubernetes admission controllers to enforce image security policies**
+
+
 ## Why This Module Matters
 
 **Every container you run came from somewhere.** In production, "somewhere" can't be DockerHub with 100 pull/hour limits, or an unknown registry with unscanned images. Harbor gives you:

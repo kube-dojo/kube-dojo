@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Advanced Cloud Operations
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure cross-cluster service discovery using DNS, service mesh, or Kubernetes MCS (Multi-Cluster Services) API**
+- **Implement cross-region pod-to-pod connectivity with VPN tunnels, peering, or overlay networks**
+- **Deploy service mesh multi-cluster topologies (Istio, Linkerd) for encrypted cross-cluster traffic routing**
+- **Design network architectures that minimize cross-region latency while maintaining security isolation between clusters**
+
 ---
 
 ## Why This Module Matters

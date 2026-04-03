@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [COMPLEX] | **Time to Complete**: 2h | **Prerequisites**: Module 9.2 (Message Brokers), Kubernetes Services and Ingress basics
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design hybrid architectures that combine Kubernetes workloads with serverless functions (Lambda, Cloud Functions, Azure Functions)**
+- **Implement Knative Serving on Kubernetes for serverless-style scale-to-zero with portable container workloads**
+- **Configure event bridges between Kubernetes and cloud-native serverless triggers (EventBridge, Eventarc, Event Grid)**
+- **Evaluate serverless vs container trade-offs for latency-sensitive, batch, and event-driven workload patterns**
+
+---
+
 ## Why This Module Matters
 
 In 2023, a healthcare startup ran their entire platform on EKS -- 42 microservices, 180 pods, three node groups. Their monthly Kubernetes bill was $18,000. During a cost optimization sprint, an engineer noticed that 11 of those microservices handled fewer than 100 requests per day. One service -- the PDF report generator -- was called exactly 23 times per day but required 2 pods (for HA) running 24/7. Another service processed insurance eligibility checks at 3 AM, running idle for 23 hours daily.

@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: Module 9.1 (Databases), Kubernetes PersistentVolumes and CSI concepts
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement CSI-based object storage mounting (Mountpoint for S3, GCS FUSE, Azure Blob CSI) for Kubernetes workloads**
+- **Configure lifecycle policies and intelligent tiering across S3, GCS, and Azure Blob for cost-optimized data pipelines**
+- **Deploy object storage access patterns using presigned URLs, workload identity, and IRSA/Workload Identity integration**
+- **Design backup and archival strategies for Kubernetes persistent data using cloud object storage as the destination**
+
+---
+
 ## Why This Module Matters
 
 In January 2024, a media streaming company stored 4.2 petabytes of video content in Amazon S3. Their transcoding pipeline ran on EKS -- 60 pods processing uploaded videos into multiple formats. The architecture worked, but their S3 costs were $127,000 per month. A junior engineer noticed that 78% of the data had not been accessed in over 90 days. The team implemented S3 Lifecycle policies, moving cold content to S3 Glacier Instant Retrieval. Monthly costs dropped to $41,000 -- a $86,000/month saving from a 15-line configuration change.

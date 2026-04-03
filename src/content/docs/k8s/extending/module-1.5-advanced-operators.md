@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Implement** finalizers that cleanly remove external resources (DNS records, cloud load balancers) before a custom resource is deleted
+2. **Design** structured status conditions following the Kubernetes API conventions so users can diagnose issues with `kubectl describe`
+3. **Configure** leader election and multi-replica deployments so your operator survives node failures without split-brain
+4. **Construct** envtest integration tests that validate the full reconciliation lifecycle including finalizer cleanup
+
+---
+
 ## Why This Module Matters
 
 The operator you built in Module 1.4 works, but it is not production-ready. What happens when a user deletes a WebApp that has provisioned external resources (a DNS record, a database, a cloud load balancer)? Without **finalizers**, those resources become orphans. How does a user know *why* their WebApp is not ready? Without **status conditions**, they have to read controller logs. How does an SRE debug a failing reconciliation at 3 AM? Without **Kubernetes Events**, they are blind.

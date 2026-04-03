@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement Apache Spark on Kubernetes using spark-submit or the Spark Operator for batch and streaming jobs**
+- **Design Spark cluster configurations that optimize executor sizing, memory allocation, and shuffle performance**
+- **Configure dynamic allocation and autoscaling for Spark workloads to balance cost and performance**
+- **Diagnose common Spark failures — OOM errors, shuffle spills, data skew — in Kubernetes environments**
+
 ## Why This Module Matters
 
 Not everything needs to happen in real time.

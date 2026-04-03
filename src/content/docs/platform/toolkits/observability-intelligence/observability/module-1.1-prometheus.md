@@ -24,6 +24,16 @@ The fix was simple: failover to the replica. But finding the root cause in a sys
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Prometheus with persistent storage and configure service discovery for Kubernetes workloads**
+- **Implement PromQL queries for alerting rules, recording rules, and capacity planning dashboards**
+- **Configure Prometheus federation and remote write for multi-cluster metrics aggregation**
+- **Optimize Prometheus storage, retention, and cardinality management for production-scale monitoring**
+
+
 ## Why This Module Matters
 
 Prometheus is the de facto standard for metrics in cloud-native environments. Born at SoundCloud in 2012, it became the second project to graduate from CNCF (after Kubernetes). If you run Kubernetes, you're almost certainly running Prometheus.

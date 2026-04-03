@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Evaluate** CIS Benchmark categories and their coverage of control plane, node, and policy security
+2. **Assess** benchmark findings to prioritize critical vs. advisory recommendations
+3. **Identify** how kube-bench automates CIS compliance checking across cluster components
+4. **Explain** the relationship between CIS Benchmarks and broader compliance frameworks
+
+---
+
 ## Why This Module Matters
 
 The CIS (Center for Internet Security) Kubernetes Benchmark provides prescriptive security recommendations for Kubernetes clusters. It's the industry standard for Kubernetes hardening and is widely referenced in compliance requirements.

@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [COMPLEX] | **Time to Complete**: 2.5h | **Prerequisites**: Module 9.3 (Serverless Interoperability), Kubernetes Ingress and Services, HTTP/TLS basics
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure cloud-native API gateways (Amazon API Gateway, Apigee, Azure API Management) to front Kubernetes services**
+- **Implement rate limiting, authentication, and request transformation at the gateway layer for Kubernetes backends**
+- **Deploy WAF (Web Application Firewall) rules to protect Kubernetes-hosted APIs from OWASP Top 10 attacks**
+- **Compare cloud API gateways with Kubernetes-native ingress controllers (Kong, Ambassador, Envoy Gateway) for different architectures**
+
+---
+
 ## Why This Module Matters
 
 In October 2023, a B2B SaaS company exposed their API through a Kubernetes NGINX Ingress controller. They had rate limiting configured in NGINX annotations and felt secure. During a product launch, a competitor's automated scraping bot hit their pricing API at 50,000 requests per second from 12,000 different IP addresses -- a distributed scraping attack that looked like legitimate traffic. The NGINX rate limiter, configured per-IP, was useless against distributed attacks. The API pods were overwhelmed, legitimate customers got 503 errors for 45 minutes, and three enterprise deals fell through.

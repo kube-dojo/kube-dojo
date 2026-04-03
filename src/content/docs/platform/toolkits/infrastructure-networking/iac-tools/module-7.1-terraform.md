@@ -18,6 +18,16 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure Terraform workspaces and state backends for multi-environment infrastructure management**
+- **Implement reusable Terraform modules with input validation, outputs, and versioned releases**
+- **Deploy Kubernetes clusters and cloud resources using Terraform providers with drift detection**
+- **Evaluate Terraform state management strategies for team collaboration and disaster recovery**
+
+
 ## Why This Module Matters
 
 **The Tool That Changed Infrastructure**

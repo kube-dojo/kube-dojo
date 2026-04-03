@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Evaluate deployment strategies — rolling, blue-green, canary, A/B — against your risk tolerance and infrastructure**
+- **Design a release strategy matrix that matches deployment patterns to service criticality levels**
+- **Implement progressive delivery workflows that gradually shift traffic with automated rollback triggers**
+- **Analyze release failure modes to build deployment pipelines that detect problems before full rollout**
+
 ## Why This Module Matters
 
 It is 2:47 AM. Your phone is screaming. A deployment that went out six hours ago has been silently corrupting customer invoices. Every single user is affected. The rollback takes 40 minutes because nobody tested it. By the time you are back in bed, 12,000 invoices need manual correction, and the CEO wants a meeting at 8 AM.

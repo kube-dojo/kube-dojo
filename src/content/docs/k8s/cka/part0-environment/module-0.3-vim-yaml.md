@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Edit** YAML files in vim with proper indentation (2 spaces, no tabs)
+- **Fix** common YAML errors (wrong indentation, missing fields) in under 30 seconds
+- **Configure** vim settings (.vimrc) that make YAML editing painless in the exam
+- **Use** the 10 essential vim commands that cover 95% of CKA editing tasks
+
+---
+
 ## Why This Module Matters
 
 The CKA exam requires editing YAML files. A lot. You'll create manifests, fix broken configs, and modify existing resources—all in a terminal.
@@ -29,6 +39,8 @@ If you prefer nano, that's fine—it's simpler. But vim skills transfer to produ
 ---
 
 ## Part 1: Vim Survival Kit
+
+> **The honest truth**: Most CKA candidates spend 2 hours learning vim and then use `i` (insert), `Esc`, `:wq` (save and quit), and `u` (undo) for 90% of their editing. That's fine. The 10 commands below cover the remaining 10% that saves you minutes per question — indentation fixes, block deletion, and search-replace.
 
 You don't need to be a vim expert. You need 10 commands.
 

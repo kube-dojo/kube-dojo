@@ -23,6 +23,16 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure K9s with custom aliases, plugins, and skins for efficient Kubernetes cluster management**
+- **Implement K9s workflows for rapid pod debugging, log tailing, and resource editing in production**
+- **Deploy K9s plugins for extended functionality including benchmark testing and resource cleanup**
+- **Optimize daily Kubernetes operations using K9s keyboard shortcuts and filtering commands**
+
+
 ## Why This Module Matters
 
 Developers spend hours in kubectl. Every second saved compounds. k9s turns 30-second operations into 1-second operations. Over a year, that's weeks of productivity recovered. More importantly, visual feedback means faster debugging and fewer mistakes.

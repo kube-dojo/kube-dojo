@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Evaluate service mesh solutions — Istio, Linkerd, Cilium mesh — against your observability and security needs**
+- **Design service mesh architectures that add mTLS, traffic management, and observability without application changes**
+- **Implement gradual service mesh adoption strategies that onboard services incrementally with rollback capability**
+- **Analyze service mesh overhead — latency, resource consumption, operational complexity — to make informed trade-offs**
+
 ## Why This Module Matters
 
 In 2022, a large e-commerce platform decided to adopt Istio after reading a blog post about how it solved Netflix's microservice challenges. Six months and $400K in engineering time later, they had Istio running across three production clusters. The problem? They didn't actually need a service mesh. Their 12-service architecture had been running fine with simple Kubernetes Services and a basic ingress controller. The mTLS they wanted could have been handled by cert-manager plus application-level TLS. The retry logic they needed was already built into their HTTP client library.

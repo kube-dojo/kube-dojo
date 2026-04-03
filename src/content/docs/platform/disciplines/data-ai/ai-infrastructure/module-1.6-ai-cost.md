@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement GPU cost tracking and attribution across teams, projects, and workload types**
+- **Design spot/preemptible instance strategies that reduce AI training costs by 60-80%**
+- **Build cost optimization workflows — right-sizing, scheduling, auto-shutdown — for GPU clusters**
+- **Evaluate reserved capacity versus on-demand pricing models for predictable AI infrastructure budgets**
+
 ## Why This Module Matters
 
 AI infrastructure is the most expensive line item in many organizations' cloud bills. The numbers are staggering:

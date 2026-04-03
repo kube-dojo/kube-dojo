@@ -11,6 +11,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Implement** Cluster API with Metal3 or Sidero providers to declaratively provision bare-metal Kubernetes clusters
+2. **Configure** a bare-metal host inventory with BMC credentials, hardware profiles, and network templates
+3. **Deploy** new Kubernetes clusters using `kubectl apply` with version-controlled YAML manifests
+4. **Design** a GitOps-driven cluster lifecycle workflow that covers provisioning, scaling, and decommissioning
+
+---
+
 ## Why This Module Matters
 
 A financial services company with 8 Kubernetes clusters across two datacenters managed their infrastructure with a combination of Ansible playbooks, shell scripts, and a shared spreadsheet tracking which server was in which cluster. Creating a new cluster took 3 days: 1 day to allocate servers (manually checking the spreadsheet), 1 day to PXE boot and install the OS, and 1 day to run kubeadm and configure networking. Decommissioning a cluster was worse — nobody was sure which servers could be safely wiped because the spreadsheet was 4 months out of date.

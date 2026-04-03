@@ -14,6 +14,15 @@ Before starting this module, ensure you have:
 - AWS CLI v2 installed and configured
 - Basic understanding of encryption concepts (symmetric vs. asymmetric keys)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure AWS Secrets Manager with automatic rotation schedules for database credentials and API keys**
+- **Implement KMS encryption key hierarchies and key policies to control access to sensitive data at rest**
+- **Compare SSM Parameter Store and Secrets Manager to select the right secret storage for each use case**
+- **Deploy secret injection patterns for EC2 instances, ECS tasks, and Lambda functions without hardcoding credentials**
+
 ---
 
 ## Why This Module Matters

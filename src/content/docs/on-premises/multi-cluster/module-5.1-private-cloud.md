@@ -11,6 +11,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Evaluate** VMware vSphere/Tanzu, OpenStack, and Harvester as virtualization platforms for on-premises Kubernetes
+2. **Design** a private cloud architecture that balances operational simplicity against licensing costs and staffing requirements
+3. **Implement** VM-based Kubernetes node provisioning with automated live migration and hardware abstraction
+4. **Plan** a bare-metal-to-virtualized migration path with defined criteria for when virtualization overhead is justified
+
+---
+
 ## Why This Module Matters
 
 A mid-size bank ran Kubernetes on bare metal for two years. Their platform team of three engineers spent 40% of their time on hardware lifecycle: firmware updates required draining nodes manually, disk replacements meant SSH sessions and fdisk, and provisioning a new cluster took two weeks of BIOS configuration, OS installs, and kubeadm bootstrapping.

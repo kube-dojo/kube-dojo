@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [COMPLEX] | **Time to Complete**: 3.5h | **Prerequisites**: Module 5.1 (EKS Architecture & Control Plane)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure the AWS VPC CNI plugin with custom networking, prefix delegation, and secondary CIDR ranges for large clusters**
+- **Implement EKS networking with security groups for pods, network policies, and pod-level traffic isolation**
+- **Deploy AWS Load Balancer Controller to provision ALB ingress and NLB services from Kubernetes manifests**
+- **Diagnose pod networking failures related to IP exhaustion, ENI limits, and subnet routing misconfigurations**
+
+---
+
 ## Why This Module Matters
 
 In March 2023, a major European e-commerce platform running 800 pods across 40 EKS nodes hit a wall during their annual spring sale. At 09:12, Kubernetes could not schedule new pods. The error was not about CPU or memory. It was `FailedCreatePodSandBox: failed to setup network for sandbox: no available IP addresses`. Their VPC subnets had run out of IP addresses. The VPC CNI plugin assigns a real VPC IP address to every single pod -- and with each `m5.xlarge` node consuming up to 58 IP addresses (14 ENIs x 4 secondary IPs + the node's primary IPs), their `/24` subnets were mathematically exhausted. The sale was live, customers were clicking, and the platform could not scale. The engineering team spent 90 minutes frantically adding secondary CIDR blocks and reconfiguring subnets while losing an estimated EUR 2.3 million in revenue.

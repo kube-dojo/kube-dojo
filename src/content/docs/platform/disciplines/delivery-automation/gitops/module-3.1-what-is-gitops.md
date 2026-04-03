@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Evaluate whether GitOps principles apply to your deployment workflows and infrastructure management**
+- **Design a GitOps architecture with clear separation between application and configuration repositories**
+- **Implement a basic GitOps workflow using Flux or Argo CD with automated reconciliation**
+- **Analyze the operational benefits and trade-offs of GitOps compared to traditional CI/CD push models**
+
 ## Why This Module Matters
 
 You've built a great CI/CD pipeline. Code gets tested, images get built, deployments happen automatically.

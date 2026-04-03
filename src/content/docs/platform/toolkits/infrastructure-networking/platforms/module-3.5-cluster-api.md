@@ -26,6 +26,16 @@ Cluster API (CAPI) brings the declarative, reconciliation-driven model of Kubern
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Cluster API management clusters and provision target workload clusters declaratively**
+- **Configure infrastructure providers (AWS, Azure, vSphere) for automated Kubernetes cluster lifecycle**
+- **Implement cluster upgrades, scaling, and machine health checks using Cluster API resources**
+- **Evaluate Cluster API's declarative approach against Terraform for Kubernetes cluster fleet management**
+
+
 ## Why This Module Matters
 
 Managing one Kubernetes cluster is hard enough. Managing 10 is a full-time job. Managing 50+ without automation is a recipe for outages, configuration drift, and burnout. Cluster API treats clusters as disposable, reproducible infrastructure--the same way Deployments treat Pods. If a cluster drifts, reconcile it. If you need 20 more, declare them.

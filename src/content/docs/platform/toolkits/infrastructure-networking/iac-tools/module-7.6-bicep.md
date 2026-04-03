@@ -19,6 +19,16 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Azure infrastructure using Bicep templates with modules and parameter files**
+- **Implement Bicep deployment stacks for multi-resource-group and subscription-level deployments**
+- **Configure Bicep with Azure DevOps and GitHub Actions for automated infrastructure pipelines**
+- **Compare Bicep's Azure-native approach against Terraform for Azure-centric infrastructure teams**
+
+
 ## Why This Module Matters
 
 *The ARM template sprawled across 2,847 lines of impenetrable JSON.*

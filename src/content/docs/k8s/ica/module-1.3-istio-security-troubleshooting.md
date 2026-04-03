@@ -18,6 +18,17 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Configure** PeerAuthentication policies to enforce mTLS modes (STRICT, PERMISSIVE) across namespaces and workloads
+2. **Implement** RequestAuthentication with JWT validation and AuthorizationPolicy rules that control service-to-service access
+3. **Diagnose** mTLS handshake failures, rejected requests, and policy conflicts using `istioctl authn tls-check` and proxy logs
+4. **Apply** a systematic troubleshooting workflow using `istioctl analyze`, `proxy-config`, and `proxy-status` to resolve mesh issues
+
+---
+
 ## Why This Module Matters
 
 Security accounts for **15% of the ICA exam** and Troubleshooting accounts for **10%**. Together, that's a quarter of your score. Security questions will ask you to configure mTLS policies, set up JWT authentication, and write authorization rules. Troubleshooting questions will give you a broken configuration and ask you to find and fix it.

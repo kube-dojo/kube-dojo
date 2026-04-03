@@ -11,6 +11,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Implement** HSM-backed encryption for etcd secrets and Kubernetes signing keys using PKCS#11 integration
+2. **Configure** TPM-based measured boot and node attestation to verify bare-metal server integrity before cluster admission
+3. **Design** a key management architecture where master encryption keys never exist outside hardware security boundaries
+4. **Evaluate** HSM deployment models (network HSM, PCIe HSM, cloud HSM) based on performance, compliance, and cost requirements
+
+---
+
 ## Why This Module Matters
 
 In 2021, a fintech company running Kubernetes on-premises stored their etcd encryption key in a Kubernetes Secret. That Secret was base64-encoded (not encrypted) and backed up nightly to an NFS share. A contractor with read access to the NFS share decoded the Secret, extracted the etcd encryption key, and used it to decrypt a backup of etcd -- which contained every Secret in the cluster: database passwords, API keys, TLS certificates, and service account tokens for 340 microservices. The breach was not detected for 11 weeks.

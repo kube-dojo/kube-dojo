@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [COMPLEX] | **Time to Complete**: 2.5h | **Prerequisites**: Module 9.4 (Object Storage), Module 9.7 (Streaming Pipelines), SQL basics
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure Kubernetes workloads to write to managed data warehouses (Redshift, BigQuery, Synapse Analytics) using private connectivity**
+- **Implement ETL/ELT pipelines on Kubernetes that transform and load data into cloud analytics platforms**
+- **Deploy Apache Spark on Kubernetes with managed storage backends for large-scale data processing**
+- **Design data lake architectures that combine Kubernetes data pipelines with cloud-native analytics and query services**
+
+---
+
 ## Why This Module Matters
 
 In May 2024, a ride-sharing company processed 8 million trips per day. Their analytics pipeline was a tangle of CronJobs running on EKS: Python scripts that extracted data from PostgreSQL, transformed it in memory, and loaded it into BigQuery. Each CronJob ran on a dedicated pod with 16 GB of RAM to handle the largest tables. The pipeline consumed 12 always-on pods -- $6,800/month in compute -- and took 4 hours to complete the daily ETL. When a single CronJob failed (out-of-memory on a growing table), downstream analysts discovered the data gap 6 hours later when their dashboards showed zeros.

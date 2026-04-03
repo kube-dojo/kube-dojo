@@ -19,6 +19,17 @@ This is the single biggest operational gap between cloud and on-premises Kuberne
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Deploy** MetalLB in both L2 and BGP mode to provide LoadBalancer services on bare-metal Kubernetes
+2. **Configure** external load balancers (HAProxy, Nginx, F5) to front Kubernetes Ingress controllers
+3. **Design** a high-availability load balancing architecture with VIP failover and health checking
+4. **Evaluate** L2 vs. BGP vs. external hardware load balancing tradeoffs for different traffic patterns and scale requirements
+
+---
+
 ## What You'll Learn
 
 - Why `type: LoadBalancer` does not work on bare metal by default

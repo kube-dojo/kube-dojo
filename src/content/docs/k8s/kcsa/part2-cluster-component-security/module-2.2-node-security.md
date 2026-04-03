@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Assess** the risk of privileged containers and host namespace access on worker nodes
+2. **Evaluate** kubelet security settings including authentication, authorization, and read-only ports
+3. **Identify** node-level attack vectors: exposed kubelet API, writable hostPath, kernel exploits
+4. **Explain** node hardening strategies including minimal OS images and automatic patching
+
+---
+
 ## Why This Module Matters
 
 Worker nodes run your actual workloads. They have direct access to your containers and sensitive data. A compromised node means compromised pods—and potentially the entire cluster if the attacker can escalate from node to control plane.

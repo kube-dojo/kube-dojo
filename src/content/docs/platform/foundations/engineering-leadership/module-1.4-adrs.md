@@ -8,6 +8,15 @@ sidebar:
 >
 > **Track**: Foundations / Engineering Leadership
 
+### What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Build** Architecture Decision Records that capture context, constraints, alternatives considered, and rationale in a format future engineers can act on
+2. **Design** a decision documentation workflow that integrates with existing pull request and review processes without adding ceremony
+3. **Evaluate** when a decision warrants an ADR versus informal documentation based on reversibility, impact scope, and team size
+4. **Apply** technical writing principles (clarity, conciseness, audience awareness) to produce documentation that engineers actually read and reference
+
 ---
 
 ## The Decision Nobody Remembers

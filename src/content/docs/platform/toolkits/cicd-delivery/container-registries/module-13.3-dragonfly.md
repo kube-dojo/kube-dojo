@@ -19,6 +19,16 @@ This module teaches you to deploy Dragonfly for massive-scale container image di
 - Basic networking concepts (P2P, BitTorrent-like protocols)
 - [DevSecOps Discipline](../../../disciplines/reliability-security/devsecops/) - Supply chain concepts
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Dragonfly's P2P distribution layer to accelerate container image pulls across large clusters**
+- **Configure peer-to-peer scheduling policies and seed node strategies for optimal distribution**
+- **Integrate Dragonfly with existing registries (Harbor, Zot, ECR) as a transparent distribution layer**
+- **Monitor P2P distribution metrics and optimize cache hit rates for large-scale deployments**
+
+
 ## Why This Module Matters
 
 Traditional registry architectures hit a wall at scale:

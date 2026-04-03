@@ -20,6 +20,16 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy serverless and container workloads using SST with live Lambda development and hot reloading**
+- **Configure SST constructs for API Gateway, queues, databases, and frontend deployments on AWS**
+- **Implement SST's resource binding for type-safe access to infrastructure from application code**
+- **Compare SST's developer experience against raw CDK and Serverless Framework for full-stack applications**
+
+
 ## Why This Module Matters
 
 **Serverless Should Be Simple**

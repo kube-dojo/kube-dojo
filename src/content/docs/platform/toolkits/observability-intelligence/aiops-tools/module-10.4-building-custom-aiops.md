@@ -15,6 +15,16 @@ Before starting this module:
 - Kubernetes basics (Deployments, Services, ConfigMaps)
 - Basic understanding of Kafka or similar streaming platforms
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement custom AIOps pipelines using Python and ML libraries for Kubernetes operational intelligence**
+- **Configure feature engineering pipelines for Prometheus metrics and Kubernetes event data**
+- **Deploy custom anomaly detection models with feedback loops for continuous accuracy improvement**
+- **Evaluate build-versus-buy trade-offs for AIOps capabilities based on team skills and data maturity**
+
+
 ## Why This Module Matters
 
 Platform AI (Datadog Watchdog, Dynatrace Davis) covers 80% of use cases. But sometimes you need **custom AIOps** because:

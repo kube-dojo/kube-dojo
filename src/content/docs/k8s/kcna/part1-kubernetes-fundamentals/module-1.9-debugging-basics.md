@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Explain** a systematic triage approach for diagnosing Kubernetes workload failures
+2. **Identify** common failure patterns from pod status, events, and log output
+3. **Trace** the debugging path from symptom to root cause using kubectl describe and logs
+4. **Compare** different categories of failures: image pull, scheduling, crashloop, and configuration errors
+
+---
+
 ## Why This Module Matters
 
 Picture this: Friday at 4:47 PM. The on-call engineer gets paged. The checkout service is down. Revenue is bleeding. Two engineers respond. The first panics -- starts deleting pods, restarting deployments, editing environment variables at random. Twenty minutes later, the situation is worse. The second engineer opens a terminal, runs three commands in sixty seconds, and says: "The new image tag has a typo. Rolling back now." Service restored in under two minutes.

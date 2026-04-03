@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design a secrets management strategy that keeps sensitive data out of Git while maintaining GitOps workflows**
+- **Implement Sealed Secrets, SOPS, or External Secrets Operator for encrypted secret storage in Git**
+- **Evaluate secrets management tools against security requirements — rotation, auditing, access control**
+- **Build secret rotation workflows that update credentials without service disruption**
+
 ## Why This Module Matters
 
 GitOps says: "Everything in Git."

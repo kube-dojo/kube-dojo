@@ -28,6 +28,15 @@ This module teaches Infrastructure as Code fundamentals: not just the tools, but
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design Infrastructure as Code workflows that treat infrastructure definitions as versioned, tested software**
+- **Implement Terraform or Pulumi projects with proper state management and backend configuration**
+- **Evaluate IaC tool choices — Terraform, Pulumi, Crossplane, CDK — against your team's skills and requirements**
+- **Build modular IaC repositories with reusable components and clear dependency management**
+
 ## Why This Module Matters
 
 Infrastructure as Code isn't just about automation—it's about treating infrastructure with the same rigor as application code. Version control. Code review. Testing. Continuous integration. These practices transformed software development. IaC brings them to infrastructure.

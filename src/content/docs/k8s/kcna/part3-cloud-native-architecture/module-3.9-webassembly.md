@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Explain** what WebAssembly is and how WASI extends it for server-side use
+2. **Compare** Wasm workloads with containers in terms of startup time, size, and security isolation
+3. **Identify** where Wasm fits in the cloud native landscape alongside containers
+4. **Evaluate** use cases where Wasm provides advantages over traditional container runtimes
+
+---
+
 ## Why This Module Matters
 
 WebAssembly (Wasm) is the most significant new runtime technology since containers. Originally built for browsers, it is now breaking into server-side and cloud native computing. Wasm workloads start in milliseconds, weigh kilobytes, and run in a secure sandbox. KCNA expects you to understand where Wasm fits in the cloud native landscape and how it relates to containers.

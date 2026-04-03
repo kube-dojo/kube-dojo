@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Foundations
 
+### What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Design** instrumentation that captures high-cardinality dimensions without creating cardinality explosions or unsustainable cost
+2. **Apply** the RED (Rate, Errors, Duration) and USE (Utilization, Saturation, Errors) methods to determine what to instrument in a service
+3. **Implement** structured logging and context propagation patterns that make cross-service debugging possible
+4. **Evaluate** whether a service's instrumentation is sufficient to diagnose production incidents without redeploying code
+
 ---
 
 ## The Startup That Went Blind at the Worst Possible Moment

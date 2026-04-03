@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure GPU node pools on Kubernetes with proper device plugins, drivers, and runtime settings**
+- **Design GPU provisioning strategies that balance availability, cost, and workload requirements**
+- **Implement node affinity and toleration rules that schedule GPU workloads on appropriate hardware**
+- **Evaluate GPU instance types across cloud providers to optimize price-performance for your AI workloads**
+
 ## Why This Module Matters
 
 GPUs are the engine of the AI revolution — and they are absurdly expensive. A single NVIDIA H100 costs more than most engineers' annual salary. An 8-GPU DGX H100 node lists north of $300,000.

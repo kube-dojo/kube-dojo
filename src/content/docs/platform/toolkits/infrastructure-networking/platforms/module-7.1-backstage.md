@@ -23,6 +23,16 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Backstage as an internal developer portal with service catalog and software templates**
+- **Configure Backstage plugins for CI/CD visibility, Kubernetes dashboards, and documentation integration**
+- **Implement software templates for standardized service scaffolding with built-in compliance guardrails**
+- **Integrate Backstage with existing toolchain (GitHub, ArgoCD, PagerDuty) for unified developer experience**
+
+
 ## Why This Module Matters
 
 Platform teams build great tools. Developers can't find them. Backstage solves the discoverability problem by creating a single pane of glass for everything developers need. It's not just a catalog—it's a developer portal that reduces cognitive load and enables self-service.

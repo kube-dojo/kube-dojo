@@ -22,6 +22,16 @@ Before starting this module, ensure you have:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Create** ConfigMaps and Secrets from files, literals, and directories
+- **Mount** configuration as environment variables and volume mounts and explain when to use each
+- **Implement** immutable ConfigMaps/Secrets and explain when immutability matters
+- **Troubleshoot** configuration issues (wrong mount path, missing key, base64 encoding errors)
+
+---
+
 ## Why This Module Matters
 
 Every real application needs configuration. Database connection strings, feature flags, API keys, certificates—these can't be hardcoded. Kubernetes provides two primitives for injecting configuration into Pods: **ConfigMaps** for non-sensitive data and **Secrets** for sensitive data.

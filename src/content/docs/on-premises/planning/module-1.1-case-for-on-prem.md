@@ -11,6 +11,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Evaluate** whether on-premises Kubernetes is the right fit for a given workload based on regulatory, performance, and cost criteria
+2. **Design** a decision framework that compares cloud vs. on-premises deployment models using quantitative metrics
+3. **Diagnose** organizational readiness gaps that must be addressed before committing to bare-metal infrastructure
+4. **Plan** a phased migration strategy from cloud-managed Kubernetes to on-premises with defined success criteria
+
+---
+
 ## Why This Module Matters
 
 In 2023, a mid-sized European bank spent $4.2 million per year running 340 microservices on AWS EKS across three regions. Their compliance team flagged a problem: under GDPR and the Digital Operational Resilience Act (DORA), they needed to demonstrate that customer financial data never left the EU — and that they could operate independently if their cloud provider experienced a prolonged outage. Their AWS bill was growing 22% year-over-year. Their CTO commissioned a study.

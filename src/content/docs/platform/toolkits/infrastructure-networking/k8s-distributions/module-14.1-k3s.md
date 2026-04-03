@@ -19,6 +19,16 @@ This module teaches you to deploy, configure, and operate k3s for edge and resou
 - Understanding of container runtimes (containerd)
 - SSH access to at least one Linux machine (or VM)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy K3s clusters on edge devices and resource-constrained environments with automated installation**
+- **Configure K3s with embedded etcd, Traefik ingress, and ServiceLB for production-ready lightweight clusters**
+- **Implement multi-node K3s clusters with server and agent roles for HA edge deployments**
+- **Evaluate K3s against standard Kubernetes for edge computing, IoT, and development environments**
+
+
 ## Why This Module Matters
 
 **Kubernetes is everywhere, but not everywhere can run Kubernetes.**

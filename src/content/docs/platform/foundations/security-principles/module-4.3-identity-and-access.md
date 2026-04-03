@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Foundations
 
+### What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Design** identity and access management architectures that enforce least privilege across human users, service accounts, and machine identities
+2. **Implement** authentication and authorization patterns (OIDC, RBAC, ABAC, short-lived credentials) appropriate for different trust levels
+3. **Evaluate** whether an IAM configuration prevents lateral movement by auditing permission scope, credential lifetime, and access review processes
+4. **Analyze** access-related incidents to identify where over-permissioning, missing audit trails, or credential reuse enabled the breach
+
 ---
 
 **July 2020. Twitter's internal admin tools become a weapon.**

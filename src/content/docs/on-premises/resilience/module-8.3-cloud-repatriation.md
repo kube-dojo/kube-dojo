@@ -11,6 +11,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Evaluate** cloud repatriation economics with accurate 5-year TCO models that include hidden migration and staffing costs
+2. **Design** a phased migration plan that replaces cloud-managed services (RDS, ElastiCache, ALB) with self-managed on-premises equivalents
+3. **Implement** workload migration strategies that maintain service continuity during the transition from cloud to bare metal
+4. **Plan** staffing and operational readiness requirements for self-managing infrastructure previously handled by cloud providers
+
+---
+
 ## Why This Module Matters
 
 In 2022, 37signals published a detailed accounting of their cloud exit. They spent $3.2 million per year on AWS -- EC2, RDS, S3, and EKS. Their CTO calculated that equivalent hardware would cost $600,000 upfront, with $840,000 annual operations. Over five years, the on-prem path would save over $7 million.

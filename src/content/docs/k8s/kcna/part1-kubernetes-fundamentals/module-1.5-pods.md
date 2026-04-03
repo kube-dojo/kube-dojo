@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Explain** what a Pod is and why it is the smallest deployable unit in Kubernetes
+2. **Identify** when to use single-container vs. multi-container Pod patterns (sidecar, init)
+3. **Compare** Pod lifecycle phases and understand what each status indicates
+4. **Evaluate** whether a given scenario requires a standalone Pod or a higher-level workload resource
+
+---
+
 ## Why This Module Matters
 
 The Pod is the **most fundamental concept** in Kubernetes. Every workload runs in a Pod. KCNA will test your understanding of what Pods are, what they contain, and how they work.

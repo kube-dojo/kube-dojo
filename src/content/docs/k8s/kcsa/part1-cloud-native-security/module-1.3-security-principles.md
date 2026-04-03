@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Explain** core security principles: defense in depth, least privilege, zero trust, and separation of duties
+2. **Evaluate** Kubernetes configurations against these principles to identify violations
+3. **Assess** which principle applies when analyzing a specific security scenario
+4. **Design** security controls that implement multiple principles simultaneously
+
+---
+
 ## Why This Module Matters
 
 Security principles are the timeless rules that guide security decisions. Technologies change—containers, Kubernetes, cloud—but these principles remain constant. Understanding them helps you evaluate any security question, even for technologies you've never seen before.

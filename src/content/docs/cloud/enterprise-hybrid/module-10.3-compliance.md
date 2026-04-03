@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [COMPLEX] | **Time to Complete**: 2h | **Prerequisites**: Cloud Governance & Policy as Code (Module 10.2), Kubernetes Security Basics
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure continuous compliance scanning using CSPM tools (Prisma Cloud, Wiz, cloud-native) for Kubernetes infrastructure**
+- **Implement audit logging pipelines that capture and retain Kubernetes API server events for regulatory compliance**
+- **Deploy CIS Kubernetes Benchmark scanning and automated remediation for cluster hardening across environments**
+- **Design compliance-as-code workflows that generate evidence artifacts for SOC 2, HIPAA, PCI DSS, and ISO 27001 audits**
+
+---
+
 ## Why This Module Matters
 
 In January 2024, a healthcare SaaS company passed their SOC 2 Type II audit with flying colors. Three months later, an automated scanner discovered that 14 of their EKS clusters had Kubernetes audit logging disabled, 6 clusters were running containers with known critical CVEs, and their production namespace had no network policies. None of these issues existed during the audit. They had accumulated in the 90 days since the auditor's snapshot. The company's CISO described the situation as "compliance theater" -- they were compliant on audit day and non-compliant every other day.

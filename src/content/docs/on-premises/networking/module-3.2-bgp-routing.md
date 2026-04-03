@@ -21,6 +21,17 @@ This module teaches you how to configure BGP peering between Kubernetes CNIs (Ca
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Configure** BGP peering between Kubernetes CNIs (Calico, Cilium) and datacenter ToR switches for routable pod networking
+2. **Implement** route reflectors to scale BGP beyond direct peering in large bare-metal clusters
+3. **Design** multi-site BGP routing with AS path prepending and community-based traffic engineering
+4. **Troubleshoot** BGP session flaps, route convergence delays, and misconfigured prefix advertisements
+
+---
+
 ## What You'll Learn
 
 - BGP fundamentals for datacenter use (eBGP, iBGP, AS numbers)

@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Identify** Kubernetes attack surfaces across API server, kubelet, etcd, and container runtime
+2. **Evaluate** which attack vectors pose the highest risk in a given cluster configuration
+3. **Assess** external vs. internal threat actors and their likely entry points
+4. **Design** attack surface reduction strategies by disabling unnecessary endpoints and features
+
+---
+
 ## Why This Module Matters
 
 To defend a system, you must understand how it can be attacked. The attack surface is the sum of all points where an attacker can try to enter or extract data. Kubernetes has a large attack surface due to its complexity—understanding it helps you prioritize security efforts.

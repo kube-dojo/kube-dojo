@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [MEDIUM] | **Time to Complete**: 1h | **Prerequisites**: Module 2.1 (IAM & Resource Hierarchy)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure Artifact Registry repositories for container images, language packages, and OS packages**
+- **Implement vulnerability scanning policies and Binary Authorization to block unscanned images from deployment**
+- **Deploy cross-region repository replication for multi-region CI/CD pipelines**
+- **Secure Artifact Registry with VPC Service Controls and IAM policies scoped to specific repositories**
+
+---
+
 ## Why This Module Matters
 
 In November 2021, the `ua-parser-js` npm package---downloaded over 7 million times per week---was compromised. An attacker gained access to the maintainer's npm account and published three malicious versions that installed cryptocurrency miners on Linux and Windows systems, and also stole passwords from infected machines. Any CI/CD pipeline that ran `npm install` during the window when the malicious versions were available pulled compromised code directly into production builds. Companies that pulled packages directly from the public npm registry had no defense. Companies that used a private registry with upstream caching had a critical advantage: the malicious versions were never cached because their pipelines pulled from the cached (clean) versions already stored in the private registry.

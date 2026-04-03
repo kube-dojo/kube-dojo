@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Evaluate** Kubernetes configurations by thinking like an attacker: "what could go wrong?"
+2. **Identify** the difference between compliance-driven and threat-driven security thinking
+3. **Explain** defense in depth and how it applies to layered Kubernetes security controls
+4. **Assess** security trade-offs between usability, performance, and risk reduction
+
+---
+
 ## Why This Module Matters
 
 Security isn't just a checklist of features to enable. It's a way of thinking. The best security professionals don't just know tools—they think differently about systems, always asking "what could go wrong?" and "how could this be abused?"

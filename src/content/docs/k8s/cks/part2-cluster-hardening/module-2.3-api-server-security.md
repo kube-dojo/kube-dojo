@@ -18,6 +18,17 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Harden** API server flags for authentication, authorization, and encryption at rest
+2. **Audit** API server configuration against security best practices and CIS benchmarks
+3. **Configure** API server admission plugins and authentication mechanisms
+4. **Diagnose** API server security issues from logs and failed request patterns
+
+---
+
 ## Why This Module Matters
 
 The API server is the control plane's front door. Every `kubectl` command, every controller, every node—they all talk to the API server. Compromising it means compromising the entire cluster.

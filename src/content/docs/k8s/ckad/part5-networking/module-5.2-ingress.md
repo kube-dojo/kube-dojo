@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## Learning Outcomes
+
+After completing this module, you will be able to:
+- **Create** Ingress resources with host-based and path-based routing rules
+- **Configure** TLS termination and multiple backend Services in a single Ingress
+- **Debug** Ingress routing failures by checking controller logs, annotations, and backend Service health
+- **Explain** the relationship between Ingress resources, IngressClasses, and Ingress controllers
+
+---
+
 ## Why This Module Matters
 
 Ingress provides HTTP/HTTPS routing from outside the cluster to Services inside. Instead of exposing multiple LoadBalancer Services (expensive) or using NodePorts (ugly URLs), Ingress gives you host/path-based routing with a single entry point.

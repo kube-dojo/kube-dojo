@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Evaluate your organization's security posture to identify gaps in the DevSecOps lifecycle**
+- **Design a DevSecOps strategy that integrates security into every phase of software delivery**
+- **Implement security champion programs that distribute security knowledge across development teams**
+- **Analyze the cost of security remediation at each lifecycle stage to justify shift-left investments**
+
 ## Why This Module Matters
 
 Your team ships code fast. Daily. Maybe multiple times a day.

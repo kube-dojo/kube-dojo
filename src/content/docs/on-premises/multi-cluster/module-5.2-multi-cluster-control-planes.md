@@ -21,6 +21,17 @@ On-premises hardware is finite. Every control plane node you provision is a node
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Deploy** virtual control planes using vCluster or Kamaji to maximize hardware utilization on constrained bare-metal infrastructure
+2. **Design** multi-tenant cluster architectures that provide strong isolation without dedicating physical nodes per tenant
+3. **Configure** external etcd topologies for high-availability control planes with proper backup and recovery procedures
+4. **Evaluate** virtual vs. dedicated control plane tradeoffs based on tenant count, isolation requirements, and resource constraints
+
+---
+
 ## What You'll Learn
 
 - Traditional kubeadm HA topology with external etcd

@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## Learning Outcomes
+
+After completing this module, you will be able to:
+- **Create** ClusterIP, NodePort, and LoadBalancer Services to expose applications
+- **Debug** Service connectivity issues using endpoint inspection, DNS resolution, and port verification
+- **Explain** how Services use label selectors to route traffic to the correct pods
+- **Compare** Service types and choose the appropriate one for internal vs external access patterns
+
+---
+
 ## Why This Module Matters
 
 Services provide stable networking for pods. Since pods are ephemeral and get new IPs when recreated, you need Services to provide consistent access to your applications. Services are fundamental to how applications communicate in Kubernetes.

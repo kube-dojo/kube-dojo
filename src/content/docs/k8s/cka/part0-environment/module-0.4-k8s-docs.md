@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Navigate** kubernetes.io docs to find any resource specification in under 30 seconds
+- **Copy** working YAML examples from the docs and adapt them to exam scenarios
+- **Use** the docs search effectively (knowing which keywords work and which waste time)
+- **Bookmark** the 5-6 most critical doc pages that cover 80% of CKA questions
+
+---
+
 ## Why This Module Matters
 
 During the CKA exam, you have access to:

@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Advanced Cloud Operations
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement FinOps practices with cloud-native cost allocation tagging, showback, and chargeback mechanisms**
+- **Configure Kubernetes cost visibility using Kubecost, OpenCost, or cloud-native cost tools across multi-cluster environments**
+- **Optimize compute costs using reserved instances, committed use discounts, Spot/preemptible instances, and right-sizing**
+- **Design automated cost anomaly detection and budget alerting pipelines that trigger remediation actions**
+
 ---
 
 ## Why This Module Matters

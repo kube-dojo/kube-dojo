@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Identify** supply chain attack vectors: compromised base images, malicious dependencies, tampered pipelines
+2. **Evaluate** image provenance and signing mechanisms (cosign, Sigstore, SLSA)
+3. **Assess** CI/CD pipeline security for injection points and trust boundary violations
+4. **Explain** how admission controllers can enforce image signing and registry restrictions
+
+---
+
 ## Why This Module Matters
 
 Supply chain attacks compromise trusted components before they reach your cluster. A malicious container image, compromised dependency, or tampered CI/CD pipeline can bypass all runtime security controls because the attack is embedded in trusted artifacts.

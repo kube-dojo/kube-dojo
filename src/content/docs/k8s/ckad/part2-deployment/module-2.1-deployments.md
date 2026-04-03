@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## Learning Outcomes
+
+After completing this module, you will be able to:
+- **Deploy** applications using Deployments with correct replica counts and update strategies
+- **Configure** rolling update parameters including `maxSurge` and `maxUnavailable`
+- **Diagnose** stuck rollouts and perform rollbacks using `kubectl rollout` commands
+- **Implement** scaling operations both imperatively and declaratively
+
+---
+
 ## Why This Module Matters
 
 Deployments are how you run applications in production Kubernetes. They manage ReplicaSets, which manage Pods. Understanding Deployments means understanding rolling updates, rollbacks, scaling, and the entire lifecycle of your application.

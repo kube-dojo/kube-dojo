@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Foundations — Advanced Networking
 
+### What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Design** DNS architectures for global traffic management using weighted routing, geolocation policies, and health-checked failover
+2. **Diagnose** DNS resolution failures by tracing queries through recursive resolvers, authoritative servers, and caching layers
+3. **Implement** DNS-based service discovery patterns and explain their tradeoffs compared to service mesh alternatives
+4. **Evaluate** DNS security risks (cache poisoning, DDoS amplification, hijacking) and apply DNSSEC, DoH, and split-horizon mitigations
+
 ---
 
 **July 22, 2016. A routine configuration update at Dyn, one of the world's largest managed DNS providers, propagates a change to their Anycast network. Nothing unusual. But three months later, Dyn would learn a very different lesson about DNS at scale.**

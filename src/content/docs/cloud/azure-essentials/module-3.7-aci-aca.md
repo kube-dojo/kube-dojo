@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [COMPLEX] | **Time to Complete**: 3h | **Prerequisites**: Module 3.6 (ACR), Module 3.1 (Entra ID)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Azure Container Instances for burst workloads with virtual network integration and GPU support**
+- **Configure Azure Container Apps with Dapr integration, KEDA-based autoscaling, and revision traffic splitting**
+- **Implement event-driven container architectures using Container Apps with Azure Event Grid and Service Bus triggers**
+- **Evaluate ACI vs Container Apps vs AKS to select the right container platform for each workload pattern**
+
+---
+
 ## Why This Module Matters
 
 In early 2023, a media streaming company needed to process video transcoding jobs during live events. Their traffic was extremely spiky---zero jobs during off-hours, then 500+ concurrent transcoding tasks during a live broadcast. Their existing solution used a pool of 20 always-on VMs that cost $2,800/month. During events, the pool was overwhelmed and jobs queued for 15+ minutes. During off-hours, the VMs sat idle burning money. They migrated the transcoding workers to Azure Container Apps with KEDA scaling triggered by Azure Service Bus queue depth. During live events, Container Apps scaled from zero to 200 instances in under 90 seconds. After the event, it scaled back to zero. Their monthly compute bill dropped from $2,800 to $340---an 88% reduction---while simultaneously eliminating the 15-minute queue backlog entirely.

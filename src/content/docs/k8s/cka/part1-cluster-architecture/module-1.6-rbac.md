@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Configure** Roles, ClusterRoles, RoleBindings, and ClusterRoleBindings for least-privilege access
+- **Debug** "forbidden" errors by tracing the RBAC chain (user → binding → role → permission)
+- **Design** an RBAC scheme for a multi-team cluster with namespace isolation
+- **Audit** existing RBAC rules to find overly permissive access (wildcard verbs, cluster-admin bindings)
+
+---
+
 ## Why This Module Matters
 
 In a real cluster, you don't want everyone to have admin access. Developers should deploy their apps but not delete production namespaces. CI/CD systems should manage deployments but not read secrets. Monitoring tools should read metrics but not modify resources.

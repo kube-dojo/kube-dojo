@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Advanced Cloud Operations
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design multi-account organization structures using AWS Organizations, GCP Folders, and Azure Management Groups**
+- **Implement automated account vending pipelines that provision new cloud accounts with security guardrails built in**
+- **Configure cross-account networking with Transit Gateway, Shared VPC, and VNet peering for hub-spoke topologies**
+- **Evaluate account-per-team vs account-per-environment strategies for blast radius isolation and compliance**
+
 ---
 
 ## Why This Module Matters

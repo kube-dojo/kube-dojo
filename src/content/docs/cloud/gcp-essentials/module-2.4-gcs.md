@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [QUICK] | **Time to Complete**: 1.5h | **Prerequisites**: Module 2.1 (IAM & Resource Hierarchy)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure Cloud Storage buckets with uniform bucket-level access and signed URL policies**
+- **Implement lifecycle management rules to automate object transitions across storage classes (Standard, Nearline, Coldline, Archive)**
+- **Deploy object versioning and retention policies to protect data from accidental deletion**
+- **Design cross-region replication and Turbo Replication strategies for disaster recovery workloads**
+
+---
+
 ## Why This Module Matters
 
 In 2019, a healthcare analytics company discovered that an internal GCS bucket containing patient diagnostic data had been publicly readable for over four months. The misconfiguration was traced to a single IAM binding: `allUsers` had been granted `roles/storage.objectViewer` on the bucket. An engineer had set this permission during development to share files with an external contractor and never revoked it. The data was exposed for months before an automated compliance scan flagged it. The ensuing investigation, security audit, and remediation cost the company over $2 million in fines and legal fees.

@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Foundations
 
+### What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Explain** how Raft and Paxos achieve consensus and why the FLP impossibility theorem constrains all consensus protocols
+2. **Evaluate** consensus-based systems (etcd, ZooKeeper, Consul) by analyzing their quorum requirements, failure tolerance, and split-brain prevention
+3. **Design** coordination patterns (leader election, distributed locks, barrier synchronization) appropriate for different consistency requirements
+4. **Diagnose** consensus failures by analyzing quorum loss scenarios, network partitions, and leader election storms in production systems
+
 ---
 
 **November 24, 2014. A routine database migration at a major financial services company triggers one of the most expensive consensus failures in banking history.**

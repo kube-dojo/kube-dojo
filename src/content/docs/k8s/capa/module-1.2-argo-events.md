@@ -14,6 +14,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Design** event-driven architectures using Argo Events' three CRDs: EventSource, Sensor, and EventBus
+2. **Configure** EventSources for webhooks, S3/MinIO, calendars, and Kafka, routing events through NATS or Jetstream EventBus
+3. **Implement** Sensor triggers that create Argo Workflows, Kubernetes objects, or HTTP requests based on event filters and data transformations
+4. **Debug** event flow failures by tracing events from source to sensor to trigger using EventSource status, Sensor logs, and EventBus metrics
+
+---
+
 ## Why This Module Matters
 
 Imagine you push code to GitHub. You want a build to start. You upload a file to S3. You want a processing pipeline to kick off. A cron timer fires at midnight. You want a cleanup workflow to run.

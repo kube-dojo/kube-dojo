@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Explain** the KCNA exam format, question types, and passing criteria
+2. **Identify** the five exam domains and their relative weight in scoring
+3. **Compare** KCNA with CKA, CKAD, and other Kubernetes certifications
+4. **Evaluate** your current knowledge gaps against the KCNA curriculum
+
+---
+
 ## Why This Module Matters
 
 The KCNA (Kubernetes and Cloud Native Associate) is the **entry point** to Kubernetes certifications. Unlike CKA or CKAD, it's a multiple-choice exam testing your conceptual understanding—not your ability to type kubectl commands under pressure.

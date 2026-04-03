@@ -23,6 +23,16 @@ Kubernetes HPA scales on CPU and memory. But what if your app's bottleneck is qu
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy KEDA and configure ScaledObjects for event-driven autoscaling beyond CPU and memory metrics**
+- **Implement KEDA scalers for message queues, databases, Prometheus metrics, and custom event sources**
+- **Configure KEDA's scale-to-zero capability for cost optimization of intermittent workloads**
+- **Integrate KEDA with HPA for composite scaling strategies combining event-driven and resource-based triggers**
+
+
 ## Why This Module Matters
 
 CPU-based scaling makes sense for compute-bound workloads. But most real applications are I/O-bound—waiting on databases, queues, APIs. KEDA lets you scale on what actually matters: pending messages, request latency, business metrics. Scale to zero when idle, scale up instantly when work arrives.

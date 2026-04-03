@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [COMPLEX] | **Time to Complete**: 2.5h | **Prerequisites**: Module 2.1 (IAM), Module 2.6 (Artifact Registry)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy containerized applications on Cloud Run with custom domains, autoscaling, and traffic splitting**
+- **Configure Cloud Run services with VPC connectors for private network access to databases and internal APIs**
+- **Implement canary deployments using Cloud Run traffic revisions and gradual rollout strategies**
+- **Evaluate Cloud Run versus GKE for container workloads by comparing cost, cold start, and operational complexity**
+
+---
+
 ## Why This Module Matters
 
 In early 2023, a health-tech startup was running their patient-facing API on a Kubernetes cluster managed by a two-person platform team. The cluster required constant maintenance: node upgrades, autoscaler tuning, certificate renewals, and security patching. When one of the two engineers left the company, the remaining engineer was overwhelmed. A routine GKE node pool upgrade went wrong during a weekend, taking down the patient portal for 6 hours. The post-incident review concluded that the team was spending 70% of their engineering time managing infrastructure instead of building product features. They migrated their stateless API services to Cloud Run in three weeks. Their infrastructure management time dropped to near zero, and their monthly compute bill decreased by 40% because Cloud Run scaled to zero during off-peak hours. The service handled a 25x traffic spike during a product launch without any intervention.

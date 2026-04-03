@@ -18,6 +18,16 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure CoreDNS in Kubernetes with custom forwarding rules, caching, and zone delegation**
+- **Implement DNS-based service discovery patterns for cross-cluster and external service resolution**
+- **Monitor DNS query performance and troubleshoot resolution failures in Kubernetes clusters**
+- **Optimize DNS caching strategies and NodeLocal DNSCache for high-throughput applications**
+
+
 ## Why This Module Matters
 
 *The VP of Engineering stared at the dashboard. Average API latency: 500ms. The application code took 12ms. Where were the other 488 milliseconds going?*

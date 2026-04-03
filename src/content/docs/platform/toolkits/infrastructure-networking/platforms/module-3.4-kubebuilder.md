@@ -25,6 +25,16 @@ A fintech team ran 200+ PostgreSQL instances across three cloud providers. Every
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement custom Kubernetes controllers using Kubebuilder with reconciliation loops and CRD generation**
+- **Configure RBAC, webhooks, and finalizers for production-grade Kubernetes operators**
+- **Deploy custom operators with leader election, health probes, and metrics exposition**
+- **Evaluate Kubebuilder's code-generation approach against Operator SDK for custom controller development**
+
+
 ## Why This Module Matters
 
 Kubernetes gives you primitives: Pods, Deployments, Services. But your business has domain-specific concepts: "a production database with read replicas, automated backups, and failover." Operators bridge that gap. They encode your operational knowledge as code -- turning tribal knowledge and runbooks into a control loop that never sleeps, never forgets a step, and never fat-fingers a command.

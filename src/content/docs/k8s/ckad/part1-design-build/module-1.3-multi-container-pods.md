@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## Learning Outcomes
+
+After completing this module, you will be able to:
+- **Create** multi-container pods using sidecar, init container, and ambassador patterns
+- **Explain** when to use each multi-container pattern and their trade-offs
+- **Debug** init container failures and shared-volume communication issues between containers
+- **Implement** a sidecar logging pattern that ships logs from the main application container
+
+---
+
 ## Why This Module Matters
 
 Most applications need more than one container. A web server needs a log shipper. An API needs a proxy. A data processor needs an initializer. Multi-container pods are how you compose these pieces.

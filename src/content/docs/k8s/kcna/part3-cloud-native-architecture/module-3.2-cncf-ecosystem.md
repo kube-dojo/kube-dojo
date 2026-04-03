@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Explain** the CNCF's role in governing cloud native projects and Kubernetes
+2. **Compare** project maturity levels: sandbox, incubating, and graduated
+3. **Identify** key CNCF projects by category (monitoring, networking, storage, security)
+4. **Evaluate** the CNCF landscape to find tools that solve specific infrastructure problems
+
+---
+
 ## Why This Module Matters
 
 The **Cloud Native Computing Foundation (CNCF)** is the home of Kubernetes and hundreds of other cloud native projects. KCNA tests your knowledge of the CNCF, its projects, and how they fit together. Understanding this ecosystem is essential.

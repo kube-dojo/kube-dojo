@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Build** a complete Kubernetes controller from scratch using client-go Informers, Listers, and Workqueues
+2. **Implement** a reconciliation loop that creates, updates, and deletes child resources based on a custom resource spec
+3. **Apply** owner references and garbage collection so child resources are cleaned up automatically when the parent is deleted
+4. **Debug** controller issues using event recording, structured logging, and workqueue retry metrics
+
+---
+
 ## Why This Module Matters
 
 A Kubernetes controller is the engine that turns **declarative intent** into **running reality**. When you create a Deployment, it is a controller (the Deployment controller) that creates the ReplicaSet. When you create a Service, it is a controller (the Endpoints controller) that populates the Endpoints. Without controllers, Kubernetes is just a database of YAML documents.

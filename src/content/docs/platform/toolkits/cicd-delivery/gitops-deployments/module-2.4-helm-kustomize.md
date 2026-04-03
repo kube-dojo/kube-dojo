@@ -15,6 +15,16 @@ Before starting this module:
 - Basic Kubernetes YAML knowledge
 - Understanding of templating concepts
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure Helm charts with values files for multi-environment deployments (dev, staging, production)**
+- **Implement Kustomize overlays to patch Kubernetes manifests without modifying base configurations**
+- **Integrate Helm and Kustomize together for template rendering with environment-specific patches**
+- **Evaluate when to use Helm charts versus Kustomize overlays based on team and project requirements**
+
+
 ## Why This Module Matters
 
 Raw Kubernetes YAML doesn't scale. When you have 50 services, each with development, staging, and production variants, you need a way to manage configuration. Helm and Kustomize are the two dominant solutions—and they work together beautifully.

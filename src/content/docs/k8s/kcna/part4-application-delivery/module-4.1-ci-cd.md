@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Explain** the difference between Continuous Integration, Continuous Delivery, and Continuous Deployment
+2. **Identify** the stages of a typical CI/CD pipeline and what each stage validates
+3. **Compare** CI/CD tools (Jenkins, GitHub Actions, GitLab CI, Tekton) by architecture and use case
+4. **Evaluate** GitOps as a deployment model and how it differs from traditional push-based CI/CD
+
+---
+
 ## Why This Module Matters
 
 Modern software delivery requires automation. **Continuous Integration** and **Continuous Delivery/Deployment** (CI/CD) are foundational practices for getting code from development to production reliably. KCNA tests your understanding of these concepts.

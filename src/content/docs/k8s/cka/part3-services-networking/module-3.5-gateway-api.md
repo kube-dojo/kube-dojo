@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Create** Gateway, HTTPRoute, and GRPCRoute resources for advanced traffic management
+- **Compare** Gateway API with Ingress and explain when to use each
+- **Configure** traffic splitting, header-based routing, and request mirroring
+- **Explain** the Gateway API role model (infrastructure provider, cluster operator, application developer)
+
+---
+
 ## Why This Module Matters
 
 Gateway API is the **current standard for Kubernetes networking**. It addresses limitations of Ingress by providing richer routing capabilities, role-oriented design, and support for protocols beyond HTTP. The CKA exam includes Gateway API as a core competency: "Use the Gateway API to manage Ingress traffic."

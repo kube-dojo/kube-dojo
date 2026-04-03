@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Cloud Architecture Patterns
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design multi-cluster architectures for fault isolation, regulatory compliance, and team autonomy across regions**
+- **Implement cross-cluster service discovery and traffic routing using service mesh or DNS-based approaches**
+- **Configure cluster federation patterns for workload placement, failover, and capacity management**
+- **Evaluate single-cluster vs multi-cluster tradeoffs for latency, blast radius, and operational complexity**
+
 ---
 
 ## Why This Module Matters

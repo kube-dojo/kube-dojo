@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Foundations
 
+### What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Analyze** when to use metrics, logs, or traces for a given debugging scenario and explain the strengths and blind spots of each
+2. **Design** a correlated observability pipeline where trace IDs connect metrics anomalies to log entries to distributed traces
+3. **Evaluate** whether existing observability coverage has gaps that leave specific failure modes invisible
+4. **Implement** a strategy for combining the three pillars so they reinforce each other rather than creating three isolated data silos
+
 ---
 
 ## The Engineer Who Had Everything and Nothing

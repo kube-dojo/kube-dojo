@@ -21,6 +21,17 @@ Cluster API (CAPI) treats Kubernetes clusters as declarative resources, just lik
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Implement** Cluster API with Metal3 (CAPM3) to declaratively provision and manage bare-metal Kubernetes clusters
+2. **Configure** MachineHealthChecks for automatic node failure detection and remediation via BMC power cycling
+3. **Deploy** a bare-metal inventory management system with BareMetalHost resources, hardware inspection, and firmware configuration
+4. **Design** a multi-cluster lifecycle pipeline that handles provisioning, upgrades, scaling, and decommissioning through Git
+
+---
+
 ## What You'll Learn
 
 - Cluster API architecture and core concepts

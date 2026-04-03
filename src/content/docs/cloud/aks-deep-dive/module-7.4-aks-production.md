@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [MEDIUM] | **Time to Complete**: 2.5h | **Prerequisites**: [Module 7.1: AKS Architecture & Node Management](../module-7.1-aks-architecture/)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure KEDA (Kubernetes Event-Driven Autoscaling) on AKS for scaling based on Azure service metrics**
+- **Implement AKS observability with Azure Monitor Container Insights, Managed Prometheus, and Managed Grafana**
+- **Deploy Azure Disk and Azure Files CSI drivers with storage classes optimized for performance and cost on AKS**
+- **Design AKS cost optimization strategies using Spot node pools, cluster autoscaler tuning, and right-sizing**
+
+---
+
 ## Why This Module Matters
 
 In November 2023, an online retailer running on AKS experienced a catastrophic failure during their Black Friday sale. Their order processing service used Azure Premium SSD disks for a write-ahead log. When traffic spiked to 15x normal levels, the disk IOPS ceiling was hit and writes started queuing. The application had no metrics on disk I/O latency---their observability stack only monitored CPU and memory. Without visibility into the real bottleneck, the on-call engineer scaled the deployment from 6 to 30 replicas, which made things dramatically worse: 30 pods now competed for the same disk's IOPS budget. The queue grew, timeouts cascaded, and the entire order pipeline froze for 90 minutes during peak sales hours. Post-incident analysis estimated $4.2 million in lost revenue. The fix was straightforward: migrate to Ultra Disks with provisioned IOPS, add disk I/O metrics to their Grafana dashboards, and implement KEDA-based scaling that responded to queue depth rather than CPU utilization.

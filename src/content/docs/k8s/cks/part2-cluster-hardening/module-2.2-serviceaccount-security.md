@@ -18,6 +18,17 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Configure** ServiceAccounts with automountServiceAccountToken disabled and scoped permissions
+2. **Audit** default ServiceAccount usage across namespaces to find over-exposed credentials
+3. **Implement** bound service account tokens with expiration and audience restrictions
+4. **Diagnose** pod authentication failures caused by ServiceAccount misconfigurations
+
+---
+
 ## Why This Module Matters
 
 Every pod runs as a ServiceAccount. By default, that's the 'default' ServiceAccount with auto-mounted credentials. If a pod is compromised, the attacker gets those credentials—potentially accessing the Kubernetes API.

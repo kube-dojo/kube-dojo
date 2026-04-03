@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Advanced Cloud Operations
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design disaster recovery architectures for Kubernetes with defined RTO/RPO targets across cloud regions**
+- **Implement Velero-based backup and restore strategies for cluster state, persistent volumes, and application data**
+- **Configure cross-region replication for etcd snapshots, container images, and persistent storage volumes**
+- **Deploy automated DR failover runbooks that validate recovery procedures through regular chaos testing**
+
 ---
 
 ## Why This Module Matters

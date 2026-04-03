@@ -18,6 +18,17 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Configure** Trivy to scan container images and interpret vulnerability severity levels
+2. **Write** Falco rules to detect suspicious runtime behavior in containers
+3. **Audit** cluster configurations using kube-bench against CIS benchmarks
+4. **Diagnose** security tool output to identify actionable remediation steps
+
+---
+
 ## Why This Module Matters
 
 Three tools dominate CKS: **Trivy**, **Falco**, and **kube-bench**. The exam expects you to use them fluently—not just run basic commands, but interpret output, modify configurations, and troubleshoot issues.

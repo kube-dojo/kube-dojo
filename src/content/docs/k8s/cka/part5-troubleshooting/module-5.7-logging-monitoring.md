@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Query** container logs using kubectl logs with container selection, previous logs, and follow mode
+- **Monitor** cluster resource usage with kubectl top (nodes and pods) and explain metrics-server
+- **Implement** sidecar-based logging for applications that write to files instead of stdout
+- **Debug** metrics-server issues and explain how resource metrics flow from kubelet to API server
+
+---
+
 ## Why This Module Matters
 
 Logs and metrics are your eyes into what's happening in a cluster. Without them, troubleshooting is guesswork. Understanding how to access container logs, interpret events, and use metrics to identify resource issues is fundamental to effective Kubernetes operations.

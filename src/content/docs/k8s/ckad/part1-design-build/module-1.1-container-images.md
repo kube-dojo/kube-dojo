@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## Learning Outcomes
+
+After completing this module, you will be able to:
+- **Create** a Dockerfile that follows best practices for size, security, and layer caching
+- **Configure** image pull policies and registry credentials for pod specifications
+- **Debug** image pull errors including `ImagePullBackOff` and authentication failures
+- **Explain** image tagging strategies and why `:latest` is dangerous in production
+
+---
+
 ## Why This Module Matters
 
 Kubernetes doesn't run source code—it runs container images. Before any application reaches a cluster, it must be packaged into an image. The CKAD expects you to understand how images are built, tagged, pushed, and referenced.

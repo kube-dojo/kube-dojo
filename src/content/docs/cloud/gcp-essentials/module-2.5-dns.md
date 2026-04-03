@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [MEDIUM] | **Time to Complete**: 1.5h | **Prerequisites**: Module 2.2 (VPC Networking)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure Cloud DNS managed zones with A, CNAME, and alias records for internal and external resolution**
+- **Implement DNS-based routing policies (weighted, geolocation, failover) for multi-region traffic distribution**
+- **Deploy private DNS zones for VPC-internal name resolution between GCP services and Kubernetes clusters**
+- **Design split-horizon DNS architectures that serve different records to internal and external clients**
+
+---
+
 ## Why This Module Matters
 
 In October 2021, a major social media company experienced a worldwide outage lasting over six hours. Billions of users could not access any of the company's services. The root cause was a routine BGP configuration change that accidentally withdrew the routes advertising the company's DNS nameservers. Because their DNS was unreachable, every subsequent DNS lookup for their domain failed. Even their internal tools for diagnosing and fixing the issue relied on the same DNS infrastructure, creating a devastating feedback loop. Engineers could not access internal dashboards, could not SSH into servers, and even physical access to data centers was impacted because the badge entry systems depended on the same network. The estimated revenue loss exceeded $100 million.

@@ -19,6 +19,16 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy AWS infrastructure using CloudFormation stacks with nested templates and cross-stack references**
+- **Implement CloudFormation custom resources and macros for advanced provisioning logic**
+- **Configure CloudFormation StackSets for multi-account and multi-region AWS deployments**
+- **Evaluate CloudFormation against Terraform and CDK for AWS-specific infrastructure management**
+
+
 ## Why This Module Matters
 
 *The deployment screen blinked red: "ROLLBACK_COMPLETE."*

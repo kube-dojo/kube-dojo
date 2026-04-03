@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [COMPLEX] | **Time to Complete**: 2.5h | **Prerequisites**: Hybrid Cloud Architecture (Module 10.4), Kubernetes Multi-Cluster Basics
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure Azure Arc-enabled Kubernetes and GKE Fleet to register and manage clusters across clouds and on-premises**
+- **Implement fleet-wide GitOps with Flux or Config Sync deployed consistently across all registered clusters**
+- **Deploy centralized policy enforcement using Azure Policy for Arc or GKE Policy Controller across the entire fleet**
+- **Design fleet topology strategies that balance central governance with team autonomy in multi-cluster environments**
+
+---
+
 ## Why This Module Matters
 
 In late 2023, a global retail company operated 73 Kubernetes clusters across three cloud providers and two data centers. Each cluster had its own deployment pipeline, its own monitoring stack, its own policy engine, and its own team responsible for upgrades. When a critical CVE in the Kubernetes API server (CVE-2023-5528) was announced, their security team needed to assess and patch every cluster. It took them 11 days to determine which clusters were affected, 6 weeks to patch all of them, and during that window they discovered that 9 clusters were running Kubernetes versions so old they were no longer receiving security patches at all. Nobody had noticed because nobody had a fleet-wide view.

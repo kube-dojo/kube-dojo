@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Trace** a packet from pod A to pod B across nodes through the full network stack
+- **Explain** how VXLAN, IP-in-IP, and native routing work at the Linux level
+- **Debug** cross-node connectivity issues by checking routes, bridges, and tunnel interfaces
+- **Compare** overlay vs native routing approaches and their performance trade-offs
+
+---
+
 ## Why This Module Matters
 
 You can create Services and write NetworkPolicies all day, but when something breaks in production at 3 AM, you need to understand **where packets actually go**. This module teaches you the mental model that turns networking mysteries into solvable puzzles.

@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [COMPLEX] | **Time to Complete**: 3h | **Prerequisites**: Module 3.1 (Entra ID & RBAC)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design Azure VNet architectures with subnets, Network Security Groups, and User-Defined Routes**
+- **Configure VNet peering and Virtual WAN for hub-spoke connectivity across subscriptions and regions**
+- **Deploy Private Endpoints and Private Link to keep Azure service traffic off the public internet**
+- **Diagnose NSG flow logs and Network Watcher packet captures to troubleshoot connectivity failures**
+
+---
+
 ## Why This Module Matters
 
 In June 2023, an e-commerce platform running on Azure experienced a complete outage during their biggest sale of the year. The root cause was breathtakingly simple: a developer in the platform team had changed the address space of a spoke VNet from `10.1.0.0/16` to `10.2.0.0/16` to "clean up the IP scheme." What they did not realize was that this change broke the VNet peering connection to the hub network, which contained the shared DNS resolver and the VPN gateway connecting to their on-premises payment processing system. Every microservice lost DNS resolution simultaneously. The payment gateway became unreachable. The outage lasted 4 hours and 22 minutes, costing the company an estimated $3.8 million in lost revenue and eroding customer trust during their most critical business period.

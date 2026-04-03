@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Foundations
 
+### What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Build** alert rules that detect meaningful user-impact signals rather than generating noise from infrastructure metrics
+2. **Analyze** observability data to move from symptom detection to root-cause identification within a structured debugging workflow
+3. **Design** dashboards that answer operational questions at a glance and guide engineers toward the right next investigation step
+4. **Evaluate** whether an alerting strategy minimizes both false positives and time-to-detection for real incidents
+
 ---
 
 ## The Team That Had Perfect Data But No Answers

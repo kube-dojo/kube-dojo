@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## Learning Outcomes
+
+After completing this module, you will be able to:
+- **Implement** blue/green and canary deployments using Kubernetes-native resources
+- **Compare** rolling update, blue/green, and canary strategies with their trade-offs
+- **Design** a deployment strategy that meets availability and rollback requirements
+- **Evaluate** deployment health during a rollout and decide when to proceed or rollback
+
+---
+
 ## Why This Module Matters
 
 How you deploy new versions matters. A bad deployment strategy can cause downtime, data corruption, or user-facing errors. The CKAD expects you to understand different deployment strategies and when to use each.

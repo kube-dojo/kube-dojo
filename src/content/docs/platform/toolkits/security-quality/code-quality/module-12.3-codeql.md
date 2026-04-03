@@ -19,6 +19,16 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure CodeQL analysis workflows for deep semantic code scanning in GitHub repositories**
+- **Implement custom CodeQL queries to detect application-specific vulnerability patterns**
+- **Deploy CodeQL database generation and analysis in CI/CD pipelines for automated security review**
+- **Evaluate CodeQL's semantic analysis capabilities against Semgrep for complex vulnerability detection**
+
+
 ## Why This Module Matters
 
 **Static Analysis That Actually Understands Your Code**

@@ -14,6 +14,15 @@ Before starting this module:
 - Familiarity with runbook automation concepts
 - Understanding of Kubernetes basics (for exercises)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design auto-remediation workflows with appropriate safety guardrails and human approval gates**
+- **Implement self-healing systems that automatically resolve common incident patterns**
+- **Build remediation runbooks that can be executed both manually and by automated systems**
+- **Evaluate remediation actions for blast radius and implement progressive rollout of automated fixes**
+
 ## Why This Module Matters
 
 Detection is only half the battle. You've identified the problem—now what? Manual remediation means waiting for a human to wake up, understand the issue, find the runbook, and execute the fix. At 3AM, that's 15-45 minutes of user impact.

@@ -14,6 +14,15 @@ Before starting this module:
 - Basic Kubernetes concepts (Deployments, Services)
 - Familiarity with containerization (Docker)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement model serving infrastructure using KServe, Seldon Core, or Triton on Kubernetes**
+- **Design inference architectures that handle model versioning, A/B testing, and canary rollouts**
+- **Configure autoscaling policies for model endpoints based on request latency and throughput SLOs**
+- **Build model serving pipelines with preprocessing, inference, and postprocessing stages**
+
 ## Why This Module Matters
 
 A model in a notebook isn't a product. The best fraud detection model is worthless if it takes 30 seconds to return a prediction. Users won't wait, transactions will fail, business will suffer.

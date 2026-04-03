@@ -14,6 +14,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Build** a Backstage frontend plugin with React components, Material UI theming, and route registration in the app shell
+2. **Build** a backend plugin with Express routes, database migrations, and service-to-service authentication
+3. **Create** Software Templates that scaffold new services with cookiecutter/Nunjucks, including CI/CD pipelines and catalog registration
+4. **Analyze** plugin extension points, composability APIs, and auth provider integration by reading Backstage TypeScript code
+
+---
+
 ## Why This Module Matters
 
 This is the single most important module for the CBA exam. **Domain 4 is worth 32%** — nearly one in three questions will test your understanding of plugin development, Material UI, Software Templates, theming, and auth providers.

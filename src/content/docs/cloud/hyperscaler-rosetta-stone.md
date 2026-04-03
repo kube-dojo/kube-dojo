@@ -7,6 +7,17 @@ sidebar:
 **Time to Complete**: 2 hours
 **Prerequisites**: Cloud Native 101 (containers, Docker basics)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Compare equivalent services across AWS, GCP, and Azure for compute, storage, networking, and identity domains**
+- **Diagnose multi-cloud migration failures caused by architectural differences (regional vs global VPCs, IAM models)**
+- **Design multi-cloud architectures that account for fundamental structural differences between hyperscalers**
+- **Evaluate cloud provider tradeoffs for specific workload patterns using the service mapping framework**
+
+---
+
 ## Why This Module Matters
 
 In late 2022, a rapidly scaling fintech enterprise decided to adopt a multi-cloud strategy to mitigate vendor lock-in and satisfy regulatory compliance requirements. Their primary infrastructure, built over six years, was heavily entrenched in Amazon Web Services (AWS). They utilized IAM roles, complex regional VPC peering, and an extensive array of ECS services. When the engineering leadership mandated a complete replication of their core transaction processing pipeline in Google Cloud Platform (GCP) and Microsoft Azure, the architecture team assumed the migration would be straightforward. They reasoned that a virtual machine is just a virtual machine, a network is just a network, and a database is just a database.

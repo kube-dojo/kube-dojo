@@ -18,6 +18,16 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Istio or Linkerd service mesh with mTLS, traffic management, and observability features**
+- **Configure traffic splitting, circuit breaking, and retry policies for resilient microservice communication**
+- **Implement service mesh authorization policies for zero-trust inter-service security**
+- **Compare Istio, Linkerd, and Cilium service mesh approaches for different operational complexity levels**
+
+
 ## Why This Module Matters
 
 *The security auditor's report landed on the CTO's desk like a bomb: "Service-to-service communication is completely unencrypted."*

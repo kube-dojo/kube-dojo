@@ -21,6 +21,16 @@ This module teaches you to deploy and operate k0s for clean, dependency-free Kub
 - SSH access to Linux machines (or VMs)
 - Understanding of container runtimes
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy K0s clusters with zero host dependencies using its single-binary architecture**
+- **Configure K0s control plane components and worker profiles for different hardware configurations**
+- **Implement K0s cluster lifecycle management with k0sctl for automated multi-node deployments**
+- **Compare K0s's zero-dependency approach against K3s and MicroK8s for air-gapped environments**
+
+
 ## Why This Module Matters
 
 **k0s answers the question: "What if Kubernetes had zero host dependencies?"**

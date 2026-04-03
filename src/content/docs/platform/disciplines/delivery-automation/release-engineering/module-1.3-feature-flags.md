@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design a feature flag architecture that decouples deployment from release across microservices**
+- **Implement feature flag management with gradual rollouts, user targeting, and kill switches**
+- **Build feature flag lifecycle processes that prevent flag debt and stale configurations**
+- **Evaluate feature flag platforms — LaunchDarkly, Flagsmith, OpenFeature — against your operational requirements**
+
 ## Why This Module Matters
 
 On March 15, 2024, a SaaS company pushed a new recommendation engine to production. The recommendation engine was brilliant — 40% better click-through rates in testing. But in production, it hammered a downstream service that nobody had load-tested, bringing down the entire product catalog for 90 minutes during peak shopping hours.

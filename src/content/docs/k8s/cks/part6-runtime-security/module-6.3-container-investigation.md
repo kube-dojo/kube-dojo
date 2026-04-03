@@ -18,6 +18,17 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Trace** running processes, open files, and network connections inside a compromised container
+2. **Diagnose** the scope of a container breach using crictl, nsenter, and /proc filesystem analysis
+3. **Implement** container isolation procedures to preserve evidence during incident response
+4. **Create** a forensic investigation workflow for Kubernetes security incidents
+
+---
+
 ## Why This Module Matters
 
 When you receive a security alert, you need to investigate quickly. What processes are running? What files were modified? What network connections exist? Container investigation is a critical incident response skill.

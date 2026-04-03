@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Foundations
 
+### What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Design** default configurations for platforms and services that are secure out of the box without requiring manual hardening steps
+2. **Evaluate** whether a tool or framework's defaults expose unnecessary attack surface and propose secure-by-default alternatives
+3. **Implement** policy-as-code guardrails (admission controllers, OPA policies, CI checks) that prevent insecure configurations from reaching production
+4. **Analyze** the tradeoff between secure defaults that restrict developer flexibility and permissive defaults that increase breach risk
+
 ---
 
 **January 2017. Security researchers discover 27,000 MongoDB databases exposed to the internet.**

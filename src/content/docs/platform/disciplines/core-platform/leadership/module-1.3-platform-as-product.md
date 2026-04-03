@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design a platform product strategy with clear user personas, value propositions, and success metrics**
+- **Implement product management practices — roadmaps, backlogs, user research — for internal platforms**
+- **Build feedback loops that continuously align platform capabilities with developer needs**
+- **Evaluate platform ROI by measuring developer productivity, time-to-market, and infrastructure efficiency**
+
 ## Why This Module Matters
 
 At a financial services company in 2021, the infrastructure team was proud of their work. They had built a Kubernetes platform with custom operators, a service mesh, progressive delivery, and automated certificate management. It took 18 months and 8 engineers. They called it "Project Atlas."

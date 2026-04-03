@@ -20,6 +20,16 @@ Before starting this module:
 - [Module 1.4: Loki](../module-1.4-loki/) — Log correlation (recommended)
 - Familiarity with microservices architecture
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy distributed tracing backends (Tempo, Jaeger) and configure trace collection from applications**
+- **Implement trace context propagation across service boundaries for end-to-end request visibility**
+- **Configure sampling strategies to balance trace coverage with storage costs in production**
+- **Integrate traces with metrics and logs for correlated troubleshooting using exemplars and trace-to-log links**
+
+
 ## Why This Module Matters
 
 In a monolith, debugging is straightforward: stack traces tell you what happened. In microservices, a single user request might touch 20 services across 5 teams. When something fails, you need to see the entire journey.

@@ -17,6 +17,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design organizational structures that scale platform teams from 5 to 50+ engineers**
+- **Implement governance models that balance platform consistency with team autonomy at scale**
+- **Build platform operating models that work across business units, regions, and cloud environments**
+- **Evaluate when to centralize versus federate platform capabilities as the organization grows**
+
 ## Why This Module Matters
 
 A payments company had one of the best platform teams in fintech. Five engineers who built and maintained a deployment platform, a monitoring stack, and a self-service database provisioning system. Developers loved them. Adoption was 95%. The team was a case study in doing platform engineering right.

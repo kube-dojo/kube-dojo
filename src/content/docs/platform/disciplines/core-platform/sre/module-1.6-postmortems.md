@@ -15,6 +15,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Lead blameless postmortem meetings that surface systemic causes rather than individual fault**
+- **Design action items that address root causes and prevent incident recurrence**
+- **Build a postmortem culture where learning from failure becomes a competitive advantage**
+- **Analyze postmortem trends across incidents to identify organizational reliability patterns**
+
 ## Why This Module Matters
 
 An incident happened. You fixed it. Everyone's exhausted.

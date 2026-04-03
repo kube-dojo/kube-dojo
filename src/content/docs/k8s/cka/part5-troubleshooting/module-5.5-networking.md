@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Diagnose** pod-to-pod, pod-to-service, and external-to-service connectivity failures
+- **Trace** network issues layer by layer: pod IP → service → endpoint → kube-proxy → CNI
+- **Fix** common network issues: missing NetworkPolicy allow rules, DNS resolution failures, port mismatches
+- **Use** network debugging tools (curl, nslookup, tcpdump, ss) from within pods and nodes
+
+---
+
 ## Why This Module Matters
 
 Networking issues are among the most challenging to troubleshoot because they can occur at multiple layers - pod network, service network, DNS, CNI, or external connectivity. A systematic approach is essential. On the CKA exam, network troubleshooting questions are common and often worth high points.

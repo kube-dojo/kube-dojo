@@ -11,6 +11,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Implement** a PXE boot infrastructure with DHCP, TFTP, and HTTP servers for automated OS provisioning
+2. **Configure** kickstart/preseed/autoinstall files that produce consistent, repeatable node installations
+3. **Deploy** bare-metal servers from power-on to Kubernetes-ready state without manual intervention
+4. **Troubleshoot** PXE boot failures across DHCP relay, TFTP timeouts, and UEFI/BIOS compatibility issues
+
+---
+
 ## Why This Module Matters
 
 When you buy 20 servers, they arrive as blank hardware — no operating system, no configuration, no identity. In the cloud, you click "Launch Instance" and an OS appears in 30 seconds. On-premises, you need to solve the bootstrapping problem: how do you install an OS on 20 servers that have no OS?

@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Explain** the Kubernetes PKI architecture and which certificates each component requires
+2. **Assess** certificate security risks: expired certs, weak key sizes, and missing rotation
+3. **Evaluate** certificate-based authentication flows between API server, kubelet, and etcd
+4. **Identify** common PKI misconfigurations that lead to authentication failures or security gaps
+
+---
+
 ## Why This Module Matters
 
 Kubernetes relies heavily on TLS certificates for authentication and encryption. Every component—API server, kubelet, etcd—uses certificates to prove its identity and encrypt communications. Understanding Kubernetes PKI helps you troubleshoot authentication issues and assess cluster security.

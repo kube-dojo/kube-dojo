@@ -18,6 +18,17 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Configure** pod and container security contexts to enforce non-root, read-only, and drop-all-capabilities
+2. **Audit** workloads for dangerous security context settings like privileged mode and hostPID
+3. **Implement** defense-in-depth security contexts combining runAsNonRoot, readOnlyRootFilesystem, and capability drops
+4. **Debug** application failures caused by security context restrictions
+
+---
+
 ## Why This Module Matters
 
 Security contexts define privilege and access control settings for pods and containers. They're your first line of defense against container breakout—controlling whether containers run as root, can access host resources, or have elevated privileges.

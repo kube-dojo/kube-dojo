@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Explain** the environmental impact of cloud computing and the CNCF TAG for Environmental Sustainability
+2. **Identify** Kubernetes features that reduce resource waste: bin packing, autoscaling, and right-sizing
+3. **Compare** strategies for reducing carbon footprint: workload scheduling, spot instances, and resource limits
+4. **Evaluate** how green computing practices align with cost optimization in cloud native environments
+
+---
+
 ## Why This Module Matters
 
 Data centers consume 1-2% of global electricity — roughly the same as the entire aviation industry. As cloud native adoption accelerates, so does its environmental footprint. The CNCF has recognized this with a dedicated TAG (Technical Advisory Group) for Environmental Sustainability. KCNA expects awareness of how cloud native practices intersect with sustainability and what the community is doing about it.

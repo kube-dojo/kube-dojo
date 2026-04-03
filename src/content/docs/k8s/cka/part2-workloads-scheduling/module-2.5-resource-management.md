@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Configure** resource requests and limits for CPU and memory and explain how they affect scheduling
+- **Implement** LimitRanges and ResourceQuotas for namespace-level governance
+- **Diagnose** resource-related failures (OOMKilled, CPU throttling, Pending due to insufficient resources)
+- **Design** a resource strategy that balances cluster utilization with application reliability
+
+---
+
 ## Why This Module Matters
 
 In production, containers compete for resources. Without proper configuration:

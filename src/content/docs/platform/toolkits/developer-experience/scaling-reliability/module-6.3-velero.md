@@ -23,6 +23,16 @@ Backups are like insurance—you hope you never need them, but you'll be glad yo
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Velero for Kubernetes cluster backup with scheduled backups and object storage backends**
+- **Configure Velero backup schedules with resource filtering, namespace selection, and TTL policies**
+- **Implement disaster recovery workflows with Velero restore operations and cross-cluster migration**
+- **Secure Velero backups with encryption, RBAC restrictions, and backup validation testing procedures**
+
+
 ## Why This Module Matters
 
 "We'll restore from etcd backup" sounds good until you realize you also need the PVs, the Secrets, and the correct order of restoration. Velero provides application-aware backups—not just etcd snapshots. It backs up what you need to actually restore a working application.

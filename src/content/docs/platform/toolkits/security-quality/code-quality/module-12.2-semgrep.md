@@ -19,6 +19,16 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Semgrep and configure custom rules for security-focused static analysis in CI/CD pipelines**
+- **Implement Semgrep patterns for detecting OWASP vulnerabilities and insecure coding practices**
+- **Configure Semgrep's autofix capabilities to automatically remediate detected code issues**
+- **Compare Semgrep's pattern-based approach against CodeQL for security scanning speed and coverage trade-offs**
+
+
 ## Why This Module Matters
 
 **The Custom Rule Problem**

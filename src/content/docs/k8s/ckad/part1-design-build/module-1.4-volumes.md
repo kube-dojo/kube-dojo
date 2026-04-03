@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## Learning Outcomes
+
+After completing this module, you will be able to:
+- **Create** pods with emptyDir, hostPath, and PersistentVolumeClaim volumes
+- **Configure** volume mounts to share data between containers in the same pod
+- **Debug** volume mount errors including permission issues and missing PVCs
+- **Explain** the difference between ephemeral and persistent volumes and when to use each
+
+---
+
 ## Why This Module Matters
 
 Containers are ephemeral—when they restart, all data is lost. For real applications, you need persistent storage: databases need durable data, applications need shared files, and containers need ways to exchange data.

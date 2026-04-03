@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Write** NetworkPolicy resources that restrict ingress and egress traffic between pods
+- **Debug** connectivity blocked by NetworkPolicies using systematic label and selector analysis
+- **Design** a network segmentation strategy for a multi-tier application (frontend, backend, database)
+- **Explain** the default-deny pattern and why explicit allow rules are more secure than blacklists
+
+---
+
 ## Why This Module Matters
 
 By default, Kubernetes allows all pods to communicate with all other pods—a **flat network** with no restrictions. Network Policies let you control this traffic, implementing **microsegmentation** for security. Without Network Policies, a compromised pod can freely communicate with every other pod in the cluster.

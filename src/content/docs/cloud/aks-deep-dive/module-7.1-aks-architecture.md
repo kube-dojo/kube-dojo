@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: Azure Essentials, Cloud Architecture Patterns
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure AKS clusters with system and user node pools, availability zones, and ephemeral OS disks**
+- **Implement AKS auto-upgrade channels and planned maintenance windows for controlled Kubernetes version updates**
+- **Deploy AKS with Entra ID RBAC integration to replace certificate-based kubeconfig with identity-driven access**
+- **Design AKS node pool strategies with VM Scale Sets, taints, labels, and node selectors for workload isolation**
+
+---
+
 ## Why This Module Matters
 
 In September 2023, a fintech company running their payment processing platform on Azure Kubernetes Service experienced a cascading failure that brought down all customer-facing services for nearly four hours. The root cause was not a bug in their application code. It was an architecture decision made months earlier: every workload, from critical payment APIs to batch reporting jobs, ran in a single system node pool on three Standard_D4s_v3 instances. When Azure initiated a routine host maintenance event on one of the underlying physical servers, the node drained its pods. The remaining two nodes could not absorb the spike, and Kubernetes started evicting pods with the lowest priority---which happened to include their payment reconciliation service. The reconciliation service held database locks that the payment API depended on, and within minutes the entire cluster was in a death spiral. The four-hour outage cost the company an estimated $2.6 million in lost transactions and regulatory penalties.

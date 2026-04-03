@@ -19,6 +19,16 @@ This module teaches you to deploy and operate Zot for scenarios where minimal fo
 - Familiarity with OCI artifacts (images, Helm charts, signatures)
 - Command-line comfort with curl and JSON
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Zot as a minimal OCI-native registry with zero external dependencies**
+- **Configure Zot for OCI artifact storage including Helm charts, WASM modules, and container images**
+- **Implement registry mirroring and content synchronization between Zot instances**
+- **Compare Zot's single-binary architecture against Harbor for resource-constrained environments**
+
+
 ## Why This Module Matters
 
 Not every registry needs to be Harbor. Sometimes you need:

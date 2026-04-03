@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [QUICK] | **Time to Complete**: 1.5h | **Prerequisites**: Module 5.1 (EKS Architecture & Control Plane)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure IRSA (IAM Roles for Service Accounts) and EKS Pod Identity to grant pods least-privilege AWS access**
+- **Implement OIDC provider trust relationships between EKS clusters and AWS IAM for workload authentication**
+- **Design cross-account access patterns for EKS workloads that need to access resources in other AWS accounts**
+- **Compare IRSA vs Pod Identity and migrate workloads from the legacy approach to the modern EKS Pod Identity model**
+
+---
+
 ## Why This Module Matters
 
 In 2022, a healthcare SaaS company running on EKS discovered that every pod in their cluster had full access to their S3 buckets containing patient health records. The reason was painfully simple: their developers had attached an IAM instance profile with `s3:*` permissions to the node group. Since EC2 instance metadata is available to all pods on a node, any compromised pod -- including a logging sidecar from a third-party vendor -- could read, write, and delete HIPAA-protected data from any bucket. The security team discovered this during a compliance audit, not during development. The remediation involved rewriting IAM policies for 60 microservices and took three months.

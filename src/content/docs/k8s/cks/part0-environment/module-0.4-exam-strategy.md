@@ -18,6 +18,17 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Implement** the three-pass strategy adapted for security-specific CKS tasks
+2. **Evaluate** task complexity to decide skip-or-solve within the first 30 seconds
+3. **Design** a time budget that maximizes points across all CKS domains
+4. **Create** a personal exam-day checklist covering environment setup and kubectl shortcuts
+
+---
+
 ## Why This Module Matters
 
 The CKS exam is 2 hours, ~15-20 tasks, 67% to pass. Time pressure is real. Many candidates who know the material fail because they manage time poorly or get stuck on complex tasks.

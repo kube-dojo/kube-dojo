@@ -19,6 +19,16 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Trivy for comprehensive vulnerability scanning of container images, filesystems, and Git repositories**
+- **Configure Trivy in CI/CD pipelines with severity thresholds and ignore policies for practical scanning**
+- **Implement Trivy Operator for continuous Kubernetes cluster scanning with vulnerability and config audit reports**
+- **Compare Trivy's open-source scanning against commercial alternatives for enterprise security requirements**
+
+
 ## Why This Module Matters
 
 **The Open Source Security Scanner That Does Everything**

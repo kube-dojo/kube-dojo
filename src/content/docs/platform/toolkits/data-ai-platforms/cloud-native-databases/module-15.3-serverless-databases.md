@@ -19,6 +19,16 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy serverless database solutions (Neon, PlanetScale, CockroachDB Serverless) for Kubernetes applications**
+- **Configure connection pooling and autoscaling database access patterns for serverless workloads**
+- **Implement database branching workflows for development and testing with instant schema cloning**
+- **Evaluate serverless database pricing models and latency trade-offs for different application patterns**
+
+
 ## Why This Module Matters
 
 **"Can I Get a Copy of Production?"**

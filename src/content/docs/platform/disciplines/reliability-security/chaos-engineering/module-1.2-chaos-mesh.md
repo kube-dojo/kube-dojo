@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement Chaos Mesh on Kubernetes with proper RBAC, namespace scoping, and experiment scheduling**
+- **Design pod-level chaos experiments — kill, CPU stress, memory stress, I/O delay — with Chaos Mesh CRDs**
+- **Configure Chaos Mesh dashboards and workflows for recurring reliability validation**
+- **Build automated chaos experiments that run as part of CI/CD pipelines before production deployments**
+
 ## Why This Module Matters
 
 In the previous module, you learned the theory of Chaos Engineering — hypotheses, steady state, blast radius, safety nets. Theory is essential, but it doesn't tell you anything you didn't already suspect about your systems.

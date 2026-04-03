@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Diagnose** storage failures systematically (PVC Pending, mount errors, capacity issues, permission denied)
+- **Trace** the storage provisioning chain from PVC → StorageClass → provisioner → PV → mount
+- **Fix** common storage issues: stuck finalizers, orphaned PVs, filesystem corruption recovery
+- **Design** a troubleshooting checklist for storage problems in CKA exam scenarios
+
+---
+
 ## Why This Module Matters
 
 Storage issues are among the most common problems in Kubernetes clusters. Pods stuck in ContainerCreating, PVCs that never bind, permission errors, and capacity problems can bring applications to a halt. The CKA exam heavily tests troubleshooting skills, and storage problems appear frequently. This module gives you a systematic approach to diagnose and fix storage issues.

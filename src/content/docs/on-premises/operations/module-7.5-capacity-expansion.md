@@ -11,6 +11,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Plan** capacity expansion that accounts for CPU generation differences, topology constraints, and scheduler behavior with heterogeneous hardware
+2. **Implement** node labeling, taints, and topology spread constraints to manage mixed-generation server pools effectively
+3. **Design** a hardware decommissioning process that respects capacity limits, PodDisruptionBudgets, and storage rebalancing
+4. **Optimize** cluster scheduling policies to distribute workloads appropriately across nodes with different performance characteristics
+
+---
+
 ## Why This Module Matters
 
 In January 2024, a gaming company running a 120-node bare metal Kubernetes cluster needed to add 40 new servers for a game launch. Their existing cluster used Intel Xeon Silver 4214 (Cascade Lake, 2019) processors. The procurement team ordered Dell R760 servers with AMD EPYC 9354 (Genoa, 2023) processors because they offered better price/performance. The infrastructure team racked the servers, PXE-booted them, and joined them to the cluster. Everything appeared fine until the scheduler started placing workloads on the new nodes.

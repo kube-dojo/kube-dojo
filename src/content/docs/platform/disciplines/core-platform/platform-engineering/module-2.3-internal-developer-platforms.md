@@ -15,6 +15,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design an Internal Developer Platform architecture with clear abstraction layers**
+- **Evaluate IDP tools like Backstage, Port, and Kratix against your organization's requirements**
+- **Implement a service catalog that gives developers self-service access to infrastructure capabilities**
+- **Build platform APIs that encapsulate infrastructure complexity behind simple developer interfaces**
+
 ## Why This Module Matters
 
 You understand Platform Engineering. You can measure developer experience. Now you need to build something.

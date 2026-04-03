@@ -14,6 +14,15 @@ Before starting this module:
 - Understanding of statistical distributions
 - Basic Prometheus/Grafana knowledge
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement model monitoring systems that detect data drift, prediction drift, and performance degradation**
+- **Design alerting policies that trigger model retraining when prediction quality drops below thresholds**
+- **Build monitoring dashboards that track model accuracy, latency, and feature distribution over time**
+- **Evaluate monitoring approaches — statistical tests, reference windows, population stability — for your models**
+
 ## Why This Module Matters
 
 ML models fail silently. A web server crashes—you get an alert. A model returns wrong predictions—nothing happens. The model is "up," returning 200 OK, while making decisions that cost you money, customers, or worse.

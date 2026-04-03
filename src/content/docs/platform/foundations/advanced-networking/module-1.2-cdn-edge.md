@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Foundations — Advanced Networking
 
+### What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Design** CDN caching strategies that maximize cache hit ratios while ensuring content freshness through TTLs, cache keys, and invalidation patterns
+2. **Evaluate** CDN architectures (pull vs. push, multi-CDN, edge compute) and select the right approach for different content types and traffic patterns
+3. **Implement** edge computing patterns that move application logic closer to users for latency-sensitive workloads
+4. **Diagnose** CDN cache misses, stale content issues, and origin shielding failures using cache headers and CDN analytics
+
 ---
 
 **November 24, 2017. Black Friday. At precisely 12:01 AM Eastern, the largest online shopping event of the year begins. In the first sixty seconds, millions of browsers simultaneously request the same product images, CSS files, JavaScript bundles, and promotional videos from thousands of retail sites.**

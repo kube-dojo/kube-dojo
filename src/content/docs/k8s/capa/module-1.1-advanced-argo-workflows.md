@@ -14,6 +14,15 @@ The platform team at a fintech company had a problem. Their nightly reconciliati
 - Kubernetes RBAC basics (ServiceAccounts, Roles)
 - CronJob scheduling syntax
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Construct** advanced Argo Workflows using all 7 template types, including Resource templates for direct Kubernetes object manipulation
+2. **Configure** CronWorkflows, memoization, and synchronization locks to build scheduled, efficient, and concurrency-safe pipelines
+3. **Implement** exit handlers, lifecycle hooks, and retry strategies that make workflows self-healing and auditable
+4. **Apply** workflow security best practices: scoped ServiceAccounts, artifact repository encryption, and RBAC for workflow submission
+
 ## Why This Module Matters
 
 The CAPA exam dedicates 36% to Domain 1, covering Argo Workflows in depth. Module 3.3 taught the fundamentals. This module covers everything else: remaining template types, scheduled workflows, reusable templates, exit handlers, synchronization, memoization, lifecycle hooks, variables, retry strategies, and security.

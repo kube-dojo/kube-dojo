@@ -23,6 +23,16 @@ Before you can develop for Kubernetes, you need Kubernetes. But you don't need a
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy local Kubernetes clusters using kind, minikube, and Docker Desktop with optimal configurations**
+- **Configure local clusters with ingress controllers, registries, and multi-node topologies for realistic testing**
+- **Implement local development workflows that mirror production Kubernetes environments accurately**
+- **Compare local Kubernetes tools for CI/CD testing, application development, and learning scenarios**
+
+
 ## Why This Module Matters
 
 Cloud Kubernetes costs money and has latency. Local Kubernetes is free and instant. For learning, testing, and development, local clusters are essential. The question isn't whether to use local K8s—it's which tool fits your needs.

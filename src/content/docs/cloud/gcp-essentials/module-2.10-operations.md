@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [MEDIUM] | **Time to Complete**: 2.5h | **Prerequisites**: Module 2.3 (Compute Engine), Module 2.7 (Cloud Run)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure Cloud Monitoring dashboards with custom metrics, uptime checks, and alerting policies**
+- **Implement structured logging with Cloud Logging and build log-based metrics for application-level observability**
+- **Deploy Cloud Trace and Cloud Profiler to diagnose latency bottlenecks in distributed GCP applications**
+- **Design multi-project monitoring with metrics scoping and centralized alerting across GCP organizations**
+
+---
+
 ## Why This Module Matters
 
 In November 2022, a fintech company's payment processing service began failing intermittently. Customers reported that approximately 5% of transactions were being declined with a generic "server error." The on-call engineer checked the Cloud Run dashboard and saw that CPU and memory utilization were normal. Request count looked steady. Everything appeared healthy from the infrastructure layer. The issue persisted for 4 hours before a senior engineer noticed an anomaly in the application logs: a third-party payment gateway was returning HTTP 429 (rate limit exceeded) for requests from a specific IP range. This log signal was buried in 2 million log lines per hour because the team had no log-based metrics, no alerting on error rates, and no structured logging. They were flying blind in a sea of unstructured text. The 4-hour delay in diagnosis cost them $340,000 in failed transactions and a significant hit to customer trust.

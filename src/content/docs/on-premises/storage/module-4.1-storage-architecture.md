@@ -21,6 +21,17 @@ The fix was dedicating 6 servers as Ceph OSD nodes with NVMe drives, separated f
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Design** storage architectures that separate compute and storage tiers with dedicated networks and hardware
+2. **Evaluate** distributed storage (Ceph, Longhorn) vs. local storage vs. external SAN/NAS for specific workload requirements
+3. **Plan** storage hardware procurement including drive types (NVMe, SSD, HDD), RAID configurations, and capacity projections
+4. **Diagnose** storage performance bottlenecks caused by I/O contention, replication overhead, and network saturation
+
+---
+
 ## What You'll Learn
 
 - Direct-Attached Storage (DAS) vs Network-Attached Storage (NAS) vs SAN

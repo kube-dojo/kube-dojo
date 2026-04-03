@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Design** a study plan optimized for multiple-choice exam preparation
+2. **Identify** distractor patterns in KCNA-style questions and eliminate wrong answers
+3. **Explain** the difference between recognition-based and recall-based study techniques
+4. **Create** a personal study schedule that covers all five KCNA domains proportionally
+
+---
+
 ## Why This Module Matters
 
 Multiple-choice exams require different preparation than hands-on exams. You're not being tested on your ability to do—you're being tested on your ability to understand and recognize correct answers.

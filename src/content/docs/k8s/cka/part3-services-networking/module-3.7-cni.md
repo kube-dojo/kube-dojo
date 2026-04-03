@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Explain** how CNI plugins assign IP addresses and configure routes for pods
+- **Compare** Calico, Cilium, and Flannel on features, performance, and NetworkPolicy support
+- **Diagnose** CNI failures by checking pod networking, CNI configuration files, and plugin logs
+- **Trace** pod-to-pod traffic through the CNI overlay or native routing path
+
+---
+
 ## Why This Module Matters
 
 The Container Network Interface (CNI) is the plugin system that gives pods their network connectivity. Without CNI, pods can't communicate. Understanding CNI helps you troubleshoot network issues, choose the right network plugin, and understand why pods can (or can't) talk to each other.

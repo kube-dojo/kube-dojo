@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Foundations
 
+### What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Analyze** cascading failures by tracing how a single-component failure propagates through dependent services
+2. **Apply** Failure Mode and Effects Analysis (FMEA) to identify high-risk failure paths before they occur in production
+3. **Design** blast-radius containment strategies including bulkheads, timeouts, and graceful degradation patterns
+4. **Evaluate** whether retry logic, rate limiters, and circuit breakers are correctly configured to prevent amplification cascades
+
 ---
 
 ## The Cascade That Nobody Saw Coming

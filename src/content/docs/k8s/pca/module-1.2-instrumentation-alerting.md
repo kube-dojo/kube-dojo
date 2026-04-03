@@ -16,6 +16,17 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Instrument** an application with Prometheus client libraries, choosing the correct metric type (counter, gauge, histogram, summary) for each signal
+2. **Apply** naming conventions, label design, and cardinality controls that keep metrics usable and storage costs predictable
+3. **Configure** alerting rules with proper `for` durations, severity labels, and runbook annotations that minimize false positives and pager fatigue
+4. **Design** a metrics-based SLO alerting pipeline using multi-window burn-rate alerts for error budgets
+
+---
+
 The database team at a large ride-sharing company added a custom Prometheus metric to track query latency. They were proud of it — `db_query_duration_milliseconds`. It worked perfectly in development.
 
 Three weeks later, the infrastructure team tried to create an SLO dashboard combining API latency (measured in seconds using `http_request_duration_seconds`) with database latency. The query looked simple:

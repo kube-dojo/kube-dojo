@@ -19,6 +19,16 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy SonarQube on Kubernetes and configure quality gates for automated code review in CI/CD pipelines**
+- **Implement SonarQube quality profiles with custom rules for language-specific coding standards**
+- **Configure SonarQube's branch analysis and pull request decoration for pre-merge quality checks**
+- **Integrate SonarQube with GitLab, GitHub, and Azure DevOps for unified code quality dashboards**
+
+
 ## Why This Module Matters
 
 **The Technical Debt Visualization Problem**

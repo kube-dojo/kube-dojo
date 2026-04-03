@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Explain** the three pillars of observability: logs, metrics, and traces
+2. **Compare** monitoring (known-unknowns) with observability (unknown-unknowns)
+3. **Identify** which observability signal to use for different debugging scenarios
+4. **Evaluate** observability maturity levels and what each level enables for operations teams
+
+---
+
 ## Why This Module Matters
 
 You can't fix what you can't see. **Observability** is how you understand what's happening inside your systems. It's especially critical in distributed systems where debugging is complex. KCNA tests your understanding of observability pillars and practices.

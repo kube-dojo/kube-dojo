@@ -23,6 +23,16 @@ You trust your code. But do you trust your dependencies? Your base images? Your 
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement container image signing with Cosign and verify signatures in Kubernetes admission policies**
+- **Configure SBOM generation with Syft and integrate attestations into CI/CD pipeline artifacts**
+- **Deploy Sigstore's Rekor transparency log for auditable software supply chain verification**
+- **Evaluate supply chain security frameworks (SLSA, in-toto) for end-to-end build provenance**
+
+
 ## Why This Module Matters
 
 The SolarWinds attack compromised 18,000 organizations through a single build system. Log4Shell affected millions of applications through one dependency. Supply chain attacks are now the #1 threat vector because defenders focus on their code while attackers target everything else.

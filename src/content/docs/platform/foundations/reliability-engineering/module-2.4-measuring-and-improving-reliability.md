@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Foundations
 
+### What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Implement** reliability measurement frameworks using MTTR, MTBF, and availability percentages tied to user-facing impact
+2. **Analyze** incident data to identify the highest-leverage reliability improvements for a given service
+3. **Design** a continuous reliability improvement process that balances feature velocity with system stability
+4. **Evaluate** whether a reliability investment (chaos engineering, redundancy, automation) is justified by its risk-reduction return
+
 ---
 
 ## The Meeting That Changed How Google Thinks About Reliability

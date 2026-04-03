@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: Cloud Native 101
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure least-privilege IAM policies using conditions, permission boundaries, and service control policies**
+- **Design cross-account access patterns using IAM roles and trust policies for multi-account AWS environments**
+- **Diagnose policy evaluation failures by tracing the Allow/Deny logic across identity, resource, and SCP policies**
+- **Implement automated credential rotation and eliminate long-lived access keys from your infrastructure**
+
+---
+
 ## Why This Module Matters
 
 In August of 2019, a massive data breach hit a major financial institution, exposing the personal information of over 100 million customers. The root cause was not a sophisticated zero-day exploit or a nation-state hacking group. It was a misconfigured web application firewall that allowed a server-side request forgery (SSRF) attack. The SSRF allowed the attacker to query the AWS EC2 instance metadata service, retrieving the credentials of the IAM role attached to the instance. Because that IAM role was overly permissive and had read access to dozens of sensitive S3 buckets containing customer data, the attacker simply synced the buckets to their own environment. The financial impact exceeded hundreds of millions of dollars in fines, settlements, and reputational damage.

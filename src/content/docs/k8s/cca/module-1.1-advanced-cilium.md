@@ -15,6 +15,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Analyze** Cilium's eBPF datapath architecture, explaining how endpoint programs, BPF maps, and identity-based policy enforcement work at the kernel level
+2. **Configure** CiliumNetworkPolicy and CiliumClusterwideNetworkPolicy with L3/L4/L7 rules, DNS-aware filtering, and host-level policies
+3. **Deploy** Cluster Mesh for multi-cluster service discovery and implement BGP peering for native pod IP advertisement
+4. **Operate** Cilium using the CLI (`cilium status`, `cilium connectivity test`) and Hubble for real-time flow visibility and troubleshooting
+
+---
+
 ## Why This Module Matters
 
 The Cilium Toolkit module taught you *what* Cilium does. This module teaches you *how it works at the level the CCA exam expects*.

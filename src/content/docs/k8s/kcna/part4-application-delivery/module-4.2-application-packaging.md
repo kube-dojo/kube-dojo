@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Compare** Helm and Kustomize as Kubernetes application packaging approaches
+2. **Explain** Helm chart structure: templates, values, and release lifecycle
+3. **Identify** when to use Helm charts vs. Kustomize overlays for different management scenarios
+4. **Evaluate** packaging strategies for multi-environment deployments (dev, staging, production)
+
+---
+
 ## Why This Module Matters
 
 Raw Kubernetes manifests become hard to manage at scale. **Helm**, **Kustomize**, and other tools help package, configure, and deploy applications. KCNA tests your understanding of these packaging approaches and when to use them.

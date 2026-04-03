@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Diagnose** CrashLoopBackOff, ImagePullBackOff, and CreateContainerConfigError systematically
+- **Fix** application failures caused by wrong images, missing ConfigMaps, incorrect probes, and resource limits
+- **Debug** multi-container pod failures by identifying which container is failing and why
+- **Trace** an application failure from symptom (pod not running) to root cause (specific configuration error)
+
+---
+
 ## Why This Module Matters
 
 Application failures are the most common issues you'll encounter - both in the exam and in production. A pod that won't start, a container that keeps crashing, or a deployment that won't roll out are daily occurrences. Mastering application troubleshooting is essential for any Kubernetes administrator.

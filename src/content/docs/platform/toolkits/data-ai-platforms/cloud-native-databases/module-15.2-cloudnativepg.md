@@ -19,6 +19,16 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy CloudNativePG for automated PostgreSQL cluster management on Kubernetes with HA failover**
+- **Configure CloudNativePG backup schedules with barman, point-in-time recovery, and WAL archiving**
+- **Implement CloudNativePG rolling updates, minor/major version upgrades, and connection pooling with PgBouncer**
+- **Compare CloudNativePG's operator approach against managed database services for PostgreSQL on Kubernetes**
+
+
 ## Why This Module Matters
 
 **The Database That Runs Itself**

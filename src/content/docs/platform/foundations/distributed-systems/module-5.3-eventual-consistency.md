@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Foundations
 
+### What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Evaluate** the CAP theorem tradeoffs for a given service and justify choosing eventual consistency over strong consistency (or vice versa)
+2. **Design** eventually consistent data flows using conflict resolution strategies (last-write-wins, vector clocks, CRDTs) appropriate for the data model
+3. **Implement** read-your-writes and causal consistency guarantees on top of eventually consistent datastores when user experience demands it
+4. **Analyze** consistency anomalies in production to determine whether they indicate a design flaw or acceptable convergence delay
+
 ---
 
 **December 26, 2012. Amazon's retail website experiences intermittent failures during the busiest shopping week of the year—and the root cause is surprisingly simple: they chose the wrong consistency model for their inventory system.**

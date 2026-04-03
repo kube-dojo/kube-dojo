@@ -7,6 +7,17 @@ sidebar:
 
 > **Complexity**: `[MEDIUM]` | **Time**: 30-40 minutes | **Prerequisites**: Modules 3.1-3.6 (Cloud Native Architecture)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Explain** the CNCF governance model including the TOC, SIGs, and Working Groups
+2. **Trace** how a feature moves from KEP proposal to shipped release in Kubernetes
+3. **Identify** the path from observer to contributor in CNCF projects
+4. **Compare** project maturity stages and the criteria for sandbox, incubating, and graduated status
+
+---
+
 ## Why This Module Matters
 
 In December 2021, a critical vulnerability in the Apache Log4j library (CVE-2021-44228) sent shockwaves through the entire software industry. Millions of applications were at risk. The Kubernetes ecosystem was no exception -- projects like Elasticsearch operators, Kafka connectors, and Java-based controllers all needed urgent patches.

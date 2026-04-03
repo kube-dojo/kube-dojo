@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## Learning Outcomes
+
+After completing this module, you will be able to:
+- **Configure** liveness, readiness, and startup probes with appropriate thresholds and timing
+- **Debug** pod restart loops and traffic routing issues caused by misconfigured probes
+- **Explain** the difference between liveness, readiness, and startup probes and when each applies
+- **Implement** HTTP, TCP, and exec probes matched to your application's health-check capabilities
+
+---
+
 ## Why This Module Matters
 
 Probes tell Kubernetes how to check if your application is alive, ready to receive traffic, or needs more startup time. Without probes, Kubernetes has no way to know if your application is actually working—it only knows if the container process is running.

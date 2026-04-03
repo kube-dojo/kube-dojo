@@ -25,6 +25,16 @@ Every developer wants their own Kubernetes cluster. Nobody wants to pay for it. 
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy virtual Kubernetes clusters within host clusters for lightweight multi-tenancy isolation**
+- **Configure vcluster resource isolation, network policies, and synced resource mappings**
+- **Implement vcluster for development environments, CI/CD testing, and multi-tenant platform offerings**
+- **Compare vcluster's virtual cluster approach against namespaces and separate clusters for isolation trade-offs**
+
+
 ## Why This Module Matters
 
 Kubernetes multi-tenancy is one of the hardest problems in platform engineering. Namespaces are too weak—tenants can interfere with each other through CRDs, cluster-scoped resources, and admission webhooks. Dedicated clusters are too expensive and too slow to provision. vCluster sits in the sweet spot: real cluster-level isolation without the blast radius or bill of separate clusters.

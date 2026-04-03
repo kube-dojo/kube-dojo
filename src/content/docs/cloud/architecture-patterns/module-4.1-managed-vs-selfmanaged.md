@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Cloud Architecture Patterns
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Evaluate managed Kubernetes services (EKS, GKE, AKS) against self-managed clusters for specific workload requirements**
+- **Design decision frameworks that weigh control plane responsibility, upgrade lifecycle, and team capability**
+- **Compare total cost of ownership between managed and self-managed Kubernetes including hidden operational costs**
+- **Implement migration strategies from self-managed Kubernetes to managed services with minimal workload disruption**
+
 ---
 
 ## Why This Module Matters

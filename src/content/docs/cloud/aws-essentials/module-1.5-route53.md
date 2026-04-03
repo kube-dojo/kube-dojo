@@ -17,6 +17,15 @@ Before starting this module, you should have completed:
 - AWS account with at least one registered domain (or willingness to register one ~$12/year)
 - AWS CLI configured with appropriate permissions
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure Route 53 hosted zones with multiple routing policies (weighted, latency, failover, geolocation)**
+- **Implement DNS-based health checks and failover routing to achieve automated disaster recovery**
+- **Design split-horizon DNS architectures that separate public and private name resolution**
+- **Deploy alias records and integrate Route 53 with ALB, CloudFront, and S3 static websites**
+
 ---
 
 ## Why This Module Matters

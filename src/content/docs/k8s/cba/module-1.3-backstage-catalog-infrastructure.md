@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Define** catalog entities (Components, APIs, Systems, Domains) with proper metadata, relationships, and lifecycle annotations
+2. **Configure** entity providers and processors that auto-discover services from GitHub, Kubernetes, or LDAP into the catalog
+3. **Deploy** Backstage to Kubernetes with PostgreSQL persistence, Ingress, and environment-specific configuration
+4. **Design** a catalog taxonomy that models your organization's ownership, dependencies, and API contracts
+
+---
+
 ## Why This Module Matters
 
 The software catalog is the beating heart of Backstage. Without it, Backstage is just a plugin framework with a pretty UI. With it, you have a single pane of glass over every service, API, team, and piece of infrastructure your organization owns. The CBA exam dedicates **22% to the catalog** (Domain 3) and another **22% to infrastructure** (Domain 2)—together, that is 44% of your score.

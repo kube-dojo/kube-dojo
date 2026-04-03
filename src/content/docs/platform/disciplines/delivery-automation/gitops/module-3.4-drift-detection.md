@@ -15,6 +15,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement drift detection that identifies when cluster state diverges from Git-declared configuration**
+- **Design alerting policies that distinguish critical drift requiring immediate attention from benign changes**
+- **Build automated remediation workflows that reconcile drift without manual intervention**
+- **Analyze drift patterns to identify systemic causes — manual kubectl edits, mutating webhooks, operator conflicts**
+
 ## Why This Module Matters
 
 GitOps principle #4: "Continuously reconciled."

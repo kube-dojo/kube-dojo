@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Diagnose** worker node NotReady status by checking kubelet, container runtime, and network
+- **Fix** kubelet failures caused by configuration errors, certificate expiry, and resource pressure
+- **Recover** a node from disk pressure, memory pressure, and PID pressure conditions
+- **Drain** and cordon nodes safely during maintenance while respecting PodDisruptionBudgets
+
+---
+
 ## Why This Module Matters
 
 Worker nodes are where your applications actually run. When a node fails, pods get evicted or stuck, services become unavailable, and applications suffer. Understanding how to diagnose and fix worker node issues is essential for maintaining cluster health and application availability.

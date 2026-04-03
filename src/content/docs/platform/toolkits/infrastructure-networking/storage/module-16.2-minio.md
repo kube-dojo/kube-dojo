@@ -19,6 +19,16 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy MinIO for high-performance S3-compatible object storage on Kubernetes**
+- **Configure MinIO with erasure coding, bucket policies, and identity management for multi-tenant access**
+- **Implement MinIO bucket replication and lifecycle rules for data management across environments**
+- **Integrate MinIO as a backing store for Velero backups, MLflow artifacts, and application data**
+
+
 ## Why This Module Matters
 
 **The $1.7 Million Data Pipeline That Almost Died**

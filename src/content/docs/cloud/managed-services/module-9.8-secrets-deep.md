@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [COMPLEX] | **Time to Complete**: 2h | **Prerequisites**: Module 9.1 (Databases), Kubernetes RBAC, cloud IAM basics
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement External Secrets Operator to synchronize cloud secrets (AWS Secrets Manager, GCP Secret Manager, Azure Key Vault) into Kubernetes**
+- **Configure automatic secret rotation workflows that update Kubernetes secrets without pod restarts**
+- **Deploy HashiCorp Vault on Kubernetes with cloud KMS auto-unseal and the Vault Secrets Operator**
+- **Design multi-cloud secret management architectures that work consistently across EKS, GKE, and AKS clusters**
+
+---
+
 ## Why This Module Matters
 
 In December 2023, a developer at a healthcare company committed a `.env` file containing an AWS access key to a public GitHub repository. An automated scanner (one of thousands operated by attackers) detected the key within 11 minutes. By the 14-minute mark, the attacker had used the key to enumerate S3 buckets, finding one containing patient records. By minute 22, they had exfiltrated 340,000 patient records. The breach cost the company $4.8 million in HIPAA fines, $1.2 million in incident response, and immeasurable reputation damage.

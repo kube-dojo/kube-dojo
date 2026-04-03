@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: Cloud Essentials (any provider), Kubernetes networking basics
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure private connectivity from Kubernetes pods to managed databases (RDS, Cloud SQL, Flexible Server) using VPC-native networking**
+- **Implement connection pooling with PgBouncer or ProxySQL sidecars to optimize database connection management from pods**
+- **Deploy automated credential rotation for database secrets using cloud-native rotation with Kubernetes External Secrets Operator**
+- **Design high-availability database architectures with cross-AZ failover that Kubernetes workloads survive transparently**
+
+---
+
 ## Why This Module Matters
 
 In September 2022, a Series B fintech startup ran their PostgreSQL database as a StatefulSet inside EKS. They had read every blog post about "running databases on Kubernetes" and felt confident. One Friday at 4:47 PM, a node auto-scaling event drained the database pod. The PersistentVolume was in us-east-1a, but the replacement node landed in us-east-1b. The pod sat in `Pending` for 22 minutes. During those 22 minutes, their payment processing pipeline -- which served 14,000 transactions per hour -- was completely dead. The postmortem estimated $89,000 in lost revenue and two enterprise customers who never came back.

@@ -19,6 +19,16 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure GitHub Actions with reusable workflows, matrix strategies, and self-hosted runners on Kubernetes**
+- **Implement GitHub Advanced Security features including CodeQL, secret scanning, and dependency review**
+- **Deploy GitHub's OIDC integration for secure, credential-free access to cloud resources from CI/CD**
+- **Optimize GitHub Actions performance with caching strategies, concurrency controls, and artifact management**
+
+
 ## Why This Module Matters
 
 **GitHub Isn't Just a Git Host Anymore**

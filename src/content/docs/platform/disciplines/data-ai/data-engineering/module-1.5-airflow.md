@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement Apache Airflow on Kubernetes using the KubernetesExecutor for scalable DAG execution**
+- **Design Airflow deployment architectures with proper scheduler, webserver, and worker configurations**
+- **Configure DAG dependency management and retry policies for reliable data pipeline orchestration**
+- **Build monitoring and alerting for Airflow that catches DAG failures, SLA misses, and resource bottlenecks**
+
 ## Why This Module Matters
 
 You have Kafka streaming events. Flink processing them in real time. Spark running batch transformations. Databases storing results. Dashboards visualizing insights.

@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [MEDIUM] | **Time to Complete**: 2.5h | **Prerequisites**: Cloud Native 101
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure Entra ID application registrations, service principals, and Managed Identities for Azure workloads**
+- **Design Azure RBAC role assignments across Management Groups, Subscriptions, and Resource Groups with least privilege**
+- **Implement Conditional Access policies and Privileged Identity Management (PIM) for just-in-time access**
+- **Diagnose Entra ID vs Azure RBAC permission conflicts using role assignment analysis and access reviews**
+
+---
+
 ## Why This Module Matters
 
 In March 2021, a security researcher discovered that a misconfigured Azure Active Directory application in a Fortune 500 company exposed the email inboxes and SharePoint files of over 16,000 employees. The application had been registered years earlier by a contractor who had long since left the company. Nobody revoked the app's permissions because nobody knew it existed. The application's client secret had been committed to a public GitHub repository, and an attacker had been quietly reading executive emails for months before the breach was discovered. The estimated cost of the incident, including regulatory fines, legal fees, and lost business, exceeded $30 million.

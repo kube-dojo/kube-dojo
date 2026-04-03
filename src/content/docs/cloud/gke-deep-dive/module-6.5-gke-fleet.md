@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [COMPLEX] | **Time to Complete**: 3h | **Prerequisites**: Module 6.1 (GKE Architecture)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure GKE Fleet management to register and manage clusters across multiple projects and regions**
+- **Implement fleet-wide observability using Cloud Monitoring metrics scoping and centralized logging pipelines**
+- **Deploy Config Sync and Policy Controller for fleet-wide GitOps-based configuration and policy enforcement**
+- **Design multi-cluster GKE architectures using Multi Cluster Ingress and Multi Cluster Services for global routing**
+
+---
+
 ## Why This Module Matters
 
 In November 2023, a ride-sharing company with 12 GKE clusters across 4 regions discovered a critical vulnerability in their payment service. The CVE had been patched in the latest image, but only 3 of the 12 clusters were running the fixed version. The other 9 clusters had drifted---some were still on images built two months earlier, and two clusters had deployment configurations that differed from the canonical Helm chart. The security team spent 11 days identifying which clusters were affected, which versions were deployed where, and how to roll out the fix consistently. During that time, they disclosed the vulnerability window to their payment processor, triggering a PCI compliance review that took six months to close. The CTO's post-mortem conclusion: "We had 12 clusters, but no way to see or manage them as a single fleet. Each cluster was its own island."

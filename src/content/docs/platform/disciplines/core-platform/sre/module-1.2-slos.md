@@ -15,6 +15,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design meaningful SLIs and SLOs that reflect actual user experience**
+- **Implement SLO monitoring using Prometheus recording rules and multi-window burn rates**
+- **Evaluate whether current service reliability meets business requirements using SLO data**
+- **Build SLO dashboards that drive operational decisions across engineering teams**
+
 ## Why This Module Matters
 
 How reliable is your service?

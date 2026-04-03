@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Configure** emptyDir, hostPath, and projected volumes and explain when to use each
+- **Mount** volumes into containers at specific paths with read-only or read-write access
+- **Explain** volume lifecycle (tied to pod, not container) and data persistence guarantees
+- **Debug** volume mount failures by checking events, paths, and permissions
+
+---
+
 ## Why This Module Matters
 
 Containers are ephemeral - when they restart, all data is lost. Volumes solve this problem by providing persistent or shared storage that outlives container restarts. On the CKA exam, you'll need to configure various volume types to share data between containers, cache temporary files, and inject configuration.

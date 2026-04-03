@@ -11,6 +11,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Evaluate** immutable OS options (Talos, Flatcar, Bottlerocket) against traditional Linux distributions for Kubernetes node hosting
+2. **Implement** an immutable OS deployment pipeline that produces identical, reproducible node images
+3. **Design** an image update strategy with atomic rollouts and rollback capabilities across bare-metal fleets
+4. **Diagnose** configuration drift issues in mutable environments and implement immutable alternatives that prevent recurrence
+
+---
+
 ## Why This Module Matters
 
 In May 2023, a manufacturing company running Kubernetes on Ubuntu 22.04 across 80 bare metal nodes discovered that 23 of their nodes had diverged from the expected state. Over 14 months, engineers had SSH'd into nodes to debug issues and made "temporary" changes: installing tcpdump here, modifying a sysctl there, adding a cron job on another. Some nodes had different kernel versions because an engineer had manually run `apt upgrade` on a subset. Three nodes had leftover debugging containers that consumed 4GB of RAM each. Two nodes had modified iptables rules that broke pod networking for certain CIDR ranges.

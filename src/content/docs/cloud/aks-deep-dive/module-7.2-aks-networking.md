@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [COMPLEX] | **Time to Complete**: 3.5h | **Prerequisites**: [Module 7.1: AKS Architecture & Node Management](../module-7.1-aks-architecture/)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure Azure CNI Overlay and Azure CNI with dynamic IP allocation for large-scale AKS networking**
+- **Implement AKS ingress with Application Gateway Ingress Controller (AGIC) and internal load balancers**
+- **Deploy network policies on AKS using Azure Network Policy Manager or Calico for pod-level traffic isolation**
+- **Design AKS private clusters with Private Link, DNS integration, and VNet peering for hub-spoke topologies**
+
+---
+
 ## Why This Module Matters
 
 In February 2024, a European e-commerce platform migrated from a legacy monolith to a microservices architecture running on AKS. The team chose the default Kubenet networking plugin because it seemed simpler and required fewer IP addresses. Everything worked fine in their three-service staging environment. Three months after going to production with 85 microservices, the platform started experiencing intermittent 5-second delays on inter-service calls. The delays worsened under load. After two weeks of fruitless application debugging, a network engineer finally traced the problem: Kubenet uses user-defined routes (UDRs) and a bridge network on each node, meaning every pod-to-pod call crossing node boundaries required an extra hop through the Azure routing table. With 85 services generating thousands of cross-node calls per second, the UDR route table hit its update limit, causing route propagation delays that manifested as those mysterious 5-second pauses. The migration to Azure CNI took three weeks and required a complete cluster rebuild---a cost of roughly $180,000 in engineering time and lost revenue during the transition.

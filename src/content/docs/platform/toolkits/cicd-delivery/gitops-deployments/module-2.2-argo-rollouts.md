@@ -20,6 +20,16 @@ Before starting this module:
 - Understanding of Kubernetes Deployments and Services
 - Basic networking concepts (traffic splitting)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure canary deployments with automated analysis using Prometheus metrics queries**
+- **Implement blue-green deployments with traffic management and automated promotion criteria**
+- **Integrate Argo Rollouts with service meshes and ingress controllers for traffic splitting**
+- **Evaluate progressive delivery strategies and select appropriate rollout patterns for different risk profiles**
+
+
 ## Why This Module Matters
 
 Kubernetes Deployments use rolling updates by default—gradually replacing old pods with new ones. But rolling updates can't answer: "Is this new version actually better?" They blindly proceed until all pods are replaced.

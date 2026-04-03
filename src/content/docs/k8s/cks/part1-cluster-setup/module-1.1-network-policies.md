@@ -18,6 +18,17 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Create** ingress and egress NetworkPolicies that enforce least-privilege pod communication
+2. **Debug** connectivity failures caused by missing or overly restrictive policies
+3. **Implement** default-deny policies and selectively allow required traffic flows
+4. **Audit** existing NetworkPolicies to identify gaps that permit lateral movement
+
+---
+
 ## Why This Module Matters
 
 NetworkPolicies are the firewall of Kubernetes. By default, all pods can communicate with all other pods—a security nightmare. NetworkPolicies let you define exactly which pods can talk to which, blocking lateral movement in case of compromise.

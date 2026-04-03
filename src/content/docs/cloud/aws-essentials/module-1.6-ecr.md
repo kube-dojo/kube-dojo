@@ -17,6 +17,15 @@ Before starting this module, you should have completed:
 - Docker installed locally and running
 - AWS CLI configured with appropriate permissions
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure ECR repositories with immutable tagging and lifecycle policies to manage container image sprawl**
+- **Implement cross-account and cross-region image replication for multi-region deployment pipelines**
+- **Deploy ECR image scanning with vulnerability reporting and enforce scan-on-push policies**
+- **Secure ECR access with IAM policies and VPC endpoints to keep image pulls off the public internet**
+
 ---
 
 ## Why This Module Matters

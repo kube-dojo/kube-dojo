@@ -17,6 +17,15 @@ Before starting this module, you should:
 - Complete [Module 2.5: Self-Service Infrastructure](../module-2.5-self-service-infrastructure/) - Self-service patterns
 - Have read or worked with a platform team
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Evaluate your platform's maturity level across adoption, capabilities, and operational excellence**
+- **Design a platform roadmap that moves from reactive tooling to proactive product thinking**
+- **Implement platform health metrics that track reliability, adoption, and developer satisfaction**
+- **Build a continuous improvement process that evolves the platform based on user feedback and data**
+
 ## Why This Module Matters
 
 Building a platform is a journey, not a destination. Without a maturity model:

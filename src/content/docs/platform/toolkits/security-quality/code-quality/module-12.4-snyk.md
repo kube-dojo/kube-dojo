@@ -19,6 +19,16 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure Snyk for continuous vulnerability scanning across code, dependencies, containers, and IaC**
+- **Implement Snyk's fix PRs and upgrade suggestions for automated dependency remediation**
+- **Deploy Snyk Container scanning in CI/CD to detect base image vulnerabilities before deployment**
+- **Integrate Snyk with IDE plugins and Git hooks for shift-left security in developer workflows**
+
+
 ## Why This Module Matters
 
 **When "847 Vulnerabilities" Actually Becomes Actionable**

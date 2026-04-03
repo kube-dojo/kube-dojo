@@ -17,6 +17,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design global release strategies that coordinate deployments across multiple regions and time zones**
+- **Implement region-aware rollout policies that respect data locality and compliance requirements**
+- **Build rollback procedures that handle cross-region dependencies during failed global deployments**
+- **Analyze global release metrics to optimize deployment windows and minimize user impact worldwide**
+
 ## Why This Module Matters
 
 On October 4, 2021, Facebook, Instagram, and WhatsApp went dark for six hours. The outage affected 3.5 billion users globally. The root cause was a configuration change to their backbone routers that cascaded across every region simultaneously. There was no containment. There was no staged rollout of the configuration change. One bad push propagated everywhere at once, and the blast radius was the entire planet.

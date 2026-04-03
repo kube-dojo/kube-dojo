@@ -14,6 +14,15 @@ Before starting this module:
 - Understanding of time series data
 - Python basics (for exercises)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement anomaly detection models that identify unusual patterns in metrics, logs, and traces**
+- **Design baseline learning algorithms that adapt to seasonal and trend-based operational patterns**
+- **Configure alert thresholds using statistical methods that reduce false positives without missing real issues**
+- **Evaluate anomaly detection approaches — statistical, ML-based, deep learning — against your data characteristics**
+
 ## Why This Module Matters
 
 Traditional monitoring relies on static thresholds: "Alert if CPU > 80%." But what's normal? A 60% CPU spike at 3AM is concerning; the same spike during peak traffic is expected. Static thresholds generate noise during normal variations and miss gradual degradation.

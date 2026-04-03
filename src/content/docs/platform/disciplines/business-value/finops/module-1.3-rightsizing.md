@@ -17,6 +17,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement resource rightsizing recommendations using VPA, Goldilocks, or custom analysis scripts**
+- **Design rightsizing workflows that validate changes in staging before applying to production workloads**
+- **Analyze resource request and limit patterns to identify over-provisioned and under-provisioned workloads**
+- **Build automated rightsizing pipelines that continuously optimize resource allocations based on actual usage**
+
 ## Why This Module Matters
 
 In Module 1.2, you learned that the average Kubernetes cluster runs at 13-18% CPU utilization. That means for every dollar you spend on compute, roughly 82-87 cents buys unused capacity.

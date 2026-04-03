@@ -17,6 +17,16 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy continuous profiling tools (Pyroscope, Parca) for always-on application performance analysis**
+- **Configure profiling agents to capture CPU, memory, and goroutine profiles from Kubernetes workloads**
+- **Implement differential flame graph analysis to identify performance regressions between deployments**
+- **Integrate continuous profiling with traces and metrics for complete performance troubleshooting workflows**
+
+
 ## Why This Module Matters
 
 Your metrics dashboard shows CPU running at 80%. Your traces confirm requests are slow. Your logs say... nothing useful. You know *something* is burning resources, but you have no idea *which function in which service* is responsible.

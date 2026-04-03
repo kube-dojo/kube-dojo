@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## Learning Outcomes
+
+After completing this module, you will be able to:
+- **Build** Kustomize overlays that customize base resources for different environments
+- **Apply** patches and transformations using `kubectl apply -k` without modifying original YAML
+- **Compare** Kustomize vs Helm and choose the right tool for a given deployment scenario
+- **Debug** Kustomize rendering issues using `kubectl kustomize` to preview output
+
+---
+
 ## Why This Module Matters
 
 Kustomize lets you customize Kubernetes resources without templates. Instead of using variables and logic (like Helm), Kustomize uses overlays and patches to modify base configurations. It's built into kubectl (`kubectl apply -k`), making it exam-friendly.

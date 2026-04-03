@@ -16,6 +16,16 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy LangChain and LlamaIndex applications on Kubernetes with scalable RAG pipeline architectures**
+- **Configure vector database integrations (Qdrant, Weaviate, Milvus) for retrieval-augmented generation**
+- **Implement LLM application monitoring with trace collection and evaluation metrics for production quality**
+- **Optimize RAG pipeline performance with chunking strategies, embedding models, and retrieval tuning**
+
+
 ## Why This Module Matters
 
 Raw LLMs have limitations: they hallucinate, don't know about your data, and can't take actions. Building production LLM applications requires retrieval, context management, output parsing, and orchestration. Writing this from scratch takes months.

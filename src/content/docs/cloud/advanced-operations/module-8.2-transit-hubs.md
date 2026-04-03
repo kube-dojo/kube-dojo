@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Advanced Cloud Operations
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure AWS Transit Gateway, GCP Cloud Interconnect, and Azure Virtual WAN for centralized network routing**
+- **Design hub-spoke network topologies that support transitive routing, traffic inspection, and cross-region connectivity**
+- **Implement network segmentation using route tables, firewall appliances, and centralized egress inspection points**
+- **Diagnose cross-region and cross-account routing failures in transit hub architectures using flow logs and route analysis**
+
 ---
 
 ## Why This Module Matters

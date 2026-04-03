@@ -18,6 +18,17 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Evaluate** Kubernetes CVEs to determine upgrade urgency and security impact
+2. **Implement** security-focused upgrade procedures using kubeadm
+3. **Audit** cluster versions to identify components running with known vulnerabilities
+4. **Design** an upgrade strategy that minimizes security exposure windows
+
+---
+
 ## Why This Module Matters
 
 Running outdated Kubernetes versions is a security risk. Each release patches vulnerabilities—some critical. The CKS exam may ask you to verify versions, understand upgrade paths, or ensure security patches are applied.

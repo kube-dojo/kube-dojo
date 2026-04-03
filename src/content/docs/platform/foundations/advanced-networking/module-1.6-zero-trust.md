@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Foundations — Advanced Networking
 
+### What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Design** a zero trust architecture that replaces perimeter-based security with identity-aware, context-driven access controls
+2. **Evaluate** VPN alternatives (BeyondCorp-style proxies, ZTNA, service mesh mTLS) and justify which approach fits a given organizational context
+3. **Implement** micro-segmentation and continuous verification policies that limit lateral movement even after credential compromise
+4. **Analyze** existing network architectures to identify implicit trust assumptions and create a migration plan toward zero trust
+
 ---
 
 **December 2020. The world learns that SolarWinds — a network monitoring company used by 300,000+ organizations including most Fortune 500 companies and multiple US government agencies — had been compromised for nearly nine months. The attackers, attributed to Russian intelligence (SVR), inserted a backdoor into a routine software update that was distributed to approximately 18,000 organizations.**

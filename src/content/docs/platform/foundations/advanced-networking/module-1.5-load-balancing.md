@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Foundations — Advanced Networking
 
+### What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Compare** L4 and L7 load balancers by explaining their architectural differences and selecting the right tier for a given workload
+2. **Design** health check configurations, connection draining, and cross-zone settings that ensure graceful failover during outages
+3. **Diagnose** load balancer issues (uneven distribution, connection reuse problems, TLS termination latency) using connection-level metrics and access logs
+4. **Implement** advanced load balancing patterns including weighted routing, session affinity, and global server load balancing across regions
+
 ---
 
 **November 14, 2023. AWS experiences an extended outage in us-east-1. Thousands of applications go offline. But a curious pattern emerges in the post-incident analysis: applications using Network Load Balancers (NLBs) recovered faster than those on Application Load Balancers (ALBs). Applications with properly configured health checks and connection draining experienced near-zero user-visible errors during failover. Applications without them dropped thousands of in-flight requests.**

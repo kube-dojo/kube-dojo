@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Evaluate** SecurityContext settings to identify dangerous configurations (privileged, hostPID, root)
+2. **Assess** the risk level of Pod Security Standards profiles: privileged, baseline, and restricted
+3. **Explain** how Pod Security Admission enforces security standards at the namespace level
+4. **Identify** pod specifications that enable container escape or privilege escalation
+
+---
+
 ## Why This Module Matters
 
 Pods are where your code runs. They're also where attackers try to gain access and escalate privileges. Pod security controls determine whether a container can escape to the host, access sensitive resources, or move laterally through your cluster.

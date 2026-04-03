@@ -14,6 +14,15 @@ Before starting this module:
 - Familiarity with pandas DataFrames
 - Understanding of training vs. inference
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design a feature store architecture that serves both batch training and real-time inference workloads**
+- **Implement feature pipelines using Feast or Tecton for consistent feature computation and serving**
+- **Build feature discovery workflows that enable ML engineers to find and reuse existing features**
+- **Evaluate feature store solutions against requirements for latency, freshness, and data consistency**
+
 ## Why This Module Matters
 
 The number one cause of ML production failures isn't bad models—it's **training/serving skew**. Your model trains on features computed one way, then serves predictions using features computed differently. Same feature name, different values, wrong predictions.

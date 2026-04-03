@@ -43,6 +43,16 @@ Cilium changes everything. By the end of this module, when something drops packe
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Cilium as a CNI plugin with eBPF-based networking and transparent encryption**
+- **Configure Cilium network policies using L3/L4 and L7 identity-aware filtering rules**
+- **Implement Cilium's service mesh capabilities with sidecar-free mTLS and load balancing**
+- **Monitor network flows and troubleshoot connectivity using Hubble's observability dashboards**
+
+
 ## Why This Module Matters
 
 Let me tell you about the moment I fell in love with Cilium.

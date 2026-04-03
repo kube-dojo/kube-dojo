@@ -23,6 +23,16 @@ Hardcoded secrets in Git are a security incident waiting to happen. This module 
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy HashiCorp Vault with auto-unseal and configure secret engines for Kubernetes workloads**
+- **Implement External Secrets Operator to sync Vault secrets into Kubernetes Secrets automatically**
+- **Configure Vault's Kubernetes authentication and dynamic secret generation for database credentials**
+- **Secure secret rotation workflows with zero-downtime deployment patterns using ESO refresh intervals**
+
+
 ## Why This Module Matters
 
 Every production breach post-mortem includes "we found credentials in..." somewhere. Secrets sprawl is inevitable without proper tooling. Vault and ESO provide the infrastructure to manage secrets at scale—centralized storage, automatic rotation, audit trails, and least-privilege access.

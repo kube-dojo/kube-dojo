@@ -16,6 +16,16 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Pixie for instant Kubernetes observability using eBPF-based auto-instrumentation**
+- **Implement PxL scripts for querying HTTP traffic, DNS requests, and database queries without code changes**
+- **Configure Pixie's data retention and export pipelines for long-term observability storage**
+- **Evaluate Pixie's zero-instrumentation approach against traditional APM for rapid debugging workflows**
+
+
 ## Why This Module Matters
 
 Traditional observability requires you to **modify your code**: add metrics libraries, instrument spans, configure log formats. This takes weeks of engineering effort and often means you can't debug production issues you didn't anticipate instrumenting.

@@ -6,6 +6,15 @@ sidebar:
 ---
 > **Complexity**: `[MEDIUM]` | **Time**: 2 hours | **Prerequisites**: [Module 1.1: Incident Command](../module-1.1-incident-command/)
 
+### What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Design** a blameless postmortem process that surfaces systemic causes rather than assigning individual fault
+2. **Apply** root cause analysis techniques (5 Whys, fault tree analysis, contributing factors) to move beyond surface-level incident explanations
+3. **Build** postmortem documents that produce actionable follow-up items with clear ownership, priority, and deadlines
+4. **Evaluate** whether a postmortem culture is genuinely blameless by identifying signs of blame avoidance, defensive writing, and missing systemic insights
+
 ---
 
 ## Why This Module Matters

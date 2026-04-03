@@ -18,6 +18,17 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Configure** host-level firewalls (iptables/nftables) to protect Kubernetes node ports
+2. **Audit** exposed node services and ports for unnecessary attack surface
+3. **Implement** network segmentation between control plane, worker nodes, and external networks
+4. **Diagnose** host network security issues that bypass container-level NetworkPolicies
+
+---
+
 ## Why This Module Matters
 
 While Kubernetes NetworkPolicies control pod-to-pod traffic, host-level network security protects the nodes themselves. Open ports, exposed services, and unfiltered traffic at the host level can bypass container isolation entirely.

@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## Learning Outcomes
+
+After completing this module, you will be able to:
+- **Create** ConfigMaps from literals, files, and directories using imperative and declarative methods
+- **Configure** pods to consume ConfigMaps as environment variables and volume mounts
+- **Debug** application configuration issues caused by missing or incorrectly mounted ConfigMaps
+- **Explain** when to use environment variables vs volume mounts for configuration injection
+
+---
+
 ## Why This Module Matters
 
 ConfigMaps decouple configuration from container images. Instead of baking settings into your image, you inject them at runtime. This lets you use the same image across environments (dev, staging, production) with different configurations.

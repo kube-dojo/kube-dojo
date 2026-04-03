@@ -18,6 +18,15 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design IaC testing strategies spanning unit tests, integration tests, and compliance validation**
+- **Implement automated plan-time validation using tools like Terratest, Checkov, and OPA**
+- **Build CI pipelines that catch infrastructure misconfigurations before they reach production**
+- **Evaluate test coverage for IaC modules to ensure critical infrastructure paths are validated**
+
 ## Why This Module Matters
 
 **The $4.2 Million Test Gap**

@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design high-throughput storage architectures for AI workloads — training data, checkpoints, and model artifacts**
+- **Implement storage solutions using CSI drivers, NFS, and object storage optimized for large-scale data access**
+- **Configure caching layers that reduce data loading bottlenecks during distributed training**
+- **Evaluate storage options — local NVMe, network-attached, cloud object stores — against AI workload I/O patterns**
+
 ## Why This Module Matters
 
 You spent months building a beautiful GPU platform. The GPUs are provisioned, shared efficiently, connected by InfiniBand. Then your ML team starts training and reports this:

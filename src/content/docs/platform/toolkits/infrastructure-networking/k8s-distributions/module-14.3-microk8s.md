@@ -21,6 +21,16 @@ This module teaches you to deploy and operate MicroK8s for development and produ
 - Ubuntu or snap-capable Linux system
 - Understanding of container runtimes
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy MicroK8s with snap-based installation and configure add-ons for development workflows**
+- **Configure MicroK8s clustering for multi-node HA setups using the built-in join mechanism**
+- **Implement MicroK8s add-ons for GPU workloads, observability, and service mesh capabilities**
+- **Compare MicroK8s's add-on ecosystem against K3s and K0s for developer and edge use cases**
+
+
 ## Why This Module Matters
 
 **MicroK8s answers: "What if installing Kubernetes add-ons was as easy as `snap install`?"**

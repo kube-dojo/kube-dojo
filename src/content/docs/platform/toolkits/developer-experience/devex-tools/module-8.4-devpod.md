@@ -19,6 +19,16 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy DevPod for standardized cloud development environments with provider-agnostic workspace management**
+- **Configure DevPod workspaces with custom Docker images, dotfiles, and IDE integration for team standards**
+- **Implement DevPod providers for Kubernetes, AWS, and local Docker to match infrastructure requirements**
+- **Compare DevPod's open-source approach against Codespaces and Gitpod for developer environment management**
+
+
 ## Why This Module Matters
 
 **Your Laptop Is a Liability**

@@ -11,6 +11,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Implement** OIDC-based authentication for Kubernetes by integrating with Active Directory, LDAP, or enterprise identity providers
+2. **Configure** Keycloak or Dex as an OIDC broker that maps AD/LDAP groups to Kubernetes RBAC roles
+3. **Design** a zero-touch access lifecycle where employee onboarding, role changes, and offboarding propagate automatically to cluster access
+4. **Evaluate** authentication strategies (x509 certificates vs. OIDC tokens vs. webhook tokens) for security, revocability, and operational overhead
+
+---
+
 ## Why This Module Matters
 
 A logistics company with 2,400 employees deployed Kubernetes on-premises in 2022. The platform team created individual kubeconfig files for each developer -- 180 in total -- using x509 client certificates signed by the cluster CA. Within six months, the system was unmanageable. When a developer left the company, their certificate could not be revoked (Kubernetes has no certificate revocation). When a developer moved teams, someone had to generate a new certificate with different group memberships. The platform team spent 15 hours per week on access management.

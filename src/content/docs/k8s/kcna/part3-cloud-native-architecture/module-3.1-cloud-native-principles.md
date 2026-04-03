@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Explain** the CNCF definition of cloud native and its core principles
+2. **Compare** cloud native applications with traditional monolithic architectures
+3. **Identify** the twelve-factor app principles and how they apply to Kubernetes workloads
+4. **Evaluate** whether an application design follows cloud native best practices
+
+---
+
 ## Why This Module Matters
 
 Cloud native is more than just containers—it's a set of principles for building scalable, resilient applications. The KCNA exam tests your understanding of what makes an application truly "cloud native." This module covers the foundational concepts.

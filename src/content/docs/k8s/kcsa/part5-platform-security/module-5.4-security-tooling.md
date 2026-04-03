@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Identify** key security tools by category: scanning (Trivy), policy (OPA/Kyverno), runtime (Falco), auditing (kube-bench)
+2. **Evaluate** which tools address which phases of the security lifecycle (build, deploy, runtime)
+3. **Compare** policy engines (OPA Gatekeeper vs. Kyverno) by architecture and use case
+4. **Assess** a security tooling stack for coverage gaps across the Kubernetes attack surface
+
+---
+
 ## Why This Module Matters
 
 The Kubernetes security ecosystem has a rich set of tools for scanning, monitoring, enforcing, and auditing security. Knowing which tools exist, what they do, and when to use them helps you build a comprehensive security program.

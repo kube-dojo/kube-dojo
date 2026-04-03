@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: Cloud Native 101
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure GCP IAM policies across the resource hierarchy (Organization, Folders, Projects) with proper inheritance**
+- **Implement least-privilege service accounts with Workload Identity Federation to eliminate exported key files**
+- **Design custom IAM roles that precisely scope permissions beyond predefined roles for production workloads**
+- **Diagnose IAM policy evaluation failures using Policy Troubleshooter and audit log analysis**
+
+---
+
 ## Why This Module Matters
 
 In September 2020, a mid-sized fintech company discovered that their entire Google Cloud production environment had been compromised. The root cause was not a sophisticated exploit or a zero-day vulnerability. A developer had created a service account with Project Owner permissions "temporarily" to debug an integration issue with Cloud Storage. That service account key was committed to a private GitHub repository. When the repository was briefly made public during an open-source release, automated scanners harvested the key within minutes. Because the service account had Owner-level access to the production project, the attacker was able to exfiltrate customer financial records, spin up cryptocurrency mining instances across multiple regions, and delete audit logs. The total cost exceeded $2.3 million in direct damages, not including the regulatory fines that followed.

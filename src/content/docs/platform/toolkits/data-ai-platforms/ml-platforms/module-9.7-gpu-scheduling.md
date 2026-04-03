@@ -17,6 +17,16 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure Kubernetes GPU scheduling with device plugins, resource limits, and multi-GPU node management**
+- **Implement GPU sharing strategies using MIG, time-slicing, and MPS for cost-effective GPU utilization**
+- **Deploy GPU-aware autoscaling with Karpenter or Cluster Autoscaler for dynamic ML workload demand**
+- **Monitor GPU utilization metrics and optimize scheduling policies for mixed ML training and inference workloads**
+
+
 ## Why This Module Matters
 
 GPUs are the most expensive resource in any Kubernetes cluster. A single NVIDIA A100 node costs $12-30/hour on cloud providers. Most ML teams treat GPU scheduling as an afterthought: they request whole GPUs for jobs that use 15% of capacity, leave nodes idle overnight, and never set up proper monitoring.

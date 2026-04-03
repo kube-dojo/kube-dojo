@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Foundations
 
+### What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Distinguish** between complicated systems (predictable, decomposable) and complex systems (emergent, non-linear) in real infrastructure
+2. **Analyze** how simple component interactions produce emergent behaviors that cannot be predicted from specifications alone
+3. **Design** observability and safeguards for systems operating at the edge of chaos where emergent failures are most likely
+4. **Evaluate** architectural decisions through the lens of complexity theory to reduce the blast radius of unexpected interactions
+
 ---
 
 ## The Perfect Storm That Nobody Saw Coming

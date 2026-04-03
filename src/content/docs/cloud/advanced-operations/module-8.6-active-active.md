@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Advanced Cloud Operations
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design multi-region active-active Kubernetes deployments with global load balancing and data replication**
+- **Implement traffic routing strategies (DNS-based, anycast, global LB) for active-active failover patterns**
+- **Configure data replication and conflict resolution mechanisms for stateful workloads across regions**
+- **Evaluate active-active vs active-passive tradeoffs including cost, complexity, and consistency guarantees**
+
 ---
 
 ## Why This Module Matters

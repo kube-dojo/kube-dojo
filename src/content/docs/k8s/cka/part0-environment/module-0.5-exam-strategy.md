@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Apply** the Three-Pass Method to maximize your score under time pressure
+- **Triage** exam questions by difficulty and time estimate (quick wins first, hard ones last)
+- **Manage** exam time using the 2-minute rule (if stuck for 2 minutes, flag and move on)
+- **Avoid** the #1 exam failure mode: spending 15 minutes on a 4-point question while skipping three 7-point questions
+
+---
+
 ## Why This Module Matters
 
 You can know Kubernetes perfectly and still fail the CKA.
@@ -47,6 +57,8 @@ This fails when:
 The CKA passing score is **66%**. You don't need perfect—you need efficient.
 
 ---
+
+> **Think about it**: The exam has 16 questions worth different points. A 4-point question and a 7-point question both take "about 10 minutes" if you get stuck. But the 7-point question is worth 75% more. If you only have time for one, which do you pick? This is why strategy matters as much as knowledge.
 
 ## The Solution: Three-Pass Method
 

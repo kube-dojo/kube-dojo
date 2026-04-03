@@ -20,6 +20,16 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Talos Linux clusters with immutable, API-managed operating system configuration**
+- **Configure Talos machine configs for control plane and worker nodes with security-hardened defaults**
+- **Implement Talos cluster upgrades and maintenance using talosctl for zero-downtime operations**
+- **Evaluate Talos's immutable OS approach against traditional Linux distributions for Kubernetes security**
+
+
 ## Why This Module Matters
 
 **The $2.3M Breach That Couldn't Happen**

@@ -13,6 +13,16 @@ Before starting this module:
 - Understanding of ITSM/incident management
 - Familiarity with enterprise monitoring tools
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy event correlation platforms that aggregate and deduplicate alerts from multiple monitoring sources**
+- **Configure correlation rules to identify root cause from cascading alert patterns across services**
+- **Implement automated incident enrichment with topology context and historical incident matching**
+- **Evaluate event correlation platforms (BigPanda, Moogsoft, PagerDuty AIOps) for operational maturity levels**
+
+
 ## Why This Module Matters
 
 You've learned correlation concepts—now understand the commercial platforms that implement them at enterprise scale. BigPanda, Moogsoft, PagerDuty AIOps, and ServiceNow ITOM each approach the problem differently. Choosing the right platform can mean the difference between 90% noise reduction and a shelfware investment.

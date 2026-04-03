@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design a platform team structure with the right mix of skills across infrastructure, developer tooling, and SRE**
+- **Build hiring criteria and interview processes that identify strong platform engineering candidates**
+- **Implement team rituals and working agreements that foster collaboration with application teams**
+- **Evaluate team effectiveness using DORA metrics, developer satisfaction, and platform adoption rates**
+
 ## Why This Module Matters
 
 In 2019, a fintech company hired 12 platform engineers in three months. They had budget, executive sponsorship, and clear technical vision. Within a year, half the team had quit and the other half was running a glorified ticket queue.

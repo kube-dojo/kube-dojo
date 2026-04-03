@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design network policy architectures that implement zero-trust networking across Kubernetes namespaces**
+- **Implement Kubernetes NetworkPolicy and Cilium NetworkPolicy for fine-grained traffic control**
+- **Build network policy testing workflows that validate connectivity rules before production deployment**
+- **Analyze network traffic patterns to identify missing policies and over-permissive access rules**
+
 ## Why This Module Matters
 
 In January 2024, a healthcare SaaS provider discovered that a compromised Pod in their staging namespace had been making API calls to their production database for three weeks. The attacker had exploited a known CVE in an unpatched logging sidecar, gained shell access, and then simply `curl`-ed the production PostgreSQL Service — because there were no network policies anywhere in the cluster. Every Pod could talk to every other Pod across every namespace.

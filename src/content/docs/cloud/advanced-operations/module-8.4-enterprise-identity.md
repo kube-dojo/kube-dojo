@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Advanced Cloud Operations
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure enterprise SSO integration with OIDC/SAML providers (Okta, Entra ID) for Kubernetes cluster access**
+- **Implement cross-account IAM role chaining and federation patterns for multi-cloud Kubernetes environments**
+- **Design RBAC hierarchies that map enterprise organizational structure to Kubernetes namespace-level permissions**
+- **Deploy centralized audit logging for identity events across multiple clusters and cloud accounts**
+
 ---
 
 ## Why This Module Matters

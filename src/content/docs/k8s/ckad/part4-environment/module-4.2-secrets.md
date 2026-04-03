@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## Learning Outcomes
+
+After completing this module, you will be able to:
+- **Create** Secrets using `kubectl create secret` for generic, TLS, and docker-registry types
+- **Configure** pods to consume Secrets as environment variables and volume mounts securely
+- **Explain** how Kubernetes stores Secrets (base64, not encrypted) and the security implications
+- **Debug** authentication failures caused by incorrectly encoded or missing Secret data
+
+---
+
 ## Why This Module Matters
 
 Secrets store sensitive data like passwords, API keys, and TLS certificates. While similar to ConfigMaps in usage, Secrets have additional security features and are designed specifically for sensitive information.

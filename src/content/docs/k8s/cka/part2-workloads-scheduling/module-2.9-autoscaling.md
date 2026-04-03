@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Configure** Horizontal Pod Autoscaler (HPA) with CPU and custom metrics
+- **Explain** the HPA decision algorithm (target utilization, scaling velocity, cooldown)
+- **Debug** HPA not scaling by checking metrics-server, current vs target utilization, and events
+- **Compare** HPA, VPA, and cluster autoscaler and explain when to use each
+
+---
+
 ## Why This Module Matters
 
 Static replica counts waste money or cause outages. Too many replicas = wasted resources. Too few = users get errors during traffic spikes. Autoscaling dynamically adjusts capacity based on actual demand.

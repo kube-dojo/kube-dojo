@@ -23,6 +23,16 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy OPA Gatekeeper and configure ConstraintTemplates for Kubernetes admission policy enforcement**
+- **Implement Rego policies for pod security, resource limits, label requirements, and image restrictions**
+- **Configure Gatekeeper audit mode for policy violation reporting without blocking existing workloads**
+- **Evaluate OPA Gatekeeper against Kyverno for policy-as-code enforcement complexity and flexibility trade-offs**
+
+
 ## Why This Module Matters
 
 Without admission control, anyone with `kubectl create` permissions can deploy anything—privileged containers, images from untrusted registries, pods without resource limits. Gatekeeper acts as your cluster's bouncer, checking every resource against your policies before allowing it in.

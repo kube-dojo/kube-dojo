@@ -18,6 +18,17 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Configure** TLS termination on Ingress resources with valid certificates
+2. **Implement** security headers and rate limiting via Ingress annotations
+3. **Audit** Ingress configurations for exposed admin panels and missing TLS enforcement
+4. **Harden** Ingress controllers to prevent information leakage and unauthorized access
+
+---
+
 ## Why This Module Matters
 
 Ingress is where your cluster meets the internet. It's the front door—and attackers target front doors. Misconfigured TLS, exposed admin panels, and missing security headers are common vulnerabilities.

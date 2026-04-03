@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## Learning Outcomes
+
+After completing this module, you will be able to:
+- **Create** Jobs and CronJobs with correct completion counts, parallelism, and backoff limits
+- **Configure** CronJob schedules, concurrency policies, and history limits
+- **Debug** failed Jobs by inspecting pod logs, events, and restart behavior
+- **Compare** Jobs vs CronJobs and choose the right resource for one-off vs recurring batch workloads
+
+---
+
 ## Why This Module Matters
 
 Not every workload runs forever. Backups run once. Reports generate hourly. Data migrations complete and exit. These are batch workloads, and Kubernetes handles them with Jobs and CronJobs.

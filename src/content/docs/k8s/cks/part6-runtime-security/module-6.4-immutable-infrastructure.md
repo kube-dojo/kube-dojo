@@ -18,6 +18,17 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Configure** read-only root filesystems with targeted writable volume mounts for required paths
+2. **Implement** immutable container patterns using non-root users, minimal base images, and no-shell builds
+3. **Audit** running workloads to detect containers with writable filesystems or mutable configurations
+4. **Design** deployment specifications that enforce immutability as a defense-in-depth layer
+
+---
+
 ## Why This Module Matters
 
 Immutable infrastructure means containers don't change after deployment. If an attacker can't modify files or install tools, their options are severely limited. Read-only filesystems, non-root users, and minimal images create defense in depth.

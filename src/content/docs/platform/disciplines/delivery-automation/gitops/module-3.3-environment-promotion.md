@@ -15,6 +15,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design environment promotion pipelines that move changes safely from dev through staging to production**
+- **Implement automated promotion gates with testing, approval, and rollback capabilities**
+- **Build promotion strategies that handle dependencies between microservices during coordinated releases**
+- **Evaluate promotion patterns — image tag updates, Kustomize overlays, Helm value overrides — for your context**
+
 ## Why This Module Matters
 
 Your new feature works in dev. Now what?

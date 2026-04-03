@@ -19,6 +19,16 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy CockroachDB on Kubernetes with multi-region topology and automatic data replication**
+- **Configure CockroachDB zone configurations and locality-aware queries for geo-distributed applications**
+- **Implement CockroachDB backup schedules, changefeeds, and rolling upgrades for production operations**
+- **Evaluate CockroachDB's distributed SQL capabilities against traditional PostgreSQL for global applications**
+
+
 ## Why This Module Matters
 
 **The $4.2 Million Phone Call That Never Came**

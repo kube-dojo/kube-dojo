@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Diagnose** control plane failures by checking static pod manifests, component logs, and certificates
+- **Fix** common control plane issues: etcd quorum loss, scheduler crash, API server unreachable
+- **Restore** a control plane from etcd snapshot backup
+- **Verify** control plane health using component status endpoints and kubectl cluster-info
+
+---
+
 ## Why This Module Matters
 
 When the control plane fails, the entire cluster is at risk. The API server down means no kubectl. The scheduler down means no new pods. The controller manager down means no reconciliation. These are the most critical and stressful incidents you'll face. Understanding how to diagnose and fix control plane issues quickly is essential.

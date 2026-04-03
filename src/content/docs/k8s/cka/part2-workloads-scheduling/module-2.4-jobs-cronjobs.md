@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Create** Jobs and CronJobs with appropriate parallelism, completion counts, and backoff limits
+- **Debug** failed Jobs by checking pod logs, exit codes, and restart policies
+- **Configure** CronJob concurrency policies and history limits for production use
+- **Explain** when to use Jobs vs Deployments and the implications of each for batch workloads
+
+---
+
 ## Why This Module Matters
 
 Not all workloads run forever. Some run once and exit:

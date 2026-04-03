@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [QUICK] | **Time to Complete**: 1.5h | **Prerequisites**: Module 3.1 (Entra ID & RBAC)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure Azure Blob Storage with access tiers (Hot, Cool, Cold, Archive) and lifecycle management policies**
+- **Implement storage account security with private endpoints, SAS tokens, and Entra ID-based RBAC access**
+- **Deploy blob versioning, soft delete, and immutable storage policies for data protection and compliance**
+- **Design Data Lake Storage Gen2 hierarchical namespaces for analytics workloads integrated with Azure services**
+
+---
+
 ## Why This Module Matters
 
 In January 2022, a healthcare analytics company discovered that their Azure storage bill had silently grown from $800/month to $14,200/month over six months. The cause was mundane but devastating: an automated pipeline had been writing diagnostic logs and intermediate processing files to a Hot-tier storage account at a rate of approximately 3 TB per week. Nobody had configured lifecycle management policies, so six months of data---roughly 78 TB---sat in Hot storage at $0.018 per GB per month ($1,437/month for the data alone, plus transaction and bandwidth costs that pushed the total to $14,200). Moving 40% of that data to Cool tier (accessed less than once per month) and 50% to Archive tier (never accessed again) would have reduced storage costs by over 80%. The unnecessary spending over those six months was money that could have funded two engineering hires.

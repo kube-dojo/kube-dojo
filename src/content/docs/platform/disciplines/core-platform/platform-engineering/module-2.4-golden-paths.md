@@ -15,6 +15,15 @@ Before starting this module, you should:
 - Complete [Module 2.3: Internal Developer Platforms](../module-2.3-internal-developer-platforms/) - IDP components
 - Understand template engines (Helm, Cookiecutter, or similar)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design golden paths that accelerate common development workflows without restricting flexibility**
+- **Implement project scaffolding templates that embed security, observability, and deployment best practices**
+- **Evaluate golden path adoption metrics to determine which paths deliver the most developer value**
+- **Build escape hatches that let advanced teams customize golden paths for edge cases**
+
 ## Why This Module Matters
 
 Every organization has standards. The question is whether those standards are:

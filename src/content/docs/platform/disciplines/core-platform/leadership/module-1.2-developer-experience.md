@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design developer experience research programs that surface real pain points from engineering teams**
+- **Implement DX measurement frameworks that track cognitive load, flow state, and feedback loops**
+- **Build developer journey maps that identify the highest-friction moments in the software lifecycle**
+- **Lead cross-functional initiatives that improve developer experience across platform boundaries**
+
 ## Why This Module Matters
 
 In 2022, a large retail company invested $4 million in a new Kubernetes-based internal developer platform. Eighteen months later, their internal developer satisfaction survey showed a 15-point *drop*. Developers complained about longer deploy times, more YAML to write, and a steeper learning curve. The platform was technically superior to what it replaced, but the developer experience was worse.

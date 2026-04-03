@@ -14,6 +14,16 @@ Before starting this module:
 - Basic understanding of time series data
 - pip/conda for package installation
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy anomaly detection systems that identify unusual patterns in Kubernetes metrics and logs**
+- **Configure machine learning models for time-series anomaly detection on Prometheus metrics**
+- **Implement alert correlation to reduce noise and surface actionable anomaly clusters**
+- **Evaluate anomaly detection approaches (statistical, ML, deep learning) for different observability data types**
+
+
 ## Why This Module Matters
 
 You understand anomaly detection concepts—now it's time to implement them. This module covers the practical tools: Prophet for time series forecasting, Luminaire for streaming detection, and PyOD for multi-dimensional anomalies. By the end, you'll know which tool to use for each scenario and how to implement them.

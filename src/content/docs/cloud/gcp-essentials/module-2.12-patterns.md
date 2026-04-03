@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [COMPLEX] | **Time to Complete**: 1.5h | **Prerequisites**: Modules 1-11 (all previous GCP Essentials modules)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design GCP architectures using Shared VPC, Private Service Connect, and hub-spoke network topologies**
+- **Evaluate GCP-native patterns for microservices (Cloud Run, GKE, App Engine) and select the right compute tier**
+- **Implement high-availability architectures with regional failover, global load balancing, and multi-region data replication**
+- **Compare GCP architectural patterns with AWS and Azure equivalents to inform multi-cloud design decisions**
+
+---
+
 ## Why This Module Matters
 
 In 2021, a rapidly growing healthcare company had 6 GCP projects. By mid-2022, they had 84. Each project had been created manually by whichever engineer needed one, with no naming convention, no consistent network configuration, and no centralized logging. When the security team was asked to produce an audit report for a HIPAA compliance review, they discovered that 23 projects had the default VPC still active, 11 had public Cloud Storage buckets, and 4 had service account keys that had not been rotated in over a year. The security engineer responsible for the audit spent 6 weeks manually checking each project. The compliance review failed, resulting in a 90-day remediation period that cost the company over $500,000 in engineering time and delayed a major product launch.

@@ -11,6 +11,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Design** multi-site disaster recovery architectures (active-passive, active-active) with defined RPO and RTO targets
+2. **Implement** cross-site backup pipelines using Velero with off-site S3-compatible storage and etcd snapshot replication
+3. **Configure** DNS-based failover and traffic switching procedures that redirect users to surviving sites within minutes
+4. **Plan** DR testing runbooks with regular failover drills that validate recovery procedures before an actual disaster
+
+---
+
 ## Why This Module Matters
 
 In March 2021, a fire destroyed OVHcloud's SBG2 datacenter in Strasbourg, France. Thousands of customers lost data permanently. One e-commerce company running Kubernetes on bare metal in that single facility lost their entire cluster -- etcd data, persistent volumes, application state, everything. They had backups, but the backups were stored on the same physical infrastructure. Recovery took 11 days. Revenue loss exceeded 2 million euros.

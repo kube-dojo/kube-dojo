@@ -18,6 +18,15 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement policy-as-code scanning that blocks insecure infrastructure before deployment**
+- **Design least-privilege IAM patterns for IaC service accounts and CI/CD pipelines**
+- **Build secret injection workflows that keep credentials out of IaC state files and repositories**
+- **Evaluate IaC security tools — tfsec, Checkov, Sentinel, OPA — against your compliance requirements**
+
 ## Why This Module Matters
 
 **The $18.7 Million Terraform Secret**

@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Compare** Deployments, ReplicaSets, DaemonSets, StatefulSets, and Jobs by use case
+2. **Identify** which workload resource to use for a given application scenario
+3. **Explain** how Deployments manage rolling updates and rollbacks through ReplicaSets
+4. **Evaluate** the relationship between controllers and the Pods they manage
+
+---
+
 ## Why This Module Matters
 
 You rarely create Pods directly—you use **workload resources** that manage Pods for you. Understanding Deployments, ReplicaSets, DaemonSets, and other controllers is essential for KCNA.

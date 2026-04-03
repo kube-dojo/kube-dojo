@@ -18,6 +18,17 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Create** AppArmor profiles that restrict container file access and network operations
+2. **Deploy** pods with AppArmor profiles applied via security context annotations
+3. **Debug** AppArmor denials by interpreting kernel audit logs
+4. **Audit** running containers to verify correct AppArmor profile enforcement
+
+---
+
 ## Why This Module Matters
 
 AppArmor is a Linux security module that restricts what applications can do—which files they can access, which network operations they can perform, which capabilities they can use. When applied to containers, AppArmor adds a security layer beyond the container runtime.

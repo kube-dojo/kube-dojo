@@ -18,6 +18,17 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Configure** gVisor (runsc) and Kata Containers as alternative container runtimes
+2. **Deploy** workloads with RuntimeClass to select sandboxed runtime environments
+3. **Compare** isolation guarantees of standard runc, gVisor, and Kata Containers
+4. **Evaluate** when runtime sandboxing is worth the performance overhead for sensitive workloads
+
+---
+
 ## Why This Module Matters
 
 Standard containers share the host kernel directly. If an attacker exploits a kernel vulnerability from within a container, they can escape to the host and compromise all workloads. Runtime sandboxing adds an extra isolation layer between containers and the kernel.

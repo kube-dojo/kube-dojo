@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [COMPLEX] | **Time to Complete**: 2h | **Prerequisites**: Cloud Essentials (AWS/Azure/GCP), Kubernetes Resource Management, Enterprise Landing Zones (Module 10.1)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement enterprise FinOps practices with cloud billing integration, team-level cost allocation, and Kubernetes cost attribution**
+- **Configure multi-cloud cost visibility using Kubecost, OpenCost, or FOCUS-compliant tools across the fleet**
+- **Design chargeback and showback models that map Kubernetes namespace and label costs to business units**
+- **Deploy automated cost optimization pipelines that enforce resource quotas, right-size recommendations, and waste detection**
+
+---
+
 ## Why This Module Matters
 
 In March 2024, the CFO of a Series D SaaS company called an emergency board meeting. Their cloud bill had grown from $1.2 million per month to $4.8 million per month in 18 months -- a 4x increase while revenue grew only 1.6x. The engineering team had no explanation. When pressed, the VP of Engineering admitted they did not know which teams or services were responsible for the growth. Their Kubernetes clusters ran hundreds of services, each requesting resources based on "better safe than sorry" estimates. The average CPU utilization across their fleet was 11%. They were paying for 9x more compute than they actually used.

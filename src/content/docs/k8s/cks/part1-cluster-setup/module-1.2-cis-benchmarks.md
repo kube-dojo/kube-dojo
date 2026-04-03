@@ -18,6 +18,17 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Audit** a Kubernetes cluster against CIS benchmarks using kube-bench
+2. **Diagnose** failing benchmark checks and trace them to specific configuration files
+3. **Implement** remediation steps to harden API server, etcd, and kubelet settings
+4. **Evaluate** which CIS recommendations are critical versus advisory for your environment
+
+---
+
 ## Why This Module Matters
 
 The CIS Kubernetes Benchmark is the gold standard for cluster security configuration. It's not opinion—it's consensus from security experts worldwide on how Kubernetes should be hardened.

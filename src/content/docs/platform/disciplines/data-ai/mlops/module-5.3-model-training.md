@@ -14,6 +14,15 @@ Before starting this module:
 - Experience training ML models (any framework)
 - Basic understanding of hyperparameters
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement model training pipelines on Kubernetes using Kubeflow, MLflow, or custom operators**
+- **Design experiment tracking workflows that capture hyperparameters, metrics, and artifacts reproducibly**
+- **Configure training infrastructure with proper GPU scheduling, checkpointing, and fault tolerance**
+- **Build automated hyperparameter tuning using Katib or Optuna on Kubernetes clusters**
+
 ## Why This Module Matters
 
 Data scientists run hundreds of experiments. "Try learning rate 0.01... now 0.001... add a layer... remove dropout..." Most of these experiments are lost to time—run in notebooks, results forgotten, impossible to reproduce.

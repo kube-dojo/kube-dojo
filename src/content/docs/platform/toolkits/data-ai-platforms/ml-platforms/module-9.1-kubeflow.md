@@ -25,6 +25,16 @@ Kubeflow brings machine learning workflows to Kubernetes. It's not a single tool
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Kubeflow on Kubernetes and configure ML pipelines for end-to-end model training workflows**
+- **Implement Kubeflow Pipelines with experiment tracking, artifact management, and hyperparameter tuning**
+- **Configure Kubeflow's multi-tenancy with profile isolation and resource quotas for data science teams**
+- **Evaluate Kubeflow's integrated ML platform against composing individual tools (MLflow, Ray, Argo)**
+
+
 ## Why This Module Matters
 
 ML teams struggle with the gap between experimentation and production. Data scientists work in notebooks; production needs containers, scaling, and monitoring. Kubeflow bridges this gap by providing a Kubernetes-native platform for the entire ML lifecycle.

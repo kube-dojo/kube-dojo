@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Scaffold** a multi-group operator project with Kubebuilder, including CRD types, controllers, and webhook stubs
+2. **Implement** a Reconciler using controller-runtime that handles create, update, and delete events with proper status reporting
+3. **Generate** RBAC manifests, CRD YAMLs, and webhook configurations from Go markers and deploy them with `make deploy`
+4. **Validate** operator behavior using envtest integration tests that run against a real API Server without a full cluster
+
+---
+
 ## Why This Module Matters
 
 In Module 1.3 you built a controller from scratch with raw client-go. It worked, but you wrote a lot of boilerplate: informer setup, workqueue wiring, unstructured-to-typed conversion, event recording plumbing. For one controller that is fine, but for a production operator with multiple CRDs, webhooks, RBAC, and tests, the boilerplate becomes a burden.

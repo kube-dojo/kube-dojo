@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design a FinOps practice with clear roles, responsibilities, and organizational reporting structures**
+- **Implement cloud cost visibility using tagging strategies and cost allocation frameworks**
+- **Analyze cloud spending patterns to identify waste, anomalies, and optimization opportunities**
+- **Build FinOps maturity assessments that track progress from reactive cost management to proactive optimization**
+
 ## Why This Module Matters
 
 Your company just got its first six-figure cloud bill. The CTO is panicking. The VP of Engineering says "we need to optimize." The CFO wants to know *who* spent *what* and *why*.

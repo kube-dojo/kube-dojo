@@ -17,6 +17,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement Kubernetes cost allocation using namespace labels, resource quotas, and tools like Kubecost**
+- **Design chargeback and showback models that attribute cluster costs to teams and applications**
+- **Build cost allocation dashboards that give engineering teams visibility into their Kubernetes spending**
+- **Evaluate cost allocation accuracy across shared resources — control plane, networking, storage — in multi-tenant clusters**
+
 ## Why This Module Matters
 
 Your cloud bill says you spent $83,000 on Kubernetes last month. Great. But *which team* spent it? *Which microservice*? Is the staging namespace costing more than production? Is anyone using the resources they requested?

@@ -19,6 +19,17 @@ A healthcare company deploying on-premises Kubernetes discovered this the hard w
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Implement** internal DNS infrastructure with authoritative and recursive resolvers for Kubernetes service discovery
+2. **Configure** a private certificate authority and automate TLS certificate issuance with cert-manager
+3. **Design** split-horizon DNS that correctly resolves internal and external names from both inside and outside the cluster
+4. **Troubleshoot** DNS resolution failures and certificate trust chain issues in air-gapped or isolated networks
+
+---
+
 ## What You'll Learn
 
 - Internal DNS architecture (authoritative + recursive)

@@ -21,6 +21,17 @@ The company then invested three months in proper hybrid connectivity: a dedicate
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Implement** hybrid connectivity between on-premises and cloud Kubernetes clusters using dedicated interconnects and encrypted tunnels
+2. **Configure** Submariner or Cilium ClusterMesh for cross-cluster service discovery and pod-to-pod communication
+3. **Design** network architectures that provide consistent latency between on-premises and cloud workloads with proper failover
+4. **Troubleshoot** hybrid connectivity issues including BGP route leaks, tunnel MTU problems, and cross-cluster DNS resolution failures
+
+---
+
 ## What You'll Learn
 
 - VPN tunnel options for on-prem to cloud (WireGuard and IPsec)

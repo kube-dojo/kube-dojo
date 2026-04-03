@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## Learning Outcomes
+
+After completing this module, you will be able to:
+- **Diagnose** pod failures systematically using events, logs, describe, and exec
+- **Debug** CrashLoopBackOff, ImagePullBackOff, and Pending pod states under time pressure
+- **Troubleshoot** networking issues between pods using temporary debug containers
+- **Implement** a repeatable debugging workflow: status, events, logs, exec, network
+
+---
+
 ## Why This Module Matters
 
 Debugging is where exam performance is won or lost. When something doesn't work, you need a systematic approach to find the problem quickly. The CKAD exam deliberately includes broken configurations—you must diagnose and fix them under time pressure.

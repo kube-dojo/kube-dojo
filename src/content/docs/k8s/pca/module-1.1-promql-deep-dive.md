@@ -16,6 +16,17 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Construct** PromQL queries using range vectors, aggregation operators, and binary operations to answer production questions about latency, error rates, and saturation
+2. **Apply** `histogram_quantile` and `rate()` correctly to compute percentile latencies and per-second rates from counter and histogram metrics
+3. **Build** recording rules that pre-compute expensive queries for dashboard performance and SLO tracking
+4. **Diagnose** misleading metric behavior (counter resets, label cardinality explosions, stale markers) by reasoning about PromQL evaluation mechanics
+
+---
+
 It was 2:00 AM on Black Friday at one of Europe's largest e-commerce platforms. Traffic was 12x normal. The platform team had dashboards everywhere — CPU, memory, pod counts, request rates. Everything looked green.
 
 Then customer support started reporting: "Users say checkout is slow." The dashboard showed average latency at 200ms. Well within SLA. The on-call engineer almost went back to sleep.

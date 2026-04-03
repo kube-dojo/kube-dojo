@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Explain** why Services are needed and how they provide stable endpoints for Pods
+2. **Compare** ClusterIP, NodePort, LoadBalancer, and ExternalName Service types
+3. **Identify** how label selectors connect Services to their backing Pods
+4. **Trace** how DNS resolution works for Service discovery within a cluster
+
+---
+
 ## Why This Module Matters
 
 Pods come and go—their IPs change constantly. **Services** provide stable endpoints to access Pods. Understanding Services is critical for KCNA and for understanding how Kubernetes networking works.

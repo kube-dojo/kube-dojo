@@ -18,6 +18,17 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Explain** the CKS exam format, domains, and passing criteria
+2. **Evaluate** your readiness based on CKS prerequisites and domain weights
+3. **Design** a study plan that prioritizes high-weight security domains
+4. **Compare** CKS scope and difficulty with CKA and other Kubernetes certifications
+
+---
+
 ## Why This Module Matters
 
 The CKS (Certified Kubernetes Security Specialist) is the most advanced Kubernetes certification. It requires you to have **passed the CKA** (it no longer needs to be active). This isn't arbitrary gatekeeping—security requires deep operational knowledge first.

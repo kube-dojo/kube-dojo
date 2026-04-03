@@ -18,6 +18,17 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Create** custom seccomp profiles that allow only required system calls for a workload
+2. **Configure** pods to use seccomp profiles via the securityContext field
+3. **Trace** blocked syscalls to diagnose application failures under seccomp enforcement
+4. **Audit** running containers for missing or overly permissive seccomp profiles
+
+---
+
 ## Why This Module Matters
 
 Seccomp (Secure Computing Mode) restricts which system calls a process can make. Containers use syscalls to interact with the kernel—file operations, network connections, process management. Limiting syscalls reduces the attack surface dramatically.

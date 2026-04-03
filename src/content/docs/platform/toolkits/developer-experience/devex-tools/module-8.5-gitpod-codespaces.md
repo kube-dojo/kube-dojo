@@ -19,6 +19,16 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure Gitpod and GitHub Codespaces for instant, pre-built cloud development environments**
+- **Implement workspace configurations with prebuilds, custom images, and IDE settings for zero-setup onboarding**
+- **Deploy self-hosted Gitpod on Kubernetes for teams requiring data sovereignty and custom infrastructure**
+- **Compare Gitpod and Codespaces pricing, performance, and ecosystem integration for team adoption decisions**
+
+
 ## Why This Module Matters
 
 **The Death of "Works on My Machine"**

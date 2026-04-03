@@ -14,6 +14,15 @@ Before starting this module:
 - Understanding of distributed systems architecture
 - Basic graph concepts (nodes, edges)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement event correlation engines that group related alerts into actionable incidents**
+- **Design topology-aware correlation rules that map alert storms to root infrastructure components**
+- **Build noise reduction pipelines that suppress duplicate and redundant alerts during cascading failures**
+- **Evaluate event correlation platforms and algorithms against your monitoring data volume and topology complexity**
+
 ## Why This Module Matters
 
 A single database failure doesn't generate one alert—it generates hundreds. Connection timeouts, health check failures, queue backlogs, API errors. Each downstream service reports its own symptoms. Without correlation, your on-call engineer faces a wall of noise at 3AM.

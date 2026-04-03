@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Identify** major compliance frameworks (SOC 2, PCI DSS, HIPAA, GDPR) and their Kubernetes relevance
+2. **Evaluate** how Kubernetes security controls map to specific compliance requirements
+3. **Assess** the gap between Kubernetes default configuration and compliance-ready posture
+4. **Explain** how to demonstrate compliance through audit trails, access controls, and encryption
+
+---
+
 ## Why This Module Matters
 
 Compliance frameworks define security requirements for specific industries and data types. Understanding these frameworks helps you implement appropriate controls in Kubernetes and demonstrate that your systems meet regulatory requirements.

@@ -29,6 +29,16 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy etcd clusters on Kubernetes using operators with automated member management and recovery**
+- **Configure etcd backup schedules, compaction policies, and performance tuning for production workloads**
+- **Implement etcd cluster scaling, member replacement, and disaster recovery procedures**
+- **Monitor etcd health metrics and optimize performance for Kubernetes control plane reliability**
+
+
 ## Why This Module Matters
 
 **The Cluster That Forgot Everything**

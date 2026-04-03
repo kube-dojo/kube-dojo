@@ -11,6 +11,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Compare** rolling update, blue-green, and canary release strategies by risk and complexity
+2. **Explain** how Kubernetes Deployments implement rolling updates with maxSurge and maxUnavailable
+3. **Identify** which release strategy fits a given scenario based on risk tolerance and traffic patterns
+4. **Evaluate** rollback mechanisms and how automated rollback triggers reduce deployment risk
+
+---
+
 ## Why This Module Matters
 
 In June 2019, a major UK bank pushed a database migration to production using a single big-bang deployment. Every customer-facing service — mobile banking, online transfers, card payments — went down simultaneously at 14:23 on a Friday afternoon. The rollback took 9 hours. 1.9 million customers could not access their accounts over an entire weekend. The bank was fined 48.65 million GBP by regulators, their CEO issued a public apology, and post-incident analysis revealed the root cause was not the migration itself but the deployment strategy: everything was released at once, with no incremental validation and no fast rollback path.

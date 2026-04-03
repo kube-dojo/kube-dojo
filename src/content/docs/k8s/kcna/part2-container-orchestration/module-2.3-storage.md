@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Explain** the relationship between Volumes, PersistentVolumes, PersistentVolumeClaims, and StorageClasses
+2. **Compare** access modes (ReadWriteOnce, ReadOnlyMany, ReadWriteMany) and their use cases
+3. **Identify** when to use ephemeral vs. persistent storage for different workload types
+4. **Evaluate** CSI drivers and their role in providing pluggable storage backends
+
+---
+
 ## Why This Module Matters
 
 Containers are ephemeral—when they restart, data is lost. Kubernetes provides storage abstractions that let stateful applications persist data across Pod restarts and rescheduling. KCNA tests your understanding of how Kubernetes manages storage.

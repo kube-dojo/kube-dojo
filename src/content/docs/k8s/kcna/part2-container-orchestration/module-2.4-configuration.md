@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Explain** the purpose of ConfigMaps and Secrets for separating config from code
+2. **Compare** methods of injecting configuration: environment variables, volume mounts, and command args
+3. **Identify** when to use ConfigMaps vs. Secrets based on data sensitivity
+4. **Evaluate** immutable ConfigMaps and their benefits for large-scale deployments
+
+---
+
 ## Why This Module Matters
 
 Applications need configuration—database URLs, feature flags, API keys. Kubernetes provides ConfigMaps and Secrets to manage configuration separately from container images. This is a core concept tested on KCNA.

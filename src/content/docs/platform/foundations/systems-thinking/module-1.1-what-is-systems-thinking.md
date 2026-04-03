@@ -6,6 +6,17 @@ sidebar:
 ---
 > **Complexity**: `[MEDIUM]` | **Time**: 35-45 minutes | **Prerequisites**: None (entry point to Platform track)
 
+### What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Analyze** a system failure by mapping interconnected components rather than investigating services in isolation
+2. **Explain** how emergent properties arise from component interactions and why they cannot be predicted from individual parts alone
+3. **Apply** systems thinking frameworks (stocks-and-flows, boundaries, leverage points) to real infrastructure architectures
+4. **Diagnose** incidents by zooming out to identify upstream and downstream dependencies before restarting individual services
+
+---
+
 ## The 3 AM Incident
 
 *Tuesday, 2:47 AM. The on-call engineer's phone explodes with alerts.*

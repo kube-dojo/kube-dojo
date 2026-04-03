@@ -18,6 +18,17 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Deploy** a security-focused Kubernetes lab with Trivy, Falco, and kube-bench installed
+2. **Configure** cluster components for security testing and vulnerability scanning
+3. **Diagnose** common lab setup issues with security tool installations
+4. **Create** reproducible lab environments for practicing CKS exam scenarios
+
+---
+
 ## Why This Module Matters
 
 CKS requires hands-on practice with security tools. You can't learn Trivy from documentation alone—you need to scan images, see vulnerabilities, and practice remediation. Same with Falco: writing rules requires a running instance generating alerts.

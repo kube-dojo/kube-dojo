@@ -58,6 +58,16 @@ That new hire saved the team from an architectural dead end. The problem was nev
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy MetalLB for bare-metal Kubernetes clusters with Layer 2 and BGP load balancing modes**
+- **Configure MetalLB address pools and BGP peering for production bare-metal service exposure**
+- **Implement IP address management strategies for multi-tenant bare-metal Kubernetes environments**
+- **Evaluate MetalLB's L2 versus BGP modes for different network topology requirements**
+
+
 ## Why This Module Matters
 
 In the cloud, creating a LoadBalancer Service is magic. You write `type: LoadBalancer`, and within seconds, AWS gives you an ELB, GCP gives you a Network LB, Azure gives you a Load Balancer. Behind the scenes, a cloud controller manager talks to the provider API and provisions real infrastructure.

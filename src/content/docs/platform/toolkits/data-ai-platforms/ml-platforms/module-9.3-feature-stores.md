@@ -25,6 +25,16 @@ Feature stores solve the most frustrating problem in ML: feature reuse. Data sci
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Feast as a feature store for serving ML features consistently between training and inference**
+- **Configure feature definitions, data sources, and materialization jobs for online and offline stores**
+- **Implement real-time feature serving with point-in-time joins for model prediction pipelines**
+- **Evaluate feature store architectures for reducing training-serving skew in production ML systems**
+
+
 ## Why This Module Matters
 
 Every ML team eventually builds the same features. User click counts, transaction aggregates, text embeddings—they're reinvented in every project. Without a feature store, you have notebooks full of feature logic that nobody can find. Feature stores make features first-class citizens: versioned, documented, and shared across the organization.

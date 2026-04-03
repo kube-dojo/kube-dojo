@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [COMPLEX] | **Time to Complete**: 2.5h | **Prerequisites**: Enterprise Landing Zones (Module 10.1), Kubernetes RBAC basics, YAML/JSON fundamentals
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement policy-as-code using OPA Gatekeeper, Kyverno, and cloud-native policy engines for Kubernetes governance**
+- **Configure cloud governance frameworks (AWS Config Rules, Azure Policy, GCP Organization Policies) for Kubernetes infrastructure**
+- **Design tag-based governance strategies that enforce cost allocation, ownership, and compliance across clusters**
+- **Deploy automated remediation workflows that detect and correct governance violations without human intervention**
+
+---
+
 ## Why This Module Matters
 
 In September 2022, a mid-size e-commerce company experienced a data breach that exposed 2.3 million customer records. The root cause was embarrassingly simple: a developer created an S3 bucket with public read access to store product images, then accidentally uploaded a database export to the same bucket. The company had an AWS SCP that was supposed to prevent public S3 buckets, but it had been written eighteen months earlier and only covered the `s3:PutBucketAcl` action -- it did not account for the newer `s3:PutBucketPublicAccessBlock` API. Meanwhile, their EKS clusters had no admission control at all. Kubernetes Services of type LoadBalancer were routinely creating internet-facing ALBs without any review, and environment variables in pod specs regularly contained plaintext database credentials.

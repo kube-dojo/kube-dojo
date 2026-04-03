@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Explain** how Endpoints and EndpointSlices connect Services to Pods
+- **Debug** "no endpoints" errors by checking label selectors, pod readiness, and endpoint status
+- **Create** manual Endpoints for external services that live outside the cluster
+- **Diagnose** endpoint churn and its impact on service stability
+
+---
+
 ## Why This Module Matters
 
 When you create a Service, Kubernetes automatically creates an Endpoints object that tracks which pod IPs should receive traffic. Understanding endpoints is crucial for debugging service issues—when a service has no endpoints, traffic goes nowhere.

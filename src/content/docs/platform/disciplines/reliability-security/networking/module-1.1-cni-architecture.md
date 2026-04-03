@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Evaluate CNI plugins — Calico, Cilium, Flannel, Weave — against your networking and security requirements**
+- **Design Kubernetes network architectures with proper CIDR planning, overlay versus native routing, and IP management**
+- **Implement CNI configuration for multi-tenant clusters with network isolation and performance requirements**
+- **Diagnose CNI-level networking issues — pod connectivity failures, IP exhaustion, routing table corruption**
+
 ## Why This Module Matters
 
 In March 2023, a fintech company migrated their 200-node production cluster from Flannel to Calico to gain network policy support. The migration seemed straightforward — swap the CNI plugin, restart nodes in a rolling fashion, done. Twelve minutes into the migration, every Pod on the third node batch lost connectivity. The CNI's IPAM (IP Address Management) assigned IPs from the old Flannel CIDR range that Calico didn't recognize. The cross-node Pod traffic that had been flowing through VXLAN tunnels now tried to route through BGP peering that hadn't fully converged. The outage lasted 94 minutes and affected every customer-facing service.

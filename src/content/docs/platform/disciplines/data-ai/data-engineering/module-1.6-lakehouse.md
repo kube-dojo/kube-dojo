@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design lakehouse architectures on Kubernetes using Delta Lake, Apache Iceberg, or Apache Hudi**
+- **Implement data catalog and metadata management for lakehouse tables across streaming and batch workloads**
+- **Configure storage tiering and compaction strategies that optimize query performance and storage costs**
+- **Build data governance workflows that enforce schema evolution, access controls, and data quality checks**
+
 ## Why This Module Matters
 
 For 30 years, the data world has been split into two camps.

@@ -11,6 +11,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Design** multi-cluster topologies that balance blast radius isolation against operational complexity
+2. **Evaluate** single-cluster vs. multi-cluster architectures based on team structure, compliance boundaries, and failure domains
+3. **Plan** control plane placement across racks and availability zones for high availability
+4. **Implement** cluster segmentation strategies that align with business domains and security requirements
+
+---
+
 ## Why This Module Matters
 
 In 2021, a European insurance company ran a single 400-node Kubernetes cluster in their on-premises datacenter. Everything — customer portal, claims processing, actuarial calculations, internal tooling — ran on one cluster. When they upgraded from Kubernetes 1.24 to 1.25, the removal of the PodSecurityPolicy API caused 60% of their workloads to fail admission. The entire company was down for 4 hours. Their postmortem identified the root cause as "catastrophic blast radius" — a single cluster meant a single failure domain for 200+ applications across 15 business units.

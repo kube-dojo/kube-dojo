@@ -16,6 +16,16 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Hubble for Cilium-based network observability with real-time flow visualization**
+- **Configure Hubble's flow filters to monitor service-to-service communication and DNS resolution**
+- **Implement Hubble metrics export to Prometheus for network-layer alerting and dashboards**
+- **Integrate Hubble UI with Grafana dashboards for comprehensive network traffic analysis**
+
+
 ## Why This Module Matters
 
 Traditional network troubleshooting in Kubernetes is painful. You end up running `tcpdump` in containers, parsing packet captures, and correlating logs across dozens of pods. Network policies are "deny by default" black boxes—when traffic is blocked, you rarely know why.

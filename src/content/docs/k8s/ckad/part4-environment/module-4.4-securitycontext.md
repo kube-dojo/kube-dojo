@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## Learning Outcomes
+
+After completing this module, you will be able to:
+- **Configure** SecurityContexts at pod and container level including `runAsUser`, `runAsNonRoot`, and `readOnlyRootFilesystem`
+- **Explain** the difference between pod-level and container-level security settings and their precedence
+- **Evaluate** whether a pod meets security requirements by inspecting its SecurityContext configuration
+- **Debug** permission denied errors caused by SecurityContext restrictions on file access or capabilities
+
+---
+
 ## Why This Module Matters
 
 SecurityContexts define privilege and access control settings for pods and containers. They control who the container runs as, what capabilities it has, and what it can access on the host.

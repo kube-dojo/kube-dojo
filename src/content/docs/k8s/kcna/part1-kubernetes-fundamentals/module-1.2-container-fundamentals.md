@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Explain** what containers are and how they differ from virtual machines
+2. **Identify** the Linux kernel features (namespaces, cgroups) that enable container isolation
+3. **Compare** container runtimes (Docker, containerd, CRI-O) and their roles in Kubernetes
+4. **Explain** the OCI image and runtime specifications and why they matter for portability
+
+---
+
 ## Why This Module Matters
 
 You can't understand Kubernetes without understanding containers. KCNA tests your knowledge of container concepts—not how to build Dockerfiles, but what containers are and how they work.

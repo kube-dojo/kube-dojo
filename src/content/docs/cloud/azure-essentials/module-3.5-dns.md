@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [MEDIUM] | **Time to Complete**: 1.5h | **Prerequisites**: Module 3.2 (Virtual Networks)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure Azure DNS zones with record sets for public-facing and private VNet-linked name resolution**
+- **Implement Traffic Manager profiles with priority, weighted, and performance routing for multi-region failover**
+- **Deploy Azure Private DNS zones for VNet-internal service discovery across peered virtual networks**
+- **Design DNS architectures combining Azure DNS, Traffic Manager, and Front Door for global traffic distribution**
+
+---
+
 ## Why This Module Matters
 
 In October 2021, a global logistics company migrated their customer-facing portal from on-premises to Azure. They deployed the application across East US and West Europe regions for redundancy. On launch day, everything worked---until the East US deployment experienced a database connection pool exhaustion at peak hours. Instead of seamlessly routing users to the healthy West Europe deployment, all users saw errors. The problem was simple: they had configured Azure DNS with A records pointing directly to the East US public IP. There was no traffic routing layer to detect the failure and redirect traffic. Adding Azure Traffic Manager with health probes took 15 minutes to configure, but the 3-hour outage had already cost them their biggest customer---a shipping company that processed 40,000 packages per day through the portal. That single customer represented $2.4 million in annual revenue.

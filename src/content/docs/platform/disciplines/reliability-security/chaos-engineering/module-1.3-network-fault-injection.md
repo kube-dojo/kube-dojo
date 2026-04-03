@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement network chaos experiments — latency, packet loss, partition, DNS failure — on Kubernetes**
+- **Design network fault scenarios that validate service mesh resilience, retry logic, and timeout configurations**
+- **Diagnose cascading failures caused by network partitions in distributed microservice architectures**
+- **Build network chaos test suites that validate cross-service communication under degraded conditions**
+
 ## Why This Module Matters
 
 On November 25, 2020, a major cloud provider experienced a cascading failure that took down dozens of high-profile services for over 6 hours. The root cause was not a server crash or a disk failure — it was a 300ms increase in cross-service latency caused by an overloaded internal DNS resolver. That tiny latency bump caused connection pools to fill, which caused timeouts, which caused retries, which amplified the DNS load further, which increased latency further. A 300ms hiccup became a 6-hour outage.

@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: Module 3.2 (Virtual Networks)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Azure VMs with Availability Sets and Availability Zones for high-availability compute workloads**
+- **Configure VM Scale Sets with autoscaling rules, custom images, and Flexible orchestration mode**
+- **Implement Azure Spot VMs and Reserved Instances to optimize compute costs across workloads**
+- **Evaluate Azure VM families (B-series, D-series, E-series, N-series) and select the right size for each workload**
+
+---
+
 ## Why This Module Matters
 
 In November 2020, a SaaS company running their entire production workload on a single Azure VM in the East US region experienced an outage that lasted 9 hours. The VM's host server had a hardware failure. Because the company had not configured Availability Zones, had no VM Scale Set, and had no load balancer, their application was completely offline. Their customers, many of whom were running end-of-month financial reports, could not access the platform. The post-incident review revealed that the monthly cost to run their single D4s_v3 VM was $140. Adding a second VM in a different Availability Zone behind a Standard Load Balancer would have added $165/month. A $165/month insurance policy could have prevented a $420,000 revenue loss and a wave of customer churn.

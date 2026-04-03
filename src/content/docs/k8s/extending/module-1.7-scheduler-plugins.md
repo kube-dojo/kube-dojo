@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Implement** a custom Filter plugin that excludes nodes based on real-time conditions (GPU utilization, rack topology, compliance labels)
+2. **Implement** a custom Score plugin that ranks nodes using business-specific criteria like data locality or cost optimization
+3. **Deploy** a scheduler plugin alongside the default scheduler using KubeSchedulerConfiguration profiles
+4. **Evaluate** when to use scheduler plugins vs. scheduling constraints (affinity, taints) for a given workload placement requirement
+
+---
+
 ## Why This Module Matters
 
 The default Kubernetes scheduler is remarkably capable -- it handles affinity, anti-affinity, resource requests, taints, tolerations, topology constraints, and more. But there are scheduling decisions it cannot make out of the box. What if you want to schedule Pods based on real-time GPU utilization instead of static resource requests? What if you need to colocate certain workloads on the same rack for network latency? What if your compliance requirements demand scheduling based on data residency labels?

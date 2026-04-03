@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [COMPLEX] | **Time to Complete**: 2.5h | **Prerequisites**: Module 9.1 (Relational Database Integration), Kubernetes Deployments and Services
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure Kubernetes workloads to consume from managed message brokers (Amazon MQ, Cloud Pub/Sub, Azure Service Bus)**
+- **Implement event-driven autoscaling using KEDA with message queue depth as the scaling trigger**
+- **Deploy dead-letter queue patterns and retry logic for reliable message processing in Kubernetes applications**
+- **Compare managed message brokers across clouds and evaluate when to use self-hosted (RabbitMQ, NATS) alternatives on Kubernetes**
+
+---
+
 ## Why This Module Matters
 
 In March 2023, a logistics company processing 2 million package-tracking events per day ran RabbitMQ as a StatefulSet inside their GKE cluster. The system worked flawlessly for eight months. Then Black Friday arrived. Event volume spiked to 11 million per day. RabbitMQ's memory alarm triggered, blocking all publishers. The three-node cluster entered a split-brain state during a simultaneous node reschedule. Queue mirroring fell behind, and 340,000 tracking events were lost. Customers could not track packages for six hours. The company's SLA penalties totaled $1.2 million.

@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Evaluate** runtime security controls: seccomp profiles, AppArmor, SELinux, and Falco rules
+2. **Assess** which runtime threats each enforcement mechanism is designed to detect or prevent
+3. **Compare** kernel-level enforcement (seccomp, AppArmor) with behavioral detection (Falco)
+4. **Identify** runtime security gaps where an attacker could operate undetected
+
+---
+
 ## Why This Module Matters
 
 Runtime security enforces security policies while workloads are running. Unlike build-time or deploy-time controls that prevent bad configurations, runtime security detects and responds to active threats—when an attacker has already gained access and is trying to move laterally or exfiltrate data.

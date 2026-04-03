@@ -17,6 +17,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement LLM serving infrastructure using vLLM, TensorRT-LLM, or Triton Inference Server on Kubernetes**
+- **Design autoscaling policies for LLM inference that balance latency, throughput, and GPU cost**
+- **Configure batching and quantization strategies that optimize LLM serving efficiency**
+- **Build model routing architectures that serve multiple LLM variants with traffic splitting and A/B testing**
+
 ## Why This Module Matters
 
 Training a model is an investment. **Serving** it is where you earn the return.

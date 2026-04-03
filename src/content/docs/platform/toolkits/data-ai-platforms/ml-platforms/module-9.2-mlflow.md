@@ -25,6 +25,16 @@ MLflow is the experiment tracking and model registry tool that data scientists a
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy MLflow on Kubernetes with tracking server, artifact store, and model registry components**
+- **Implement experiment tracking with MLflow's API for metrics, parameters, and model versioning**
+- **Configure MLflow's model registry for staging, production, and archived model lifecycle management**
+- **Integrate MLflow with Kubernetes for model serving using Seldon Core or KServe inference endpoints**
+
+
 ## Why This Module Matters
 
 Data scientists run hundreds of experiments. Without tracking, they lose which parameters produced which results. MLflow provides a central record of every experiment, making ML reproducible. It's the Git for machine learning—you wouldn't code without version control, and you shouldn't train models without experiment tracking.

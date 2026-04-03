@@ -24,6 +24,16 @@ Kyverno is a Kubernetes-native policy engine. Unlike OPA/Gatekeeper which uses R
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Kyverno and configure admission policies for validation, mutation, and resource generation**
+- **Implement Kyverno policies using familiar Kubernetes patterns without learning a new policy language**
+- **Configure Kyverno's image verification policies to enforce signed containers and SBOM attestations**
+- **Evaluate Kyverno's Kubernetes-native approach against OPA Gatekeeper for policy management simplicity**
+
+
 ## Why This Module Matters
 
 In 2023, a fintech company pushed a Friday deploy with a root container, no resource limits, and an image tagged `latest` from a public registry. By Monday, cryptominers had consumed 80% of cluster CPU. Cost: $340,000 in cloud spend, a week of incident response, and a mandatory regulator audit. A single Kyverno ClusterPolicy requiring non-root containers and pinned image tags would have stopped it at the gate.

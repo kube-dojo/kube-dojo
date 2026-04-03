@@ -21,6 +21,17 @@ In the cloud, managed Kubernetes upgrades are a button click with automatic roll
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Plan** bare-metal Kubernetes upgrades with staging validation, written runbooks, and tested rollback procedures
+2. **Implement** rolling node upgrades that respect PodDisruptionBudgets, drain timeouts, and heterogeneous hardware constraints
+3. **Design** a staging cluster that mirrors production hardware and workloads for pre-upgrade validation
+4. **Troubleshoot** upgrade failures caused by kernel incompatibilities, deprecated APIs, and node-level configuration drift
+
+---
+
 ## What You'll Learn
 
 - kubeadm upgrade workflow for control plane and workers

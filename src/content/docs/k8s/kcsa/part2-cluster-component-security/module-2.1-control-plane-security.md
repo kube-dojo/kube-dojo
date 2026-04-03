@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Evaluate** API server, etcd, scheduler, and controller manager security configurations
+2. **Assess** the impact of control plane compromise on cluster-wide security posture
+3. **Identify** insecure control plane settings: anonymous auth, unencrypted etcd, permissive RBAC
+4. **Explain** how to harden each control plane component following CIS benchmark recommendations
+
+---
+
 ## Why This Module Matters
 
 The control plane is the brain of Kubernetes. If it's compromised, an attacker controls your entire cluster—every pod, every secret, every workload. Understanding control plane security is critical not just for the exam, but for any production Kubernetes deployment.

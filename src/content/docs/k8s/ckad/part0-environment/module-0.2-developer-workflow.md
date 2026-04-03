@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## Learning Outcomes
+
+After completing this module, you will be able to:
+- **Configure** kubectl aliases, shell completions, and CKAD-specific shortcuts for maximum speed
+- **Create** Kubernetes resources imperatively using `kubectl run`, `kubectl create`, and `kubectl expose`
+- **Debug** resource issues rapidly using `kubectl describe`, `kubectl logs`, and `kubectl exec`
+- **Explain** the developer-centric kubectl workflow that distinguishes CKAD from CKA tasks
+
+---
+
 ## Why This Module Matters
 
 CKAD is about speed AND correctness. You have 2 hours for ~15-20 tasks. Every second counts. The difference between a passing and failing score is often not knowledge—it's execution speed.

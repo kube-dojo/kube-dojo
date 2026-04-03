@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Advanced Cloud Operations
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design Terraform or Pulumi state management strategies for large-scale multi-account infrastructure**
+- **Implement modular IaC patterns with versioned modules, workspace isolation, and policy-as-code validation**
+- **Configure automated drift detection and remediation pipelines for infrastructure managed by Terraform or CloudFormation**
+- **Evaluate IaC tools (Terraform, Pulumi, CloudFormation, Bicep, Crossplane) for multi-cloud Kubernetes platform engineering**
+
 ---
 
 ## Why This Module Matters

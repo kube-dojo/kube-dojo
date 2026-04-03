@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: Module 5.1 (EKS Architecture & Control Plane)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure EBS CSI driver and EFS CSI driver for persistent storage in EKS with encryption and access modes**
+- **Implement storage classes with topology-aware provisioning to bind volumes in the correct availability zone**
+- **Deploy stateful workloads on EKS with volume snapshots, backup strategies, and cross-AZ data replication**
+- **Evaluate EBS vs EFS vs FSx for Lustre to select the right storage backend for each workload type on EKS**
+
+---
+
 ## Why This Module Matters
 
 In June 2023, an ad-tech company migrated their PostgreSQL database from RDS to a StatefulSet on EKS to reduce costs. The database ran on EBS gp3 volumes and performed well in testing. Two months into production, during a routine node upgrade, Kubernetes rescheduled the database pod to a node in a different Availability Zone. The pod came up -- but the EBS volume did not follow. EBS volumes are bound to a single AZ. The database pod sat in `Pending` state for 18 minutes while the on-call engineer figured out what happened. Meanwhile, their real-time bidding pipeline, which required sub-10ms response times, was returning errors on every request. The estimated revenue loss was $340,000.

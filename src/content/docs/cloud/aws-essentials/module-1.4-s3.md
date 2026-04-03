@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [MEDIUM] | **Time to Complete**: 2.5h | **Prerequisites**: Module 1.1
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure S3 bucket policies and access control lists to enforce least-privilege access on object storage**
+- **Implement lifecycle policies to automate data tiering across S3 storage classes and reduce storage costs**
+- **Deploy server-side encryption with KMS customer-managed keys and enforce encryption in transit**
+- **Design presigned URL strategies and cross-account access patterns for secure, time-limited object sharing**
+
+---
+
 ## Why This Module Matters
 
 In 2017, a defense contractor accidentally exposed the personal information, security clearance details, and passwords of thousands of government employees. The data was not exfiltrated through a complex network breach. It was sitting in an Amazon S3 bucket named `defense-contractor-internal-data`. The bucket's permissions had been casually modified by a developer trying to fix a deployment script, unintentionally granting `READ` access to the `AllUsers` group—effectively making it public to the entire internet. Anyone who could guess the URL could download the files. The data remained exposed for months before a security researcher found it.

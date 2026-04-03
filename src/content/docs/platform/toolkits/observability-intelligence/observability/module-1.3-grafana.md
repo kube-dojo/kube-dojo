@@ -30,6 +30,16 @@ The next quarter, they rebuilt their dashboards from scratch: one overview, four
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Grafana with provisioned dashboards, data sources, and alerting rules as code**
+- **Implement Grafana dashboards with variables, annotations, and cross-datasource correlations**
+- **Configure Grafana alerting with notification policies, silences, and escalation routing**
+- **Integrate Grafana with Prometheus, Loki, and Tempo for unified metrics, logs, and traces visualization**
+
+
 ## Why This Module Matters
 
 Data without visualization is just numbers. Grafana transforms raw metrics into actionable insights. It's the window into your systems—the first place you look during an incident, the source of truth for SLOs, the tool that makes observability accessible to everyone.

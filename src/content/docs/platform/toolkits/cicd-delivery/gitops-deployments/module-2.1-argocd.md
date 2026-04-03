@@ -20,6 +20,16 @@ Before starting this module:
 - Git fundamentals
 - kubectl experience
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy ArgoCD and configure Applications that sync Kubernetes manifests from Git repositories**
+- **Implement multi-cluster GitOps with ArgoCD ApplicationSets and cluster generators**
+- **Configure sync policies, health checks, and automated rollback strategies for production deployments**
+- **Secure ArgoCD with RBAC, SSO integration, and project-scoped access controls**
+
+
 ## Why This Module Matters
 
 ArgoCD is the most popular GitOps tool in the Kubernetes ecosystem. It watches Git repositories and automatically syncs your cluster state to match what's defined in version control. No more `kubectl apply` from laptops—every change is auditable, reviewable, and reversible.

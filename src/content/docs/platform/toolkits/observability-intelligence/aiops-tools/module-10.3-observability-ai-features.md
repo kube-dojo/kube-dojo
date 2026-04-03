@@ -13,6 +13,16 @@ Before starting this module:
 - [Observability Toolkit](../observability/) — Platform fundamentals
 - Basic understanding of observability platforms (Datadog, Dynatrace, New Relic)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure AI-powered features in Grafana, Datadog, and New Relic for intelligent observability workflows**
+- **Implement natural language queries and AI-assisted root cause analysis for faster incident response**
+- **Deploy log pattern detection and automatic metric correlation using built-in AI capabilities**
+- **Compare AI observability features across platforms to select the right tooling for your stack**
+
+
 ## Why This Module Matters
 
 Modern observability platforms have **AI capabilities built-in**. These aren't separate products—they're intelligent features woven throughout the platform. Understanding these capabilities helps you:

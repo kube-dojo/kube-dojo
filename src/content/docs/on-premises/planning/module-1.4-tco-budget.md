@@ -11,6 +11,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Design** a comprehensive TCO model that captures hardware, staffing, facilities, networking, and opportunity costs
+2. **Evaluate** cloud vs. on-premises economics with accurate 3-5 year projections including hidden costs
+3. **Plan** budget proposals that account for colocation, power, cooling, maintenance contracts, and staffing overhead
+4. **Diagnose** common budgeting blind spots that cause on-premises projects to exceed estimates by 2-3x
+
+---
+
 ## Why This Module Matters
 
 In 2023, a logistics company presented their board with a plan to move from AWS to on-premises Kubernetes. The infrastructure team calculated hardware costs: $380,000 for servers, networking, and storage. The CFO approved. Twelve months later, the actual spend was $1.1 million. The team had not budgeted for colocation fees ($72K/year), redundant internet circuits ($36K/year), a part-time facilities manager ($45K/year), two additional engineers ($350K/year), hardware maintenance contracts ($38K/year), or the $180K in professional services for the initial buildout. The "savings" over cloud disappeared entirely.

@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Explain** the plugin architecture (CNI, CSI, CRI) and why Kubernetes uses interfaces instead of built-in implementations
+- **Identify** which runtime, network, and storage plugins are installed on a cluster
+- **Diagnose** plugin failures by checking pod logs, socket files, and kubelet configuration
+- **Compare** common implementations (containerd vs CRI-O, Calico vs Cilium, local vs CSI drivers) and their trade-offs
+
+---
+
 ## Why This Module Matters
 
 Kubernetes doesn't actually know how to run containers, set up networking, or provision storage. Surprised?

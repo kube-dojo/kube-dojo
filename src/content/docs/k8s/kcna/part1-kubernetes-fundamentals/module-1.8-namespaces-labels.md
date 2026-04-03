@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Explain** how namespaces provide logical isolation and resource organization
+2. **Identify** when to use namespaces vs. labels vs. annotations for different purposes
+3. **Compare** namespace-scoped and cluster-scoped resources
+4. **Evaluate** label selector expressions used by Services, Deployments, and NetworkPolicies
+
+---
+
 ## Why This Module Matters
 
 Namespaces and labels are how Kubernetes organizes resources. Labels enable Services to find Pods, Deployments to manage ReplicaSets, and operators to select resources. KCNA tests your understanding of these organizational primitives.

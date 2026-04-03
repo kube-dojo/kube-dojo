@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design automated chaos engineering pipelines that run experiments on schedule and in CI/CD**
+- **Implement GameDay exercises that combine multiple chaos experiments into realistic failure scenarios**
+- **Build chaos experiment result tracking that measures resilience improvements over time**
+- **Configure automated abort conditions that halt experiments when unexpected blast radius is detected**
+
 ## Why This Module Matters
 
 On October 4, 2021, Facebook experienced a 6-hour global outage that affected 3.5 billion users and cost the company an estimated $65 million in revenue. The root cause was a configuration change to their backbone routers that disconnected Facebook's data centers from each other. But the real question isn't why it happened — network misconfigurations happen. The question is why it lasted 6 hours.

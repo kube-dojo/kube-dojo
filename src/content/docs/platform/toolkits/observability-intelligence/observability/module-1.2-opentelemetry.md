@@ -26,6 +26,16 @@ The cost? Zero licensing fees. The migration effort? Six engineers for three wee
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy OpenTelemetry Collector and configure pipelines for traces, metrics, and logs processing**
+- **Implement auto-instrumentation for applications using OpenTelemetry SDKs across multiple languages**
+- **Configure OpenTelemetry exporters to route telemetry data to multiple backend systems simultaneously**
+- **Evaluate OpenTelemetry's vendor-neutral approach for building portable observability architectures**
+
+
 ## Why This Module Matters
 
 The observability landscape was fragmented. Prometheus for metrics, Jaeger for traces, different agents for different backends. Each vendor had its own SDK. Switching vendors meant rewriting instrumentation code.

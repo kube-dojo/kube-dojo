@@ -16,6 +16,16 @@ Before starting this module:
 - Container fundamentals
 - DAG (Directed Acyclic Graph) concepts helpful
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Argo Workflows and configure DAG-based pipelines for complex multi-step processing**
+- **Implement artifact passing, parameter substitution, and conditional logic between workflow steps**
+- **Configure workflow templates with retry strategies, timeouts, and resource limits**
+- **Evaluate Argo Workflows against Tekton and Airflow for data processing and ML pipeline use cases**
+
+
 ## Why This Module Matters
 
 Argo Workflows is a container-native workflow engine for orchestrating parallel jobs on Kubernetes. While Tekton focuses on CI/CD pipelines, Argo Workflows excels at complex DAGs, data processing, and ML workflows.

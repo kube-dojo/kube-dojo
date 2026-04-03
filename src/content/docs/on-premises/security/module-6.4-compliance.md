@@ -11,6 +11,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Design** a Kubernetes audit logging pipeline that captures API server access with tamper-evident storage for compliance evidence
+2. **Implement** policy-as-code frameworks (OPA/Gatekeeper, Kyverno) that enforce regulatory controls and generate compliance reports
+3. **Plan** an evidence collection strategy that maps technical controls to specific regulatory requirements (HIPAA, PCI-DSS, SOC 2, GDPR)
+4. **Configure** continuous compliance monitoring with automated drift detection and audit-ready dashboards
+
+---
+
 ## Why This Module Matters
 
 In 2023, a healthcare SaaS company running Kubernetes on-premises failed their HIPAA audit. Not because of a breach -- because they could not prove controls existed. The auditor asked: "Show me your audit log for who accessed the production namespace containing PHI in the last 90 days." The platform team had Kubernetes audit logging enabled, but it was set to the default `None` level for most resources. They had pod logs in Loki, but those showed application activity, not API server access. They had no record of which engineer ran `kubectl exec` into a database pod two months ago.

@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Foundations
 
+### What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Apply** attacker-mindset thinking to evaluate infrastructure designs and identify the paths of least resistance an adversary would exploit
+2. **Analyze** real-world breaches (supply chain, lateral movement, credential theft) to extract defensive lessons for your own systems
+3. **Design** threat models that enumerate attack surfaces, trust boundaries, and high-value targets for a given architecture
+4. **Evaluate** security tradeoffs between usability, cost, and protection level when proposing defensive controls
+
 ---
 
 **December 2020. A software company's network monitoring tool sits quietly on 18,000 customer networks worldwide.**

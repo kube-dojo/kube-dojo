@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [QUICK] | **Time to Complete**: 1.5h | **Prerequisites**: [Module 7.1: AKS Architecture & Node Management](../module-7.1-aks-architecture/)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure AKS Workload Identity with Entra ID federated credentials for pod-level Azure resource access**
+- **Implement Azure Key Vault Secrets Provider (CSI driver) to inject secrets into pods without application changes**
+- **Deploy Microsoft Defender for Containers to monitor AKS runtime threats and enforce security baselines**
+- **Design namespace-level RBAC with Entra ID groups mapped to Kubernetes ClusterRoles for team-based access control**
+
+---
+
 ## Why This Module Matters
 
 In January 2023, a healthcare SaaS company discovered that their Azure SQL database credentials had been stored as a Kubernetes Secret (base64-encoded, not encrypted) in their AKS cluster for over two years. A developer had copy-pasted the connection string into a manifest during a late-night migration and never circled back to implement a proper secrets solution. When a junior engineer accidentally ran `kubectl get secrets -o yaml` during a debugging session and pasted the output into a public Slack channel, the credentials were exposed. An automated bot scanning Slack for patterns found the connection string within 18 minutes. The attacker exfiltrated 340,000 patient records before the breach was detected. HIPAA fines, notification costs, and legal fees exceeded $8 million.

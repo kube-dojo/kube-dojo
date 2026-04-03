@@ -59,6 +59,16 @@ This module teaches you Calico from the ground up -- architecture, BGP, IPAM, po
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Calico with BGP-based networking for high-performance Kubernetes pod networking**
+- **Configure Calico network policies using both Kubernetes and Calico-specific policy resources**
+- **Implement Calico's eBPF dataplane for improved performance and native service handling**
+- **Integrate Calico with enterprise firewalls and network infrastructure using BGP peering**
+
+
 ## Why This Module Matters
 
 Calico is not just a CNI plugin. It is a full networking and security platform that runs on everything from a single-node kind cluster to thousand-node bare-metal deployments peered with physical routers. While Cilium innovates with eBPF, Calico has been the production workhorse of Kubernetes networking since before Kubernetes was mainstream.

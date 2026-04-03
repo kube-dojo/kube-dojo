@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [MEDIUM] | **Time to Complete**: 1h | **Prerequisites**: Module 3.1 (Entra ID & RBAC), Docker basics
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure Azure Container Registry with geo-replication, content trust, and quarantine policies**
+- **Implement ACR Tasks for automated container image builds, patching, and multi-architecture image support**
+- **Deploy vulnerability scanning with Microsoft Defender for Containers and enforce admission policies on scan results**
+- **Secure ACR with private endpoints, managed identities, and scope maps for granular repository access control**
+
+---
+
 ## Why This Module Matters
 
 In September 2022, a DevOps team at a mid-size fintech company pushed a new container image to their shared Docker Hub account. The image contained a critical fix for a payment processing bug. Twenty minutes later, their entire CI/CD pipeline ground to a halt. Docker Hub had rate-limited their pulls: the free tier allows only 100 pulls per 6 hours for anonymous users and 200 for authenticated users. With 40 microservices, 3 environments, and frequent deployments, they were blowing past the limit every day. Developers sat idle for hours waiting for rate limits to reset. The team estimated the productivity loss at roughly $8,000 per incident, and it happened three times that month before they migrated to Azure Container Registry.

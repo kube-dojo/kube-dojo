@@ -26,6 +26,16 @@ SPIFFE (Secure Production Identity Framework for Everyone) is an open standard f
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy SPIRE server and agents for automatic workload identity provisioning using SPIFFE standards**
+- **Configure workload attestation policies that bind cryptographic identities to Kubernetes pods**
+- **Implement SPIFFE-based mTLS between services for zero-trust inter-service authentication**
+- **Integrate SPIFFE identities with service meshes and secret stores for unified identity management**
+
+
 ## Why This Module Matters
 
 It was 2 AM when the incident channel lit up. An attacker had compromised a single container in a staging namespace -- a forgotten debug pod with default ServiceAccount credentials. From there, they moved laterally. The staging ServiceAccount token worked against internal APIs that only checked "is this a valid token?" not "should this specific workload be calling me?" Within three hours, the attacker had read production database credentials from a config service that trusted anything inside the cluster network.

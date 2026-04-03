@@ -18,6 +18,17 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Configure** audit policy files with appropriate logging levels per resource and verb
+2. **Implement** audit log backends (file and webhook) on the API server
+3. **Trace** security incidents by analyzing audit log entries for suspicious API activity
+4. **Design** audit policies that balance security visibility with storage and performance costs
+
+---
+
 ## Why This Module Matters
 
 Audit logs record all requests to the Kubernetes API server. They're your primary tool for investigating security incidents—who did what, when, and from where. Without audit logging, you're flying blind.

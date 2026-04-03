@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Create** Ingress resources with path-based and host-based routing rules
+- **Configure** TLS termination on Ingress using Secrets
+- **Deploy** and configure an Ingress controller (NGINX) and explain its role vs the Ingress resource
+- **Debug** Ingress routing failures by checking controller logs, backend services, and annotations
+
+---
+
 ## Why This Module Matters
 
 While Services expose applications to the network, Ingress provides **HTTP/HTTPS routing** with features like path-based routing, virtual hosts, and TLS termination. Instead of exposing many NodePorts, you expose one Ingress controller that routes traffic based on URLs.

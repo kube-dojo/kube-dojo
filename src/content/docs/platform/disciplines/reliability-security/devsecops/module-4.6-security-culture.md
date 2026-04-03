@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Lead security culture transformation that makes security a shared responsibility across engineering**
+- **Design security training programs that build practical skills rather than compliance checkbox exercises**
+- **Implement security metrics and scorecards that track organizational security posture over time**
+- **Build incident response playbooks that integrate security incident handling with SRE practices**
+
 ## Why This Module Matters
 
 You can have the best security tools in the world. Scanners in every pipeline. Policies for every resource. Alerts for every anomaly.

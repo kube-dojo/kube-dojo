@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Foundations — Advanced Networking
 
+### What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Explain** how BGP path selection works across autonomous systems and why the protocol's trust model creates systemic vulnerability
+2. **Analyze** BGP hijack and route leak incidents by tracing AS path propagation and identifying where filtering failed
+3. **Implement** BGP security controls (RPKI/ROA, route filtering, prefix limits, ASPA) to protect against route hijacking and leaks
+4. **Design** multi-homed network architectures with BGP that balance redundancy, performance, and security considerations
+
 ---
 
 **April 24, 2018. Traffic destined for Amazon's Route53 DNS service suddenly takes an unexpected detour. For approximately two hours, a small ISP in Ohio called eNet (AS10297) announces BGP routes for Amazon's IP prefixes. Routers across the internet, following the fundamental trust model of BGP, accept these routes and begin forwarding traffic to eNet instead of Amazon.**

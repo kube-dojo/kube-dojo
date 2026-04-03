@@ -16,6 +16,15 @@ Before starting this module, ensure you have:
 - AWS CLI v2 installed and configured
 - Basic knowledge of Docker and Dockerfiles
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy end-to-end CI/CD pipelines using CodePipeline, CodeBuild, and CodeDeploy for containerized applications**
+- **Configure CodeBuild projects with buildspec files that run tests, build images, and push to ECR**
+- **Implement blue/green and canary deployment strategies using CodeDeploy with ECS and Lambda targets**
+- **Design pipeline stages with manual approval gates, cross-account deployments, and artifact encryption**
+
 ---
 
 ## Why This Module Matters

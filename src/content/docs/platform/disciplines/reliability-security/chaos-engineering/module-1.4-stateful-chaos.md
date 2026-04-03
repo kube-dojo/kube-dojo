@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design chaos experiments for stateful workloads — databases, queues, caches — with proper data safety controls**
+- **Implement storage-level fault injection that tests volume failures, I/O errors, and disk pressure**
+- **Evaluate data consistency guarantees under chaos conditions for stateful Kubernetes workloads**
+- **Build recovery validation experiments that verify backup, restore, and failover procedures actually work**
+
 ## Why This Module Matters
 
 On March 15, 2017, GitLab suffered a catastrophic data loss incident. An engineer, during routine maintenance, accidentally deleted a production PostgreSQL database directory. That part was bad luck. What made it a disaster was what came next: five out of five backup and recovery mechanisms failed. LVM snapshots hadn't been configured. pg_dump cron jobs had been silently failing for months. The Azure disk snapshots were empty. The S3 backup process had never successfully completed a restore test. The replication lag was too high to recover recent data.

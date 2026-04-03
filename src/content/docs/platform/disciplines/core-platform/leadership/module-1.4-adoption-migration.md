@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design migration strategies that move teams to the platform incrementally with minimal disruption**
+- **Implement adoption tracking dashboards that identify teams struggling with platform onboarding**
+- **Build champion programs that turn early adopters into advocates who accelerate platform adoption**
+- **Lead organizational change management for platform migrations spanning hundreds of services**
+
 ## Why This Module Matters
 
 In 2020, a healthcare technology company mandated that all 35 development teams migrate to their new Kubernetes-based platform within 6 months. They sent an email, set a deadline, and waited.

@@ -17,6 +17,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Lead organizational change that embeds cost awareness into engineering culture and daily practices**
+- **Design gamification and incentive programs that motivate teams to optimize cloud spending**
+- **Build cost review processes that integrate with sprint planning and architecture decision records**
+- **Implement cost anomaly detection that alerts teams to unexpected spending changes before they compound**
+
 ## Why This Module Matters
 
 You've learned the technical side of FinOps: cost allocation, rightsizing, compute optimization, storage and network management. Impressive. But here's the uncomfortable truth:

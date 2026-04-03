@@ -15,6 +15,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Measure developer experience using quantitative metrics like time-to-first-deploy and cognitive load**
+- **Design developer workflows that minimize context switching and manual configuration**
+- **Implement developer satisfaction surveys that drive platform improvement priorities**
+- **Analyze friction points in the developer journey to identify high-impact platform investments**
+
 ## Why This Module Matters
 
 Platform Engineering exists to improve developer experience. But what *is* developer experience? How do you measure it? How do you improve it?

@@ -15,6 +15,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design repository structures that support GitOps at scale — monorepo, multi-repo, or hybrid approaches**
+- **Implement branch and directory strategies that map cleanly to environments and team ownership**
+- **Evaluate repository access patterns to prevent configuration drift and unauthorized changes**
+- **Build repository conventions that make GitOps workflows self-documenting and auditable**
+
 ## Why This Module Matters
 
 You've decided to adopt GitOps. Great! Now where do you put things?

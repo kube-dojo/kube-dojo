@@ -16,6 +16,17 @@ In December 2020, a routine FireEye security audit uncovered something terrifyin
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Design** a threat model for Kubernetes using STRIDE or similar frameworks across the 4C layers
+2. **Evaluate** trust boundaries in software supply chains to identify where verification is needed
+3. **Assess** supply chain risks systematically rather than reacting to individual threats
+4. **Identify** which controls (signing, scanning, admission policies) address which supply chain threats
+
+---
+
 ## Why This Module Matters
 
 Supply chain attacks bypass every runtime control because they weaponize trust. Your admission controllers approve the image — it came from your own registry. Your network policies allow the traffic — the compromised pod looks legitimate. Falco sees nothing — the malicious code runs inside normal process boundaries.

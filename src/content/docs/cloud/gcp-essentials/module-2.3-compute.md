@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [MEDIUM] | **Time to Complete**: 2.5h | **Prerequisites**: Module 2.2 (VPC Networking)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Compute Engine instances with custom machine types, preemptible VMs, and managed instance groups**
+- **Configure instance templates and autoscaling policies for self-healing compute clusters on GCP**
+- **Implement OS Login and metadata-based SSH key management to secure instance access**
+- **Evaluate Compute Engine pricing models (on-demand, committed use, preemptible, Spot) to optimize costs**
+
+---
+
 ## Why This Module Matters
 
 In December 2022, a fast-growing e-commerce company ran their annual holiday sale on Google Cloud. Their architecture was simple: a fleet of Compute Engine VMs behind an HTTP(S) load balancer, with a Cloud SQL database in the backend. At 9:01 AM on Black Friday, traffic spiked to 15x normal levels. The operations team had provisioned what they thought was enough capacity---24 VMs running `n1-standard-8` instances. Within minutes, all 24 VMs were at 100% CPU. The team scrambled to manually add more VMs, but each new VM took 3-4 minutes to boot, install dependencies, and register with the load balancer. By the time they had scaled to 60 VMs, they had lost an estimated $1.8 million in abandoned carts. The post-incident review revealed two failures: first, they were using individual VMs instead of Managed Instance Groups with autoscaling. Second, they were using an older machine family (`n1`) when the `n2` family offered 20% better price-performance. The CEO's summary was blunt: "We paid more for machines that were slower, and we could not scale them automatically."

@@ -8,6 +8,15 @@ sidebar:
 >
 > **Track**: Foundations / Engineering Leadership
 
+### What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Design** mentorship programs that accelerate junior engineer growth through structured pairing, graduated autonomy, and deliberate skill-building
+2. **Apply** coaching techniques (Socratic questioning, just-in-time teaching, productive struggle) that build problem-solving ability rather than dependency
+3. **Evaluate** your own multiplier impact by measuring how your code reviews, pairing sessions, and knowledge sharing improve team-wide output
+4. **Build** a culture of knowledge sharing through tech talks, documentation, and collaborative debugging that scales beyond one-on-one mentorship
+
 ---
 
 ## The 10x Engineer Myth

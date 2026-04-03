@@ -11,6 +11,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Design** an air-gapped Kubernetes deployment with a secure image transfer pipeline, private registry, and offline package mirrors
+2. **Implement** physical security controls including USB port lockdown, network segmentation, and access logging for classified environments
+3. **Deploy** Harbor as an air-gapped container registry with image signing, vulnerability scanning, and approval workflows
+4. **Secure** the supply chain for disconnected clusters by validating image provenance and maintaining offline CVE databases
+
+---
+
 ## Why This Module Matters
 
 A defense contractor running classified workloads on Kubernetes learned the hardest possible lesson in 2022. Their "air-gapped" cluster was not truly disconnected -- a junior engineer had plugged in a USB WiFi adapter to download a container image he needed for testing. The adapter associated with a nearby guest network. An automated scanner on that guest network found the adapter within 40 minutes and began probing. The incident triggered a full security audit, a 90-day remediation, and $2.3 million in costs -- not from a breach (there was none) but from the investigation, re-accreditation, and mandatory hardware replacement.

@@ -23,6 +23,16 @@ Admission control stops bad configurations, but what about runtime attacks? A co
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Falco with eBPF driver for runtime security monitoring of Kubernetes workloads**
+- **Configure custom Falco rules to detect suspicious container behavior (shell access, file modifications, network connections)**
+- **Implement Falco alert routing to Slack, PagerDuty, and SIEM systems for security incident response**
+- **Integrate Falco with Kubernetes admission controllers for runtime-informed deployment decisions**
+
+
 ## Why This Module Matters
 
 Prevention eventually fails. When it does, you need detection. Falco watches what containers actually DO—not what they claim they'll do. Cryptominer spawning a process? Detected. Shell opened in a webserver container? Detected. Sensitive file read by unauthorized process? Detected.

@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Trace** a kubectl request through authentication, authorization, and admission control to etcd storage
+2. **Implement** a Go program that creates, watches, and modifies Kubernetes resources using client-go
+3. **Evaluate** which API extensibility hook (CRDs, admission webhooks, aggregation) fits a given use case
+4. **Diagnose** API Server request failures by interpreting audit logs and HTTP response codes
+
+---
+
 ## Why This Module Matters
 
 Every single thing that happens in a Kubernetes cluster goes through one gateway: the **API Server**. When you run `kubectl apply`, when a controller reconciles state, when the scheduler places a Pod -- every action is an API call. If you want to extend Kubernetes (and you do, that is why you are here), you need to understand this gateway inside and out.

@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: Module 3.4 (Blob Storage), Module 3.1 (Entra ID)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Azure Functions with HTTP, Timer, Blob, and Service Bus triggers using the Flex Consumption plan**
+- **Configure Durable Functions for stateful orchestration patterns (fan-out/fan-in, human interaction, chaining)**
+- **Implement Azure Functions with VNet integration, managed identity, and Key Vault secret references**
+- **Optimize Azure Functions performance by configuring host.json settings, concurrency limits, and scale-out rules**
+
+---
+
 ## Why This Module Matters
 
 In 2022, an e-commerce company was processing product image uploads. Their workflow was simple: a customer uploads an image, the application resizes it into three formats (thumbnail, medium, large), and stores the results. They ran this on a pair of D4s_v5 VMs behind a load balancer, running a Node.js process that polled an upload queue every 500 milliseconds. The two VMs cost $280/month. During business hours, they processed about 200 images per hour. Between midnight and 6 AM, they processed zero. On Black Friday, they processed 15,000 images per hour and the VMs could not keep up, causing a 3-hour backlog of unprocessed images. After migrating to Azure Functions with a Blob trigger, images were processed within 2 seconds of upload, regardless of volume. The Functions scaled automatically from zero to hundreds of concurrent executions during Black Friday, and back to zero at night. Their monthly bill dropped from $280 to $23---and the image processing backlog disappeared permanently.

@@ -16,6 +16,16 @@ Before starting this module:
 - Docker/container fundamentals
 - Basic CI/CD pipeline experience
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure Dagger pipelines in Go, Python, or TypeScript that run identically on local machines and CI systems**
+- **Implement containerized CI/CD steps with explicit dependency management and caching strategies**
+- **Deploy Dagger-based pipelines across multiple CI providers (GitHub Actions, GitLab CI, CircleCI) without rewriting logic**
+- **Evaluate when Dagger's portable pipeline approach outperforms traditional YAML-based CI/CD configurations**
+
+
 ## Why This Module Matters
 
 Traditional CI/CD pipelines are written in YAML—declarative, hard to test, impossible to debug locally. Dagger flips this: write your pipelines in real programming languages, run them anywhere, and debug locally before pushing.

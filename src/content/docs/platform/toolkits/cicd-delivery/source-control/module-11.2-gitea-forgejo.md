@@ -19,6 +19,16 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Gitea or Forgejo on Kubernetes as a lightweight self-hosted Git platform**
+- **Configure Gitea Actions for CI/CD workflows compatible with GitHub Actions syntax**
+- **Implement repository mirroring, webhooks, and OAuth2 authentication for team workflows**
+- **Compare Gitea and Forgejo resource footprints against GitLab for small-to-medium team requirements**
+
+
 ## Why This Module Matters
 
 **When GitHub Is Too Much and Too Little**

@@ -19,6 +19,16 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy self-hosted GitLab on Kubernetes with HA configuration and integrated CI/CD runners**
+- **Configure GitLab CI/CD pipelines with Auto DevOps, security scanning, and container registry integration**
+- **Implement GitLab's merge request workflows with approval gates, environments, and deployment tracking**
+- **Evaluate GitLab's all-in-one platform approach against best-of-breed toolchain alternatives**
+
+
 ## Why This Module Matters
 
 **When GitHub Isn't Enough**

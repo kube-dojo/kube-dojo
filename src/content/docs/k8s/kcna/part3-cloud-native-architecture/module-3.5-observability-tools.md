@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Identify** the purpose and role of Prometheus, Grafana, Jaeger, Fluentd, and OpenTelemetry
+2. **Compare** push-based vs. pull-based metrics collection approaches
+3. **Explain** how OpenTelemetry unifies logging, metrics, and tracing instrumentation
+4. **Evaluate** which observability tools fit different cluster monitoring requirements
+
+---
+
 ## Why This Module Matters
 
 Knowing the concepts is one thing; knowing the tools is another. KCNA tests your familiarity with popular observability tools in the cloud native ecosystem. This module covers the key tools you need to know.

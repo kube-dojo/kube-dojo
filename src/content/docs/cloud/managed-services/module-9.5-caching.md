@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [COMPLEX] | **Time to Complete**: 2h | **Prerequisites**: Module 9.1 (Databases), Module 9.4 (Object Storage), Redis fundamentals
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure Kubernetes pods to connect to managed caching services (ElastiCache, Memorystore, Azure Cache for Redis)**
+- **Implement cache-aside, write-through, and write-behind patterns for applications running on Kubernetes**
+- **Deploy Redis Sentinel or Cluster mode configurations via managed services with private endpoint connectivity**
+- **Diagnose cache performance issues including connection pooling, serialization overhead, and hot key distribution**
+
+---
+
 ## Why This Module Matters
 
 In November 2023, an e-commerce platform ran their product catalog API on GKE. Every product page required three database queries: product details, pricing, and reviews. During a flash sale, traffic jumped from 3,000 to 45,000 requests per second. Cloud SQL hit its connection limit at 15,000 connections. The auto-scaler was adding pods, but each new pod opened more database connections, making the problem worse. The site went down for 28 minutes during peak sale time. Estimated lost revenue: $2.3 million.

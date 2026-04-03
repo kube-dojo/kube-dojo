@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design StatefulSet configurations that handle persistent storage, ordered deployment, and stable network identity**
+- **Implement operator-managed stateful workloads using patterns like the sidecar, init container, and ambassador**
+- **Configure persistent volume claims with appropriate storage classes for database and queue workloads**
+- **Diagnose common stateful workload failures — split-brain, data corruption, volume mount issues — on Kubernetes**
+
 ## Why This Module Matters
 
 There is a persistent myth in the Kubernetes community: "Don't run databases on Kubernetes." Five years ago, that was reasonable advice. Today, it is dangerously outdated.

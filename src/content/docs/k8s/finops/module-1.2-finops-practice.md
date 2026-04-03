@@ -27,6 +27,17 @@ Module 1 gave you the "why" and "what" of FinOps. This module gives you the "how
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Implement** a cost allocation strategy using tags, labels, and shared-cost distribution models (showback vs. chargeback)
+2. **Evaluate** rate optimization options (reserved instances, savings plans, spot/preemptible instances) and calculate break-even points
+3. **Apply** right-sizing and scheduling techniques to eliminate idle compute and reduce Kubernetes workload costs using OpenCost
+4. **Interpret** a cloud bill's line items, blended rates, and amortization to identify the top optimization opportunities
+
+---
+
 ## Why This Module Matters
 
 Knowing the 6 FinOps Principles is like knowing the rules of chess — necessary but not sufficient. To pass the exam and be useful in the real world, you need to understand the *capabilities* — the concrete practices that turn principles into action.

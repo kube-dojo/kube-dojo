@@ -17,6 +17,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement spot instance strategies for Kubernetes workloads with proper fault tolerance and interruption handling**
+- **Design node pool architectures that mix instance types for optimal price-performance**
+- **Configure cluster autoscaler policies that balance cost efficiency with workload availability requirements**
+- **Evaluate compute pricing models — on-demand, reserved, spot, savings plans — for your workload patterns**
+
 ## Why This Module Matters
 
 Module 1.3 taught you to rightsize individual workloads — giving each Pod exactly the resources it needs. But even with perfectly rightsized Pods, your cluster can still waste enormous amounts of money if the *nodes* underneath those Pods are inefficient.

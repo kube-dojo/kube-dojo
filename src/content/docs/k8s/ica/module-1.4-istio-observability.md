@@ -19,6 +19,17 @@ Before starting this module, you should have completed:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Configure** Istio's Telemetry API to control which metrics, access logs, and trace spans are collected per workload
+2. **Construct** Prometheus queries using Istio's standard metrics (request count, duration, size) to build RED-method dashboards
+3. **Integrate** Istio with Jaeger/Zipkin for distributed tracing and propagate trace context headers across service boundaries
+4. **Operate** Kiali to visualize service topology, detect misconfigurations, and validate traffic flow through the mesh
+
+---
+
 ## Why This Module Matters
 
 Observability accounts for **10% of the ICA exam**. You'll be asked to configure telemetry collection, understand Istio's built-in metrics, and integrate with tools like Prometheus, Grafana, Kiali, and Jaeger. These aren't just exam topics — they're the reason most teams adopt Istio in the first place.

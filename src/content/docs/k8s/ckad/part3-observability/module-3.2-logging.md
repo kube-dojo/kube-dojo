@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## Learning Outcomes
+
+After completing this module, you will be able to:
+- **Debug** application issues by querying container logs with `kubectl logs` and its filtering options
+- **Implement** logging patterns that write structured output to stdout/stderr for Kubernetes collection
+- **Explain** the Kubernetes logging architecture and why containers should log to stdout, not files
+- **Configure** log access for multi-container pods by specifying the correct container name
+
+---
+
 ## Why This Module Matters
 
 Logs are your window into what's happening inside containers. When something goes wrong, logs are usually the first place you look. Kubernetes doesn't store logs permanently—it provides access to stdout/stderr from running containers.

@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Create** Custom Resource Definitions and explain how they extend the Kubernetes API
+- **Deploy** an operator and manage its custom resources
+- **Explain** the operator pattern (custom controller + CRD) and when it's appropriate
+- **Debug** CRD validation errors and operator reconciliation failures
+
+---
+
 ## Why This Module Matters
 
 CRDs and Operators are **new to the CKA 2025 curriculum**.

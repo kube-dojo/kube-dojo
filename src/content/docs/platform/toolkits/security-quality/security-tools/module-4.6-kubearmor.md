@@ -16,6 +16,16 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy KubeArmor for container-aware runtime security with LSM-based policy enforcement**
+- **Configure KubeArmor security policies for process, file, and network access control per workload**
+- **Implement KubeArmor's visibility mode to discover application behavior before enforcing restrictions**
+- **Compare KubeArmor's LSM approach against Tetragon's eBPF enforcement for different kernel requirements**
+
+
 ## Why This Module Matters
 
 Container security defaults are permissive. A container can typically execute any binary, access any file it has permissions for, and make any network connection. This is the "default allow" model—everything is permitted unless explicitly blocked.

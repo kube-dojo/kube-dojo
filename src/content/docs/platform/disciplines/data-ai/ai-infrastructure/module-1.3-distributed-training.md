@@ -17,6 +17,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement distributed training jobs on Kubernetes using PyTorch DDP, Horovod, or DeepSpeed**
+- **Design multi-node training architectures with proper NCCL configuration and network topology awareness**
+- **Configure Kubernetes operators like Kubeflow Training Operator for managing distributed training lifecycle**
+- **Diagnose common distributed training failures — NCCL timeouts, OOM errors, stragglers — in Kubernetes environments**
+
 ## Why This Module Matters
 
 Modern AI models are too large and too slow to train on a single GPU. GPT-4 is estimated to have been trained on ~25,000 GPUs for roughly 100 days. Even a "small" LLM like Llama-3-8B requires 1.3 million GPU-hours to train.

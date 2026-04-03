@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Foundations
 
+### What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Explain** the eight fallacies of distributed computing and identify where each manifests in real cloud-native architectures
+2. **Analyze** a system's architecture to determine which components introduce distributed-system challenges (partial failure, network partitions, clock skew)
+3. **Design** service boundaries that account for the inherent unreliability of network communication between components
+4. **Evaluate** when a distributed architecture is justified versus when a simpler single-process design would be more reliable and maintainable
+
 ---
 
 **February 28, 2017. Amazon Web Services experiences what would become one of the most costly outages in cloud computing history.**

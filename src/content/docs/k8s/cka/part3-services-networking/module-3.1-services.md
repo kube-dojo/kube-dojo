@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Create** ClusterIP, NodePort, and LoadBalancer services and explain the traffic flow for each
+- **Debug** service connectivity by checking endpoints, selectors, and kube-proxy rules
+- **Trace** a request from client through Service to Pod using iptables/IPVS rules
+- **Explain** how kube-proxy implements service load balancing in iptables and IPVS modes
+
+---
+
 ## Why This Module Matters
 
 Pods are ephemeral—they come and go, and their IP addresses change. Services provide **stable networking** for your applications. Without services, you'd have to track every pod IP manually, which is impossible at scale.

@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement runtime security monitoring using Falco, Tetragon, or KubeArmor on Kubernetes clusters**
+- **Design security policies that detect and prevent container escape, privilege escalation, and cryptomining**
+- **Configure network policies and seccomp profiles that enforce least-privilege at the container level**
+- **Build runtime security alerting workflows that distinguish real threats from benign operational noise**
+
 ## Why This Module Matters
 
 You've secured your code. Your pipeline is locked down. Your images are signed.

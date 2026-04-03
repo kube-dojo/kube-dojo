@@ -17,6 +17,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement Argo Rollouts for canary and blue-green deployments with automated analysis**
+- **Configure analysis templates that evaluate metrics during progressive delivery rollouts**
+- **Design rollback strategies that automatically revert failed deployments based on SLO violations**
+- **Build promotion workflows that integrate Argo Rollouts with existing CI/CD pipelines**
+
 ## Why This Module Matters
 
 In the previous module, you learned that canary deployments send a small percentage of traffic to a new version and gradually increase it. You did this manually — patching Services, eyeballing dashboards, making gut-feeling decisions about whether to proceed.

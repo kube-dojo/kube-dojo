@@ -8,6 +8,15 @@ sidebar:
 >
 > **Track**: Foundations / Engineering Leadership
 
+### What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Design** communication strategies tailored to different stakeholder audiences (executives, product, engineering, customers) with appropriate detail levels
+2. **Apply** expectation management techniques to surface technical risk, timeline uncertainty, and scope tradeoffs before they become crises
+3. **Evaluate** whether engineering concerns are being translated into business impact language that non-technical stakeholders can act on
+4. **Build** status reporting cadences that maintain trust through transparency without creating overhead or enabling micromanagement
+
 ---
 
 ## The Feature That Shipped on Time (and Broke Everything)

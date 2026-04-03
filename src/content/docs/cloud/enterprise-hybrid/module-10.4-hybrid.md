@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [COMPLEX] | **Time to Complete**: 3h | **Prerequisites**: Cloud Architecture Patterns, Networking Fundamentals, Enterprise Landing Zones (Module 10.1)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design hybrid cloud architectures that connect on-premises Kubernetes clusters to cloud provider services**
+- **Configure site-to-site VPN and Direct Connect/ExpressRoute/Cloud Interconnect for secure hybrid connectivity**
+- **Implement workload migration strategies that gradually shift traffic from on-premises to cloud Kubernetes clusters**
+- **Evaluate hybrid orchestration platforms (Anthos, Azure Arc, EKS Anywhere) for on-premises Kubernetes management**
+
+---
+
 ## Why This Module Matters
 
 In 2023, a major European bank began migrating its trading platform from on-premises data centers to AWS. The migration was planned as a "lift and shift" over 18 months. Six months in, they discovered a fundamental problem: their regulatory framework required that certain trading data never leave the country. Their on-premises data centers were in Frankfurt, but the low-latency market data feeds connected directly to those data centers via dedicated fiber. Moving the trading engine to the cloud meant adding 3-8 milliseconds of latency to market data -- enough to cost them $12 million per year in missed arbitrage opportunities. They also could not fully decommission the data center because their mainframe-based settlement system had 22 years of business logic that would take 5+ years to rewrite.

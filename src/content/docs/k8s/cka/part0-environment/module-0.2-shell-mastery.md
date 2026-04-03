@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Configure** kubectl aliases and bash completion to save 5-10 minutes in the CKA exam
+- **Use** shell shortcuts (Ctrl+R, `!!`, tab completion) to avoid retyping commands
+- **Build** a personal `.bashrc` setup that makes kubectl operations 3x faster
+- **Recover** from shell mistakes quickly using history search and command editing
+
+---
+
 ## Why This Module Matters
 
 In the CKA exam, you have roughly **7 minutes per question on average**. Every keystroke counts. The difference between typing `kubectl get pods --all-namespaces` and `k get po -A` is small, but multiply that by 50+ kubectl commands and you've saved 5-10 minutes.
@@ -48,6 +58,8 @@ After:  kx production<TAB>  → switches context with autocomplete
 ---
 
 ## Part 1: kubectl Autocomplete
+
+> **Try this comparison**: Type `kubectl get pods --all-namespaces -o wide` in your terminal. Now imagine typing that 30 times during a 2-hour exam. With the alias `k get po -A -o wide` and tab completion for pod names, you'll type half the characters. These aren't nice-to-haves — they're the difference between finishing the exam and running out of time.
 
 This is **non-negotiable**. Autocomplete saves more time than any alias.
 

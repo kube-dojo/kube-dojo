@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement security gates in CI/CD pipelines — SAST, DAST, container scanning, and compliance checks**
+- **Design pipeline security architectures that prevent credential leakage and supply chain attacks**
+- **Build security dashboards that aggregate vulnerability findings across all pipeline stages**
+- **Configure automated security policy enforcement that blocks deployments failing security checks**
+
 ## Why This Module Matters
 
 Pre-commit hooks catch a lot. But developers can bypass them. And some checks are too slow for pre-commit.

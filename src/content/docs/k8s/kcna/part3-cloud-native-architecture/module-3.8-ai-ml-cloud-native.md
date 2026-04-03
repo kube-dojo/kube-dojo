@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Explain** why Kubernetes is the dominant platform for AI/ML workloads
+2. **Identify** key tools in the ML on Kubernetes ecosystem: Kubeflow, KServe, and GPU scheduling
+3. **Compare** training vs. inference workload requirements and their Kubernetes resource patterns
+4. **Evaluate** how Kubernetes scheduling and resource management support GPU and TPU workloads
+
+---
+
 ## Why This Module Matters
 
 Artificial Intelligence and Machine Learning workloads are rapidly becoming the largest consumers of cloud infrastructure. Kubernetes is evolving into "the operating system for AI" — not because it was designed for it, but because its extensibility, scheduling, and resource management capabilities make it the natural platform. KCNA expects you to understand how AI/ML intersects with cloud native.

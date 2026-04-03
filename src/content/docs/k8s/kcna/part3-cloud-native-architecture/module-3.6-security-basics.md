@@ -13,6 +13,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Explain** the key Kubernetes security concepts: RBAC, NetworkPolicies, Secrets, and Pod Security Standards
+2. **Identify** common security misconfigurations that lead to real-world breaches
+3. **Compare** authentication, authorization, and admission control as layers of API security
+4. **Evaluate** whether a given cluster configuration follows security best practices
+
+---
+
 ## Why This Module Matters
 
 In February 2018, security researchers discovered that Tesla's Kubernetes dashboard was publicly accessible with no authentication. Attackers had slipped in, deployed cryptocurrency mining containers across Tesla's cloud infrastructure, and hid the evidence by keeping CPU usage artificially low. The breach was not caused by a sophisticated zero-day exploit. It was caused by a missing password on an admin console.

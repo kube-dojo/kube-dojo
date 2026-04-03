@@ -18,6 +18,17 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Configure** validating and mutating admission webhooks for custom security enforcement
+2. **Implement** ImagePolicyWebhook to restrict which container registries are allowed
+3. **Audit** enabled admission controllers and their impact on cluster security posture
+4. **Debug** admission controller rejections by interpreting webhook response errors
+
+---
+
 ## Why This Module Matters
 
 Admission controllers are gatekeepers that intercept API requests before objects are persisted. They can validate, mutate, or reject requests based on custom logic. Understanding how to enable and configure admission controllers is essential for cluster security.

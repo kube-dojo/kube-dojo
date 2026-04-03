@@ -28,6 +28,16 @@ Six months after migration, the CFO asked the infrastructure team to present at 
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Loki for cost-effective log aggregation with label-based indexing and object storage backends**
+- **Implement LogQL queries for log exploration, metric extraction, and pattern-based alerting**
+- **Configure Promtail and Grafana Alloy agents for Kubernetes log collection with label enrichment**
+- **Optimize Loki's storage configuration and retention policies for high-volume log environments**
+
+
 ## Why This Module Matters
 
 Logs tell you what happened. Metrics tell you something is wrong; logs tell you why. But traditional logging solutions (ELK, Splunk) are expensive—indexing every field in every log line costs storage and compute.

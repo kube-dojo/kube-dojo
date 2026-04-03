@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Explain** the shared responsibility model and what you own vs. what the cloud provider owns
+2. **Evaluate** cloud provider security controls (IAM, VPCs, encryption) relevant to Kubernetes
+3. **Assess** the risk of misconfigured cloud-level security boundaries on cluster workloads
+4. **Compare** managed Kubernetes (EKS, GKE, AKS) security defaults across providers
+
+---
+
 ## Why This Module Matters
 
 Every Kubernetes cluster runs on infrastructure—whether it's AWS, GCP, Azure, or your own data center. The security of that infrastructure is the foundation for everything else. Understanding the shared responsibility model is critical because it defines **what you're responsible for securing** versus what your cloud provider handles.

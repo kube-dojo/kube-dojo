@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design multi-cluster networking architectures that connect services across clusters, regions, and clouds**
+- **Implement cross-cluster service discovery using DNS, service mesh federation, or Submariner**
+- **Configure network policies that span cluster boundaries while maintaining security isolation**
+- **Evaluate multi-cluster networking trade-offs — latency, complexity, cost — for your distributed architecture**
+
 ## Why This Module Matters
 
 In June 2023, a global payments company ran two Kubernetes clusters — one in us-east-1 (AWS) and one in eu-west-1. Each cluster was self-contained, with its own databases, caches, and application stacks. The company's European customers were routing through the US cluster because a DNS misconfiguration in their global load balancer pointed `payments.example.com` to the US cluster only.

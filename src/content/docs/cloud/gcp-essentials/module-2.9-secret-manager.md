@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [MEDIUM] | **Time to Complete**: 1.5h | **Prerequisites**: Module 2.1 (IAM & Resource Hierarchy)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure Secret Manager with automatic rotation and IAM-based access control for application secrets**
+- **Implement secret versioning and alias strategies for zero-downtime credential rotation**
+- **Deploy secret injection patterns for Compute Engine, Cloud Run, Cloud Functions, and GKE workloads**
+- **Design cross-project secret sharing using IAM policies and organization-level secret management**
+
+---
+
 ## Why This Module Matters
 
 In January 2023, a code review at a mid-sized SaaS company revealed that database credentials for their production PostgreSQL instance had been hardcoded in a Kubernetes ConfigMap for over two years. The credentials had been committed to Git, synced to the cluster via ArgoCD, and were visible in plaintext to anyone with `kubectl get configmap` access---which included every developer in the company. When the security team investigated, they found that the same database password had been shared via Slack three times, copied into a local `.env` file on at least 12 developer laptops, and had never been rotated. A former employee who left the company 8 months ago still had a working copy. The company spent six weeks conducting a full credential rotation across 42 services, updating and redeploying each one. During the rotation, three production outages occurred because services failed to pick up the new credentials.

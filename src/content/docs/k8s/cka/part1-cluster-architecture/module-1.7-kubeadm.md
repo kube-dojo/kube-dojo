@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Upgrade** a kubeadm cluster safely (control plane first, then workers, one at a time)
+- **Backup** and restore etcd snapshots for disaster recovery
+- **Manage** kubeadm certificates (check expiry, renew, rotate)
+- **Troubleshoot** kubeadm upgrade failures by reading component logs and checking version compatibility
+
+---
+
 ## Why This Module Matters
 
 kubeadm is the official tool for creating Kubernetes clusters. The CKA exam environment uses kubeadm-based clusters, and you'll need to understand how they work.

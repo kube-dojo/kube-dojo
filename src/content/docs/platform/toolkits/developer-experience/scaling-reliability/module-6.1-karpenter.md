@@ -23,6 +23,16 @@ Cluster Autoscaler was fine. Karpenter is better. Instead of scaling node groups
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy Karpenter for intelligent Kubernetes node provisioning based on pending pod requirements**
+- **Configure Karpenter NodePools with instance type constraints, zones, and consolidation policies**
+- **Implement Karpenter's spot instance strategies with fallback provisioning for cost-optimized clusters**
+- **Compare Karpenter's pod-driven scaling against Cluster Autoscaler's node-group approach for cost efficiency**
+
+
 ## Why This Module Matters
 
 Cluster Autoscaler thinks in node groups. "Need more capacity? Add another node from this pre-defined group." Karpenter thinks in pods. "This pod needs 4 CPU, 8GB RAM, ARM64, and GPU? I'll provision exactly that." The result: faster scaling, better bin-packing, and lower costs.

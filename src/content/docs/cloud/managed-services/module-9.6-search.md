@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [COMPLEX] | **Time to Complete**: 2.5h | **Prerequisites**: Module 9.2 (Message Brokers), Kubernetes logging concepts, JSON/HTTP API basics
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Deploy managed OpenSearch/Elasticsearch (Amazon OpenSearch, Elastic Cloud, Azure Cognitive Search) with Kubernetes ingestion pipelines**
+- **Configure Fluentd or Vector to ship Kubernetes logs to managed search clusters with index lifecycle management**
+- **Implement search-as-a-service patterns where Kubernetes applications query managed search indices via private endpoints**
+- **Optimize search cluster sizing, shard strategies, and index templates for Kubernetes log and application data volumes**
+
+---
+
 ## Why This Module Matters
 
 In August 2023, a SaaS company running 200 microservices on EKS generated 12 TB of logs per day. They ran a self-managed Elasticsearch cluster on Kubernetes -- 9 data nodes, 3 master nodes, each on i3.2xlarge instances with local NVMe storage. Total monthly cost: $22,000 for compute alone. The cluster required a dedicated engineer spending roughly 30% of their time on shard rebalancing, index lifecycle management, JVM tuning, and version upgrades. When they attempted an upgrade from Elasticsearch 7.x to 8.x, a mapping incompatibility brought down the cluster for 4 hours. During those 4 hours, the security team could not search logs to investigate an active incident.

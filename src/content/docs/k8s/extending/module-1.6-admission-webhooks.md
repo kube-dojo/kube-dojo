@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Build** a mutating admission webhook that injects sidecar containers, default labels, or resource limits into incoming requests
+2. **Build** a validating admission webhook that enforces custom policies (image registries, naming conventions, security constraints)
+3. **Configure** TLS certificates, failure policies, and namespace selectors for webhook reliability in production
+4. **Debug** webhook failures using API Server audit logs, webhook timeout tuning, and dry-run admission testing
+
+---
+
 ## Why This Module Matters
 
 Admission webhooks give you a checkpoint at the front door of the Kubernetes API. Every CREATE, UPDATE, or DELETE request can be intercepted, inspected, and either modified (mutating) or rejected (validating) -- before the object is stored in etcd. This is how Istio injects sidecar containers without modifying your Deployment YAML. This is how OPA/Gatekeeper enforces policies like "no pods with root access." This is how cert-manager auto-populates certificate fields.

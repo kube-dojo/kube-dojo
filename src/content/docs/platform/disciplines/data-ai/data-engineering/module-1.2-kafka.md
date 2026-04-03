@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement Apache Kafka on Kubernetes using Strimzi operator with proper broker and ZooKeeper configuration**
+- **Design Kafka cluster topologies that balance throughput, durability, and availability requirements**
+- **Configure topic partitioning, replication, and retention policies for production streaming workloads**
+- **Diagnose Kafka performance issues — consumer lag, under-replicated partitions, broker imbalance — in Kubernetes**
+
 ## Why This Module Matters
 
 Every modern data platform has Kafka at its center. Not sometimes — virtually always.

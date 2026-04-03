@@ -25,6 +25,17 @@ This module covers the conceptual foundation of FinOps — what it is, why it ex
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Apply** the 6 FinOps Principles to evaluate cloud spending decisions and justify optimization proposals to stakeholders
+2. **Map** the FinOps Lifecycle phases (Inform, Optimize, Operate) to concrete organizational activities and maturity stages
+3. **Design** a FinOps team structure (centralized, embedded, or hybrid) that fits an organization's size and cloud maturity
+4. **Analyze** cloud cost challenges (variable spend, shared costs, delayed billing) and explain how FinOps practices address each one
+
+---
+
 ## Why This Module Matters
 
 Imagine you run a restaurant. Every dish has a price on the menu, every ingredient has a cost, and at the end of the month you know exactly where your money went. Now imagine a restaurant where nobody knows what ingredients cost, the kitchen orders whatever it wants, and the bill arrives 30 days later as one giant number with no breakdown. That is how most companies run their cloud.

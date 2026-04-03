@@ -18,6 +18,17 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Audit** Kubernetes manifests using kubesec to identify security misconfigurations
+2. **Write** OPA Rego policies to enforce custom security rules at admission time
+3. **Deploy** OPA Gatekeeper ConstraintTemplates and Constraints for policy enforcement
+4. **Evaluate** static analysis tool output to prioritize security fixes before deployment
+
+---
+
 ## Why This Module Matters
 
 Static analysis examines Kubernetes manifests before deployment, catching misconfigurations early. Tools like kubesec score security posture, while OPA Gatekeeper enforces policies at admission time.

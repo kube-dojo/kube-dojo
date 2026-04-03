@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## Learning Outcomes
+
+After completing this module, you will be able to:
+- **Create** a CustomResourceDefinition with proper schema validation and versioning
+- **Explain** how CRDs extend the Kubernetes API and how controllers reconcile custom resources
+- **Deploy** custom resources and interact with them using standard kubectl commands
+- **Debug** CRD validation errors and understand the relationship between CRDs and operators
+
+---
+
 ## Why This Module Matters
 
 Custom Resource Definitions extend Kubernetes with your own resource types. Instead of only working with Pods, Services, and Deployments, you can define resources like `Database`, `Certificate`, or `BackupJob` that make sense for your domain.

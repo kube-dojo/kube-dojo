@@ -16,6 +16,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Implement GPU scheduling policies using resource quotas, priorities, and preemption rules**
+- **Design multi-tenant GPU sharing strategies — time-slicing, MIG, MPS — for cluster efficiency**
+- **Configure fractional GPU allocation to maximize utilization across training and inference workloads**
+- **Build scheduling workflows that prevent GPU starvation while maintaining fair resource distribution**
+
 ## Why This Module Matters
 
 Here is the dirty secret of GPU computing: **most GPUs in Kubernetes clusters are criminally underutilized**.

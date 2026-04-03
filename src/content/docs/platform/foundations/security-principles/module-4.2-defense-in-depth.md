@@ -12,6 +12,15 @@ sidebar:
 >
 > **Track**: Foundations
 
+### What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Design** layered security architectures where each layer provides independent protection and no single bypass compromises the entire system
+2. **Evaluate** whether existing security layers are truly independent or share common failure modes (credentials, network paths, trust boundaries)
+3. **Implement** defense-in-depth strategies across network, application, identity, and data layers for cloud-native environments
+4. **Analyze** breach post-mortems to identify which defensive layers failed and where additional independent controls would have contained the blast radius
+
 ---
 
 **November 2013. The holiday shopping season begins at Target, America's second-largest discount retailer.**

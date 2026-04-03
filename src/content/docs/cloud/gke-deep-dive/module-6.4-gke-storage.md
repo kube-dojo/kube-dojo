@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: Module 6.1 (GKE Architecture)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure Persistent Disks (pd-standard, pd-ssd, pd-balanced) and Filestore CSI driver for GKE workloads**
+- **Implement volume snapshots and backup schedules using Backup for GKE for stateful application protection**
+- **Deploy regional persistent disks for cross-zone high availability of stateful workloads on GKE**
+- **Evaluate GKE storage options (Persistent Disk, Filestore, Cloud Storage FUSE) for different access patterns**
+
+---
+
 ## Why This Module Matters
 
 In August 2023, an online gaming company running on GKE lost 6 hours of player progress data for 180,000 active users. Their PostgreSQL database was running on a single-zone Persistent Disk attached to a StatefulSet pod. When `us-central1-a` experienced a partial zone outage, the node hosting the database went offline. Because the PD was zonal, it could not be attached to a node in another zone. The StatefulSet controller created a replacement pod in `us-central1-b`, but it could not mount the volume---zonal PDs are locked to their zone. The database was down for 6 hours until the zone recovered. The company's VP of Engineering later estimated the revenue loss at $420,000 and the player trust damage as "incalculable." The fix was straightforward: switch to a **Regional Persistent Disk**, which synchronously replicates data to two zones and can failover in under a minute. It cost 16 cents more per GB per month.

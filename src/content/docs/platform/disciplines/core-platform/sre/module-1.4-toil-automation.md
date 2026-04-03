@@ -15,6 +15,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Evaluate operational tasks against the SRE toil taxonomy to prioritize automation**
+- **Design automation strategies that eliminate the highest-impact toil first**
+- **Implement self-healing systems that resolve common incidents without human intervention**
+- **Measure toil reduction over time and build a business case for continued automation investment**
+
 ## Why This Module Matters
 
 You're drowning in repetitive work. Every day:

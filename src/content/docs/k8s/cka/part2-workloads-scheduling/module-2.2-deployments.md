@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Create** Deployments with rolling update strategy and configure maxSurge/maxUnavailable
+- **Perform** rollouts, rollbacks, and history inspection under CKA time pressure
+- **Diagnose** a stuck rollout by checking ReplicaSet status, pod events, and resource availability
+- **Explain** the Deployment → ReplicaSet → Pod ownership chain and why old ReplicaSets are retained
+
+---
+
 ## Why This Module Matters
 
 In production, you never run standalone pods. You use **Deployments**.

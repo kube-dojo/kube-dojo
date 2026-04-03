@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [COMPLEX] | **Time to Complete**: 3h | **Prerequisites**: Module 2.1 (IAM & Resource Hierarchy)
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design GCP's global VPC architecture with regional subnets, firewall rules, and Private Google Access**
+- **Configure Shared VPC to centralize network management across multiple GCP projects**
+- **Deploy Cloud NAT and Cloud Router for outbound internet access from private instances without public IPs**
+- **Compare GCP's global VPC model with AWS regional VPCs to avoid common multi-cloud networking mistakes**
+
+---
+
 ## Why This Module Matters
 
 In March 2021, a logistics company running on GCP experienced a cascading outage that took down their entire order-tracking system for 14 hours. The root cause was a firewall rule misconfiguration during a routine deployment. An engineer had added a new firewall rule using network tags to allow traffic from their monitoring system to a set of backend VMs. The tag name had a typo---`monitoring-target` instead of `monitor-target`---and because GCP firewall rules are deny-by-default, the monitoring traffic was silently dropped. No alerts fired because the monitoring system itself was what stopped working. Meanwhile, a second engineer had created an overly broad "debug" firewall rule allowing all ingress from `0.0.0.0/0` on port 8080 to any VM with the tag `debug`, not realizing that 34 production VMs still carried that tag from a previous troubleshooting session. Within hours, automated scanners found the exposed endpoints and began probing for vulnerabilities. The incident cost the company over $800,000 in lost revenue and required a full security audit.

@@ -6,6 +6,17 @@ sidebar:
 ---
 **Complexity**: [COMPLEX] | **Time to Complete**: 3h | **Prerequisites**: Module 1.1, Linux Networking
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Design multi-AZ VPC architectures with public and private subnets that support high-availability workloads**
+- **Configure Security Groups and Network ACLs to implement defense-in-depth network segmentation**
+- **Deploy VPC peering and Transit Gateway attachments to connect multiple VPCs at scale**
+- **Diagnose routing table misconfigurations and connectivity failures between subnets, NAT Gateways, and internet gateways**
+
+---
+
 ## Why This Module Matters
 
 In 2018, a major cryptocurrency exchange discovered unauthorized access to their internal administration tools. The attackers had bypassed the external web application firewall entirely. How? The engineering team had deployed a temporary EC2 instance to test a new database migration script. To make it easy to SSH into, they attached a security group allowing port 22 from `0.0.0.0/0` and placed it in a public subnet, effectively hanging a server containing administrative database credentials directly on the public internet. The attackers brute-forced the SSH key within hours, pivoted to the private subnets holding the primary databases, and triggered a massive localized outage while attempting to exfiltrate data.

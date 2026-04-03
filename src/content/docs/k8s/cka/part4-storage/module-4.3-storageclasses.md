@@ -18,6 +18,16 @@ lab:
 
 ---
 
+## What You'll Be Able to Do
+
+After this module, you will be able to:
+- **Create** StorageClasses for dynamic provisioning with cloud and local provisioners
+- **Configure** binding modes (Immediate vs WaitForFirstConsumer) and explain when each is appropriate
+- **Implement** volume expansion on existing PVCs and explain the requirements
+- **Debug** dynamic provisioning failures by checking StorageClass, provisioner pods, and events
+
+---
+
 ## Why This Module Matters
 
 In Module 4.2, you manually created PersistentVolumes before creating PersistentVolumeClaims. This doesn't scale - imagine an admin creating hundreds of PVs for every storage request! StorageClasses enable **dynamic provisioning**: create a PVC, and Kubernetes automatically provisions the underlying storage. The CKA exam tests both understanding StorageClasses and configuring dynamic provisioning.

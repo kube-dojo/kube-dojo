@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Explain** how the Kubernetes scheduler selects nodes using filtering and scoring
+2. **Compare** scheduling mechanisms: nodeSelector, affinity, taints, and tolerations
+3. **Identify** why a pod is pending based on scheduler constraints and resource availability
+4. **Evaluate** scheduling strategies for different workload placement requirements
+
+---
+
 ## Why This Module Matters
 
 Scheduling is how Kubernetes decides where to run your Pods. Understanding scheduling concepts helps you predict where workloads will run and how to influence placement. KCNA tests your conceptual understanding of scheduling.

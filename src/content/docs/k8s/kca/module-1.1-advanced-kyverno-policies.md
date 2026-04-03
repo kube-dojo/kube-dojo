@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Author** advanced Kyverno policies using CEL expressions, JMESPath, JSON patches, and API call variables for complex validation and mutation
+2. **Implement** image verification policies that validate container signatures and attestations using cosign and Notary
+3. **Configure** generate rules that auto-create NetworkPolicies, ResourceQuotas, or RBAC bindings when namespaces are created
+4. **Apply** cleanup policies, preconditions, and autogen controls to manage policy scope and lifecycle across clusters
+
+---
+
 ## Why This Module Matters
 
 Domain 5 is the single largest section of the KCA exam at 32%. You cannot pass without mastering advanced Kyverno policy writing. While basic validate/mutate rules get you started, the exam tests CEL expressions, image verification, cleanup policies, complex JMESPath, JSON patches, autogen behavior, background scans, API call variables, and preconditions. This module covers every one of those topics with copy-paste-ready examples.

@@ -15,6 +15,15 @@ Before starting this module:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Evaluate your organization's readiness for platform engineering adoption**
+- **Design a platform team charter that defines scope, boundaries, and success metrics**
+- **Analyze the difference between platform engineering, DevOps, and SRE to position your team correctly**
+- **Build a platform vision document that aligns engineering leadership around shared infrastructure goals**
+
 ## Why This Module Matters
 
 You've heard the buzzword. "Platform Engineering" is everywhere—conference talks, job postings, vendor pitches. But what actually *is* it? And why does it matter?

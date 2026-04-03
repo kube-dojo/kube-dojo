@@ -13,6 +13,15 @@ Before starting this module:
 - [SRE Fundamentals](../../core-platform/sre/module-1.1-what-is-sre/) — Incident management basics
 - Basic understanding of machine learning concepts
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Evaluate AIOps maturity levels to identify where AI-driven operations can deliver the most value**
+- **Design an AIOps architecture that integrates with existing monitoring, logging, and alerting systems**
+- **Implement data pipelines that feed operational telemetry into ML models for automated analysis**
+- **Analyze the ROI of AIOps investments by measuring reduction in alert noise, MTTR, and manual toil**
+
 ## Why This Module Matters
 
 Modern systems generate more data than humans can process. A medium-sized Kubernetes cluster produces millions of metrics, thousands of log lines per second, and countless traces. Traditional monitoring approaches—setting thresholds and waiting for alerts—can't scale.

@@ -12,6 +12,17 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+1. **Explain** the role of kubelet, kube-proxy, and the container runtime on each node
+2. **Identify** which node component is responsible for a given networking or pod lifecycle behavior
+3. **Compare** kube-proxy modes (iptables vs. IPVS) and their trade-offs
+4. **Trace** how a pod gets scheduled and started on a worker node
+
+---
+
 ## Why This Module Matters
 
 While the control plane makes decisions, worker nodes do the actual work of running containers. Understanding node components completes your picture of Kubernetes architecture—a key KCNA topic.

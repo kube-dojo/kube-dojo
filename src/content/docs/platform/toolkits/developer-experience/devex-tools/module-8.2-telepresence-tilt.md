@@ -23,6 +23,16 @@ sidebar:
 
 ---
 
+## What You'll Be Able to Do
+
+After completing this module, you will be able to:
+
+- **Configure Telepresence for local-to-remote Kubernetes service intercepts during development**
+- **Implement Tilt configurations for automated build-push-deploy loops with live update capabilities**
+- **Deploy development workflows that combine local code editing with remote cluster services**
+- **Compare Telepresence and Tilt approaches for different inner-loop development productivity needs**
+
+
 ## Why This Module Matters
 
 The traditional Kubernetes development loop is: edit code → build container → push to registry → deploy to cluster → test → repeat. This takes 5-10 minutes per iteration. With Telepresence and Tilt, it takes seconds. Faster feedback means faster development, fewer bugs, and happier developers.
