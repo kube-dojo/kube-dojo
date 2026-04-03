@@ -51,3 +51,4 @@ clusterctl
 talosctl
 demo-cluster.yaml
 test_script.sh
+.venv/
