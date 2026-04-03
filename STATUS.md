@@ -103,7 +103,8 @@
 | #143 | Ukrainian Translation — Full Coverage | Open (~40%) |
 | #157 | Supabase Auth + Progress Migration | Open |
 | #156 | CKA Parts 3-5 Labs | Open |
-| #165 | Epic: Pedagogical Quality Review | Open (Phases 1-3,5 done; Phase 4 in progress) |
+| #165 | Epic: Pedagogical Quality Review | Open (Phases 1-3,5 done; Phase 4: CKA/CKAD/On-Prem complete) |
+| #180 | Elevate All Modules to 4/5 | Open (CKA/CKAD/On-Prem done; CKS/KCNA/KCSA/Cloud/Platform pending) |
 | #177 | Improve Lowest-Quality Modules | Open (8 critical/high done, ~19 remaining) |
 | #179 | Improve Lowest-Quality Labs | Open (blocked on Phase 3 lab audit) |
 
@@ -120,13 +121,18 @@
 
 - [x] Prerequisites: all 33 modules improved (outcomes, inline prompts, quiz upgrades, emoji fixes) — EN + UK complete
 - [x] Linux: all 37 modules improved (outcomes added) — EN + UK complete
-- [x] CKA: all 41 modules improved (outcomes + inline prompts on Part 0 and troubleshooting) — EN complete, UK syncing
-- [ ] CKAD: 24 modules — outcomes being added (agent running)
-- [ ] CKS/KCNA/KCSA: 84 modules — outcomes being added (agent running)
-- [ ] Remaining: Cloud (84), Platform (209), On-Prem (30) — #180
+- [x] CKA: all 41 modules — outcomes + inline prompts + scenario quizzes (Parts 0-5 complete) — EN complete, UK outcomes synced
+- [x] CKAD: all 24 modules — outcomes + inline prompts + scenario quizzes — EN complete, UK outcomes synced
+- [x] CKS: 30 modules — outcomes added, UK outcomes synced
+- [x] KCNA: 28 modules — outcomes added, UK outcomes synced
+- [x] KCSA: 26 modules — outcomes added, UK outcomes synced
+- [x] On-Premises: all 30 modules — inline prompts + narrative between code blocks + quiz improvements
+- [x] Fundamentals track reorder: Zero to Terminal → Everyday Linux → Cloud Native 101 → K8s Basics → Philosophy & Design → Modern DevOps
+- [x] Zero to Terminal: Next Module link fixes (0.1→0.2, UK 0.2→0.3)
+- [ ] CKS/KCNA/KCSA: inline prompts + scenario quiz upgrades (outcomes done, deeper treatment pending)
+- [ ] Remaining: Cloud (84), Platform (209) — outcomes + inline prompts — #180
 - [ ] Lab quality audit and improvements — #179
 - [ ] Gemini adversary review remaining on-prem + discipline modules
-- [ ] Ukrainian translations: CKS (30), KCNA (28), KCSA (26)
 - [ ] Visual aid beautification pass (alignment, ASCII formatting)
 
 ## Blockers
