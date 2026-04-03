@@ -611,6 +611,28 @@ def cmd_run_section(args):
 
     print(f"Found {len(modules)} modules in {args.section}")
 
+    # --- GAP-CHECK first (track level) ---
+    track = args.track or _infer_track(args.section)
+    print(f"\n{'='*60}")
+    print(f"  GAP-CHECK: {args.section} (track: {track})")
+    print(f"{'='*60}")
+
+    gap_issues = gaps.run_track_gap_analysis(section_path, track=track)
+    gap_errors = [i for i in gap_issues if i.severity == "ERROR"]
+    gap_warnings = [i for i in gap_issues if i.severity == "WARNING"]
+
+    if gap_issues:
+        for issue in gap_issues:
+            print(issue)
+        print(f"\n  Gaps: {len(gap_errors)} errors, {len(gap_warnings)} warnings")
+    else:
+        print("  ✓ No scaffolding gaps detected")
+
+    if gap_errors and not args.skip_gaps:
+        print(f"\n  ❌ {len(gap_errors)} gap errors — fix before processing modules")
+        print(f"  Use --skip-gaps to override")
+        sys.exit(1)
+
     models = dict(MODELS)
     if args.audit_model:
         models["audit"] = args.audit_model
@@ -714,6 +736,18 @@ def cmd_resume(args):
             run_module(path, state, models=models)
 
 
+def _infer_track(section: str) -> str:
+    """Infer track type from section path for jargon lookup."""
+    s = section.lower()
+    if "prerequisite" in s or "zero-to-terminal" in s or "philosophy" in s or "modern-devops" in s or "cloud-native-101" in s or "kubernetes-basics" in s:
+        return "prerequisites"
+    if "linux" in s:
+        return "linux"
+    if "cloud" in s or "aws" in s or "gcp" in s or "azure" in s or "eks" in s or "gke" in s or "aks" in s:
+        return "cloud"
+    return "k8s"
+
+
 def cmd_gap_check(args):
     """Detect scaffolding gaps in a track or section."""
     path = CONTENT_ROOT / args.path
@@ -780,6 +814,9 @@ def main():
     rsp = subparsers.add_parser("run-section", help="Run all modules in a section")
     rsp.add_argument("section", help="Section path (e.g., cloud/aws-essentials)")
     rsp.add_argument("--workers", type=int, default=1, help="Parallel workers (default: 1)")
+    rsp.add_argument("--track", help="Track type for gap check (auto-detected if omitted)",
+                     choices=["prerequisites", "linux", "cloud", "k8s"])
+    rsp.add_argument("--skip-gaps", action="store_true", help="Skip gap check even if errors found")
 
     # gap-check
     gcp = subparsers.add_parser("gap-check", help="Detect scaffolding gaps in a track/section")
