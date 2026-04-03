@@ -564,4 +564,4 @@ rm complex-deployment.yaml
 
 ## Next Module
 
-[Module 6: Security Practices (DevSecOps)](../module-1.6-devsecops/) - Integrating security into DevOps.
+[Module 1.6: Security Practices (DevSecOps)](../module-1.6-devsecops/) - Integrating security into DevOps.

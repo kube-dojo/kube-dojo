@@ -326,4 +326,4 @@ Understanding these boundaries helps you set expectations and plan your broader 
 
 ## Next Module
 
-[Module 4: Dead Ends - Technologies We Skip](../module-1.4-dead-ends/) - Why certain technologies are deprecated and shouldn't be learned.
+[Module 1.4: Dead Ends - Technologies We Skip](../module-1.4-dead-ends/) - Why certain technologies are deprecated and shouldn't be learned.

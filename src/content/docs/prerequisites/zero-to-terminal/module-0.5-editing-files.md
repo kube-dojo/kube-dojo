@@ -513,7 +513,7 @@ rm hello.txt kitchen-memo.txt kitchen-report.sh my-first-script.sh
 
 ## What's Next?
 
-In [Module 0.7: Servers and SSH](../module-0.7-servers-and-ssh/), you'll learn what a server is and how to connect to one remotely. Everything you've learned so far -- commands, file editing, scripts -- works exactly the same on a remote server. The only difference is that you'll be controlling a kitchen in another building.
+**Next Module**: [Module 0.6: What is Networking?](../module-0.6-what-is-networking/) — Learn how computers talk to each other across the internet, and run your first network commands.
 
 ---
 

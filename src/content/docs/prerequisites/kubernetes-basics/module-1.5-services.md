@@ -389,4 +389,4 @@ Services provide stable networking:
 
 ## Next Module
 
-[Module 6: ConfigMaps and Secrets](../module-1.6-configmaps-secrets/) - Managing configuration.
+[Module 1.6: ConfigMaps and Secrets](../module-1.6-configmaps-secrets/) - Managing configuration.

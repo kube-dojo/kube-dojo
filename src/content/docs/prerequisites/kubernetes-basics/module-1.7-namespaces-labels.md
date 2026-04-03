@@ -347,4 +347,4 @@ kubectl delete namespace frontend backend
 
 ## Next Module
 
-[Module 8: YAML for Kubernetes](../module-1.8-yaml-kubernetes/) - Writing and understanding K8s manifests.
+[Module 1.8: YAML for Kubernetes](../module-1.8-yaml-kubernetes/) - Writing and understanding K8s manifests.

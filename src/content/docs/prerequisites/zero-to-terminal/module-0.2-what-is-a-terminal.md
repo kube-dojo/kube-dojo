@@ -453,4 +453,4 @@ You've completed this exercise when you can:
 
 You've taken the first step — you opened a terminal and ran commands. In the next modules, you'll learn to navigate the filesystem, work with files, and start building real skills.
 
-**Next Module**: [Module 0.4: Files and Directories](../module-0.4-files-and-directories/) — Learn how your computer organizes everything into files and folders, and how to navigate them like a pro.
+**Next Module**: [Module 0.3: First Terminal Commands](../module-0.3-first-commands/) — Learn how to open the terminal and run your first commands.

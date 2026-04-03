@@ -579,4 +579,4 @@ You've completed this exercise when you can:
 
 You can now navigate the filesystem, create files and directories, read files, and understand permissions. The kitchen is starting to feel familiar.
 
-**Next Module**: [Module 0.6: What is Networking?](../module-0.6-what-is-networking/) — Learn how computers talk to each other across the internet, and run your first network commands.
+**Next Module**: [Module 0.5: Editing Files](../module-0.5-editing-files/) — Learn how to actually put content inside files using a text editor that runs right in your terminal.

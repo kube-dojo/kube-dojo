@@ -509,4 +509,4 @@ kubectl delete service web
 
 ## Next Module
 
-[Module 5: Platform Engineering Concepts](../module-1.5-platform-engineering/) - Building internal developer platforms.
+[Module 1.5: Platform Engineering Concepts](../module-1.5-platform-engineering/) - Building internal developer platforms.

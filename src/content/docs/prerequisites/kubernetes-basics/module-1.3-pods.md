@@ -443,4 +443,4 @@ Pods are the foundation:
 
 ## Next Module
 
-[Module 4: Deployments](../module-1.4-deployments/) - Managing applications at scale.
+[Module 1.4: Deployments](../module-1.4-deployments/) - Managing applications at scale.

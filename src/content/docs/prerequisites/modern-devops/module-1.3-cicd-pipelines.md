@@ -638,4 +638,4 @@ echo "=== CI Pipeline Complete ==="
 
 ## Next Module
 
-[Module 4: Observability Fundamentals](../module-1.4-observability/) - Monitoring, logging, and tracing.
+[Module 1.4: Observability Fundamentals](../module-1.4-observability/) - Monitoring, logging, and tracing.

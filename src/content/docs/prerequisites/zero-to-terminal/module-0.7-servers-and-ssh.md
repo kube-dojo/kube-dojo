@@ -436,7 +436,7 @@ It would look, feel, and work exactly like the localhost exercise. The only diff
 
 ## What's Next?
 
-In [Module 0.9: What is the Cloud?](../module-0.9-what-is-the-cloud/), you'll learn what happens when you take thousands of servers, put them in massive buildings, and let anyone rent them by the hour. That's cloud computing, and it's where Kubernetes lives.
+**Next Module**: [Module 0.8: Software and Packages](../module-0.8-software-and-packages/) — Learn how software gets installed on your computer, what package managers are, and how to install tools from the terminal.
 
 ---
 

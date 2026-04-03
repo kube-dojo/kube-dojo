@@ -335,4 +335,4 @@ The alternatives didn't fail because they were bad—they failed because Kuberne
 
 ## Next Module
 
-[Module 2: Declarative vs Imperative](../module-1.2-declarative-vs-imperative/) - The philosophy that makes Kubernetes different.
+[Module 1.2: Declarative vs Imperative](../module-1.2-declarative-vs-imperative/) - The philosophy that makes Kubernetes different.

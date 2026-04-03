@@ -97,7 +97,7 @@ sidebar:
 |------|----------------|
 | Опанувати Linux | [Linux](../linux/) (включає сертифікацію LFCS) |
 | Отримати сертифікат | [Сертифікації Kubernetes](../k8s/) |
-| Вивчити хмарних провайдерів | [Cloud](../cloud/) |
-| Запускати на власному обладнанні | [On-Premises Kubernetes](../on-premises/) |
-| Поглибити знання | [Platform Engineering](../platform/) |
-| Дослідити cloud native інструменти | [Cloud Native Tools](../platform/toolkits/) |
+| Вивчити хмарних провайдерів | [Хмарні технології](../cloud/) |
+| Запускати на власному обладнанні | [Локальний Kubernetes (On-Premises)](../on-premises/) |
+| Поглибити знання | [Платформна інженерія](../platform/) |
+| Дослідити cloud native інструменти | [Cloud Native інструменти](../platform/toolkits/) |

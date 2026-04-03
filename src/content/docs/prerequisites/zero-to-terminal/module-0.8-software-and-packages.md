@@ -556,4 +556,4 @@ You now know how software gets from code to a running program, how to install to
 
 From here, you have the foundation to start learning about containers, cloud computing, and eventually Kubernetes. Every tool in the Kubernetes ecosystem — `kubectl`, `helm`, `kind`, `docker` — gets installed exactly the way you just learned.
 
-**Continue to**: [Part 2: Cloud Native 101](../cloud-native-101/module-1.1-what-are-containers/) — Now that you're comfortable with the terminal, it's time to learn what containers are and why they changed everything.
+**Continue to**: [Module 0.9: What is the Cloud?](../module-0.9-what-is-the-cloud/) — Learn what the cloud actually is, how data centers work, and why companies rent servers instead of buying them.

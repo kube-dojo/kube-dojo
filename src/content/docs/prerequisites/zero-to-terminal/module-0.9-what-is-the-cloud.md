@@ -458,8 +458,6 @@ cat ~/cloud-notes.txt
 
 ## What's Next?
 
-Congratulations -- you've completed the **Zero to Terminal** track!
-
 You started knowing nothing about computers or terminals, and now you understand:
 - How computers work (CPU, RAM, disk, OS)
 - How to navigate and manage files from the terminal
@@ -467,7 +465,12 @@ You started knowing nothing about computers or terminals, and now you understand
 - What servers are and how to connect to them
 - What the cloud is and where Kubernetes fits
 
-Your next step is [Cloud Native 101](../cloud-native-101/module-1.1-what-are-containers/), where you'll learn about containers -- the technology that makes Kubernetes possible. Containers are like standardized shipping containers for software, and they changed everything about how we build and deploy applications.
+**Next Module**: [Module 0.10: Your First Server](../module-0.10-your-first-server/) — The capstone project. Put everything you've learned together and deploy your first website. The kitchen is built. Time to start cooking.
+
+---
+
+> **You just used a tool that senior engineers use every day. You belong here.**
+ardized shipping containers for software, and they changed everything about how we build and deploy applications.
 
 The foundation is solid. The kitchen is built. Time to start cooking.
 

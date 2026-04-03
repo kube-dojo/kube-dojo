@@ -465,4 +465,4 @@ You've completed this exercise when you can:
 
 You now understand how computers find and talk to each other. IP addresses, ports, DNS, and basic networking commands are in your toolkit.
 
-**Next Module**: [Module 0.8: Software and Packages](../module-0.8-software-and-packages/) — Learn how software gets installed on your computer, what package managers are, and how to install tools from the terminal.
+**Next Module**: [Module 0.7: Servers and SSH](../module-0.7-servers-and-ssh/) — Learn what a server is, where they live, and how to connect to them remotely.

@@ -423,4 +423,4 @@ Containers are:
 
 ## Next Module
 
-[Module 2: Docker Fundamentals](../module-1.2-docker-fundamentals/) - Hands-on with building and running containers.
+[Module 1.2: Docker Fundamentals](../module-1.2-docker-fundamentals/) - Hands-on with building and running containers.

@@ -453,4 +453,4 @@ Essential kubectl commands:
 
 ## Next Module
 
-[Module 3: Pods](../module-1.3-pods/) - The atomic unit of Kubernetes.
+[Module 1.3: Pods](../module-1.3-pods/) - The atomic unit of Kubernetes.

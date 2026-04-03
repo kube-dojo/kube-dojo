@@ -562,7 +562,7 @@ No output means it's gone.
 
 ## What's Next?
 
-In [Module 0.5: Editing Files](../module-0.5-editing-files/), you'll learn how to actually put content inside files using a text editor that runs right in your terminal. Creating empty files is useful, but filling them with content is where the real work happens.
+In [Module 0.4: Files and Directories](../module-0.4-files-and-directories/), you'll dive deeper into how your computer organizes everything into files and folders, and how to navigate them like a pro.
 
 ---
 

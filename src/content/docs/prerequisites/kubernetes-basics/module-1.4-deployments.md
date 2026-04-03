@@ -413,4 +413,4 @@ Deployments manage your applications:
 
 ## Next Module
 
-[Module 5: Services](../module-1.5-services/) - Stable networking for your Pods.
+[Module 1.5: Services](../module-1.5-services/) - Stable networking for your Pods.
