@@ -41,7 +41,8 @@ RUSSICISMS = {
     "слідуючий": "наступний (next/following)",
     "любий": "будь-який (any) — любий means 'dear'",
     "являється": "є (is) — являється is bureaucratic Russian calque",
-    "питання": "запитання (question) — питання means 'issue/matter'",
+    "остановка": "зупинка (stop)",
+    "строїти": "будувати (to build)",
 }
 
 # Russian-only characters (never appear in proper Ukrainian)

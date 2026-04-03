@@ -17,6 +17,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import subprocess
 import sys
@@ -65,8 +66,15 @@ def load_state() -> dict:
 
 
 def save_state(state: dict) -> None:
+    """Save state with file locking for thread safety."""
     STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    STATE_FILE.write_text(yaml.dump(state, allow_unicode=True, sort_keys=False))
+    lock_file = STATE_FILE.with_suffix(".lock")
+    with open(lock_file, "w") as lf:
+        fcntl.flock(lf, fcntl.LOCK_EX)
+        try:
+            STATE_FILE.write_text(yaml.dump(state, allow_unicode=True, sort_keys=False))
+        finally:
+            fcntl.flock(lf, fcntl.LOCK_UN)
 
 
 def get_module_state(state: dict, module_key: str) -> dict:
@@ -88,7 +96,15 @@ def module_key_from_path(path: Path) -> str:
 
 def find_module_path(key: str) -> Path | None:
     """Find the actual file path from a module key."""
+    # Path traversal protection
+    if ".." in key or key.startswith("/"):
+        print(f"  ❌ Invalid module key (path traversal): {key}")
+        return None
     candidate = CONTENT_ROOT / f"{key}.md"
+    # Ensure resolved path is still under CONTENT_ROOT
+    if not candidate.resolve().is_relative_to(CONTENT_ROOT.resolve()):
+        print(f"  ❌ Path escapes content root: {key}")
+        return None
     if candidate.exists():
         return candidate
     # Try fuzzy match
@@ -421,6 +437,10 @@ def run_module(module_path: Path, state: dict, max_retries: int = 2,
                 return False
 
             if review.get("verdict") == "APPROVE":
+                # Save review scores (these reflect the IMPROVED content)
+                if review.get("scores") and len(review["scores"]) == 7:
+                    ms["scores"] = review["scores"]
+                    ms["sum"] = sum(review["scores"])
                 ms["phase"] = "check"
                 save_state(state)
                 break
@@ -468,15 +488,22 @@ def run_module(module_path: Path, state: dict, max_retries: int = 2,
         if passes:
             print(f"\n  ✓ PASS: {total}/35 (min: {minimum})")
             # Auto-commit
-            subprocess.run(
+            add_result = subprocess.run(
                 ["git", "add", str(module_path)],
-                cwd=str(REPO_ROOT), capture_output=True,
+                cwd=str(REPO_ROOT), capture_output=True, text=True,
             )
-            subprocess.run(
+            if add_result.returncode != 0:
+                print(f"  ⚠ git add failed: {add_result.stderr[:200]}")
+
+            commit_result = subprocess.run(
                 ["git", "commit", "-m",
                  f"chore(quality): v1 pipeline pass [{key}] ({total}/35)"],
-                cwd=str(REPO_ROOT), capture_output=True,
+                cwd=str(REPO_ROOT), capture_output=True, text=True,
             )
+            if commit_result.returncode != 0:
+                print(f"  ⚠ git commit failed: {commit_result.stderr[:200]}")
+            else:
+                print(f"  ✓ Committed")
             return True
         else:
             print(f"\n  ✗ FAIL: {total}/35 (min: {minimum}) — needs manual intervention")
