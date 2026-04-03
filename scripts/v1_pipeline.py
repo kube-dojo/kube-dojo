@@ -35,7 +35,7 @@ SCORE_SCRIPT = REPO_ROOT / "scripts" / "score_module.py"
 # Add scripts to path for imports
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from checks import structural, ukrainian
+from checks import structural, ukrainian, gaps
 from dispatch import (
     dispatch_gemini_with_retry,
     dispatch_claude,
@@ -714,6 +714,45 @@ def cmd_resume(args):
             run_module(path, state, models=models)
 
 
+def cmd_gap_check(args):
+    """Detect scaffolding gaps in a track or section."""
+    path = CONTENT_ROOT / args.path
+    if not path.exists():
+        print(f"Path not found: {args.path}")
+        sys.exit(1)
+
+    print(f"\nGap analysis: {args.path} (track: {args.track})")
+    print(f"{'='*60}")
+
+    issues = gaps.run_track_gap_analysis(path, track=args.track)
+
+    if not issues:
+        print("\n  ✓ No scaffolding gaps detected")
+        return
+
+    # Group by type
+    by_type = {}
+    for issue in issues:
+        by_type.setdefault(issue.gap_type, []).append(issue)
+
+    for gap_type, items in sorted(by_type.items()):
+        print(f"\n  {gap_type} ({len(items)}):")
+        for item in items:
+            print(item)
+
+    errors = [i for i in issues if i.severity == "ERROR"]
+    warnings = [i for i in issues if i.severity == "WARNING"]
+    print(f"\n  Summary: {len(errors)} errors, {len(warnings)} warnings")
+
+    # Also run LLM gap analysis for deeper detection
+    if args.track in ("prerequisites", "linux"):
+        print(f"\n  For deeper analysis, consider running:")
+        print(f"  python scripts/v1_pipeline.py gap-check {args.path} --track {args.track}")
+        print(f"  and reviewing CONCEPT_JUMP warnings manually")
+
+    sys.exit(1 if errors else 0)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="KubeDojo Module Quality Pipeline v1",
@@ -742,6 +781,13 @@ def main():
     rsp.add_argument("section", help="Section path (e.g., cloud/aws-essentials)")
     rsp.add_argument("--workers", type=int, default=1, help="Parallel workers (default: 1)")
 
+    # gap-check
+    gcp = subparsers.add_parser("gap-check", help="Detect scaffolding gaps in a track/section")
+    gcp.add_argument("path", help="Track or section path (e.g., prerequisites/zero-to-terminal)")
+    gcp.add_argument("--track", default="k8s",
+                     choices=["prerequisites", "linux", "cloud", "k8s"],
+                     help="Track type for jargon lookup (default: k8s)")
+
     # status
     subparsers.add_parser("status", help="Show pipeline status")
 
@@ -759,6 +805,7 @@ def main():
         "audit-all": cmd_audit_all,
         "run": cmd_run,
         "run-section": cmd_run_section,
+        "gap-check": cmd_gap_check,
         "status": cmd_status,
         "resume": cmd_resume,
     }
