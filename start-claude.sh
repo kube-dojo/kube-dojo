@@ -101,6 +101,11 @@ fi
 
 echo ""
 
+# Autocompact at 65% of 1M context (~650K tokens)
+# Balances: using the 1M window we pay for vs. leaving buffer before degradation
+# Subagents handle isolated work in their own windows, so main thread stays clean
+export CLAUDE_CODE_AUTO_COMPACT_WINDOW=650000
+
 # Launch via npx to avoid cache bugs (stale binary + prompt caching issues)
 # See: https://reddit.com/r/ClaudeAI/comments/1s7mkn3/
 echo "Launching Claude Code via npx (cache-safe)..."
