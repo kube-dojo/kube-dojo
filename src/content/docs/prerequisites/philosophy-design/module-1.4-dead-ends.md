@@ -85,26 +85,18 @@ Timeline:
 
 ---
 
-### Cloud Foundry (for orchestration)
+### Case Study: Cloud Foundry (for orchestration)
 
-**What it was**: Platform-as-a-Service that predated K8s.
+**What it was**: A heavily opinionated Platform-as-a-Service (PaaS) that predated Kubernetes, designed primarily for stateless 12-factor apps.
 
-**Status**: Pivoted to run on K8s. Original approach deprecated.
+**Status**: Pivoted. The original Diego architecture was deprecated in favor of running Cloud Foundry directly on Kubernetes.
 
-```
-Timeline:
-2011: Cloud Foundry launched by VMware
-2015: CF Foundation formed
-2019: CF begins running on K8s (KubeCF)
-2022: CF pivots fully to K8s-based architecture
-```
+> **Stop and think**: If a platform handles routing, logging, and deployment perfectly for stateless web apps, why would users leave it for something harder like Kubernetes?
 
-**Why it pivoted**:
-- K8s became the infrastructure standard
-- Couldn't compete with K8s ecosystem
-- "If you can't beat them, run on them"
+**The Rationale**:
+Cloud Foundry was incredible at its narrow use case: `cf push` and your app was live. But modern applications aren't just stateless web apps. They include stateful databases, message queues, AI workloads, and complex networking requirements. Cloud Foundry's abstraction was too high; it hid the infrastructure so well that you couldn't tweak it when you needed to. Kubernetes offered a lower-level abstraction that could run *anything*, including databases and complex stateful sets. As a result, the industry chose the flexible "infrastructure OS" (Kubernetes) over the opinionated PaaS (Cloud Foundry). "If you can't beat them, run on them"—Cloud Foundry eventually became a layer *on top of* Kubernetes.
 
-**Don't learn**: BOSH (CF's deployment tool), Diego (CF's orchestrator), CF-specific concepts
+**Don't learn**: BOSH (CF's deployment tool), Diego (CF's orchestrator), CF-specific concepts that try to replace Kubernetes natively.
 
 ---
 
@@ -195,32 +187,39 @@ Kubernetes:
 
 ---
 
-### Docker Compose for Production
+### Case Study: Docker Compose for Production
 
-**What it is**: Multi-container orchestration for Docker.
+**What it is**: A tool for defining and running multi-container Docker applications using a simple YAML file.
 
-**Status**: Great for development, wrong for production.
+**Status**: Exceptional for local development, but an anti-pattern for production deployment.
 
+> **Pause and predict**: If `docker-compose up` brings up your entire stack locally, why is it dangerous to run that exact same command on a production server?
+
+**The Rationale**:
+Docker Compose expects a single machine. It lacks the distributed system primitives required for production reliability.
+Consider a typical `docker-compose.yml`:
+
+```yaml
+version: '3'
+services:
+  api:
+    image: myapi:v1
+    ports:
+      - "8080:8080"
+  db:
+    image: postgres:13
+    volumes:
+      - db-data:/var/lib/postgresql/data
 ```
-Docker Compose is perfect for:
-- Local development
-- CI/CD test environments
-- Demo setups
 
-Docker Compose is wrong for:
-- Production orchestration
-- Multi-node deployments
-- High availability requirements
-```
+If the node hosting this Compose stack crashes, the application goes down. There is no control plane to detect the node failure and reschedule the `api` and `db` containers onto a healthy node.
+Furthermore, Compose lacks:
+- **Self-healing**: If a process hangs but the container doesn't exit, Compose doesn't know how to restart it based on health checks without complex external tooling.
+- **Zero-downtime rolling updates**: `docker-compose up -d` often results in downtime as containers are recreated.
+- **Advanced Secret Management**: Secrets are often passed as plain text environment variables or simple files, lacking the RBAC and encryption provided by Kubernetes Secrets.
+- **Service Mesh integration**: No native way to handle complex traffic routing, mutual TLS, or advanced observability.
 
-**Why it doesn't scale**:
-- Single-node only
-- No self-healing
-- No rolling updates
-- No built-in service discovery
-- No secrets management
-
-**Don't learn**: Deploying Compose to production, Compose in Swarm mode
+**Don't learn**: Deploying Compose to production, attempting to use Compose in Swarm mode, or using direct translation tools like Kompose for complex production architectures.
 
 ---
 
@@ -280,6 +279,20 @@ To contrast the dead ends, here's what IS current:
 | Service Mesh | Istio, Linkerd, Cilium |
 | Monitoring | Prometheus, Grafana |
 | Logging | Fluentd, Loki |
+
+---
+
+## Common Mistakes
+
+| Mistake | Impact | How to Avoid |
+|---------|--------|--------------|
+| **Learning Docker Swarm** | Wasted time learning deprecated orchestration concepts. | Skip Swarm tutorials. Focus exclusively on Kubernetes for orchestration. |
+| **Using Docker Compose in Prod** | Single point of failure; no self-healing or multi-node scheduling. | Use Compose for local dev only. Use K8s or managed serverless (like Cloud Run) for prod. |
+| **Applying Chef/Puppet mindsets** | Treating containers like VMs leads to mutable, fragile infrastructure. | Embrace immutable infrastructure and declarative YAML. Never SSH into a container to fix it. |
+| **Ignoring managed K8s services** | Operating K8s "the hard way" in production leads to control plane outages. | Use EKS, GKE, or AKS for production unless you have a dedicated platform team. |
+| **Translating Compose to K8s 1:1** | Translation tools create suboptimal K8s manifests lacking probes, limits, and RBAC. | Write K8s manifests from scratch (or use Helm) to properly utilize K8s primitives. |
+| **Chasing abandoned CNCF projects** | Adopting tools that are moving to the "Archive" stage leaves you without support. | Check the CNCF landscape status and GitHub commit velocity before adopting a tool. |
+| **Assuming Docker is dead** | Misunderstanding the dockershim removal means you stop learning Dockerfiles. | Continue mastering `docker build` and containerizing apps. Only Docker-as-K8s-runtime is dead. |
 
 ---
 
@@ -343,30 +356,60 @@ When new technologies emerge, ask:
 
 ---
 
+## Hands-On Exercise: Technology Radar Audit
+
+In this exercise, you will audit an imaginary legacy tech stack and propose a modernization plan based on what you've learned about technological dead ends.
+
+**Scenario**: You have inherited the "Project Phoenix" infrastructure. It currently uses Docker Swarm for production container orchestration, Puppet to SSH into nodes and install Docker, and a monolithic `docker-compose.yml` file translated directly to production via a 3rd party script.
+
+### Success Criteria
+
+- [ ] **Identify the Risks**: List at least 3 critical points of failure or dead-end technologies in the current stack.
+- [ ] **Select Replacements**: Map each dead-end technology to its modern, industry-standard equivalent.
+- [ ] **Draft the Architecture**: Sketch (mentally or on paper) how the new stack will look without the deprecated tools.
+- [ ] **Plan the Paradigm Shift**: Write a one-paragraph explanation for your team on why you are stopping the use of Puppet for container management.
+- [ ] **Define the Build Process**: Confirm the one tool from the legacy stack that will *not* be thrown away (hint: how will you build the images?).
+
+**Self-Check**: Your modernization plan should lead you toward Kubernetes for orchestration, declarative YAML/GitOps instead of Puppet, and native K8s manifests instead of a translated Compose file. You should have kept Docker strictly for the image build process.
+
+---
+
 ## Quiz
 
-1. **Why was Docker removed as a Kubernetes runtime in version 1.24?**
+1. **Scenario**: Your startup is moving from a monolithic architecture to microservices. The lead developer suggests using Docker Compose on a massive AWS EC2 instance because "it's simpler than Kubernetes and runs all our containers perfectly on my laptop." How should you respond based on production orchestration requirements?
    <details>
    <summary>Answer</summary>
-   Docker is a full platform while K8s only needed the runtime component. containerd (Docker's underlying runtime) works directly with K8s via CRI, eliminating Docker's unnecessary overhead. This improved performance and security.
+   You should strongly advise against this approach. Docker Compose is restricted to a single node, meaning if that EC2 instance crashes, the entire application goes offline with no automatic failover. Furthermore, Compose lacks native capabilities for zero-downtime rolling updates, robust health-check-based self-healing, and advanced secrets management. While Kubernetes has a steeper learning curve, its distributed scheduling and reconciliation loop are mandatory for a reliable, highly available production environment.
    </details>
 
-2. **Why don't Chef/Puppet/Ansible fit the Kubernetes model?**
+2. **Scenario**: A recruiter reaches out with a highly paid contract role specifically asking for "Apache Mesos and Marathon administration for a legacy financial system." You've never used Mesos but are considering taking a weekend course to learn it. Why might this be a risky career move?
    <details>
    <summary>Answer</summary>
-   They're designed for mutable servers (SSH in, apply changes). Kubernetes uses immutable containers and declarative configuration via API. The paradigm is fundamentally different—K8s continuously reconciles desired state, not converge-on-apply.
+   Investing time in Apache Mesos is a bet on a technologically dead end. The platform was largely abandoned by the industry after Kubernetes achieved critical mass, and Marathon is officially unmaintained. While legacy maintenance pays well in the short term, the skills you acquire will not transfer to modern infrastructure roles, actively depreciating your market value. Your time is better spent mastering current standard tools like Kubernetes, Helm, or GitOps operators.
    </details>
 
-3. **Why did Mesos/Marathon lose to Kubernetes despite being used by Twitter at scale?**
+3. **Scenario**: You are tasked with upgrading an older Kubernetes cluster from version 1.22 to 1.25. The current environment uses Docker as the container runtime. During the upgrade planning, a junior engineer asks if you need to rewrite all the application Dockerfiles since "Kubernetes removed Docker." How do you clarify this misconception?
    <details>
    <summary>Answer</summary>
-   Mesos was complex (two-level scheduling), Marathon never matched K8s features, and the ecosystem never materialized. K8s had neutral CNCF governance, cloud provider support, and massive ecosystem growth. Even Twitter migrated to K8s.
+   You must explain the difference between a container image format and a container runtime. Kubernetes version 1.24 removed `dockershim`, which was the code that allowed Kubernetes to use Docker as its node-level runtime, switching to standard CRI-compatible runtimes like `containerd`. However, standard container images built with Docker (via Dockerfiles) are fully OCI-compliant and will continue to run perfectly on `containerd`. Therefore, no application Dockerfiles or image build pipelines need to be changed.
    </details>
 
-4. **Is Docker still relevant? In what way?**
+4. **Scenario**: A senior systems administrator joining your cloud-native team insists on using Ansible to directly manage the state of pods and replica sets, arguing it's the exact same as managing EC2 instances. Why does this traditional configuration management approach fail in a Kubernetes environment?
    <details>
    <summary>Answer</summary>
-   Yes, for building container images. `docker build` and Dockerfiles are still the primary way to create container images. Docker as a runtime for Kubernetes is deprecated, but Docker for development and image building remains relevant.
+   Traditional tools like Ansible are imperative and often rely on SSH to connect to mutable servers to apply configuration changes sequentially. Kubernetes relies on immutable infrastructure and declarative APIs, where you define the desired state in YAML and the control plane's controllers continuously reconcile the actual state to match it. Attempting to use Ansible to imperatively manage pod state fights against Kubernetes' built-in self-healing mechanisms and reconciliation loops. Configuration should instead be handled natively via Helm, Kustomize, or direct YAML manifests.
+   </details>
+
+5. **Scenario**: Your team evaluates a new, highly-hyped open-source deployment tool. It's built entirely by a single startup, has no open governance model, and isn't part of any foundation like the CNCF. Based on historical patterns in the container ecosystem, what is the primary risk of adopting this tool?
+   <details>
+   <summary>Answer</summary>
+   The primary risk is vendor lock-in combined with ecosystem isolation, similar to what happened with Docker Swarm. When a single company controls the roadmap without neutral foundation governance, competitors and major cloud providers are unlikely to build deep integrations or managed services for it. If the startup pivots, gets acquired, or fails to compete with community-backed alternatives, your team will be stuck supporting an orphaned technology with a shrinking talent pool and no industry standard support.
+   </details>
+
+6. **Scenario**: Your company has been happily using Cloud Foundry for years to deploy stateless Node.js web apps. Now, the data science team wants to deploy complex, stateful machine learning pipelines that require specific GPU sharing and custom networking. Why might the original Cloud Foundry architecture struggle with this, prompting a move to Kubernetes?
+   <details>
+   <summary>Answer</summary>
+   Cloud Foundry was designed as a highly opinionated PaaS optimized for simple, stateless 12-factor web applications, aggressively hiding infrastructure details from developers. Stateful workloads, complex distributed ML pipelines, and custom hardware requirements like GPU sharing break these rigid abstractions. Kubernetes, acting as a lower-level "infrastructure OS," provides the flexible primitives required to manage state, custom resource definitions (CRDs), and complex scheduling rules. This flexibility is why the industry standardized on Kubernetes and why Cloud Foundry eventually pivoted to run on top of it.
    </details>
 
 ---
