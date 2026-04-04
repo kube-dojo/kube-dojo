@@ -1,3 +1,5 @@
 state.yaml
 audit-report.json
 gaps-report.json
+state.lock
+uk-sync-report.json

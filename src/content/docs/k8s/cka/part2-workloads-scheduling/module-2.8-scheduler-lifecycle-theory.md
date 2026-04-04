@@ -32,12 +32,12 @@ This module teaches you the scheduler's decision pipeline, priority and preempti
 ## What You'll Learn
 
 By the end of this module, you'll be able to:
-- Trace a pod through the scheduler's Filter, Score, and Bind phases
-- Create PriorityClasses and predict preemption behavior
-- Determine a pod's QoS class from its resource spec
-- Explain kubelet eviction signals and threshold types
-- Configure graceful termination with PreStop hooks and PDBs
-- Troubleshoot Pending pods and unexpected evictions on the CKA exam
+- **Trace** a pod through the scheduler's Filter, Score, and Bind phases
+- **Create** PriorityClasses and predict preemption behavior
+- **Determine** a pod's QoS class from its resource spec
+- **Explain** kubelet eviction signals and threshold types
+- **Configure** graceful termination with PreStop hooks and PDBs
+- **Troubleshoot** Pending pods and unexpected evictions on the CKA exam
 
 ---
 

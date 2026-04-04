@@ -1,97 +1,98 @@
 ---
-title: "Module 2.3: DaemonSets & StatefulSets"
-slug: k8s/cka/part2-workloads-scheduling/module-2.3-daemonsets-statefulsets
-sidebar:
+title: "Модуль 2.3: DaemonSets та StatefulSets"
+slug: uk/k8s/cka/part2-workloads-scheduling/module-2.3-daemonsets-statefulsets
+sidebar: 
   order: 4
-lab:
+lab: 
   id: cka-2.3-daemonsets-statefulsets
   url: https://killercoda.com/kubedojo/scenario/cka-2.3-daemonsets-statefulsets
   duration: "40 min"
   difficulty: intermediate
   environment: kubernetes
----
-> **Complexity**: `[MEDIUM]` - Specialized workload patterns
+en_commit: "0db65d452c40cd0d7f3715378f49ec94bfd032fb"
+en_file: "src/content/docs/k8s/cka/part2-workloads-scheduling/module-2.3-daemonsets-statefulsets.md"---
+> **Складність**: `[MEDIUM]` — Спеціалізовані шаблони навантажень
 >
-> **Time to Complete**: 40-50 minutes
+> **Час на проходження**: 40-50 хвилин
 >
-> **Prerequisites**: Module 2.1 (Pods), Module 2.2 (Deployments)
+> **Передумови**: Модуль 2.1 (Поди), Модуль 2.2 (Деплойменти)
 
 ---
 
-## What You'll Be Able to Do
+## Що ви зможете робити
 
-After this module, you will be able to:
-- **Deploy** DaemonSets for node-level services and StatefulSets for stateful applications
-- **Explain** how StatefulSet pod naming, PVC binding, and ordered deployment differ from Deployments
-- **Configure** DaemonSet tolerations to run on control plane nodes when needed
-- **Troubleshoot** StatefulSet issues (stuck PVC binding, ordered rollout failures, headless service DNS)
+Після цього модуля ви зможете:
+- **Розгорнути** DaemonSets для сервісів на рівні вузлів та StatefulSets для stateful-застосунків
+- **Пояснити**, як іменування подів StatefulSet, прив'язка PVC та упорядковане розгортання відрізняються від Deployments
+- **Налаштувати** tolerations DaemonSet для запуску на вузлах площини управління за потреби
+- **Діагностувати** проблеми StatefulSet (застрягла прив'язка PVC, збої упорядкованого розгортання, DNS headless service)
 
 ---
 
-## Why This Module Matters
+## Чому цей модуль важливий
 
-Deployments work great for stateless applications, but not everything is stateless. Some workloads have special requirements:
+Деплойменти чудово працюють для застосунків без стану, але не все є stateless. Деякі навантаження мають особливі вимоги:
 
-- **DaemonSets**: When you need exactly one pod per node (logging, monitoring, network plugins)
-- **StatefulSets**: When pods need stable identities and persistent storage (databases, distributed systems)
+- **DaemonSets**: Коли вам потрібен рівно один Под на кожному вузлі (збір логів, моніторинг, мережеві плагіни)
+- **StatefulSets**: Коли Поди потребують стабільних ідентичностей і постійного сховища (бази даних, розподілені системи)
 
-The CKA exam tests your understanding of when to use each controller and how to troubleshoot them. Knowing the right tool for the job is a key admin skill.
+Іспит CKA перевіряє ваше розуміння того, коли використовувати кожен контролер і як їх діагностувати. Знання правильного інструменту для кожного завдання — ключова навичка адміністратора.
 
-> **The Specialist Teams Analogy**
+> **Аналогія зі спеціалізованими командами**
 >
-> Think of your cluster as a hospital. **Deployments** are like general practitioners—you can have any number, they're interchangeable, and patients don't care which one they see. **DaemonSets** are like security guards—you need exactly one per entrance (node), no more, no less. **StatefulSets** are like surgeons—each has a unique identity, their own dedicated tools (storage), and patients specifically request "Dr. Smith" (stable network identity).
+> Уявіть свій кластер як лікарню. **Деплойменти** — це терапевти: їх може бути скільки завгодно, вони взаємозамінні, і пацієнтам байдуже, до якого саме потрапити. **DaemonSets** — це охоронці: потрібен рівно один на кожному вході (вузлі), не більше й не менше. **StatefulSets** — це хірурги: кожен має унікальну ідентичність, власні виділені інструменти (сховище), і пацієнти звертаються конкретно до «доктора Сміта» (стабільна мережева ідентичність).
 
 ---
 
-## What You'll Learn
+## Що ви дізнаєтесь
 
-By the end of this module, you'll be able to:
-- Create and manage DaemonSets
-- Understand when to use DaemonSets vs Deployments
-- Create and manage StatefulSets
-- Understand stable network identity and storage
-- Troubleshoot DaemonSet and StatefulSet issues
+До кінця цього модуля ви зможете:
+- Створювати та керувати DaemonSets
+- Розуміти, коли використовувати DaemonSets замість Деплойментів
+- Створювати та керувати StatefulSets
+- Розуміти стабільну мережеву ідентичність і сховище
+- Діагностувати проблеми DaemonSet та StatefulSet
 
 ---
 
-## Part 1: DaemonSets
+## Частина 1: DaemonSets
 
-### 1.1 What Is a DaemonSet?
+### 1.1 Що таке DaemonSet?
 
-A DaemonSet ensures that **all (or some) nodes run a copy of a pod**.
+DaemonSet гарантує, що **всі (або деякі) вузли запускають копію Пода**.
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
 │                       DaemonSet                                 │
 │                                                                 │
-│   Node 1              Node 2              Node 3               │
+│   Вузол 1             Вузол 2             Вузол 3              │
 │   ┌─────────────┐     ┌─────────────┐     ┌─────────────┐      │
 │   │ ┌─────────┐ │     │ ┌─────────┐ │     │ ┌─────────┐ │      │
-│   │ │ DS Pod  │ │     │ │ DS Pod  │ │     │ │ DS Pod  │ │      │
+│   │ │ DS Под  │ │     │ │ DS Под  │ │     │ │ DS Под  │ │      │
 │   │ │(fluentd)│ │     │ │(fluentd)│ │     │ │(fluentd)│ │      │
 │   │ └─────────┘ │     │ └─────────┘ │     │ └─────────┘ │      │
 │   │             │     │             │     │             │      │
-│   │ [App Pods] │     │ [App Pods] │     │ [App Pods] │      │
+│   │ [Поди App] │     │ [Поди App] │     │ [Поди App] │      │
 │   │             │     │             │     │             │      │
 │   └─────────────┘     └─────────────┘     └─────────────┘      │
 │                                                                 │
-│   When Node 4 joins → DaemonSet automatically creates pod      │
-│   When Node 2 leaves → Pod is terminated                       │
+│   Коли Вузол 4 приєднується → DaemonSet автоматично створює Под│
+│   Коли Вузол 2 від'єднується → Под видаляється                 │
 │                                                                 │
 └────────────────────────────────────────────────────────────────┘
 ```
 
-### 1.2 Common DaemonSet Use Cases
+### 1.2 Типові випадки використання DaemonSet
 
-| Use Case | Example |
-|----------|---------|
-| Log collection | Fluentd, Filebeat |
-| Node monitoring | Node Exporter, Datadog agent |
-| Network plugins | Calico, Cilium, Weave |
-| Storage daemons | GlusterFS, Ceph |
-| Security agents | Falco, Sysdig |
+| Випадок використання | Приклад |
+|----------------------|---------|
+| Збір логів | Fluentd, Filebeat |
+| Моніторинг вузлів | Node Exporter, Datadog agent |
+| Мережеві плагіни | Calico, Cilium, Weave |
+| Демони сховища | GlusterFS, Ceph |
+| Агенти безпеки | Falco, Sysdig |
 
-### 1.3 Creating a DaemonSet
+### 1.3 Створення DaemonSet
 
 ```yaml
 # fluentd-daemonset.yaml
@@ -132,45 +133,45 @@ spec:
 kubectl apply -f fluentd-daemonset.yaml
 ```
 
-> **Pause and predict**: You have a 5-node cluster and create a DaemonSet. Then a 6th node joins the cluster. What happens automatically? Now imagine you do the same with a Deployment set to 5 replicas -- what happens when the 6th node joins?
+> **Зупиніться та подумайте**: У вас кластер з 5 вузлів, і ви створюєте DaemonSet. Потім до кластера приєднується 6-й вузол. Що відбувається автоматично? А тепер уявіть, що ви робите те саме з Deployment, встановленим на 5 реплік — що відбувається, коли приєднується 6-й вузол?
 
-### 1.4 DaemonSet vs Deployment
+### 1.4 DaemonSet проти Деплойменту
 
-| Aspect | DaemonSet | Deployment |
+| Аспект | DaemonSet | Деплоймент |
 |--------|-----------|------------|
-| Pod count | One per node (automatic) | Specified replicas |
-| Scheduling | Bypasses scheduler | Uses scheduler |
-| Node addition | Auto-creates pod | No automatic action |
-| Use case | Node-level services | Application workloads |
+| Кількість Подів | Один на вузол (автоматично) | Вказана кількість реплік |
+| Планування | Обходить планувальник | Використовує планувальник |
+| Додавання вузла | Автоматично створює Под | Жодних автоматичних дій |
+| Випадок використання | Сервіси рівня вузла | Навантаження застосунків |
 
-### 1.5 DaemonSet Commands
+### 1.5 Команди для DaemonSet
 
 ```bash
-# List DaemonSets
+# Список DaemonSets
 kubectl get daemonsets
-kubectl get ds           # Short form
+kubectl get ds           # Скорочена форма
 
-# Describe DaemonSet
+# Опис DaemonSet
 kubectl describe ds fluentd
 
-# Check pods created by DaemonSet
+# Перевірка Подів, створених DaemonSet
 kubectl get pods -l app=fluentd -o wide
 
-# Delete DaemonSet
+# Видалення DaemonSet
 kubectl delete ds fluentd
 ```
 
-> **Did You Know?**
+> **Чи знали ви?**
 >
-> DaemonSets ignore most scheduling constraints by default. They even run on control plane nodes if there are no taints preventing it. Use `nodeSelector` or `tolerations` to control placement.
+> DaemonSets за замовчуванням ігнорують більшість обмежень планування. Вони навіть запускаються на вузлах площини управління, якщо немає taints, які цьому перешкоджають. Використовуйте `nodeSelector` або `tolerations` для контролю розміщення.
 
 ---
 
-## Part 2: DaemonSet Scheduling
+## Частина 2: Планування DaemonSet
 
-### 2.1 Running on Specific Nodes
+### 2.1 Запуск на конкретних вузлах
 
-Use `nodeSelector` to run only on certain nodes:
+Використовуйте `nodeSelector`, щоб запускати лише на певних вузлах:
 
 ```yaml
 apiVersion: apps/v1
@@ -187,7 +188,7 @@ spec:
         app: ssd-monitor
     spec:
       nodeSelector:
-        disk: ssd            # Only nodes with this label
+        disk: ssd            # Тільки вузли з цим лейблом
       containers:
       - name: monitor
         image: busybox
@@ -195,16 +196,16 @@ spec:
 ```
 
 ```bash
-# Label a node
+# Додати лейбл до вузла
 kubectl label node worker-1 disk=ssd
 
-# DaemonSet only runs on labeled nodes
+# DaemonSet запускається лише на вузлах з лейблом
 kubectl get pods -l app=ssd-monitor -o wide
 ```
 
-### 2.2 Tolerating Taints
+### 2.2 Толерування Taints
 
-DaemonSets often need to run on tainted nodes:
+DaemonSets часто потребують запуску на вузлах з taints:
 
 ```yaml
 apiVersion: apps/v1
@@ -221,18 +222,18 @@ spec:
         app: node-monitor
     spec:
       tolerations:
-      # Tolerate control-plane taint
+      # Толерування taint площини управління
       - key: node-role.kubernetes.io/control-plane
         operator: Exists
         effect: NoSchedule
-      # Tolerate all taints (run everywhere)
+      # Толерування всіх taints (запуск скрізь)
       - operator: Exists
       containers:
       - name: monitor
         image: prom/node-exporter
 ```
 
-### 2.3 Update Strategy
+### 2.3 Стратегія оновлення
 
 ```yaml
 apiVersion: apps/v1
@@ -241,9 +242,9 @@ metadata:
   name: fluentd
 spec:
   updateStrategy:
-    type: RollingUpdate        # Default
+    type: RollingUpdate        # За замовчуванням
     rollingUpdate:
-      maxUnavailable: 1        # Update one node at a time
+      maxUnavailable: 1        # Оновлення по одному вузлу за раз
   selector:
     matchLabels:
       app: fluentd
@@ -251,61 +252,62 @@ spec:
     # ...
 ```
 
-| Strategy | Behavior |
-|----------|----------|
-| `RollingUpdate` | Gradually update pods, one node at a time |
-| `OnDelete` | Only update when pod is manually deleted |
+| Стратегія | Поведінка |
+|-----------|----------|
+| `RollingUpdate` | Поступове оновлення Подів, по одному вузлу за раз |
+| `OnDelete` | Оновлення лише після ручного видалення Пода |
 
 ---
 
-## Part 3: StatefulSets
+## Частина 3: StatefulSets
 
-### 3.1 What Is a StatefulSet?
+### 3.1 Що таке StatefulSet?
 
-StatefulSets manage stateful applications with:
-- **Stable, unique network identifiers**
-- **Stable, persistent storage**
-- **Ordered, graceful deployment and scaling**
+StatefulSets керують застосунками зі станом та забезпечують:
+- **Стабільні, унікальні мережеві ідентифікатори**
+- **Стабільне, постійне сховище**
+- **Впорядковане, коректне розгортання та масштабування**
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
 │                       StatefulSet                               │
 │                                                                 │
-│   Unlike Deployments, pods have stable identities:             │
+│   На відміну від Деплойментів, Поди мають стабільні            │
+│   ідентичності:                                                │
 │                                                                 │
 │   ┌───────────────┐  ┌───────────────┐  ┌───────────────┐      │
 │   │    web-0      │  │    web-1      │  │    web-2      │      │
-│   │  (always 0)   │  │  (always 1)   │  │  (always 2)   │      │
+│   │  (завжди 0)   │  │  (завжди 1)   │  │  (завжди 2)   │      │
 │   │               │  │               │  │               │      │
 │   │ PVC: data-0   │  │ PVC: data-1   │  │ PVC: data-2   │      │
 │   │ DNS: web-0... │  │ DNS: web-1... │  │ DNS: web-2... │      │
 │   └───────────────┘  └───────────────┘  └───────────────┘      │
 │                                                                 │
-│   If web-1 dies and restarts:                                  │
-│   - Still named web-1 (not web-3)                              │
-│   - Reattaches to PVC data-1                                   │
-│   - Same DNS name: web-1.nginx.default.svc.cluster.local       │
+│   Якщо web-1 зупиняється і перезапускається:                   │
+│   - Все ще має ім'я web-1 (не web-3)                           │
+│   - Повторно підключає PVC data-1                              │
+│   - Те саме DNS-ім'я: web-1.nginx.default.svc.cluster.local   │
 │                                                                 │
 └────────────────────────────────────────────────────────────────┘
 ```
 
-### 3.2 StatefulSet Use Cases
+### 3.2 Випадки використання StatefulSet
 
-| Use Case | Example |
-|----------|---------|
-| Databases | PostgreSQL, MySQL, MongoDB |
-| Distributed systems | Kafka, Zookeeper, etcd |
-| Search engines | Elasticsearch |
-| Message queues | RabbitMQ |
+| Випадок використання | Приклад |
+|----------------------|---------|
+| Бази даних | PostgreSQL, MySQL, MongoDB |
+| Розподілені системи | Kafka, Zookeeper, etcd |
+| Пошукові системи | Elasticsearch |
+| Черги повідомлень | RabbitMQ |
 
-> **Pause and predict**: If you delete pod `web-1` from a StatefulSet, what name will the replacement pod get -- `web-1` or `web-3`? What happens to the PVC that was bound to `web-1`?
+> **Зупиніться та подумайте**: Якщо ви видалите Під `web-1` зі StatefulSet, яке ім'я отримає замінюючий Під — `web-1` чи `web-3`? Що станеться з PVC, який був прив'язаний до `web-1`?
 
-### 3.3 StatefulSet Requirements
+### 3.3 Вимоги StatefulSet
 
-StatefulSets require a **Headless Service** for network identity:
+StatefulSets вимагають **Headless Service** для мережевої ідентичності:
 
 ```yaml
-# Headless Service (required)
+# Headless Service (обов'язковий)
 apiVersion: v1
 kind: Service
 metadata:
@@ -316,7 +318,7 @@ spec:
   ports:
   - port: 80
     name: web
-  clusterIP: None          # This makes it headless
+  clusterIP: None          # Це робить його headless
   selector:
     app: nginx
 ---
@@ -326,7 +328,7 @@ kind: StatefulSet
 metadata:
   name: web
 spec:
-  serviceName: nginx       # Must reference the headless service
+  serviceName: nginx       # Повинен посилатися на headless service
   replicas: 3
   selector:
     matchLabels:
@@ -344,7 +346,7 @@ spec:
         volumeMounts:
         - name: data
           mountPath: /usr/share/nginx/html
-  volumeClaimTemplates:    # Creates PVC for each pod
+  volumeClaimTemplates:    # Створює PVC для кожного Пода
   - metadata:
       name: data
     spec:
@@ -354,56 +356,56 @@ spec:
           storage: 1Gi
 ```
 
-### 3.4 Stable Network Identity
+### 3.4 Стабільна мережева ідентичність
 
 ```bash
-# Pod DNS names follow pattern:
-# <pod-name>.<service-name>.<namespace>.svc.cluster.local
+# DNS-імена Подів відповідають шаблону:
+# <ім'я-пода>.<ім'я-сервісу>.<namespace>.svc.cluster.local
 
-# For StatefulSet "web" with headless service "nginx":
+# Для StatefulSet "web" з headless service "nginx":
 web-0.nginx.default.svc.cluster.local
 web-1.nginx.default.svc.cluster.local
 web-2.nginx.default.svc.cluster.local
 
-# Other pods can reach specific instances:
+# Інші Поди можуть звертатися до конкретних екземплярів:
 curl web-0.nginx
 curl web-1.nginx
 ```
 
-### 3.5 Stable Storage
+### 3.5 Стабільне сховище
 
 ```bash
-# Each pod gets its own PVC named:
-# <volumeClaimTemplates.name>-<pod-name>
+# Кожен Под отримує власний PVC з іменем:
+# <volumeClaimTemplates.name>-<ім'я-пода>
 data-web-0
 data-web-1
 data-web-2
 
-# When pod restarts, it reattaches to its specific PVC
-# Data persists across pod restarts
+# При перезапуску Під повторно підключає свій конкретний PVC
+# Дані зберігаються між перезапусками Пода
 ```
 
-> **Did You Know?**
+> **Чи знали ви?**
 >
-> When you delete a StatefulSet, the PVCs are NOT automatically deleted. This is a safety feature—you keep your data. To clean up, manually delete the PVCs after deleting the StatefulSet.
+> Коли ви видаляєте StatefulSet, PVC НЕ видаляються автоматично. Це функція безпеки — ваші дані зберігаються. Щоб очистити сховище, вручну видаліть PVC після видалення StatefulSet.
 
 ---
 
-## Part 4: StatefulSet Operations
+## Частина 4: Операції з StatefulSet
 
-### 4.1 Ordered Creation and Deletion
+### 4.1 Впорядковане створення та видалення
 
 ```
-Scaling Up (0 → 3):
-web-0 created and ready → web-1 created and ready → web-2 created
+Масштабування вгору (0 → 3):
+web-0 створено й готово → web-1 створено й готово → web-2 створено
 
-Scaling Down (3 → 1):
-web-2 terminated → web-1 terminated → web-0 remains
+Масштабування вниз (3 → 1):
+web-2 завершено → web-1 завершено → web-0 залишається
 
-Each pod waits for previous to be Running and Ready
+Кожен Під очікує, поки попередній буде в стані Running та Ready
 ```
 
-### 4.2 Pod Management Policy
+### 4.2 Політика керування Подами
 
 ```yaml
 apiVersion: apps/v1
@@ -411,18 +413,18 @@ kind: StatefulSet
 metadata:
   name: web
 spec:
-  podManagementPolicy: OrderedReady   # Default - sequential
-  # podManagementPolicy: Parallel     # All at once (like Deployment)
+  podManagementPolicy: OrderedReady   # За замовчуванням — послідовно
+  # podManagementPolicy: Parallel     # Всі одночасно (як Деплоймент)
 ```
 
-| Policy | Behavior |
-|--------|----------|
-| `OrderedReady` | Sequential creation/deletion (default) |
-| `Parallel` | All pods created/deleted simultaneously |
+| Політика | Поведінка |
+|----------|----------|
+| `OrderedReady` | Послідовне створення/видалення (за замовчуванням) |
+| `Parallel` | Всі Поди створюються/видаляються одночасно |
 
-> **Stop and think**: You're running a 3-replica StatefulSet for a database cluster. You want to test a new version on just one replica before rolling it out to all. How would you use the `partition` field to achieve a canary deployment? Which pod gets updated first -- web-0 or web-2?
+> **Подумайте**: Ви запускаєте StatefulSet з 3 репліками для кластера баз даних. Ви хочете протестувати нову версію лише на одній репліці, перш ніж розгортати її на всіх. Як би ви використали поле `partition` для досягнення канарейкового розгортання? Який Під оновлюється першим — web-0 чи web-2?
 
-### 4.3 Update Strategy
+### 4.3 Стратегія оновлення
 
 ```yaml
 apiVersion: apps/v1
@@ -433,90 +435,90 @@ spec:
   updateStrategy:
     type: RollingUpdate
     rollingUpdate:
-      partition: 2          # Only update pods >= 2
+      partition: 2          # Оновлювати лише Поди >= 2
 ```
 
-**Partition** enables canary deployments:
-- With `partition: 2`, only web-2 gets updated
-- web-0 and web-1 keep the old version
-- Useful for testing updates on subset of pods
+**Partition** дає змогу робити канаркові розгортання:
+- З `partition: 2` лише web-2 отримує оновлення
+- web-0 та web-1 залишаються на старій версії
+- Корисно для тестування оновлень на підмножині Подів
 
-### 4.4 StatefulSet Commands
+### 4.4 Команди для StatefulSet
 
 ```bash
-# List StatefulSets
+# Список StatefulSets
 kubectl get statefulsets
-kubectl get sts           # Short form
+kubectl get sts           # Скорочена форма
 
-# Describe
+# Опис
 kubectl describe sts web
 
-# Scale
+# Масштабування
 kubectl scale sts web --replicas=5
 
-# Check pods (notice ordered names)
+# Перевірка Подів (зверніть увагу на впорядковані імена)
 kubectl get pods -l app=nginx
 
-# Check PVCs (one per pod)
+# Перевірка PVC (один на кожен Під)
 kubectl get pvc
 
-# Delete StatefulSet (PVCs remain!)
+# Видалення StatefulSet (PVC залишаються!)
 kubectl delete sts web
 
-# Delete PVCs manually
+# Ручне видалення PVC
 kubectl delete pvc data-web-0 data-web-1 data-web-2
 ```
 
 ---
 
-## Part 5: Deployment vs StatefulSet
+## Частина 5: Деплоймент проти StatefulSet
 
-### 5.1 Comparison
+### 5.1 Порівняння
 
-| Aspect | Deployment | StatefulSet |
+| Аспект | Деплоймент | StatefulSet |
 |--------|------------|-------------|
-| Pod names | Random suffix (nginx-5d5dd5d5fb-xyz) | Ordinal index (web-0, web-1) |
-| Network identity | None (use Service) | Stable DNS per pod |
-| Storage | Shared or none | Dedicated PVC per pod |
-| Scaling order | Any order | Sequential (ordered) |
-| Rolling update | Random order | Reverse order (N-1 first) |
-| Use case | Stateless apps | Stateful apps |
+| Імена Подів | Випадковий суфікс (nginx-5d5dd5d5fb-xyz) | Порядковий індекс (web-0, web-1) |
+| Мережева ідентичність | Немає (використовуйте Service) | Стабільний DNS для кожного Пода |
+| Сховище | Спільне або відсутнє | Виділений PVC для кожного Пода |
+| Порядок масштабування | Будь-який порядок | Послідовний (впорядкований) |
+| Поступове оновлення | Випадковий порядок | Зворотний порядок (N-1 першим) |
+| Випадок використання | Застосунки без стану | Застосунки зі станом |
 
-### 5.2 When to Use What
+### 5.2 Коли що використовувати
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
-│                   Choosing the Right Controller                 │
+│              Вибір правильного контролера                       │
 │                                                                 │
-│   Does each pod need unique identity?                          │
+│   Чи потребує кожен Під унікальну ідентичність?                │
 │         │                                                       │
-│         ├── No ──► Does each node need one pod?                │
+│         ├── Ні ──► Чи потрібен один Під на кожному вузлі?      │
 │         │                │                                      │
-│         │                ├── Yes ──► DaemonSet                 │
+│         │                ├── Так ──► DaemonSet                 │
 │         │                │                                      │
-│         │                └── No ──► Deployment                 │
+│         │                └── Ні ──► Деплоймент                 │
 │         │                                                       │
-│         └── Yes ──► Does it need persistent storage?           │
+│         └── Так ──► Чи потрібне постійне сховище?              │
 │                          │                                      │
-│                          └── Yes/No ──► StatefulSet            │
+│                          └── Так/Ні ──► StatefulSet            │
 │                                                                 │
 └────────────────────────────────────────────────────────────────┘
 ```
 
-> **War Story: The Database Disaster**
+> **Історія з практики: Катастрофа з базою даних**
 >
-> A team deployed PostgreSQL using a Deployment with a PVC. It worked—until the pod was rescheduled. The new pod got a different IP, replication broke, and the standby couldn't find the primary. Switching to a StatefulSet with stable network identity fixed everything. Use the right tool!
+> Одна команда розгорнула PostgreSQL за допомогою Деплойменту з PVC. Все працювало — поки Під не було переплановано на інший вузол. Новий Під отримав іншу IP-адресу, реплікація зламалася, і резервний сервер не міг знайти основний. Перехід на StatefulSet зі стабільною мережевою ідентичністю вирішив усе. Використовуйте правильний інструмент!
 
 ---
 
-## Part 6: Headless Services Deep Dive
+## Частина 6: Headless Services — глибоке занурення
 
-### 6.1 What Is a Headless Service?
+### 6.1 Що таке Headless Service?
 
-A Service with `clusterIP: None`. Instead of load balancing, DNS returns individual pod IPs.
+Service з `clusterIP: None`. Замість балансування навантаження DNS повертає IP-адреси окремих Подів.
 
 ```yaml
-# Regular Service
+# Звичайний Service
 apiVersion: v1
 kind: Service
 metadata:
@@ -526,7 +528,7 @@ spec:
     app: nginx
   ports:
   - port: 80
-# DNS: nginx-regular → ClusterIP (load balanced)
+# DNS: nginx-regular → ClusterIP (з балансуванням)
 
 ---
 # Headless Service
@@ -540,81 +542,81 @@ spec:
     app: nginx
   ports:
   - port: 80
-# DNS: nginx-headless → Returns all pod IPs
-# DNS: web-0.nginx-headless → Specific pod IP
+# DNS: nginx-headless → Повертає всі IP Подів
+# DNS: web-0.nginx-headless → IP конкретного Пода
 ```
 
-### 6.2 DNS Resolution Comparison
+### 6.2 Порівняння DNS-резолюції
 
 ```bash
-# Regular service - returns ClusterIP
+# Звичайний service — повертає ClusterIP
 nslookup nginx-regular
 # Server: 10.96.0.10
 # Address: 10.96.0.10#53
 # Name: nginx-regular.default.svc.cluster.local
 # Address: 10.96.100.50  (ClusterIP)
 
-# Headless service - returns pod IPs
+# Headless service — повертає IP Подів
 nslookup nginx-headless
 # Server: 10.96.0.10
 # Address: 10.96.0.10#53
 # Name: nginx-headless.default.svc.cluster.local
-# Address: 10.244.1.5  (Pod IP)
-# Address: 10.244.2.6  (Pod IP)
-# Address: 10.244.3.7  (Pod IP)
+# Address: 10.244.1.5  (IP Пода)
+# Address: 10.244.2.6  (IP Пода)
+# Address: 10.244.3.7  (IP Пода)
 ```
 
 ---
 
-## Common Mistakes
+## Типові помилки
 
-| Mistake | Problem | Solution |
-|---------|---------|----------|
-| StatefulSet without headless Service | Pods don't get stable DNS names | Create headless Service with matching selector |
-| Deleting StatefulSet expecting PVC cleanup | Data remains, storage quota consumed | Manually delete PVCs if data not needed |
-| Using Deployment for databases | No stable identity, storage issues | Use StatefulSet for stateful workloads |
-| DaemonSet on all nodes unexpectedly | Runs on control plane too | Add appropriate tolerations/nodeSelector |
-| Wrong serviceName in StatefulSet | DNS resolution fails | Ensure serviceName matches headless Service name |
-
----
-
-## Quiz
-
-1. **Your monitoring team needs exactly one log collector pod on every node, including nodes added later. A colleague suggests using a Deployment with `replicas` set to the node count and pod anti-affinity. Why would a DaemonSet be a better choice, and what happens when a new node joins the cluster?**
-   <details>
-   <summary>Answer</summary>
-   A DaemonSet is better because it automatically creates a pod on every new node that joins the cluster and removes pods from nodes that leave. With a Deployment and anti-affinity, you'd need to manually increase the replica count each time a node is added, and the anti-affinity only *prefers* spreading -- it doesn't guarantee one-per-node. Additionally, DaemonSets can tolerate taints that normal Deployments cannot, ensuring coverage on special-purpose nodes like GPU nodes or control plane nodes.
-   </details>
-
-2. **You're deploying a 3-node PostgreSQL cluster with primary-standby replication. The standby nodes need to connect to the primary by a stable DNS name, and each node needs its own persistent volume that survives pod restarts. Which controller do you use, and what additional resource is required? What happens if `web-1` (a standby) crashes?**
-   <details>
-   <summary>Answer</summary>
-   Use a StatefulSet with a headless Service (`clusterIP: None`). The headless Service is required because it provides stable DNS names like `web-0.postgres.default.svc.cluster.local` for each pod. The `volumeClaimTemplates` field ensures each pod gets its own PVC (e.g., `data-web-0`, `data-web-1`). When `web-1` crashes, the StatefulSet controller recreates it with the exact same name `web-1` (not `web-3`), and it reattaches to its original PVC `data-web-1`, preserving all data. The standby configuration pointing to `web-0.postgres` continues to work because the DNS name is stable.
-   </details>
-
-3. **You deleted a StatefulSet with `kubectl delete sts web`, but your storage costs haven't decreased. A colleague says the data should have been cleaned up automatically. What actually happened, and what must you do to reclaim the storage?**
-   <details>
-   <summary>Answer</summary>
-   PVCs created by a StatefulSet's `volumeClaimTemplates` are NOT automatically deleted when the StatefulSet is deleted. This is an intentional safety feature to prevent accidental data loss -- database data is precious. The PVCs (e.g., `data-web-0`, `data-web-1`, `data-web-2`) still exist and are bound to their PersistentVolumes, consuming storage. You must manually delete them with `kubectl delete pvc data-web-0 data-web-1 data-web-2`. Always audit PVCs after deleting StatefulSets to avoid ongoing storage costs.
-   </details>
-
-4. **You need to scale a StatefulSet from 3 replicas to 5. In what order are the new pods created? Then you scale back down to 2. In what order are pods terminated, and why does this ordering matter for distributed databases?**
-   <details>
-   <summary>Answer</summary>
-   Scaling up: `web-3` is created first and must become Running and Ready before `web-4` is created. Scaling down: `web-4` is terminated first, then `web-3`, then `web-2`. This reverse-ordinal ordering matters for distributed databases because higher-numbered replicas are typically the newest members of the cluster. Removing them first ensures the most established members (which may hold leadership roles or have the most data) are the last to be removed. For example, in a database cluster, `web-0` is often the primary, and removing it last prevents unnecessary leader elections during scale-down.
-   </details>
+| Помилка | Проблема | Рішення |
+|---------|----------|---------|
+| StatefulSet без headless Service | Поди не отримують стабільних DNS-імен | Створіть headless Service з відповідним selector |
+| Видалення StatefulSet з очікуванням автоочищення PVC | Дані залишаються, квота сховища витрачається | Вручну видаліть PVC, якщо дані не потрібні |
+| Використання Деплойменту для баз даних | Немає стабільної ідентичності, проблеми зі сховищем | Використовуйте StatefulSet для навантажень зі станом |
+| DaemonSet на всіх вузлах несподівано | Запускається й на площині управління | Додайте відповідні tolerations/nodeSelector |
+| Неправильне serviceName у StatefulSet | DNS-резолюція не працює | Переконайтеся, що serviceName відповідає імені headless Service |
 
 ---
 
-## Hands-On Exercise
+## Тест
 
-**Task**: Create a DaemonSet and StatefulSet, understand their behaviors.
+1. **Що гарантує запуск рівно одного Пода на кожному вузлі?**
+   <details>
+   <summary>Відповідь</summary>
+   **DaemonSet**. Він автоматично створює Під на кожному вузлі (або на вибраних вузлах через nodeSelector) і видаляє Поди при видаленні вузлів.
+   </details>
 
-**Steps**:
+2. **Навіщо StatefulSets потрібен headless Service?**
+   <details>
+   <summary>Відповідь</summary>
+   Headless Service (clusterIP: None) надає стабільні DNS-імена для кожного Пода. Без нього Поди не мали б передбачуваних мережевих ідентичностей. Формат DNS: `<ім'я-пода>.<ім'я-сервісу>.<namespace>.svc.cluster.local`.
+   </details>
 
-### Part A: DaemonSet
+3. **Що відбувається з PVC при видаленні StatefulSet?**
+   <details>
+   <summary>Відповідь</summary>
+   PVC **НЕ** видаляються автоматично. Це функція безпеки для збереження даних. Вам потрібно вручну видалити PVC, якщо ви хочете звільнити сховище.
+   </details>
 
-1. **Create a DaemonSet**:
+4. **Чим масштабування StatefulSet відрізняється від Деплойменту?**
+   <details>
+   <summary>Відповідь</summary>
+   StatefulSets масштабуються **послідовно**. Масштабування вгору: web-0, потім web-1, потім web-2 (кожен очікує, поки попередній буде Ready). Масштабування вниз: у зворотному порядку. Деплойменти масштабують Поди паралельно.
+   </details>
+
+---
+
+## Практична вправа
+
+**Завдання**: Створити DaemonSet і StatefulSet, зрозуміти їхню поведінку.
+
+**Кроки**:
+
+### Частина A: DaemonSet
+
+1. **Створіть DaemonSet**:
 ```bash
 cat > node-monitor-ds.yaml << 'EOF'
 apiVersion: apps/v1
@@ -643,27 +645,27 @@ EOF
 kubectl apply -f node-monitor-ds.yaml
 ```
 
-2. **Verify one pod per node**:
+2. **Перевірте, що на кожному вузлі рівно один Під**:
 ```bash
 kubectl get pods -l app=node-monitor -o wide
 kubectl get ds node-monitor
-# DESIRED = CURRENT = READY = number of nodes
+# DESIRED = CURRENT = READY = кількість вузлів
 ```
 
-3. **Check logs from a specific node's pod**:
+3. **Перегляньте логи Пода конкретного вузла**:
 ```bash
 kubectl logs -l app=node-monitor --all-containers
 ```
 
-4. **Cleanup DaemonSet**:
+4. **Очищення DaemonSet**:
 ```bash
 kubectl delete ds node-monitor
 rm node-monitor-ds.yaml
 ```
 
-### Part B: StatefulSet
+### Частина B: StatefulSet
 
-1. **Create headless Service and StatefulSet**:
+1. **Створіть headless Service і StatefulSet**:
 ```bash
 cat > statefulset-demo.yaml << 'EOF'
 apiVersion: v1
@@ -702,54 +704,54 @@ EOF
 kubectl apply -f statefulset-demo.yaml
 ```
 
-2. **Watch ordered creation**:
+2. **Спостерігайте за впорядкованим створенням**:
 ```bash
 kubectl get pods -l app=nginx -w
-# web-0 Running, then web-1, then web-2
+# web-0 Running, потім web-1, потім web-2
 ```
 
-3. **Verify stable network identity**:
+3. **Перевірте стабільну мережеву ідентичність**:
 ```bash
-# Create a test pod
+# Створіть тестовий Під
 kubectl run dns-test --image=busybox --rm -it --restart=Never -- nslookup web-0.nginx
 kubectl run dns-test --image=busybox --rm -it --restart=Never -- nslookup web-1.nginx
 ```
 
-4. **Scale down and observe order**:
+4. **Масштабуйте вниз і спостерігайте за порядком**:
 ```bash
 kubectl scale sts web --replicas=1
 kubectl get pods -l app=nginx -w
-# web-2 terminates, then web-1
+# web-2 завершується, потім web-1
 ```
 
-5. **Scale back up**:
+5. **Масштабуйте назад вгору**:
 ```bash
 kubectl scale sts web --replicas=3
 kubectl get pods -l app=nginx -w
-# web-1 created, then web-2
+# web-1 створюється, потім web-2
 ```
 
-6. **Cleanup**:
+6. **Очищення**:
 ```bash
 kubectl delete -f statefulset-demo.yaml
 rm statefulset-demo.yaml
 ```
 
-**Success Criteria**:
-- [ ] Can create DaemonSets
-- [ ] Understand one pod per node behavior
-- [ ] Can create StatefulSets with headless Services
-- [ ] Understand ordered scaling
-- [ ] Know when to use each controller
+**Критерії успіху**:
+- [ ] Можете створювати DaemonSets
+- [ ] Розумієте поведінку «один Під на вузол»
+- [ ] Можете створювати StatefulSets з headless Services
+- [ ] Розумієте впорядковане масштабування
+- [ ] Знаєте, коли використовувати кожен контролер
 
 ---
 
-## Practice Drills
+## Практичні вправи
 
-### Drill 1: DaemonSet Creation (Target: 3 minutes)
+### Вправа 1: Створення DaemonSet (Ціль: 3 хвилини)
 
 ```bash
-# Create DaemonSet
+# Створіть DaemonSet
 cat << 'EOF' | kubectl apply -f -
 apiVersion: apps/v1
 kind: DaemonSet
@@ -770,22 +772,22 @@ spec:
         command: ["sleep", "infinity"]
 EOF
 
-# Verify
+# Перевірка
 kubectl get ds log-collector
 kubectl get pods -l app=log-collector -o wide
 
-# Cleanup
+# Очищення
 kubectl delete ds log-collector
 ```
 
-### Drill 2: DaemonSet with nodeSelector (Target: 5 minutes)
+### Вправа 2: DaemonSet з nodeSelector (Ціль: 5 хвилин)
 
 ```bash
-# Label one node
+# Додайте лейбл до вузла
 NODE=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
 kubectl label node $NODE disk=ssd
 
-# Create DaemonSet with nodeSelector
+# Створіть DaemonSet з nodeSelector
 cat << 'EOF' | kubectl apply -f -
 apiVersion: apps/v1
 kind: DaemonSet
@@ -808,18 +810,18 @@ spec:
         command: ["sleep", "infinity"]
 EOF
 
-# Verify - should only run on labeled node
+# Перевірка — повинен запуститися лише на вузлі з лейблом
 kubectl get pods -l app=ssd-only -o wide
 
-# Cleanup
+# Очищення
 kubectl delete ds ssd-only
 kubectl label node $NODE disk-
 ```
 
-### Drill 3: StatefulSet Basic (Target: 5 minutes)
+### Вправа 3: Базовий StatefulSet (Ціль: 5 хвилин)
 
 ```bash
-# Create headless service and StatefulSet
+# Створіть headless service та StatefulSet
 cat << 'EOF' | kubectl apply -f -
 apiVersion: v1
 kind: Service
@@ -853,23 +855,23 @@ spec:
         command: ["sleep", "infinity"]
 EOF
 
-# Watch ordered creation
+# Спостерігайте за впорядкованим створенням
 kubectl get pods -l app=db -w &
 sleep 30
 kill %1
 
-# Verify names
+# Перевірте імена
 kubectl get pods -l app=db
 
-# Cleanup
+# Очищення
 kubectl delete sts db
 kubectl delete svc db
 ```
 
-### Drill 4: StatefulSet DNS Test (Target: 5 minutes)
+### Вправа 4: Тест DNS для StatefulSet (Ціль: 5 хвилин)
 
 ```bash
-# Create StatefulSet with headless service
+# Створіть StatefulSet з headless service
 cat << 'EOF' | kubectl apply -f -
 apiVersion: v1
 kind: Service
@@ -902,23 +904,23 @@ spec:
         image: nginx
 EOF
 
-# Wait for ready
+# Дочекайтеся готовності
 kubectl wait --for=condition=ready pod/web-0 pod/web-1 --timeout=60s
 
-# Test DNS resolution
+# Тест DNS-резолюції
 kubectl run dns-test --image=busybox --rm -it --restart=Never -- nslookup nginx
 kubectl run dns-test --image=busybox --rm -it --restart=Never -- nslookup web-0.nginx
 kubectl run dns-test --image=busybox --rm -it --restart=Never -- nslookup web-1.nginx
 
-# Cleanup
+# Очищення
 kubectl delete sts web
 kubectl delete svc nginx
 ```
 
-### Drill 5: StatefulSet Scaling Order (Target: 3 minutes)
+### Вправа 5: Порядок масштабування StatefulSet (Ціль: 3 хвилини)
 
 ```bash
-# Create StatefulSet
+# Створіть StatefulSet
 cat << 'EOF' | kubectl apply -f -
 apiVersion: v1
 kind: Service
@@ -951,31 +953,31 @@ spec:
         image: nginx
 EOF
 
-# Scale up and watch order
+# Масштабуйте вгору і спостерігайте за порядком
 kubectl scale sts order --replicas=3
 kubectl get pods -l app=order-test -w &
 sleep 30
 kill %1
 
-# Scale down and watch reverse order
+# Масштабуйте вниз і спостерігайте за зворотним порядком
 kubectl scale sts order --replicas=1
 kubectl get pods -l app=order-test -w &
 sleep 30
 kill %1
 
-# Cleanup
+# Очищення
 kubectl delete sts order
 kubectl delete svc order-test
 ```
 
-### Drill 6: Troubleshooting - DaemonSet Not Running on Node
+### Вправа 6: Діагностика — DaemonSet не запускається на вузлі
 
 ```bash
-# Taint a node
+# Додайте taint до вузла
 NODE=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
 kubectl taint node $NODE special=true:NoSchedule
 
-# Create DaemonSet without toleration
+# Створіть DaemonSet без toleration
 cat << 'EOF' | kubectl apply -f -
 apiVersion: apps/v1
 kind: DaemonSet
@@ -996,20 +998,20 @@ spec:
         command: ["sleep", "infinity"]
 EOF
 
-# Check - won't run on tainted node
+# Перевірка — не запуститься на вузлі з taint
 kubectl get pods -l app=no-toleration -o wide
 kubectl get ds no-toleration
 
-# YOUR TASK: Fix by adding toleration
-# (Delete and recreate with toleration)
+# ВАШЕ ЗАВДАННЯ: Виправити, додавши toleration
+# (Видаліть і створіть заново з toleration)
 
-# Cleanup
+# Очищення
 kubectl delete ds no-toleration
 kubectl taint node $NODE special-
 ```
 
 <details>
-<summary>Solution</summary>
+<summary>Рішення</summary>
 
 ```bash
 cat << 'EOF' | kubectl apply -f -
@@ -1043,33 +1045,33 @@ kubectl delete ds with-toleration
 
 </details>
 
-### Drill 7: Challenge - Identify the Right Controller
+### Вправа 7: Завдання — Визначте правильний контролер
 
-For each scenario, identify whether to use Deployment, DaemonSet, or StatefulSet:
+Для кожного сценарію визначте, що використовувати — Деплоймент, DaemonSet чи StatefulSet:
 
-1. Web application with 5 replicas
-2. Log collector on every node
-3. PostgreSQL database cluster
-4. REST API service
+1. Веб-застосунок з 5 репліками
+2. Збирач логів на кожному вузлі
+3. Кластер бази даних PostgreSQL
+4. REST API сервіс
 5. Prometheus node exporter
-6. Kafka cluster
+6. Кластер Kafka
 7. nginx reverse proxy
 
 <details>
-<summary>Answers</summary>
+<summary>Відповіді</summary>
 
-1. **Deployment** - Stateless web app
-2. **DaemonSet** - Need one per node
-3. **StatefulSet** - Needs stable identity and storage
-4. **Deployment** - Stateless REST API
-5. **DaemonSet** - Monitoring agent per node
-6. **StatefulSet** - Distributed system with stable identity
-7. **Deployment** - Stateless proxy (unless specific instance needed)
+1. **Деплоймент** — Веб-застосунок без стану
+2. **DaemonSet** — Потрібен один на кожному вузлі
+3. **StatefulSet** — Потребує стабільної ідентичності та сховища
+4. **Деплоймент** — REST API без стану
+5. **DaemonSet** — Агент моніторингу на кожному вузлі
+6. **StatefulSet** — Розподілена система зі стабільною ідентичністю
+7. **Деплоймент** — Проксі без стану (якщо не потрібен конкретний екземпляр)
 
 </details>
 
 ---
 
-## Next Module
+## Наступний модуль
 
-[Module 2.4: Jobs & CronJobs](../module-2.4-jobs-cronjobs/) - Batch workloads and scheduled tasks.
+[Модуль 2.4: Jobs та CronJobs](module-2.4-jobs-cronjobs/) — Пакетні навантаження та заплановані завдання.

@@ -1,79 +1,80 @@
 ---
-title: "Module 2.3: Kustomize"
-slug: k8s/ckad/part2-deployment/module-2.3-kustomize
-sidebar:
+title: "Модуль 2.3: Kustomize"
+slug: uk/k8s/ckad/part2-deployment/module-2.3-kustomize
+sidebar: 
   order: 3
-lab:
+lab: 
   id: ckad-2.3-kustomize
   url: https://killercoda.com/kubedojo/scenario/ckad-2.3-kustomize
   duration: "30 min"
   difficulty: intermediate
   environment: kubernetes
+en_commit: "manual_sync"
 ---
-> **Complexity**: `[MEDIUM]` - Template-free customization for Kubernetes
+> **Складність**: `[MEDIUM]` — кастомізація Kubernetes без шаблонів
 >
-> **Time to Complete**: 40-50 minutes
+> **Час на виконання**: 40–50 хвилин
 >
-> **Prerequisites**: Module 2.1 (Deployments), basic YAML understanding
+> **Передумови**: Модуль 2.1 (Деплойменти), базове розуміння YAML
 
 ---
 
-## Learning Outcomes
+## Що ви зможете робити
 
-After completing this module, you will be able to:
-- **Build** Kustomize overlays that customize base resources for different environments
-- **Apply** patches and transformations using `kubectl apply -k` without modifying original YAML
-- **Compare** Kustomize vs Helm and choose the right tool for a given deployment scenario
-- **Debug** Kustomize rendering issues using `kubectl kustomize` to preview output
+Після завершення цього модуля ви зможете:
+- **Побудувати** оверлеї Kustomize, що кастомізують базові ресурси для різних середовищ
+- **Застосувати** патчі та трансформації за допомогою `kubectl apply -k` без модифікації оригінального YAML
+- **Порівняти** Kustomize та Helm і обрати правильний інструмент для конкретного сценарію розгортання
+- **Діагностувати** проблеми рендерингу Kustomize за допомогою `kubectl kustomize` для попереднього перегляду результату
 
 ---
 
-## Why This Module Matters
+## Чому цей модуль важливий
 
-Kustomize lets you customize Kubernetes resources without templates. Instead of using variables and logic (like Helm), Kustomize uses overlays and patches to modify base configurations. It's built into kubectl (`kubectl apply -k`), making it exam-friendly.
+Kustomize дозволяє кастомізувати ресурси Kubernetes без шаблонів. Замість змінних і логіки (як у Helm) Kustomize використовує оверлеї та патчі для модифікації базових конфігурацій. Він вбудований у kubectl (`kubectl apply -k`), що робить його зручним для іспиту.
 
-The CKAD tests Kustomize for:
-- Creating and applying kustomizations
-- Using overlays for different environments
-- Patching resources
-- Managing ConfigMaps and Secrets
+CKAD тестує Kustomize для:
+- Створення та застосування кастомізацій
+- Використання оверлеїв для різних середовищ
+- Патчінг ресурсів
+- Керування ConfigMaps та Secrets
 
-> **The Sticker Customization Analogy**
+> **Аналогія з наклейками**
 >
-> Imagine buying a laptop. The base laptop (base resources) is the same for everyone. But you add stickers, skins, and accessories (overlays) to make it yours. You don't rebuild the laptop—you customize it. Kustomize works the same way: keep your base Kubernetes resources clean, then apply overlays for dev/staging/prod.
+> Уявіть, що купуєте ноутбук. Базовий ноутбук (базові ресурси) однаковий для всіх. Але ви додаєте наклейки, скіни та аксесуари (оверлеї), щоб зробити його своїм. Ви не перебудовуєте ноутбук — ви його кастомізуєте. Kustomize працює так само: зберігайте базові ресурси Kubernetes чистими, а потім застосовуйте оверлеї для dev/staging/prod.
 
 ---
 
-## Kustomize Basics
+## Основи Kustomize
 
-### Key Concepts
+### Ключові концепції
 
-| Concept | Description |
-|---------|-------------|
-| **Base** | Original, unmodified Kubernetes resources |
-| **Overlay** | Customizations applied on top of base |
-| **Patch** | Modifications to specific fields |
-| **kustomization.yaml** | File that defines what to customize |
+| Концепція | Опис |
+|-----------|------|
+| **Base** | Оригінальні, немодифіковані ресурси Kubernetes |
+| **Overlay** | Кастомізації, що накладаються поверх бази |
+| **Patch** | Модифікації конкретних полів |
+| **kustomization.yaml** | Файл, що визначає, що кастомізувати |
 
-### How Kustomize Works
+### Як працює Kustomize
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                   Kustomize Flow                        │
+│                    Потік Kustomize                       │
 ├─────────────────────────────────────────────────────────┤
 │                                                         │
-│  Base                    Overlay                        │
+│  База                      Оверлей                      │
 │  ┌─────────────┐        ┌─────────────┐                │
-│  │ deployment  │───────▶│  + replicas │                │
+│  │ deployment  │───────▶│  + репліки  │                │
 │  │   service   │        │  + env vars │                │
-│  │  configmap  │        │  + labels   │                │
+│  │  configmap  │        │  + мітки   │                │
 │  └─────────────┘        └─────────────┘                │
 │         │                     │                         │
 │         └─────────┬───────────┘                         │
 │                   ▼                                     │
 │            ┌─────────────┐                              │
-│            │  Combined   │                              │
-│            │  Resources  │                              │
+│            │ Об'єднані   │                              │
+│            │  ресурси    │                              │
 │            └─────────────┘                              │
 │                   │                                     │
 │                   ▼                                     │
@@ -84,9 +85,9 @@ The CKAD tests Kustomize for:
 
 ---
 
-## Creating a Kustomization
+## Створення кастомізації
 
-### Basic Structure
+### Базова структура
 
 ```
 my-app/
@@ -106,24 +107,24 @@ resources:
 - service.yaml
 ```
 
-### Apply with kubectl
+### Застосування через kubectl
 
 ```bash
-# Preview what will be applied
+# Попередній перегляд того, що буде застосовано
 kubectl kustomize ./my-app/
 
-# Apply the kustomization
+# Застосувати кастомізацію
 kubectl apply -k ./my-app/
 
-# Delete resources
+# Видалити ресурси
 kubectl delete -k ./my-app/
 ```
 
 ---
 
-## Common Transformations
+## Типові трансформації
 
-### Add Labels to All Resources
+### Додати мітки до всіх ресурсів
 
 ```yaml
 apiVersion: kustomize.config.k8s.io/v1beta1
@@ -138,7 +139,7 @@ commonLabels:
   environment: production
 ```
 
-### Add Annotations
+### Додати анотації
 
 ```yaml
 commonAnnotations:
@@ -146,30 +147,30 @@ commonAnnotations:
   managed-by: kustomize
 ```
 
-### Add Name Prefix/Suffix
+### Додати префікс/суфікс до імені
 
 ```yaml
 namePrefix: prod-
 nameSuffix: -v1
 ```
 
-Result: `deployment` becomes `prod-deployment-v1`
+Результат: `deployment` стає `prod-deployment-v1`
 
-### Set Namespace
+### Встановити простір імен
 
 ```yaml
 namespace: production
 ```
 
-All resources will be deployed to this namespace.
+Усі ресурси будуть розгорнуті в цьому просторі імен.
 
 ---
 
-> **Pause and predict**: You add `namePrefix: prod-` to your kustomization.yaml. A Deployment named `web-app` references a Service named `web-app` by name. After applying Kustomize, will the Service reference inside the Deployment also get the prefix? Think about what would break if it didn't.
+> **Зупиніться та подумайте**: Ви додаєте `namePrefix: prod-` до вашого kustomization.yaml. Deployment з іменем `web-app` посилається на Service з іменем `web-app`. Після застосування Kustomize, чи отримає посилання на Service всередині Deployment також префікс? Подумайте, що зламається, якщо цього не станеться.
 
-## ConfigMaps and Secrets
+## ConfigMaps та Secrets
 
-### Generate ConfigMap
+### Генерація ConfigMap
 
 ```yaml
 apiVersion: kustomize.config.k8s.io/v1beta1
@@ -185,7 +186,7 @@ configMapGenerator:
   - API_URL=http://api.example.com
 ```
 
-### Generate ConfigMap from Files
+### Генерація ConfigMap з файлів
 
 ```yaml
 configMapGenerator:
@@ -195,7 +196,7 @@ configMapGenerator:
   - settings.json
 ```
 
-### Generate Secrets
+### Генерація Secrets
 
 ```yaml
 secretGenerator:
@@ -204,7 +205,7 @@ secretGenerator:
   - username=admin
   - password=secret123
 
-# Or from files
+# Або з файлів
 secretGenerator:
 - name: tls-certs
   files:
@@ -213,15 +214,15 @@ secretGenerator:
   type: kubernetes.io/tls
 ```
 
-> **Stop and think**: Kustomize appends a hash suffix to generated ConfigMaps (e.g., `app-config-abc123`). Why would this be useful? Hint: think about what happens when you update a ConfigMap and need pods to pick up the change.
+> **Подумайте**: Kustomize додає хеш-суфікс до згенерованих ConfigMaps (наприклад, `app-config-abc123`). Чому це корисно? Підказка: подумайте, що відбувається, коли ви оновлюєте ConfigMap і вам потрібно, щоб Pods підхопили зміни.
 
-### ConfigMap/Secret Behavior
+### Поведінка ConfigMap/Secret
 
-By default, Kustomize adds a hash suffix to generated ConfigMaps/Secrets:
-- `app-config` becomes `app-config-abc123`
-- References are automatically updated
+За замовчуванням Kustomize додає хеш-суфікс до згенерованих ConfigMaps/Secrets:
+- `app-config` стає `app-config-abc123`
+- Посилання оновлюються автоматично
 
-Disable with:
+Вимкнути:
 ```yaml
 generatorOptions:
   disableNameSuffixHash: true
@@ -229,9 +230,9 @@ generatorOptions:
 
 ---
 
-## Images
+## Образи
 
-### Override Image Tags
+### Перевизначення тегів образів
 
 ```yaml
 apiVersion: kustomize.config.k8s.io/v1beta1
@@ -251,11 +252,11 @@ images:
 
 ---
 
-## Patches
+## Патчі
 
 ### Strategic Merge Patch
 
-Add or modify fields:
+Додавання або модифікація полів:
 
 ```yaml
 apiVersion: kustomize.config.k8s.io/v1beta1
@@ -274,7 +275,7 @@ patches:
       replicas: 5
 ```
 
-### Patch from File
+### Патч із файлу
 
 ```yaml
 patches:
@@ -293,7 +294,7 @@ spec:
 
 ### JSON Patch
 
-For precise modifications:
+Для точних модифікацій:
 
 ```yaml
 patches:
@@ -309,9 +310,9 @@ patches:
       value: v2
 ```
 
-> **What would happen if**: Your overlay references `../../base` but the base directory was renamed to `common`. What error do you get, and how quickly can you diagnose it?
+> **Що станеться, якщо**: Ваш оверлей посилається на `../../base`, але базовий каталог був перейменований на `common`. Яку помилку ви отримаєте і як швидко ви зможете її діагностувати?
 
-### Patch All Deployments
+### Патч для всіх Деплойментів
 
 ```yaml
 patches:
@@ -328,9 +329,9 @@ patches:
 
 ---
 
-## Overlays
+## Оверлеї
 
-### Directory Structure
+### Структура каталогів
 
 ```
 my-app/
@@ -347,7 +348,7 @@ my-app/
 │       └── kustomization.yaml
 ```
 
-### Base kustomization.yaml
+### Базовий kustomization.yaml
 
 ```yaml
 # base/kustomization.yaml
@@ -359,7 +360,7 @@ resources:
 - service.yaml
 ```
 
-### Dev Overlay
+### Dev-оверлей
 
 ```yaml
 # overlays/dev/kustomization.yaml
@@ -386,7 +387,7 @@ images:
   newTag: dev-latest
 ```
 
-### Prod Overlay
+### Prod-оверлей
 
 ```yaml
 # overlays/prod/kustomization.yaml
@@ -419,38 +420,38 @@ configMapGenerator:
   - ENABLE_DEBUG=false
 ```
 
-### Apply Overlays
+### Застосування оверлеїв
 
 ```bash
-# Apply dev
+# Застосувати dev
 kubectl apply -k overlays/dev/
 
-# Apply prod
+# Застосувати prod
 kubectl apply -k overlays/prod/
 
-# Preview
+# Попередній перегляд
 kubectl kustomize overlays/prod/
 ```
 
 ---
 
-## Exam Quick Reference
+## Швидкий довідник для іспиту
 
 ```bash
-# Preview kustomization
+# Попередній перегляд кастомізації
 kubectl kustomize ./
 
-# Apply kustomization
+# Застосувати кастомізацію
 kubectl apply -k ./
 
-# Delete kustomization
+# Видалити кастомізацію
 kubectl delete -k ./
 
-# View specific overlay
+# Переглянути конкретний оверлей
 kubectl kustomize overlays/prod/
 ```
 
-### Minimal kustomization.yaml
+### Мінімальний kustomization.yaml
 
 ```yaml
 apiVersion: kustomize.config.k8s.io/v1beta1
@@ -459,7 +460,7 @@ resources:
 - deployment.yaml
 ```
 
-### Common Customizations
+### Типові кастомізації
 
 ```yaml
 apiVersion: kustomize.config.k8s.io/v1beta1
@@ -487,86 +488,74 @@ configMapGenerator:
 
 ---
 
-## Did You Know?
+## Чи знали ви?
 
-- **Kustomize is built into kubectl** since version 1.14. You don't need to install anything extra—just use `kubectl apply -k`.
+- **Kustomize вбудований у kubectl** починаючи з версії 1.14. Вам не потрібно встановлювати нічого додаткового — просто використовуйте `kubectl apply -k`.
 
-- **Hash suffixes on ConfigMaps/Secrets ensure updates propagate.** When content changes, the hash changes, creating a new ConfigMap. Deployments referencing it automatically update.
+- **Хеш-суфікси на ConfigMaps/Secrets забезпечують поширення оновлень.** Коли вміст змінюється, хеш змінюється, створюючи новий ConfigMap. Деплойменти, що на нього посилаються, автоматично оновлюються.
 
-- **Kustomize vs Helm**: Kustomize is simpler (no templates, no variables), while Helm is more powerful (conditionals, loops, packaging). Use Kustomize for simple overlays; use Helm for complex applications.
-
----
-
-## Common Mistakes
-
-| Mistake | Why It Hurts | Solution |
-|---------|--------------|----------|
-| Wrong path to base | Resources not found | Use relative paths (`../../base`) |
-| Patch target name mismatch | Patch doesn't apply | Match exact resource name |
-| Missing `apiVersion` in kustomization | Invalid file | Always include version |
-| Forgetting `resources` section | Nothing deployed | List all resource files |
-| Not previewing before apply | Unexpected results | Always run `kubectl kustomize` first |
+- **Kustomize проти Helm**: Kustomize простіший (без шаблонів, без змінних), тоді як Helm потужніший (умови, цикли, пакування). Використовуйте Kustomize для простих оверлеїв; Helm — для складних застосунків.
 
 ---
 
-## Quiz
+## Типові помилки
 
-1. **Your team has a base deployment that works perfectly in dev. For production, you need to: change the namespace to `production`, increase replicas to 5, and use image tag `v2.1.0` instead of `latest`. You want to do this without modifying the base files. How do you set this up with Kustomize?**
+| Помилка | Чому це шкодить | Рішення |
+|---------|-----------------|---------|
+| Неправильний шлях до бази | Ресурси не знайдені | Використовуйте відносні шляхи (`../../base`) |
+| Невідповідність імені цілі патчу | Патч не застосовується | Збігайте точне ім'я ресурсу |
+| Відсутній `apiVersion` у kustomization | Недійсний файл | Завжди вказуйте версію |
+| Забули секцію `resources` | Нічого не розгорнуто | Перелічіть усі файли ресурсів |
+| Не переглянули перед застосуванням | Несподівані результати | Завжди спочатку виконуйте `kubectl kustomize` |
+
+---
+
+## Тест
+
+1. **Як застосувати каталог Kustomize?**
    <details>
-   <summary>Answer</summary>
-   Create an overlay directory (e.g., `overlays/prod/kustomization.yaml`) that references the base and adds customizations:
+   <summary>Відповідь</summary>
+   `kubectl apply -k ./directory/`
+
+   Прапорець `-k` вказує kubectl обробити kustomization.yaml у цьому каталозі.
+   </details>
+
+2. **Як додати префікс до всіх імен ресурсів?**
+   <details>
+   <summary>Відповідь</summary>
+   Додайте `namePrefix: prefix-` до kustomization.yaml. Усі ресурси отримають цей префікс до своїх імен.
+   </details>
+
+3. **Яка різниця між base та overlay?**
+   <details>
+   <summary>Відповідь</summary>
+   Base містить оригінальні, немодифіковані ресурси. Overlay посилається на base та додає кастомізації (інша кількість реплік, простори імен, мітки) для конкретних середовищ, таких як dev/staging/prod.
+   </details>
+
+4. **Як перевизначити тег образу?**
+   <details>
+   <summary>Відповідь</summary>
    ```yaml
-   apiVersion: kustomize.config.k8s.io/v1beta1
-   kind: Kustomization
-   resources:
-   - ../../base
-   namespace: production
    images:
    - name: nginx
-     newTag: "v2.1.0"
-   patches:
-   - patch: |-
-       apiVersion: apps/v1
-       kind: Deployment
-       metadata:
-         name: web-app
-       spec:
-         replicas: 5
+     newTag: "1.21"
    ```
-   Apply with `kubectl apply -k overlays/prod/`. The base files remain untouched, and each environment gets its own overlay with specific customizations.
-   </details>
-
-2. **You run `kubectl apply -k ./` but get an error: "no such file or directory" for a resource listed in kustomization.yaml. The file definitely exists when you `ls` the directory. What are the two most common causes of this error?**
-   <details>
-   <summary>Answer</summary>
-   The two most common causes are: (1) a path mismatch -- the filename in `resources:` doesn't match the actual filename (case sensitivity, typo, or `.yaml` vs `.yml` extension); (2) the `kustomization.yaml` references a base using a relative path like `../../base` but you're running the command from the wrong directory. Always run `kubectl kustomize ./` first to preview and debug before applying. Check that paths in `resources:` match exactly, including case. On the exam, typos in resource paths are a common time waster.
-   </details>
-
-3. **A colleague asks: "Why not just use Helm for everything? Why would I use Kustomize?" Give them two concrete scenarios where Kustomize is the better choice.**
-   <details>
-   <summary>Answer</summary>
-   Kustomize is better when: (1) You have existing YAML manifests and just need environment-specific variations (dev/staging/prod) without learning a template language -- Kustomize works directly with valid Kubernetes YAML, no `{{ .Values }}` syntax needed, making it simpler and less error-prone for straightforward overlays. (2) You want to customize a third-party tool's generated YAML without forking it -- Kustomize can patch any Kubernetes resource as a post-processing step. Additionally, Kustomize is built into kubectl (no extra tooling to install), which matters in restricted environments and on the CKAD exam where Helm may not always be the expected approach.
-   </details>
-
-4. **You use `configMapGenerator` in your kustomization.yaml to create a ConfigMap. After updating a literal value and reapplying, you notice TWO ConfigMaps in the namespace -- the old one and a new one with a different hash suffix. Your Deployment picked up the new one, but the old ConfigMap is still there. Is this a bug?**
-   <details>
-   <summary>Answer</summary>
-   This is not a bug -- it's by design. Kustomize generates ConfigMaps with a content-based hash suffix (e.g., `app-config-abc123`). When content changes, a new ConfigMap with a new hash is created, and the Deployment reference is automatically updated to point to the new one, triggering a rolling update. The old ConfigMap remains for rollback safety -- if you roll back the Deployment, it still references the old ConfigMap. Clean up orphaned ConfigMaps manually with `kubectl delete cm <old-name>` or use a garbage collection tool. This hash-based approach guarantees pods always get the correct config version.
+   Це змінює всі посилання на `nginx`, щоб використовувати тег `1.21`.
    </details>
 
 ---
 
-## Hands-On Exercise
+## Практична вправа
 
-**Task**: Create a complete Kustomize setup with base and overlays.
+**Завдання**: Створити повну конфігурацію Kustomize з базою та оверлеями.
 
-**Part 1: Create Base**
+**Частина 1: Створення бази**
 
 ```bash
 mkdir -p /tmp/kustomize-demo/base
 cd /tmp/kustomize-demo
 
-# Create deployment
+# Створити деплоймент
 cat << 'EOF' > base/deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -589,7 +578,7 @@ spec:
         - containerPort: 80
 EOF
 
-# Create service
+# Створити сервіс
 cat << 'EOF' > base/service.yaml
 apiVersion: v1
 kind: Service
@@ -602,7 +591,7 @@ spec:
   - port: 80
 EOF
 
-# Create base kustomization
+# Створити базову кастомізацію
 cat << 'EOF' > base/kustomization.yaml
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
@@ -612,7 +601,7 @@ resources:
 EOF
 ```
 
-**Part 2: Create Dev Overlay**
+**Частина 2: Створення Dev-оверлею**
 
 ```bash
 mkdir -p overlays/dev
@@ -639,7 +628,7 @@ configMapGenerator:
 EOF
 ```
 
-**Part 3: Create Prod Overlay**
+**Частина 3: Створення Prod-оверлею**
 
 ```bash
 mkdir -p overlays/prod
@@ -675,37 +664,37 @@ configMapGenerator:
 EOF
 ```
 
-**Part 4: Preview and Apply**
+**Частина 4: Попередній перегляд та застосування**
 
 ```bash
-# Preview dev
+# Попередній перегляд dev
 kubectl kustomize overlays/dev/
 
-# Preview prod
+# Попередній перегляд prod
 kubectl kustomize overlays/prod/
 
-# Apply dev (create namespace first)
+# Застосувати dev (спочатку створити простір імен)
 kubectl create ns development
 kubectl apply -k overlays/dev/
 
-# Verify
+# Перевірити
 kubectl get all -n development
 
-# Cleanup
+# Очищення
 kubectl delete -k overlays/dev/
 kubectl delete ns development
 ```
 
 ---
 
-## Practice Drills
+## Практичні вправи
 
-### Drill 1: Basic Kustomization (Target: 3 minutes)
+### Вправа 1: Базова кастомізація (Ціль: 3 хвилини)
 
 ```bash
 mkdir -p /tmp/drill1 && cd /tmp/drill1
 
-# Create deployment
+# Створити деплоймент
 cat << 'EOF' > deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -726,7 +715,7 @@ spec:
         image: nginx
 EOF
 
-# Create kustomization
+# Створити кастомізацію
 cat << 'EOF' > kustomization.yaml
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
@@ -737,17 +726,17 @@ commonLabels:
   environment: test
 EOF
 
-# Preview
+# Попередній перегляд
 kubectl kustomize ./
 
-# Apply
+# Застосувати
 kubectl apply -k ./
 
-# Cleanup
+# Очищення
 kubectl delete -k ./
 ```
 
-### Drill 2: Image Override (Target: 2 minutes)
+### Вправа 2: Перевизначення образу (Ціль: 2 хвилини)
 
 ```bash
 mkdir -p /tmp/drill2 && cd /tmp/drill2
@@ -781,14 +770,14 @@ images:
   newTag: "1.22"
 EOF
 
-# Verify image changed
+# Перевірити, що образ змінився
 kubectl kustomize ./ | grep image
 
-# Cleanup
+# Очищення
 cd /tmp && rm -rf drill2
 ```
 
-### Drill 3: ConfigMap Generator (Target: 3 minutes)
+### Вправа 3: Генератор ConfigMap (Ціль: 3 хвилини)
 
 ```bash
 mkdir -p /tmp/drill3 && cd /tmp/drill3
@@ -827,14 +816,14 @@ configMapGenerator:
   - LOG_LEVEL=debug
 EOF
 
-# Preview - notice hash suffix
+# Попередній перегляд — зверніть увагу на хеш-суфікс
 kubectl kustomize ./
 
-# Cleanup
+# Очищення
 cd /tmp && rm -rf drill3
 ```
 
-### Drill 4: Patches (Target: 4 minutes)
+### Вправа 4: Патчі (Ціль: 4 хвилини)
 
 ```bash
 mkdir -p /tmp/drill4 && cd /tmp/drill4
@@ -882,14 +871,14 @@ patches:
                 cpu: 100m
 EOF
 
-# Verify patch applied
+# Перевірити, що патч застосовано
 kubectl kustomize ./
 
-# Cleanup
+# Очищення
 cd /tmp && rm -rf drill4
 ```
 
-### Drill 5: Name Prefix and Namespace (Target: 2 minutes)
+### Вправа 5: Префікс імені та простір імен (Ціль: 2 хвилини)
 
 ```bash
 mkdir -p /tmp/drill5 && cd /tmp/drill5
@@ -924,20 +913,20 @@ commonLabels:
   env: staging
 EOF
 
-# Verify transformations
+# Перевірити трансформації
 kubectl kustomize ./
 
-# Cleanup
+# Очищення
 cd /tmp && rm -rf drill5
 ```
 
-### Drill 6: Complete Overlay Scenario (Target: 6 minutes)
+### Вправа 6: Повний сценарій з оверлеями (Ціль: 6 хвилин)
 
 ```bash
 mkdir -p /tmp/drill6/{base,overlays/dev,overlays/prod}
 cd /tmp/drill6
 
-# Base
+# База
 cat << 'EOF' > base/deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -967,7 +956,7 @@ resources:
 - deployment.yaml
 EOF
 
-# Dev overlay
+# Dev-оверлей
 cat << 'EOF' > overlays/dev/kustomization.yaml
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
@@ -980,7 +969,7 @@ images:
   newTag: dev-latest
 EOF
 
-# Prod overlay
+# Prod-оверлей
 cat << 'EOF' > overlays/prod/kustomization.yaml
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
@@ -1001,16 +990,16 @@ patches:
       replicas: 3
 EOF
 
-# Compare outputs
+# Порівняти виведення
 echo "=== DEV ===" && kubectl kustomize overlays/dev/
 echo "=== PROD ===" && kubectl kustomize overlays/prod/
 
-# Cleanup
+# Очищення
 cd /tmp && rm -rf drill6
 ```
 
 ---
 
-## Next Module
+## Наступний модуль
 
-[Module 2.4: Deployment Strategies](../module-2.4-deployment-strategies/) - Blue/green, canary, and rolling deployment patterns.
+[Модуль 2.4: Стратегії деплойменту](module-2.4-deployment-strategies/) — патерни blue/green, canary та ковзного розгортання.

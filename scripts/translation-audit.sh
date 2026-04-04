@@ -43,7 +43,7 @@ else:
 
 # 2. Code Block Integrity
 echo -e "\n2. Code Block Integrity..."
-EN_FILE="${FILE%.uk.md}.md"
+EN_FILE=$(echo "$FILE" | sed 's/\/uk\//\//' | sed 's/\.uk\.md/\.md/')
 if [ -f "$EN_FILE" ]; then
     EN_BLOCKS=$(grep -c '```' "$EN_FILE" 2>/dev/null || echo 0)
     UK_BLOCKS=$(grep -c '```' "$FILE" 2>/dev/null || echo 0)
