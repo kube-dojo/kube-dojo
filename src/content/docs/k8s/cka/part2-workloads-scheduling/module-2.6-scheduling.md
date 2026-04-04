@@ -187,6 +187,10 @@ spec:
     image: nginx
 ```
 
+> **War Story: The Lopsided Cluster**
+>
+> A team used `preferredDuringSchedulingIgnoredDuringExecution` to attract all CI/CD builder pods to nodes with a `builder=true` label. Because it was only a soft preference, the cluster autoscaler didn't provision new builder nodes when they got full; it just dumped the overflow pods onto general-purpose web nodes. The web applications were starved for CPU by the greedy builder pods. If a workload absolutely requires specific hardware isolation, use hard affinity or taints, not soft affinity.
+
 ### 2.5 Operators
 
 | Operator | Meaning |
@@ -267,6 +271,10 @@ spec:
   - name: web
     image: nginx
 ```
+
+> **War Story: The Scheduling Gridlock**
+>
+> In a large multi-tenant cluster, every team started adding required pod anti-affinity to ensure their microservices didn't share nodes with each other. Eventually, to schedule a simple 5-replica deployment, the scheduler had to find 5 completely empty nodes because every node already contained a pod that repelled the new ones. The cluster was only 20% utilized on CPU and memory, but couldn't schedule anything new. Over-constraining causes massive resource waste. Stick to soft constraints unless strictly necessary.
 
 ### 3.4 Topology Key
 
@@ -469,6 +477,10 @@ spec:
 └────────────────────────────────────────────────────────────────┘
 ```
 
+> **War Story: The Un-Scalable Spread**
+>
+> An engineering team set a strict `maxSkew: 1` with `whenUnsatisfiable: DoNotSchedule` across 3 zones, but their cloud provider ran out of spot instances in `us-east-1c`. The cluster autoscaler couldn't add nodes in zone C. Because of the strict `maxSkew`, the scheduler refused to place pods in zones A and B (which had plenty of capacity) because it would make the skew greater than 1. Their deployment stalled completely. They learned to use `ScheduleAnyway` for soft spreading, or ensure autoscaler and instance types are highly available across all zones.
+
 ---
 
 ## Part 6: Scheduling Decision Flow
@@ -503,11 +515,36 @@ spec:
 └────────────────────────────────────────────────────────────────┘
 ```
 
+> **Production Trade-offs: The Cost of Control**
+>
+> - **Hard vs. Soft Affinity**: Hard rules (`required`) guarantee placement but increase the risk of Pending pods and failed deployments if capacity is constrained. Soft rules (`preferred`) maximize scheduling success but can lead to localized hotspots or performance degradation.
+> - **Cross-AZ Network Costs**: Using topology spread across availability zones provides excellent high availability. However, if those pods communicate heavily with each other, cloud providers will charge you for cross-AZ data transfer.
+> - **Taint and Toleration Overhead**: At scale, managing dozens of custom taints creates administrative bloat. It becomes difficult to onboard new applications because developers must remember to add a huge list of tolerations just to get their pods to run.
+
 ---
 
-## Part 7: Troubleshooting Scheduling
+## Part 7: Common Production Patterns
 
-### 7.1 Common Issues
+### 7.1 Databases (Stateful Workloads)
+Databases need fast I/O and must not run on the same physical hardware as their replicas.
+- **Node Affinity**: Required affinity for nodes labeled `disk=ssd` or `instance-family=storage-optimized`.
+- **Pod Anti-Affinity**: Required pod anti-affinity using `topologyKey: kubernetes.io/hostname` to ensure replicas never share a node (avoiding a single point of failure).
+
+### 7.2 Web Tiers (Stateless Workloads)
+Web servers need high availability and can run on almost any node.
+- **Topology Spread**: Soft or hard constraints across `topology.kubernetes.io/zone` to survive datacenter outages.
+- **Node Affinity**: Preferred affinity for newer, cost-effective instance types, falling back to older instances if necessary.
+
+### 7.3 Batch Jobs (Cost Optimization)
+Background processing jobs are fault-tolerant and perfect for preemptible or spot instances.
+- **Tolerations**: Tolerate taints like `node.kubernetes.io/lifecycle=spot:NoSchedule`.
+- **Node Affinity**: Required affinity to strictly run on spot nodes, keeping regular nodes free for critical user-facing services.
+
+---
+
+## Part 8: Troubleshooting Scheduling
+
+### 8.1 Common Issues
 
 | Symptom | Likely Cause | Debug Command |
 |---------|--------------|---------------|
@@ -516,7 +553,7 @@ spec:
 | Pending (Taints) | No toleration for taint | Check node taints, pod tolerations |
 | Pending (Affinity) | No nodes match affinity rules | Simplify/remove affinity |
 
-### 7.2 Debug Commands
+### 8.2 Debug Commands
 
 ```bash
 # Check pod events
