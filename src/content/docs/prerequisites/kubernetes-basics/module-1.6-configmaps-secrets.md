@@ -10,6 +10,10 @@ sidebar:
 >
 > **Prerequisites**: Module 3 (Pods)
 
+Every major cloud security breach starts the same way — credentials that shouldn't have been there.
+
+Imagine you have a web application with hardcoded database credentials in the source code. If that code is compromised, the attacker has the keys to your database. In Module 1.3, you learned how to run applications in Pods. But how do you pass configuration and sensitive data to those Pods without rebuilding the container image every time a password changes? Let's fix that hardcoded password.
+
 ---
 
 ## What You'll Be Able to Do
@@ -17,8 +21,9 @@ sidebar:
 After this module, you will be able to:
 - **Create** ConfigMaps and Secrets and inject them into pods as environment variables or mounted files
 - **Explain** why configuration should be separate from code (the 12-factor app principle)
-- **Choose** between ConfigMaps and Secrets and explain what Secrets actually protect (hint: not much by default)
-- **Update** configuration without rebuilding container images
+- **Choose** between ConfigMaps and Secrets based on data sensitivity
+- **Update** configuration dynamically without rebuilding container images
+- **Identify** three security gaps in default Secret handling and describe mitigations
 
 ---
 
@@ -26,11 +31,13 @@ After this module, you will be able to:
 
 Applications need configuration: database URLs, feature flags, API keys, credentials. Hardcoding these in container images is bad practice. ConfigMaps and Secrets let you manage configuration separately from your application code.
 
+Think of ConfigMaps as a restaurant's public menu: it changes occasionally, anyone can read it, and it tells the staff what to cook. Secrets are the locked safe containing the secret sauce recipe: you only give access to the specific chefs who actually need it.
+
 ---
 
 ## ConfigMaps vs Secrets
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              CONFIGMAPS vs SECRETS                          │
 ├─────────────────────────────────────────────────────────────┤
@@ -52,9 +59,13 @@ Applications need configuration: database URLs, feature flags, API keys, credent
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Pause and predict**: Your application needs a feature flag (`ENABLE_BETA=true`) and a database password. Which object should store each, and why?
+
 ---
 
 ## ConfigMaps
+
+ConfigMaps store non-confidential data in key-value pairs.
 
 ### Creating ConfigMaps
 
@@ -116,6 +127,8 @@ spec:
         name: app-config
 ```
 
+> **Stop and think**: When would you mount configuration as a file versus using an environment variable?
+
 **As volume (files):**
 
 ```yaml
@@ -139,6 +152,8 @@ spec:
 ---
 
 ## Secrets
+
+Now that you can create ConfigMaps, let's talk about their secretive cousin. Secrets follow the exact same pattern as ConfigMaps, but with two key differences: you reference them using `secretKeyRef` instead of `configMapKeyRef`, and their data values must be base64 encoded.
 
 ### Creating Secrets
 
@@ -234,7 +249,7 @@ spec:
 
 ## Visualization
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              CONFIGMAP/SECRET USAGE                         │
 ├─────────────────────────────────────────────────────────────┤
@@ -265,7 +280,15 @@ spec:
 
 ---
 
-## Practical Example
+## Worked Example: Refactoring Hardcoded Config
+
+Let's walk through how to refactor an application that has hardcoded settings.
+
+**1. Identify the configuration points**: The application connects to a database at `localhost:5432` with a password `supersecret`, and uses a caching TTL of `3600`.
+
+**2. Separate by sensitivity**: The cache TTL is not sensitive, so it belongs in a ConfigMap. The database password is highly sensitive, so it must go into a Secret.
+
+**3. Create the objects**:
 
 ```yaml
 # ConfigMap
@@ -274,7 +297,6 @@ kind: ConfigMap
 metadata:
   name: app-settings
 data:
-  LOG_LEVEL: "info"
   CACHE_TTL: "3600"
 ---
 # Secret
@@ -284,8 +306,11 @@ metadata:
   name: app-secrets
 stringData:
   DB_PASSWORD: "supersecret"
-  API_KEY: "abc123"
----
+```
+
+**4. Mount them into the Pod**:
+
+```yaml
 # Pod using both
 apiVersion: v1
 kind: Pod
@@ -304,62 +329,78 @@ spec:
         secretKeyRef:
           name: app-secrets
           key: DB_PASSWORD
-    - name: API_KEY
-      valueFrom:
-        secretKeyRef:
-          name: app-secrets
-          key: API_KEY
 ```
+
+---
+
+## Production Reality: Handling Secrets Securely
+
+In 2019, multiple startups suffered severe breaches because developers committed their `.env` files containing raw database passwords into public Git repositories. Storing plain Kubernetes Secret YAMLs in Git creates the exact same vulnerability.
+
+In a production environment, you must address three major security gaps in default Kubernetes Secrets:
+
+1. **Secrets are just Base64 encoded, not encrypted**. Anyone who can view the Secret can easily decode it.
+   *Mitigation*: Enable Encryption at Rest in your Kubernetes API server so that secrets are encrypted before being written to the `etcd` database.
+2. **You cannot commit plain Secrets to Git**.
+   *Mitigation*: Use tools like **Sealed Secrets** (which encrypts the secret so it is safe to commit, and the cluster decrypts it) or the **External Secrets Operator** (which pulls secrets dynamically from cloud providers like AWS Secrets Manager or HashiCorp Vault).
+3. **Environment variables can be leaked**. If an application crashes, crash reporting tools often dump all environment variables to the logs.
+   *Mitigation*: Mount secrets as files using volumes. It is much harder to accidentally leak a mounted file than an environment variable, and files dynamically update when the Secret changes without requiring a Pod restart.
 
 ---
 
 ## Did You Know?
 
-- **Secrets are NOT encrypted at rest by default.** They're just base64 encoded. Enable encryption at rest for real security.
+- **ConfigMap/Secret updates don't automatically restart pods.** Mounted volumes update (which can take up to a minute), but environment variables require a pod restart to pick up new values.
+- **Max size is 1MB.** Both ConfigMaps and Secrets are limited to 1MB of data to prevent bloating the `etcd` database.
+- **Secrets are stored in etcd.** Anyone with etcd access can read them. Use Role-Based Access Control (RBAC) to heavily restrict access to Secrets.
 
-- **ConfigMap/Secret updates don't automatically restart pods.** Mounted volumes update, but env vars require pod restart.
-
-- **Max size is 1MB.** Both ConfigMaps and Secrets are limited to 1MB of data.
-
-- **Secrets are stored in etcd.** Anyone with etcd access can read them. Use RBAC to restrict access.
+> **Stop and think**: A colleague says Secrets are secure because they are base64 encoded. How would you respond?
 
 ---
 
 ## Common Mistakes
 
-| Mistake | Why It Hurts | Solution |
-|---------|--------------|----------|
-| Committing secrets to Git | Security breach | Use sealed-secrets or external secret management |
-| Thinking base64 = encrypted | False security | Enable encryption at rest |
-| Not using stringData | Manual base64 encoding errors | Use `stringData` for plain text |
-| Hardcoding in images | Can't change without rebuild | Use ConfigMaps/Secrets |
+| Mistake | Impact | Solution |
+|---------|--------|----------|
+| Committing secrets to Git | 100% compromise of credentials, requiring immediate rotation | Use sealed-secrets or external secret management |
+| Thinking base64 = encrypted | False sense of security; anyone with read access can decode | Enable encryption at rest in etcd |
+| Not using stringData | High rate of manual base64 encoding errors or trailing spaces | Use `stringData` for plain text |
+| Hardcoding in images | Multi-minute deployment delays just to change a configuration value | Use ConfigMaps/Secrets |
 
 ---
 
 ## Quiz
 
-1. **What's the difference between ConfigMaps and Secrets?**
+1. **A developer updates a ConfigMap that is injected into a running Pod as an environment variable, but the application isn't picking up the new value. Why?**
    <details>
    <summary>Answer</summary>
-   ConfigMaps are for non-sensitive configuration data (plain text). Secrets are for sensitive data (base64 encoded). Both can be used as environment variables or mounted as files.
+   Environment variables are only read when the container starts. Updating a ConfigMap does not automatically restart the Pod. To pick up the new environment variable, the Pod must be deleted and recreated (or restarted via a Deployment rollout). If the ConfigMap was mounted as a volume instead, the file contents would update dynamically.
    </details>
 
-2. **How do you decode a Secret value?**
+2. **You are reviewing a colleague's Kubernetes YAML and notice they have stored a production API key in a ConfigMap. Why is this a problem, and how should it be fixed?**
    <details>
    <summary>Answer</summary>
-   `kubectl get secret NAME -o jsonpath='{.data.KEY}' | base64 -d`. The data is base64 encoded, not encrypted.
+   ConfigMaps are meant for non-sensitive data. Anyone with basic access to the namespace might have permission to read ConfigMaps, exposing the API key. It should be moved to a Secret, and access to Secrets should be tightly restricted using RBAC. Additionally, the cluster should be configured with encryption at rest for Secrets.
    </details>
 
-3. **What happens to pods when you update a ConfigMap?**
+3. **Your security team runs a vulnerability scan and finds that if your application crashes, the database password is being printed in the crash logs. How can you change how the Secret is provided to fix this?**
    <details>
    <summary>Answer</summary>
-   If mounted as a volume, files update automatically (may take up to a minute). Environment variables don't update—pods need to be restarted to pick up new env values.
+   The application is likely receiving the Secret as an environment variable, which crash dumpers often log by default. The mitigation is to mount the Secret as a volume (a file) instead. The application can read the file at startup, and crash reporters will not automatically log the contents of mounted files.
    </details>
 
-4. **What's the advantage of using `stringData` in Secrets?**
+4. **This YAML has a major problem. What is it?**
+   ```yaml
+   apiVersion: v1
+   kind: Secret
+   metadata:
+     name: db-creds
+   data:
+     password: mysecretpassword
+   ```
    <details>
    <summary>Answer</summary>
-   You can write plain text, and Kubernetes automatically base64 encodes it. No manual encoding required, fewer errors.
+   The YAML uses the `data` field but provides plain text (`mysecretpassword`). The `data` field expects values to be base64 encoded. The Secret creation will either fail or the application will receive garbage when it decodes it. The developer should either manually base64 encode the password, or change the key from `data` to `stringData`.
    </details>
 
 ---
@@ -374,7 +415,9 @@ kubectl create configmap app-config \
   --from-literal=LOG_LEVEL=debug \
   --from-literal=APP_NAME=myapp
 
-# 2. Create Secret
+# 2. DECISION POINT: Create the secret.
+# Will you use --from-literal or create a YAML file with stringData? 
+# We'll use the CLI for speed here:
 kubectl create secret generic app-secret \
   --from-literal=DB_PASS=secretpassword
 
@@ -400,36 +443,45 @@ spec:
           key: DB_PASS
 EOF
 
-# 4. Verify env vars
+# 4. Verify env vars are present
 kubectl logs config-test | grep -E "LOG_LEVEL|APP_NAME|DB_PASSWORD"
+```
 
-# 5. Cleanup
+**Success criteria**: Pod logs show all three environment variables populated with the correct values.
+
+### Graduated Mini-Challenge
+
+Instead of injecting the ConfigMap as an environment variable using `envFrom`, modify the `config-test` Pod YAML to mount `app-config` as a volume at `/etc/app-config`. 
+
+Once the Pod is running, verify the files exist by running:
+`kubectl exec config-test -- ls -l /etc/app-config`
+
+Then clean up your resources:
+```bash
 kubectl delete pod config-test
 kubectl delete configmap app-config
 kubectl delete secret app-secret
 ```
 
-**Success criteria**: Pod logs show all environment variables.
-
 ---
 
 ## Summary
 
-ConfigMaps and Secrets externalize configuration:
+ConfigMaps and Secrets externalize configuration, allowing you to separate code from environment-specific variables.
 
 **ConfigMaps**:
 - Non-sensitive data
 - Plain text storage
-- Use for config values, files
+- Use for config values, feature flags, and non-sensitive files
 
 **Secrets**:
 - Sensitive data
-- Base64 encoded (NOT encrypted)
-- Use for passwords, keys, tokens
+- Base64 encoded (NOT encrypted by default)
+- Use for passwords, API keys, tokens, and certificates
 
 **Usage patterns**:
-- Environment variables (env, envFrom)
-- Volume mounts (files)
+- Environment variables (`env`, `envFrom`) - easy to use, but static and prone to leaking in crash logs
+- Volume mounts (files) - dynamically update and generally more secure
 
 ---
 
