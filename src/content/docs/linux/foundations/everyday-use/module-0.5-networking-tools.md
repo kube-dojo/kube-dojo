@@ -120,6 +120,8 @@ No response doesn't always mean the host is down. Many servers and firewalls blo
 
 `curl` is the Swiss Army knife of network tools. If ping tells you "the host is alive," curl tells you "and here's what it's saying."
 
+> **Stop and think**: Compare `curl -I` (headers only) and `curl -v` (verbose). If you are writing a monitoring script that checks if a website is up every minute, which one would you use and why? (Hint: consider bandwidth and the specific information needed by a health check).
+
 ### Basic Requests
 
 ```bash
@@ -168,6 +170,9 @@ Output (annotated):
 ```
 
 Key insight: lines with `>` are what **you sent**, lines with `<` are what **the server replied**. This is invaluable for debugging API issues.
+
+> **War Story: The API Rate Limit Trap**
+> A developer wrote a script hitting a third-party API using standard `curl`. The script kept failing mysteriously after 100 requests with no output. By switching to `curl -v`, they immediately saw the server responding with `HTTP/1.1 429 Too Many Requests` and a `Retry-After: 60` header. Without verbose mode, they were completely blind to the protocol-level conversation happening behind the scenes.
 
 ### Viewing Just Headers
 
@@ -290,6 +295,8 @@ ss -s
 ## Tool 4: DNS Lookups with `dig` and `host`
 
 DNS translates names to IP addresses. When "the website isn't loading," the first question is: **is DNS working?**
+
+> **Stop and think**: You just changed your domain's A record, but `ping yourdomain.com` still connects to the old IP. You run `dig yourdomain.com` and it shows the old IP with a TTL of 3600. What is happening, and how can you use `dig` with a specific nameserver to verify that your new IP was actually saved at the authoritative provider?
 
 ### Quick Lookups with `host`
 
@@ -469,6 +476,9 @@ For most everyday troubleshooting, either works fine.
 
 In DevOps, you constantly download binaries — kubectl, helm, terraform, container images. But how do you know the file wasn't tampered with? **Checksums.**
 
+> **War Story: The Codecov Breach of 2021**
+> In 2021, attackers compromised the bash uploader script for Codecov, a popular code coverage tool. Thousands of CI/CD pipelines downloaded and ran this script automatically without verification. If those pipelines had verified the script's checksum against a known-good hash before executing it, the tampered script would have been rejected immediately. This incident proved that verifying downloads in automated systems is a critical security requirement, not just an optional best practice.
+
 ### The Pattern: Download, Then Verify
 
 ```bash
@@ -524,6 +534,45 @@ If you skip verification and install a compromised binary, you've just given an 
 
 ---
 
+## Tool 7: Basic Firewall Rules (`ufw` and `iptables`)
+
+When `ss -tulpn` shows your service is listening on `0.0.0.0:80`, but `curl` from another machine times out, the culprit is usually a firewall. 
+
+> **War Story: The "Silent Drop" Outage**
+> A junior engineer deployed a new Redis cache and couldn't connect from the app servers. They spent 4 hours debugging the Redis config, restarting the service, and checking `ss`, which showed it listening perfectly. The problem? The default `iptables` rules dropped all incoming traffic to port 6379, silently. When packets are dropped silently, `curl` just hangs until it times out. Always check the firewall!
+
+### Using UFW (Uncomplicated Firewall)
+On Ubuntu/Debian, `ufw` is the standard frontend for managing firewall rules easily. It provides a user-friendly way to interact with the underlying netfilter system.
+
+```bash
+# Check firewall status and active rules
+sudo ufw status verbose
+
+# Allow incoming HTTP (port 80) and HTTPS (port 443)
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+
+# Block a specific malicious IP address
+sudo ufw deny from 203.0.113.50
+
+# Delete a rule (e.g., if you accidentally blocked something)
+sudo ufw delete deny from 203.0.113.50
+```
+
+### The Underlying Engine: `iptables`
+While `ufw` (or `firewalld` on RHEL/CentOS) provides easy interfaces, they both configure the Linux kernel's netfilter using `iptables` (or `nftables`). Knowing how to read raw iptables rules is a crucial fallback skill.
+
+```bash
+# List all active iptables rules with line numbers and packet counts
+sudo iptables -L -n -v --line-numbers
+```
+
+The output shows distinct chains: `INPUT` (incoming traffic), `FORWARD` (routed traffic), and `OUTPUT` (outgoing traffic). If you see a policy of `DROP` on the `INPUT` chain without specific `ACCEPT` rules for your ports, your traffic is being blocked.
+
+> **Design Challenge**: Imagine you are writing a troubleshooting runbook for your junior engineers. They complain that connections to a new internal API (port 8080) are timing out. Write a 3-step checklist using `ping`, `ss`, and `ufw`/`iptables` that logically isolates whether the problem is the network path, the service itself, or the local firewall.
+
+---
+
 ## Common Mistakes
 
 | Mistake | Problem | Solution |
@@ -535,7 +584,7 @@ If you skip verification and install a compromised binary, you've just given an 
 | Ignoring the TTL in `dig` output | You don't understand why DNS changes "aren't working" | Check TTL — old records may be cached. Wait for TTL to expire or flush local cache |
 | Running `traceroute` and panicking at `* * *` | Stars just mean that hop doesn't respond to probes | Only worry if the destination itself is unreachable. Intermediate stars are normal |
 | Downloading binaries without checksum verification | You could install corrupted or tampered files | Always download `.sha256` files and verify with `sha256sum -c` |
-| Using `netstat` instead of `ss` | `netstat` is deprecated and slower on busy systems | Use `ss` — it's the modern replacement, faster and more informative |
+| Forgetting the firewall when connections timeout | Service is listening but traffic is blocked | Always check `sudo ufw status` or `iptables -L` when connections silently hang |
 
 ---
 
@@ -549,7 +598,7 @@ You ping a server and get `ttl=52` in the response. What can you infer about the
 <details>
 <summary>Show Answer</summary>
 
-The TTL of 52 most likely indicates a **Linux server** (starting TTL of 64). The packet crossed **12 router hops** to reach you (64 - 52 = 12). If the starting TTL were 128 (Windows), it would mean 76 hops — far too many for a typical internet path. So Linux is the most reasonable guess.
+The TTL of 52 most likely indicates a **Linux server**, which typically starts with a TTL of 64. As the packet traverses the internet, each router it passes through decrements the TTL by 1. Therefore, the packet crossed **12 router hops** to reach you (64 - 52 = 12). If the starting TTL were 128 (the Windows default), it would mean the packet took 76 hops, which is far too many for a typical internet path, making Linux the most reasonable conclusion.
 
 </details>
 
@@ -589,13 +638,7 @@ Why is it dangerous to skip checksum verification when downloading a binary like
 <details>
 <summary>Show Answer</summary>
 
-Without checksum verification, you have no way to confirm the file is **authentic and intact**. The risks include:
-
-- **Supply chain attacks**: An attacker could compromise the download server or perform a man-in-the-middle attack, serving you a modified binary with a backdoor
-- **Corrupted downloads**: Network issues could produce a partially downloaded or corrupted file that behaves unpredictably
-- **Compromised infrastructure**: If you install a tampered `kubectl`, the attacker gets access to every Kubernetes cluster you manage with it
-
-The `sha256sum` verification takes seconds and confirms the file matches exactly what the maintainers published.
+Without checksum verification, you have no way to confirm the file is **authentic and intact**, leaving your system vulnerable. An attacker could compromise the download server or perform a man-in-the-middle attack, serving you a modified binary with a backdoor. Furthermore, network issues could produce a partially downloaded or corrupted file that behaves unpredictably and causes obscure errors. If you install a tampered tool like `kubectl` without checking, the attacker immediately gains access to every Kubernetes cluster you manage with it. The `sha256sum` verification takes seconds and mathematically guarantees the file matches exactly what the maintainers published.
 
 </details>
 
