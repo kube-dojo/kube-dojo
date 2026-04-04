@@ -91,7 +91,8 @@ origin  git@github.com:kubedojo/core-platform.git (fetch)
 origin  git@github.com:kubedojo/core-platform.git (push)
 ```
 
-**Pause and predict: What do you think happens if you run `git commit` while on your local `main` branch? Does `origin/main` move?**
+> **Pause and predict**: What do you think happens if you run `git commit` while on your local `main` branch? Does `origin/main` move?
+
 *Prediction outcome:* Only your local `main` branch pointer moves forward. `origin/main` remains exactly where it was, representing the last known state of the server. They are now diverged.
 
 ## 2. Fetch vs Pull: The Hidden Danger
@@ -194,7 +195,8 @@ git rebase upstream/main
 git push origin main
 ```
 
-**Pause and predict: If you accidentally run `git push upstream main`, what output do you expect?**
+> **Pause and predict**: If you accidentally run `git push upstream main`, what output do you expect?
+
 *Prediction outcome:* The server will reject the push with an HTTP 403 Forbidden error, because you do not have direct write permissions to the upstream repository. This is the exact security boundary the fork model is designed to enforce.
 
 ## 4. Force Pushing Safely: The Lease Mechanism
@@ -398,42 +400,52 @@ When reviewing, be kind but rigorous. Instead of saying, "This is wrong, use a S
 
 <details>
 <summary>Question 1: You are ready to start work on a new feature. You know the upstream `main` branch has received updates since yesterday. What sequence of commands ensures your local `main` is perfectly synced before you branch off?</summary>
-Answer: First, `git fetch upstream` to update your tracking branches. Then, `git checkout main` to ensure you are on the correct local branch. Finally, `git rebase upstream/main` to fast-forward your local branch to match the remote state. (Using `git pull --rebase upstream main` achieves the same in one step).
+Answer: First, `git fetch upstream` to update your tracking branches. Then, `git checkout main` to ensure you are on the correct local branch. Finally, `git rebase upstream/main` to fast-forward your local branch to match the remote state. (Using `git pull --rebase upstream main` achieves the same in one step). This multi-step process is crucial because it cleanly updates your local state without creating unnecessary merge commits, ensuring your new feature branch starts from a pristine, linear history.
 </details>
 
 <details>
 <summary>Question 2: You just spent an hour rebasing your local feature branch to squash some messy commits. You run `git push origin my-feature` and it is rejected. Why did this happen, and what is the safest way to proceed?</summary>
-Answer: It was rejected because rebasing rewrites commit hashes, causing your local history to diverge from the remote history. The safest way to proceed is `git push --force-with-lease origin my-feature`. This forces the update but aborts if someone else has pushed new commits to the remote in the meantime.
+Answer: It was rejected because rebasing rewrites commit hashes, causing your local history to diverge from the remote history. The server sees this as a conflict. The safest way to proceed is `git push --force-with-lease origin my-feature`. This is crucial because it forces the update but includes a safety check that aborts if a teammate has pushed new commits to the remote in the meantime, preventing you from accidentally overwriting their work.
 </details>
 
 <details>
 <summary>Question 3: Your team requires atomic commits. You have added a new Redis deployment manifest, updated the backend Service manifest to expose a new port, and fixed a typo in the README. How should you commit these?</summary>
-Answer: You should create three separate commits using `git add -p` or by specifying the files individually: one commit for the Redis deployment (`feat(cache): add redis deployment`), one for the Service port update (`feat(api): expose backend port 8080`), and one for the README typo (`docs: fix typo in setup instructions`).
+Answer: You should create three separate commits using `git add -p` or by specifying the files individually: one commit for the Redis deployment (`feat(cache): add redis deployment`), one for the Service port update (`feat(api): expose backend port 8080`), and one for the README typo (`docs: fix typo in setup instructions`). This separation is necessary because it isolates changes by their logical purpose, allowing reviewers to verify them independently. Furthermore, atomic commits enable safe, precise rollbacks if one specific component fails without taking down unrelated changes.
 </details>
 
 <details>
-<summary>Question 4: You run `git fetch origin`. Which of the following statements is true regarding your local working directory?</summary>
-Answer: Your local working directory is completely unchanged. `git fetch` only communicates with the remote server to download new objects and updates your hidden Remote Tracking Branches (like `origin/main`). It does not merge or rebase anything into your active files.
+<summary>Question 4: You have uncommitted changes in your working directory and your teammate just pushed a breaking change to `origin/main`. You run `git fetch origin`. What is the state of your working directory and local `main` branch afterward?</summary>
+Answer: Your working directory and local `main` branch remain completely unchanged. `git fetch` is a safe operation that only downloads the new objects from the remote server and updates your hidden Remote Tracking Branches (like `origin/main`). You must explicitly merge or rebase to integrate those breaking changes into your local files. This behavior ensures your uncommitted work remains safe from being unexpectedly overwritten during routine synchronization.
 </details>
 
 <details>
-<summary>Question 5: What is the primary architectural difference between an `origin` remote and an `upstream` remote in the Fork and Pull model?</summary>
-Answer: There is no technical difference in Git—they are both just URL aliases configured in `.git/config`. The difference is purely conventional. `upstream` refers to the central, authoritative repository maintained by the organization, while `origin` refers to your personal, writable copy (fork) of that repository hosted under your own account.
+<summary>Question 5: You are contributing to an open-source Kubernetes controller using the Fork and Pull model. You clone your personal fork to your laptop. A maintainer merges a major feature into the central repository. Which remote should you fetch from to get these changes, and why is this separation of remotes necessary?</summary>
+Answer: You should fetch from the `upstream` remote, which points to the central, authoritative repository. This separation is necessary for security and access control, as you do not have direct write permissions to the `upstream` server. By maintaining both an `origin` (your writable fork) and an `upstream` (the read-only central repo), you can pull the latest community changes safely. This workflow allows you to push your own proposals to your fork without risking the integrity of the main project's history.
 </details>
 
 <details>
 <summary>Question 6: A teammate reviews your Pull Request and asks you to change a label in your Kubernetes Deployment manifest. You make the change locally. How do you update the PR without adding a messy "fix label" commit to the history?</summary>
-Answer: You stage the change with `git add deployment.yaml`, then run `git commit --amend --no-edit` to fold the change into your previous commit. Finally, you run `git push --force-with-lease origin branch-name` to update the Pull Request on the server.
+Answer: You stage the change with `git add deployment.yaml`, then run `git commit --amend --no-edit` to fold the change into your previous commit. Finally, you run `git push --force-with-lease origin branch-name` to update the Pull Request on the server. This workflow is important because it maintains a clean, atomic commit history that reflects the final intended state of the feature. By amending instead of adding new commits, you avoid polluting the project log with incremental trial-and-error corrections.
 </details>
 
 <details>
-<summary>Question 7: You are examining a repository's log and see a commit message starting with `chore(deps):`. What does this indicate based on Conventional Commits?</summary>
-Answer: The `chore` type indicates a routine maintenance task that does not add a feature or fix a bug in the application code. The `(deps)` scope specifically indicates that this commit involves updating dependencies or libraries.
+<summary>Question 7: Your CI pipeline uses commit prefixes to decide whether to trigger a deployment. A teammate pushes a commit with the message `chore(deps): bump helm to 3.15`. Should the pipeline trigger a production deployment? Why or why not?</summary>
+Answer: The pipeline should not trigger a production deployment. According to the Conventional Commits specification, the `chore` type indicates routine maintenance that does not modify application logic or add features. Specifically, `chore(deps)` means a dependency was updated. Triggering a deployment for non-functional or non-user-facing changes introduces unnecessary risk and deployment churn, which is why CI pipelines typically ignore these commits.
 </details>
 
 <details>
-<summary>Question 8: Why is cryptographically signing Git commits important in an enterprise environment?</summary>
-Answer: Git allows you to set your `user.name` and `user.email` to absolutely anything in your local configuration, making it trivial to impersonate another developer. Cryptographic signing (via SSH or GPG) proves that the commit was generated by someone holding the corresponding private key, verifying authenticity and preventing supply-chain spoofing attacks.
+<summary>Question 8: A malicious actor gains access to your organization's internal network and attempts to push a backdoor to a deployment script, configuring their Git client to use your name and email. How does cryptographically signing commits prevent this code from being trusted?</summary>
+Answer: While anyone can configure their local `user.name` and `user.email` to impersonate another developer, they cannot forge a cryptographic signature without possessing your private SSH or GPG key. When commits are signed, CI pipelines and code review platforms verify the signature against your public key. The malicious actor's commit would fail verification and lack the "Verified" badge. This missing badge immediately flags the spoofing attempt to reviewers and prevents the unauthorized backdoor from being merged.
+</details>
+
+<details>
+<summary>Question 9: You are reviewing a Pull Request that introduces a new microservice. The PR contains a single commit with a 2,500-line diff modifying Kubernetes Deployment, Service, ConfigMap, Ingress, and application source code simultaneously. Why should you reject this PR, and what should you instruct the author to do?</summary>
+Answer: You should reject the PR because the commit is monolithic, making it impossible to review effectively or revert safely if a specific component fails. The blast radius is simply too large for a single approval. You should instruct the author to use `git add -p` to break the changes into smaller, atomic commits. This approach allows isolating the ConfigMap update, the application code changes, and the Ingress routing into independent, logically separated commits that can be reviewed thoroughly.
+</details>
+
+<details>
+<summary>Question 10: During an incident response, you need to revert a recent update to a Kubernetes ConfigMap that broke production. The commit history shows that the ConfigMap change was bundled in the same commit as a critical security patch for the application image. What is the consequence of this non-atomic commit, and how does it complicate the rollback?</summary>
+Answer: Because the changes were bundled non-atomically, you cannot use a simple `git revert` to undo the ConfigMap update without also removing the critical security patch. This forces the team to manually extract the ConfigMap change, write a new commit to fix it, and push it forward while the system is degraded. If the commit had been atomic (one commit for the ConfigMap, one for the security patch), you could have instantly reverted only the configuration error. This scenario highlights exactly why atomic commits are a fundamental requirement for reliable incident response.
 </details>
 
 ## Hands-On Exercise
