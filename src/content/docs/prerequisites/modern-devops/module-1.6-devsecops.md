@@ -19,6 +19,9 @@ After this module, you will be able to:
 - **Identify** the top Kubernetes security risks (misconfiguration, exposed dashboards, excessive RBAC)
 - **Describe** a secure CI/CD pipeline with image scanning, secret management, and policy enforcement
 - **Compare** DevSecOps tools (Trivy, OPA/Gatekeeper, Falco) and explain what each protects against
+- **Configure** Pod Security Standards (PSS) to restrict container privileges at the namespace level
+- **Set up** pre-commit scanning concepts to prevent secret leaks before they reach version control
+- **Write** a NetworkPolicy to explicitly control and restrict pod-to-pod traffic
 
 ---
 
@@ -67,6 +70,8 @@ DevSecOps is **security integrated into DevOps**, not bolted on afterward.
 ## The Shift Left Philosophy
 
 "Shift Left" means finding security issues earlier:
+
+> **Stop and think**: If a developer hardcodes a password in a feature branch, at what stage of the pipeline should it ideally be caught to minimize cost and risk?
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -303,6 +308,8 @@ kubeseal --format yaml < secret.yaml > sealed-secret.yaml
 
 ## Network Security
 
+> **Pause and predict**: If you apply a default-deny NetworkPolicy to a namespace, what happens to the existing pods that are currently communicating with each other?
+
 ```yaml
 # Network Policy: Only allow specific traffic
 apiVersion: networking.k8s.io/v1
@@ -462,11 +469,10 @@ roleRef:
 
 ## Did You Know?
 
-- **Over 90% of Kubernetes security incidents** are caused by misconfiguration, not zero-day exploits. Scanning for misconfigurations is more valuable than most people think.
-
-- **The Log4Shell vulnerability (2021)** could have been detected by dependency scanning. Companies with good SCA practices knew within hours which applications were affected.
-
-- **Falco processes billions of events** at companies like Shopify. It can detect a shell being spawned in a container within milliseconds.
+- **Over 90% of Kubernetes security incidents** are caused by misconfiguration, not zero-day exploits. The infamous 2018 Tesla breach happened simply because an administrative Kubernetes dashboard was left exposed to the internet without a password.
+- **The Capital One Breach (2019)** resulted in the theft of 100 million credit card applications due to an overly permissive IAM role, highlighting exactly why the principle of least privilege (like strict RBAC) is critical.
+- **The Codecov Supply Chain Attack (2021)** occurred when attackers modified a bash script to exfiltrate CI/CD environment variables, emphasizing why secret management and dependency scanning must be integrated into pipelines.
+- **Falco processes billions of events** at companies like Shopify. At that scale, it can detect a malicious anomaly—like a shell being unexpectedly spawned in a production container—within milliseconds.
 
 ---
 
@@ -485,28 +491,46 @@ roleRef:
 
 ## Quiz
 
-1. **What does "Shift Left" mean in DevSecOps?**
+1. **Your team is planning a new microservice. The lead developer suggests running security scans only on the final container image right before production deployment to save CI time. Why is this approach risky in a DevSecOps culture?**
    <details>
    <summary>Answer</summary>
-   Finding security issues earlier in the development lifecycle (closer to code, further from production). Early detection is cheaper and faster to fix than finding issues in production.
+   This approach violates the "Shift Left" principle, which advocates finding security issues as early in the development lifecycle as possible. Waiting until the final container image is built means any discovered vulnerabilities (like outdated dependencies or insecure code) will require sending the work all the way back to the development phase. Fixing issues in production or staging is significantly more expensive and time-consuming than catching them during local development or at the pull request stage. By shifting left, teams can address flaws when the context is still fresh in the developer's mind.
    </details>
 
-2. **Why shouldn't containers run as root?**
+2. **A developer creates a Pod manifest that sets `runAsUser: 0` because their application needs to install a package at startup. If this container is compromised, what is the primary risk, and how should it be mitigated?**
    <details>
    <summary>Answer</summary>
-   If an attacker compromises the container, running as root makes container escape easier. Non-root containers limit the blast radius of a compromise.
+   Setting `runAsUser: 0` means the container runs as the root user, which creates a severe security risk if an attacker gains execution capabilities inside the container. If a vulnerability is exploited, the attacker would have root-level permissions, making it much easier to escape the container boundary and compromise the underlying Kubernetes worker node. To mitigate this, the container image should be built with all necessary packages installed during the CI phase, not at runtime. The Pod manifest should enforce `runAsNonRoot: true` and specify a non-privileged user ID to limit the blast radius of any potential compromise.
    </details>
 
-3. **What's the difference between SAST and DAST?**
+3. **You need to implement security checks in your CI/CD pipeline. Your manager asks you to choose between SAST (Static Application Security Testing) and DAST (Dynamic Application Security Testing) because of budget constraints. How do you explain the different threats each one addresses?**
    <details>
    <summary>Answer</summary>
-   SAST (Static Analysis) scans source code without running it. DAST (Dynamic Analysis) tests the running application. SAST finds coding issues; DAST finds runtime vulnerabilities like SQL injection.
+   SAST and DAST are complementary tools that address different types of security threats, so choosing only one leaves a significant blind spot. SAST analyzes the static source code before it is compiled or run, making it excellent for catching hardcoded secrets, dangerous function calls, and logic flaws early in the development cycle. Conversely, DAST interacts with the running application from the outside, simulating an attacker to find runtime vulnerabilities like cross-site scripting (XSS), misconfigured HTTP headers, or authentication bypasses. Because they evaluate the application in entirely different states, a robust DevSecOps pipeline requires both to ensure comprehensive coverage.
    </details>
 
-4. **What problem do Sealed Secrets solve?**
+4. **A junior engineer proposes committing a Kubernetes `Secret` manifest containing database credentials directly to the Git repository, arguing that the repository is private and secure. What is the fundamental flaw in this reasoning, and what is a better alternative?**
    <details>
    <summary>Answer</summary>
-   Sealed Secrets allow you to store encrypted secrets in Git. Only the cluster can decrypt them. This enables GitOps workflows where everything, including secrets, is version-controlled.
+   Committing raw secrets to any version control system, even a private one, is fundamentally flawed because Git retains a permanent history of all changes. Once a secret is committed, anyone with read access to the repository—or anyone who gains access in the future—can retrieve the credentials from the commit history, even if the file is later deleted. A better alternative is to use a tool like Sealed Secrets, which uses asymmetric cryptography to encrypt the secret so that it can be safely committed to Git. Only the Kubernetes cluster holds the private key required to decrypt the SealedSecret back into a usable Kubernetes Secret object.
+   </details>
+
+5. **Your organization wants to enforce a policy where no pods can run in the `production` namespace with privileged access or host-level mounts. How can you implement this natively in Kubernetes 1.25+ without installing third-party admission controllers?**
+   <details>
+   <summary>Answer</summary>
+   You can achieve this natively by configuring Pod Security Standards (PSS) at the namespace level using specific labels. By applying the label `pod-security.kubernetes.io/enforce: restricted` to the `production` namespace, the Kubernetes built-in admission controller will automatically reject any Pod creation requests that violate the restricted profile. This profile explicitly forbids privileged containers, host network namespaces, and hostpath volumes, among other insecure configurations. This native approach requires no additional tooling and ensures that misconfigured pods are blocked before they are ever scheduled onto a node.
+   </details>
+
+6. **A developer accidentally commits an AWS access key to their local Git repository. They realize the mistake before pushing to the remote repository, but they want to ensure this never happens again. What DevSecOps practice should be implemented to prevent this specific scenario?**
+   <details>
+   <summary>Answer</summary>
+   The team should implement pre-commit scanning using a tool like `git-secrets` or `trufflehog` configured to run as a Git pre-commit hook. This practice intercepts the commit process locally on the developer's machine and scans the staged files for patterns matching known sensitive data formats, such as API keys or passwords. If a secret is detected, the hook aborts the commit, providing immediate feedback to the developer and preventing the secret from ever entering the local Git history. This is a prime example of "shifting left," as it addresses the vulnerability at the earliest possible moment in the development lifecycle.
+   </details>
+
+7. **An attacker compromises a frontend web pod and immediately attempts to connect to the backend database pod on port 5432. By default, Kubernetes allows this traffic. What specific resource must you write to block this unauthorized lateral movement?**
+   <details>
+   <summary>Answer</summary>
+   You must write a Kubernetes `NetworkPolicy` resource to explicitly control and restrict pod-to-pod communication. By default, all pods in a Kubernetes cluster can communicate with each other freely, which facilitates lateral movement during a breach. By defining a default-deny NetworkPolicy and then explicitly allowing only ingress traffic from the frontend pod to the database pod on port 5432, you create a zero-trust network boundary. This ensures that even if an attacker compromises a pod in a different part of the cluster, they cannot reach the database because the network layer will drop the unauthorized packets.
    </details>
 
 ---
