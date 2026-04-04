@@ -1,0 +1,622 @@
+---
+title: "Module 0.6: Git Basics — Track Your Work"
+sidebar:
+  order: 7
+---
+
+# Module 0.6: Git Basics — Track Your Work
+
+**Complexity**: [BEGINNER]
+**Time to Complete**: 45 minutes
+**Prerequisites**: Module 0.5 (Editing Files)
+
+## Learning Outcomes
+
+After completing this module, you will be able to:
+- Initialize local Git repositories and configure user identities for accurate commit attribution.
+- Construct a logical commit history by selectively staging file modifications using `git add` and `git commit`.
+- Diagnose unexpected repository states by analyzing `git status`, `git log`, and `git diff` outputs.
+- Synchronize local repositories with remote servers using `git push` and `git pull`.
+- Formulate a `.gitignore` file to prevent sensitive data or generated artifacts from being tracked.
+
+## Why This Module Matters
+
+A mid-sized financial technology company relied on a shared network drive to store their infrastructure configuration files. Engineers would map the drive, open the files in their local editors, make changes, and save them back to the network. One Friday afternoon, a junior engineer was tasked with updating a testing environment. By mistake, they opened the production `payment-processor-deployment.yaml` file instead of the testing variant. They modified the container image tag to an experimental build, saved the file, and applied the configuration to the cluster.
+
+Within minutes, the payment processing system began dropping transactions. When the senior engineers rushed to investigate, they looked at the configuration file on the network drive, but it only showed the current, broken state. Because there was no version control system in place, there was no historical record of what the file looked like ten minutes prior, who had changed it, or why. The team had to manually reconstruct the production configuration from memory and outdated documentation. The subsequent delay in restoring service halted all customer transactions for six hours, resulting in millions of dollars in lost revenue and severe reputational damage.
+
+Version control prevents this exact scenario. Git, the industry standard for version control, acts as an unbreakable time machine for your code and configuration. It records every change, identifies exactly who made it, and allows you to instantly revert to any previous state. In the modern cloud-native world, infrastructure is defined as code. If you cannot track, review, and revert your infrastructure code with absolute certainty, you are operating a disaster waiting to happen. Mastering Git is not optional for platform engineers; it is the foundational skill upon which all reliable automation and collaboration is built. 
+
+Without Git, modern continuous integration and continuous deployment (CI/CD) pipelines cannot exist. The entire premise of automated deployments relies on a single, trusted source of truth that triggers automation whenever a new, approved change is detected. If you do not understand Git, you cannot understand modern software delivery.
+
+## Section 1: The Concept of Version Control and Git's Architecture
+
+Before typing any commands, you must understand how Git thinks about your files. Many beginners struggle with Git because they treat it like a simple backup tool (like Dropbox or Google Drive). Git is entirely different. Git does not just sync files continuously in the background; it takes deliberate, immutable snapshots of your project at specific points in time, but only when you explicitly command it to do so.
+
+Think of Git like a video game with manual save points. You can play the game, make mistakes, take damage, and explore dead ends. As long as you explicitly create a "save point" before trying a dangerous boss fight, you can always reload that exact state if things go wrong. Git works the same way, but for your text files.
+
+### Centralized vs. Distributed Version Control
+
+Historically, version control systems like Subversion (SVN) or Team Foundation Server (TFS) were centralized. There was one master server that held the history. If you wanted to view the history or make a commit, you had to be connected to the internet to talk to that server. If the server went down, nobody could work.
+
+Git is a **distributed** version control system. When you use Git, you do not just download the latest files; you download the entire history of the project. Your local laptop becomes a fully functioning repository. You can view history, compare versions, and make commits while completely offline on an airplane. You only need the internet when you want to synchronize your history with someone else's.
+
+### The Three Trees of Git
+
+Git manages your files by moving them through three distinct logical areas, often called "trees." Understanding this pipeline is the key to diagnosing almost any Git problem.
+
+```text
++---------------------+       +---------------------+       +---------------------+
+|                     |       |                     |       |                     |
+|  Working Directory  | ----> |    Staging Area     | ----> |     Repository      |
+|  (Your local files) |       | (The loading dock)  |       | (The saved history) |
+|                     |       |                     |       |                     |
++---------------------+       +---------------------+       +---------------------+
+           |                             |                             |
+           |   1. Modify files           |                             |
+           |---------------------------->|                             |
+           |                             |   2. Group changes          |
+           |                             |---------------------------->|
+           |                             |                             |
+           |                                                           |
+           |<----------------------------------------------------------|
+                               3. Restore old versions
+```
+
+1. **The Working Directory**: This is your current workspace on your computer. It contains the actual files you are editing, deleting, or creating. When you open a file in Vim or VS Code, you are modifying the Working Directory. Git sees these changes but has not saved them yet.
+2. **The Staging Area (Index)**: This is a crucial intermediate step unique to Git. Think of it as a loading dock or a staging area for a photoshoot. Before you take the final snapshot, you choose exactly which modified files to place on the stage. You can stage some files while leaving others behind. This allows you to craft highly focused, logical commits even if you modified fifty files at once.
+3. **The Repository (Commit History)**: This is the permanent database where Git stores your snapshots (called commits). Once files are committed here, they are safely recorded in history with an author name, a timestamp, and a descriptive message. A commit is mathematically sealed; it cannot be secretly altered without changing its unique identifier.
+
+### Active Learning: Pause and Predict
+Imagine you have modified three files in your Working Directory: `app.py`, `database.yaml`, and `readme.md`. You only want to save the changes made to `database.yaml` right now because the Python code is still broken and the documentation is incomplete.
+Based on the Three Trees architecture, how would you achieve this? Would you save everything at once, or is there an intermediate step you must use?
+
+*Prediction check: You must use the Staging Area. You would selectively move only `database.yaml` to the Staging Area, leaving the other two in the Working Directory. When you create the commit, Git will only snapshot what is currently sitting on the loading dock (`database.yaml`).*
+
+## Section 2: Setting the Stage: Installation and Configuration
+
+Git is a command-line tool at its core. While graphical interfaces exist, learning the terminal commands is mandatory for platform engineering, as you will often be using Git on remote servers without graphical capabilities. Most modern Linux distributions and macOS come with Git pre-installed, or it can be easily added via a standard package manager like `apt`, `yum`, or `brew`.
+
+To verify your installation, open your terminal and check the version:
+
+```bash
+git --version
+```
+
+Expected output:
+```text
+git version 2.39.2
+```
+
+### Identity Configuration
+
+Because Git is designed for collaboration across potentially thousands of developers, it refuses to create snapshots unless it knows exactly who is taking them. Every commit requires an author name and an email address. This is critical for accountability—if an infrastructure change brings down production, the team needs to know who to ask about the rationale behind the change.
+
+You configure this using the `git config` command. The `--global` flag applies these settings to all repositories on your current computer by writing them to a hidden file in your home directory (`~/.gitconfig`).
+
+```bash
+# Set your name (use your real name, this appears in the history)
+git config --global user.name "Alex Chen"
+
+# Set your email address
+git config --global user.email "alex.chen@example.com"
+```
+
+You can verify your configuration at any time by asking Git to list all its current settings:
+
+```bash
+git config --list
+```
+
+### Initializing a Repository: git init
+
+To tell Git to start tracking a project, you must initialize a repository in the root directory of your project. Let us create a new directory for a hypothetical Kubernetes project and initialize Git within it.
+
+```bash
+# Create a new directory
+mkdir k8s-webapp
+cd k8s-webapp
+
+# Tell Git to start tracking this directory
+git init
+```
+
+Expected output:
+```text
+Initialized empty Git repository in /home/alex/k8s-webapp/.git/
+```
+
+What exactly did `git init` do? It did not magically scan your hard drive. It simply created a hidden directory named `.git` inside your `k8s-webapp` folder. This hidden `.git` directory is the actual "Repository" from our Three Trees model. It is where Git stores all the internal database objects, the compressed file contents, the commit history graph, and the local configuration for this specific project. 
+
+If you delete the `.git` directory, you delete all version history for the project, though your current working files will remain untouched on the disk.
+
+```bash
+# List all files, including hidden ones
+ls -la
+```
+
+Expected output:
+```text
+total 12
+drwxr-xr-x 3 alex alex 4096 Oct 12 10:00 .
+drwxr-xr-x 5 alex alex 4096 Oct 12 09:59 ..
+drwxr-xr-x 7 alex alex 4096 Oct 12 10:00 .git
+```
+
+## Section 3: The Snapshot Lifecycle: Add, Commit, and Status
+
+Now that we have an active repository, let us walk through the daily workflow of tracking files. The command you will use more than any other—hundreds of times a day—is `git status`. It acts as your compass, telling you exactly where your files are within the Three Trees.
+
+### Step 1: Modifying the Working Directory
+
+Let us create our first file, a basic Kubernetes namespace configuration.
+
+```bash
+cat << 'EOF' > namespace.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: webapp-prod
+EOF
+```
+
+Run `git status` to see what Git thinks about this newly created file:
+
+```bash
+git status
+```
+
+Output:
+```text
+On branch main
+
+No commits yet
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	namespace.yaml
+
+nothing added to commit but untracked files present (use "git add" to track)
+```
+
+Git recognizes that a file exists in the Working Directory, but it lists it as "Untracked." This means Git has never seen this file before. It is not monitoring it for changes, and it will not automatically back it up. Git only tracks what you explicitly tell it to track.
+
+### Step 2: Moving to the Staging Area (git add)
+
+To tell Git we want to include this file in our very first snapshot, we must move it to the Staging Area (the loading dock) using the `git add` command.
+
+```bash
+git add namespace.yaml
+```
+
+Run `git status` again to observe the state change:
+
+```bash
+git status
+```
+
+Output:
+```text
+On branch main
+
+No commits yet
+
+Changes to be committed:
+  (use "git rm --cached <file>..." to unstage)
+	new file:   namespace.yaml
+```
+
+The file has moved. It is now categorized under "Changes to be committed". It is sitting on the loading dock, waiting for the photographer to take the picture.
+
+### Step 3: Taking the Snapshot (git commit)
+
+To permanently save the staged changes into the Repository, we use `git commit`. Every commit requires a commit message explaining *why* the change was made. Writing good commit messages is a core professional skill. A good message explains the intent and context, not just what lines changed.
+
+```bash
+git commit -m "feat: add production namespace definition"
+```
+
+Output:
+```text
+[main (root-commit) a1b2c3d] feat: add production namespace definition
+ 1 file changed, 4 insertions(+)
+ create mode 100644 namespace.yaml
+```
+
+Let us check `git status` one more time to see the final result of our workflow:
+
+```bash
+git status
+```
+
+Output:
+```text
+On branch main
+nothing to commit, working tree clean
+```
+
+Your Working Directory is now described as "clean." This means every single file currently sitting on your disk matches the latest snapshot stored in the `.git` database exactly. There are no pending changes.
+
+### War Story: The Accidental Secret Commit
+
+A junior developer was testing an application locally that required an AWS access key. For convenience, they hardcoded the key directly into their `deployment.yaml` file just to see if the pods would start. It worked. Excited, they ran `git add .` (a command which indiscriminately stages every changed file in the entire directory) and then ran `git commit -m "fix deployment"`.
+
+They then pushed the code to a public GitHub repository. Within 120 seconds, automated security bots scanning public GitHub repositories found the exposed AWS key. The bots instantly spun up hundreds of massive cryptocurrency mining servers across multiple AWS regions using the compromised credentials. By the time the developer woke up the next morning, the company had incurred a $65,000 cloud billing charge.
+
+**The Lesson**: Never blindly use `git add .` unless you are absolutely certain what you have changed. Always run `git status` and `git diff` before staging to ensure you are not accidentally committing passwords, API keys, private ssh keys, or temporary debugging files.
+
+## Section 4: Traveling Through Time: Log and Diff
+
+Once you have made multiple commits, you need robust ways to view the history timeline and understand exactly what has changed between different points in time. 
+
+Let us make another change to our project. We will update the namespace file to add a label, a common task in Kubernetes for organizational purposes.
+
+```bash
+cat << 'EOF' > namespace.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: webapp-prod
+  labels:
+    environment: production
+EOF
+```
+
+### Seeing What Changed: git diff
+
+Before you ever stage or commit a file, you should always verify exactly what lines you modified. Memory is fallible; the diff is objective. The `git diff` command compares your current Working Directory against the last snapshot you took.
+
+```bash
+git diff
+```
+
+Output:
+```text
+diff --git a/namespace.yaml b/namespace.yaml
+index e46b825..8394c41 100644
+--- a/namespace.yaml
++++ b/namespace.yaml
+@@ -2,3 +2,5 @@ apiVersion: v1
+ kind: Namespace
+ metadata:
+   name: webapp-prod
++  labels:
++    environment: production
+```
+
+**How to decipher a diff output:**
+- The `--- a/namespace.yaml` and `+++ b/namespace.yaml` headers show the two versions of the files being compared (old vs new).
+- `@@ -2,3 +2,5 @@` is a chunk header. It provides context to the system about roughly where in the file the changes occurred.
+- Lines starting with a space character are unchanged context lines. Git shows them to help you orient yourself.
+- Lines starting with a `+` (usually highlighted in green) are entirely new additions.
+- Lines starting with a `-` (usually highlighted in red) are deletions. If you changed a line, Git represents it as deleting the old line and adding the new line.
+
+### Active Learning: Diff Reading
+Imagine you ran `git diff` on a deployment file and saw the following output:
+
+```text
+@@ -10,3 +10,3 @@
+ spec:
+   replicas: 3
+-  image: nginx:1.14
++  image: nginx:1.24
+```
+
+Before reading further, what exactly did the engineer do in this file? Be specific.
+
+*Prediction check: The engineer did not add a completely new structural element. They modified an existing line. They deleted the line specifying the Nginx container version 1.14 and replaced it with a line specifying version 1.24. This represents a container image version upgrade.*
+
+Now that we have verified our changes are correct and contain no secrets, let us stage and commit our label addition:
+
+```bash
+git add namespace.yaml
+git commit -m "chore: add environment label to namespace"
+```
+
+### Viewing History: git log
+
+To see the timeline of your snapshots, use the `git log` command. This opens a pager (usually `less`) showing your history in reverse chronological order (newest first).
+
+```bash
+git log
+```
+
+Output:
+```text
+commit 8f9e0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f (HEAD -> main)
+Author: Alex Chen <alex.chen@example.com>
+Date:   Wed Oct 12 10:45:12 2023 -0400
+
+    chore: add environment label to namespace
+
+commit a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8g9h
+Author: Alex Chen <alex.chen@example.com>
+Date:   Wed Oct 12 10:15:30 2023 -0400
+
+    feat: add production namespace definition
+```
+
+Notice the long string of letters and numbers (e.g., `8f9e0a1b2...`). This is the Commit Hash (specifically, a SHA-1 hash). It is a mathematically generated unique identifier for that specific snapshot. It encompasses the file contents, the author, the date, and the previous commit's hash. You use this hash if you ever need to revert your project to that exact point in time.
+
+For a more compact view, which is especially useful when you are investigating a repository with thousands of commits over several years, use the `--oneline` flag:
+
+```bash
+git log --oneline
+```
+
+Output:
+```text
+8f9e0a1 chore: add environment label to namespace
+a1b2c3d feat: add production namespace definition
+```
+
+You can also use `git log -p` to see the actual diffs introduced by every single commit in history, allowing you to see not just *that* a commit happened, but exactly *what lines* were altered by it.
+
+## Section 5: Collaborating with the World: Remotes, Push, and Pull
+
+Up until this point, everything we have done exists entirely on your local laptop's hard drive. If your computer crashes, or if you drop a cup of coffee on it, your entire project history is permanently gone. Furthermore, nobody else on your team can see your work. 
+
+To collaborate with others and back up your work, you must connect your local repository to a remote server, such as GitHub, GitLab, or Bitbucket.
+
+### What is a Remote?
+
+A "remote" is simply another Git repository hosted on a network or the internet. Because Git is decentralized, everyone has a full, standalone copy of the history. "Pushing" and "Pulling" are the explicit actions we take to synchronize our local timeline with the remote timeline. 
+
+```text
++-----------------------+                    +-----------------------+
+|                       |                    |                       |
+|   Local Repository    |                    |   Remote Repository   |
+|   (Your Laptop)       |                    |   (GitHub/GitLab)     |
+|                       |                    |                       |
+|  commit C (HEAD)      | ==== git push ===> |  commit C             |
+|  commit B             |                    |  commit B             |
+|  commit A             | <=== git pull ==== |  commit A             |
+|                       |                    |                       |
++-----------------------+                    +-----------------------+
+```
+
+### Connecting to a Remote
+
+When you create an empty repository on a platform like GitHub, the platform provides you with a connection URL (usually HTTPS or SSH). You tell your local Git installation to connect to this URL using the `git remote add` command. 
+
+By industry convention, the primary, default remote server is almost always named `origin`.
+
+```bash
+# Example command (do not run unless you have a real repository URL prepared)
+git remote add origin https://github.com/yourusername/k8s-webapp.git
+```
+
+If you join a company and want to download an existing project, you do not use `git init` and `git remote add`. Instead, you use `git clone <url>`. Cloning automatically initializes a local repository, adds the remote as `origin`, and downloads all the history and files in one step.
+
+### Pushing Changes (git push)
+
+To upload your locally created commits to the remote server, you "push" them. You must specify the remote name (usually `origin`) and the branch name you are pushing (often `main` or `master`).
+
+```bash
+# Push your main branch to the origin remote for the first time
+git push -u origin main
+```
+
+The `-u` flag stands for "upstream." You only need to use it the very first time you push a new branch. It creates a persistent tracking link between your local `main` branch and the remote `main` branch. In the future, you can simply type `git push` without any arguments, and Git will know exactly where to send the data.
+
+### Pulling Changes (git pull)
+
+If a teammate makes changes, commits them locally, and pushes them to GitHub, your local repository will *not* update automatically. Git will never change your local files without your explicit permission. You must actively reach out to the server, download their new commits, and integrate them into your local history using `git pull`.
+
+```bash
+# Fetch changes from the remote and merge them into your local branch
+git pull origin main
+```
+
+Under the hood, `git pull` is actually a macro that runs two distinct commands in sequence: `git fetch` (which safely downloads the new commits from the remote without modifying your working files) and `git merge` (which attempts to seamlessly combine the downloaded changes with your current working directory).
+
+## Section 6: Ignoring the Noise: .gitignore
+
+In any real-world software or infrastructure project, there are numerous files that you **never** want to commit to version control. These include:
+- Compiled binaries, executable files, or build artifacts (e.g., `.exe`, `.jar`, `/dist/` directories).
+- Log files generated by your application during testing.
+- Operating system hidden files (e.g., `.DS_Store` generated by macOS Finder).
+- **Secrets, API keys, database passwords, and local environment variables** (e.g., `.env` files).
+
+If you accidentally commit these, you bloat the repository size or, worse, cause a severe security breach. To tell Git to pretend these files do not exist entirely, you create a plain text file named `.gitignore` in the root folder of your project.
+
+Let us create a `.gitignore` tailored for our cloud-native environment.
+
+```bash
+cat << 'EOF' > .gitignore
+# Ignore operating system generated files
+.DS_Store
+Thumbs.db
+
+# Ignore local secret and credential files
+.env
+secret-keys.yaml
+kubeconfig-local
+
+# Ignore terraform state files (if we add Infrastructure as Code later)
+*.tfstate
+*.tfstate.backup
+.terraform/
+EOF
+```
+
+Git reads this file top-to-bottom. Any file that matches a pattern listed in the `.gitignore` will never show up in `git status` as untracked. This makes it impossible to accidentally stage it with a wildcard command like `git add .`.
+
+### Active Learning: The Late Ignore
+You have a file named `database-creds.txt` that you created last week. You committed it to Git a few days ago. Today, you realize your mistake and add `database-creds.txt` to your `.gitignore` file. You modify the credentials file, and run `git status`. Will Git ignore the changes?
+
+*Prediction check: No, Git will not ignore the changes. The `.gitignore` file only prevents **untracked** files from being added to the database. Once a file is tracked (committed), Git will continue tracking it regardless of what the `.gitignore` says. You must explicitly remove it from tracking using `git rm --cached database-creds.txt` before the ignore rule takes effect.*
+
+## Did You Know?
+
+1. **Git was built in two weeks.** In 2005, the Linux kernel community abruptly lost their free license to a proprietary version control system. Linus Torvalds, the original creator of Linux, needed a replacement immediately. Unimpressed with existing options, he wrote the initial version of Git in just 14 days, and the massive Linux kernel codebase migrated to it two months later.
+2. **The name is a self-deprecating insult.** Torvalds, known for his abrasive humor, named the system "Git" (British slang for a stubborn, unpleasant, or incompetent person). He famously joked at a conference, "I'm an egotistical bastard, and I name all my projects after myself. First Linux, now Git."
+3. **Git does not track empty directories.** Due to its underlying database architecture, which maps paths directly to file contents, Git only tracks files. If you create an empty directory and run `git status`, Git will completely ignore it. Developers work around this limitation by placing a hidden, empty file (often conventionally named `.gitkeep`) inside a directory to force Git to track the folder's existence.
+4. **Colossal collision resistance.** The hashes identifying your commits (the SHA-1 strings) are 40-character hexadecimal numbers. The mathematical probability of two different snapshots generating the exact same hash (a hash collision) is astronomically low. You are statistically far more likely to be struck by lightning while simultaneously winning the lottery than to experience an accidental Git hash collision in your repository.
+
+## Common Mistakes
+
+| Mistake | Why It Happens | How to Fix It |
+| :--- | :--- | :--- |
+| **Accidentally committing a password/secret** | Using the indiscriminate `git add .` command without reviewing `git status` first, accidentally dragging a `.env` file into the staging area. | If unpushed: `git reset HEAD~1` to undo the commit locally. If pushed, **the secret is compromised**. You must instantly revoke/rotate the credential in AWS/GCP. Do not just delete it in a new commit; the history is permanent. |
+| **"fatal: refusing to merge unrelated histories"** | You initialized a repository locally, and initialized a separate repository on GitHub with a default README, then tried to pull. Git thinks they are two completely different, unrelated projects. | Run `git pull origin main --allow-unrelated-histories` to forcefully instruct Git to combine the two distinct timelines into one. |
+| **"Updates were rejected because the remote contains work that you do not have locally"** | A teammate pushed new commits to the GitHub server while you were working offline. Git refuses to let you push and overwrite their work. | Run `git pull` first to download and integrate their changes into your local branch. Resolve any potential merge conflicts, then run `git push`. |
+| **Empty or meaningless commit messages** | Rushing the job. Using vague messages like `git commit -m "update"` or `git commit -m "fixed stuff"`. | Use `git commit --amend -m "new better message"` if you haven't pushed yet. Develop a professional habit of writing "Why" not just "What". |
+| **Forgetting to stage files before committing** | Running `git commit -m "message"` while your changes are still sitting in the Working Directory, entirely bypassing the Staging Area. | Run `git status` to see what is unstaged. Run `git add <file>` to move the changes to the stage, then retry the `git commit` command. |
+| **Committing massive binary files** | Accidentally adding compiled artifacts, database memory dumps, or large videos to the repository. Git is designed for text tracking, not large binaries. | Remove the file from the tracking database with `git rm --cached <file>`, commit the removal, and immediately add the file type to your `.gitignore`. |
+
+## Quiz
+
+<details>
+<summary>1. Your team just deployed a new Kubernetes configuration, and the cluster immediately crashed. You need to quickly see who made the last change and what their commit message was. Which command do you run?</summary>
+You should run `git log` or `git log --oneline`. This command displays the commit history in reverse chronological order, showing the author, the timestamp, and the commit message, allowing you to instantly identify who made the recent changes.
+</details>
+
+<details>
+<summary>2. You have modified a `service.yaml` file on your laptop to expose a new port. You type `git commit -m "expose port 8080"`, but Git returns a message saying "nothing added to commit but untracked files present". What did you forget to do?</summary>
+You forgot to move the file from the Working Directory to the Staging Area. You must run `git add service.yaml` before you can commit. Git only commits files that have been explicitly staged on the "loading dock".
+</details>
+
+<details>
+<summary>3. You are about to stage `configMap.yaml`, but you cannot remember if you set the database password to the testing password or left the production password in there. What command should you run to inspect the exact lines you changed before staging?</summary>
+You should run `git diff`. This will compare your Working Directory against the last snapshot and show you exactly which lines were added or removed, allowing you to verify you aren't committing a production secret.
+</details>
+
+<details>
+<summary>4. You just joined a new project. You clone the repository, but when you run `git push`, the terminal asks for your username and email, and tells you to run `git config`. Why is this necessary?</summary>
+Git requires an author identity for every commit to ensure accountability and traceability in collaborative environments. Without configuring `user.name` and `user.email`, Git refuses to create snapshots because it cannot attribute the changes to a specific person in the permanent history graph.
+</details>
+
+<details>
+<summary>5. You created a file named `aws-credentials.json` on your local machine to test a script. You never want this file to be committed to the company repository. What exactly should you do to ensure it is ignored forever?</summary>
+You must create a file named `.gitignore` in the root of your repository (if it doesn't already exist) and add the text `aws-credentials.json` on a new line inside it. This explicitly instructs Git to ignore the file permanently.
+</details>
+
+<details>
+<summary>6. True or False: If you delete the `.git` hidden folder in your project directory, Git will automatically recreate it the next time you run `git status`, preserving all your commit history.</summary>
+False. The `.git` folder IS the repository. It contains the entire database of all your commits, branches, and historical snapshots. If you delete it, you instantly destroy all version control history for that project locally, reverting the directory to a standard folder of untracked files.
+</details>
+
+## Hands-On Exercise
+
+In this exercise, you will create a local repository from scratch, simulate a standard engineering workflow by making multiple logical commits, and observe the resulting history. We will use dummy Kubernetes configuration files to simulate a real infrastructure workflow.
+
+### Task 1: Initialization
+Create a new directory named `dojo-k8s-project` and navigate into it. Initialize an empty Git repository.
+- [ ] Directory created and navigated into.
+- [ ] Git repository initialized.
+
+<details>
+<summary>Solution: Task 1</summary>
+
+```bash
+mkdir dojo-k8s-project
+cd dojo-k8s-project
+git init
+```
+</details>
+
+### Task 2: The Initial Commit
+Create a `README.md` file with the text "# KubeDojo Project". Stage the file and commit it with the message "docs: add initial readme".
+- [ ] File created with correct content.
+- [ ] File added to staging area.
+- [ ] Commit successfully created.
+
+<details>
+<summary>Solution: Task 2</summary>
+
+```bash
+echo "# KubeDojo Project" > README.md
+git add README.md
+git commit -m "docs: add initial readme"
+```
+</details>
+
+### Task 3: Simulating Infrastructure Development
+Create a file named `deployment.yaml` and add the following dummy content:
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+```
+Stage and commit this file with the message "feat: add web deployment skeleton".
+- [ ] File created.
+- [ ] Commit successfully created with correct message.
+
+<details>
+<summary>Solution: Task 3</summary>
+
+```bash
+cat << 'EOF' > deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+EOF
+
+git add deployment.yaml
+git commit -m "feat: add web deployment skeleton"
+```
+</details>
+
+### Task 4: Modifying Existing Files
+Open `deployment.yaml` and add `replicas: 3` under a `spec:` block, so it looks like this:
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+spec:
+  replicas: 3
+```
+Use a command to view the exact differences before staging. Then, stage and commit the change with the message "fix: set deployment replicas to 3".
+- [ ] File modified.
+- [ ] Diff viewed successfully.
+- [ ] Change staged and committed.
+
+<details>
+<summary>Solution: Task 4</summary>
+
+```bash
+# Modify the file using your preferred editor (nano, vim, or cat override)
+cat << 'EOF' > deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+spec:
+  replicas: 3
+EOF
+
+# View the diff
+git diff
+
+# Stage and commit
+git add deployment.yaml
+git commit -m "fix: set deployment replicas to 3"
+```
+</details>
+
+### Task 5: Reviewing the Timeline
+Run a command to view your complete commit history in a compact, single-line format. Verify that all three of your commits are present in chronological order.
+- [ ] History command executed.
+- [ ] Three distinct commits visible in the output.
+
+<details>
+<summary>Solution: Task 5</summary>
+
+```bash
+git log --oneline
+```
+Output should look similar to:
+```text
+3b2a1c4 fix: set deployment replicas to 3
+9f8e7d6 feat: add web deployment skeleton
+1a2b3c4 docs: add initial readme
+```
+</details>
+
+---
+
+**Next Module**: [Module 0.7: What is Networking?](../module-0.7-what-is-networking/) — Now that you can track files, it is time to understand how computers actually talk to each other across the wires.

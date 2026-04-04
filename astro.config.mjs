@@ -45,6 +45,7 @@ export default defineConfig({
             { label: 'Everyday Linux', autogenerate: { directory: 'linux/foundations/everyday-use' }, collapsed: true },
             { label: 'Cloud Native 101', autogenerate: { directory: 'prerequisites/cloud-native-101' }, collapsed: true },
             { label: 'Kubernetes Basics', autogenerate: { directory: 'prerequisites/kubernetes-basics' }, collapsed: true },
+            { label: 'Git Deep Dive', autogenerate: { directory: 'prerequisites/git-deep-dive' }, collapsed: true },
             { label: 'Philosophy & Design', autogenerate: { directory: 'prerequisites/philosophy-design' }, collapsed: true },
             { label: 'Modern DevOps', autogenerate: { directory: 'prerequisites/modern-devops' }, collapsed: true },
           ],
