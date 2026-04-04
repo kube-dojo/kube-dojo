@@ -54,6 +54,9 @@ This fails when:
 - You rush through Questions 14-16
 - You miss easy points you could have gotten
 
+> **War Story: The 4-Point Black Hole**
+> A candidate taking the CKA encountered a question worth 4 points asking them to fix a crashing CoreDNS pod. They spent 22 minutes digging through logs, editing ConfigMaps, and restarting deployments. They eventually fixed it, but they only had 5 minutes left for the last three questions—two of which were simple 7-point JSONPath and scaling tasks. They lost 14 easy points to gain 4 hard points, failing the exam by a 3% margin.
+
 The CKA passing score is **66%**. You don't need perfect—you need efficient.
 
 ---
@@ -143,6 +146,13 @@ Before you can use the three-pass method, you need to instantly categorize quest
 - Fix the broken deployment (something is wrong, figure it out)
 - Node is NotReady, find and fix the issue
 - Application cannot connect to database, resolve
+
+> **Pause and predict**: Before moving to Pass 1, test your gut reaction. How would you categorize these three tasks?
+> 1. "Fix a kubelet that fails to start on worker-node-2."
+> 2. "Create a Secret and mount it as a volume in a new Pod."
+> 3. "Output the names of all Pods with label `tier=front` to a file."
+>
+> *Answers: 1 is Complex (troubleshooting, unpredictable time). 2 is Medium (multi-step YAML, relies on docs). 3 is Quick (single imperative command).*
 
 ---
 
@@ -251,6 +261,8 @@ kubectl create role pod-reader --verb=get,list,watch --resource=pods
 kubectl create rolebinding app-sa-binding --role=pod-reader --serviceaccount=default:app-sa
 ```
 
+> **Stop and think**: Pause and plan your own time budget. If you know you are naturally slow at writing YAML but very fast at kubectl imperative commands, how might you adjust the 55 minutes for Pass 2? Sketch out your personalized time limits before reading further.
+
 ---
 
 ## Part 4: Pass 3 - Complex Tasks
@@ -313,6 +325,9 @@ Every CKA question specifies a cluster context. **This is critical.**
 
 Solving a problem on the wrong cluster. You do everything right, but on the wrong context. Zero points.
 
+> **War Story: The Perfect Zero**
+> A candidate flawlessly executed a complex ETCD backup and restore procedure worth 11 points. It took them 12 minutes, and they verified the snapshot perfectly. When they got their exam results, they scored 0 on that question. Why? They performed the backup on the `k8s-master` context instead of the required `wk8s-cluster` context. The grading script checked `wk8s-cluster`, found no backup file, and awarded zero points.
+
 ### The Rule
 
 **EVERY question, FIRST action**: Switch context.
@@ -332,6 +347,10 @@ kubectl config current-context
 ```
 
 This takes 2 seconds. It can save 7 minutes of wasted work.
+
+> **Stop and think**: You just perfectly solved a 7-point NetworkPolicy question, but as you review your work, you realize you forgot to switch context at the start. What do you do?
+>
+> *Answer: Do not panic. Switch to the correct context immediately. Re-apply your YAML file or commands in the correct cluster. Finally, switch back to the wrong context and delete the resources you accidentally created to avoid unintended side effects.*
 
 ---
 
@@ -393,6 +412,14 @@ If you're behind at a checkpoint, speed up. Skip more aggressively.
 
 ---
 
+### When Three-Pass Doesn't Work
+
+The Three-Pass method isn't flawless. Be aware of these edge cases:
+- **Misjudging Complexity**: You might tag a task as "Quick," but realize 3 minutes in that there's a trick (e.g., a missing namespace or a broken API). *Adjustment*: Be ruthless. If a Quick task hits the 4-minute mark, downgrade it to Medium/Complex and walk away.
+- **The "All Medium" Exam**: Sometimes, you won't get any 1-minute tasks. If every question seems to require YAML and 5 minutes of work, Pass 1 might only yield 2 completed questions. *Adjustment*: Don't panic. Combine Pass 1 and Pass 2, maintaining a strict 6-minute cap per question.
+
+---
+
 ## Part 8: Pre-Exam Routine
 
 ### 5 Minutes Before
@@ -414,6 +441,16 @@ If you're behind at a checkpoint, speed up. Skip more aggressively.
 2. **Verify critical answers**: Quick sanity checks
 3. **Submit any partial work**: Something > nothing
 4. **Breathe**: You did your best
+
+---
+
+## Beyond the Exam: Triage as a Site Reliability Engineer (SRE)
+
+> **Real-World Connection**: The Three-Pass method isn't just an exam trick; it's incident response training. When an outage hits a production cluster, you will face dozens of firing alerts. You can't fix them linearly. You triage:
+> 1. **Quick Wins (Mitigation)**: Can I scale up the deployment or rollback to stabilize the system in 2 minutes?
+> 2. **Medium Tasks (Investigation)**: Let's pull the logs and check the database connection limits.
+> 3. **Complex Tasks (Root Cause)**: We need to analyze the memory leak in the application code.
+> Mastering exam triage directly translates to keeping your cool during a Sev-1 outage.
 
 ---
 
@@ -444,28 +481,32 @@ If you're behind at a checkpoint, speed up. Skip more aggressively.
 
 ## Quiz
 
-1. **You're at 30 minutes and have only finished 2 questions. What do you do?**
+1. **Question Categorization**: You read the following task: "Upgrade the kubeadm cluster on the master node to version 1.28.x." How do you categorize this, and why?
    <details>
    <summary>Answer</summary>
-   You're behind. Immediately switch to easier questions (Pass 1). Skip anything that's taking too long. Recover time by focusing on quick wins only.
+   Complex (Pass 3). While the steps are well-documented, a cluster upgrade involves multiple commands like draining nodes, upgrading kubeadm, applying upgrades, upgrading the kubelet, and uncordoning. It takes significant time and carries a high risk of getting stuck if a node does not drain properly due to restrictive PodDisruptionBudgets or local data. Because of this unpredictability and the high volume of steps, you should save it for Pass 3 to ensure it does not consume time meant for quicker wins.
    </details>
 
-2. **A question asks you to troubleshoot a broken deployment. How do you categorize it?**
+2. **Scenario-Based Triage**: You have 45 minutes remaining in the exam. You have three questions left:
+   - Question 12 (12 points): Troubleshoot a broken cluster network (Complex).
+   - Question 14 (4 points): Create a CronJob (Medium).
+   - Question 15 (8 points): Create a NetworkPolicy and expose a Pod (Medium).
+   What is your optimal execution order and why?
    <details>
    <summary>Answer</summary>
-   Complex (Pass 3). "Troubleshoot" questions require investigation and are unpredictable in time. Save for last when you have remaining time to spend.
+   Your optimal order is Question 15, then Question 14, and finally Question 12. You must secure predictable points first, and the two medium tasks are standard operations that will reliably yield a combined 12 points in about 15 minutes. Question 12 is a troubleshooting task that could easily consume your entire remaining 45 minutes if you go down a rabbit hole. By banking the 12 easy and medium points first, you ensure you do not fail because you ran out of time, and you can comfortably dedicate the remaining 30 minutes to diagnosing the broken network.
    </details>
 
-3. **What's the FIRST thing you do when starting any question?**
+3. **Calculate the Tradeoff**: You have 15 minutes left. You can either attempt a 9-point ETCD restore (Complex, estimated 12 minutes) OR two separate questions: a 4-point RBAC task (estimated 5 minutes) and a 5-point Service/Ingress task (estimated 6 minutes). Which option gives you the better point-per-minute return, and which should you choose?
    <details>
    <summary>Answer</summary>
-   Switch to the correct context. `kubectl config use-context <context>`. This prevents solving problems on the wrong cluster.
+   Attempting the two smaller tasks gives you a better point-per-minute return (0.81 points per minute vs 0.75 points per minute) and is the strategically correct choice. You should choose the RBAC and Service/Ingress tasks because they yield a better return on your limited time. More importantly, this approach diversifies your risk across two separate grading rubrics. If you make a fatal mistake on the ETCD restore, you lose all 9 points, but if you mess up the RBAC task, you can still secure 5 points from the Ingress task.
    </details>
 
-4. **You've partially solved a complex question but time is running out. What do you do?**
+4. **Full Triage Planning**: You have 5 minutes left in the exam. You are working on a 7-point troubleshooting question, but you are completely stuck. You remember skipping a 2-point question to "output the CPU usage of nodes to a file." What is your exact plan of action for the last 5 minutes?
    <details>
    <summary>Answer</summary>
-   Leave your partial solution. Partial credit is possible. Move on to the next question if there's one you can finish completely, otherwise keep working on this one.
+   You should immediately stop troubleshooting the 7-point question and switch to the 2-point question. Your chances of successfully identifying and fixing a complex bug in 5 minutes while under severe exam pressure are near zero. Instead, switch your context to the 2-point question, run the quick imperative command to output the CPU usage, and verify the file. If you have a minute left afterward, switch back to the context of the 7-point question and leave whatever partial configuration you managed to create, as you might receive partial credit for the steps you completed.
    </details>
 
 ---
