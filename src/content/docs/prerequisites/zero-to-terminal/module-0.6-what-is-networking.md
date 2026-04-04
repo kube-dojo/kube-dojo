@@ -114,7 +114,7 @@ $ curl -s ifconfig.me
 
 ## Ports: Many Doors on One Address
 
-> **Pause and think**: A server has one IP address, but it runs a web server, an email server, and a database — all at the same time. When a message arrives at the IP address, how does the computer know which program it's for? Think of how an apartment building works — one street address, many apartments...
+> **Stop and think**: A server has one IP address, but it runs a web server, an email server, and a database — all at the same time. When a message arrives at the IP address, how does the computer know which program it's for? Think of how an apartment building works — one street address, many apartments...
 
 So every computer has an IP address. But a computer runs many programs at once — a web browser, an email client, a chat app. How does the computer know which program should receive an incoming message?
 
@@ -153,7 +153,7 @@ The colon `:` separates the IP address from the port number.
 
 When you type `google.com` in your browser, your computer doesn't actually know where `google.com` is. Computers only understand IP addresses (numbers). So how does it work?
 
-> **Think about it**: When you type `google.com` in your browser, your computer needs to reach Google's server. But networks use IP addresses (numbers), not names. Something has to translate `google.com` into `142.250.80.46`. What do you think does that translation?
+> **Pause and predict**: When you type `google.com` in your browser, your computer needs to reach Google's server. But networks use IP addresses (numbers), not names. Something has to translate `google.com` into `142.250.80.46`. What do you think does that translation?
 
 **DNS** — the **Domain Name System** — translates human-friendly names into IP addresses.
 
@@ -296,11 +296,13 @@ This confirms that `google.com` translates to `142.250.80.46` (your result may d
 
 ## Did You Know?
 
-> 1. **The internet relies on physical cables under the ocean.** Over 550 submarine cables span the ocean floor, carrying 99% of intercontinental data. When you visit a website hosted in another continent, your request literally travels through a cable on the seabed. These cables are about the thickness of a garden hose and stretch for thousands of miles.
+> 1. **A common production issue: DNS caching.** Sometimes, even after a server migration is completed and DNS records are updated, your application keeps connecting to the old IP address because it cached the old DNS result. This has caused real, prolonged outages at major scale. For instance, a global e-commerce giant once suffered a 4-hour outage during a migration when their payment gateways aggressively cached outdated DNS records, costing an estimated $3.2 million in lost transactions because the application simply refused to look up the new address.
 >
-> 2. **The port number 80 for HTTP was chosen somewhat arbitrarily.** Tim Berners-Lee, the inventor of the World Wide Web, picked port 80 in 1991 simply because it wasn't already claimed by another service. Port 443 for HTTPS came later when encryption was added.
+> 2. **NAT (Network Address Translation) and "It works on my machine".** Your local machine might have an IP like `192.168.1.42`, but the internet only sees your router's public IP. When you run a server on your laptop, it's bound to your local IP. This is why you can access it locally, but your friend across town gets a "connection refused" error — they cannot route traffic through the public internet directly to your private local IP without NAT rules on your router.
 >
 > 3. **DNS was invented because memorizing IP addresses was too hard.** Before DNS existed (1983), there was literally a single text file called `hosts.txt` that listed every computer on the internet and its address. Someone maintained it by hand. As the internet grew, this became impossible, so Paul Mockapetris invented DNS to automate the process.
+>
+> 4. **IP address exhaustion is real.** The original IP address system (IPv4) only has about 4.3 billion addresses. By the 2010s, we effectively ran out. To solve this, engineers created IPv6, which has so many addresses (340 undecillion) that we could assign one to every atom on the surface of the Earth and still have plenty left over. However, moving the entire internet to IPv6 is taking decades, which is why NAT (mentioned above) is so crucial today to share IPv4 addresses.
 
 ---
 
@@ -319,52 +321,66 @@ This confirms that `google.com` translates to `142.250.80.46` (your result may d
 
 ## Quiz
 
-**Question 1**: What is an IP address?
+**Question 1**: Your friend says their new laptop's address is `192.168.1.42` and asks you to connect to it from your house. You try, but it fails. Based on the type of address provided, why didn't this work?
 
 <details>
 <summary>Show Answer</summary>
 
-A unique number that identifies a computer on a network, like a street address identifies a building. Example: `192.168.1.42`
+The address `192.168.1.42` is a private, local IP address. It only identifies computers within the same local network (LAN). Since you are at your house and your friend is at theirs, you are on different local networks. To connect over the internet, you would need their router's public IP address, not their laptop's local one.
 
 </details>
 
-**Question 2**: If an IP address is a street address, what is a port?
+**Question 2**: You are setting up a new web application. You can successfully run `ping 203.0.113.55` and receive replies, indicating the server is online. However, running `curl http://203.0.113.55` simply times out. What layer of the network is likely causing the problem?
 
 <details>
 <summary>Show Answer</summary>
 
-A port is the **apartment number** (or door number). It identifies a specific service or program on that computer. For example, port 80 is for web traffic, port 22 is for SSH.
+The issue is likely at the port level. The `ping` command proves that the IP address is reachable and the server is online. However, `curl` tries to connect to a specific service on port 80 (HTTP). If that times out, it means the server is blocking traffic to port 80 via a firewall, or the web server software isn't running to answer the knock on that specific "apartment door."
 
 </details>
 
-**Question 3**: What does DNS do?
+**Question 3**: A user reports they cannot access your company's API at `api.example.com`. You run `ping api.example.com` and it immediately says `cannot resolve api.example.com: Unknown host`. However, you know the server's public IP is `203.0.113.100`, and `curl http://203.0.113.100` returns a `200 OK`. Diagnose the exact point of failure.
 
 <details>
 <summary>Show Answer</summary>
 
-DNS translates human-readable domain names (like `google.com`) into IP addresses (like `142.250.80.46`) that computers can use to find each other. It's the phone book of the internet.
+The failure is in the DNS resolution, not the server or the network itself. Because `curl` works with the direct IP address and returns a 200 OK, we know the server is running, the network path is clear, and the web service is responding on the correct port. The `Unknown host` error from `ping` shows that your computer's "phone book" (DNS) cannot translate the human-readable name `api.example.com` into the IP address `203.0.113.100`.
 
 </details>
 
-**Question 4**: What command would you use to check if a server is reachable?
+**Question 4**: A customer complains that your company's website is down. You run `curl -I https://example.com` and receive a `500 Internal Server Error` response. Is the problem with the customer's internet connection, DNS, or your company's server?
 
 <details>
 <summary>Show Answer</summary>
 
-```bash
-$ ping -c 4 servername.com
-```
-
-`ping` sends a small message and waits for a reply. If you get replies, the server is reachable. Use `-c 4` to limit it to 4 attempts.
+The problem is with your company's server. A 500-level HTTP status code means that the connection succeeded, DNS worked, and the request reached the web server, but the web server encountered an error while trying to generate the page. The kitchen received the order but something went wrong while cooking the food.
 
 </details>
 
-**Question 5**: You see `curl: (6) Could not resolve host: fakename.xyz`. What does this mean?
+**Question 5**: A junior developer runs `ping -c 4 api.example.com` and it returns `Request timeout` for every packet. They immediately declare, "The API server is completely down and broken!" You run `curl -I https://api.example.com` on the same machine and receive `HTTP/1.1 200 OK`. Why was the junior developer's conclusion wrong, and what is actually happening?
 
 <details>
 <summary>Show Answer</summary>
 
-DNS could not translate `fakename.xyz` into an IP address. This means either the domain name doesn't exist, is misspelled, or there's a DNS issue on your network.
+The junior developer incorrectly assumed that a failed ping means the server is offline or unreachable. In reality, many modern servers and corporate firewalls are explicitly configured to block ICMP traffic (the protocol used by ping) for security reasons, while still allowing normal HTTP/HTTPS traffic on ports 80 and 443. The `curl` command proved that the web server is actively running and serving content successfully. The ping failed because the network dropped the specific diagnostic packets, not because the destination server was offline.
+
+</details>
+
+**Question 6**: You are helping a colleague troubleshoot an application that connects to a database. The database is supposed to be running on `10.0.5.50:5432`. The application logs show an error: `Connection refused to 10.0.5.50 on port 80`. Based on this log, what is the most likely cause of the failure?
+
+<details>
+<summary>Show Answer</summary>
+
+The application is trying to connect to the wrong port. While the IP address `10.0.5.50` is correct, the application is attempting to communicate over port 80, which is the default port for regular unencrypted web traffic (HTTP). The database service is actually listening on port 5432. Because there is no web server listening on port 80 at that address, the operating system on the database server actively rejects the connection attempt, resulting in the "Connection refused" error. The application configuration needs to be updated to specify the correct port.
+
+</details>
+
+**Question 7**: Your team just launched a new marketing site at `promo.company.com`. When you type this into your browser, it fails to load. You run `nslookup promo.company.com` and the command returns `server can't find promo.company.com: NXDOMAIN`. However, the lead engineer says the server is running perfectly at `198.51.100.22`. What specific system needs to be updated to fix this issue?
+
+<details>
+<summary>Show Answer</summary>
+
+The Domain Name System (DNS) needs to be updated. The `NXDOMAIN` error from `nslookup` means that there is no DNS record linking the human-readable name `promo.company.com` to any IP address. Even though the server is running perfectly at `198.51.100.22`, the rest of the internet has no way to find it because the "phone book" entry is missing. You or your team must log into your DNS provider and create a record that points the domain name to that specific IP address.
 
 </details>
 
@@ -378,23 +394,14 @@ Use networking commands to explore connections, look up addresses, and fetch web
 
 ### Steps
 
-1. **Ping a website:**
+1. **Verify network connectivity to a popular website:**
+Use the terminal tool that sends small messages to a server to see if it responds. Send exactly 4 messages to `google.com` so the command doesn't run forever. Note the IP address it resolves to and the response times.
 
-```bash
-$ ping -c 4 google.com
-```
-
-Note the IP address it resolves to and the response times.
-
-2. **Ping another website and compare:**
-
-```bash
-$ ping -c 4 cloudflare.com
-```
-
-Are the response times faster or slower? The difference depends on how far their servers are from you.
+2. **Compare latency with another service:**
+Run the exact same command from step 1, but target `cloudflare.com` instead. Are the response times faster or slower? The difference depends on how far their servers are from you.
 
 3. **Find your local IP address:**
+Use the appropriate command to find your local IP:
 
 On macOS:
 ```bash
@@ -408,21 +415,11 @@ $ hostname -I
 
 Write down your local IP. It should start with `192.168.`, `10.`, or `172.`.
 
-4. **Find your public IP address:**
+4. **Discover your public IP address:**
+Use `curl` in silent mode (with the `-s` flag) to fetch the page at `ifconfig.me`. This will output the IP address the rest of the internet sees for you. Notice how it differs from your local IP.
 
-```bash
-$ curl -s ifconfig.me
-```
-
-This is the IP address the rest of the internet sees for you. It'll be different from your local IP.
-
-5. **Look up a domain name:**
-
-```bash
-$ nslookup github.com
-```
-
-Find the IP address for `github.com` in the output.
+5. **Manually resolve a domain name:**
+Use the DNS lookup tool you learned about (like `nslookup`) to find the exact IP address for `github.com`. Locate the IP address in the resulting output.
 
 6. **Fetch a web page:**
 
@@ -432,30 +429,14 @@ $ curl -s example.com
 
 You should see the raw HTML of the example.com page.
 
-7. **Check the response headers:**
+7. **Examine server response headers:**
+Instead of getting the full HTML, use `curl` to ask `example.com` just for its metadata headers (using the `-I` flag). Look for `HTTP/1.1 200 OK` in the output — that means success!
 
-```bash
-$ curl -I example.com
-```
+8. **Trigger a specific HTTP error code:**
+Use `curl` to request only the headers for a path that you know doesn't exist on `example.com` (such as `example.com/this-page-does-not-exist`). Look for the `404` status in the response — that means "not found."
 
-Look for `HTTP/1.1 200 OK` — that means success!
-
-8. **Try a page that doesn't exist:**
-
-```bash
-$ curl -I example.com/this-page-does-not-exist
-```
-
-Look for `404` in the response — that means "not found."
-
-9. **Save a web page to a file** (combining networking with file skills!):
-
-```bash
-$ curl -s example.com > ~/kubedojo-practice/my-first-webpage.html
-$ cat ~/kubedojo-practice/my-first-webpage.html
-```
-
-You just downloaded a web page and saved it as a file!
+9. **Combine networking with file skills:**
+Fetch the raw HTML of `example.com` silently again, but this time, redirect the output into a new file called `my-first-webpage.html` inside a `~/kubedojo-practice/` directory. Then, use a file reading command to output the contents of that new file to the screen to verify it worked.
 
 ### Success Criteria
 

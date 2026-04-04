@@ -84,6 +84,8 @@ More RAM = More counter space = More things open at once
 
 **When RAM fills up**, your computer gets slow. Just like a chef with no counter space has to keep putting things away and getting them back out, your computer starts "swapping" data back and forth to disk. This is painfully slow.
 
+In 2017, a GitLab engineer accidentally deleted a production database. The recovery was slow partly because backup processes were competing for RAM and disk I/O with production traffic — understanding these resources isn't academic, it's what prevents outages.
+
 > **Pause and predict**: You have 8 GB of RAM and you open a web browser with 30 tabs, a video editor, and a music player — all at once. What do you think happens? If you guessed "the computer gets painfully slow" — you're right. Each program needs counter space, and 30 browser tabs alone can eat 4-6 GB. The OS starts shuffling data between RAM and disk (swapping), and everything grinds to a crawl.
 
 ---
@@ -133,7 +135,7 @@ The three main operating systems:
 
 Here's a fact that will matter a LOT in your Kubernetes journey: **almost every server in the world runs Linux.** Your laptop might run Windows or macOS, but the cloud? That's Linux territory. That's why we'll be learning Linux commands in the next modules.
 
-> **Think about it**: Why do you think servers don't use Windows or macOS? Think about what servers need — they run 24/7, they don't need a graphical interface, they need to be stable and efficient. Linux is free, customizable, and uses fewer resources because it doesn't need to render a desktop. That's why even Microsoft runs Linux on most of its Azure cloud servers.
+> **Stop and think**: Why do you think servers don't use Windows or macOS? Think about what servers need — they run 24/7, they don't need a graphical interface, they need to be stable and efficient. Linux is free, customizable, and uses fewer resources because it doesn't need to render a desktop. That's why even Microsoft runs Linux on most of its Azure cloud servers.
 
 ---
 
@@ -193,7 +195,7 @@ Kubernetes is a system that manages **thousands of these kitchens** (computers) 
 - What to do when a kitchen breaks down (move the orders to another kitchen)
 - How to add more kitchens when the restaurant gets busy
 
-You can't manage thousands of kitchens if you don't understand how *one* kitchen works. That's what this module gave you.
+You can't manage thousands of kitchens if you don't understand how *one* kitchen works. That's what this module gave you. Companies pay per GB of RAM and per CPU core in the cloud. AWS charges ~$0.05/hour for a server with 8 GB RAM. Misunderstanding these resources literally costs money.
 
 ---
 
@@ -205,6 +207,8 @@ You can't manage thousands of kitchens if you don't understand how *one* kitchen
 
 - **SSDs have no moving parts.** Traditional hard drives have spinning metal disks and a moving arm (like a record player). SSDs store data in electronic circuits with zero moving parts, which is why they're faster, quieter, and more durable. Drop a laptop with an HDD and you might lose data. Drop one with an SSD and you probably won't.
 
+- **The first computer bug was an actual bug.** In 1947, engineers working on the Harvard Mark II computer found a literal moth stuck in a relay, causing the machine to fail. They taped the moth into their logbook and noted it as the "first actual case of bug being found." The term "debugging" has been used in computer science ever since.
+
 ---
 
 ## Common Mistakes
@@ -214,40 +218,55 @@ You can't manage thousands of kitchens if you don't understand how *one* kitchen
 | Confusing RAM and storage | "I have 256 GB of memory" -- you probably mean storage, not RAM | RAM = temporary counter space (8-32 GB typical). Storage = permanent pantry (256 GB - 2 TB typical) |
 | Thinking more storage = faster computer | A bigger pantry doesn't make the chef cook faster | Speed comes from CPU and RAM. Storage just means more room for files |
 | Ignoring RAM when computer is slow | Opening 47 browser tabs and wondering why things crawl | Check how much RAM is in use. Close what you don't need |
-| Thinking all computers are the same | "A computer is a computer" | A laptop, a phone, a server, and a smartwatch are all computers -- but built for very different jobs |
+| Over-provisioning cloud servers | "Let's just use the biggest server so it doesn't crash." | In the cloud, you pay for what you provision. A team might pay $400/month for a 32GB RAM server when their application only uses 2GB. Right-sizing saves thousands of dollars. |
+| Assuming CPU speed solves internet lag | "My web pages load slowly, I need a better processor." | Internet speed depends on your network bandwidth and latency. Troubleshoot your router, Wi-Fi signal, or ISP connection first before blaming your computer hardware. |
+| Never restarting the operating system | "I just close my laptop lid, why is my computer glitching?" | Restarting clears out the RAM completely and restarts background processes. Make it a habit to reboot at least once a week to clear temporary issues. |
+| Judging a CPU only by its clock speed | "A 4 GHz CPU is always better than a 3 GHz one." | Look at the number of cores as well. A 3 GHz CPU with 8 cores can handle many simultaneous tasks much better than a 4 GHz CPU with only 2 cores. |
 
 ---
 
 ## Quiz
 
-1. **What does the CPU do?**
+1. **You are hired to set up a new restaurant kitchen. You have a chef (CPU), counter space (RAM), and a pantry (Disk), but no one to take orders from customers, assign tasks to the chef, or organize the ingredients. What component is missing?**
    <details>
    <summary>Answer</summary>
-   The CPU (Central Processing Unit) is the part of the computer that executes instructions. It's the "chef" that does the actual work -- processing data, running calculations, and carrying out every action you ask your computer to perform.
+   The Operating System (OS) is missing. Just like a restaurant manager, the OS does not process the data itself, but it coordinates all the hardware. It decides which CPU core handles which program, manages the RAM so programs do not overwrite each other's data, and organizes files on the disk. Without an OS, the hardware cannot communicate with the user or run any software. It essentially acts as the bridge between your instructions and the physical machine.
    </details>
 
-2. **What happens to everything in RAM when you turn off your computer?**
+2. **You're writing a document and the power goes out before you save. What is lost and what survives? Explain using the kitchen analogy.**
    <details>
    <summary>Answer</summary>
-   It disappears. RAM is temporary (volatile) memory. Like counter space in a kitchen, it only holds things while the kitchen is open. When power is off, RAM is wiped clean. That's why your files are saved to disk (the pantry), not kept only in RAM.
+   The unsaved changes to your document are lost, but the original file and your other programs survive. Before you save, your work is kept in RAM, which is temporary "counter space" that requires electricity to hold data. When the power goes out, the counter is wiped clean. The files that survive were already stored on your disk, which acts as the "pantry" and permanently retains data even without power. This is why frequent saving or auto-save features are critical for protecting your work.
    </details>
 
-3. **Your friend says their computer is slow and asks if they should buy a bigger hard drive. What would you tell them, and what should they check first?**
+3. **Your computer is running a video call and the video keeps freezing, but your internet speed test shows 100 Mbps. Which component is most likely the bottleneck — CPU, RAM, or disk? Why?**
    <details>
    <summary>Answer</summary>
-   A bigger hard drive won't make their computer faster — that's like building a bigger pantry when the problem is a slow chef or no counter space. First, check RAM usage — if it's maxed out, the computer is swapping to disk and that's what feels slow. If RAM is fine, the CPU might be overwhelmed (too many programs open). A bigger or faster SSD only helps if the disk itself is the bottleneck (full disk or old HDD), which is less common than RAM pressure.
+   The CPU is the most likely bottleneck in this scenario. Processing live video requires the computer to constantly decode and encode images in real-time, which is a highly intensive task for the CPU "chef". If the internet is fast, the data is arriving on time, but the CPU simply cannot keep up with processing it fast enough. While RAM might also be a factor if it is completely full, video encoding and decoding are primarily bound by CPU performance. Closing other heavy applications can help free up CPU resources for the call.
    </details>
 
-4. **Why does almost every server run Linux?**
+4. **Your friend says their computer is slow and asks if they should buy a bigger hard drive. What would you tell them, and what should they check first?**
    <details>
    <summary>Answer</summary>
-   Linux is open-source (free to use and modify), extremely stable, highly customizable, and efficient with resources. For servers that need to run 24/7 without a graphical interface, Linux is the natural choice. This is also why learning Linux commands is essential for working with Kubernetes.
+   A bigger hard drive will not make their computer faster, because storage capacity does not affect processing speed. That would be like building a bigger pantry and expecting the chef to cook faster. They should first check their RAM and CPU usage to see if the system is overloaded with too many open programs. If their RAM is entirely full, the computer is likely "swapping" data back and forth to the slow disk, which causes the sluggishness. Upgrading the RAM or switching to an SSD (if they have an older HDD) would be more effective upgrades.
    </details>
 
-5. **In the kitchen analogy, what is the Operating System?**
+5. **Your team is deploying a new web application to the cloud and debating whether to use Windows or Linux servers. Based on what you know about operating systems, why will they almost certainly choose Linux?**
    <details>
    <summary>Answer</summary>
-   The restaurant manager. It doesn't cook (process data) itself, but it coordinates everything: deciding which chef handles which order, managing counter space so programs don't interfere with each other, organizing storage, and handling communication with the outside world.
+   They will almost certainly choose Linux because it is optimized for server environments where stability and efficiency are critical. Unlike desktop operating systems, Linux can run perfectly without a graphical user interface, which means it consumes significantly less RAM and CPU overhead. This allows more hardware resources to be dedicated entirely to running the actual application instead of rendering screens. Furthermore, Linux is open-source and free, making it the cost-effective standard foundation for cloud infrastructure and platforms like Kubernetes. Its command-line focus also makes it far easier to automate at scale.
+   </details>
+
+6. **You are running a database server for your company's e-commerce site, and during a major sale, the server crashes. The monitoring logs show that CPU utilization was at 20%, but memory usage hit 100% right before the crash. What caused the crash, and how should you fix it?**
+   <details>
+   <summary>Answer</summary>
+   The crash was caused by the server running out of RAM (memory exhaustion) rather than a lack of processing power. When the server reached 100% memory usage, the operating system had no more "counter space" to process the sudden influx of customer orders and likely killed the database process to protect itself. To fix this, you need to either provision a server with more RAM to handle the peak load, or optimize the database queries to use less memory. The low CPU utilization indicates that upgrading the processor would not have prevented this outage.
+   </details>
+
+7. **Your colleague accidentally spills coffee on their laptop, completely destroying the motherboard, CPU, and RAM. However, a technician manages to extract the internal SSD and connect it to a new computer. Will your colleague be able to recover their files? Why or why not?**
+   <details>
+   <summary>Answer</summary>
+   Yes, your colleague will almost certainly be able to recover their files. The SSD acts as the computer's "pantry," where data is stored permanently even when the power is off or other components fail. Because the CPU and RAM only handle active processing and temporary data, their destruction does not erase the information saved on the storage drive. As long as the physical SSD itself was not damaged by the spill or encrypted without a backup key, all documents, photos, and installed programs remain intact and readable.
    </details>
 
 ---
@@ -314,6 +333,10 @@ Write down (yes, physically write it down or type it somewhere):
 4. **My operating system is**: _____________
 
 **Success criteria**: You can name your CPU, how much RAM you have, and how much storage you have. You now know your kitchen better than most people know theirs.
+
+### Stretch Challenge
+
+Open Activity Monitor (macOS) / Task Manager (Windows) / top (Linux) and identify which program is using the most RAM. Can you predict what would happen if you closed it?
 
 ---
 

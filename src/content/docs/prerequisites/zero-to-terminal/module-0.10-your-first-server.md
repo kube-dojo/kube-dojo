@@ -119,6 +119,8 @@ Here it is. One command to start a web server:
 docker run -d -p 8080:80 --name my-website nginx
 ```
 
+> **Stop and think**: You're mapping port 8080 to port 80. If another program on your computer is already using port 8080 (like another web server or a local development tool), what do you expect this Docker command to do? Will it override the existing program, or will it fail?
+
 Let's break down every piece of that command (because understanding matters more than memorizing):
 
 | Part | What It Does |
@@ -287,6 +289,8 @@ sudo systemctl status nginx
 
 You should see `active (running)` in green.
 
+> **Pause and predict**: You just installed nginx, and it started automatically. Before you even open a web browser, what command could you run right here in the terminal to verify that the server is actually responding to requests on your VM?
+
 ### Step 4: Test the default page
 
 Open your browser on your own computer and visit:
@@ -298,6 +302,8 @@ http://YOUR_PUBLIC_IP
 You should see the nginx default page. That page is being served from a machine in a data center, across the internet, to your browser. Take a moment to appreciate that.
 
 ### Step 5: Create your custom page
+
+> **Stop and think**: The default nginx page is located at `/var/www/html/index.html`. If you were to create a second file named `about.html` in that same directory, what exact URL would you type into your browser to view it?
 
 Still connected via SSH, edit the default web page:
 
@@ -398,28 +404,46 @@ exit
 
 ## Quiz
 
-1. **What does nginx do?**
+1. **You are explaining the role of a web server to a colleague who is setting up a new application. They ask, "I wrote my HTML files, why do I need this nginx thing running on the server?" How do you explain the specific role nginx plays in delivering those files to users?**
    <details>
    <summary>Answer</summary>
-   nginx is a web server. It listens for HTTP requests (from browsers) on a port (usually port 80) and responds with web pages (HTML files). It's the "waiter" that takes orders and delivers food in our restaurant analogy.
+   Nginx acts as the "waiter" or intermediary between the server's filesystem and the outside internet. While you have HTML files sitting on a hard drive, a browser cannot simply reach into your computer and read them. Nginx actively listens on a specific network port (usually 80 or 443) for incoming HTTP requests. When a request arrives, nginx interprets it, locates the corresponding HTML file on the filesystem, packages it into a valid HTTP response, and sends it back across the network to the user's browser. Without this active listening and responding mechanism, your HTML files are completely inaccessible to the web.
    </details>
 
-2. **In the Docker command `docker run -d -p 8080:80 nginx`, what does `-p 8080:80` mean?**
+2. **You successfully ran `docker run -d -p 9090:80 nginx` on your local machine. However, out of habit, you open your browser and navigate to `http://localhost:8080`. What happens exactly, and why did changing the first number in the `-p` flag cause this result?**
    <details>
    <summary>Answer</summary>
-   It maps port 8080 on your local machine to port 80 inside the Docker container. When you visit `localhost:8080` in your browser, the request gets forwarded to port 80 inside the container where nginx is listening. This is called port mapping or port forwarding.
+   Your browser will display a "connection refused" or "site can't be reached" error. The `-p 9090:80` flag tells Docker to map port 9090 on your physical machine (the host) to port 80 inside the isolated container where nginx is actually listening. By visiting `localhost:8080`, your browser is knocking on a network door (port 8080) that no application is currently listening to. Nginx is happily running inside the container and waiting for traffic on its internal port 80, but that traffic is now exclusively routed from port 9090 on your local machine, not 8080.
    </details>
 
-3. **Why is the path for web files different in Option A and Option B?**
+3. **You deploy a website using the cloud VM method (Option B) and successfully copy your custom `index.html` to `/var/www/html/index.html`. Later, you try the Docker method (Option A) and copy your exact same HTML file to `/var/www/html/index.html` inside the container, but the browser still shows the default "Welcome to nginx!" page. What went wrong, and what does this teach you about software configuration?**
    <details>
    <summary>Answer</summary>
-   Different nginx installations and operating systems use different default directories. The official nginx Docker image serves files from `/usr/share/nginx/html/`, while Ubuntu's nginx package serves files from `/var/www/html/`. Both are just directories on a filesystem -- the nginx configuration file tells nginx where to look. This is a good reminder that paths are configurable, not magical.
+   The container is ignoring your custom file because the official nginx Docker image is configured by its creators to look for web files in a different directory—specifically, `/usr/share/nginx/html/`. Software like nginx doesn't have a single universal, magical location where it finds files; instead, it relies on a configuration file that dictates the exact filesystem path it should serve. The package maintainers for Ubuntu (Option B) chose `/var/www/html/` as their standard, while the Docker image maintainers chose `/usr/share/nginx/html/`. This teaches us that paths are arbitrary configuration choices made by system administrators or package maintainers, and you must always adapt to the specific environment's configuration rather than assuming universal defaults.
    </details>
 
-4. **Name at least five skills from earlier modules that you used in this capstone.**
+4. **Trace what happens step-by-step when you type `http://YOUR_PUBLIC_IP` in a browser and your nginx server returns your custom page. Include DNS, TCP, port, nginx, and the filesystem.**
    <details>
    <summary>Answer</summary>
-   Any five of these: (1) understanding computer hardware and what a process is (Module 0.1), (2) using the terminal as your interface (Module 0.2), (3) running commands like `ls`, `cd`, and `cat` (Module 0.3), (4) understanding file paths and directories (Module 0.4), (5) editing files with nano (Module 0.5), (6) understanding ports, IP addresses, and localhost (Module 0.6), (7) knowing what a server is and using SSH (Module 0.7), (8) installing software with a package manager (Module 0.8), (9) understanding cloud VMs and free tiers (Module 0.9).
+   When you type the URL, your browser checks if it needs to resolve a domain name via DNS (though here we use a raw IP, skipping DNS resolution). Next, your computer initiates a TCP connection to that IP address specifically on port 80, the default port for HTTP traffic. Once the TCP handshake completes, the browser sends an HTTP GET request asking for the root document (`/`). The nginx web server listening on port 80 receives this request, looks at its configuration to find the corresponding directory on the filesystem (like `/var/www/html/`), and reads the `index.html` file found there. Finally, nginx sends the contents of that file back through the TCP connection as an HTTP response, which your browser renders into the visible web page.
+   </details>
+
+5. **Your browser shows "connection refused" when visiting `localhost:8080`. List three possible causes and how you'd diagnose each.**
+   <details>
+   <summary>Answer</summary>
+   "Connection refused" typically means nothing is actively listening on that port, which points to a few common culprits. First, the Docker container might have crashed or stopped; you can diagnose this by running `docker ps` to see if your `my-website` container is still actively running. Second, you might have mapped the wrong ports in your run command, such as `-p 8080:8080` instead of `-p 8080:80`; verify this by checking the port mappings in the `docker ps` output. Third, another application might already be using port 8080 on your host machine, preventing Docker from binding to it; you can check this using a command like `lsof -i :8080` or `netstat` to see what process is holding the port.
+   </details>
+
+6. **You can reach your cloud VM via SSH but not via browser on port 80. What's the most likely cause and what command would you run to verify?**
+   <details>
+   <summary>Answer</summary>
+   The most likely cause is a firewall blocking incoming web traffic, as cloud providers usually block port 80 by default while allowing port 22 for SSH. Because SSH works, we know the server is online and reachable, so the issue must be specific to HTTP traffic. To verify if the server itself is working correctly internally, you can connect via SSH and run `curl http://localhost`. If `curl` returns the HTML content locally, it confirms nginx is running perfectly and the problem is definitely the cloud provider's external firewall or security group settings blocking external access to port 80.
+   </details>
+
+7. **You deployed your server and want to test if it's returning the correct HTML before opening a browser. How would you use `curl` to verify this, and what exactly are you looking for in the output?**
+   <details>
+   <summary>Answer</summary>
+   You can use the command `curl http://localhost:8080` (or `curl http://YOUR_PUBLIC_IP`) directly from your terminal to simulate a basic browser request. This tool sends an HTTP GET request and prints the raw response body directly to your screen, bypassing any graphical rendering. You are looking to see if the terminal outputs the raw HTML code of your custom page, such as your `<h1>Hello, Internet!</h1>` tags. If it returns the expected HTML, you know the server is successfully processing requests and serving the correct file, proving the backend works even before a browser is involved.
    </details>
 
 ---
@@ -428,7 +452,7 @@ exit
 
 You've deployed the template page. Now make it **truly yours**.
 
-### The challenge
+### Part 1: The Customization Challenge
 
 Customize your web page to include:
 
@@ -442,12 +466,37 @@ Here's a hint for the link syntax:
 <a href="https://kubedojo.dev" style="color: #00d4ff;">KubeDojo</a>
 ```
 
+### Part 2: The "Break It and Fix It" Challenge
+
+Now that your server is working, let's intentionally break it and practice diagnosing the issue. In the real world, troubleshooting is just as important as deploying.
+
+**Step 1: Break your deployment**
+Depending on which option you chose, deliberately introduce a configuration error:
+- **Option A (Local)**: Stop your working container (`docker stop my-website` and `docker rm my-website`). Start a new one with a broken port mapping: `docker run -d -p 9090:80 --name broken-site nginx`.
+- **Option B (Cloud)**: Connect to your VM and intentionally rename your index file to something nginx isn't looking for: `sudo mv /var/www/html/index.html /var/www/html/broken.html`.
+
+**Step 2: Observe the failure**
+- **Option A**: Try to visit `http://localhost:8080` in your browser. What exact error message do your browser and network give you? Why did it happen?
+- **Option B**: Try to visit your public IP in your browser. What exact error message do you see? Why did it happen?
+
+**Step 3: Diagnose and fix**
+Use your terminal skills to investigate the problem. Think about how the traffic flows from your browser, to the port, to the server, and finally to the filesystem. Once you understand the break, run the necessary terminal commands to fix it so your custom website is reachable again on the correct URL.
+
 ### Success criteria
 
 - Your custom page loads in a browser (either `localhost:8080` or a public IP)
 - It contains your name, three things you learned, and at least one link
 - You edited it using nano (not by pasting into a GUI text editor)
+- You successfully broke your server, observed the specific error, and restored it to working order
 - You can explain to someone what nginx is doing and why the page appears
+
+### Self-Assessment Rubric
+
+Use this rubric to gauge your depth of understanding, not just a binary pass/fail:
+
+- **Basic**: Your custom page loads with your name and a link. You successfully broke the server and blindly followed commands to fix it, achieving the desired result.
+- **Good**: Your custom page loads, and you understand *why*. You can confidently explain the difference between the local port (`8080`) and the container port (`80`), explain why `sudo` was needed for the cloud option, and articulate the exact reason your "Break It and Fix It" scenario failed before you restored it.
+- **Excellent**: You modified the nginx command or HTML significantly (e.g., adding an image, changing ports, or mapping a local directory instead of copying the file). You used `curl` from the terminal to test the server's response before opening the browser, proving you understand the underlying HTTP mechanism. You intentionally broke your server in a new, unguided way and successfully troubleshot it using terminal tools.
 
 If you completed this, you've validated every skill in the Zero to Terminal track.
 

@@ -104,6 +104,24 @@ When you type `ls` in your terminal right now, that command runs **locally** -- 
 
 When you connect to a server and type `ls`, that command runs **remotely** -- on the server. But it looks exactly the same in your terminal. That's the beauty of it.
 
+### Quick Check: Local or Remote?
+
+> **Stop and think**: Classify these 5 scenarios as local or remote operations.
+> 1. Editing a photo on your laptop's desktop.
+> 2. Using SSH to check the logs of a web server in London.
+> 3. Running `pwd` in your terminal immediately after opening it.
+> 4. Typing `ls` after connecting via `ssh admin@10.0.0.5`.
+> 5. Your browser requesting a web page from Wikipedia.
+
+<details>
+<summary>Answers</summary>
+1. **Local** (happening on the machine in front of you)
+2. **Remote** (you are telling a distant server to show its logs)
+3. **Local** (you haven't connected to another machine yet)
+4. **Remote** (your terminal is now controlling the 10.0.0.5 machine)
+5. **Remote** (the Wikipedia server is sending you the page data)
+</details>
+
 ---
 
 ## SSH: Your Secure Tunnel to Remote Kitchens
@@ -129,6 +147,22 @@ echo $HOME
 ```
 
 You don't need to set these -- your computer does it for you when you log in. We mention this now because SSH commands often use `$USER`, and you'll see environment variables throughout your career.
+
+### Try it now
+
+Run these commands in your terminal right now:
+
+```bash
+echo $USER
+echo $HOME
+```
+
+> **Pause and predict**: If you connect to a remote server using `ssh chef@192.168.1.100` and then run `echo $USER`, what will it output? Your laptop's username, or `chef`?
+>
+> <details>
+> <summary>Answer</summary>
+> It will output <code>chef</code>! When you SSH into a server, the commands run in the context of the remote user. The <code>$USER</code> variable on that server is set to the user you logged in as.
+> </details>
 
 ### The SSH Command
 
@@ -248,6 +282,19 @@ You copy the public key to the server, and from then on, you can connect without
 | `-i` | Use a specific key file | `ssh -i ~/.ssh/mykey chef@server.com` |
 | `-v` | Verbose mode (shows what's happening -- useful for debugging) | `ssh -v chef@server.com` |
 
+### Mini-Exercise: Build the Command
+
+> **Stop and think**: Write the exact SSH command to connect to the user `admin` on the server `10.0.0.5` using port `2222` and the key file `~/.ssh/work_key`.
+
+<details>
+<summary>Answer</summary>
+
+```bash
+ssh -p 2222 -i ~/.ssh/work_key admin@10.0.0.5
+```
+*(Note: the order of `-p` and `-i` doesn't matter, as long as they come before the `user@host` part).*
+</details>
+
 ---
 
 ## The Lifecycle of a Connection
@@ -264,12 +311,20 @@ Your computer                          Remote server
     |  <--- "Welcome! Here's a shell" ----  |
     |                                       |
     |  --- ls, pwd, nano, etc. --------->  |  (commands run HERE, on the server)
-    |  <--- results sent back -----------  |
+    |  <--- [ BLANK 1: Predict what happens here ] --- |
     |                                       |
-    |  --- exit ------------------------->  |
+    |  --- [ BLANK 2: How do you disconnect? ] ------> |
     |                                       |  "Goodbye"
     |  (back to local terminal)             |
 ```
+
+> **Pause and predict**: Fill in the two blanks in the diagram above. What does the server send back after you run a command, and what command do you type to disconnect?
+>
+> <details>
+> <summary>Answers</summary>
+> <strong>BLANK 1:</strong> The server sends back the results/output of your commands.<br>
+> <strong>BLANK 2:</strong> You type <code>exit</code> to disconnect and return to your local terminal.
+> </details>
 
 > **Pause and predict**: If you're SSH'd into a server and you run `rm -rf /home/yourname/projects`, what happens? Does it delete files on your laptop or on the server? This is not a trick question — but it's the kind of mistake that has caused real outages. Always check `hostname` after connecting to confirm you're on the machine you think you are.
 
@@ -312,16 +367,16 @@ You'll use SSH to connect to these servers, troubleshoot problems, check logs, a
 
 ## Quiz
 
-1. **What is the difference between your laptop and a server?**
+1. **You SSH into a server and run `hostname` — it shows your laptop name. What happened?**
    <details>
    <summary>Answer</summary>
-   Physically, they're very similar -- both have CPUs, RAM, and storage. The difference is their purpose. Your laptop is designed for one person to use with a screen and keyboard. A server is designed to serve many clients simultaneously, often has no screen or keyboard, and typically runs Linux with only a terminal interface. A server is usually more powerful (more CPU cores, more RAM) because it handles many requests at once.
+   You are not actually connected to the remote server! Either the SSH connection failed, or you already typed `exit` and returned to your local terminal without realizing it. Because you ran `hostname` and saw your laptop's name, you confirmed that your commands are currently running locally, not remotely. Always check your prompt and use `hostname` to verify your environment to avoid running destructive commands on the wrong machine.
    </details>
 
-2. **What does SSH stand for, and what does it do?**
+2. **Your colleague asks you to email them your SSH private key so they can quickly log into a server you both manage. What do you say and why?**
    <details>
    <summary>Answer</summary>
-   SSH stands for Secure Shell. It lets you open a terminal session on a remote computer over an encrypted connection. You type commands on your local machine, they execute on the remote machine, and the results are sent back to you. The "secure" part means all communication is encrypted so nobody can eavesdrop.
+   You must say absolutely not. Your private key (e.g., `id_ed25519`) is your personal "house key" and should never be shared with anyone, not even colleagues. If they need access to the server, they should generate their own SSH key pair and give you their *public* key (`id_ed25519.pub`), which you can then add to the server's allowed list. This ensures everyone's access remains secure and allows you to revoke their access later without changing your own key.
    </details>
 
 3. **What is the difference between a private key and a public key?**
@@ -334,6 +389,12 @@ You'll use SSH to connect to these servers, troubleshoot problems, check logs, a
    <details>
    <summary>Answer</summary>
    On the remote server, not on your local machine. When you're connected via SSH, every command you type runs on the remote server. The file `recipe.txt` is created on the server's file system. Your local machine doesn't get a copy. To verify which machine you're on, check the terminal prompt or type `hostname`.
+   </details>
+
+5. **Progressive Difficulty: You need to automate deployments from a CI (Continuous Integration) server to 50 production machines. Would you use password or key-based auth? Explain your reasoning.**
+   <details>
+   <summary>Answer</summary>
+   You must use key-based authentication. If you used passwords, an automated script would either get stuck waiting for a human to type the password 50 times, or you would have to hardcode the password directly into the script (which is a massive security risk). With SSH keys, the CI server can securely hold a private key, and the 50 production machines can be configured to trust its public key. This allows the automated system to connect instantly and securely without human intervention, making deployments both fast and secure.
    </details>
 
 ---
@@ -444,7 +505,7 @@ exit
 
 It would look, feel, and work exactly like the localhost exercise. The only difference is the physical location of the computer.
 
-**Success criteria**: You successfully (or conceptually understand how to) open an SSH connection, verify you're connected to a different machine (or the same machine via SSH), run commands, and disconnect. You understand that SSH gives you a remote terminal and that commands execute on the server, not your laptop.
+**Success criteria**: You must run `hostname` in your terminal *before* connecting via SSH and record the output. Then, successfully open the SSH connection and run `hostname` again *after* connecting to prove you are in a different environment. You must capture this output difference, run at least one other command to verify the file system, and then properly disconnect. This proves you understand how to verify which machine you are actively controlling.
 
 ---
 
