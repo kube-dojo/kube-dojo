@@ -267,6 +267,24 @@ def step_write(module_path: Path, plan: str, model: str = MODELS["write"]) -> st
     if output.endswith("```"):
         output = output[:-3].strip()
 
+    # Detect Gemini thinking leaks (chain-of-thought dumped into output)
+    thinking_markers = ["CRITICAL INSTRUCTION", "thought\n", "Wait,", "I will ", "I'll just",
+                        "the prompt says", "standard behavior"]
+    if any(marker in output[:500] for marker in thinking_markers):
+        print(f"  ❌ WRITE failed — Gemini leaked chain-of-thought into output")
+        return None
+
+    # Ensure output starts with frontmatter
+    if not output.startswith("---"):
+        # Try to find frontmatter deeper in the output
+        fm_start = output.find("---\n")
+        if fm_start > 0 and fm_start < 2000:
+            output = output[fm_start:]
+            print(f"  ⚠ Stripped {fm_start} chars of preamble before frontmatter")
+        else:
+            print(f"  ❌ WRITE failed — output has no frontmatter")
+            return None
+
     print(f"  ✓ WRITE produced {len(output)} chars")
     return output
 
