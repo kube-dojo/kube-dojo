@@ -123,6 +123,8 @@ Here is what each column means:
 | TIME | Total CPU time consumed |
 | COMMAND | The command that started the process |
 
+> **Pause and predict**: Run `ps aux` now. Find the process using the most memory. What is its COMMAND? Is the RSS what you expected?
+
 ### Finding a specific process
 
 Do not scroll through hundreds of lines. Filter:
@@ -167,7 +169,7 @@ You will see something like:
 ```
 top - 10:30:00 up 3 days,  2:15,  2 users,  load average: 0.52, 0.58, 0.59
 Tasks: 143 total,   2 running, 140 sleeping,   0 stopped,   1 zombie
-%Cpu(s):  5.0 us,  2.0 sy,  0.0 ni, 92.0 id,  1.0 wa,  0.0 hi,  0.0 si
+%Cpu(s):  5.0 us,  2.0 sy,  0.0 ni, 92.0 id,  1.0 wa,  0.0 hi,  0.0 si,  0.0 st
 MiB Mem :   7953.5 total,   2345.2 free,   3210.1 used,   2398.2 buff/cache
 MiB Swap:   2048.0 total,   2048.0 free,      0.0 used.   4320.5 avail Mem
 
@@ -180,7 +182,8 @@ The top section gives you the system overview:
 
 - **load average**: Three numbers (1-min, 5-min, 15-min). If these are higher than your CPU count, the system is overloaded. A 4-core machine with load average 4.0 is at capacity
 - **Tasks**: How many processes exist and in which states
-- **%Cpu**: `us` is user programs, `sy` is kernel, `id` is idle (idle is good!), `wa` is waiting for disk
+- **%Cpu**: `us` is user programs, `sy` is kernel, `id` is idle. Two critical metrics for cloud/K8s are `wa` (waiting for disk I/O) and `st` (CPU steal). **CPU Steal** happens in virtualized environments (like AWS/GCP or VMs) when the hypervisor takes CPU cycles away from your VM to give to another tenant. If `st` is consistently high, your node is being starved by the cloud provider ("noisy neighbor" problem).
+- **MiB Mem / Swap**: This shows system memory. **Memory pressure** occurs when your `available` memory drops near zero and the system starts using `Swap` (writing memory pages to the slow hard drive). In Kubernetes, memory pressure is critical: if a node runs out of memory, the kernel's OOM (Out Of Memory) Killer will forcefully terminate pods (SIGKILL) to save the node.
 
 **Useful keys while `top` is running:**
 
@@ -191,6 +194,8 @@ The top section gives you the system overview:
 | `P` | Sort by CPU usage |
 | `k` | Kill a process (it will ask for the PID) |
 | `1` | Toggle showing individual CPU cores |
+
+> **Pause and predict**: Launch `top` right now. What is your current load average? How many CPUs do you have? Is your system overloaded? (Hint: compare load average to CPU count.)
 
 ### `htop` — the better `top`
 
@@ -218,6 +223,23 @@ Why `htop` is better for beginners:
 
 For now, know that `htop` exists and try it. In your day-to-day work, most people reach for `htop` over `top`.
 
+### Checking Memory: `free`
+
+While `top` shows memory usage per process, the `free` command gives you the system-wide memory picture instantly.
+
+```bash
+# Show memory in human-readable format (megabytes/gigabytes)
+free -h
+```
+
+```
+               total        used        free      shared  buff/cache   available
+Mem:           7.8Gi       3.1Gi       2.3Gi        45Mi       2.3Gi       4.2Gi
+Swap:          2.0Gi          0B       2.0Gi
+```
+
+The most important column is **available**, not `free`. Linux intentionally uses "free" memory to cache disk files (`buff/cache`) to speed up the system. If an application needs memory, Linux instantly drops the cache and hands over the RAM. The `available` column tells you how much memory can actually be given to new processes before the system starts swapping to disk.
+
 ---
 
 ## Killing Processes: Signals, `kill`, and `killall`
@@ -243,6 +265,8 @@ Other useful signals:
 | SIGINT | 2 | Interrupt — this is what Ctrl+C sends |
 | SIGSTOP | 19 | Pause the process (cannot be caught or ignored) |
 | SIGCONT | 18 | Resume a paused process |
+
+> **Stop and think**: Before reading on — if you run `kill` on a `sleep` process, will it terminate or ignore the signal? Why? Try it and check.
 
 ### Using `kill`
 
@@ -369,6 +393,8 @@ A quick reference:
 | Bring to foreground | `fg` or `fg %N` |
 | Survive disconnect | `nohup command &` |
 
+> **Stop and think**: You accidentally ran a database migration in the foreground and it will take 20 minutes. You need your terminal back but cannot restart the migration. What two keystrokes solve this? Try it with `sleep 1200` to verify.
+
 ---
 
 ## Disk Usage: Where Did All My Space Go?
@@ -400,6 +426,8 @@ The important columns:
 | Mounted on | Where this filesystem is accessible in the directory tree |
 
 In the example above, `/var` is at 95% — that is a problem waiting to happen. Logs are usually stored in `/var/log`, so this is extremely common on servers.
+
+> **Pause and predict**: Run `df -h` on your system. Which filesystem has the highest Use%? Predict which directory is the biggest consumer before running `du`.
 
 ### `du` — Disk Usage (the detective)
 
@@ -471,6 +499,16 @@ This shows you the physical layout: `sda` is a 50GB disk with two partitions, an
 
 ---
 
+## Kubernetes Connection: Processes in Pods
+
+In a traditional server environment, hundreds of background processes and services run together. In Kubernetes, the environment is radically simplified: a container is essentially just an isolated process (or a small group of them) running on the host node. 
+
+- **PID 1 in Containers**: The `ENTRYPOINT` or `CMD` of your Dockerfile becomes PID 1 inside the container. If that primary process dies, the container terminates. If your PID 1 doesn't know how to pass signals (like SIGTERM) to its children, graceful pod shutdown fails, resulting in forced SIGKILLs and potential data corruption.
+- **Resource Limits**: When you set `resources.limits.memory` on a K8s Pod, you are telling the Linux kernel's cgroups feature to watch that specific process tree. If the processes exceed the allocated limit, the kernel invokes the OOMKiller to terminate the container immediately.
+- **Execing into Pods**: When you run `kubectl exec -it my-pod -- bash`, you are not SSHing into a virtual machine. You are simply asking the container runtime (like containerd) to start a new `bash` process on the node and attach it to the same isolated namespaces as the pod's PID 1.
+
+---
+
 ## Common Mistakes
 
 | Mistake | Why It Is Bad | What To Do Instead |
@@ -488,78 +526,67 @@ This shows you the physical layout: `sda` is a 50GB disk with two partitions, an
 
 ### Question 1
 
-What is the difference between `ps` and `top`?
+You are writing a bash script to monitor a specific application and restart it if it crashes. Should your script use `ps` or `top` to check if the process is running?
 
 <details>
 <summary>Show Answer</summary>
 
-`ps` takes a **snapshot** — it shows processes at a single moment in time and exits. `top` is a **live dashboard** that updates continuously (every few seconds by default).
-
-Use `ps` when you need to filter or script. Use `top` or `htop` when you want to watch what is happening in real time.
+Your script should use `ps` (or `pgrep`). `ps` takes a single, instantaneous snapshot of the process table and exits, making it perfect for scripts to parse. `top` is an interactive, continuously updating dashboard designed for human eyes, which will block your script from continuing and flood the output with terminal escape characters. Using `ps` ensures your script gets exactly the data it needs in a single pass without hanging.
 
 </details>
 
 ### Question 2
 
-You run `kill 5678` and the process is still running 10 seconds later. What happened, and what should you do next?
+You notice a runaway Python script consuming 100% CPU. You run `kill 5678`, but when you check 10 seconds later, the process is still running. What happened, and what is your exact next step?
 
 <details>
 <summary>Show Answer</summary>
 
-`kill` without a signal number sends **SIGTERM** (signal 15), which the process can catch and handle — or even ignore. If the process is stuck, ignoring signals, or in an uninterruptible state, SIGTERM will not work.
-
-Your next step: send SIGKILL with `kill -9 5678`. This signal cannot be caught or ignored — the kernel terminates the process directly.
-
-The only exception: processes in the `D` (uninterruptible sleep) state cannot be killed even with SIGKILL. Those usually indicate a storage or I/O problem that must be resolved at the system level.
+Running `kill` without any flags sends a SIGTERM (signal 15) to the process, which is merely a polite request to shut down. The process is allowed to catch this signal to perform cleanup tasks, or it can ignore it entirely if it is stuck in an infinite loop or poorly written. Because the polite request was ignored, your next step is to run `kill -9 5678` to send a SIGKILL. This signal is handled directly by the Linux kernel, which forcefully terminates the process immediately without giving it a chance to ignore the command.
 
 </details>
 
 ### Question 3
 
-You start a long backup script over SSH: `./backup.sh &`. You close your laptop and go home. When you check the server the next morning, the backup did not complete. What went wrong?
+You log into a production database server via SSH and start a critical database migration script using `./migrate-db.sh &`. You then close your laptop to commute home. When you reconnect later, the migration has failed halfway through. Why did this happen despite running it in the background?
 
 <details>
 <summary>Show Answer</summary>
 
-When your SSH session disconnected, the terminal sent **SIGHUP** to all its child processes, killing your backup script. Running a command with `&` only puts it in the background — it does not protect it from hangup signals.
-
-The fix: use `nohup ./backup.sh &` — this tells the system to ignore SIGHUP for that process, so it survives disconnects. Alternatively, use tools like `tmux` or `screen` that keep sessions alive across disconnects.
+Adding the `&` at the end of a command only runs it in the background of your current terminal session, allowing you to type other commands, but it still belongs to your session's process tree. When you closed your laptop, the SSH connection dropped, causing the server to send a SIGHUP (hangup) signal to your terminal session and all of its child processes, terminating the migration instantly. To prevent this, you must run the command with `nohup ./migrate-db.sh &` (or use a multiplexer like `tmux`), which instructs the process to ignore the SIGHUP signal and keep running after you disconnect.
 
 </details>
 
 ### Question 4
 
-A server is responding slowly. You run `df -h` and see that `/var` is at 98%. Describe the steps you would take to find and fix the problem.
+An alerting system pages you at 2 AM because a Kubernetes worker node is entirely unresponsive. You manage to SSH in, run `df -h`, and notice the `/var` partition is at 99% capacity. How do you systematically identify the exact file causing the issue?
 
 <details>
 <summary>Show Answer</summary>
 
-Step-by-step:
-
-1. **Find the biggest directories**: `du -sh /var/* 2>/dev/null | sort -rh | head -10`
-2. **Drill down** into the largest directory (usually `/var/log`): `du -sh /var/log/* 2>/dev/null | sort -rh | head -10`
-3. **Identify the culprit** — often a massive log file that was not rotated
-4. **Fix it** — options include:
-   - Truncate a huge log file: `> /var/log/huge-file.log` (empties it without deleting)
-   - Remove old rotated logs: `rm /var/log/syslog.*.gz`
-   - Clean package caches: `apt clean` or `dnf clean all`
-5. **Prevent it** — ensure log rotation is configured properly (`/etc/logrotate.conf`)
-
-Never just blindly delete files. Always check what they are first.
+You need to drill down into the file system hierarchically to locate the space consumer because `df` only shows top-level partitions, not individual directories. Start broadly by running `du -sh /var/* 2>/dev/null | sort -rh | head -10` to find the largest directories within `/var`. Once you identify the largest directory (often `/var/log`), repeat the command on that specific sub-directory to narrow it down further. You continue this pattern of investigating the largest path until you isolate the specific massive file. Once found, you can safely truncate the runaway log file (e.g., `> /var/log/huge-file.log`) to instantly restore node health without breaking file handles.
 
 </details>
 
 ### Question 5
 
-What does Ctrl+Z do, and how is it different from Ctrl+C?
+You are viewing a massive, continuously scrolling application log using `tail -f`, but you urgently need to run a `curl` command to test the application API without losing your place in the logs. How do you temporarily get your prompt back and then return to the logs?
 
 <details>
 <summary>Show Answer</summary>
 
-- **Ctrl+C** sends **SIGINT** (signal 2), which tells the process to **terminate**. Most processes will stop and exit.
-- **Ctrl+Z** sends **SIGTSTP** (signal 20), which **pauses** (suspends) the process. It is still alive, just frozen. You can resume it in the background with `bg` or in the foreground with `fg`.
+You should press `Ctrl+Z` to send a SIGTSTP (suspend) signal to the active `tail` process. Unlike `Ctrl+C` (SIGINT), which terminates the process entirely and loses your state, `Ctrl+Z` simply freezes the process in memory and returns control of the terminal to you. You can then comfortably run your `curl` command to test the API. Once finished, type the `fg` command to bring the frozen `tail` process back to the foreground, resuming the log output exactly where you left off.
 
-Think of it this way: Ctrl+C kills the song. Ctrl+Z pauses it so you can resume later.
+</details>
+
+### Question 6
+
+You run `top` on a Kubernetes node that is performing extremely poorly. The CPU usage shows `%Cpu(s): 0.5 us, 1.0 sy, 0.0 id, 0.0 wa, 98.5 st`. Memory is mostly available. What is the root cause of the slowness, and can you fix it by killing processes?
+
+<details>
+<summary>Show Answer</summary>
+
+The root cause of the slowness is severe CPU Steal (`st`), which is sitting at 98.5%. This means the underlying cloud provider's hypervisor is taking almost all of the physical CPU cycles away from your virtual machine to serve other tenants on the same shared hardware (the "noisy neighbor" problem). You cannot fix this issue by killing processes on your Linux node because the constraint is external to your operating system. Your only resolutions are to wait for the hypervisor to allocate resources back, cordon and drain the node to move your pods elsewhere, or upgrade your instance type to one with dedicated CPU cores.
 
 </details>
 
