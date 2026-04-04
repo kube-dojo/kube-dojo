@@ -68,10 +68,9 @@ Git manages your files by moving them through three distinct logical areas, ofte
 3. **The Repository (Commit History)**: This is the permanent database where Git stores your snapshots (called commits). Once files are committed here, they are safely recorded in history with an author name, a timestamp, and a descriptive message. A commit is mathematically sealed; it cannot be secretly altered without changing its unique identifier.
 
 ### Active Learning: Pause and Predict
-Imagine you have modified three files in your Working Directory: `app.py`, `database.yaml`, and `readme.md`. You only want to save the changes made to `database.yaml` right now because the Python code is still broken and the documentation is incomplete.
-Based on the Three Trees architecture, how would you achieve this? Would you save everything at once, or is there an intermediate step you must use?
-
-*Prediction check: You must use the Staging Area. You would selectively move only `database.yaml` to the Staging Area, leaving the other two in the Working Directory. When you create the commit, Git will only snapshot what is currently sitting on the loading dock (`database.yaml`).*
+> **Pause and predict**: Imagine you have modified three files in your Working Directory: `app.py`, `database.yaml`, and `readme.md`. You only want to save the changes made to `database.yaml` right now because the Python code is still broken and the documentation is incomplete. Based on the Three Trees architecture, how would you achieve this? Would you save everything at once, or is there an intermediate step you must use?
+>
+> *Prediction check: You must use the Staging Area. You would selectively move only `database.yaml` to the Staging Area, leaving the other two in the Working Directory. When you create the commit, Git will only snapshot what is currently sitting on the loading dock (`database.yaml`).*
 
 ## Section 2: Setting the Stage: Installation and Configuration
 
@@ -142,6 +141,8 @@ drwxr-xr-x 3 alex alex 4096 Oct 12 10:00 .
 drwxr-xr-x 5 alex alex 4096 Oct 12 09:59 ..
 drwxr-xr-x 7 alex alex 4096 Oct 12 10:00 .git
 ```
+
+With your repository successfully initialized and your identity configured, you have laid the essential groundwork. Next, we will explore how to populate this repository by deliberately moving files through Git's lifecycle to create your first committed snapshots.
 
 ## Section 3: The Snapshot Lifecycle: Add, Commit, and Status
 
@@ -245,6 +246,8 @@ They then pushed the code to a public GitHub repository. Within 120 seconds, aut
 
 **The Lesson**: Never blindly use `git add .` unless you are absolutely certain what you have changed. Always run `git status` and `git diff` before staging to ensure you are not accidentally committing passwords, API keys, private ssh keys, or temporary debugging files.
 
+Now that you know how to safely construct snapshots, you will inevitably need to inspect past snapshots or review the exact modifications made to individual files over time. In the next section, we will delve into the commands that allow you to analyze your commit history and examine precise file differences.
+
 ## Section 4: Traveling Through Time: Log and Diff
 
 Once you have made multiple commits, you need robust ways to view the history timeline and understand exactly what has changed between different points in time. 
@@ -292,19 +295,19 @@ index e46b825..8394c41 100644
 - Lines starting with a `-` (usually highlighted in red) are deletions. If you changed a line, Git represents it as deleting the old line and adding the new line.
 
 ### Active Learning: Diff Reading
-Imagine you ran `git diff` on a deployment file and saw the following output:
-
-```text
-@@ -10,3 +10,3 @@
- spec:
-   replicas: 3
--  image: nginx:1.14
-+  image: nginx:1.24
-```
-
-Before reading further, what exactly did the engineer do in this file? Be specific.
-
-*Prediction check: The engineer did not add a completely new structural element. They modified an existing line. They deleted the line specifying the Nginx container version 1.14 and replaced it with a line specifying version 1.24. This represents a container image version upgrade.*
+> **Pause and predict**: Imagine you ran `git diff` on a deployment file and saw the following output:
+>
+> ```text
+> @@ -10,3 +10,3 @@
+>  spec:
+>    replicas: 3
+> -  image: nginx:1.14
+> +  image: nginx:1.24
+> ```
+>
+> Before reading further, what exactly did the engineer do in this file? Be specific.
+>
+> *Prediction check: The engineer did not add a completely new structural element. They modified an existing line. They deleted the line specifying the Nginx container version 1.14 and replaced it with a line specifying version 1.24. This represents a container image version upgrade.*
 
 Now that we have verified our changes are correct and contain no secrets, let us stage and commit our label addition:
 
@@ -351,6 +354,8 @@ a1b2c3d feat: add production namespace definition
 ```
 
 You can also use `git log -p` to see the actual diffs introduced by every single commit in history, allowing you to see not just *that* a commit happened, but exactly *what lines* were altered by it.
+
+Mastering the ability to navigate your local timeline provides immense confidence when experimenting with infrastructure code. However, modern engineering is a team effort; the next section will introduce how to safely share your local history with remote servers to collaborate seamlessly with others.
 
 ## Section 5: Collaborating with the World: Remotes, Push, and Pull
 
@@ -410,6 +415,11 @@ git pull origin main
 
 Under the hood, `git pull` is actually a macro that runs two distinct commands in sequence: `git fetch` (which safely downloads the new commits from the remote without modifying your working files) and `git merge` (which attempts to seamlessly combine the downloaded changes with your current working directory).
 
+### Active Learning: Remote Synchronization
+> **Pause and predict**: You spent the morning working offline and made two local commits. Meanwhile, your teammate pushed three commits to the same branch on the remote server. What will happen if you blindly run `git push origin main` when you reconnect to the internet?
+> 
+> *Prediction check: The push will be rejected by the remote server. Git will recognize that the remote branch has commits that your local branch lacks, preventing you from unintentionally overwriting your teammate's work. You must run `git pull` to fetch and integrate their changes into your local history before you can successfully push your combined timeline.*
+
 ## Section 6: Ignoring the Noise: .gitignore
 
 In any real-world software or infrastructure project, there are numerous files that you **never** want to commit to version control. These include:
@@ -442,10 +452,15 @@ EOF
 
 Git reads this file top-to-bottom. Any file that matches a pattern listed in the `.gitignore` will never show up in `git status` as untracked. This makes it impossible to accidentally stage it with a wildcard command like `git add .`.
 
-### Active Learning: The Late Ignore
-You have a file named `database-creds.txt` that you created last week. You committed it to Git a few days ago. Today, you realize your mistake and add `database-creds.txt` to your `.gitignore` file. You modify the credentials file, and run `git status`. Will Git ignore the changes?
+### Active Learning: Pattern Matching
+> **Pause and predict**: Given the `.gitignore` file above, which of the following three newly created files would still show up as "Untracked" when you run `git status`? 1) `main.tfstate`, 2) `secret-keys.yaml`, 3) `secret-keys.txt`.
+>
+> *Prediction check: Only `secret-keys.txt` will show up as untracked. `main.tfstate` is ignored by the `*.tfstate` wildcard rule, and `secret-keys.yaml` is explicitly ignored by name. `secret-keys.txt` does not match any ignore pattern, so Git will continue to flag it as an untracked file.*
 
-*Prediction check: No, Git will not ignore the changes. The `.gitignore` file only prevents **untracked** files from being added to the database. Once a file is tracked (committed), Git will continue tracking it regardless of what the `.gitignore` says. You must explicitly remove it from tracking using `git rm --cached database-creds.txt` before the ignore rule takes effect.*
+### Active Learning: The Late Ignore
+> **Pause and predict**: You have a file named `database-creds.txt` that you created last week. You committed it to Git a few days ago. Today, you realize your mistake and add `database-creds.txt` to your `.gitignore` file. You modify the credentials file, and run `git status`. Will Git ignore the changes?
+>
+> *Prediction check: No, Git will not ignore the changes. The `.gitignore` file only prevents **untracked** files from being added to the database. Once a file is tracked (committed), Git will continue tracking it regardless of what the `.gitignore` says. You must explicitly remove it from tracking using `git rm --cached database-creds.txt` before the ignore rule takes effect.*
 
 ## Did You Know?
 
@@ -495,6 +510,11 @@ You must create a file named `.gitignore` in the root of your repository (if it 
 <details>
 <summary>6. True or False: If you delete the `.git` hidden folder in your project directory, Git will automatically recreate it the next time you run `git status`, preserving all your commit history.</summary>
 False. The `.git` folder IS the repository. It contains the entire database of all your commits, branches, and historical snapshots. If you delete it, you instantly destroy all version control history for that project locally, reverting the directory to a standard folder of untracked files.
+</details>
+
+<details>
+<summary>7. You and a colleague are both modifying the same `nginx-deployment.yaml` file. They push a change that sets `replicas: 5` while you are offline. You locally change the same line to `replicas: 2` and attempt to push. Git rejects your push, so you run `git pull`. What happens next, and how do you resolve it?</summary>
+Git will attempt to automatically merge the changes, but because you both modified the exact same line of the same file, it will pause and declare a merge conflict. It cannot safely guess whether the deployment should have 5 replicas or 2. To resolve it, you must open the file in your editor, locate the conflict markers (which look like `<<<<<<< HEAD` and `>>>>>>>`), manually edit the file to the desired state, and save. Finally, you must use `git add` to mark the file as resolved and `git commit` to finalize the merge before pushing.
 </details>
 
 ## Hands-On Exercise
@@ -615,6 +635,34 @@ Output should look similar to:
 9f8e7d6 feat: add web deployment skeleton
 1a2b3c4 docs: add initial readme
 ```
+</details>
+
+### Task 6: Bonus Challenge — Advanced Ignore Rules
+You are working on a new application that generates numerous log files ending in `.log` across various directories. You want Git to ignore all of them to save space, but you must ensure that one specific file named `audit-trail.log` in the root directory is always tracked for compliance reasons.
+Create a `.gitignore` file that achieves this exact configuration. Verify your solution by creating dummy files (e.g., `app.log`, `database.log`, and `audit-trail.log`) and checking `git status` to ensure only `audit-trail.log` is ready to be tracked.
+- [ ] `.gitignore` file created with appropriate wildcard and exclusion rules.
+- [ ] Dummy files created to test the rules.
+- [ ] `git status` confirms only the required file is untracked.
+
+<details>
+<summary>Solution: Task 6</summary>
+
+```bash
+# Create the .gitignore file
+cat << 'EOF' > .gitignore
+*.log
+!audit-trail.log
+EOF
+
+# Create dummy files
+touch app.log
+touch database.log
+touch audit-trail.log
+
+# Check status
+git status
+```
+Git will show `.gitignore` and `audit-trail.log` as untracked files. The other `.log` files will be successfully ignored.
 </details>
 
 ---
