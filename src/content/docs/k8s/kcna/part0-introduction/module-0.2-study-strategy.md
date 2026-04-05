@@ -333,6 +333,29 @@ Don't get stuck:
 | Not taking practice tests | Unprepared for format | Take 2-3 full practice exams |
 | Changing answers | First instinct often right | Only change if certain |
 | Poor time management | Running out of time | Practice with timer |
+| Not reviewing wrong answers | You will repeat the exact same conceptual mistakes | Spend twice as much time analyzing why an answer was wrong |
+| Studying all domains equally | Wastes time on low-weight topics (e.g., Observability is 8%) | Allocate study hours strictly proportionally to exam weights |
+| Memorizing YAML from scratch | KCNA does not ask you to write YAML | Focus on recognizing what a YAML block does, not writing it |
+
+---
+
+## Hands-On Exercise: Build Your KCNA Study Strategy
+
+Even a strategy module requires practice. Complete this exercise to lock in your study plan before moving on to technical content.
+
+**Task**: Create your personalized 2-week preparation strategy and baseline assessment.
+
+**Instructions**:
+1. **Assess Your Baseline**: Review the five KCNA domains and rate your current confidence in each on a scale from 1 to 10.
+2. **Calculate Your Focus Weight**: Multiply the domain's exam weight by your "knowledge gap" (10 minus your confidence score). The highest resulting numbers indicate your priority domains.
+3. **Create the Schedule**: Block out specific 1-2 hour study windows on your personal calendar for the next 14 days. Assign your priority domains to the first 5 days.
+4. **Generate Starter Materials**: Pick your lowest-scoring domain and immediately create 5 physical or digital flashcards for it.
+
+**Success Criteria**:
+- [ ] You have a written schedule mapping study hours to the 5 KCNA domains.
+- [ ] Your schedule allocates the most time to Kubernetes Fundamentals (46%).
+- [ ] You have created at least 5 flashcards for your weakest subject.
+- [ ] You have bookmarked the official CNCF KCNA curriculum page.
 
 ---
 
@@ -360,6 +383,24 @@ Don't get stuck:
    <details>
    <summary>Answer</summary>
    Focus heavily on Kubernetes Fundamentals, which is worth 46% of the exam. At 60%, you are failing that domain, and it represents nearly half your score. Even a modest improvement from 60% to 70% in Fundamentals would add more points than going from 82% to 92% in Cloud Native Architecture (which is only 16%). Spend at least 2 of the 3 days reviewing Fundamentals concepts: architecture components, Pods, Deployments, Services, and namespaces. Use the final day for a full practice test and targeted review of any remaining weak spots.
+   </details>
+
+5. **During your KCNA exam, you flag a question about the difference between a Deployment and a StatefulSet. You initially selected A, but upon review, C also looks plausible. You aren't 100% sure about either. What is the most statistically sound strategy for this situation, and why?**
+   <details>
+   <summary>Answer</summary>
+   Stick with your initial choice, option A, unless you find concrete proof later in the exam that points to C. Statistical studies on multiple-choice tests show that a student's first instinct is usually correct. Changing answers based purely on second-guessing or self-doubt frequently leads to switching from a correct answer to an incorrect one. Only change a flagged answer if you recall a specific fact or realize you misread the question entirely.
+   </details>
+
+6. **You are preparing for the Cloud Native Architecture section and have spent 4 hours memorizing the exact founding dates and graduation dates of every CNCF project. A study partner tells you this is a waste of time. Are they right or wrong, and why?**
+   <details>
+   <summary>Answer</summary>
+   Your study partner is completely correct. The KCNA exam tests conceptual understanding and your ability to recognize the purpose of various cloud-native tools, not trivial historical recall. Spending hours memorizing dates is a misapplication of your study time because it prepares you for recall instead of recognition. Instead, you should focus your time on understanding the difference between CNCF maturity tiers (graduated, incubating, sandbox) and identifying the primary use cases for major ecosystem projects.
+   </details>
+
+7. **You are evaluating the following exam option: "A Kubernetes Service will always route traffic to Pods across all namespaces." You remember that Services can cross namespaces in some contexts, but you aren't sure if it's universal. How does the phrasing of this option help you determine if it is the correct answer?**
+   <details>
+   <summary>Answer</summary>
+   The phrasing helps you eliminate this option because it contains the absolute word "always". In complex distributed systems like Kubernetes, absolute rules are extremely rare due to flexible configurations and security boundaries like NetworkPolicies. Test writers frequently use words like "always", "never", or "all" to create plausible-sounding but technically false distractors. By recognizing this absolute language, you can confidently eliminate the option even if you do not remember the exact cross-namespace routing rules.
    </details>
 
 ---
