@@ -204,6 +204,8 @@ You do not need to know how to install or configure these tools for KCNA. Know *
 
 - **vLLM can serve models 24x faster than naive approaches** — By using PagedAttention (managing GPU memory like an OS manages virtual memory), vLLM dramatically improves throughput for LLM serving. This is why it became the default serving engine for many LLM deployments on K8s.
 
+- **Kubernetes was not built for AI** — When Kubernetes was released in 2014, deep learning was still in its infancy. The device plugin framework that makes GPU scheduling possible wasn't introduced until late 2017 (Kubernetes 1.8), proving that K8s won the AI platform war through extensibility, not initial design.
+
 ---
 
 ## Common Mistakes
@@ -215,38 +217,70 @@ You do not need to know how to install or configure these tools for KCNA. Know *
 | One GPU per cluster = enough | LLM training needs many GPUs in parallel | Large models need distributed training across dozens or hundreds of GPUs |
 | Ignoring GPU memory (VRAM) | Models that do not fit in VRAM crash | A 70B parameter model needs ~140GB VRAM — more than one GPU holds |
 | Treating inference like a batch job | Users expect low latency responses | Use Deployments with autoscaling, not Jobs, for inference endpoints |
+| Using Deployments for batch inference | Batch inference tasks are meant to complete | Use Jobs or specialized batch frameworks for processing large offline datasets, saving Deployments for real-time serving |
+| Assuming GPUs scale automatically | Pending GPU Pods won't trigger standard CPU node scaling | Cluster Autoscaler must be explicitly configured with GPU-specific node groups to provision new hardware when requested |
+
+---
+
+## Hands-On Exercise: Simulating a GPU Request
+
+In this exercise, you will create a Pod specification that requests a GPU, even if you don't have a physical GPU in your cluster. This helps you understand how the Kubernetes scheduler handles extended resources.
+
+1. Create a file named `gpu-pod.yaml` with the following content:
+   ```yaml
+   apiVersion: v1
+   kind: Pod
+   metadata:
+     name: gpu-test-pod
+   spec:
+     containers:
+     - name: cuda-container
+       image: nvidia/cuda:11.4.2-base-ubuntu20.04
+       command: ["nvidia-smi"]
+       resources:
+         limits:
+           nvidia.com/gpu: 1
+   ```
+2. Apply the Pod to your cluster: `kubectl apply -f gpu-pod.yaml`
+3. Check the Pod's status: `kubectl get pods gpu-test-pod`
+4. Describe the Pod to see why it is in that state: `kubectl describe pod gpu-test-pod`
+
+**Success Criteria:**
+- [ ] You have successfully created the `gpu-pod.yaml` file.
+- [ ] You applied the file and observed that the Pod remains in a `Pending` state (assuming no GPU nodes exist).
+- [ ] You identified the `FailedScheduling` event in the describe output indicating insufficient `nvidia.com/gpu` resources.
 
 ---
 
 ## Quiz
 
-**1. What is the primary mechanism Kubernetes uses to manage GPU resources?**
+**1. Your engineering team just purchased a cluster of physical servers with NVIDIA H100 GPUs. After installing Kubernetes, developers report that their Pods requesting `nvidia.com/gpu: 1` are stuck in the Pending state. What is the most likely missing component that must be deployed to resolve this issue?**
 
-A) Built-in GPU scheduler
-B) Device plugins that advertise GPUs to the kubelet
-C) A special GPU namespace
-D) Container runtime GPU detection
-
-<details>
-<summary>Answer</summary>
-
-**B) Device plugins that advertise GPUs to the kubelet.** The device plugin framework lets vendors (like NVIDIA) register hardware resources with the kubelet, which then reports them to the scheduler. GPUs are not built into K8s core.
-</details>
-
-**2. What is gang scheduling in the context of AI/ML workloads?**
-
-A) Scheduling Pods across as many nodes as possible
-B) Running all workers of a distributed job together or not at all
-C) Assigning multiple GPUs to a single Pod
-D) Scheduling inference requests in batches
+A) A specialized GPU Scheduler add-on
+B) A Device Plugin deployed as a DaemonSet
+C) A Custom Resource Definition for the `GPU` object
+D) The Container Network Interface (CNI) plugin optimized for AI
 
 <details>
 <summary>Answer</summary>
 
-**B) Running all workers of a distributed job together or not at all.** Distributed training requires all workers to communicate. If only half start, they waste GPU resources waiting. Gang scheduling ensures the entire group launches together.
+**B) A Device Plugin deployed as a DaemonSet.** The Kubernetes core system does not natively understand or detect GPUs out of the box. Hardware vendors provide Device Plugins, typically deployed as DaemonSets, which inspect the node hardware and advertise the available resources to the local kubelet. The kubelet then updates the node's status with the API server, allowing the scheduler to finally place Pods requesting those specific resources. Without this plugin, the scheduler assumes no GPUs exist.
 </details>
 
-**3. Which tool is a CNCF Incubating project for end-to-end ML pipelines on Kubernetes?**
+**2. A data science team is training a large language model across 16 different GPU nodes. They frequently experience "deadlocks" where 8 Pods start running and hold their GPU resources indefinitely while waiting for the remaining 8 Pods, which are stuck Pending due to cluster capacity. Which scheduling concept must be implemented to fix this problem?**
+
+A) Time-slicing scheduling
+B) Priority and Preemption scheduling
+C) Gang scheduling
+D) Topology-aware scheduling
+
+<details>
+<summary>Answer</summary>
+
+**C) Gang scheduling.** Distributed training workloads require all participating worker Pods to communicate with each other simultaneously to process the data effectively. If standard Kubernetes scheduling places only half of the Pods, those Pods will reserve valuable GPUs but do no actual work while waiting for the rest to appear. Gang scheduling (provided by tools like Volcano) solves this by ensuring that the entire group of required Pods is scheduled together at the exact same time, or none of them are scheduled at all.
+</details>
+
+**3. Your organization wants to deploy an end-to-end machine learning platform on top of your existing Kubernetes infrastructure. The platform engineering team insists on using a CNCF-backed project that provides notebooks, pipeline orchestration, and model serving out of the box. Which tool best fits these requirements?**
 
 A) vLLM
 B) Ray
@@ -256,46 +290,59 @@ D) TensorFlow
 <details>
 <summary>Answer</summary>
 
-**C) Kubeflow.** Kubeflow is the CNCF Incubating project that provides ML pipelines, training operators, notebooks, and serving capabilities on Kubernetes. vLLM and Ray are not CNCF projects; TensorFlow is an ML framework, not a K8s platform.
+**C) Kubeflow.** Kubeflow is a CNCF Incubating project specifically designed to make deployments of machine learning workflows on Kubernetes simple, portable, and scalable. It provides a comprehensive ecosystem including Jupyter notebooks for exploration, pipelines for workflow orchestration, and integrated model serving. While vLLM and Ray are powerful tools in the ML space, they are not CNCF projects and focus on more specific niches like inference throughput or distributed compute rather than an end-to-end platform.
 </details>
 
-**4. Why do organizations run LLM inference on their own Kubernetes clusters instead of using cloud APIs?**
+**4. A financial institution currently uses a public cloud API for their customer service chatbot. The security team mandates that customer data can no longer be sent to external APIs, but the business requires the chatbot to maintain its current response latency. Why would deploying an LLM inference workload directly on their own Kubernetes cluster address these concerns?**
 
-A) It is always cheaper than cloud APIs
-B) Privacy, latency, compliance, and cost control at scale
-C) Cloud APIs do not support large models
-D) Kubernetes is required to run LLMs
+A) It eliminates the need for expensive GPU hardware purchases.
+B) It automatically scales better than public cloud provider APIs.
+C) It ensures data privacy while allowing the model to be co-located with the application.
+D) It prevents the need to manage container networking and storage.
 
 <details>
 <summary>Answer</summary>
 
-**B) Privacy, latency, compliance, and cost control at scale.** Self-hosting keeps data on your infrastructure, reduces per-token costs at high volume, and meets data residency requirements. It is not always cheaper (especially at low volume), and cloud APIs do support large models.
+**C) It ensures data privacy while allowing the model to be co-located with the application.** Self-hosting LLM inference directly on an organization's Kubernetes cluster keeps sensitive data entirely within their own infrastructure, satisfying strict privacy and compliance requirements. Furthermore, co-locating the inference engine within the same cluster as the frontend application reduces network hops, which helps maintain or even improve response latency. The tradeoff is that the platform team must now take on the operational burden of managing specialized GPU nodes, drivers, and scaling policies.
 </details>
 
-**5. What Kubernetes resource type is most appropriate for a model training job that runs for 8 hours and then completes?**
+**5. A machine learning engineer has written a script to process 10,000 images, train a computer vision model, and output the final weights to an S3 bucket. The entire process takes approximately 14 hours. Which Kubernetes workload resource is the most appropriate choice for running this task?**
 
 A) Deployment
-B) DaemonSet
+B) StatefulSet
 C) Job
-D) StatefulSet
+D) DaemonSet
 
 <details>
 <summary>Answer</summary>
 
-**C) Job.** Training is a batch workload that runs to completion. Jobs are designed for this — they track completions and do not restart Pods after success. Deployments keep Pods running indefinitely, which wastes resources after training finishes.
+**C) Job.** A model training task is fundamentally a batch workload because it has a clear beginning and a definitive end once the model weights are generated. The Job resource in Kubernetes is specifically designed for these types of ephemeral tasks, ensuring that the Pod executes successfully and tracking its completion status. If a Deployment were used instead, Kubernetes would continuously restart the Pod after the 14-hour script finished, wasting expensive compute resources and potentially overwriting the output.
 </details>
 
-**6. What is GPU time-slicing?**
+**6. Your startup operates a Kubernetes cluster with a limited number of physical GPUs. You have several lightweight inference APIs and development notebooks that each require minimal GPU acceleration, but they are currently blocking each other because standard Kubernetes assigns an entire GPU to a single Pod. Which technique should you implement to maximize your hardware utilization?**
 
-A) Splitting GPU memory into isolated hardware partitions
-B) Sharing one GPU across multiple Pods by rotating access in time
-C) Running GPU workloads only during off-peak hours
-D) Scheduling GPUs across different time zones
+A) Multi-Instance GPU (MIG) hardware partitioning
+B) CPU emulation for GPU requests
+C) GPU time-slicing
+D) Dedicated GPU node pools per environment
 
 <details>
 <summary>Answer</summary>
 
-**B) Sharing one GPU across multiple Pods by rotating access in time.** Time-slicing allows multiple Pods to share a single GPU by taking turns, improving utilization for lightweight workloads. It does not provide memory isolation — for that, you need hardware-level MIG (Multi-Instance GPU).
+**C) GPU time-slicing.** Standard Kubernetes extended resource scheduling allocates whole integer GPUs exclusively to a single Pod, meaning a lightweight workload will strand the remaining compute capacity of that hardware. GPU time-slicing allows the cluster administrator to configure the device plugin to oversubscribe the physical GPU, exposing multiple virtual GPUs to the scheduler. These Pods then share the physical GPU by rotating access over time, which dramatically improves utilization for workloads that do not require full isolation or massive continuous throughput.
+</details>
+
+**7. An operations team notices that during high-traffic events, their web application scales up perfectly, but their newly deployed AI recommendation engine crashes because new Pods are assigned to nodes without GPUs. How should the team ensure the recommendation engine only scales onto appropriate hardware?**
+
+A) Implement a horizontal pod autoscaler tied exclusively to GPU utilization metrics.
+B) Use node selectors, affinity rules, or specific tolerations to target GPU-enabled node groups.
+C) Rewrite the application to fall back to CPU inference when GPUs are unavailable.
+D) Deploy the application as a DaemonSet across the entire cluster.
+
+<details>
+<summary>Answer</summary>
+
+**B) Use node selectors, affinity rules, or specific tolerations to target GPU-enabled node groups.** Kubernetes does not automatically know that a specific application requires specialized hardware unless the Pod specification explicitly demands it. By applying node selectors or node affinity rules, the scheduler is constrained to only place these Pods on nodes labeled with specific GPU characteristics. Additionally, GPU nodes are often tainted to repel normal workloads, requiring the AI Pods to possess the matching tolerations to be scheduled there successfully.
 </details>
 
 ---
