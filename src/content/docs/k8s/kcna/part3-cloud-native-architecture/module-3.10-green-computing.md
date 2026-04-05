@@ -306,10 +306,9 @@ The single most impactful thing most organizations can do is stop over-provision
 ## Did You Know?
 
 - **Training a single large AI model can emit as much CO2 as five cars over their lifetime** — Researchers estimated that training GPT-3 consumed approximately 1,287 MWh of electricity. The AI boom is making data center sustainability the most urgent infrastructure challenge of the decade.
-
 - **Most Kubernetes clusters run at 15-25% utilization** — This means 75-85% of provisioned compute capacity is wasted. If every organization right-sized their clusters, the collective energy savings would be massive — equivalent to shutting down thousands of data centers worldwide.
-
 - **Iceland and the Nordics are becoming AI data center hotspots** — Not just because of cold air (free cooling) but because of abundant renewable energy (geothermal, hydro, wind). Carbon-aware location decisions are already reshaping where data centers are built.
+- **E-waste from data centers is a rapidly growing crisis** — Cloud hardware is often refreshed every 3-5 years to maintain peak performance. This rapid turnover contributes to millions of tons of electronic waste annually, making extending the lifespan of servers a crucial, though often overlooked, aspect of green computing.
 
 ---
 
@@ -322,87 +321,138 @@ The single most impactful thing most organizations can do is stop over-provision
 | Over-provisioning "just in case" | The default behavior in most orgs, massive waste | Use autoscaling and VPA instead of static over-provisioning |
 | Assuming cloud = green | Cloud providers are not carbon-neutral by default | Cloud region and time-of-day matter; not all regions use renewable energy |
 | Carbon-aware scheduling for everything | Not all workloads can be deferred | Only deferrable workloads (batch, training, CI/CD) benefit; latency-sensitive services cannot wait |
+| Treating FinOps and GreenOps as competitors | Creates unnecessary friction between teams | They are mutually beneficial; most waste reduction strategies save both money and carbon |
+| Forgetting about zombie workloads | Idle deployments silently consume resources indefinitely | Regularly audit and delete abandoned deployments, or scale down non-prod environments during off-hours |
+
+---
+
+## Hands-On Exercise: Spotting the Waste
+
+**Goal**: Identify resource waste in a simulated Pod definition.
+
+Imagine you are auditing a deployment for a simple internal web dashboard that gets a few dozen visits per day. Review this YAML snippet:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: internal-dashboard
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: dashboard
+        image: internal-dashboard:v1.2
+        resources:
+          requests:
+            cpu: "2"
+            memory: "4Gi"
+```
+
+**Task**: Identify three ways this deployment is wasting resources and emitting unnecessary carbon.
+
+<details>
+<summary>Solution</summary>
+
+1. **Over-provisioned Requests**: 2 full CPUs and 4GB of RAM is massive for a low-traffic internal dashboard. It likely needs only `cpu: 100m` and `memory: 128Mi`. This prevents other workloads from using that space on the node (bin packing inefficiency).
+2. **Unnecessary Replicas**: Running 3 replicas for an internal tool with minimal traffic is overkill. Dropping this to 1 replica (or using scale-to-zero with a tool like Knative) would immediately save 66% of the compute.
+3. **No Limits Specified**: While requests handle scheduling, lack of limits means a memory leak in this dashboard could consume the entire node, potentially causing other critical workloads to crash and forcing the cluster to spin up additional nodes unnecessarily.
+</details>
 
 ---
 
 ## Quiz
 
-**1. What does Kepler measure in a Kubernetes cluster?**
+**1. Your team has been tasked with identifying which specific microservices are consuming the most energy to prioritize them for optimization. However, your cloud provider only shows total node power consumption. Which CNCF tool should you deploy to get the required visibility?**
 
-A) Network latency between Pods
-B) Energy consumption per Pod
-C) Carbon intensity of the electricity grid
-D) Financial cost of each workload
-
-<details>
-<summary>Answer</summary>
-
-**B) Energy consumption per Pod.** Kepler (Kubernetes-based Efficient Power Level Exporter) uses eBPF and hardware power counters to estimate energy consumption at the Pod level, exporting metrics to Prometheus. It is a CNCF Sandbox project.
-</details>
-
-**2. What is carbon-aware scheduling?**
-
-A) Scheduling workloads only on ARM-based servers
-B) Running workloads when and where the electricity grid is cleanest
-C) Automatically shutting down all workloads at night
-D) Using carbon fiber network cables for better performance
+A) Prometheus Node Exporter
+B) Kepler
+C) Falco
+D) Envoy
 
 <details>
 <summary>Answer</summary>
 
-**B) Running workloads when and where the electricity grid is cleanest.** Carbon-aware scheduling uses temporal shifting (run at cleaner times) and spatial shifting (run in cleaner regions) to reduce the carbon footprint of deferrable workloads like batch jobs and model training.
+**B) Kepler.** Kepler (Kubernetes-based Efficient Power Level Exporter) uses eBPF and hardware power counters to estimate energy consumption directly at the Pod level. It bridges the gap between total server power draw and individual workload responsibility. Without this granular visibility, it is impossible to accurately identify which specific microservices are the worst carbon offenders. It exports these metrics to Prometheus, enabling teams to build detailed GreenOps dashboards.
 </details>
 
-**3. What is the typical resource utilization rate in Kubernetes clusters?**
+**2. Your organization runs massive machine learning training jobs that take 12 hours to complete, but they don't have a strict deadline. You want to minimize the carbon footprint of these jobs. What is the most effective cloud native strategy to achieve this?**
 
-A) 80-90%
-B) 50-60%
-C) 15-25%
-D) 1-5%
+A) Compress the training data using gzip before processing
+B) Implement carbon-aware scheduling to run the jobs at night or in regions with high renewable energy
+C) Run the jobs on ARM processors instead of x86
+D) Use a Vertical Pod Autoscaler to increase the CPU limits of the training jobs
 
 <details>
 <summary>Answer</summary>
 
-**C) 15-25%.** Most Kubernetes clusters are heavily over-provisioned, running at only 15-25% utilization. This means 75-85% of allocated resources are wasted. Right-sizing resource requests is the single biggest sustainability win for most organizations.
+**B) Implement carbon-aware scheduling to run the jobs at night or in regions with high renewable energy.** Carbon-aware scheduling leverages the flexibility of deferrable workloads by shifting them spatially or temporally. Since the training job does not have a strict immediate deadline, it can wait for a time when the local grid's carbon intensity is lowest (e.g., when wind power is peaking). Alternatively, it can be scheduled in a cloud region powered primarily by renewable sources. This dramatically reduces the operational carbon footprint without impacting business requirements.
 </details>
 
-**4. Which CNCF group focuses on environmental sustainability in cloud native?**
+**3. After auditing your Kubernetes environments, your GreenOps team finds that most clusters are running at 15-25% utilization, meaning the majority of provisioned resources are wasted. What is the most impactful action your engineering teams can take to improve this?**
+
+A) Switch all container base images to Alpine Linux
+B) Right-size resource requests and limits for all workloads to match actual historical usage
+C) Implement network policies to restrict unnecessary cross-namespace traffic
+D) Upgrade the Kubernetes control plane to the latest version
+
+<details>
+<summary>Answer</summary>
+
+**B) Right-size resource requests and limits for all workloads to match actual historical usage.** The single largest source of waste in Kubernetes is over-provisioning resource requests "just in case." When a Pod requests 2 CPUs but only uses 0.1, the Kubernetes scheduler reserves those 2 CPUs, preventing other workloads from using them and forcing the cluster to scale up unnecessary nodes. Right-sizing ensures the scheduler packs workloads efficiently (bin packing), which allows cluster autoscalers to shut down unneeded nodes, directly reducing both costs and carbon emissions.
+</details>
+
+**4. Your company is developing a new open-source tool for measuring the embodied carbon of hardware running Kubernetes nodes. You want to present this project to the CNCF to get feedback and align with community best practices. Which group should you approach?**
 
 A) SIG-Scheduling
-B) TAG Environmental Sustainability
-C) WG-Green-Compute
-D) SIG-Energy
+B) Kubernetes Steering Committee
+C) TAG Environmental Sustainability
+D) OpenTelemetry Technical Committee
 
 <details>
 <summary>Answer</summary>
 
-**B) TAG Environmental Sustainability.** The CNCF has a dedicated Technical Advisory Group (TAG) for Environmental Sustainability that defines best practices, evaluates tools, and advocates for carbon-awareness across the cloud native ecosystem.
+**C) TAG Environmental Sustainability.** The CNCF has a dedicated Technical Advisory Group (TAG) for Environmental Sustainability. This group is explicitly tasked with defining best practices, evaluating tools, and advocating for carbon-awareness across the cloud native ecosystem. By collaborating with this TAG, you ensure your new tool aligns with community standards and gains visibility among organizations looking to improve their GreenOps practices.
 </details>
 
-**5. How does GreenOps relate to FinOps?**
+**5. The finance department wants to reduce cloud spend (FinOps), while the sustainability team wants to reduce carbon emissions (GreenOps). They are arguing over whose initiatives should be prioritized. How should you resolve this conflict?**
 
-A) They are completely unrelated disciplines
-B) GreenOps replaces FinOps
-C) They overlap heavily — reducing waste saves both money and carbon
-D) FinOps is a subset of GreenOps
+A) Explain that the two goals are fundamentally opposed, so executive leadership must choose one
+B) Prioritize FinOps, as cloud providers automatically offset all carbon emissions anyway
+C) Align their efforts, as the core practices of reducing waste (like right-sizing and killing zombie workloads) achieve both goals simultaneously
+D) Prioritize GreenOps, as carbon taxes will soon exceed standard cloud computing costs
 
 <details>
 <summary>Answer</summary>
 
-**C) They overlap heavily — reducing waste saves both money and carbon.** Over-provisioning wastes both money and energy. Right-sizing, scale-to-zero, and spot instances are both FinOps and GreenOps best practices. GreenOps adds carbon-specific concerns like grid carbon intensity and embodied carbon.
+**C) Align their efforts, as the core practices of reducing waste (like right-sizing and killing zombie workloads) achieve both goals simultaneously.** FinOps and GreenOps share a fundamental objective: eliminating waste. An over-provisioned cluster wastes both financial budget and electrical energy. By implementing right-sizing, scaling to zero during idle periods, and utilizing spot instances, an organization inherently reduces both its cloud bill and its carbon footprint, making these two disciplines highly complementary rather than opposed.
 </details>
 
-**6. Which workloads are best suited for carbon-aware scheduling?**
+**6. Your team operates a user-facing e-commerce API that must respond in under 200ms, as well as a nightly data aggregation cron job. You are implementing a carbon-aware scheduler. How should these workloads be handled?**
 
-A) All production workloads
-B) Latency-sensitive API endpoints
-C) Deferrable workloads like batch jobs, model training, and CI/CD pipelines
-D) Only development environments
+A) Schedule both workloads to run only when grid carbon intensity is below a specific threshold
+B) Move the e-commerce API to a region with 100% renewable energy, and deprecate the cron job
+C) Apply carbon-aware scheduling only to the nightly cron job, as it is a deferrable workload that can tolerate temporal shifting
+D) Apply carbon-aware scheduling to the e-commerce API to ensure every user request is processed sustainably
 
 <details>
 <summary>Answer</summary>
 
-**C) Deferrable workloads like batch jobs, model training, and CI/CD pipelines.** Carbon-aware scheduling delays or relocates workloads to cleaner times/regions. This only works for workloads that can tolerate delay. Production APIs serving user requests must respond immediately regardless of grid carbon intensity.
+**C) Apply carbon-aware scheduling only to the nightly cron job, as it is a deferrable workload that can tolerate temporal shifting.** Carbon-aware scheduling delays or relocates workloads to times or places where the electricity grid is cleaner. This strategy only works for deferrable workloads, such as batch jobs, model training, or background data aggregation, which can tolerate flexible start times. Production APIs serving live user requests must respond immediately to maintain user experience, meaning they cannot wait for the grid's carbon intensity to drop.
+</details>
+
+**7. You are reviewing a cluster where several test environments were spun up months ago for a project that was subsequently cancelled. The Deployments are still running, but receiving zero traffic. What is the immediate sustainability impact and the best remediation?**
+
+A) They have zero impact because Kubernetes automatically puts idle containers to sleep; no action needed
+B) They consume base node resources and energy just by running; the Deployments should be deleted as 'zombie workloads'
+C) They only consume network bandwidth; you should implement rate limiting
+D) They are optimizing the cluster by keeping the nodes warm; you should label them as system-critical
+
+<details>
+<summary>Answer</summary>
+
+**B) They consume base node resources and energy just by running; the Deployments should be deleted as 'zombie workloads'.** Even when receiving zero traffic, running containers consume baseline memory and CPU cycles just to maintain their idle state. More importantly, their requested resources remain reserved by the Kubernetes scheduler, preventing those resources from being used by active workloads. This forces the cluster to keep unnecessary nodes powered on, leading to continuous, unjustifiable carbon emissions until these 'zombie workloads' are actively terminated.
 </details>
 
 ---
