@@ -100,6 +100,8 @@ Disk I/O is often the hidden bottleneck.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+> **Stop and think**: If an application writes a 1GB file to disk, but the physical disk's write throughput is only 100MB/s, why might the application report that the write completed in under a second? Consider the layers of the I/O stack and what actually happens when a write system call returns.
+
 ### IOPS vs Throughput
 
 | Metric | Definition | Good For |
@@ -165,6 +167,8 @@ iostat -x 1
 | `await` | Total latency | >10ms for SSD, >50ms for HDD |
 | `avgqu-sz` | Queue depth | >1 means I/O backing up |
 | `r_await/w_await` | Read/write latency separately | Large difference indicates problem |
+
+> **Pause and predict**: You are monitoring a database server and notice that `await` is consistently high (over 50ms), but `%util` is hovering around 30%. What might this combination of metrics tell you about the storage subsystem's characteristics or the nature of the database's I/O patterns?
 
 ### iotop
 
@@ -428,109 +432,62 @@ rm /tmp/testfile /tmp/fiotest
 ## Quiz
 
 ### Question 1
-What does high %util with low await indicate?
+You are monitoring a server equipped with a modern NVMe SSD array. During a nightly batch processing job, you observe that `iostat` reports `%util` at 99%, but `await` remains consistently under 1ms and `avgqu-sz` is around 2. A junior engineer panics, stating the disks are completely maxed out and causing a bottleneck. How should you interpret these metrics?
 
 <details>
 <summary>Show Answer</summary>
 
-**Disk is busy but keeping up**.
+**The storage subsystem is handling the load perfectly and is not a bottleneck.**
 
-- High %util: Disk is working most of the time
-- Low await: Requests complete quickly
-
-This is healthy utilization. The disk is being used efficiently without forming queues.
-
-Contrast with high %util AND high await, which means requests are queuing and the disk can't keep up.
+The `%util` metric only measures the percentage of time the device had at least one outstanding I/O request, not its total capacity or saturation. Because NVMe SSDs are highly parallel, they can process many requests simultaneously without slowing down. The crucial metrics here are `await` (latency) and `avgqu-sz` (queue depth); since latency remains sub-millisecond and the queue is very small, the drives are processing requests as fast as they arrive. The junior engineer is misinterpreting a "busy" drive for a "saturated" drive.
 
 </details>
 
 ### Question 2
-Why might a read-heavy application show no disk I/O in iostat?
+Your team deploys a new read-heavy analytics application. During the first 10 minutes of operation, `iostat` shows massive read throughput (rkB/s) and high disk utilization. However, after an hour, the application is serving queries faster than ever, yet `iostat` shows almost zero disk read activity. The application's code and query volume have not changed. What architectural component of Linux explains this behavior?
 
 <details>
 <summary>Show Answer</summary>
 
-**Page cache hit**.
+**The Linux Page Cache has successfully cached the frequently accessed data in RAM.**
 
-Linux aggressively caches file data in RAM. If the application reads data that's already cached:
-- Data comes from RAM, not disk
-- No disk I/O appears in iostat
-- Much faster than actual disk reads
-
-First access: disk → cache → application
-Subsequent: cache → application (no disk)
-
-This is why benchmarks differ from cold starts.
+When the application first started, the data resided only on the physical disk, forcing the kernel to perform actual disk reads, which surfaced in `iostat`. As this data was read into memory, the kernel retained it in the Page Cache (unused RAM). Subsequent queries for the same data are served directly from the extremely fast RAM rather than the physical disk. Therefore, `iostat` shows no physical block device reads, and the application experiences significantly lower latency because memory access is orders of magnitude faster than disk I/O.
 
 </details>
 
 ### Question 3
-What does avgqu-sz (average queue size) tell you?
+You are troubleshooting a legacy application running on an older server with spinning Hard Disk Drives (HDDs). Users are complaining about severe intermittent lag. You check `iostat` and notice that while `%util` is only around 60%, the `avgqu-sz` (average queue size) frequently spikes to 15 or 20, and `await` jumps to over 200ms during these spikes. What is the actual bottleneck, and why?
 
 <details>
 <summary>Show Answer</summary>
 
-**I/O saturation level**.
+**The physical disks are becoming saturated and cannot process requests fast enough, leading to queuing.**
 
-- avgqu-sz ~ 0-1: Disk keeping up, minimal queuing
-- avgqu-sz > 1: Requests are queuing
-- avgqu-sz >> device parallelism: Severe saturation
-
-For SSDs (high parallelism), avgqu-sz of 8 might be fine.
-For HDDs (low parallelism), avgqu-sz of 4 means trouble.
-
-High queue depth + high await = bottleneck.
+Unlike modern SSDs, spinning HDDs have very low parallel processing capabilities; they physically rely on a moving read/write head. An `avgqu-sz` of 15 means there are 15 requests waiting in line for the disk head to move to the correct physical location. This mechanical limitation causes the `await` time (which includes time spent waiting in the queue plus actual service time) to skyrocket to 200ms. Even though the disk isn't busy 100% of the time over the polling interval (`%util`), during the bursts of activity, the hardware simply cannot keep up with the concurrent I/O demands.
 
 </details>
 
 ### Question 4
-When should you use the "none" I/O scheduler?
+You have just provisioned a high-performance database server on a public cloud provider. The underlying storage is a block storage volume mapped to your VM over a high-speed virtualized NVMe interface. You check the current I/O scheduler and see it is set to `mq-deadline`. Should you change this, and if so, to what and why?
 
 <details>
 <summary>Show Answer</summary>
 
-When the **device handles scheduling itself**:
+**Yes, you should change the scheduler to `none`.**
 
-1. **NVMe drives**: Have internal schedulers, Linux scheduler adds overhead
-2. **Virtual disks (VMs)**: Hypervisor does scheduling
-3. **Hardware RAID**: Controller optimizes I/O
-
-"none" passes I/O directly to device without kernel-side scheduling.
-
-Don't use "none" for HDDs — they benefit from elevator algorithms that reduce seek time.
+The `mq-deadline` scheduler is designed to sort and merge I/O requests to optimize the physical movement of HDD read/write heads, preventing starvation. However, in this scenario, your VM is writing to a virtualized NVMe device backed by a cloud provider's distributed storage system, meaning physical head movement is irrelevant and the underlying hardware/hypervisor already handles scheduling optimally. By keeping a complex scheduler active in the guest OS, you are only adding unnecessary CPU overhead and latency. Setting it to `none` allows the kernel to pass the I/O requests directly to the hypervisor as quickly as possible.
 
 </details>
 
 ### Question 5
-How do you identify which process is causing high disk I/O?
+A production web server is suddenly unresponsive. You log in and run `uptime`, seeing a load average of 45.0 on a 4-core machine. You run `top` and notice the CPU usage is mostly idle, but the `%wa` (iowait) is sitting at 95%. When you look at the process list in `top`, you see dozens of processes stuck in the `D` state. How do you systematically determine exactly which process or application is driving the physical disks to saturation?
 
 <details>
 <summary>Show Answer</summary>
 
-Several methods:
+**You should use a tool like `iotop` or `pidstat -d` to measure per-process I/O bandwidth.**
 
-1. **iotop** (easiest):
-```bash
-sudo iotop -o
-```
-
-2. **pidstat**:
-```bash
-pidstat -d 1
-```
-
-3. **Check D-state processes**:
-```bash
-ps aux | awk '$8 ~ /D/'
-top  # Look for D state
-```
-
-4. **blktrace** (advanced):
-```bash
-blktrace -d /dev/sda -o - | blkparse -i -
-```
-
-`iotop` is usually the quickest way to find the culprit.
+The high `%wa` and processes in the `D` (uninterruptible sleep) state confirm that the CPUs are idle because they are waiting on the storage subsystem to return data. However, `top` only shows CPU and memory usage, not how many bytes a process is reading or writing to the disk. By running `sudo iotop -o`, you can see a real-time, top-like view sorted by actual disk read and write bandwidth (MB/s). This immediately pinpoints the exact PID and command (e.g., a runaway logging process or an unoptimized database query) that is overwhelming the block device.
 
 </details>
 
