@@ -260,21 +260,52 @@ The CNCF governance model is specifically designed to prevent vendor capture. Th
 This assumption is incorrect and it is one of the most common misunderstandings about the CNCF. The CNCF Landscape is a comprehensive map of the cloud native ecosystem -- it includes over 1,000 entries, many of which are not CNCF projects at all. Even among actual CNCF projects, the maturity levels vary dramatically: Sandbox projects are early-stage experiments, while Graduated projects have passed rigorous governance and security reviews. Appearing on the landscape means a tool exists in the ecosystem, not that the CNCF endorses or has audited it. Always check the specific project's maturity level and do your own evaluation.
 </details>
 
+**Question 6**: Your team is building a new open-source tool for Kubernetes cluster cost optimization and wants to donate it to the CNCF to encourage cross-company collaboration. What maturity level must the project apply for first, and what is the primary goal of this entry-level stage?
+
+<details>
+<summary>Answer</summary>
+
+The project must apply to enter as a Sandbox project. The Sandbox stage is designed for early-stage, experimental projects that need a neutral home to foster collaborative development. It does not guarantee that the project is production-ready or that it will eventually graduate. Instead, it provides the legal and governance framework necessary for developers from multiple different companies to contribute without worrying about a single vendor taking private ownership of their work.
+</details>
+
+**Question 7**: An organization is auditing its software supply chain and mandates that all critical infrastructure components must have undergone an independent third-party security audit. Looking at the CNCF maturity model, which project tier automatically satisfies this specific requirement, and why is this requirement placed at that tier?
+
+<details>
+<summary>Answer</summary>
+
+Projects at the Graduated tier automatically satisfy this requirement because completing an independent third-party security audit is a strict prerequisite for graduation. The CNCF enforces this rule at the highest maturity tier to ensure that projects trusted by the broader industry for mission-critical, production workloads have a proven security posture. Sandbox and Incubating projects may be widely used, but only Graduated projects carry the CNCF's highest level of assurance regarding code security, stability, and diverse governance. Relying on Graduated projects significantly reduces supply chain risk for sensitive enterprise environments.
+</details>
+
+**Question 8**: A platform engineering team wants to help define best practices for multi-tenant cluster security, a topic that spans networking, storage, and authentication. They want to join a Kubernetes governance group to work on this, but notice there is no specific "SIG Multi-Tenancy." Where should they direct their efforts, and how does this group differ from a SIG?
+
+<details>
+<summary>Answer</summary>
+
+The team should look for a Working Group (WG), such as WG Multi-Tenancy, rather than a Special Interest Group (SIG). While SIGs own specific, permanent areas of the Kubernetes codebase (like SIG Network or SIG Auth) and maintain code indefinitely, Working Groups are temporary committees formed to address cross-cutting problems that affect multiple SIGs. Once the Working Group establishes the policies, architectures, or best practices for multi-tenancy, it will disband. This leaves the actual implementation and long-term ownership of the resulting code to the respective permanent SIGs.
+</details>
+
 ---
 
-## Reflection Exercise
+## Hands-On Exercise: Navigating CNCF Governance and KEPs
 
-Find a real Kubernetes Enhancement Proposal (KEP) at `github.com/kubernetes/enhancements/tree/master/keps`. Pick one that interests you -- perhaps something related to a feature you use daily.
+In this exercise, you will actively navigate the CNCF Landscape and the Kubernetes Enhancement Proposal (KEP) repository to extract real-world governance data. This simulates the exact process platform engineers use when researching ecosystem tools and tracking upcoming Kubernetes features.
 
-Read through the KEP and answer these questions in your notes:
+### Step 1: Analyze the CNCF Landscape
+Navigate to the official CNCF Landscape (landscape.cncf.io) and filter projects by their maturity levels to understand the ecosystem's structure.
 
-1. **What problem does this KEP solve?** Summarize it in two sentences.
-2. **What alternatives were considered?** Why were they rejected?
-3. **Which SIG owns this KEP?** Look at the labels and the `kep.yaml` metadata.
-4. **What is the current status?** (Provisional, Implementable, Alpha, Beta, GA, Deprecated)
-5. **How long has it been in progress?** Check the git history of the KEP directory.
+- [ ] Open the CNCF Landscape in your web browser.
+- [ ] Filter the view to show only **Graduated** projects and identify three distinct projects related to "Observability and Analysis."
+- [ ] Clear your filters, then filter the view to show only **Sandbox** projects and find one project that was added to the foundation in the last 12 months.
+- [ ] Locate the GitHub repository or official documentation for one of the Graduated projects you found and verify its governance structure (usually found in a `GOVERNANCE.md`, `CODE_OF_CONDUCT.md`, or `MAINTAINERS.md` file).
 
-This exercise builds a skill you will use repeatedly in your career: reading design documents to understand not just *what* a system does, but *why* it was built that way and what trade-offs were accepted.
+### Step 2: Investigate a Kubernetes Enhancement Proposal (KEP)
+Navigate to the official Kubernetes Enhancements repository (`github.com/kubernetes/enhancements/tree/master/keps`) and trace the lifecycle of a specific feature to understand how community consensus shapes code.
+
+- [ ] Open the `keps` directory in the repository and select a specific SIG folder that interests you (e.g., `sig-network`, `sig-auth`, or `sig-scheduling`).
+- [ ] Choose a KEP that is currently in the `implemented` or `implementable` state and open its `kep.yaml` file.
+- [ ] Identify the owning SIG, the participating reviewers, and the specific milestone (alpha, beta, or stable) targeted by the KEP.
+- [ ] Locate the "Alternatives" section in the KEP's `README.md` and identify at least one alternative technical approach that the authors considered but ultimately rejected.
+- [ ] Review the `OWNERS` file in the KEP's directory to identify who has the authority to approve changes to this specific proposal.
 
 ---
 
