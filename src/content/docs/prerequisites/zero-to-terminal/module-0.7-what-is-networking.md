@@ -114,7 +114,7 @@ $ curl -s ifconfig.me
 
 ## Ports: Many Doors on One Address
 
-> **Stop and think**: A server has one IP address, but it runs a web server, an email server, and a database — all at the same time. When a message arrives at the IP address, how does the computer know which program it's for? Think of how an apartment building works — one street address, many apartments...
+> **Stop and think**: Imagine a single physical server hosting three different company websites and an internal email system, all sharing the exact same public IP address. When a customer's browser sends a request to that IP, what mechanical sorting process ensures the request reaches the correct website instead of the email system?
 
 So every computer has an IP address. But a computer runs many programs at once — a web browser, an email client, a chat app. How does the computer know which program should receive an incoming message?
 
@@ -153,7 +153,7 @@ The colon `:` separates the IP address from the port number.
 
 When you type `google.com` in your browser, your computer doesn't actually know where `google.com` is. Computers only understand IP addresses (numbers). So how does it work?
 
-> **Pause and predict**: When you type `google.com` in your browser, your computer needs to reach Google's server. But networks use IP addresses (numbers), not names. Something has to translate `google.com` into `142.250.80.46`. What do you think does that translation?
+> **Pause and predict**: If you disconnect your computer from the internet, you can still reach your home router by typing `192.168.1.1` into your browser, but typing `router.local` might fail. Based on how computers identify each other, what specific infrastructure piece is missing when you try to use the human-readable name offline?
 
 **DNS** — the **Domain Name System** — translates human-friendly names into IP addresses.
 
@@ -326,7 +326,7 @@ This confirms that `google.com` translates to `142.250.80.46` (your result may d
 <details>
 <summary>Show Answer</summary>
 
-The address `192.168.1.42` is a private, local IP address. It only identifies computers within the same local network (LAN). Since you are at your house and your friend is at theirs, you are on different local networks. To connect over the internet, you would need their router's public IP address, not their laptop's local one.
+The address `192.168.1.42` is a private, local IP address designated specifically for internal networks. It only identifies computers within the same local network (LAN) and is completely invisible to the outside internet. Since you are at your house and your friend is at theirs, you are on two entirely separate local networks. To connect over the internet, your computer would need to target their router's public IP address, and their router would need a rule to forward that traffic to their specific laptop.
 
 </details>
 
@@ -335,7 +335,7 @@ The address `192.168.1.42` is a private, local IP address. It only identifies co
 <details>
 <summary>Show Answer</summary>
 
-The issue is likely at the port level. The `ping` command proves that the IP address is reachable and the server is online. However, `curl` tries to connect to a specific service on port 80 (HTTP). If that times out, it means the server is blocking traffic to port 80 via a firewall, or the web server software isn't running to answer the knock on that specific "apartment door."
+The issue is occurring at the port or application layer, not the network routing layer. The successful `ping` command proves that the IP address is reachable, the server is powered on, and the network path is clear. However, `curl` specifically attempts to connect to a web service on port 80 (HTTP). The timeout indicates that either a firewall is blocking traffic specifically to port 80, or the web server software has crashed and isn't listening for connections on that port.
 
 </details>
 
@@ -344,7 +344,7 @@ The issue is likely at the port level. The `ping` command proves that the IP add
 <details>
 <summary>Show Answer</summary>
 
-The failure is in the DNS resolution, not the server or the network itself. Because `curl` works with the direct IP address and returns a 200 OK, we know the server is running, the network path is clear, and the web service is responding on the correct port. The `Unknown host` error from `ping` shows that your computer's "phone book" (DNS) cannot translate the human-readable name `api.example.com` into the IP address `203.0.113.100`.
+The failure is isolated to the DNS resolution system, meaning the 'phone book' of the internet is failing to translate the name. Because the `curl` command works perfectly with the direct IP address and returns a `200 OK`, we can definitively prove the server is running, the network path is clear, and the application is healthy. The `Unknown host` error from `ping` shows that your computer cannot figure out which IP address belongs to `api.example.com`. To fix this, the DNS records for the domain need to be investigated and updated to point to `203.0.113.100`.
 
 </details>
 
@@ -353,7 +353,7 @@ The failure is in the DNS resolution, not the server or the network itself. Beca
 <details>
 <summary>Show Answer</summary>
 
-The problem is with your company's server. A 500-level HTTP status code means that the connection succeeded, DNS worked, and the request reached the web server, but the web server encountered an error while trying to generate the page. The kitchen received the order but something went wrong while cooking the food.
+The problem is definitively with your company's server and application infrastructure. A 500-level HTTP status code is generated by the web server itself, which means the customer's internet connection works, DNS resolved correctly, and the network successfully delivered the request. The server received the request, but the application code encountered a fatal error (like a database connection failure or a syntax error) while trying to process it and build the webpage. You need to check the server's application logs to find the exact software bug causing the crash.
 
 </details>
 
@@ -362,7 +362,7 @@ The problem is with your company's server. A 500-level HTTP status code means th
 <details>
 <summary>Show Answer</summary>
 
-The junior developer incorrectly assumed that a failed ping means the server is offline or unreachable. In reality, many modern servers and corporate firewalls are explicitly configured to block ICMP traffic (the protocol used by ping) for security reasons, while still allowing normal HTTP/HTTPS traffic on ports 80 and 443. The `curl` command proved that the web server is actively running and serving content successfully. The ping failed because the network dropped the specific diagnostic packets, not because the destination server was offline.
+The junior developer incorrectly assumed that a failed `ping` definitively means a server is offline or network-unreachable. In reality, `ping` uses a specific type of diagnostic network traffic (ICMP) that many modern servers and corporate firewalls intentionally drop for security reasons. Meanwhile, they allow normal web traffic (TCP) through on ports 80 and 443. The successful `curl` command proved that the web server is actively running, network routing is fine, and it is serving content successfully to legitimate web requests. The ping simply failed because the server's firewall is configured to ignore diagnostic knocks.
 
 </details>
 
@@ -371,7 +371,7 @@ The junior developer incorrectly assumed that a failed ping means the server is 
 <details>
 <summary>Show Answer</summary>
 
-The application is trying to connect to the wrong port. While the IP address `10.0.5.50` is correct, the application is attempting to communicate over port 80, which is the default port for regular unencrypted web traffic (HTTP). The database service is actually listening on port 5432. Because there is no web server listening on port 80 at that address, the operating system on the database server actively rejects the connection attempt, resulting in the "Connection refused" error. The application configuration needs to be updated to specify the correct port.
+The application is trying to connect to the database using the wrong port number. While the target IP address `10.0.5.50` is correct, the application is attempting to communicate over port 80, which is the default port for regular unencrypted web traffic. The database service is actually listening on port 5432, leaving port 80 completely unattended. Because there is no service listening on port 80 at that address, the operating system on the database server actively rejects the connection attempt, resulting in the 'Connection refused' error. The application's configuration file must be updated to explicitly specify port 5432.
 
 </details>
 
@@ -380,7 +380,7 @@ The application is trying to connect to the wrong port. While the IP address `10
 <details>
 <summary>Show Answer</summary>
 
-The Domain Name System (DNS) needs to be updated. The `NXDOMAIN` error from `nslookup` means that there is no DNS record linking the human-readable name `promo.company.com` to any IP address. Even though the server is running perfectly at `198.51.100.22`, the rest of the internet has no way to find it because the "phone book" entry is missing. You or your team must log into your DNS provider and create a record that points the domain name to that specific IP address.
+The Domain Name System (DNS) records for the company's domain need to be updated. The `NXDOMAIN` (Non-Existent Domain) error from the `nslookup` command proves that there is no public DNS record linking the human-readable name `promo.company.com` to any IP address. Even though the server is fully operational at `198.51.100.22`, browsers on the internet have no way to discover that routing information because the 'phone book' entry is missing. The infrastructure team must log into the DNS provider and create an 'A record' that points the new subdomain to the correct public IP address.
 
 </details>
 
