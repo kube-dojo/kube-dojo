@@ -20,12 +20,15 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime, UTC
 from pathlib import Path
+
+os.environ["KUBEDOJO_QUIET"] = "1"  # suppress Gemini streaming to stdout
 
 REPO_ROOT = Path(__file__).parent.parent
 CONTENT_ROOT = REPO_ROOT / "src" / "content" / "docs"
@@ -258,41 +261,14 @@ def detect_sync(uk_path: Path) -> SyncReport | None:
 # Fix — translate delta using Gemini + MCP
 # ---------------------------------------------------------------------------
 
-TRANSLATE_PROMPT = """You are translating additions to a KubeDojo module from English to Ukrainian.
-
-RULES:
-- Translate ONLY what is missing or changed compared to the existing Ukrainian file
-- Keep ALL existing Ukrainian content intact — do not rewrite what's already there
-- Keep all technical terms in English: kubectl, Kubernetes, Pod, Deployment, Service, RBAC, YAML, etc.
-- Glossary: Pod=Під, cluster=кластер, container=контейнер, namespace=простір імен
-- Action verbs in bold infinitive: **Налаштувати**, **Створити**, **Діагностувати**
-- Inline prompts: translate "Pause and predict" → "Зупиніться та подумайте", "Stop and think" → "Подумайте"
-- No Russicisms (no ы, ё, ъ, э)
-- Output the COMPLETE updated Ukrainian file starting with --- frontmatter
-
-Use your MCP tools to verify Ukrainian quality:
-- verify_words for VESUM validation
-- query_r2u to check for Russicisms
-- search_style_guide for consistency
-
-EXISTING UKRAINIAN FILE:
-{uk_content}
-
-CURRENT ENGLISH FILE (source of truth):
-{en_content}
-
-DETECTED ISSUES TO FIX:
-{issues}
-"""
-
 
 def fix_module(uk_path: Path, report: SyncReport | None = None) -> bool:
-    """Fix a stale UK module by translating the delta from EN."""
+    """Fix a stale UK module by re-translating from EN."""
     rel = uk_path.relative_to(UK_ROOT)
     en_path = CONTENT_ROOT / rel
 
     if not en_path.exists():
-        print(f"  ❌ No EN counterpart for {uk_path}")
+        print(f"  ✗ No EN counterpart for {uk_path}")
         return False
 
     if report is None:
@@ -302,72 +278,18 @@ def fix_module(uk_path: Path, report: SyncReport | None = None) -> bool:
         print(f"  ✓ Already synced: {uk_path.name}")
         return True
 
-    en_content = en_path.read_text()
-    uk_content = uk_path.read_text()
-
-    issues_text = "\n".join(f"- {i.issue_type}: {i.message}" for i in report.issues)
-
-    print(f"  Translating delta for {uk_path.name} ({len(report.issues)} issues)...")
-
-    prompt = TRANSLATE_PROMPT.format(
-        uk_content=uk_content,
-        en_content=en_content,
-        issues=issues_text,
-    )
-
-    # Snapshot file before dispatch — Gemini may write directly via tool use
-    uk_before = uk_path.read_text() if uk_path.exists() else ""
-
-    ok, output = dispatch_gemini_with_retry(prompt, mcp=True, timeout=300)
-
-    if not ok or not output.strip():
-        print(f"  ✗ Translation failed")
-        return False
-
-    # Strip markdown wrapper
-    if output.startswith("```"):
-        lines = output.split("\n")
-        output = "\n".join(lines[1:-1]) if lines[-1].strip() == "```" else output
-
-    # Check if output is actual markdown or just a summary
-    gemini_wrote_directly = False
-    if not output.startswith("---"):
-        fm_start = output.find("---\n")
-        if fm_start > 0 and fm_start < 2000:
-            output = output[fm_start:]
-        else:
-            # Gemini may have written to the file directly via tool use
-            uk_now = uk_path.read_text() if uk_path.exists() else ""
-            if uk_now != uk_before and uk_now.startswith("---"):
-                print(f"  ✓ Gemini wrote directly to {uk_path.name}")
-                output = uk_now
-                gemini_wrote_directly = True
-            else:
-                print(f"  ✗ Translation output has no frontmatter")
-                return False
-
-    # Add/update en_commit in frontmatter
-    en_commit = _get_en_file_commit(en_path)
-    if en_commit:
-        if "en_commit:" in output:
-            output = re.sub(r"^en_commit:.*$", f'en_commit: "{en_commit}"', output, count=1, flags=re.MULTILINE)
-        else:
-            output = output.replace("\n---\n", f'\nen_commit: "{en_commit}"\n---\n', 1)
-
-    # Verify Ukrainian quality
-    check_results = ukrainian.run_all(output, uk_path)
-    check_errors = [r for r in check_results if not r.passed and r.severity == "ERROR"]
-
-    if check_errors:
-        print(f"  ⚠ Ukrainian quality issues:")
-        for r in check_errors:
-            print(f"    {r}")
-
-    # Write (or re-write with en_commit added)
-    uk_path.write_text(output)
-    print(f"  ✓ Updated {uk_path.name} (en_commit: {en_commit[:8]})")
-
-    return True
+    # Full re-translate from EN — backup old UK, translate fresh, remove backup on success
+    print(f"  Re-translating {uk_path.name} from scratch ({len(report.issues)} issues)...")
+    backup = uk_path.with_suffix(".md.bak")
+    uk_path.rename(backup)
+    ok = translate_new_module(en_path)
+    if ok:
+        backup.unlink(missing_ok=True)
+    else:
+        # Restore from backup on failure
+        backup.rename(uk_path)
+        print(f"  Restored {uk_path.name} from backup")
+    return ok
 
 
 # ---------------------------------------------------------------------------
@@ -490,7 +412,7 @@ def translate_new_module(en_path: Path) -> bool:
         en_file=en_file,
     )
 
-    ok, output = dispatch_gemini_with_retry(prompt, mcp=True, timeout=300)
+    ok, output = dispatch_gemini_with_retry(prompt, mcp=True, timeout=600)
 
     if not ok or not output.strip():
         print(f"  ✗ Translation failed")
@@ -776,62 +698,128 @@ def cmd_translate_section(args):
     sys.exit(0 if failed == 0 else 1)
 
 
-def cmd_e2e(args):
-    """Full translation cycle: fix stale → translate missing → verify."""
-    section = args.section
+# ---------------------------------------------------------------------------
+# Track aliases (same pattern as v1_pipeline.py)
+# ---------------------------------------------------------------------------
+
+TRACK_ALIASES = {
+    "prereqs": [
+        "prerequisites/zero-to-terminal", "prerequisites/git-deep-dive",
+        "prerequisites/cloud-native-101", "prerequisites/kubernetes-basics",
+        "prerequisites/philosophy-design", "prerequisites/modern-devops",
+    ],
+    "certs": [
+        "k8s/cka", "k8s/ckad", "k8s/cks", "k8s/kcna", "k8s/kcsa",
+    ],
+    "cloud": [
+        "cloud/aws-essentials", "cloud/gcp-essentials", "cloud/azure-essentials",
+        "cloud/architecture-patterns", "cloud/eks-deep-dive", "cloud/gke-deep-dive",
+        "cloud/aks-deep-dive", "cloud/advanced-operations", "cloud/managed-services",
+        "cloud/enterprise-hybrid",
+    ],
+    "linux": [
+        "linux/foundations/container-primitives", "linux/foundations/networking",
+        "linux/foundations/system-essentials", "linux/foundations/everyday-use",
+        "linux/operations", "linux/security",
+    ],
+    "platform": [
+        "platform/foundations", "platform/disciplines", "platform/toolkits",
+    ],
+    "on-prem": [
+        "on-premises/planning", "on-premises/provisioning", "on-premises/networking",
+        "on-premises/storage", "on-premises/multi-cluster", "on-premises/security",
+        "on-premises/operations", "on-premises/resilience",
+    ],
+}
+
+
+def _expand_sections(sections: list[str]) -> list[str]:
+    """Expand track aliases to section paths."""
+    expanded: list[str] = []
+    for s in sections:
+        if s in TRACK_ALIASES:
+            expanded.extend(TRACK_ALIASES[s])
+        else:
+            expanded.append(s)
+    return expanded
+
+
+def _run_e2e_section(section: str) -> tuple[int, int, int]:
+    """Run e2e on one section. Returns (fixed, translated, failed)."""
     print(f"\n{'='*60}")
-    print(f"  UK Translation E2E: {section}")
+    print(f"  UK Translation: {section}")
     print(f"{'='*60}")
 
-    # Phase 1: Fix stale translations
+    fixed = 0
+    translated = 0
+    failed = 0
+    consecutive_failures = 0
+
+    # Phase 1: Fix stale (re-translate out-of-sync UK files)
     uk_dir = UK_ROOT / section if (UK_ROOT / section).exists() else None
     if uk_dir:
         uk_files = sorted(uk_dir.glob("**/module-*.md"))
-        stale = 0
-        fixed = 0
         for uk_path in uk_files:
             report = detect_sync(uk_path)
             if report and report.status != "synced":
-                stale += 1
-                print(f"\n  Fixing stale: {uk_path.name}")
+                print(f"\n  Re-translating stale: {uk_path.name}")
                 if fix_module(uk_path, report):
                     fixed += 1
-        print(f"\n  Phase 1 (fix stale): {fixed}/{stale} fixed")
-    else:
-        print(f"\n  Phase 1: no existing UK dir for {section} — skipping")
+                    consecutive_failures = 0
+                else:
+                    failed += 1
+                    consecutive_failures += 1
+                if consecutive_failures >= 3:
+                    print(f"\n  CIRCUIT BREAKER: 3 consecutive failures — halting section")
+                    return fixed, translated, failed
 
-    # Phase 2: Translate missing
+    # Phase 2: Translate missing (EN modules with no UK file)
     missing = find_missing_translations(section)
-    if missing:
-        print(f"\n  Phase 2: translating {len(missing)} missing modules...")
-        translated = 0
-        consecutive_failures = 0
-        for en_path in missing:
-            ok = translate_new_module(en_path)
-            if ok:
-                translated += 1
-                consecutive_failures = 0
-            else:
-                consecutive_failures += 1
-            if consecutive_failures >= 3:
-                print(f"\n  CIRCUIT BREAKER: 3 consecutive failures — halting")
-                break
-        print(f"\n  Phase 2 (translate new): {translated}/{len(missing)} done")
-    else:
-        print(f"\n  Phase 2: no missing translations")
+    for en_path in missing:
+        ok = translate_new_module(en_path)
+        if ok:
+            translated += 1
+            consecutive_failures = 0
+        else:
+            failed += 1
+            consecutive_failures += 1
+        if consecutive_failures >= 3:
+            print(f"\n  CIRCUIT BREAKER: 3 consecutive failures — halting section")
+            break
 
-    # Phase 3: Verify
-    incomplete = find_untranslated_paragraphs(section)
-    if incomplete:
-        print(f"\n  Phase 3 (verify): {len(incomplete)} files still have English content")
-        for f, lines in sorted(incomplete.items())[:5]:
-            rel = str(f.relative_to(UK_ROOT))
-            print(f"    {rel} ({len(lines)} lines)")
-    else:
-        print(f"\n  Phase 3 (verify): all clean")
+    print(f"\n  {section}: {fixed} re-translated, {translated} new, {failed} failed")
+    return fixed, translated, failed
+
+
+def cmd_e2e(args):
+    """Full translation cycle: fix stale → translate missing → verify."""
+    sections = _expand_sections(args.sections) if args.sections else _expand_sections(["prereqs", "certs", "cloud", "linux", "platform", "on-prem"])
+
+    total_fixed = 0
+    total_translated = 0
+    total_failed = 0
+
+    for section in sections:
+        if not (CONTENT_ROOT / section).exists():
+            continue
+        fixed, translated, failed = _run_e2e_section(section)
+        total_fixed += fixed
+        total_translated += translated
+        total_failed += failed
+
+    # Verify
+    print(f"\n{'='*60}")
+    print(f"  VERIFY")
+    print(f"{'='*60}")
+    for section in sections:
+        incomplete = find_untranslated_paragraphs(section)
+        if incomplete:
+            print(f"  {section}: {len(incomplete)} files with English content")
+        else:
+            print(f"  {section}: clean")
 
     print(f"\n{'='*60}")
-    print(f"  E2E complete for {section}")
+    print(f"  E2E COMPLETE: {total_fixed} re-translated, {total_translated} new, {total_failed} failed")
     print(f"{'='*60}")
 
 
@@ -883,8 +871,24 @@ examples:
     tsp.add_argument("section", help="Section path (e.g., prerequisites)")
 
     # e2e
-    ep = subparsers.add_parser("e2e", help="Full cycle: fix stale → translate new → verify")
-    ep.add_argument("section", help="Section path (e.g., prerequisites)")
+    ep = subparsers.add_parser("e2e", help="Full cycle: fix stale → translate new → verify",
+        epilog="""track aliases:
+  prereqs    zero-to-terminal, git-deep-dive, cloud-native-101, k8s-basics, philosophy, modern-devops
+  certs      cka, ckad, cks, kcna, kcsa
+  cloud      aws, gcp, azure, etc.
+  linux      container-primitives, networking, system-essentials, everyday-use, operations, security
+  platform   foundations, disciplines, toolkits
+  on-prem    planning, provisioning, networking, storage, etc.
+
+examples:
+  e2e prereqs                      all prerequisites
+  e2e prereqs certs                prereqs + certs
+  e2e prerequisites/kubernetes-basics  single section
+  e2e                              everything
+
+safe to re-run: skips synced files, skips existing UK files
+""", formatter_class=argparse.RawDescriptionHelpFormatter)
+    ep.add_argument("sections", nargs="*", help="track aliases or section paths (default: all)")
 
     args = parser.parse_args()
 

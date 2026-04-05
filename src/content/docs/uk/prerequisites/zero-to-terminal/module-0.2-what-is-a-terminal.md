@@ -3,6 +3,8 @@ title: "\u041c\u043e\u0434\u0443\u043b\u044c 0.2: \u0429\u043e \u0442\u0430\u043
 slug: uk/prerequisites/zero-to-terminal/module-0.2-what-is-a-terminal
 sidebar:
   order: 3
+en_commit: "a523c7a66ed10cd68e789104134a330a3ae95efc"
+en_file: "src/content/docs/prerequisites/zero-to-terminal/module-0.2-what-is-a-terminal.md"
 ---
 > **Складність**: `[QUICK]` — Абсолютний початківець
 >

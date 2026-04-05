@@ -184,7 +184,8 @@ def dispatch_gemini(prompt: str, model: str = GEMINI_DEFAULT_MODEL,
         stdin_thread.start()
         stderr_thread.start()
 
-        output_lines, timed_out = _stream_with_timeout(proc, timeout)
+        quiet = os.environ.get("KUBEDOJO_QUIET", "") == "1"
+        output_lines, timed_out = _stream_with_timeout(proc, timeout, quiet=quiet)
         proc.wait()
         stdin_thread.join(timeout=5)
         stderr_thread.join(timeout=5)
@@ -355,7 +356,7 @@ def _log(agent: str, model: str, prompt: str, output: str, ok: bool,
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _stream_with_timeout(proc, timeout: int) -> tuple[list[str], bool]:
+def _stream_with_timeout(proc, timeout: int, quiet: bool = False) -> tuple[list[str], bool]:
     """Stream stdout lines, kill if timeout exceeded. Returns (lines, timed_out)."""
     output_lines: list[str] = []
     timed_out = False
@@ -377,8 +378,9 @@ def _stream_with_timeout(proc, timeout: int) -> tuple[list[str], bool]:
 
     try:
         for line in proc.stdout:
-            print(line, end="")
-            sys.stdout.flush()
+            if not quiet:
+                print(line, end="")
+                sys.stdout.flush()
             output_lines.append(line)
     except (OSError, ValueError):
         pass

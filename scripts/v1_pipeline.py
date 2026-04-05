@@ -20,6 +20,7 @@ import argparse
 import builtins
 import fcntl
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -44,6 +45,7 @@ LOG_FILE = LOG_DIR / f"run_{datetime.now(UTC).strftime('%Y%m%dT%H%M%S')}.log"
 
 _original_print = builtins.print
 _quiet = False  # set by e2e command
+os.environ["KUBEDOJO_QUIET"] = "1"  # suppress Gemini streaming to stdout
 
 
 def _logged_print(*args, **kwargs):

@@ -3,6 +3,8 @@ title: "\u041c\u043e\u0434\u0443\u043b\u044c 0.7: \u0429\u043e \u0442\u0430\u043
 slug: uk/prerequisites/zero-to-terminal/module-0.7-what-is-networking
 sidebar:
   order: 8
+en_commit: "5bc7eed893121d8d90c9c7dfe911ac19c479a305"
+en_file: "src/content/docs/prerequisites/zero-to-terminal/module-0.7-what-is-networking.md"
 ---
 > **Складність**: `[QUICK]` — Абсолютний початківець
 >

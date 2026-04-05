@@ -3,6 +3,8 @@ title: "\u041c\u043e\u0434\u0443\u043b\u044c 0.1: \u0429\u043e \u0442\u0430\u043
 slug: uk/prerequisites/zero-to-terminal/module-0.1-what-is-a-computer
 sidebar:
   order: 2
+en_commit: "22098983f6e1196c1d0fee4b51c85405dc113021"
+en_file: "src/content/docs/prerequisites/zero-to-terminal/module-0.1-what-is-a-computer.md"
 ---
 > **Складність**: `[QUICK]` — Технічний досвід не потрібен
 >
