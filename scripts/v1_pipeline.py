@@ -898,12 +898,17 @@ def cmd_learning_path(args):
 
 
 def _track_from_key(key: str) -> str:
-    """Map a module key to its track name."""
+    """Map a module key to its display group matching e2e aliases."""
     parts = key.split("/")
     if parts[0] == "k8s":
-        return "/".join(parts[:2])
+        sub = parts[1] if len(parts) > 1 else ""
+        if sub in ("cka", "ckad", "cks", "kcna", "kcsa"):
+            return "certs"
+        if sub in ("extending",):
+            return "certs"  # part of certs alias
+        return "specialty"  # pca, cba, capa, kca, otca, ica, cca, finops
     if parts[0] == "prerequisites":
-        return "prerequisites"
+        return "prereqs"
     if parts[0] == "linux":
         return "linux"
     if parts[0] in ("cloud", "platform", "on-premises"):
