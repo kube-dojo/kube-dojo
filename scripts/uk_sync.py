@@ -244,12 +244,16 @@ def detect_sync(uk_path: Path) -> SyncReport | None:
             ))
 
     # Determine overall status
+    # If en_commit matches, trust it — warnings are cosmetic, not stale
     errors = [i for i in report.issues if i.severity == "ERROR"]
-    warnings = [i for i in report.issues if i.severity == "WARNING"]
+    commits_match = en_commit and uk_synced and en_commit == uk_synced
 
-    if errors:
+    if commits_match:
+        report.status = "synced"
+    elif errors:
         report.status = "stale"
-    elif warnings:
+    elif not uk_synced:
+        # No tracking — can't tell, flag as stale
         report.status = "stale"
     else:
         report.status = "synced"
