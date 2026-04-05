@@ -121,6 +121,8 @@ journalctl --no-pager
 
 ### Filtering by Time
 
+> **Pause and predict**: If you need to correlate a database error with a web server error, what is the most reliable piece of information to use across both log sources?
+
 ```bash
 # Last hour
 journalctl --since "1 hour ago"
@@ -367,6 +369,8 @@ ls /var/log/containers/
 
 ## Log Management
 
+> **Stop and think**: What happens to the system if `/var/log` fills up completely because logs weren't rotated? How would this affect running services?
+
 ### Log Rotation
 
 ```bash
@@ -434,7 +438,7 @@ sudo journalctl --vacuum-size=500M
 ## Quiz
 
 ### Question 1
-How do you view only error-level logs from the last hour?
+A user reports that the web application started throwing 500 errors about 45 minutes ago. You need to quickly isolate the system-level error messages from that specific timeframe to identify the root cause without being overwhelmed by info-level noise. Which command should you run?
 
 <details>
 <summary>Show Answer</summary>
@@ -443,10 +447,9 @@ How do you view only error-level logs from the last hour?
 journalctl -p err --since "1 hour ago"
 ```
 
-- `-p err` filters by priority (error level = 3)
-- `--since "1 hour ago"` limits time range
+Filtering by priority is essential when a system is generating a massive volume of informational logs. By using the `-p err` flag, you instruct `journald` to only display messages with a severity of error (level 3) or higher, immediately cutting through the noise. The `--since "1 hour ago"` parameter scopes the search down to the relevant incident window, ensuring you don't waste time investigating old, unrelated issues. 
 
-For warnings and errors:
+For warnings and errors combined, you can widen the priority slightly:
 ```bash
 journalctl -p warning --since "1 hour ago"
 ```
@@ -454,7 +457,7 @@ journalctl -p warning --since "1 hour ago"
 </details>
 
 ### Question 2
-How do you get the logs from the previous boot?
+Your Kubernetes node experienced a sudden kernel panic and automatically rebooted. You SSH into the node after it comes back online, but the current logs only show the successful startup sequence. How can you retrieve the logs from right before the crash?
 
 <details>
 <summary>Show Answer</summary>
@@ -463,20 +466,18 @@ How do you get the logs from the previous boot?
 journalctl -b -1
 ```
 
-- `-b` filters by boot
-- `-1` means previous boot (0 = current, -2 = two boots ago)
+By default, running `journalctl` without arguments shows logs from the current boot, which isn't helpful if you are investigating a crash that caused a restart. The `-b` flag targets a specific boot session, and appending `-1` explicitly requests the logs from the immediately preceding boot. This allows you to inspect the system's exact state and read the kernel messages that were recorded right before the panic occurred.
 
-To list available boots:
+To list all available boot sessions and their IDs, you can run:
 ```bash
 journalctl --list-boots
 ```
-
-Useful when system crashed and restarted — need to see what happened before.
+This is particularly useful when a system has crashed and restarted multiple times, as you may need to go back further than just the previous boot (e.g., `-b -2`).
 
 </details>
 
 ### Question 3
-How do you find how many times a specific error occurred?
+You suspect a newly deployed microservice is occasionally failing to connect to the database. You want to quantify the impact by counting the exact number of times the "database connection timeout" message appears in the application log file. What approaches can you use?
 
 <details>
 <summary>Show Answer</summary>
@@ -492,12 +493,12 @@ journalctl -u service --no-pager | grep -c "error message"
 grep "error" app.log | awk '{print $1}' | sort | uniq -c
 ```
 
-The `-c` flag in grep counts matching lines instead of printing them.
+Counting the raw number of errors helps establish the severity and frequency of an issue. Using the `-c` flag with `grep` is the most efficient way to get a total count because it avoids printing the matching lines to standard output, simply returning the integer tally. When you need to understand if the errors are a continuous stream or isolated spikes, piping the output to `awk`, `sort`, and `uniq -c` allows you to group the occurrences by timestamp, revealing the pattern of the failures over time.
 
 </details>
 
 ### Question 4
-How do you see context around a log entry (what happened before and after)?
+You found a critical "Out of Memory" error in the `/var/log/app.log` file, but the error message itself doesn't specify which transaction caused it. You need to see the log lines immediately preceding and following this error to reconstruct the sequence of events. How can you retrieve this context?
 
 <details>
 <summary>Show Answer</summary>
@@ -514,35 +515,25 @@ grep -A 5 "error"  # 5 lines after
 journalctl --since "10:23:40" --until "10:23:50"
 ```
 
-Context shows what led to the error and what happened after.
+An isolated error message rarely tells the full story of why a failure occurred. The context flags in `grep` (`-B` for before, `-A` for after, and `-C` for context in both directions) allow you to see the application's state leading up to the crash, such as the specific user request being processed. Alternatively, if you are using `journalctl`, extracting the exact timestamp of the error and querying a narrow time window around it lets you correlate events across multiple system services simultaneously.
 
 </details>
 
 ### Question 5
-Why might `kubectl logs pod-name` show nothing even though the pod has been running?
+A developer asks for your help because their newly deployed application is failing, but when they run `kubectl logs pod-name`, the output is completely empty. The pod status shows it has been running for 10 minutes. What are the most likely architectural or configurational reasons for this missing log output?
 
 <details>
 <summary>Show Answer</summary>
 
-Several possibilities:
+When `kubectl logs` returns nothing, it generally means the container engine isn't capturing the application's standard output. The most common reason is that the application is hardcoded to write its logs directly to a file inside the container's filesystem (e.g., `/var/log/app.log`) instead of streaming to `stdout` and `stderr`. Furthermore, if the pod contains multiple containers, you might be querying a sidecar container that hasn't logged anything yet instead of the main application container.
 
-1. **Application writes to files, not stdout**
-   - Container logs only capture stdout/stderr
-   - Check if app logs to /var/log/ inside container
+Several specific possibilities to investigate include:
 
-2. **Container restarted**
-   - New container has fresh logs
-   - Use `--previous` for previous container's logs
-
-3. **Logging to wrong container**
-   - Multi-container pod, specify `-c container-name`
-
-4. **Application hasn't logged anything**
-   - App might buffer logs
-   - Check application configuration
-
-5. **Log rotation**
-   - Old logs may have been rotated out
+1. **Application writes to files, not stdout**: Container logs only capture stdout/stderr. Check if the app logs to a specific file inside the container.
+2. **Container restarted**: A new container starts with fresh logs. Use the `--previous` flag to view logs from the crashed instance.
+3. **Logging to wrong container**: In a multi-container pod, you must specify the target using `-c container-name`.
+4. **Application hasn't logged anything**: The application framework might be buffering logs in memory, or the log level might be set too high (e.g., only logging critical errors).
+5. **Log rotation**: If the application generates massive logs, old logs may have already been rotated out by system policies.
 
 </details>
 
