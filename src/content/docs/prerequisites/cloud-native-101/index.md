@@ -1,7 +1,7 @@
 ---
 title: "Cloud Native 101"
 sidebar:
-  order: 1
+  order: 3
 ---
 Containers, Kubernetes, and the cloud native ecosystem from zero.
 

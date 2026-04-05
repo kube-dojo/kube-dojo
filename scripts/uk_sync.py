@@ -629,9 +629,11 @@ def cmd_detect(args):
 
 def cmd_fix(args):
     """Fix a single stale UK module."""
-    uk_path = Path(args.file)
+    uk_path = Path(args.file).resolve()
     if not uk_path.exists():
-        uk_path = UK_ROOT / f"{args.file}.md"
+        uk_path = (UK_ROOT / args.file).resolve()
+    if not uk_path.exists():
+        uk_path = (UK_ROOT / f"{args.file}.md").resolve()
     if not uk_path.exists():
         print(f"File not found: {args.file}")
         sys.exit(1)

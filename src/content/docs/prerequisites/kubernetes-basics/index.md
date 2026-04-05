@@ -1,7 +1,7 @@
 ---
 title: "Kubernetes Basics"
 sidebar:
-  order: 1
+  order: 4
 ---
 Hands-on fundamentals: clusters, kubectl, core resources, and YAML.
 

@@ -1,7 +1,7 @@
 ---
 title: "Git Deep Dive"
 sidebar:
-  order: 1
+  order: 2
 ---
 
 **Master the tool that every engineer uses daily but few truly understand.**
