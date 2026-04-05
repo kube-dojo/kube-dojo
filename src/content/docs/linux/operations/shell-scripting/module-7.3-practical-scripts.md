@@ -189,6 +189,34 @@ if [[ $exit_code -ne 0 ]]; then
 fi
 ```
 
+> **Pause and predict**: What happens if you run `grep "error" log.txt | wc -l` and `log.txt` doesn't exist? How does `set -o pipefail` change the outcome?
+
+### Knowledge Check
+What does `set -euo pipefail` do?
+
+<details>
+<summary>Show Answer</summary>
+
+Three separate options:
+
+- **`-e`** (errexit): Exit immediately if a command returns non-zero
+- **`-u`** (nounset): Exit if an undefined variable is used
+- **`-o pipefail`**: The pipeline returns the exit code of the rightmost failing command
+
+Without pipefail:
+```bash
+false | true  # Exit code 0
+```
+
+With pipefail:
+```bash
+false | true  # Exit code 1
+```
+
+This is the recommended start for reliable scripts.
+
+</details>
+
 ### Trap for Cleanup
 
 ```bash
@@ -205,6 +233,29 @@ trap cleanup EXIT       # Normal exit
 trap cleanup ERR        # On error
 trap cleanup INT TERM   # Ctrl+C, kill
 ```
+
+### Knowledge Check
+Why is `rm -rf "$TEMP_DIR"` in a trap better than at the end of the script?
+
+<details>
+<summary>Show Answer</summary>
+
+**The trap runs on ANY exit**, including:
+- Normal script completion
+- `set -e` triggering on error
+- Ctrl+C (SIGINT)
+- `kill` (SIGTERM)
+
+Without a trap, if the script errors out early, the temp directory remains.
+
+```bash
+trap 'rm -rf "$TEMP_DIR"' EXIT
+TEMP_DIR=$(mktemp -d)
+```
+
+The trap is registered before creating the temp dir, ensuring cleanup even if mktemp somehow fails later in a more complex script.
+
+</details>
 
 ### Retry Logic
 
@@ -421,7 +472,48 @@ TEMP_FILE=$(mktemp /tmp/myscript.XXXXXX)
 # TEMP_FILE=/tmp/myscript.tmp  # BAD!
 ```
 
+### Knowledge Check
+What's wrong with `TEMP=/tmp/myscript.tmp`?
+
+<details>
+<summary>Show Answer</summary>
+
+Several problems:
+
+1. **Predictable path** — Security risk (symlink attacks)
+2. **Race condition** — Two instances overwrite each other
+3. **Not cleaned up** — If script crashes, file remains
+
+Correct approach:
+```bash
+TEMP=$(mktemp)
+trap 'rm -f "$TEMP"' EXIT
+```
+
+- `mktemp` creates unique filename
+- `trap` ensures cleanup
+- Permissions are secure by default
+
+</details>
+
 ### Atomic File Operations
+
+Writing directly to a configuration file can cause partial reads if another service loads the file before the write finishes. We prevent this using atomic writes.
+
+```mermaid
+sequenceDiagram
+    participant Script
+    participant TempFile as /tmp/config.tmp
+    participant ProdFile as /etc/config.yaml
+    participant App as Target Application
+    
+    Script->>TempFile: 1. Write data (takes time)
+    App--xProdFile: 2. Reads existing intact config
+    Script->>ProdFile: 3. Atomic rename (mv)
+    App->>ProdFile: 4. Reads fully updated config
+```
+
+> **War Story**: In 2018, a major SaaS provider had a cronjob that rebuilt their HAProxy configuration every minute using `cat new_config > /etc/haproxy/haproxy.cfg`. Once, the script ran out of memory halfway through the `cat` command. HAProxy automatically reloaded the half-empty configuration file, causing a global load balancer outage that took 45 minutes to resolve. If they had written to a temporary file and used `mv`, the partial file would never have been loaded.
 
 ```bash
 # Atomic write (write to temp, then move)
@@ -439,7 +531,50 @@ atomic_write() {
 generate_config | atomic_write /etc/app/config.yaml
 ```
 
+### Knowledge Check
+How do you safely write to a config file that other processes might be reading?
+
+<details>
+<summary>Show Answer</summary>
+
+**Atomic write** — write to temp file, then rename:
+
+```bash
+generate_config() {
+    echo "key=value"
+    # ...
+}
+
+DEST=/etc/app/config.yaml
+TEMP=$(mktemp "${DEST}.XXXXXX")
+
+generate_config > "$TEMP"
+chmod 644 "$TEMP"
+mv "$TEMP" "$DEST"  # Atomic on same filesystem
+```
+
+Why it works:
+- `mv` on same filesystem is atomic (rename syscall)
+- Other processes never see partial file
+- If generation fails, original untouched
+
+</details>
+
 ### File Locking
+
+Think of file locking like the key to a single-occupancy restroom at a gas station. Only one process can hold the lock at a time. If another process tries to enter the locked section, it must either wait (blocking) or walk away entirely (non-blocking).
+
+```mermaid
+stateDiagram-v2
+    [*] --> CheckLock
+    CheckLock --> AcquireLock: File is unlocked
+    AcquireLock --> ExecuteTask: Lock acquired
+    ExecuteTask --> ReleaseLock: Task finishes/fails
+    ReleaseLock --> [*]: Lock removed
+    
+    CheckLock --> Fail: File is locked (non-blocking)
+    Fail --> [*]: Exit immediately
+```
 
 ```bash
 # Lock file for single instance
@@ -459,6 +594,104 @@ release_lock() {
 
 trap release_lock EXIT
 acquire_lock
+```
+
+### Knowledge Check
+How do you ensure a script only runs one instance at a time?
+
+<details>
+<summary>Show Answer</summary>
+
+**File locking with flock**:
+
+```bash
+LOCK_FILE="/var/run/myscript.lock"
+
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+    echo "Another instance is running" >&2
+    exit 1
+fi
+```
+
+- Opens file descriptor 9 to the lock file
+- `flock -n 9` tries to acquire an exclusive lock
+- `-n` makes it non-blocking (fail immediately if locked)
+- Lock is released when script exits
+
+Alternative: Check for PID file, but that has race conditions.
+
+</details>
+
+---
+
+## Designing for Idempotency
+
+Idempotency is the property of an operation that can be applied multiple times without changing the result beyond the initial application. In scripting, this means your script should be safe to run again if it fails halfway through.
+
+### Unsafe vs. Idempotent Operations
+
+**Not Idempotent (Fails or duplicates on second run):**
+```bash
+mkdir /app/config
+useradd nginx
+echo "export ENV=prod" >> /etc/environment
+```
+
+**Idempotent (Safe to run repeatedly):**
+```bash
+mkdir -p /app/config
+
+if ! id -u nginx >/dev/null 2>&1; then
+    useradd nginx
+fi
+
+if ! grep -q "^export ENV=prod" /etc/environment; then
+    echo "export ENV=prod" >> /etc/environment
+fi
+```
+
+> **Stop and think**: If your deployment script crashes on step 4 of 10, and you run it again, what happens if steps 1-3 were not written idempotently?
+
+---
+
+## Automating Health Checks
+
+Health checks are automated scripts that verify system state. They should be binary (pass/fail) and output clear diagnostic information when they fail.
+
+### Endpoint Health Check
+```bash
+check_endpoint() {
+    local url=$1
+    local expected_status=${2:-200}
+    
+    local status
+    status=$(curl -s -o /dev/null -w "%{http_code}" "$url")
+    
+    if [[ "$status" != "$expected_status" ]]; then
+        log_error "Endpoint $url returned $status (expected $expected_status)"
+        return 1
+    fi
+    log_info "Endpoint $url is healthy"
+    return 0
+}
+```
+
+### Disk Space Health Check
+```bash
+check_disk_space() {
+    local threshold_percent=$1
+    local mount_point=$2
+    
+    local usage
+    usage=$(df -h "$mount_point" | awk 'NR==2 {print $5}' | sed 's/%//')
+    
+    if [[ "$usage" -gt "$threshold_percent" ]]; then
+        log_error "Disk usage on $mount_point is at ${usage}% (threshold: ${threshold_percent}%)"
+        return 1
+    fi
+    return 0
+}
 ```
 
 ---
@@ -548,131 +781,36 @@ process_parallel 4 file1 file2 file3 file4 file5
 ## Quiz
 
 ### Question 1
-What does `set -euo pipefail` do?
+You are building a deployment script that needs to append an application database URL to `/etc/environment` and then restart a background service. During the first run, the service restart fails due to a syntax error in your systemd unit, but the database URL is successfully appended. You fix the unit file and run the script again. What will happen if the script is not idempotent?
 
 <details>
 <summary>Show Answer</summary>
 
-Three separate options:
+The database URL will be appended a second time to `/etc/environment`. If your script uses a standard `echo "DB_URL=..." >> /etc/environment`, every subsequent run will add duplicate lines. This can lead to configuration file bloat, unexpected behavior if values conflict, or outright parsing errors.
 
-- **`-e`** (errexit): Exit immediately if a command returns non-zero
-- **`-u`** (nounset): Exit if an undefined variable is used
-- **`-o pipefail`**: The pipeline returns the exit code of the rightmost failing command
-
-Without pipefail:
+**Why this matters**: Scripts must be designed expecting to fail halfway through. To make this idempotent, you must check for the existence of the line before appending:
 ```bash
-false | true  # Exit code 0
+if ! grep -q "^DB_URL=" /etc/environment; then
+    echo "DB_URL=..." >> /etc/environment
+fi
 ```
-
-With pipefail:
-```bash
-false | true  # Exit code 1
-```
-
-This is the recommended start for reliable scripts.
+Alternatively, use tools like `sed` to replace the value if the key already exists.
 
 </details>
 
 ### Question 2
-Why is `rm -rf "$TEMP_DIR"` in a trap better than at the end of the script?
+You are writing a critical automated backup script that compresses `/var/www` and copies the archive to a mounted NFS drive at `/mnt/backups`. What specific edge cases must you systematically test to ensure this script won't fail silently or cause damage in production?
 
 <details>
 <summary>Show Answer</summary>
 
-**The trap runs on ANY exit**, including:
-- Normal script completion
-- `set -e` triggering on error
-- Ctrl+C (SIGINT)
-- `kill` (SIGTERM)
+You must systematically test the following edge cases:
+1. **Missing source:** What happens if `/var/www` doesn't exist? (The script should fail fast and alert).
+2. **Unmounted destination:** What happens if the NFS drive drops and `/mnt/backups` is just an empty local directory? (The script might fill up the local root partition).
+3. **Full destination disk:** What happens if there is no space left on the NFS drive? (The script must trap the failure and clean up the partially written archive).
+4. **Permission denial:** Does the script run as a user with read access to all files inside `/var/www`?
 
-Without a trap, if the script errors out early, the temp directory remains.
-
-```bash
-trap 'rm -rf "$TEMP_DIR"' EXIT
-TEMP_DIR=$(mktemp -d)
-```
-
-The trap is registered before creating the temp dir, ensuring cleanup even if mktemp somehow fails later in a more complex script.
-
-</details>
-
-### Question 3
-How do you ensure a script only runs one instance at a time?
-
-<details>
-<summary>Show Answer</summary>
-
-**File locking with flock**:
-
-```bash
-LOCK_FILE="/var/run/myscript.lock"
-
-exec 9>"$LOCK_FILE"
-if ! flock -n 9; then
-    echo "Another instance is running" >&2
-    exit 1
-fi
-```
-
-- Opens file descriptor 9 to the lock file
-- `flock -n 9` tries to acquire an exclusive lock
-- `-n` makes it non-blocking (fail immediately if locked)
-- Lock is released when script exits
-
-Alternative: Check for PID file, but that has race conditions.
-
-</details>
-
-### Question 4
-What's wrong with `TEMP=/tmp/myscript.tmp`?
-
-<details>
-<summary>Show Answer</summary>
-
-Several problems:
-
-1. **Predictable path** — Security risk (symlink attacks)
-2. **Race condition** — Two instances overwrite each other
-3. **Not cleaned up** — If script crashes, file remains
-
-Correct approach:
-```bash
-TEMP=$(mktemp)
-trap 'rm -f "$TEMP"' EXIT
-```
-
-- `mktemp` creates unique filename
-- `trap` ensures cleanup
-- Permissions are secure by default
-
-</details>
-
-### Question 5
-How do you safely write to a config file that other processes might be reading?
-
-<details>
-<summary>Show Answer</summary>
-
-**Atomic write** — write to temp file, then rename:
-
-```bash
-generate_config() {
-    echo "key=value"
-    # ...
-}
-
-DEST=/etc/app/config.yaml
-TEMP=$(mktemp "${DEST}.XXXXXX")
-
-generate_config > "$TEMP"
-chmod 644 "$TEMP"
-mv "$TEMP" "$DEST"  # Atomic on same filesystem
-```
-
-Why it works:
-- `mv` on same filesystem is atomic (rename syscall)
-- Other processes never see partial file
-- If generation fails, original untouched
+**Why this matters**: A silent failure in a backup script is catastrophic because you only discover the bug months later when you need to restore data during an emergency. Validating inputs, testing bounds, and handling external system failures (like unmounted drives) ensures your automation reports issues proactively.
 
 </details>
 
