@@ -12,7 +12,7 @@ After completing this module, you will be able to:
 
 - **Design multi-AZ VPC architectures with public and private subnets that support high-availability workloads**
 - **Configure Security Groups and Network ACLs to implement defense-in-depth network segmentation**
-- **Deploy VPC peering and Transit Gateway attachments to connect multiple VPCs at scale**
+- **Explain VPC peering and Transit Gateway architectures for connecting multiple VPCs at scale**
 - **Diagnose routing table misconfigurations and connectivity failures between subnets, NAT Gateways, and internet gateways**
 
 ---
@@ -295,6 +295,13 @@ Security Groups act as **stateful**, instance-level firewalls.
 - **Chaining**: Instead of using IP addresses, SGs can reference other SGs. You can configure the database SG to "allow traffic on port 3306 from the web-tier SG," automatically accommodating auto-scaling without IP management.
 - **Limit**: Up to 5 SGs per ENI (adjustable). Each SG can have up to 60 inbound + 60 outbound rules.
 
+> **Pause and predict**: Web Server A needs to communicate with Database B on port 5432. Both are in the same VPC but different subnets. What is the most secure way to configure the Security Group attached to Database B to allow this traffic?
+>
+> <details>
+> <summary>View Answer</summary>
+> Add an inbound rule to Database B's Security Group that allows TCP port 5432, with the <strong>source set to the Security Group ID</strong> attached to Web Server A (e.g., <code>sg-0abcd1234</code>). This ensures that only resources possessing Web Server A's Security Group can connect, regardless of what subnet they are in. It automatically scales as Web Servers are added or removed, without ever needing to manage individual IP addresses. Never use <code>0.0.0.0/0</code> or even the VPC CIDR as the source for database access, as this violates the principle of least privilege.
+> </details>
+
 **Example: Chained Security Group Architecture**
 
 ```text
@@ -345,6 +352,13 @@ NACLs act as **stateless**, subnet-level firewalls.
 | **SG references** | Can reference other SGs | Cannot reference SGs (IP/CIDR only) |
 | **Rule limit** | 60 inbound + 60 outbound per SG | 20 inbound + 20 outbound (adjustable) |
 | **Typical use** | Primary firewall for every resource | Subnet-wide IP blocking, compliance |
+
+> **Stop and think**: A junior engineer configures a NACL with Rule #100 allowing all traffic from 0.0.0.0/0 and Rule #50 denying all traffic from 10.0.0.5/32. An instance at 10.0.0.5 attempts to send traffic into the subnet. What happens and why?
+>
+> <details>
+> <summary>View Answer</summary>
+> The traffic is <strong>denied</strong>. NACL rules are evaluated sequentially starting from the lowest rule number. Rule #50 explicitly denies the traffic from <code>10.0.0.5</code>. Once a matching rule is found, the evaluation stops immediately, so the Allow rule at #100 is never processed for this specific traffic. This is why rule numbering matters — always place Deny rules at lower numbers than Allow rules.
+> </details>
 
 ### Defense in Depth: Both Layers Working Together
 
@@ -438,14 +452,12 @@ VPC Peering is a one-to-one networking connection between two VPCs that enables 
 - **Non-Transitive**: If VPC A is peered with VPC B, and VPC B is peered with VPC C, VPC A **cannot** talk to VPC C through B. You must create an explicit peering connection between A and C.
 - **No overlapping CIDRs**: You cannot peer two VPCs if any of their CIDR blocks overlap.
 
-```text
-Non-Transitive Peering:
-
-  VPC-A ◄──peer──► VPC-B ◄──peer──► VPC-C
-    │                                   │
-    └──── Cannot reach! ────────────────┘
-           (Need direct peering)
-```
+> **Stop and think**: You have three VPCs: Dev, Test, and Prod. The Dev VPC is peered with the Test VPC, and the Test VPC is peered with the Prod VPC. An engineer tries to ping an EC2 instance in Prod directly from an EC2 instance in Dev. Does the ping succeed? Why or why not?
+>
+> <details>
+> <summary>View Answer</summary>
+> <strong>No, the ping will fail.</strong> VPC Peering is strictly non-transitive. The connection from Dev to Test does not carry over or route through to Prod. To allow the Dev VPC to communicate with the Prod VPC, you must establish an explicit, direct peering connection between them. Alternatively, if managing many connections, you could use a Transit Gateway as a central hub, which does support transitive routing between attached VPCs.
+> </details>
 
 **Number of peering connections**: With N VPCs in a full mesh, you need N*(N-1)/2 connections. For 5 VPCs, that is 10 connections. For 20 VPCs, that is 190 connections. This is where peering breaks down.
 
@@ -535,48 +547,21 @@ You should configure a **VPC Gateway Endpoint** for Amazon S3. This creates a pr
 </details>
 
 <details>
-<summary>Question 3: Web Server A needs to communicate with Database B on port 5432. What is the most secure way to configure the Security Group attached to Database B?</summary>
+<summary>Question 3: Your company's primary application is hosted entirely within a single Availability Zone (us-east-1a) when a massive power failure takes the data center offline. What architectural pattern would have prevented the resulting total application outage, and how does it work?</summary>
 
-Add an inbound rule to Database B's Security Group that allows TCP port 5432, with the **source set to the Security Group ID** attached to Web Server A (e.g., `sg-0abcd1234`). This ensures that only resources possessing Web Server A's Security Group can connect, and it automatically scales as Web Servers are added or removed, without managing IP addresses. Never use `0.0.0.0/0` or even the VPC CIDR as the source for database access.
+To prevent a total outage, you should design a **multi-AZ architecture** by spanning your VPC and deploying redundant resources across multiple Availability Zones. An Availability Zone represents one or more discrete data centers with redundant power, networking, and connectivity. If an entire AZ goes offline due to a massive infrastructure failure, resources deployed in the other AZs within the same VPC will continue to operate. This ensures the application remains highly available and fault-tolerant. Best practice dictates using at least two AZs, with three AZs recommended for production workloads.
 </details>
 
 <details>
-<summary>Question 4: You have three VPCs: Dev, Test, and Prod. Dev is peered with Test. Test is peered with Prod. Can an EC2 instance in Dev directly ping an instance in Prod?</summary>
+<summary>Question 4: You have a private subnet with a NAT Gateway providing internet access. You check VPC Flow Logs and see traffic from your instance to an external API being ACCEPTED, but the application reports connection timeouts. What should you investigate?</summary>
 
-**No.** VPC Peering is non-transitive. The connection from Dev to Test does not carry over to Prod. To allow Dev to communicate with Prod, you must establish an explicit, direct peering connection between the Dev VPC and the Prod VPC (or use a Transit Gateway as a central hub, which supports transitive routing).
+The Flow Log `ACCEPT` means the **Security Group and NACL** allowed the traffic — but it does not mean the traffic actually reached the destination. First, verify the route tables to ensure the private subnet routes `0.0.0.0/0` to the NAT Gateway, and the public subnet routes it to the IGW. Second, check if the NAT Gateway is in the `available` state with an attached Elastic IP. Third, ensure the NACL on the private subnet explicitly allows inbound return traffic on ephemeral ports (1024-65535). Finally, verify if the external API is reachable and not blocking your NAT Gateway's Elastic IP.
 </details>
 
 <details>
-<summary>Question 5: A NACL has Rule #100 allowing all traffic from 0.0.0.0/0 and Rule #50 denying all traffic from 10.0.0.5/32. An instance at 10.0.0.5 attempts to send traffic into the subnet. What happens and why?</summary>
+<summary>Question 5: Your engineering team needs to connect private subnets to both Amazon S3 and AWS Systems Manager (SSM) without using the public internet. They are confused about which endpoint types to deploy to optimize for cost and compatibility. How should they choose between a VPC Gateway Endpoint and a VPC Interface Endpoint for these services?</summary>
 
-The traffic is **denied**. NACL rules are evaluated sequentially starting from the lowest rule number. Rule #50 explicitly denies the traffic from `10.0.0.5`. Once a matching rule is found, the evaluation stops immediately, so the Allow rule at #100 is never processed for this specific traffic. This is why rule numbering matters -- always place Deny rules at lower numbers than Allow rules.
-</details>
-
-<details>
-<summary>Question 6: Why is it best practice to span a VPC across multiple Availability Zones?</summary>
-
-**High Availability and Fault Tolerance.** An Availability Zone represents one or more discrete data centers with redundant power, networking, and connectivity. If an entire AZ goes offline due to a massive infrastructure failure (it has happened), resources deployed in the other AZs within the same VPC will continue to operate, ensuring the application remains available. Best practice is to use at least 2 AZs, with 3 AZs recommended for production workloads.
-</details>
-
-<details>
-<summary>Question 7: You have a private subnet with a NAT Gateway providing internet access. You check VPC Flow Logs and see traffic from your instance to an external API being ACCEPTED, but the application reports connection timeouts. What should you investigate?</summary>
-
-The Flow Log `ACCEPT` means the **Security Group and NACL** allowed the traffic -- but it does not mean the traffic actually reached the destination. Investigate:
-
-1. **Route table**: Does the private subnet route `0.0.0.0/0` to the NAT Gateway? Does the NAT Gateway's public subnet route `0.0.0.0/0` to the IGW?
-2. **NAT Gateway status**: Is the NAT Gateway in the `available` state? Is its Elastic IP still associated?
-3. **NACL return traffic**: Are ephemeral ports (1024-65535) allowed inbound on the private subnet NACL?
-4. **External API**: Is the external API reachable? Is it blocking your NAT Gateway's Elastic IP?
-</details>
-
-<details>
-<summary>Question 8: What is the difference between a VPC Gateway Endpoint and a VPC Interface Endpoint?</summary>
-
-**Gateway Endpoint**: Available only for S3 and DynamoDB. It adds a route to your route table pointing to the service. It is free (no hourly or data charges). It does not use an ENI.
-
-**Interface Endpoint (PrivateLink)**: Available for most AWS services and custom services. It creates an Elastic Network Interface (ENI) with a private IP in your subnet. It costs ~$0.01/hr per AZ plus data processing charges. It supports Security Groups and provides a DNS hostname you can use to reach the service.
-
-Use Gateway Endpoints when available (S3, DynamoDB) because they are free. Use Interface Endpoints for everything else.
+The team should use a **Gateway Endpoint** for Amazon S3 and an **Interface Endpoint** for AWS Systems Manager. Gateway Endpoints are available exclusively for S3 and DynamoDB, adding a route directly to your route table without incurring any hourly or data charges. Interface Endpoints (PrivateLink) must be used for most other AWS services, including SSM, as they create an Elastic Network Interface (ENI) with a private IP in your subnet. Interface Endpoints cost approximately $0.01 per hour per AZ plus data processing charges, but they crucially support Security Groups and provide a resolvable DNS hostname. Using Gateway Endpoints whenever possible optimizes costs, while Interface Endpoints provide the necessary connectivity for the rest of the AWS ecosystem.
 </details>
 
 ---
