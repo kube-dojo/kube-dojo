@@ -179,6 +179,8 @@ User Space                         Kernel Space
     │                                   │
 ```
 
+> **Pause and predict**: If an application enters an infinite loop performing mathematical calculations on data already in memory, without reading files or sending network packets, will it generate any system calls during that loop?
+
 ### Try This: Count System Calls
 
 ```bash
@@ -289,6 +291,8 @@ Each container has its own filesystem and libraries, but they all use **the same
 | **Compatibility** | Container must be compatible with host kernel |
 | **Features** | Container can only use host kernel's capabilities |
 
+> **Stop and think**: If a newly released container image relies on a system call that was introduced in Linux kernel 6.0, what happens when you attempt to run this container on a host running Ubuntu with kernel 5.15?
+
 ### Try This: Same Kernel, Different "OS"
 
 ```bash
@@ -394,56 +398,52 @@ mount | grep cgroup
 Test your understanding:
 
 ### Question 1
-What prevents user applications from directly accessing hardware?
+**Scenario**: A developer writes a C program that attempts to read a file by directly addressing the hard drive's memory controller, bypassing the standard library functions. When executed, the program immediately crashes with a segmentation fault. What mechanism caused this crash?
 
 <details>
 <summary>Show Answer</summary>
 
-**CPU privilege levels (rings)**. The CPU runs the kernel in Ring 0 (privileged) and applications in Ring 3 (unprivileged). Attempts to execute privileged instructions from Ring 3 cause an exception.
+**CPU privilege levels (rings)**. The CPU hardware enforces the separation between Kernel Space (Ring 0) and User Space (Ring 3). When the user-space program attempts to execute a privileged memory instruction to access the disk controller directly, the CPU hardware intercepts this illegal action and generates an exception. The kernel then handles this exception by terminating the offending process with a segmentation fault. This hardware-level enforcement is what prevents user applications from bypassing security and crashing the system.
 
 </details>
 
 ### Question 2
-Why do containers on the same host show the same kernel version?
+**Scenario**: You are migrating a legacy application running on an old CentOS 7 virtual machine to a container. The application team insists they need a specific old kernel version (3.10) for their app to work. You deploy the CentOS 7 container image onto your modern Kubernetes cluster running Ubuntu 22.04. When the app checks the kernel version, it crashes. Why did the container fail to provide the requested kernel?
 
 <details>
 <summary>Show Answer</summary>
 
-**Containers share the host kernel**. Unlike VMs, containers don't have their own kernel. They only package userspace (libraries, tools, applications) and rely on the host's kernel for system calls.
+**Containers share the host kernel**. Unlike virtual machines which run their own complete operating system including a kernel, containers are simply isolated processes running on the host OS. When a process inside the container requests the kernel version or attempts to use kernel features, that request goes straight to the single, shared host kernel. The container image provides only the user-space file system (libraries and binaries), meaning it cannot downgrade or supply its own kernel to satisfy the application's legacy requirements.
 
 </details>
 
 ### Question 3
-What is a system call, and why is it necessary?
+**Scenario**: You are troubleshooting a high-latency database application. Using performance tools, you notice the CPU is spending 60% of its time in "system" (kernel space) rather than "user" space. The database is constantly reading small chunks of data from disk. What boundary is the application repeatedly crossing that is causing this performance overhead, and why must it cross it?
 
 <details>
 <summary>Show Answer</summary>
 
-**A system call is a request from user space to the kernel for a privileged operation**. It's necessary because user applications can't directly access hardware or protected resources. System calls provide a controlled interface for operations like file I/O, network access, and process management.
+**The boundary between User Space and Kernel Space via system calls**. User-space applications are strictly restricted from directly interacting with hardware, including hard drives, to ensure system stability and security. To read data, the application must request that the kernel perform the action on its behalf via a system call, which involves an expensive context switch from Ring 3 to Ring 0 and back. The high CPU overhead is caused by the constant switching required for many small reads; optimizing the application to read larger chunks per system call would significantly reduce this overhead.
 
 </details>
 
 ### Question 4
-Which kernel modules are commonly required for Kubernetes?
+**Scenario**: You have just provisioned a minimal Linux server to act as a Kubernetes node. When kube-proxy starts, it logs an error stating "cannot initialize IPVS: module not loaded" and falls back to iptables mode. The containers also cannot communicate with each other. Which components of the kernel are likely missing or disabled, and how do they affect the cluster?
 
 <details>
 <summary>Show Answer</summary>
 
-Common modules include:
-- `overlay` - For container image layers (OverlayFS)
-- `br_netfilter` - For network policies and kube-proxy
-- `ip_vs` - For kube-proxy IPVS mode
-- `nf_conntrack` - For connection tracking in services
+**Kernel modules**. The server is missing specific kernel modules, which are pieces of code that can be dynamically loaded into the kernel to extend its functionality. Specifically, `ip_vs` is required for kube-proxy's efficient IPVS load balancing mode, and modules like `overlay` or `br_netfilter` are necessary for container filesystems and networking. Because the Linux kernel is modular, many features are not loaded into memory by default to save resources. If these required modules are not enabled or loaded on the host system, Kubernetes components will fail to initialize properly.
 
 </details>
 
 ### Question 5
-What's the security implication of containers sharing the host kernel?
+**Scenario**: A critical vulnerability (CVE) is announced in the Linux kernel's networking stack that allows remote code execution. Your security team says "We run all our apps in isolated containers without root access, so we don't need to patch the host immediately." Is the security team's assessment correct?
 
 <details>
 <summary>Show Answer</summary>
 
-**A kernel vulnerability affects ALL containers and the host**. There's no isolation at the kernel level—if an attacker escapes to kernel space, they have access to everything. This is why kernel patching is critical and why some workloads require additional isolation (gVisor, Kata Containers, or dedicated nodes).
+**No, the assessment is dangerously incorrect**. Because containers do not run their own kernel, they rely entirely on the shared host kernel for all operations, including network processing. If a remote code execution vulnerability exists in the host kernel's networking stack, any malicious traffic processed by the host can trigger the exploit, regardless of container isolation. Once an attacker exploits the vulnerability to compromise the host kernel (Ring 0), they instantly bypass all user-space container isolation mechanisms and gain full, unrestricted control over every container running on that node.
 
 </details>
 
