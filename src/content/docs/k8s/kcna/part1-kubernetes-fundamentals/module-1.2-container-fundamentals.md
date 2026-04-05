@@ -312,14 +312,64 @@ Kubernetes doesn't run containers directly—it uses a **container runtime**:
 
 ---
 
+## Hands-On Exercise: Container Inspection
+
+In this exercise, you will interact with a container runtime to understand isolation and image layers. You can use Docker or containerd (`nerdctl`) if installed on your local machine.
+
+**Step 1: Run a Simple Container**
+Start an interactive Alpine Linux container:
+```bash
+docker run -it alpine sh
+```
+
+**Step 2: Observe Process Isolation (Namespaces)**
+Inside the container, list the running processes:
+```bash
+ps aux
+```
+*Notice that the shell (`sh`) is PID 1. You cannot see the processes running on your host machine due to PID namespace isolation.*
+
+**Step 3: Exit and Observe Container State**
+Type `exit` to leave the container. Check if it's still running:
+```bash
+docker ps -a
+```
+*The container is in an 'Exited' state because its main process (PID 1) terminated.*
+
+**Step 4: Explore Image Layers**
+Pull an image and inspect its layers:
+```bash
+docker pull nginx:latest
+docker image inspect nginx:latest | grep -A 10 "Layers"
+```
+*You will see multiple SHA256 hashes, each representing a read-only filesystem layer within the union filesystem.*
+
+**Success Criteria:**
+- [ ] You successfully started an interactive container.
+- [ ] You verified that the container has its own isolated process tree (PID 1).
+- [ ] You inspected an image to see its composed layers.
+
+---
+
+## War Story: The "Noisy Neighbor" Outage
+
+A financial services company migrated their monolithic application to containers but failed to set resource limits. During a high-traffic event, a minor memory leak in a reporting container caused it to consume 100% of the host node's RAM. Because no cgroup limits were applied, this single container starved the host's operating system and all other critical containers running on the same node. The entire node crashed, triggering a cascading failure across the cluster. This outage highlighted a painful lesson: while containers provide namespace isolation out of the box, you must explicitly configure cgroup limits to prevent noisy neighbors from hoarding shared kernel resources.
+
+---
+
+## Operational Lessons
+
+- **Set Resource Requests and Limits:** Always define CPU and memory limits (using cgroups) for every container to ensure predictable performance and fair resource sharing.
+- **Use Immutable Tags:** Never use the `latest` tag in production environments. Always pin to specific, immutable versions (e.g., `v1.2.4`) to guarantee consistent and repeatable deployments.
+- **Run as Non-Root:** By default, containers run as the root user. Always configure your containers to run as a non-privileged user to minimize the blast radius in the event of a security breach.
+
+---
+
 ## Did You Know?
 
 - **Containers aren't new** - The concepts date back to Unix chroot (1979) and FreeBSD jails (2000). Docker popularized them in 2013.
-
 - **Docker isn't required for Kubernetes** - Since K8s 1.24, containerd is the default. Docker as a runtime is deprecated.
-
 - **The OCI defines standards** - Open Container Initiative standardizes image formats and runtimes, ensuring portability.
-
 - **Containers share the host kernel** - This is why Windows containers can't run on Linux and vice versa (without virtualization).
 
 ---
@@ -332,6 +382,10 @@ Kubernetes doesn't run containers directly—it uses a **container runtime**:
 | "Each container has its own OS" | Wastes resources mentally | Containers share host kernel |
 | "Docker = Containers" | Docker is just one runtime | containerd, CRI-O also run containers |
 | "Images and containers are the same" | Confuses template vs instance | Image is template; container is running instance |
+| Running containers as root by default | Expands the blast radius if the container is compromised | Always configure processes to run as a non-root user |
+| Using the `latest` tag in production | Causes unpredictable deployments if the tag gets overwritten | Pin image versions using specific, immutable tags |
+| Ignoring image layer ordering | Results in slow builds and wasted caching efficiency | Place frequently changing files (like app code) in the final layers |
+| Not setting cgroup resource limits | Allows one noisy neighbor container to starve the host node | Always define CPU and memory limits to restrict resource usage |
 
 ---
 
@@ -365,6 +419,24 @@ Kubernetes doesn't run containers directly—it uses a **container runtime**:
    <details>
    <summary>Answer</summary>
    Containers alone may not provide sufficient isolation for multi-tenant workloads with strict security requirements. Since containers share the host kernel, a kernel vulnerability could allow one tenant's container to access another's data. For stronger isolation, the organization could consider: running containers inside lightweight VMs (like Kata Containers or Firecracker), using gVisor which interposes a user-space kernel between containers and the host, or using separate nodes per tenant. The choice depends on the security requirements versus the performance and cost trade-offs.
+   </details>
+
+6. **A new engineer notices that the application's container image uses the `latest` tag in the production deployment manifest. They argue this is good because the app will automatically get the newest security patches. Why is this practice dangerous in a production environment?**
+   <details>
+   <summary>Answer</summary>
+   Using the `latest` tag in production is dangerous because it makes deployments unpredictable and non-reproducible. The `latest` tag is simply a mutable pointer that changes every time a new image is pushed without a specific tag. If a node fails and Kubernetes needs to reschedule the pod, it might pull a newer, untested version of the application that breaks compatibility or introduces bugs. Instead, production deployments should always use specific, immutable tags (like `v1.2.3`) or image digests to ensure that exactly the same code is running across all nodes and deployments.
+   </details>
+
+7. **During a security audit, the team discovers that their Node.js container is running its main process as the `root` user. The lead developer says this is fine because containers are isolated. Why is the security team still concerned, and what should be done?**
+   <details>
+   <summary>Answer</summary>
+   The security team is concerned because containers share the underlying host's kernel and do not offer the same boundary as a virtual machine. While namespaces provide process isolation, a process running as root inside a container still possesses root-level privileges from the kernel's perspective. If an attacker exploits a vulnerability in the application and manages to break out of the container (known as a container escape), they would land on the host node as the root user, potentially taking over the entire machine. To mitigate this, containers should always be configured to run as a non-root, unprivileged user using the `USER` directive in the Dockerfile.
+   </details>
+
+8. **A cluster node crashes because a single container consumed all of the node's memory. Which underlying Linux kernel feature was not properly configured, and how does it prevent this scenario?**
+   <details>
+   <summary>Answer</summary>
+   The cgroups (control groups) feature was not properly configured for this container. While namespaces isolate what a container can see, cgroups limit the physical resources (CPU, memory, disk I/O) a container is allowed to use. When resource limits are not set, a single "noisy neighbor" container can consume all available memory on the host, causing the host operating system to become unstable or crash. By setting memory and CPU limits, the kernel ensures the container is restricted to its allocated quota and gets terminated if it exceeds it, protecting the rest of the node.
    </details>
 
 ---
