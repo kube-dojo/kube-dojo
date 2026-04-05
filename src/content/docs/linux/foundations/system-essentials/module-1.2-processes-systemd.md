@@ -128,6 +128,8 @@ systemd(1)─┬─sshd(800)───sshd(1200)───bash(1234)───pstre
            └─kubelet(400)
 ```
 
+> **Stop and think**: You run `pstree` and notice your application is a child of `containerd-shim` rather than `systemd`. What does this tell you about how the application was launched and is currently running?
+
 ### Special PIDs
 
 | PID | Name | Purpose |
@@ -295,6 +297,8 @@ SIGTERM (15)                    SIGKILL (9)
 
 **Best practice**: Always try SIGTERM first, wait a few seconds, then SIGKILL only if necessary.
 
+> **Pause and predict**: You've sent a `SIGTERM` to a misbehaving database process, but it's still running after 10 seconds. What is the process likely doing right now, and what is your next troubleshooting step?
+
 ### Signals in Kubernetes
 
 When Kubernetes terminates a pod:
@@ -419,6 +423,8 @@ WantedBy=multi-user.target     # Enable for this target
 | oneshot | Process expected to exit | Scripts, setup tasks |
 | notify | Like simple, sends notification | systemd-aware apps |
 | idle | Like simple, waits for jobs | Low priority |
+
+> **Stop and think**: You're creating a script that must run once during boot to initialize a database schema, and other services must wait until it finishes before they can start. Which systemd service `Type` should you choose to ensure the startup process waits correctly?
 
 ### Try This: Create a Service
 
@@ -623,72 +629,52 @@ Key htop shortcuts:
 ## Quiz
 
 ### Question 1
-What's the difference between fork() and exec()?
+Scenario: A developer reports their application is crashing on startup. You use `strace` and see the application calls `fork()` successfully, but the subsequent `exec()` call fails with "No such file or directory". What is happening?
 
 <details>
 <summary>Show Answer</summary>
 
-- **fork()** creates a copy of the current process (new PID, same code)
-- **exec()** replaces the current process's code with a new program
-
-A new process typically uses both: fork() to create the child, then exec() to run the new program.
+The application is successfully creating a child process using `fork()`, which is why the first step succeeds. However, the child process is failing to replace its memory space with the new program using `exec()` because the target executable file does not exist, or the path is incorrect. Since `exec()` failed, the child process cannot run the intended application and will likely exit with an error. To fix this, you need to verify the path to the executable and ensure it has the correct permissions.
 
 </details>
 
 ### Question 2
-What is a zombie process and how is it created?
+Scenario: A monitoring alert fires for "High PID usage". You run `top` and see 500 processes with a state of "Z". The CPU and memory usage are completely normal. What is causing this alert, and how do you resolve it?
 
 <details>
 <summary>Show Answer</summary>
 
-A **zombie** is a process that has terminated but whose parent hasn't called wait() to read its exit status. It exists in the process table but consumes no resources except the PID entry.
-
-Created when: Child exits → Parent doesn't call wait() → Child becomes zombie
-
-Fixed when: Parent calls wait() or parent dies (init inherits and reaps)
+The system is accumulating "Zombie" processes, which are child processes that have terminated. They consume no CPU or RAM, which is why your resource usage is normal, but they still occupy a slot in the system's process table (PID). A zombie exists because its parent process hasn't called `wait()` to read its exit status and properly reap it. To resolve this, you must troubleshoot, restart, or kill the *parent* process that is failing to manage its children correctly.
 
 </details>
 
 ### Question 3
-Why can't you kill a process in "D" (uninterruptible sleep) state?
+Scenario: A backup script is stuck. You try `kill 1234` (SIGTERM) and then `kill -9 1234` (SIGKILL), but the process remains in the process list with a state of "D". Why did `SIGKILL` fail, and what must you do?
 
 <details>
 <summary>Show Answer</summary>
 
-Processes in D state are waiting for I/O (usually disk) to complete. They can't receive signals because they're in the middle of a kernel operation that can't be interrupted safely.
-
-The only solution is to resolve the underlying I/O issue (fix storage, NFS mount, etc.) or reboot.
+The process is in an "Uninterruptible Sleep" (D state), meaning it is waiting on hardware I/O, such as a disconnected network drive or a failing disk. Because it is deep in a kernel system call, it cannot process any signals whatsoever, including `SIGKILL`. `SIGKILL` only works on processes that can actually receive signals from the kernel. You must resolve the underlying hardware or storage issue, or if that is impossible, forcefully reboot the system.
 
 </details>
 
 ### Question 4
-What happens when you run `systemctl enable nginx`?
+Scenario: You create a new `web-app.service` and run `systemctl start web-app`. It works perfectly. However, after a server reboot, the web app is not running. What step was missed, and what exactly does that step do under the hood?
 
 <details>
 <summary>Show Answer</summary>
 
-It creates a symbolic link from the target's wants directory to the unit file:
-```
-/etc/systemd/system/multi-user.target.wants/nginx.service →
-  /lib/systemd/system/nginx.service
-```
-
-This tells systemd to start nginx when the system reaches that target (usually at boot).
+You missed running `systemctl enable web-app` before rebooting the server. While `start` runs the service immediately, it does not configure the system to launch it automatically on boot. The `enable` command creates a symbolic link in the appropriate target's `.wants` directory (e.g., `/etc/systemd/system/multi-user.target.wants/web-app.service`). This symlink tells systemd that the service is a dependency for the boot target, ensuring it starts up automatically.
 
 </details>
 
 ### Question 5
-Why is PID 1 special in containers?
+Scenario: A developer complains their Node.js container takes exactly 30 seconds to stop every time they run `kubectl delete pod`, instead of stopping instantly. Based on the process lifecycle and signals, what is the root cause?
 
 <details>
 <summary>Show Answer</summary>
 
-In containers, PID 1:
-1. Receives SIGTERM when Kubernetes stops the pod
-2. Must properly reap zombie children (no init to help)
-3. Doesn't get default signal handlers (SIGTERM is ignored by default for PID 1!)
-
-This is why many containers use tini or dumb-init as PID 1, or why applications need explicit SIGTERM handling.
+When Kubernetes deletes a pod, it sends a `SIGTERM` signal to PID 1 inside the container to request a graceful shutdown. If the Node.js application (acting as PID 1) does not have explicit code to catch and handle `SIGTERM`, it simply ignores the signal and keeps running. Kubernetes patiently waits for the default 30-second grace period to expire, gives up on a graceful exit, and then forcefully terminates the container with `SIGKILL`. To fix this, the developer must add a signal handler to their application or use a lightweight init system like `tini`.
 
 </details>
 
@@ -795,6 +781,54 @@ systemctl --failed
 systemctl list-dependencies sshd || systemctl list-dependencies ssh
 ```
 
+#### Part 5: Diagnose a Broken Service
+
+```bash
+# 1. Create an intentionally broken service
+sudo tee /etc/systemd/system/broken-web.service << 'EOF'
+[Unit]
+Description=Broken Web Service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 -m http.server 80
+User=nobody
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# 2. Reload and try to start
+sudo systemctl daemon-reload
+sudo systemctl start broken-web
+
+# 3. Diagnose the failure!
+# Check the status - what does the active state say?
+systemctl status broken-web
+
+# Check the logs - what specific error prevented it from running?
+journalctl -u broken-web -n 10 --no-pager
+
+# 4. Fix the service
+# Hint: Port 80 requires root privileges, but this service runs as 'nobody'
+# Edit the file to use port 8080 instead:
+# ExecStart=/usr/bin/python3 -m http.server 8080
+sudo vi /etc/systemd/system/broken-web.service
+
+# 5. Apply the fix and verify
+sudo systemctl daemon-reload
+sudo systemctl start broken-web
+systemctl status broken-web
+
+# 6. Cleanup
+sudo systemctl stop broken-web
+sudo systemctl disable broken-web
+sudo rm /etc/systemd/system/broken-web.service
+sudo systemctl daemon-reload
+```
+
 ### Success Criteria
 
 - [ ] Found your shell's PID and PPID
@@ -802,6 +836,7 @@ systemctl list-dependencies sshd || systemctl list-dependencies ssh
 - [ ] Successfully sent STOP, CONT, and TERM signals
 - [ ] Created and observed a zombie process
 - [ ] Used systemctl to explore services
+- [ ] Diagnosed and fixed a broken systemd service using `systemctl status` and `journalctl`
 
 ---
 
