@@ -10,7 +10,8 @@ lab:
   difficulty: intermediate
   environment: kubernetes
 en_commit: "0db65d452c40cd0d7f3715378f49ec94bfd032fb"
-en_file: "src/content/docs/k8s/cka/part2-workloads-scheduling/module-2.3-daemonsets-statefulsets.md"---
+en_file: "src/content/docs/k8s/cka/part2-workloads-scheduling/module-2.3-daemonsets-statefulsets.md"
+---
 > **Складність**: `[MEDIUM]` — Спеціалізовані шаблони навантажень
 >
 > **Час на проходження**: 40-50 хвилин
