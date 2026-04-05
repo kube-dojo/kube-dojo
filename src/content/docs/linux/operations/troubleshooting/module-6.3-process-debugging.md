@@ -60,6 +60,8 @@ Sometimes the only way to understand a problem is to watch the process in action
 
 ## The /proc Filesystem
 
+> **Stop and think**: If an application binary is accidentally deleted from the disk while the process is still running, how might you use the `/proc` filesystem to recover the executable?
+
 ### Process Information
 
 ```bash
@@ -153,6 +155,8 @@ cat /proc/$PID/status | grep -E "VmSize|VmRSS|VmSwap"
 
 ## strace
 
+> **Pause and predict**: If you run `strace ls /tmp`, will the actual output of the `ls` command be printed before, during, or after the `strace` output?
+
 ### Basic Usage
 
 ```bash
@@ -242,6 +246,8 @@ strace -e openat myapp 2>&1 | grep -E "\.conf|\.cfg|\.yaml"
 ---
 
 ## Process States
+
+> **Stop and think**: Why is it impossible to forcefully terminate (`kill -9`) a process that is currently in the 'D' (Uninterruptible sleep) state?
 
 ### Understanding States
 
@@ -433,12 +439,12 @@ ltrace -l libc.so.6 ls /tmp
 ## Quiz
 
 ### Question 1
-How do you find what files a process has open?
+An application team reports that their Node.js service is crashing with a "Too many open files" error. You have the PID of the running Node.js process. How would you investigate which specific files and connections the process currently holds open to find the leak?
 
 <details>
 <summary>Show Answer</summary>
 
-Multiple ways:
+You can investigate the open file descriptors using multiple methods, depending on the level of detail you need. Exploring the `/proc` filesystem is the fastest approach because it directly queries the kernel's data structures in memory without invoking external binaries that parse complex states. Alternatively, `lsof` provides a much richer, formatted output that maps file descriptors to actual file paths, network sockets, and pipes, making it easier for humans to read. If you suspect the process is actively opening files in a loop right now, attaching `strace` allows you to monitor the real-time file opening behavior as it happens.
 
 ```bash
 # 1. /proc filesystem
@@ -456,12 +462,12 @@ strace -e openat -p $PID
 </details>
 
 ### Question 2
-What does a 'D' state in `ps` output mean?
+You are troubleshooting a legacy database server that is suddenly unresponsive. When you run `ps aux`, you notice several critical processes are stuck in the 'D' state. The system load average is extremely high, but CPU usage is near 0%. What does this state indicate about the root cause, and how should you proceed?
 
 <details>
 <summary>Show Answer</summary>
 
-**Uninterruptible sleep** — the process is waiting for I/O and cannot be interrupted, not even by signals.
+The 'D' state indicates **Uninterruptible sleep** — meaning the process is waiting for an I/O operation to complete and cannot be interrupted, not even by a `SIGKILL` (kill -9) signal. This state is designed to protect data integrity, ensuring a process doesn't terminate halfway through writing to hardware. Because the process is asleep, it doesn't consume CPU cycles, which explains the near 0% CPU usage despite a skyrocketing load average (which counts processes waiting for I/O). The root cause is almost always hardware-related, such as a failing physical disk, a disconnected NFS mount, or an overloaded storage array.
 
 Common causes:
 - Waiting for disk I/O
@@ -482,10 +488,12 @@ cat /proc/$PID/stack  # See kernel function
 </details>
 
 ### Question 3
-How do you trace only network-related system calls?
+A custom proxy application is failing to connect to an external API, but it doesn't log any useful error messages. You decide to use `strace` on the running process to see what's happening. The process is extremely busy doing file I/O, so a standard `strace` generates too much noise. How can you isolate only the network connection attempts?
 
 <details>
 <summary>Show Answer</summary>
+
+You can isolate network activity by passing the `-e trace=network` filter or specifying exact system calls like `-e connect` to `strace`. Filtering system calls at the tracing level is critical for performance and readability because busy applications can generate thousands of system calls per second, overwhelming your terminal and making it impossible to spot the failure. By restricting the trace to network operations, you force the kernel to only report events related to sockets, significantly reducing overhead and allowing you to pinpoint exactly when the application attempts to reach out and whether the connection is refused or timing out.
 
 ```bash
 strace -e trace=network command
@@ -507,10 +515,12 @@ strace -e connect curl http://example.com 2>&1
 </details>
 
 ### Question 4
-What's the difference between strace and ltrace?
+You are reverse-engineering a compiled binary without source code to figure out why it is crashing on startup. You suspect it might be failing when trying to allocate memory or format a string internally before it even tries to read a file. Which tool would you use to verify this, and why would the other tracing tool not show this activity?
 
 <details>
 <summary>Show Answer</summary>
+
+You would use `ltrace` to verify internal memory allocations or string formatting because these are library functions, whereas `strace` only intercepts requests made directly to the Linux kernel. When a program formats a string using something like `printf`, it executes entirely in user space within the C standard library. The kernel is completely unaware of this operation until the library finally decides to output the result via a `write` system call. Therefore, `strace` is blind to the internal mechanics of shared libraries, making `ltrace` the necessary choice for debugging user-space library interactions before they hit the kernel boundary.
 
 **strace** traces **system calls** — interactions with the kernel:
 - File operations (open, read, write)
@@ -532,10 +542,12 @@ Use strace for I/O, network, system behavior. Use ltrace for library-level debug
 </details>
 
 ### Question 5
-How do you find why a process is stuck/hanging?
+A background data processing daemon has been running for 12 hours but hasn't updated its output file or written any logs in the last hour. The process is still alive and shows an 'S' (Interruptible Sleep) state in `top`. What steps would you take to figure out exactly what the daemon is currently waiting on?
 
 <details>
 <summary>Show Answer</summary>
+
+To diagnose a process stuck in an 'S' state, you must progressively investigate its kernel stack, system calls, and open files to identify the blocking resource. Because an 'S' state simply means the process is waiting for some event (like input, a lock, or a timer) to wake it up, just looking at `ps` or `top` won't tell you the cause. Checking `/proc/$PID/stack` reveals the exact kernel function the process is sleeping in, while attaching `strace` allows you to see the last system call that hasn't returned yet. Correlating that system call with the process's open file descriptors via `lsof` usually reveals the culprit, such as a blocked pipe or a locked file.
 
 Step by step:
 
