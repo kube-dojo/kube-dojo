@@ -315,10 +315,13 @@ def fix_module(uk_path: Path, report: SyncReport | None = None) -> bool:
         issues=issues_text,
     )
 
+    # Snapshot file before dispatch — Gemini may write directly via tool use
+    uk_before = uk_path.read_text() if uk_path.exists() else ""
+
     ok, output = dispatch_gemini_with_retry(prompt, mcp=True, timeout=300)
 
     if not ok or not output.strip():
-        print(f"  ❌ Translation failed")
+        print(f"  ✗ Translation failed")
         return False
 
     # Strip markdown wrapper
@@ -326,35 +329,41 @@ def fix_module(uk_path: Path, report: SyncReport | None = None) -> bool:
         lines = output.split("\n")
         output = "\n".join(lines[1:-1]) if lines[-1].strip() == "```" else output
 
-    # Ensure frontmatter
+    # Check if output is actual markdown or just a summary
+    gemini_wrote_directly = False
     if not output.startswith("---"):
         fm_start = output.find("---\n")
         if fm_start > 0 and fm_start < 2000:
             output = output[fm_start:]
         else:
-            print(f"  ❌ Translation output has no frontmatter")
-            return False
+            # Gemini may have written to the file directly via tool use
+            uk_now = uk_path.read_text() if uk_path.exists() else ""
+            if uk_now != uk_before and uk_now.startswith("---"):
+                print(f"  ✓ Gemini wrote directly to {uk_path.name}")
+                output = uk_now
+                gemini_wrote_directly = True
+            else:
+                print(f"  ✗ Translation output has no frontmatter")
+                return False
 
     # Add/update en_commit in frontmatter
     en_commit = _get_en_file_commit(en_path)
     if en_commit:
         if "en_commit:" in output:
-            output = re.sub(r"^en_commit:.*$", f"en_commit: {en_commit}", output, count=1, flags=re.MULTILINE)
+            output = re.sub(r"^en_commit:.*$", f'en_commit: "{en_commit}"', output, count=1, flags=re.MULTILINE)
         else:
-            # Add before closing ---
-            output = output.replace("\n---\n", f"\nen_commit: {en_commit}\n---\n", 1)
+            output = output.replace("\n---\n", f'\nen_commit: "{en_commit}"\n---\n', 1)
 
     # Verify Ukrainian quality
     check_results = ukrainian.run_all(output, uk_path)
     check_errors = [r for r in check_results if not r.passed and r.severity == "ERROR"]
 
     if check_errors:
-        print(f"  ⚠️ Ukrainian quality issues found:")
+        print(f"  ⚠ Ukrainian quality issues:")
         for r in check_errors:
             print(f"    {r}")
-        # Still write — issues are warnings, not blockers for now
-        # The uk_sync detect will catch them on next run
 
+    # Write (or re-write with en_commit added)
     uk_path.write_text(output)
     print(f"  ✓ Updated {uk_path.name} (en_commit: {en_commit[:8]})")
 
@@ -492,18 +501,28 @@ def translate_new_module(en_path: Path) -> bool:
         lines = output.split("\n")
         output = "\n".join(lines[1:-1]) if lines[-1].strip() == "```" else output
 
-    # Ensure frontmatter
+    # Check if output is actual markdown or just a summary
     if not output.startswith("---"):
         fm_start = output.find("---\n")
         if fm_start > 0 and fm_start < 2000:
             output = output[fm_start:]
         else:
-            print(f"  ✗ Output has no frontmatter")
-            return False
+            # Gemini may have written to the file directly via tool use
+            if uk_path.exists():
+                uk_now = uk_path.read_text()
+                if uk_now.startswith("---"):
+                    print(f"  ✓ Gemini wrote directly to {uk_path.name}")
+                    output = uk_now
+                else:
+                    print(f"  ✗ Output has no frontmatter")
+                    return False
+            else:
+                print(f"  ✗ Output has no frontmatter")
+                return False
 
     # Ensure en_commit is present
     if en_commit and "en_commit:" not in output:
-        output = output.replace("\n---\n", f"\nen_commit: \"{en_commit}\"\nen_file: \"{en_file}\"\n---\n", 1)
+        output = output.replace("\n---\n", f'\nen_commit: "{en_commit}"\nen_file: "{en_file}"\n---\n', 1)
 
     # Truncation guard
     if len(output) < len(en_content) * 0.70:
