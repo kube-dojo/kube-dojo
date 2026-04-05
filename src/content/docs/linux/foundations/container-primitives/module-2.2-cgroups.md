@@ -164,6 +164,8 @@ cat /sys/fs/cgroup/cgroup.controllers 2>/dev/null && echo "v2" || echo "v1 or mi
 
 ### How Memory Limits Work
 
+> **Stop and think**: If a Java application with a 512MB heap size is placed in a container with a 512MB cgroup memory limit, it will almost certainly be OOMKilled. Why? Consider what else inside the container's environment or the JVM process requires memory beyond just the allocated heap space.
+
 ```
 ┌────────────────────────────────────────────────────────────────┐
 │                    CONTAINER MEMORY                             │
@@ -231,6 +233,8 @@ cat /sys/fs/cgroup/user.slice/memory.stat
 ## CPU Limits
 
 ### How CPU Limits Work
+
+> **Pause and predict**: If you set a CPU limit of `0.5` (500m) for a single-threaded Node.js application, and it receives a massive spike in traffic, what will happen to the response time? Will the container crash, or will something else occur at the kernel level?
 
 Unlike memory, CPU doesn't trigger kills—it **throttles**.
 
@@ -406,89 +410,52 @@ systemctl show docker.service -p MemoryMax
 ## Quiz
 
 ### Question 1
-What's the difference between memory request and limit in Kubernetes?
+You are deploying a critical database pod and set its memory request to 4GB and memory limit to 8GB. During a sudden traffic spike, the pod's memory usage reaches 6GB, and the Node it is running on experiences severe memory pressure, running out of allocatable RAM. What will the kubelet and the kernel do to this pod, and why?
 
 <details>
 <summary>Show Answer</summary>
 
-- **Request**: Used for **scheduling** — Kubernetes ensures the node has this much memory available. The container is guaranteed this amount.
-
-- **Limit**: Used for **enforcement** — Kernel enforces via cgroup. If exceeded, the container is OOM killed.
-
-Request affects where the pod lands; limit affects what happens if it uses too much.
+The pod is at risk of being evicted or OOMKilled, despite being under its 8GB limit. **Why?** When a node experiences memory pressure, Kubernetes evicts pods to reclaim memory. Because the pod is using more than its 4GB *request* (it's using 6GB), it falls into the "Burstable" QoS class and is actively consuming resources beyond its guaranteed baseline. The kernel's OOM killer or the kubelet eviction manager will target pods that exceed their requests before touching pods that are strictly within their requested boundaries. Setting requests equal to limits (Guaranteed QoS) would have protected this critical database from being the first victim.
 
 </details>
 
 ### Question 2
-Why might a container use less than 100% CPU even under load?
+Your team deploys a video encoding application. The developers complain that the application is running slowly, but when they check monitoring tools, the container is only using 40% of the node's CPU capacity. They insist the node must have a hardware issue. How do you explain this behavior using cgroups?
 
 <details>
 <summary>Show Answer</summary>
 
-**CPU throttling**. If a CPU limit is set, the container can only use a certain amount of CPU time per period (typically 100ms). After using its quota, it's throttled until the next period.
-
-Example: 500m limit = 50ms per 100ms period. Container runs at 100% for 50ms, then waits 50ms.
-
-Check `cpu.stat` for `nr_throttled` and `throttled_usec`.
+The container is experiencing CPU throttling enforced by the Completely Fair Scheduler (CFS) bandwidth control in cgroups. **Why?** The deployment likely has a CPU limit set (e.g., `limit: 400m` on a 1-core node). The cgroup translates this limit into a specific quota of CPU time allowed per period (usually 100ms). Once the video encoder uses up its allotted quota (e.g., 40ms) within that period, the kernel pauses the process until the next period begins. This manifests as the application artificially running slowly without ever reaching 100% host CPU utilization, as the cgroup restricts its access to the physical cores.
 
 </details>
 
 ### Question 3
-What happens when a container exceeds its memory limit?
+A developer sets a memory limit of 512MB for a Python data processing container. The application attempts to load a 600MB dataset entirely into RAM. The developer expects the application to throw a catchable `MemoryError` exception so they can log it and gracefully exit. Instead, the container simply vanishes and restarts. What kernel mechanism caused this, and why didn't the application catch the error?
 
 <details>
 <summary>Show Answer</summary>
 
-The kernel's **OOM killer immediately terminates** the process (SIGKILL). There's no warning, no graceful shutdown, no chance to save state.
-
-This is why:
-- Memory limits must be appropriate for the workload
-- Applications should handle restart gracefully
-- Monitoring memory usage is critical
+The kernel's Out-Of-Memory (OOM) killer intervened and terminated the container abruptly. **Why?** cgroup memory limits represent a hard boundary enforced by the Linux kernel, not the language runtime. When the container's total memory footprint attempts to exceed the `memory.max` value set in its cgroup, the kernel immediately sends a `SIGKILL` signal to the process. A `SIGKILL` cannot be caught, blocked, or handled by the application code (unlike a soft memory exception thrown by a runtime). Therefore, the Python process never gets a chance to log the error or gracefully shut down before the container is restarted by Kubernetes or Docker.
 
 </details>
 
 ### Question 4
-How is cgroups v2 different from v1?
+You are upgrading your Kubernetes cluster to a version that enforces cgroups v2. A legacy monitoring daemonset in your cluster fails to start, complaining that it cannot find `/sys/fs/cgroup/memory/memory.usage_in_bytes`. What architectural change between cgroups v1 and v2 is causing this failure?
 
 <details>
 <summary>Show Answer</summary>
 
-Key differences:
-
-| Aspect | v1 | v2 |
-|--------|----|----|
-| Hierarchy | Multiple (per controller) | Single unified |
-| Process membership | Different groups per controller | One group |
-| Memory pressure | Not available | Available |
-| Management | Complex | Simpler |
-
-v2 is now default in Kubernetes 1.25+.
+The monitoring tool is failing because cgroups v2 uses a unified hierarchy, whereas cgroups v1 used separate hierarchies for every resource controller. **Why?** In cgroups v1, CPU, memory, and PIDs were mounted in different directory trees (e.g., `/sys/fs/cgroup/memory/...` and `/sys/fs/cgroup/cpu/...`), allowing a process to belong to different groups for different resources. cgroups v2 simplifies this by placing a process in exactly one cgroup path (e.g., `/sys/fs/cgroup/user.slice/...`), and all resource controllers (memory, CPU, I/O) are managed via files in that single directory (like `memory.current` and `cpu.max`). The legacy tool is hardcoded to look for the v1 split-directory structure and specific v1 filenames, which no longer exist in a v2 environment.
 
 </details>
 
 ### Question 5
-Where would you find a container's cgroup settings?
+You are investigating a node where a specific Docker container is mysteriously running very slowly. You want to manually check the raw kernel values to see if the container's CPU quota has been artificially restricted. Walk through the exact steps you would take on the host system to find this container's specific CPU limit configuration in cgroups v2.
 
 <details>
 <summary>Show Answer</summary>
 
-```bash
-# 1. Get container PID
-docker inspect <container> --format '{{.State.Pid}}'
-
-# 2. Find its cgroup
-cat /proc/<pid>/cgroup
-
-# 3. Access settings (v2 example)
-cat /sys/fs/cgroup/<cgroup-path>/memory.max
-cat /sys/fs/cgroup/<cgroup-path>/cpu.max
-```
-
-Or search:
-```bash
-find /sys/fs/cgroup -name "*<container-id>*" 2>/dev/null
-```
+You must first find the process ID (PID) of the container and then trace it to its cgroup path. **Why?** Containers are just isolated processes to the kernel, so their cgroup configurations are tied to their PID. First, you would run `docker inspect <container_name> --format '{{.State.Pid}}'` to get the host PID. Next, you read `/proc/<PID>/cgroup` to discover the exact unified cgroup path assigned to that process (e.g., `0::/system.slice/docker-<id>.scope`). Finally, you append that path to the cgroup mount point (`/sys/fs/cgroup`) and inspect the `cpu.max` file (e.g., `cat /sys/fs/cgroup/system.slice/docker-<id>.scope/cpu.max`) to see the raw quota and period values causing the throttling.
 
 </details>
 
