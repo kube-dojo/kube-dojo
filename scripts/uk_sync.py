@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
-"""Ukrainian sync detector — find and fix stale translations.
+"""Ukrainian translation manager — detect, fix, translate, sync.
 
-Detects when English modules have been improved but their Ukrainian
-counterparts haven't been updated. Uses section-level hashing for
-accurate detection and Gemini + MCP RAG for translation fixes.
+One tool for all Ukrainian translation work. Detects stale translations,
+finds missing files, translates new modules, and fixes incomplete ones.
+Uses Gemini + MCP RAG for translation with Ukrainian quality verification.
 
 Usage:
-    .venv/bin/python scripts/uk_sync.py detect
-    .venv/bin/python scripts/uk_sync.py detect --section k8s/cka
-    .venv/bin/python scripts/uk_sync.py detect --json
-    .venv/bin/python scripts/uk_sync.py fix <uk-file-path>
-    .venv/bin/python scripts/uk_sync.py fix-section k8s/cka
+    .venv/bin/python scripts/uk_sync.py status                    # full report
+    .venv/bin/python scripts/uk_sync.py status --section prereqs  # scoped
+    .venv/bin/python scripts/uk_sync.py fix <uk-file>             # fix one stale file
+    .venv/bin/python scripts/uk_sync.py fix-section <section>     # fix stale in section
+    .venv/bin/python scripts/uk_sync.py translate <en-file>       # translate new module
+    .venv/bin/python scripts/uk_sync.py translate-section <sect>  # translate all missing
+    .venv/bin/python scripts/uk_sync.py e2e <section>             # full cycle
 """
 
 from __future__ import annotations
@@ -360,8 +362,227 @@ def fix_module(uk_path: Path, report: SyncReport | None = None) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Completeness detection (merged from check_uk_completeness.py)
+# ---------------------------------------------------------------------------
+
+def find_missing_translations(section: str | None = None) -> list[Path]:
+    """Find EN modules that have no UK translation file."""
+    root = CONTENT_ROOT / section if section else CONTENT_ROOT
+    en_modules = sorted(root.glob("**/module-*.md"))
+    en_modules = [m for m in en_modules if "/uk/" not in str(m)]
+    missing = []
+    for en in en_modules:
+        rel = en.relative_to(CONTENT_ROOT)
+        uk = UK_ROOT / rel
+        if not uk.exists():
+            missing.append(en)
+    return missing
+
+
+def find_untranslated_paragraphs(section: str | None = None) -> dict[Path, list[tuple[int, str]]]:
+    """Find UK files with English paragraphs that should be translated."""
+    root = UK_ROOT / section if section and (UK_ROOT / section).exists() else UK_ROOT
+    suspect: dict[Path, list[tuple[int, str]]] = {}
+
+    for f in sorted(root.glob("**/*.md")):
+        content = f.read_text()
+        lines = content.split("\n")
+        en_lines: list[tuple[int, str]] = []
+        in_code = False
+        in_frontmatter = False
+        fm_count = 0
+
+        for i, line in enumerate(lines, 1):
+            if line.strip() == "---":
+                fm_count += 1
+                in_frontmatter = fm_count < 2
+                continue
+            if in_frontmatter or in_code:
+                if line.strip().startswith("```"):
+                    in_code = not in_code
+                continue
+            if line.strip().startswith("```"):
+                in_code = not in_code
+                continue
+            stripped = line.strip()
+            if not stripped or stripped.startswith(("#", "|", "<", "[", "!", ">", "-")):
+                continue
+            if len(stripped) < 50:
+                continue
+            cyrillic = len(re.findall(r"[\u0400-\u04FF]", stripped))
+            latin = len(re.findall(r"[a-zA-Z]", stripped))
+            total = cyrillic + latin
+            if total > 30 and latin > 0 and cyrillic / max(total, 1) < 0.1:
+                en_lines.append((i, stripped[:120]))
+
+        if en_lines:
+            suspect[f] = en_lines
+
+    return suspect
+
+
+# ---------------------------------------------------------------------------
+# Translate new — create UK file from scratch
+# ---------------------------------------------------------------------------
+
+TRANSLATE_NEW_PROMPT = """You are translating a KubeDojo module from English to Ukrainian.
+
+RULES:
+- Translate ALL content to Ukrainian
+- Keep all technical terms in English: kubectl, Kubernetes, Pod, Deployment, Service, RBAC, YAML, etc.
+- Follow the glossary: cluster=кластер, container=контейнер, namespace=простір імен, node=вузол
+- Translate learning outcome verbs to bold infinitive: **Налаштувати**, **Створити**, **Діагностувати**
+- Translate inline prompts: "Pause and predict" → "Зупиніться та подумайте"
+- Translate section headings: "Learning Outcomes" → "Що ви зможете зробити", "Why This Module Matters" → "Чому це важливо", "Common Mistakes" → "Типові помилки", "Did You Know?" → "Чи знали ви?", "Quiz" → "Контрольні запитання", "Hands-On Exercise" → "Практична вправа", "Next Module" → "Наступний модуль"
+- No Russicisms (no ы, ё, ъ, э)
+- Keep code blocks, YAML, and bash commands UNCHANGED
+- Output length should be 95-105% of the English original
+- Output the COMPLETE Ukrainian file starting with --- frontmatter
+
+FRONTMATTER RULES:
+- Translate the title to Ukrainian
+- Keep slug and sidebar.order exactly as in English
+- Add en_commit and en_file fields (provided below)
+
+Use your MCP tools to verify Ukrainian quality:
+- verify_words for VESUM validation
+- query_r2u to check for Russicisms
+- search_style_guide for consistency
+
+ENGLISH SOURCE FILE ({en_path}):
+{en_content}
+
+FRONTMATTER TO USE:
+en_commit: "{en_commit}"
+en_file: "{en_file}"
+"""
+
+
+def translate_new_module(en_path: Path) -> bool:
+    """Create a new UK translation from an EN module."""
+    rel = en_path.relative_to(CONTENT_ROOT)
+    uk_path = UK_ROOT / rel
+
+    if uk_path.exists():
+        print(f"  ✗ UK file already exists: {uk_path}")
+        print(f"    Use 'fix' to update it, or delete it first")
+        return False
+
+    en_content = en_path.read_text()
+    en_commit = _get_en_file_commit(en_path)
+    en_file = f"src/content/docs/{rel}"
+
+    print(f"  Translating: {rel}")
+
+    prompt = TRANSLATE_NEW_PROMPT.format(
+        en_path=rel,
+        en_content=en_content,
+        en_commit=en_commit,
+        en_file=en_file,
+    )
+
+    ok, output = dispatch_gemini_with_retry(prompt, mcp=True, timeout=300)
+
+    if not ok or not output.strip():
+        print(f"  ✗ Translation failed")
+        return False
+
+    # Strip markdown wrapper
+    if output.startswith("```"):
+        lines = output.split("\n")
+        output = "\n".join(lines[1:-1]) if lines[-1].strip() == "```" else output
+
+    # Ensure frontmatter
+    if not output.startswith("---"):
+        fm_start = output.find("---\n")
+        if fm_start > 0 and fm_start < 2000:
+            output = output[fm_start:]
+        else:
+            print(f"  ✗ Output has no frontmatter")
+            return False
+
+    # Ensure en_commit is present
+    if en_commit and "en_commit:" not in output:
+        output = output.replace("\n---\n", f"\nen_commit: \"{en_commit}\"\nen_file: \"{en_file}\"\n---\n", 1)
+
+    # Truncation guard
+    if len(output) < len(en_content) * 0.70:
+        print(f"  ✗ Output truncated: {len(output)} chars vs {len(en_content)} EN ({len(output)/len(en_content):.0%})")
+        return False
+
+    # Verify Ukrainian quality
+    check_results = ukrainian.run_all(output, uk_path)
+    check_errors = [r for r in check_results if not r.passed and r.severity == "ERROR"]
+    if check_errors:
+        print(f"  ⚠ Ukrainian quality issues:")
+        for r in check_errors:
+            print(f"    {r}")
+
+    # Create directory and write
+    uk_path.parent.mkdir(parents=True, exist_ok=True)
+    uk_path.write_text(output)
+    print(f"  ✓ Created {uk_path} ({len(output)} chars, en_commit: {en_commit[:8]})")
+    return True
+
+
+# ---------------------------------------------------------------------------
 # CLI commands
 # ---------------------------------------------------------------------------
+
+def cmd_status(args):
+    """Combined status: stale translations + missing files + incomplete translations."""
+    section = args.section
+
+    # 1. Stale (existing UK files out of sync with EN)
+    uk_dir = UK_ROOT / section if section and (UK_ROOT / section).exists() else UK_ROOT
+    uk_files = sorted(uk_dir.glob("**/module-*.md"))
+    stale_count = 0
+    for uk_path in uk_files:
+        report = detect_sync(uk_path)
+        if report and report.status != "synced":
+            stale_count += 1
+
+    # 2. Missing (EN modules with no UK file)
+    missing = find_missing_translations(section)
+
+    # 3. Incomplete (UK files with English paragraphs)
+    incomplete = find_untranslated_paragraphs(section)
+    incomplete_lines = sum(len(v) for v in incomplete.values())
+
+    # Group missing by track
+    tracks: dict[str, int] = {}
+    for en in missing:
+        rel = str(en.relative_to(CONTENT_ROOT))
+        track = rel.split("/")[0]
+        tracks[track] = tracks.get(track, 0) + 1
+
+    print(f"\n{'='*60}")
+    print(f"  Ukrainian Translation Status{f' ({section})' if section else ''}")
+    print(f"{'='*60}")
+    print(f"  UK files: {len(uk_files)} | Stale: {stale_count} | Missing: {len(missing)} | Incomplete: {len(incomplete)} ({incomplete_lines} lines)")
+    print()
+
+    if missing:
+        print(f"  Missing translations ({len(missing)} files):")
+        for track, count in sorted(tracks.items()):
+            print(f"    {track}: {count}")
+        print()
+
+    if incomplete:
+        print(f"  Incomplete translations ({len(incomplete)} files, {incomplete_lines} English lines):")
+        for f, lines in sorted(incomplete.items())[:10]:
+            rel = str(f.relative_to(UK_ROOT))
+            print(f"    {rel} ({len(lines)} lines)")
+        if len(incomplete) > 10:
+            print(f"    ... +{len(incomplete) - 10} more")
+        print()
+
+    if stale_count:
+        print(f"  Stale translations: {stale_count} files (run 'detect' for details)")
+
+    total_work = len(missing) + len(incomplete) + stale_count
+    print(f"\n  Total work: {total_work} items")
+
 
 def cmd_detect(args):
     """Detect out-of-sync Ukrainian modules."""
@@ -493,14 +714,136 @@ def cmd_fix_section(args):
     sys.exit(0 if failed == 0 else 1)
 
 
+def cmd_translate(args):
+    """Translate a single EN module to Ukrainian."""
+    en_path = Path(args.file)
+    if not en_path.exists():
+        en_path = CONTENT_ROOT / f"{args.file}.md"
+    if not en_path.exists():
+        print(f"EN file not found: {args.file}")
+        sys.exit(1)
+
+    ok = translate_new_module(en_path)
+    sys.exit(0 if ok else 1)
+
+
+def cmd_translate_section(args):
+    """Translate all missing UK modules in a section."""
+    missing = find_missing_translations(args.section)
+    if not missing:
+        print(f"  No missing translations in {args.section}")
+        return
+
+    print(f"  Translating {len(missing)} missing modules in {args.section}...")
+
+    translated = 0
+    failed = 0
+    consecutive_failures = 0
+
+    for en_path in missing:
+        ok = translate_new_module(en_path)
+        if ok:
+            translated += 1
+            consecutive_failures = 0
+        else:
+            failed += 1
+            consecutive_failures += 1
+
+        if consecutive_failures >= 3:
+            print(f"\n  CIRCUIT BREAKER: 3 consecutive translation failures — halting")
+            break
+
+    print(f"\n  Translated: {translated} | Failed: {failed} | Remaining: {len(missing) - translated - failed}")
+    sys.exit(0 if failed == 0 else 1)
+
+
+def cmd_e2e(args):
+    """Full translation cycle: fix stale → translate missing → verify."""
+    section = args.section
+    print(f"\n{'='*60}")
+    print(f"  UK Translation E2E: {section}")
+    print(f"{'='*60}")
+
+    # Phase 1: Fix stale translations
+    uk_dir = UK_ROOT / section if (UK_ROOT / section).exists() else None
+    if uk_dir:
+        uk_files = sorted(uk_dir.glob("**/module-*.md"))
+        stale = 0
+        fixed = 0
+        for uk_path in uk_files:
+            report = detect_sync(uk_path)
+            if report and report.status != "synced":
+                stale += 1
+                print(f"\n  Fixing stale: {uk_path.name}")
+                if fix_module(uk_path, report):
+                    fixed += 1
+        print(f"\n  Phase 1 (fix stale): {fixed}/{stale} fixed")
+    else:
+        print(f"\n  Phase 1: no existing UK dir for {section} — skipping")
+
+    # Phase 2: Translate missing
+    missing = find_missing_translations(section)
+    if missing:
+        print(f"\n  Phase 2: translating {len(missing)} missing modules...")
+        translated = 0
+        consecutive_failures = 0
+        for en_path in missing:
+            ok = translate_new_module(en_path)
+            if ok:
+                translated += 1
+                consecutive_failures = 0
+            else:
+                consecutive_failures += 1
+            if consecutive_failures >= 3:
+                print(f"\n  CIRCUIT BREAKER: 3 consecutive failures — halting")
+                break
+        print(f"\n  Phase 2 (translate new): {translated}/{len(missing)} done")
+    else:
+        print(f"\n  Phase 2: no missing translations")
+
+    # Phase 3: Verify
+    incomplete = find_untranslated_paragraphs(section)
+    if incomplete:
+        print(f"\n  Phase 3 (verify): {len(incomplete)} files still have English content")
+        for f, lines in sorted(incomplete.items())[:5]:
+            rel = str(f.relative_to(UK_ROOT))
+            print(f"    {rel} ({len(lines)} lines)")
+    else:
+        print(f"\n  Phase 3 (verify): all clean")
+
+    print(f"\n{'='*60}")
+    print(f"  E2E complete for {section}")
+    print(f"{'='*60}")
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Ukrainian sync detector — find and fix stale translations",
+        description="Ukrainian translation manager — detect, fix, translate, sync",
+        epilog="""commands:
+  status                           combined report: missing + stale + incomplete
+  detect                           detailed stale detection with section hashing
+  fix <uk-file>                    fix one stale UK file via Gemini+MCP
+  fix-section <section>            fix all stale in section
+  translate <en-file>              create new UK translation from EN module
+  translate-section <section>      translate all missing UK files in section
+  e2e <section>                    full cycle: fix stale → translate new → verify
+
+examples:
+  uk_sync.py status --section prerequisites
+  uk_sync.py fix-section k8s/cka
+  uk_sync.py translate src/content/docs/prerequisites/zero-to-terminal/module-0.6-git-basics.md
+  uk_sync.py translate-section prerequisites
+  uk_sync.py e2e prerequisites
+""", formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     subparsers = parser.add_subparsers(dest="command", help="Command")
 
+    # status
+    stp = subparsers.add_parser("status", help="Combined translation status report")
+    stp.add_argument("--section", help="Limit to section (e.g., prerequisites, k8s/cka)")
+
     # detect
-    dp = subparsers.add_parser("detect", help="Detect out-of-sync UK modules")
+    dp = subparsers.add_parser("detect", help="Detailed stale detection with section hashing")
     dp.add_argument("--section", help="Limit to section (e.g., k8s/cka)")
     dp.add_argument("--json", action="store_true", help="Output as JSON")
 
@@ -512,13 +855,34 @@ def main():
     fsp = subparsers.add_parser("fix-section", help="Fix all stale UK modules in a section")
     fsp.add_argument("section", help="Section path (e.g., k8s/cka)")
 
+    # translate
+    tp = subparsers.add_parser("translate", help="Create new UK translation from EN module")
+    tp.add_argument("file", help="EN file path")
+
+    # translate-section
+    tsp = subparsers.add_parser("translate-section", help="Translate all missing UK files in section")
+    tsp.add_argument("section", help="Section path (e.g., prerequisites)")
+
+    # e2e
+    ep = subparsers.add_parser("e2e", help="Full cycle: fix stale → translate new → verify")
+    ep.add_argument("section", help="Section path (e.g., prerequisites)")
+
     args = parser.parse_args()
 
     if not args.command:
         parser.print_help()
         sys.exit(1)
 
-    {"detect": cmd_detect, "fix": cmd_fix, "fix-section": cmd_fix_section}[args.command](args)
+    cmd_map = {
+        "status": cmd_status,
+        "detect": cmd_detect,
+        "fix": cmd_fix,
+        "fix-section": cmd_fix_section,
+        "translate": cmd_translate,
+        "translate-section": cmd_translate_section,
+        "e2e": cmd_e2e,
+    }
+    cmd_map[args.command](args)
 
 
 if __name__ == "__main__":

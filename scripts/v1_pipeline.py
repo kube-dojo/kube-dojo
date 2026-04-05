@@ -43,13 +43,20 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = LOG_DIR / f"run_{datetime.now(UTC).strftime('%Y%m%dT%H%M%S')}.log"
 
 _original_print = builtins.print
+_quiet = False  # set by e2e command
 
 
 def _logged_print(*args, **kwargs):
-    _original_print(*args, **kwargs)
     msg = " ".join(str(a) for a in args)
+    # Always write to log file
     with open(LOG_FILE, "a", encoding="utf-8") as f:
         f.write(f"[{datetime.now(UTC).strftime('%H:%M:%S')}] {msg}\n")
+    # Only print to stdout if not in quiet mode, or if it's a summary/error line
+    if not _quiet:
+        _original_print(*args, **kwargs)
+    elif any(k in msg for k in ("PASS", "FAIL", "CIRCUIT", "E2E COMPLETE", "SECTION:", "PHASE 1",
+                                  "SKIP:", "Resumed:", "passed,", "BREAKER")):
+        _original_print(*args, **kwargs)
 
 
 builtins.print = _logged_print
@@ -1027,6 +1034,10 @@ def cmd_resume(args):
 
 def cmd_e2e(args):
     """End-to-end pipeline: resume stuck modules, then process all sections."""
+    global _quiet
+    _quiet = not getattr(args, "verbose", False)
+    _original_print(f"  Logging to: {LOG_FILE}")
+    _original_print(f"  Use --verbose or tail -f {LOG_FILE} for full output\n")
     models = _apply_model_overrides(args)
     state = load_state()
 
@@ -1225,11 +1236,22 @@ def cmd_gap_check(args):
 def main():
     parser = argparse.ArgumentParser(
         description="KubeDojo Module Quality Pipeline v1",
+        epilog="""quick start:
+  status                           show progress across all 700+ modules
+  e2e certs                        run all cert tracks (CKA, CKAD, CKS, KCNA, KCSA)
+  e2e prereqs cloud                run prerequisites + cloud
+  e2e                              run everything (overnight batch)
+  resume                           retry stuck modules only
+
+models (default: gemini-3.1-pro-preview for all steps):
+  --audit-model claude-opus-4-6    use Claude for scoring
+  --review-model claude-opus-4-6   use Claude for review
+""", formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     # Global model overrides
-    parser.add_argument("--audit-model", help="Model for AUDIT+PLAN step")
-    parser.add_argument("--write-model", help="Model for WRITE step")
-    parser.add_argument("--review-model", help="Model for REVIEW step")
+    parser.add_argument("--audit-model", help="Model for AUDIT+PLAN step (default: gemini-3.1-pro-preview)")
+    parser.add_argument("--write-model", help="Model for WRITE step (default: gemini-3.1-pro-preview)")
+    parser.add_argument("--review-model", help="Model for REVIEW step (default: gemini-3.1-pro-preview)")
 
     subparsers = parser.add_subparsers(dest="command", help="Pipeline command")
 
@@ -1290,6 +1312,7 @@ examples:
   e2e k8s/cka              single section
 """, formatter_class=argparse.RawDescriptionHelpFormatter)
     e2e_parser.add_argument("sections", nargs="*", help="track aliases or section paths (default: all)")
+    e2e_parser.add_argument("--verbose", "-v", action="store_true", help="print full output to stdout (default: quiet, log only)")
 
     args = parser.parse_args()
 
