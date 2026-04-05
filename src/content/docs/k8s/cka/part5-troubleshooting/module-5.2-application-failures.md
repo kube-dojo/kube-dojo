@@ -52,9 +52,10 @@ By the end of this module, you'll be able to:
 
 ## Did You Know?
 
-- **CrashLoopBackOff has exponential backoff**: It starts at 10s, then 20s, 40s, up to 5 minutes between restart attempts
-- **Init containers run first**: If init containers fail, main containers never start - many people forget to check them
-- **ImagePullBackOff vs ErrImagePull**: ErrImagePull is the first failure, ImagePullBackOff is after multiple retries
+- **CrashLoopBackOff has exponential backoff**: It starts at 10s, then 20s, 40s, up to 5 minutes between restart attempts.
+- **Init containers run first**: If init containers fail, main containers never start - many people forget to check them.
+- **ImagePullBackOff vs ErrImagePull**: ErrImagePull is the first failure, ImagePullBackOff is after multiple retries.
+- **OOMKilled doesn't always mean a memory leak**: It can simply mean your `limits` are set lower than the application's baseline startup requirement.
 
 ---
 
@@ -129,6 +130,8 @@ k get nodes --show-labels
 
 ### 1.3 ContainerCreating - Preparation Issues
 
+> **Stop and think**: If a pod is stuck in `ContainerCreating` for 5 minutes, what is the most likely external dependency causing the hang?
+
 When a pod is stuck in ContainerCreating:
 
 ```bash
@@ -191,6 +194,8 @@ k describe pvc <name>
 
 ### 2.2 CrashLoopBackOff Investigation
 
+> **Pause and predict**: If a pod has restarted 50 times but currently shows as `Running`, how can you find out why it crashed previously?
+
 **Step-by-step approach**:
 
 ```bash
@@ -220,10 +225,11 @@ k get pod <pod> -o jsonpath='{.status.containerStatuses[0].lastState.terminated.
 | 2 | - | Misuse of shell builtin | Script error |
 | 126 | - | Command not executable | Permission issue |
 | 127 | - | Command not found | Wrong entrypoint/command |
-| 128+N | Signal N | Killed by signal | See below |
+| 128+N | Signal N | Killed by signal | Fatal error raised by OS |
 | 137 | SIGKILL (9) | Force killed | OOMKilled, or `kill -9` |
 | 139 | SIGSEGV (11) | Segmentation fault | Application bug |
 | 143 | SIGTERM (15) | Graceful termination | Normal shutdown |
+| 255 | - | Unknown/Custom error | Application specific fatal error |
 
 ### 2.4 OOMKilled Investigation
 
@@ -340,6 +346,8 @@ k create secret docker-registry dockerhub \
 
 ### 4.1 Missing ConfigMap/Secret
 
+> **Pause and predict**: What exact pod status would you expect if a referenced Secret does not exist in the namespace?
+
 **Symptoms**:
 - Pod stuck in ContainerCreating
 - Events show "configmap not found" or "secret not found"
@@ -415,6 +423,8 @@ k get pod <pod> -o yaml | grep -A 5 valueFrom
 ## Part 5: Deployment Rollout Failures
 
 ### 5.1 Stuck Deployments
+
+> **Stop and think**: If `kubectl rollout status` hangs indefinitely, what object should you describe next to find the actual pod creation errors?
 
 **Symptoms**:
 - `k rollout status deployment/<name>` hangs
@@ -580,93 +590,72 @@ livenessProbe:
 | Wrong resource units | Unexpected OOM or throttling | Use correct units: Mi, Gi, m |
 | Liveness probe too aggressive | Healthy containers killed | Increase timeouts and failure threshold |
 | Forgetting imagePullSecrets | Private images fail | Add secrets at ServiceAccount or pod level |
+| Using `restartPolicy: Never` for Deployments | Pods won't restart on failure | Deployments require `Always`. Use Jobs for run-once tasks. |
+| Overlooking namespace | "Pod not found" errors | Always add `-n <namespace>` or set default namespace context |
 
 ---
 
 ## Quiz
 
 ### Q1: Exit Code Analysis
-A container has exit code 1 with logs showing "Error: REDIS_HOST not set". What's the fix?
+> **Stop and think**: You deploy a new version of your application. The pod immediately goes into CrashLoopBackOff. When you check the status, the container shows exit code 1, and the logs end with "Error: REDIS_HOST not set". What exactly happened and how do you fix it?
 
 <details>
 <summary>Answer</summary>
-
-The application is missing a required environment variable. Fix by adding it:
-
-```bash
-k set env deployment/<name> REDIS_HOST=redis-service
-```
-
-Or verify the ConfigMap/Secret that should provide it exists and is correctly referenced.
-
+The application is missing a required environment variable, which causes the application process to terminate with a generic error (exit code 1). Kubernetes sees the main process exit and restarts the container, leading to CrashLoopBackOff. You can fix this by adding the variable directly using `k set env` or by verifying that the referenced ConfigMap/Secret exists and contains the correct key.
 </details>
 
 ### Q2: Image Pull Sequence
-What's the difference between ErrImagePull and ImagePullBackOff?
+> **Pause and predict**: A developer typoed an image name as `nginx:1.255` in a new Deployment. You decide to watch the pod status. What sequence of statuses will you observe over the next 5 minutes?
 
 <details>
 <summary>Answer</summary>
-
-- **ErrImagePull**: Initial failure to pull the image (first attempt)
-- **ImagePullBackOff**: State after multiple failed pull attempts, with exponential backoff between retries
-
-ErrImagePull transitions to ImagePullBackOff after the first failure. The pod alternates between trying to pull and backing off.
-
+The pod will first show `ErrImagePull`, and then transition to `ImagePullBackOff`. 
+Why? `ErrImagePull` is the immediate status after the first failed attempt to pull the non-existent image tag. After Kubernetes retries and fails again, it enters `ImagePullBackOff` which uses exponential backoff to space out retry attempts, preventing registry hammering.
 </details>
 
 ### Q3: Pending Diagnosis
-A pod is Pending with message "0/3 nodes are available: 3 Insufficient memory". All nodes have 8GB RAM. What do you check?
+> **Stop and think**: You apply a pod manifest and it remains stuck in Pending state. `kubectl describe pod` reveals the message: "0/3 nodes are available: 3 Insufficient memory". You know all 3 nodes have 8GB RAM physically available. What is actually preventing the pod from scheduling?
 
 <details>
 <summary>Answer</summary>
-
-Check:
-1. Pod's memory request: `k get pod <pod> -o jsonpath='{.spec.containers[0].resources.requests.memory}'`
-2. Allocated resources on nodes: `k describe nodes | grep -A 5 "Allocated resources"`
-3. Running pods' requests: `k top nodes`
-
-The requests from existing pods plus this pod's request exceeds available memory. Either reduce requests or add capacity.
-
+The Kubernetes scheduler cannot find a node with enough unallocated memory to satisfy the pod's memory `requests`. Even if nodes have physical memory available, the scheduler only looks at what has been formally requested by other running pods. To fix this, you must either reduce the memory requests of the pending pod, delete other pods to free up allocated capacity, or add a new node to the cluster.
 </details>
 
 ### Q4: CrashLoopBackOff Max
-What's the maximum backoff time between container restart attempts?
+> **Pause and predict**: A pod has been in CrashLoopBackOff for 2 hours due to a bad configuration. You finally locate the issue and fix the ConfigMap it depends on. How long might you have to wait for Kubernetes to automatically restart the container, and why?
 
 <details>
 <summary>Answer</summary>
-
-**5 minutes (300 seconds)**. The backoff doubles each time: 10s, 20s, 40s, 80s, 160s, 300s. It stays at 300s until the container runs successfully for 10 minutes, then resets.
-
+You might have to wait up to **5 minutes (300 seconds)**. 
+Why? Kubernetes uses an exponential backoff delay for crashing containers (10s, 20s, 40s, 80s, 160s, up to a maximum of 300s). Since the pod has been crashing for 2 hours, it has hit the 5-minute maximum cap and will only retry once every 5 minutes. You can manually delete the pod to force an immediate restart instead of waiting.
 </details>
 
 ### Q5: Init Container Failure
-Main container never starts, but there are no errors in its logs. Where do you look?
+> **Stop and think**: A new Deployment scales up, but the pod's main container never starts. You run `kubectl logs <pod>` and the output is completely empty. What hidden component should you investigate next?
 
 <details>
 <summary>Answer</summary>
-
-Check **init containers**:
-```bash
-k get pod <pod> -o jsonpath='{.spec.initContainers[*].name}'
-k logs <pod> -c <init-container-name>
-```
-
-Init containers run first and must all complete successfully before main containers start. If an init container fails, the main container never begins.
-
+You need to check the logs of the pod's **init containers** using `kubectl logs <pod> -c <init-container-name>`. 
+By design, Kubernetes executes init containers sequentially before any app containers are started. If an init container exits with an error or gets stuck, the pod remains in an initialization phase and the main container's process is never launched. Therefore, its logs will be entirely empty.
 </details>
 
 ### Q6: Rollback Decision
-Deployment is stuck mid-rollout. Old ReplicaSet has 2 pods, new has 1 pod in CrashLoopBackOff. What's the quickest fix?
+> **Pause and predict**: You trigger an image update on a critical Deployment. The rollout gets stuck midway. You see that the old ReplicaSet still has 2 running pods, but the new ReplicaSet has 1 pod stuck in CrashLoopBackOff. What is the fastest way to restore full capacity safely?
 
 <details>
 <summary>Answer</summary>
+Executing `kubectl rollout undo deployment/<name>` is the quickest and safest fix. 
+Executing this command will immediately revert the deployment to its previous stable revision. This scales the old ReplicaSet back up to full capacity and terminates the failing pods in the new ReplicaSet, restoring service availability rapidly. Once the system is stable, you can investigate the root cause of the CrashLoopBackOff in the failed revision without impacting production traffic.
+</details>
 
-```bash
-k rollout undo deployment/<name>
-```
+### Q7: Readiness vs Liveness
+> **Stop and think**: Your Java application takes 30 seconds to load data into memory before it can serve requests. You configure a liveness probe that checks the `/health` endpoint immediately on startup. What happens to the pod?
 
-This immediately rolls back to the previous working version. You can then investigate the failing image/config at leisure.
-
+<details>
+<summary>Answer</summary>
+The container will likely enter a CrashLoopBackOff state before it ever finishes loading. 
+Why? Because the liveness probe starts checking immediately (without an `initialDelaySeconds`) and fails because the app isn't ready. A failed liveness probe instructs Kubernetes to restart the container, actively interrupting the 30-second initialization. To fix this, you should use a `startupProbe` to cover the loading period, or add an `initialDelaySeconds` to the liveness probe.
 </details>
 
 ---
