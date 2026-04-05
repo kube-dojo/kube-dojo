@@ -35,6 +35,8 @@ After this module, you will be able to:
 
 **seccomp (Secure Computing Mode)** filters system calls at the kernel level. Unlike AppArmor or SELinux which control resource access, seccomp controls which kernel functions a process can call at all.
 
+> **Stop and think**: If AppArmor is already restricting a container from accessing `/etc/shadow`, what additional security value does blocking the `open` system call via seccomp provide? Consider the difference between restricting *targets* versus restricting *actions*.
+
 Understanding seccomp helps you:
 
 - **Reduce attack surface** — Block dangerous syscalls entirely
@@ -91,6 +93,8 @@ When a container gets "operation not permitted" for something root should be abl
 │  Kernel executes syscall (if allowed)                           │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+> **Pause and predict**: If a seccomp filter evaluates a syscall and encounters multiple matching rules with different actions (e.g., one rule says `SCMP_ACT_ALLOW` and another says `SCMP_ACT_KILL`), how should the kernel resolve the conflict to prioritize security?
 
 ### seccomp Actions
 
@@ -258,6 +262,8 @@ docker run --security-opt seccomp=/path/to/profile.json nginx
 # Disable seccomp (dangerous!)
 docker run --security-opt seccomp=unconfined nginx
 ```
+
+> **Stop and think**: Kubernetes provides a `RuntimeDefault` seccomp profile. In a highly locked-down environment, why might relying solely on `RuntimeDefault` be insufficient for a container that only runs a simple static Go web server?
 
 ### Kubernetes seccomp
 
@@ -460,96 +466,52 @@ docker run --rm --security-opt seccomp=/tmp/test-seccomp.json alpine echo "hello
 ## Quiz
 
 ### Question 1
-What's the difference between seccomp's KILL and ERRNO actions?
+You are deploying a legacy third-party application in a container. During staging, the application unexpectedly crashes immediately upon startup without writing any error logs. You suspect a seccomp violation. If the current profile uses `SCMP_ACT_KILL` as the default action, why would changing it to `SCMP_ACT_ERRNO` help diagnose the issue, and what are the security trade-offs of leaving it as `SCMP_ACT_ERRNO` in production?
 
 <details>
 <summary>Show Answer</summary>
 
-- **SCMP_ACT_KILL**: Terminates the thread/process immediately with SIGSYS
-- **SCMP_ACT_ERRNO**: Returns an error code (like EPERM) without killing
-
-KILL is more secure (attacker can't try again) but harder to debug. ERRNO allows graceful handling but gives attackers information.
+Changing the action to `SCMP_ACT_ERRNO` prevents the kernel from immediately terminating the process with a `SIGSYS` signal, which is what `SCMP_ACT_KILL` does. Instead, the kernel blocks the system call and returns an error code (like `EPERM`) back to the application. This allows the application to handle the error gracefully or log a descriptive error message indicating that a specific operation was not permitted, making debugging significantly easier. However, leaving `SCMP_ACT_ERRNO` in production reduces security because an attacker exploiting the application can probe the system to map out exactly which system calls are permitted and which are blocked. `SCMP_ACT_KILL` is strictly safer because it instantly neutralizes compromised threads the moment they attempt an unauthorized action, giving the attacker no feedback.
 
 </details>
 
 ### Question 2
-Why would you use seccomp instead of (or in addition to) AppArmor/SELinux?
+You have perfectly configured AppArmor to ensure a web server container can only read files in `/var/www/html` and cannot write anywhere on the filesystem. A colleague argues that applying a seccomp profile is redundant since the file access is already locked down. Based on how system calls function compared to Mandatory Access Control (MAC) systems, why is your colleague incorrect?
 
 <details>
 <summary>Show Answer</summary>
 
-**Different protection layers**:
-- **seccomp**: Controls which syscalls can be made
-- **AppArmor/SELinux**: Controls what resources can be accessed
-
-Example: AppArmor might allow accessing /etc/, but seccomp could block the `read` syscall entirely for that process.
-
-Defense in depth: Use both for maximum protection.
+Your colleague is incorrect because AppArmor and seccomp operate at different conceptual layers and mitigate different classes of vulnerabilities. AppArmor and SELinux are Mandatory Access Control systems that mediate access to specific resources, such as file paths or network sockets, after the application has already invoked a system call. In contrast, seccomp filters the invocation of the system calls themselves, completely removing kernel surface area. For example, an attacker who finds a remote code execution vulnerability might attempt to execute system calls like `ptrace` or `unshare` to exploit kernel bugs or manipulate memory, which do not involve file paths at all. By using seccomp to block system calls the web server never needs, you eliminate the kernel attack surface entirely, providing defense in depth even if the MAC system is bypassed.
 
 </details>
 
 ### Question 3
-How do you apply a seccomp profile to a Kubernetes pod?
+A security audit requires you to apply a custom, highly restrictive seccomp profile named `api-strict.json` to a deployment of API pods. You have placed the JSON file in the correct directory on all Kubernetes worker nodes. When configuring the Pod specification, what exact fields must you define in the `securityContext` to ensure the pod utilizes this specific file rather than the container runtime's default?
 
 <details>
 <summary>Show Answer</summary>
 
-```yaml
-spec:
-  securityContext:
-    seccompProfile:
-      type: Localhost
-      localhostProfile: profiles/my-profile.json
-```
-
-Profile must exist at `/var/lib/kubelet/seccomp/profiles/my-profile.json` on the node.
-
-Or use `RuntimeDefault` for the container runtime's built-in profile.
+To apply a custom profile located on the worker nodes, you must configure the `seccompProfile` field within the pod's or container's `securityContext` to use the `Localhost` type. Specifically, you need to set `type: Localhost` and provide the relative path to the profile using the `localhostProfile` field, such as `localhostProfile: profiles/api-strict.json`. This tells the Kubelet to look in its default seccomp profile directory (typically `/var/lib/kubelet/seccomp/`) for the specified file and instruct the container runtime to apply it. If you were to use `type: RuntimeDefault`, the container would simply inherit the generic, broad profile provided by Docker or containerd, which would fail to meet the strict requirements of your security audit.
 
 </details>
 
 ### Question 4
-What syscall number is commonly associated with container escapes?
+An automated security scanner flags your container image because it requires the `CAP_SYS_ADMIN` capability to perform its legitimate function. To mitigate the risk of a container escape, you decide to write a custom seccomp profile. Which specific system calls should you explicitly ensure are blocked to prevent an attacker from creating new namespaces or mounting the host filesystem, and why?
 
 <details>
 <summary>Show Answer</summary>
 
-Several dangerous syscalls:
-- **`ptrace` (101)**: Debug other processes
-- **`kexec_load` (246)**: Load new kernel
-- **`mount` (165)**: Mount filesystems
-- **`unshare` (272)**: Create namespaces
-- **`setns` (308)**: Enter namespaces
-
-All are blocked by Docker's default profile.
+To prevent namespace manipulation and filesystem mounting—common techniques for container escapes—you must explicitly block the `unshare`, `setns`, and `mount` system calls. The `unshare` system call allows a process to disassociate parts of its execution context, effectively allowing an attacker to create new, isolated namespaces where they might gain elevated privileges. The `setns` system call allows a process to enter an existing namespace, which could be abused to break out of the container's isolation and join the host's namespaces. Finally, the `mount` system call must be blocked because an attacker with `CAP_SYS_ADMIN` could use it to mount the host's underlying root filesystem into the container, granting them full read and write access to the host node's files. Blocking these system calls neutralizes the most direct vectors for escaping the container boundary.
 
 </details>
 
 ### Question 5
-How do you debug which syscall is being blocked?
+You are migrating a complex Java application to a hardened Kubernetes cluster that enforces a strict custom seccomp profile. Upon deployment, the application pod repeatedly enters a `CrashLoopBackOff` state. You suspect a critical system call is being denied, but the application logs show no errors before terminating. Outline the exact steps you would take at the host kernel level to identify the specific blocked system call.
 
 <details>
 <summary>Show Answer</summary>
 
-1. **Check dmesg**:
-```bash
-sudo dmesg | grep seccomp
-```
-
-2. **Use audit log**:
-```bash
-sudo ausearch -m SECCOMP
-```
-
-3. **Change action to LOG temporarily**:
-```json
-"defaultAction": "SCMP_ACT_LOG"
-```
-
-4. **Use strace**:
-```bash
-strace -f myapp 2>&1 | grep -v "= 0"
-```
+Because seccomp violations often result in immediate process termination via `SIGSYS` (if `SCMP_ACT_KILL` is used), the application will not have a chance to write to its standard error logs. The most reliable way to identify the blocked system call is to inspect the kernel audit logs on the host node where the pod was scheduled. You can do this by SSHing into the worker node and running `sudo dmesg | grep -i seccomp` or `sudo ausearch -m SECCOMP` to view the audit trails. The kernel logs will display an audit event indicating that a system call was denied, along with the PID and the numeric system call ID (e.g., `syscall=157`). Once you have the numeric ID, you can use a tool like `ausyscall <number>` or reference the kernel header files (like `unistd_64.h`) to translate the number into the human-readable system call name, which you can then evaluate for inclusion in your custom profile.
 
 </details>
 
