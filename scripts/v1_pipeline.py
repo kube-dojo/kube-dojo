@@ -982,38 +982,65 @@ def cmd_e2e(args):
     models = _apply_model_overrides(args)
     state = load_state()
 
-    # Ordered by priority — all sections, skips already-done automatically
-    ALL_SECTIONS = [
-        # Prerequisites
-        "prerequisites/zero-to-terminal", "prerequisites/git-deep-dive",
-        "prerequisites/cloud-native-101", "prerequisites/kubernetes-basics",
-        "prerequisites/philosophy-design", "prerequisites/modern-devops",
-        # Certs (highest priority)
-        "k8s/cka", "k8s/ckad", "k8s/cks", "k8s/kcna", "k8s/kcsa",
-        "k8s/extending",
-        # Specialty certs
-        "k8s/pca", "k8s/cba", "k8s/capa", "k8s/kca", "k8s/otca",
-        "k8s/ica", "k8s/cca", "k8s/finops",
-        # Cloud
-        "cloud/aws-essentials", "cloud/gcp-essentials", "cloud/azure-essentials",
-        "cloud/architecture-patterns", "cloud/eks-deep-dive", "cloud/gke-deep-dive",
-        "cloud/aks-deep-dive", "cloud/advanced-operations", "cloud/managed-services",
-        "cloud/enterprise-hybrid",
-        # Platform
-        "platform/foundations", "platform/disciplines", "platform/toolkits",
-        # On-prem
-        "on-premises/planning", "on-premises/provisioning", "on-premises/networking",
-        "on-premises/storage", "on-premises/multi-cluster", "on-premises/security",
-        "on-premises/operations", "on-premises/resilience",
-        # Linux deep dive
-        "linux/foundations/container-primitives", "linux/foundations/networking",
-        "linux/foundations/system-essentials", "linux/foundations/everyday-use",
-        "linux/operations", "linux/security",
-    ]
+    # Track aliases for convenience
+    TRACK_ALIASES = {
+        "prereqs": [
+            "prerequisites/zero-to-terminal", "prerequisites/git-deep-dive",
+            "prerequisites/cloud-native-101", "prerequisites/kubernetes-basics",
+            "prerequisites/philosophy-design", "prerequisites/modern-devops",
+        ],
+        "certs": [
+            "k8s/cka", "k8s/ckad", "k8s/cks", "k8s/kcna", "k8s/kcsa",
+            "k8s/extending",
+        ],
+        "specialty": [
+            "k8s/pca", "k8s/cba", "k8s/capa", "k8s/kca", "k8s/otca",
+            "k8s/ica", "k8s/cca", "k8s/finops",
+        ],
+        "cloud": [
+            "cloud/aws-essentials", "cloud/gcp-essentials", "cloud/azure-essentials",
+            "cloud/architecture-patterns", "cloud/eks-deep-dive", "cloud/gke-deep-dive",
+            "cloud/aks-deep-dive", "cloud/advanced-operations", "cloud/managed-services",
+            "cloud/enterprise-hybrid",
+        ],
+        "platform": [
+            "platform/foundations", "platform/disciplines", "platform/toolkits",
+        ],
+        "on-prem": [
+            "on-premises/planning", "on-premises/provisioning", "on-premises/networking",
+            "on-premises/storage", "on-premises/multi-cluster", "on-premises/security",
+            "on-premises/operations", "on-premises/resilience",
+        ],
+        "linux": [
+            "linux/foundations/container-primitives", "linux/foundations/networking",
+            "linux/foundations/system-essentials", "linux/foundations/everyday-use",
+            "linux/operations", "linux/security",
+        ],
+    }
+
+    # "all" = everything in priority order
+    ALL_SECTIONS = (
+        TRACK_ALIASES["prereqs"] + TRACK_ALIASES["certs"] + TRACK_ALIASES["specialty"]
+        + TRACK_ALIASES["cloud"] + TRACK_ALIASES["platform"] + TRACK_ALIASES["on-prem"]
+        + TRACK_ALIASES["linux"]
+    )
 
     # Phase 1: Resume stuck modules (check, write, review phases)
+    # Only resume modules that belong to the requested sections
+    sections_to_run = ALL_SECTIONS
+    if args.sections:
+        expanded: list[str] = []
+        for s in args.sections:
+            if s in TRACK_ALIASES:
+                expanded.extend(TRACK_ALIASES[s])
+            else:
+                expanded.append(s)
+        sections_to_run = expanded
+
+    section_prefixes = tuple(sections_to_run)
     incomplete = {k: m for k, m in state.get("modules", {}).items()
-                  if m.get("phase") not in ("done", "pending")}
+                  if m.get("phase") not in ("done", "pending")
+                  and k.startswith(section_prefixes)}
     if incomplete:
         print(f"\n{'='*60}")
         print(f"  PHASE 1: Resuming {len(incomplete)} stuck modules")
@@ -1026,11 +1053,6 @@ def cmd_e2e(args):
                 if ok:
                     resumed += 1
         print(f"\n  Resumed: {resumed}/{len(incomplete)} completed")
-
-    # Phase 2: Process all sections
-    sections_to_run = ALL_SECTIONS
-    if args.sections:
-        sections_to_run = args.sections
 
     for section in sections_to_run:
         section_path = CONTENT_ROOT / section
@@ -1187,8 +1209,23 @@ def main():
     subparsers.add_parser("resume", help="Resume incomplete modules")
 
     # e2e
-    e2e_parser = subparsers.add_parser("e2e", help="End-to-end: resume stuck + process all sections")
-    e2e_parser.add_argument("sections", nargs="*", help="Limit to specific sections (default: all)")
+    e2e_parser = subparsers.add_parser("e2e", help="End-to-end: resume stuck + process all sections",
+        epilog="""track aliases:
+  prereqs    zero-to-terminal, git-deep-dive, cloud-native-101, k8s-basics, philosophy, modern-devops
+  certs      cka, ckad, cks, kcna, kcsa, extending
+  specialty  pca, cba, capa, kca, otca, ica, cca, finops
+  cloud      aws, gcp, azure, architecture, eks, gke, aks, advanced-ops, managed, enterprise
+  platform   foundations, disciplines, toolkits
+  on-prem    planning, provisioning, networking, storage, multi-cluster, security, operations, resilience
+  linux      container-primitives, networking, system-essentials, everyday-use, operations, security
+
+examples:
+  e2e                      run everything
+  e2e prereqs              just prerequisites
+  e2e certs cloud          certs + cloud
+  e2e k8s/cka              single section
+""", formatter_class=argparse.RawDescriptionHelpFormatter)
+    e2e_parser.add_argument("sections", nargs="*", help="track aliases or section paths (default: all)")
 
     args = parser.parse_args()
 
