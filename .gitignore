@@ -56,3 +56,4 @@ test_script.sh
 .pids/
 *.bak
 .pipeline/rewrite-output/
+*.staging.md
