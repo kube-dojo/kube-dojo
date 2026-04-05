@@ -56,6 +56,8 @@ When `kubectl exec` doesn't behave as expected, or containers can "see" each oth
 
 A **namespace** wraps a global system resource in an abstraction that makes it appear to processes within the namespace that they have their own isolated instance.
 
+> **Pause and predict**: If a process is placed in a new network namespace, what network interfaces will it see by default?
+
 ```
 ┌────────────────────────────────────────────────────────────────┐
 │                         HOST SYSTEM                             │
@@ -235,6 +237,45 @@ sudo ip netns delete test-ns
 ```
 
 Virtual ethernet pairs (veth) connect container namespaces to host bridges.
+
+---
+
+## Debugging with `nsenter`
+
+When a container lacks debugging tools (like `ip`, `ping`, or `tcpdump`), you can use `nsenter` to run the host's debugging tools *inside* the container's namespaces. This is a critical workflow for troubleshooting "distroless" or stripped-down containers.
+
+> **Stop and think**: If a container image doesn't have `tcpdump` installed, how can you capture its network traffic without modifying the image or installing packages?
+
+### Scenario: Debugging a Container's Network
+
+Imagine you have a container named `web-app` that cannot reach the database. The container image is minimal and lacks networking tools.
+
+1. **Find the container's main PID:**
+   First, you need the process ID (PID) of the container's main process as seen from the host system.
+   ```bash
+   # For Docker
+   PID=$(docker inspect --format '{{.State.Pid}}' web-app)
+   
+   # For containerd / Kubernetes (using crictl)
+   # PID=$(crictl inspect <container_id> | jq .info.pid)
+   
+   echo "Container PID on host: $PID"
+   ```
+
+2. **Enter the network namespace:**
+   Use `nsenter` to run a command (e.g., `ip route`) using the target process's network namespace, but relying on the host's filesystem and binaries.
+   ```bash
+   # Enter ONLY the network namespace (-n or --net)
+   sudo nsenter -t $PID -n ip route
+   ```
+
+3. **Run a packet capture:**
+   Because you are using the host's binaries, you can run `tcpdump` directly inside the container's isolated network stack:
+   ```bash
+   sudo nsenter -t $PID -n tcpdump -i eth0 port 80
+   ```
+
+By selectively entering specific namespaces, you effectively combine the container's environment (its network stack) with the host's tooling (the `tcpdump` binary), allowing deep inspection without altering the container itself.
 
 ---
 
@@ -437,63 +478,52 @@ spec:
 ## Quiz
 
 ### Question 1
-What happens when PID 1 in a PID namespace dies?
+**Scenario**: You deploy a Node.js application containerized without an init process like `dumb-init`. When Kubernetes tries to terminate the pod during a rolling update, the container ignores the `SIGTERM` signal, hangs for 30 seconds, and is eventually forcefully killed with `SIGKILL`. Why did the Node.js process ignore `SIGTERM`?
 
 <details>
 <summary>Show Answer</summary>
 
-**All processes in that PID namespace are killed.** The kernel sends SIGKILL to all remaining processes when the init process (PID 1) of a PID namespace terminates. This is why containers stop when their main process exits.
+**The Node.js process was running as PID 1 inside its isolated PID namespace.** In Linux, PID 1 is the `init` process and receives special treatment from the kernel, including ignoring signals like `SIGTERM` unless the application explicitly registers a signal handler for them. Because Node.js doesn't natively handle `SIGTERM` as an init system would, the signal is dropped, and Kubernetes is forced to wait for the grace period to expire before sending an uncatchable `SIGKILL`. Wrapping the application with a minimal init system like `tini` or `dumb-init` ensures it runs as a normal PID and properly receives and forwards termination signals.
 
 </details>
 
 ### Question 2
-How can two containers both listen on port 80?
+**Scenario**: You run an Nginx container bound to port 80 and an Apache container also bound to port 80 on the same Linux host using Docker. Both start successfully and serve traffic without a "port already in use" error. How is the Linux kernel able to allow both processes to listen on port 80 simultaneously?
 
 <details>
 <summary>Show Answer</summary>
 
-**They're in different network namespaces.** Each network namespace has its own port space. Container A's port 80 is in namespace A, Container B's port 80 is in namespace B. The host maps these to different external ports.
+**Each container is running in its own isolated Network namespace.** A network namespace provides a completely independent network stack, including its own interfaces, routing tables, and port space. Because Nginx and Apache are in different network namespaces, Container A's port 80 is logically separate from Container B's port 80. The container runtime (like Docker) then uses port forwarding (NAT rules via `iptables`) on the host to map different external host ports to port 80 inside each respective isolated namespace.
 
 </details>
 
 ### Question 3
-Why do containers in a Kubernetes pod share localhost?
+**Scenario**: You have a Kubernetes pod containing an application container and a logging sidecar container. The application container writes logs to a local file, but the sidecar cannot find or read that file, even though both are in the exact same pod. What namespace-related concept explains why the sidecar cannot see the file, and how is this normally resolved in Kubernetes?
 
 <details>
 <summary>Show Answer</summary>
 
-**They share the same network namespace.** Kubernetes creates one network namespace per pod. All containers in the pod join this shared namespace, so they:
-- Share the same IP address
-- Can communicate via localhost
-- Share the same port space (can't both use :80)
+**Containers in a pod do not share Mount namespaces by default.** While Kubernetes pods share Network, IPC, and UTS namespaces, each container still receives its own isolated Mount namespace, meaning they have completely separate root filesystems. To allow the sidecar to see the application's log files, you must configure a shared Kubernetes `Volume` (like an `emptyDir`) and mount it into both containers. Because the volume is mounted into both isolated Mount namespaces, it provides a shared directory they can both access.
 
 </details>
 
 ### Question 4
-What does `unshare --pid --fork` do?
+**Scenario**: You are debugging a malfunctioning container. From the host system, you run a command to spawn a new bash shell that shares the exact same process tree view as the malfunctioning container, allowing you to see its internal processes. You used a command with the flags `--pid --fork`. Why was the `--fork` flag necessary when entering or creating this new PID namespace?
 
 <details>
 <summary>Show Answer</summary>
 
-Creates a new **PID namespace** for the child process:
-- `--pid`: Create new PID namespace
-- `--fork`: Fork before executing (required for PID namespace to work correctly)
-
-The child process will be PID 1 in the new namespace.
+**The `--fork` flag ensures the new process becomes PID 1 inside the newly created PID namespace.** When you use `unshare --pid`, the unshare process itself does not enter the new PID namespace; only its children do. By adding `--fork`, `unshare` forks a new child process (like `bash`) which correctly enters the new namespace and acts as the initial process (PID 1). Without `--fork`, the command would run in the original PID namespace, failing to provide the isolated process view you intended to create.
 
 </details>
 
 ### Question 5
-Why are user namespaces important for security?
+**Scenario**: A vulnerability is discovered in your web application that allows an attacker to execute arbitrary code inside the container as `root` (UID 0). However, when the attacker attempts to read sensitive files on the host filesystem that were accidentally mounted, they get a "Permission denied" error. The files on the host are owned by `root`. What Linux feature prevented the attacker from accessing the host files?
 
 <details>
 <summary>Show Answer</summary>
 
-User namespaces allow **UID mapping**:
-- Root (UID 0) inside container → Unprivileged UID outside
-- Container escape no longer grants host root
-- Enables rootless containers
-- Reduces blast radius of container compromise
+**The container runtime is using User namespaces to map the container's root user to an unprivileged host user.** With user namespaces enabled, a process can have UID 0 (root) inside the container, but the kernel maps this to a high, unprivileged UID (like 100000) on the host machine. When the attacker tried to access the host files owned by the real host root, the kernel evaluated their permissions based on the mapped unprivileged UID, resulting in a denial. This mapping ensures that even if a container escape occurs, the attacker has no actual administrative privileges on the underlying host.
 
 </details>
 
