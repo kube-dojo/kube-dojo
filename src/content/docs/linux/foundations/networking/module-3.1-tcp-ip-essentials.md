@@ -131,6 +131,8 @@ Host:        .100          (last 8 bits)
 Broadcast:   192.168.1.255 (all host bits = 1)
 ```
 
+> **Stop and think**: If your pod gets the IP address 10.244.1.15/24, what is the highest IP address that can exist in that exact same subnet before traffic needs to go through a router?
+
 ### CIDR Notation
 
 | CIDR | Subnet Mask | Hosts | Common Use |
@@ -186,6 +188,8 @@ ip -br addr
 ---
 
 ## TCP vs UDP
+
+> **Pause and predict**: If a client sends a SYN packet to a server, but the server's application has crashed and isn't listening on that port, what will the server's OS network stack send back?
 
 ### TCP: Reliable, Ordered
 
@@ -256,6 +260,8 @@ UDP Features:
 
 ## Routing
 
+> **Stop and think**: If a Linux server has two network interfaces (eth0 and eth1) and receives a request on eth0, does it always send the reply back out through eth0?
+
 ### How Routing Works
 
 ```
@@ -324,6 +330,8 @@ sudo ip route del 10.0.0.0/8
 ---
 
 ## Ports and Sockets
+
+> **Pause and predict**: If you run a Node.js app as a standard non-root user and tell it to listen on port 80, what will happen when you start the app?
 
 ### Port Ranges
 
@@ -425,81 +433,52 @@ watch -n1 'cat /proc/net/dev'
 ## Quiz
 
 ### Question 1
-What's the difference between 192.168.1.0/24 and 192.168.1.0/16?
+You are troubleshooting a connection issue between two Kubernetes nodes. Node A has the IP `192.168.1.50/24` and Node B has the IP `192.168.2.10/16`. Node A is trying to reach Node B directly without going through the default gateway, but the connection is failing. Why is this happening, and how does the subnet mask explain the failure?
 
 <details>
 <summary>Show Answer</summary>
 
-- **/24** = 255.255.255.0 = 256 addresses (192.168.1.0 - 192.168.1.255)
-- **/16** = 255.255.0.0 = 65,536 addresses (192.168.0.0 - 192.168.255.255)
-
-The /24 network is a subset of the /16 network. /24 covers just the .1.x subnet, /16 covers all .x.x subnets.
+Node A and Node B have mismatched subnet masks, leading to a one-way routing black hole. When Node A (`/24`) looks at Node B's IP (`192.168.2.10`), it calculates that Node B is on a different network (since the `/24` means Node A only considers `192.168.1.X` as local). Therefore, Node A sends the traffic to its default gateway. However, Node B (`/16`) considers any `192.168.X.X` address to be on its local network. If Node B tries to reply, it skips the gateway and tries to reach Node A directly via ARP, which may fail if they are physically on different broadcast domains.
 
 </details>
 
 ### Question 2
-Why does TCP use a 3-way handshake?
+You deploy a new metrics collection daemon to your cluster that streams thousands of tiny telemetry data points per second to a central server. You notice that when the network gets slightly congested, the daemon's memory usage spikes dramatically and it eventually crashes. The daemon is currently configured to use TCP. Why might switching to UDP solve this specific crash, and what tradeoff would you be making?
 
 <details>
 <summary>Show Answer</summary>
 
-The 3-way handshake ensures:
-1. **Client can send** (SYN received by server)
-2. **Server can send** (SYN-ACK received by client)
-3. **Both agree on sequence numbers** (synchronized)
-
-This establishes a reliable, bidirectional connection with agreed-upon starting sequence numbers for ordered delivery.
+The crash is likely caused by TCP's reliability and congestion control mechanisms queuing up data in memory when the network slows down. TCP guarantees delivery, so if packets are dropped due to congestion, the operating system holds unacknowledged data in buffers until it can successfully retransmit them. By switching to UDP, you eliminate these buffers because UDP simply fires the packets onto the network and forgets them, regardless of network conditions. This prevents the memory spike and crash, but the tradeoff is that you will permanently lose some telemetry data points during periods of network congestion.
 
 </details>
 
 ### Question 3
-When would you use UDP instead of TCP?
+You are configuring a custom Linux router for a bare-metal Kubernetes cluster. You have added a route `10.244.0.0/16 via 192.168.1.50` to handle Pod traffic, and you have a default route `default via 192.168.1.1`. A packet arrives destined for `10.244.5.10`. How does the Linux kernel decide which route to use, and where does the packet go?
 
 <details>
 <summary>Show Answer</summary>
 
-Use UDP when:
-- **Speed matters more than reliability** (gaming, live video)
-- **You handle reliability yourself** (DNS, custom protocols)
-- **Single request-response** (DNS queries)
-- **Broadcast/multicast** (UDP only)
-- **Lower overhead needed** (IoT, sensors)
-
-UDP has no connection setup overhead and no retransmission delay.
+The Linux kernel routes the packet to `192.168.1.50` because it always uses the "longest prefix match" rule. Even though the default route (`0.0.0.0/0`) technically covers the destination IP, the `10.244.0.0/16` route is more specific because its subnet mask is longer (16 bits vs 0 bits). The kernel evaluates all available routes, finds the one with the most specific matching network block, and ignores broader routes. If the destination had been `10.245.5.10`, it would have missed the `/16` route and fallen back to the default gateway at `192.168.1.1`.
 
 </details>
 
 ### Question 4
-What does `ip route add default via 192.168.1.1` do?
+You are trying to start a new Nginx ingress controller on a Linux node, but it instantly fails with a "bind: address already in use" error for port 443. You run `ping localhost` and get a response, so the network stack is up. What exact command would you run to find the culprit, and what specific information in the output tells you which process to kill?
 
 <details>
 <summary>Show Answer</summary>
 
-It adds a **default gateway**. Any packet whose destination doesn't match a more specific route will be sent to 192.168.1.1.
-
-This is how your machine knows where to send packets destined for the internet or any unknown network.
+You should run `ss -tlnp | grep :443` (as root or with sudo) to find the conflicting process. The `-t` flag filters for TCP, `-l` shows only listening sockets, `-n` prevents slow DNS resolution of IP addresses, and `-p` shows the process information. In the output, you must look at the far right column for the `users:` section, which will display the process name (like `apache2` or `haproxy`) and its exact Process ID (PID). You can then use that specific PID with the `kill` command to terminate the conflicting service and free up port 443.
 
 </details>
 
 ### Question 5
-How do you find what process is listening on port 443?
+An application team complains that their web app on `10.0.5.50` is unreachable from a client machine. You run `ping 10.0.5.50` from the client, and it works perfectly. However, when the client tries to use `curl http://10.0.5.50`, it hangs indefinitely until it times out. Based on the OSI model and TCP/IP stack, what is the most likely cause of this discrepancy, and what tool should you use next?
 
 <details>
 <summary>Show Answer</summary>
 
-```bash
-# Modern way
-ss -tlnp | grep :443
-
-# Legacy
-netstat -tlnp | grep :443
-
-# Using lsof
-lsof -i :443
-
-# Sample output:
-# LISTEN  0  128  *:443  *:*  users:(("nginx",pid=1234,fd=6))
-```
+The most likely cause is a network firewall or security group that is allowing ICMP (ping) traffic but dropping TCP traffic on port 80. Ping operates at the Network Layer (Layer 3) using the ICMP protocol, which proves that routing and basic IP connectivity are fully functional. However, `curl` uses HTTP over TCP at the Transport Layer (Layer 4), which is subject to port-specific firewall rules. To verify this, you should use `nc -zv 10.0.5.50 80` or `traceroute -T -p 80 10.0.5.50` to specifically test TCP port 80 connectivity and see where the packets are being dropped or blocked.
 
 </details>
 
