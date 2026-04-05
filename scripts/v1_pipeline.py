@@ -17,8 +17,10 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import builtins
 import fcntl
 import json
+import shutil
 import subprocess
 import sys
 import yaml
@@ -31,6 +33,26 @@ CONTENT_ROOT = REPO_ROOT / "src" / "content" / "docs"
 STATE_FILE = REPO_ROOT / ".pipeline" / "state.yaml"
 REPORT_FILE = REPO_ROOT / ".pipeline" / "audit-report.json"
 SCORE_SCRIPT = REPO_ROOT / "scripts" / "score_module.py"
+
+# ---------------------------------------------------------------------------
+# Timestamped logging — tee all print() to a log file
+# ---------------------------------------------------------------------------
+
+LOG_DIR = REPO_ROOT / ".pipeline" / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+LOG_FILE = LOG_DIR / f"run_{datetime.now(UTC).strftime('%Y%m%dT%H%M%S')}.log"
+
+_original_print = builtins.print
+
+
+def _logged_print(*args, **kwargs):
+    _original_print(*args, **kwargs)
+    msg = " ".join(str(a) for a in args)
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(f"[{datetime.now(UTC).strftime('%H:%M:%S')}] {msg}\n")
+
+
+builtins.print = _logged_print
 
 # Add scripts to path for imports
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
@@ -400,6 +422,29 @@ def step_check(content: str, path: Path) -> tuple[bool, list]:
     """Run all deterministic checks on the improved content."""
     print(f"\n  CHECK: running deterministic checks")
 
+    # Safety guard: reject truncated content (Gemini output limit)
+    original = path.read_text()
+    if len(content) < len(original) * 0.85:
+        print(f"  ✗ CHECK: content truncated — {len(content)} chars vs {len(original)} original (< 85%)")
+        return False, []
+
+    # Safety guard: validate YAML frontmatter before writing
+    if not content.startswith("---"):
+        print("  ✗ CHECK: missing YAML frontmatter delimiter")
+        return False, []
+    parts = content.split("---", 2)
+    if len(parts) < 3:
+        print("  ✗ CHECK: malformed frontmatter — no closing ---")
+        return False, []
+    try:
+        fm = yaml.safe_load(parts[1])
+        if not isinstance(fm, dict) or "title" not in fm:
+            print(f"  ✗ CHECK: frontmatter missing 'title' field")
+            return False, []
+    except yaml.YAMLError as e:
+        print(f"  ✗ CHECK: broken YAML frontmatter — {e}")
+        return False, []
+
     is_uk = "/uk/" in str(path)
     results = structural.run_all(content, path)
     if is_uk:
@@ -536,9 +581,12 @@ def run_module(module_path: Path, state: dict, max_retries: int = 2,
             print(f"  Staging file kept: {staging}")
             return False
 
-        # Write the improved file and clean up staging
+        # Backup original, then write improved file
+        backup = module_path.with_suffix(".md.bak")
+        shutil.copy2(module_path, backup)
         module_path.write_text(improved)
         staging.unlink(missing_ok=True)
+        backup.unlink(missing_ok=True)  # remove backup on success
         print(f"  ✓ File written: {module_path}")
 
         ms["phase"] = "score"
@@ -1046,12 +1094,20 @@ def cmd_e2e(args):
         print(f"  PHASE 1: Resuming {len(incomplete)} stuck modules")
         print(f"{'='*60}")
         resumed = 0
+        consecutive_failures = 0
         for key, ms in incomplete.items():
             path = find_module_path(key)
             if path and path.exists():
                 ok = run_module(path, state, models=models)
                 if ok:
                     resumed += 1
+                    consecutive_failures = 0
+                else:
+                    consecutive_failures += 1
+                if consecutive_failures >= 5:
+                    print(f"\n  CIRCUIT BREAKER: 5 consecutive resume failures — halting")
+                    print(f"  Check logs: {LOG_FILE}")
+                    break
         print(f"\n  Resumed: {resumed}/{len(incomplete)} completed")
 
     for section in sections_to_run:
@@ -1080,6 +1136,7 @@ def cmd_e2e(args):
         passed = 0
         failed = 0
         skipped = 0
+        consecutive_failures = 0
         for i, path in enumerate(modules, 1):
             key = module_key_from_path(path)
             ms = state.get("modules", {}).get(key, {})
@@ -1093,8 +1150,15 @@ def cmd_e2e(args):
             ok = run_module(path, state, models=models)
             if ok:
                 passed += 1
+                consecutive_failures = 0
             else:
                 failed += 1
+                consecutive_failures += 1
+
+            if consecutive_failures >= 5:
+                print(f"\n  CIRCUIT BREAKER: 5 consecutive failures in {section} — halting")
+                print(f"  Check logs: {LOG_FILE}")
+                break
 
         print(f"\n  {section}: {passed} passed, {failed} failed, {skipped} skipped")
 
