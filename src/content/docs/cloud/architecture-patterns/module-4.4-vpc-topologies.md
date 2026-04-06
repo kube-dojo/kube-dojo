@@ -124,6 +124,31 @@ kubectl get node ip-10-0-1-42.ec2.internal -o json | \
   jq '.status.allocatable["vpc.amazonaws.com/pod-eni"] // .status.capacity["vpc.amazonaws.com/PrivateIPv4Address"]'
 ```
 
+### Guided Worked Example: Subnet Calculation
+
+Let's walk through sizing a subnet for a new production cluster.
+
+**The Scenario:**
+You are provisioning an EKS cluster using VPC CNI (without prefix delegation). The cluster will scale up to 20 worker nodes (m5.large, which support up to 3 ENIs and 10 IPs per ENI). You want to ensure the subnet can handle this maximum capacity plus 100% headroom for future growth.
+
+**Step 1: Calculate IPs per node**
+An m5.large can attach 3 ENIs, each with 10 IPs.
+Total IPs per node = 3 * 10 = 30 IPs.
+
+**Step 2: Calculate total IPs for maximum capacity**
+20 nodes * 30 IPs/node = 600 IPs required from the VPC.
+
+**Step 3: Add headroom**
+100% headroom means we need space for 1,200 IPs.
+
+**Step 4: Select the subnet CIDR**
+- A /24 provides 251 usable IPs (Too small)
+- A /23 provides 507 usable IPs (Too small)
+- A /22 provides 1,019 usable IPs (Too small)
+- A /21 provides 2,043 usable IPs (Perfect)
+
+For this cluster, a /21 subnet is the minimum safe choice to guarantee 1,200 IPs are available even if other resources are deployed in the same subnet.
+
 ### Subnet Sizing Guide
 
 | Cluster Size | Nodes | Pods (est.) | VPC CNI (standard) | VPC CNI (prefix delegation) | Overlay |
@@ -134,6 +159,8 @@ kubectl get node ip-10-0-1-42.ec2.internal -o json | \
 | Very Large | 200+ | ~10,000 | /17 minimum | /19 | /23 |
 
 **The golden rule: always provision subnets at least 2x larger than your current needs.** IP address space is free. Expanding subnets later is painful.
+
+> **Pause and predict**: If you use a /24 subnet (251 IPs) for a cluster configured with Calico VXLAN (overlay) and scale to 50 nodes running 2,000 pods total, will you exhaust the VPC subnet? Why or why not?
 
 ---
 
@@ -216,6 +243,42 @@ OVERLAY NETWORKING (Calico VXLAN)
 | Best for | Cloud-native apps needing deep cloud integration | Multi-cloud, IP-constrained environments |
 
 Most teams on a single cloud provider should use underlay (VPC-native) networking with prefix delegation. The cloud integration benefits -- direct pod targeting by load balancers, security group per pod, native VPC Flow Logs -- outweigh the IP planning overhead.
+
+---
+
+## Private Cluster Architectures: Securing the API Server
+
+By default, managed Kubernetes services like EKS and GKE provision the cluster API server endpoint with a public IP address. This means `kubectl` commands traverse the public internet to reach your cluster. For enterprise environments, this is often unacceptable.
+
+### Endpoint Access Modes
+
+When configuring your cluster, you have three primary architectural choices for the API server endpoint:
+
+1. **Public Only (Default but Risky)**
+   The API server is accessible from the internet. Security relies entirely on Kubernetes RBAC and IAM authentication. If a vulnerability is found in the API server itself, your cluster is immediately exposed to the world.
+
+2. **Public and Private (The Compromise)**
+   The API server has both a public IP and a private IP within your VPC. Nodes use the private IP to communicate with the control plane, keeping node-to-control-plane traffic off the internet. Developers can still use the public endpoint from their laptops (often restricted by a CIDR allowlist).
+
+3. **Private Only (Enterprise Standard)**
+   The API server only has a private IP within your VPC. There is no public routing to the control plane. This is the most secure posture but requires additional architecture for developer access.
+
+### Implementing Private-Only Access
+
+When you choose a fully private cluster, how do developers and CI/CD pipelines run `kubectl apply`? You must provide a secure path into the VPC:
+
+- **VPN / Direct Connect:** Developers connect to the corporate VPN, which is peered to the VPC. Traffic flows privately.
+- **Bastion Host:** A hardened EC2 instance in a public subnet. Users SSH into the bastion (or use AWS Systems Manager Session Manager) and run `kubectl` from there.
+- **CI/CD Runners in VPC:** GitHub Actions runners or GitLab runners are deployed as EC2 instances or pods within the VPC itself, allowing them to communicate natively with the private API server.
+
+```bash
+# EKS: Update cluster to Private-Only mode
+aws eks update-cluster-config \
+  --name production-cluster \
+  --resources-vpc-config endpointPublicAccess=false,endpointPrivateAccess=true
+```
+
+> **Stop and think**: If you switch an existing cluster to "Private Only" without having a VPN or Bastion host set up, what will happen to your current `kubectl` session? How will the worker nodes be affected?
 
 ---
 
@@ -320,6 +383,8 @@ aws ec2 create-vpc-endpoint \
   --subnet-ids subnet-private-1a subnet-private-1b \
   --security-group-ids sg-vpce-sts
 ```
+
+> **Pause and predict**: Your monthly AWS bill shows a $4,000 charge for NAT Gateway Data Processing. Your cluster heavily uses S3 and DynamoDB. What single architectural change would drastically reduce this cost tomorrow without changing any application code?
 
 ### Egress for Compliance: Proxy-Based Egress
 
@@ -743,53 +808,37 @@ Correct planning from day one:
 <details>
 <summary>1. An EKS cluster uses VPC CNI (default mode, no prefix delegation) with m5.xlarge nodes. Each node has 4 ENIs with 15 IPs each. The subnet is a /24 (251 usable IPs). How many nodes can fit before IP exhaustion?</summary>
 
-Each m5.xlarge node consumes 60 VPC IPs (4 ENIs x 15 IPs). With 251 usable IPs in a /24 subnet, you can fit 251 / 60 = 4.18, so only 4 nodes before exhaustion. The 5th node would fail to get all its ENI IPs.
-
-In practice, it's even worse. Some IPs are consumed by other VPC resources (internal load balancers, VPC endpoints, Lambda ENIs in the same subnet). You might hit the limit at 3 nodes. This is why /24 subnets are dangerously small for EKS with VPC CNI. A /20 (4,091 IPs) would support 68 nodes -- much more reasonable for a production cluster.
+Each m5.xlarge node consumes 60 VPC IPs (4 ENIs x 15 IPs) because the default VPC CNI attaches all possible ENIs and secondary IPs to ensure rapid pod scheduling. With 251 usable IPs in a /24 subnet, you can fit 251 / 60 = 4.18, so only 4 nodes before exhaustion. The 5th node would fail to acquire all its necessary ENI IPs, preventing new pods from being scheduled on it. In practice, because some IPs are consumed by internal load balancers or VPC endpoints, you might hit the limit even sooner, which is why a /24 is dangerously small for EKS.
 </details>
 
 <details>
-<summary>2. What is the difference between a VPC Gateway endpoint and a VPC Interface endpoint, and when should you use each?</summary>
+<summary>2. Your application team is building a microservice that heavily reads from AWS S3 and pushes metrics to CloudWatch. During a cost audit, you notice a massive spike in NAT Gateway data processing charges. What specific architectural changes should you implement to eliminate these costs?</summary>
 
-Gateway endpoints are free, route-based, and available only for S3 and DynamoDB. They work by adding routes to your route tables that direct traffic for these services through the endpoint instead of through the NAT Gateway. No ENI is created, no IP is consumed, and there's no hourly charge.
-
-Interface endpoints create an ENI in your subnet with a private IP address. Traffic to the AWS service is redirected to this ENI via private DNS. They cost $0.01/hour ($7.30/month) per AZ plus data processing charges. Interface endpoints are available for most AWS services (ECR, STS, CloudWatch, SQS, SNS, etc.).
-
-Use Gateway endpoints for S3 and DynamoDB (always -- they're free). Use Interface endpoints for ECR, STS, CloudWatch Logs, and any other AWS service your pods call frequently. The endpoint cost ($7.30/mo per AZ) is almost always less than the NAT Gateway data processing charges you'd pay otherwise.
+You should implement VPC Gateway endpoints for S3 and VPC Interface endpoints for CloudWatch. Gateway endpoints are free and route traffic to S3 directly over the AWS network, bypassing the NAT Gateway completely. Interface endpoints create an ENI in your subnet for services like CloudWatch, redirecting traffic privately for a small hourly fee that is vastly cheaper than NAT data processing. By routing this heavy internal traffic directly through endpoints, the NAT Gateway is bypassed, eliminating the data processing charges associated with those services.
 </details>
 
 <details>
-<summary>3. Why does overlay networking (VXLAN) reduce cloud integration capabilities compared to underlay (VPC CNI)?</summary>
+<summary>3. A security compliance auditor mandates that every individual pod's network traffic must be fully logged and subject to VPC-level Network ACLs. Your current clusters run on standard EC2 instances. Which network architecture must you choose to satisfy this requirement?</summary>
 
-With overlay networking, pod IP addresses are invisible to the cloud provider's networking stack. The VPC only sees node-to-node traffic, not pod-to-pod traffic. This breaks several cloud integrations: (1) Cloud load balancers can't target pods directly by IP -- they must go through NodePort, adding an extra hop and uneven traffic distribution. (2) Security Groups can't be applied per-pod -- only per-node, giving coarser access control. (3) VPC Flow Logs show node-to-node traffic, not individual pod traffic, reducing observability. (4) Network ACLs can't filter based on pod source/destination. (5) Cross-VPC peering routes pod IPs natively with underlay; with overlay, you need additional tunneling or mesh configuration. The trade-off is that overlay networking consumes far fewer VPC IPs and works identically across cloud providers.
+You must choose an Underlay (VPC-Native) networking architecture, such as the AWS VPC CNI. With underlay networking, every pod receives a native IP address from the VPC subnet. Because the traffic is not encapsulated in tunnels (like it would be with an overlay network such as VXLAN), the VPC fabric sees every packet's true source and destination IP. This visibility allows VPC Flow Logs to record individual pod traffic and enables Network ACLs to filter traffic at the pod IP level, directly satisfying the auditor's requirements.
 </details>
 
 <details>
-<summary>4. Your company has 8 VPCs that need to communicate. Why is Transit Gateway better than VPC Peering for this scenario?</summary>
+<summary>4. Your company has 8 VPCs that need to communicate. You are debating between using VPC Peering or a Transit Gateway. Why is Transit Gateway the better architectural choice for this scenario?</summary>
 
-With 8 VPCs, VPC Peering requires 8 x 7 / 2 = 28 peering connections. Each connection needs route table entries in both VPCs, security group rules, and DNS configuration. Adding a 9th VPC means creating 8 new peering connections.
-
-Transit Gateway requires 8 attachments (one per VPC) to a central hub. Adding a 9th VPC is one attachment. Route tables are managed centrally on the TGW, and you can implement segmentation (e.g., dev can't reach production) using TGW route tables without touching individual VPC route tables.
-
-The cost trade-off: TGW attachments cost $0.05/hr per AZ, so 8 VPCs across 2 AZs each = 16 attachments = $584/month. VPC Peering is free for the connection itself (you pay only data transfer). For 8+ VPCs, the operational simplicity of Transit Gateway usually outweighs the cost.
+With 8 VPCs, a full mesh of VPC Peering would require 28 separate peering connections (8 x 7 / 2), each needing custom route table entries and complex security group management. Adding a 9th VPC later would require 8 more distinct peering connections, creating an operational nightmare. Transit Gateway simplifies this by acting as a central hub where each VPC only requires a single attachment. Route tables are managed centrally on the Transit Gateway, allowing for clean network segmentation and vastly simpler scaling as new environments are added.
 </details>
 
 <details>
-<summary>5. A team plans to connect their AWS VPCs to an on-premises data center. Both use the 10.0.0.0/8 range. What are their options?</summary>
+<summary>5. A team plans to connect their AWS VPCs to an on-premises data center using a Site-to-Site VPN. Both the AWS environments and the on-premises network use the 10.0.0.0/8 CIDR range. What routing problem will occur, and how must it be resolved?</summary>
 
-They have a painful problem. Direct peering or VPN won't work because the CIDR ranges overlap -- the router can't determine whether `10.0.1.5` means the cloud or the data center.
-
-Options, from least to most painful: (1) Use AWS PrivateLink to expose specific services across the boundary without full network peering. Each service gets a unique endpoint. This avoids the CIDR conflict but only works for known, enumerated services. (2) Deploy NAT at the boundary to translate addresses. Configure the VPN to NAT the on-prem 10.x range to a non-overlapping range (e.g., 100.64.0.0/10) as seen from the cloud. Complex, error-prone, but avoids re-IPing either side. (3) Re-IP one side. For new cloud workloads, migrate to a non-overlapping range (172.16.0.0/12). For on-prem, this is usually impractical. (4) Use IPv6 for the cloud side and keep IPv4 for on-prem. Avoids the overlap entirely but requires IPv6 readiness across the stack.
-
-The real lesson: plan a global IPAM scheme before creating infrastructure. This problem is nearly always the result of "we'll deal with it later" planning.
+Direct routing will fail because the CIDR ranges perfectly overlap, meaning the routers cannot determine whether a packet destined for `10.0.1.5` belongs to a cloud pod or an on-premises server. To fix this without re-IPing either side, you must deploy a NAT solution at the network boundary. The VPN configuration would need to NAT the on-premises 10.x range to a non-overlapping range (such as 100.64.0.0/10) from the perspective of the cloud VPC. The most sustainable long-term solution, however, is to plan a global IPAM scheme before creating infrastructure to ensure environments utilize entirely distinct CIDR blocks.
 </details>
 
 <details>
-<summary>6. What is topology-aware routing in Kubernetes and why does it save money on cloud infrastructure?</summary>
+<summary>6. Your e-commerce platform spans three Availability Zones. During a load test, you notice that cross-AZ data transfer costs are excessively high, even though the total number of requests is expected. You are currently using default Kubernetes Services for internal routing. How can you modify the Kubernetes configuration to reduce this cloud infrastructure cost?</summary>
 
-Topology-aware routing (using the `service.kubernetes.io/topology-mode: Auto` annotation) tells kube-proxy to prefer routing traffic to endpoints in the same topology zone (typically the same AZ) as the client pod. Without it, a service's traffic is distributed across all healthy endpoints regardless of zone.
-
-This saves money because cross-AZ data transfer costs $0.01/GB in each direction ($0.02/GB round trip) on AWS. For a high-traffic service handling 100 million requests/day with 1KB average payload, cross-AZ traffic across 3 zones would be roughly 67% cross-zone. That's ~67GB/day cross-AZ, or ~$40/month for one service. Multiply by dozens of services and the savings are significant. Beyond cost, same-zone routing also reduces latency by 1-3ms (intra-AZ vs cross-AZ round trip).
+You should implement topology-aware routing by adding the `service.kubernetes.io/topology-mode: Auto` annotation to your Kubernetes Services. By default, kube-proxy distributes internal service traffic randomly across all healthy endpoints in the cluster, meaning roughly 67% of traffic crosses AZ boundaries in a 3-AZ setup. Topology-aware routing instructs kube-proxy to prefer routing traffic to backend pods located in the exact same Availability Zone as the client pod. This change keeps the majority of internal traffic local to the AZ, drastically reducing the $0.01/GB cross-AZ data transfer fees while also slightly improving request latency.
 </details>
 
 ---
