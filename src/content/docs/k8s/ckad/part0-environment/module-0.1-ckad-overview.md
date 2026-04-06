@@ -297,32 +297,32 @@ k run test --image=busybox --rm -it --restart=Never -- wget -qO- http://service
 
 ---
 
-> **What would happen if**: You spend your first 30 minutes on complex debugging tasks and leave simple pod creation for the end. How would that affect your score compared to using the three-pass method?
+> **Stop and think**: You spend your first 30 minutes on complex debugging tasks and leave simple pod creation for the end. How would that affect your score compared to using the three-pass method?
 
 ## Quiz
 
-1. **You have 2 hours for the CKAD exam and 17 tasks remaining. A colleague suggests spending equal time on each. Why is that a poor strategy, and which domain's tasks should you prioritize completing first?**
+1. **You have just started the CKAD exam. You have 2 hours and 17 tasks to complete. A colleague previously suggested spending equal time on each task (about 7 minutes per task) and working through them sequentially. Why is this a poor strategy for this specific exam, and how should you approach the task list instead to maximize your chances of passing?**
    <details>
    <summary>Answer</summary>
-   Equal time allocation is poor because tasks vary widely in complexity. You should tackle quick-win tasks first (simple pod/deployment creation, labeling, exposing services) regardless of domain. The three-pass strategy maximizes points: Pass 1 collects easy points in 1-3 minutes each, Pass 2 handles medium tasks, and Pass 3 uses remaining time for complex debugging. The "Application Environment, Configuration and Security" domain (25%) carries the most weight, so if you must prioritize by domain, focus there -- but speed on easy tasks across all domains matters more.
+   Equal time allocation is a poor strategy because exam tasks vary significantly in both complexity and their point value. If you spend 10 minutes struggling with a low-point complex debugging task early on, you might run out of time to complete several high-point, simple tasks later in the exam. Instead, you should employ a three-pass strategy where you tackle quick-win tasks first, regardless of their domain or sequence. This approach ensures you secure easy points early, builds your confidence, and leaves the remaining time dedicated entirely to the more complex, time-consuming challenges without the pressure of unfinished easy tasks.
    </details>
 
-2. **A developer on your team says "I passed CKA, so CKAD should be easy -- it's the same stuff." What 2-3 topics would you warn them to study that CKA barely covers?**
+2. **A platform engineer on your team just passed the CKA certification. They are now tasked with mentoring junior application developers on Kubernetes best practices and assume their CKA knowledge is sufficient. As someone studying for the CKAD, what specific developer-centric topics would you warn the platform engineer that they need to learn to effectively mentor the developers?**
    <details>
    <summary>Answer</summary>
-   Multi-container pod patterns (sidecar, init, ambassador) are barely mentioned in CKA but are a CKAD signature topic appearing in 2-4 questions. API deprecation awareness is CKAD-specific and not tested in CKA at all. Container image building and Dockerfile understanding is another area CKA skips but CKAD tests. Additionally, deployment strategies like blue/green and canary go well beyond the basic rolling updates covered in CKA.
+   While the platform engineer understands cluster administration, they likely lack deep knowledge of multi-container pod patterns such as sidecars, init containers, and ambassadors, which are essential for developer workflows but barely covered in the CKA. Furthermore, they need to study application-level deployment strategies, such as blue/green and canary deployments, which go beyond the basic rolling updates. Finally, the CKAD heavily emphasizes application observability from a developer's perspective, including detailed probe configurations and API deprecation awareness. Mentoring developers requires understanding how to build and debug applications within the cluster, not just how to maintain the cluster infrastructure itself.
    </details>
 
-3. **During the CKAD exam, you encounter a task requiring a pod with an init container that waits for a database, a main container running your app, and a sidecar shipping logs. You estimate it will take 8-10 minutes. You have 45 minutes left and 5 tasks remaining. What do you do?**
+3. **During the CKAD exam, you encounter a heavily weighted task requiring you to design a pod with an init container that waits for a database, a main container running the primary application, and a sidecar container shipping logs to a central server. You estimate it will take you 8-10 minutes to write and troubleshoot the YAML. You have 45 minutes left in the exam and 5 tasks remaining. What is the most strategic course of action?**
    <details>
    <summary>Answer</summary>
-   Skip this task for now and scan the remaining 4 tasks for quicker wins. Multi-container patterns with init + sidecar + main are complex (Pass 3 material). With 45 minutes and 5 tasks, you likely have simpler tasks worth more points-per-minute. Complete those first, then return to this task with whatever time remains. If you start with this complex task and get stuck, you risk losing easy points on simpler tasks.
+   The most strategic action is to skip this complex multi-container task for now and immediately scan the remaining four tasks for quicker wins. Multi-container patterns with multiple distinct responsibilities are typically Pass 3 material and are prone to syntax errors that consume valuable troubleshooting time. With 45 minutes and 5 tasks left, you likely have simpler, imperative-driven tasks available that yield more points per minute of effort. You should complete those simpler tasks first to secure their points, and then return to this complex pod design with whatever time remains.
    </details>
 
-4. **Your team is preparing for CKAD and asks which domain to study last if they're running out of time. The domains are: Design & Build (20%), Deployment (20%), Observability (15%), Environment/Config/Security (25%), Services & Networking (20%). Which domain and why?**
+4. **Your organization is adopting a "shift-left" security and configuration model, requiring application developers to define their own resource constraints, secure their pod environments, and manage their own application configuration via Kubernetes native resources. A junior developer is studying for the CKAD and asks which exam domain is most relevant to this new company policy. Which domain should they prioritize, and why?**
    <details>
    <summary>Answer</summary>
-   Study "Application Observability and Maintenance" (15%) last since it has the lowest weight. However, don't skip it entirely -- debugging and probes appear frequently. If time is truly limited, focus most effort on "Application Environment, Configuration and Security" (25%) since it's the highest-weighted domain and covers ConfigMaps, Secrets, ServiceAccounts, resource requirements, and SecurityContexts. A strong showing in this single domain can make or break your passing score.
+   The junior developer should heavily prioritize the "Application Environment, Configuration and Security" domain, which accounts for 25% of the exam weight. This domain directly addresses the shift-left model by testing the developer's ability to use ConfigMaps and Secrets to decouple configuration from container images. Furthermore, it covers how to define application resource requirements to prevent node starvation and how to implement SecurityContexts and ServiceAccounts to restrict pod privileges. Mastering this specific domain is crucial because it bridges the gap between writing application code and securely operating that code within a shared Kubernetes cluster environment.
    </details>
 
 ---
