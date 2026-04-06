@@ -287,6 +287,23 @@ KCSA tests your awareness of major compliance frameworks and how they apply to K
 
 > **Pause and predict**: Your cluster handles both payment card data (PCI-DSS) and health records (HIPAA). Would you run both workloads in the same namespace? What isolation strategy would satisfy both frameworks?
 
+## Default vs. Compliant Posture
+
+A vanilla Kubernetes cluster prioritizes ease of use and developer velocity over security. To achieve compliance, you must bridge the gap between the default configuration and a hardened, compliance-ready posture.
+
+| Component | Vanilla Kubernetes Default | Compliance-Ready Posture | Compliance Impact |
+|-----------|----------------------------|--------------------------|-------------------|
+| **Network** | Flat network (all pods can communicate) | Default-deny NetworkPolicies, strict segmentation | Fails PCI-DSS scope reduction; fails SOC 2 logical access |
+| **Secrets** | Base64 encoded in etcd (plain-text) | Encrypted at rest using a KMS provider | Fails HIPAA/PCI-DSS data protection requirements |
+| **Service Accounts** | Tokens automounted to every pod | `automountServiceAccountToken: false` by default | Fails least privilege access (SOC 2, PCI-DSS) |
+| **Pod Security** | Pods can run as root, mount host paths | Pod Security Admission (Restricted/Baseline) | Fails SOC 2 system operations security; increases blast radius |
+| **Audit Logs** | Often disabled or limited retention | API server audit logging enabled, shipped to SIEM | Fails HIPAA audit controls; fails PCI-DSS monitoring |
+| **Images** | Pull from any registry, no scanning | Signed images from trusted registries, continuous scanning | Fails PCI-DSS secure development; fails SOC 2 vulnerability management |
+
+> **Stop and think**: If you deploy a managed Kubernetes cluster (like EKS or GKE), are these default posture gaps automatically fixed for you, or is compliance still a shared responsibility?
+
+---
+
 ## Implementing Compliance in Kubernetes
 
 ### Common Control Categories
