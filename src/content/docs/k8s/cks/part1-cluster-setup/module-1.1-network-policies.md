@@ -539,23 +539,33 @@ encryption:
 
 ## Hands-On Exercise
 
-**Task**: Create NetworkPolicies for a three-tier application.
+In this exercise, you will secure a three-tier application (web, api, db) by writing and debugging NetworkPolicies.
+
+### Setup
+
+Run the following commands to create the environment:
 
 ```bash
-# Setup
 kubectl create namespace exercise
 kubectl label namespace exercise name=exercise
 
-# Create pods
-kubectl run web --image=nginx -n exercise -l tier=web
-kubectl run api --image=nginx -n exercise -l tier=api
-kubectl run db --image=nginx -n exercise -l tier=db
+kubectl run web --image=nginx -n exercise --labels="tier=web" --port=80
+kubectl run api --image=nginx -n exercise --labels="tier=api" --port=80
+kubectl run db --image=nginx -n exercise --labels="tier=db" --port=80
 
-# Wait for pods
 kubectl wait --for=condition=Ready pod --all -n exercise
+```
 
-# Task 1: Create default deny all ingress
-cat <<EOF | kubectl apply -f -
+### Task 1: Establish a Baseline
+
+Write and apply a NetworkPolicy named `default-deny` in the `exercise` namespace that denies **all** ingress traffic to all pods in the namespace.
+
+> **Hint**: Select all pods using an empty `podSelector` and specify the `Ingress` policy type with no rules.
+
+<details>
+<summary>View Solution</summary>
+
+```yaml
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -565,13 +575,23 @@ spec:
   podSelector: {}
   policyTypes:
   - Ingress
-EOF
+```
+</details>
 
-# Verify: api can't reach db anymore
-kubectl exec -n exercise web -- curl -s --connect-timeout 2 db || echo "Blocked (expected)"
+Verify that the `api` pod can no longer reach the `db` pod:
 
-# Task 2: Allow web -> api on port 80
-cat <<EOF | kubectl apply -f -
+```bash
+kubectl exec -n exercise api -- curl -s --connect-timeout 2 db || echo "Blocked (expected)"
+```
+
+### Task 2: Allow Web to API
+
+Write a NetworkPolicy named `allow-web-to-api` that allows pods labeled `tier=web` to connect to pods labeled `tier=api` on port 80.
+
+<details>
+<summary>View Solution</summary>
+
+```yaml
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -590,10 +610,17 @@ spec:
           tier: web
     ports:
     - port: 80
-EOF
+```
+</details>
 
-# Task 3: Allow api -> db on port 80
-cat <<EOF | kubectl apply -f -
+### Task 3: Allow API to DB
+
+Write a NetworkPolicy named `allow-api-to-db` that allows pods labeled `tier=api` to connect to pods labeled `tier=db` on port 80.
+
+<details>
+<summary>View Solution</summary>
+
+```yaml
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -612,18 +639,96 @@ spec:
           tier: api
     ports:
     - port: 80
-EOF
+```
+</details>
 
-# Verify
+Verify your policies:
+
+```bash
 kubectl exec -n exercise web -- curl -s --connect-timeout 2 api  # Should work
 kubectl exec -n exercise api -- curl -s --connect-timeout 2 db   # Should work
 kubectl exec -n exercise web -- curl -s --connect-timeout 2 db   # Should fail
-
-# Cleanup
-kubectl delete namespace exercise
 ```
 
-**Success criteria**: Web can reach API, API can reach DB, Web cannot directly reach DB.
+### Task 4: Audit and Debug a Broken Policy
+
+A junior engineer attempted to allow a new `metrics` pod to scrape the `db` pod on port 80, but the metrics pod is receiving "Connection refused" or timing out.
+
+Apply their broken policy and the metrics pod:
+
+```bash
+kubectl run metrics --image=nginx -n exercise --labels="tier=metrics"
+
+cat <<EOF | kubectl apply -f -
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-metrics-to-db
+  namespace: exercise
+spec:
+  podSelector:
+    matchLabels:
+      tier: metrics
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          tier: db
+    ports:
+    - port: 80
+EOF
+```
+
+**Your Task**: Identify the logical error in the policy above, delete it, and write the correct policy so that the `metrics` pod can curl the `db` pod.
+
+> **Hint**: Look closely at the `podSelector` vs `ingress.from.podSelector`. Who is the target, and who is the source?
+
+<details>
+<summary>View Solution</summary>
+
+The broken policy was applied to the `metrics` pod (target) and allowed ingress *from* the `db` pod. It should be applied to the `db` pod (target) and allow ingress *from* the `metrics` pod.
+
+```bash
+kubectl delete networkpolicy allow-metrics-to-db -n exercise
+```
+
+**Correct Policy:**
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-metrics-to-db
+  namespace: exercise
+spec:
+  podSelector:
+    matchLabels:
+      tier: db
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          tier: metrics
+    ports:
+    - port: 80
+```
+
+Apply the correct policy, then verify:
+
+```bash
+kubectl exec -n exercise metrics -- curl -s --connect-timeout 2 db  # Should work
+```
+</details>
+
+### Cleanup
+
+```bash
+kubectl delete namespace exercise
+```
 
 ---
 
