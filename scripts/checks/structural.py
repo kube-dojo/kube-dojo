@@ -60,7 +60,7 @@ def check_required_sections(content: str) -> list[CheckResult]:
     checks = [
         ("SECTION_OUTCOMES", r"##\s+(Learning Outcomes|What You.ll|Що ви зможете)",
          "Learning Outcomes section"),
-        ("SECTION_QUIZ", r"##\s+(Quiz|Knowledge Check|Тест)",
+        ("SECTION_QUIZ", r"##\s+(Quiz|Knowledge Check|Тест|Контрольні запитання)",
          "Quiz section"),
     ]
 
@@ -111,7 +111,8 @@ def check_content_lines(content: str, path: Path | None = None) -> list[CheckRes
 
     passed = count >= threshold
     return [CheckResult("LINE_COUNT", passed,
-                        f"Content lines (excl. code blocks): {count} (threshold: {threshold})")]
+                        f"Content lines (excl. code blocks): {count} (threshold: {threshold})",
+                        severity="WARNING")]  # Demoted — LLM scoring catches thin content
 
 
 def check_code_blocks(content: str) -> list[CheckResult]:
