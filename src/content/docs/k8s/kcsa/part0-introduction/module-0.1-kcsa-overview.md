@@ -27,6 +27,9 @@ After completing this module, you will be able to:
 
 The KCSA (Kubernetes and Cloud Native Security Associate) fills a crucial gap in the Kubernetes certification landscape. Before KCSA, you had to choose between general knowledge (KCNA) or jump straight into hands-on security specialist work (CKS). Now there's a bridge.
 
+**The Real-World Cost of Knowledge Gaps**
+Consider a common industry scenario: A development team quickly deployed a new microservice to production. Lacking foundational Kubernetes security knowledge, they left the default service account token mounted in their pods and did not implement network policies. When an attacker found a simple vulnerability in their application code, they used that default token to query the Kubernetes API, discover other services, and move laterally across the cluster. This was not an advanced zero-day exploit; it was a basic misconfiguration that could have been easily avoided. The KCSA curriculum is designed exactly to prevent this scenario by ensuring everyone interacting with the cluster understands the threat landscape and baseline defenses, demonstrating the practical field value of the certification beyond just passing a test.
+
 KCSA is perfect for:
 - Security professionals entering the Kubernetes space
 - Developers who need security awareness
@@ -122,6 +125,18 @@ KCSA is perfect for:
 ```
 
 > **Stop and think**: Looking at the domain weights, if you only had two weeks to prepare, which domains would you prioritize and why? Consider both the weight percentages and how the domains build on each other.
+
+### Self-Assessment: Where Do You Stand?
+
+Before diving in, take a moment to map your current experience against the six KCSA domains. Ask yourself:
+- **Cluster Component Security (22%)**: Have I ever configured or secured the Kubernetes API server, etcd, or kubelet?
+- **Security Fundamentals (22%)**: Do I regularly write RBAC roles, manage Kubernetes Secrets, or define Network Policies?
+- **Kubernetes Threat Model (16%)**: Can I explain how a container escape happens or identify common Kubernetes attack surfaces?
+- **Platform Security (16%)**: Have I worked with image scanners, admission controllers (like OPA Gatekeeper), or runtime security tools?
+- **Cloud Native Security (14%)**: Am I familiar with the 4 Cs of cloud native security and the shared responsibility model?
+- **Compliance Frameworks (10%)**: Have I ever run a CIS Benchmark assessment or mapped controls to NIST frameworks?
+
+> **Pause and predict**: Based on your answers above, which two domains will require the most study time for you personally?
 
 ### Where to Focus
 
