@@ -74,6 +74,8 @@ The table below compares commonly used instance types across the four most popul
 
 **Key insight**: Notice how `t3.medium` and `m6i.large` both offer 2 vCPUs—but the `m6i.large` provides 8 GiB of memory (double the `t3.medium`'s 4 GiB at the same vCPU count) and consistent performance without credit-based throttling. For production workloads that need reliable performance, General Purpose M-series instances usually make more sense than burstable T-series, despite the slightly higher hourly cost.
 
+> **Stop and think**: You are migrating a legacy, monolithic application that requires 32 GiB of memory. It idles at 15% CPU utilization 95% of the time, but during monthly reporting runs, it hits 100% CPU for several hours. Which instance family and size provides the most cost-effective baseline without risking CPU throttling during the reporting runs?
+
 *Note on Graviton: Instance families ending in 'g' (like m6g, c6g, r6g) use AWS Graviton processors (ARM architecture) rather than x86. They generally offer 20-40% better price-performance ratios compared to their Intel equivalents. If your application stack supports ARM (most Linux workloads, containers, and interpreted languages do), Graviton instances are almost always the smarter choice.*
 
 ### Purchasing Options
@@ -99,6 +101,8 @@ How you pay for compute dramatically impacts your architecture and your monthly 
 | **Dedicated Hosts** | Varies | 1 or 3 years (or On-Demand) | None | License compliance, regulatory isolation |
 
 **Cost example**: A single `m6i.xlarge` running 24/7 for a year at On-Demand rates costs approximately $0.192/hr x 8,760 hrs = **$1,682/year**. With a 3-year Savings Plan (all upfront), that same compute drops to roughly **$672/year**—a 60% savings. With Spot pricing (assuming ~70% average discount), an equivalent workload costs roughly **$504/year**, but you must design for interruptions.
+
+> **Pause and predict**: A data science team runs a massive, parallel data processing job every night. The job takes 4 hours to complete, but it is heavily checkpointed—if a server shuts down, the job simply resumes from the last checkpoint with a 5-minute penalty. If they switch from On-Demand to Spot instances and experience 3 interruptions per night, will this architectural change save money?
 
 *The golden rule of EC2 cost optimization: use Savings Plans for your baseline, On-Demand for unpredictable burst, and Spot for anything that can tolerate interruption. Never run a stable production workload on pure On-Demand for more than a few weeks without evaluating a commitment.*
 
@@ -245,6 +249,8 @@ echo "User Data script completed at $(date)"
 | **Golden AMI** | Fast (seconds) | Low — rebuild to change | AMI pipeline needed | Stable base, infrequent changes |
 | **User Data only** | Slow (minutes) | High — change at launch | Simple script | Rapid iteration, dev/test |
 | **Hybrid (recommended)** | Medium | Balanced | Both pipelines | Production: AMI for base + User Data for config |
+
+> **Stop and think**: If a critical zero-day vulnerability is discovered in the OpenSSL library, how does your patching strategy differ if you rely entirely on a Golden AMI versus relying entirely on User Data for OS configuration? Which approach allows for faster emergency remediation across a fleet of 1,000 instances?
 
 The hybrid approach is what most production teams adopt. Bake the OS, security agents, and application runtime into the AMI (things that rarely change). Use User Data to pull the latest application version and environment-specific configuration at boot time (things that change frequently).
 
@@ -489,42 +495,42 @@ aws ec2 create-launch-template \
 
 <details>
 <summary>Question 1: You need to design an architecture for a video rendering application. The rendering jobs are pulled from an SQS queue. If a server goes offline mid-render, the job simply returns to the queue to be picked up by another server. The rendering requires significant CPU power but has a tight budget. What EC2 purchasing option is best?</summary>
-Spot Instances. Because the workload is completely stateless, fault-tolerant, and driven by a queue, it perfectly handles the 2-minute interruption notice of Spot instances. This provides access to powerful compute resources (like C6i instances) at a fraction of the On-Demand cost. To further reduce interruption risk, configure the fleet to diversify across multiple instance types (c6i, c5, c5a, c6g) and multiple Availability Zones.
+Spot Instances are the correct choice because the workload is completely stateless, fault-tolerant, and driven by a queue. When an instance is interrupted with the 2-minute warning, the job simply fails and returns to the SQS queue, where another server will pick it up without data corruption. This architecture perfectly handles the volatility of Spot instances, providing access to powerful compute resources (like c6i instances) at a 70-90% discount compared to On-Demand. To further reduce interruption risk and maintain throughput, you should configure the fleet to diversify across multiple instance types (e.g., c6i, c5, c5a, c6g) and multiple Availability Zones.
 </details>
 
 <details>
 <summary>Question 2: You launch an EC2 instance with a User Data script that updates the OS packages and installs Node.js. An hour later, you stop the instance and start it again. Will the User Data script run a second time?</summary>
-No. By default, the `cloud-init` User Data script only executes once per instance lifecycle, specifically during the very first boot. Stopping and starting the instance does not re-trigger it. If you need a script to run on every boot, you must use a cloud-init `#cloud-boothook` or place the script in `/var/lib/cloud/scripts/per-boot/`.
+No, the User Data script will not run a second time. By default, the `cloud-init` service that processes User Data scripts only executes during the very first boot lifecycle of the instance. Stopping and starting the instance simply reboots the operating system; it does not trigger the initialization phase again. If you require a script to run on every single boot (such as pulling the latest configuration from Parameter Store), you must explicitly configure it using a `cloud-init` `#cloud-boothook` directive, or place the script in the `/var/lib/cloud/scripts/per-boot/` directory on the instance.
 </details>
 
 <details>
 <summary>Question 3: Your Auto Scaling Group has a Minimum capacity of 2, a Maximum of 10, and a Desired capacity of 4. An Availability Zone experiences a localized failure, bringing down two of your instances. What will the Auto Scaling Group do?</summary>
-The ASG health checks will detect that two instances have failed. Because the Desired capacity is set to 4, the ASG will automatically launch two new instances in the remaining healthy Availability Zones to restore the fleet count to the desired state. The ASG also performs AZ rebalancing, so once the failed AZ recovers, new instances may be launched there during subsequent scaling activities to restore even distribution.
+The Auto Scaling Group will automatically launch two new instances to replace the failed ones. First, the ASG's health checks (or ELB health checks, if configured) will detect that the two instances in the failed AZ are no longer responding. Because the Desired capacity is explicitly set to 4, the ASG detects a drift in state and initiates a scale-out action in the remaining healthy Availability Zones to restore the fleet count. Once the failed AZ eventually recovers, the ASG will perform an AZ rebalancing operation during subsequent scaling activities, ensuring the instances are evenly distributed across all configured zones once again.
 </details>
 
 <details>
 <summary>Question 4: You attach an EBS volume to an EC2 instance in `us-east-1a`. You take a snapshot of the volume. A few days later, the instance is terminated. Can you use the snapshot to create a new volume for an instance in `us-east-1b`?</summary>
-Yes. While EBS volumes are tied to a specific Availability Zone, EBS snapshots are stored regionally in Amazon S3. You can use a snapshot taken in `us-east-1a` to instantly provision a new volume in `us-east-1b` (or any other AZ within the `us-east-1` region). You can even copy the snapshot to a different region entirely.
+Yes, you can absolutely use the snapshot to create a volume in a different Availability Zone. While EBS volumes themselves are inherently tied to a specific Availability Zone and cannot be moved, EBS snapshots are stored regionally within Amazon S3. Because the snapshot exists at the region level, it can be referenced to instantly provision a new, fully populated volume in `us-east-1b`, `us-east-1c`, or any other AZ within that same region. Furthermore, if you need to migrate the data to a completely different geographic region for disaster recovery, you can copy the snapshot across regions and restore it there.
 </details>
 
 <details>
-<summary>Question 5: What is the primary operational benefit of using a Launch Template over a legacy Launch Configuration for an Auto Scaling Group?</summary>
-Launch Templates support versioning. You can create a new version of a template (e.g., updating the AMI ID to a newly patched image) and update the ASG to use the new version, or set it to always use the "Latest" version. Legacy Launch Configurations were immutable; changing anything required creating an entirely new configuration and updating the ASG. Launch Templates also support additional features like mixed instance types, Spot/On-Demand mix, and multiple network interfaces.
+<summary>Question 5: Your team manages an Auto Scaling Group using a legacy Launch Configuration. A critical security patch requires you to update the AMI across the entire fleet. You also want to start mixing On-Demand and Spot instances to save costs. What is the most efficient architectural path forward, and why?</summary>
+You must migrate from a Launch Configuration to a Launch Template. Legacy Launch Configurations are strictly immutable; updating an AMI requires creating a completely new configuration object, updating the ASG to point to it, and deleting the old one. More importantly, Launch Configurations are deprecated and do not support modern EC2 features, such as combining Spot and On-Demand instances in the same ASG. Launch Templates solve both problems by supporting versioning—allowing you to simply draft a v2 of the template with the new AMI—and unlocking advanced features like mixed instance policies and IMDSv2 enforcement.
 </details>
 
 <details>
 <summary>Question 6: An Application Load Balancer is routing traffic to a target group of EC2 instances. One instance suddenly starts returning HTTP 500 errors due to a memory leak in the application. How does the ALB handle this?</summary>
-Assuming the ALB health check is configured to look for an HTTP 200 response on a specific path, the ALB will notice the instance failing health checks after the configured unhealthy threshold is exceeded. It will mark the instance as "Unhealthy" and immediately stop routing new user traffic to it, directing all traffic to the remaining healthy instances. If the ASG uses ELB health checks, it will then terminate the unhealthy instance and launch a replacement.
+Assuming the ALB is configured with an active health check on an application path (e.g., `/health`), it will detect the HTTP 500 errors. Once the instance returns consecutive errors exceeding the configured "unhealthy threshold," the ALB marks the target as Unhealthy. It immediately stops routing new user requests to that specific instance, distributing the load across the remaining healthy targets to prevent a wider outage. If the Auto Scaling Group is configured to use `ELB` health checks rather than just `EC2` status checks, the ASG will recognize the unhealthy status, terminate the malfunctioning instance, and launch a fresh replacement to restore desired capacity.
 </details>
 
 <details>
 <summary>Question 7: You have a production web application running on m6i.large instances. Traffic is very predictable: low overnight, ramps up at 8 AM, peaks at noon, and drops off at 6 PM. What scaling strategy should you use?</summary>
-Use a combination of Scheduled Scaling and Target Tracking. Configure a scheduled action to scale out before 8 AM (e.g., increase desired capacity from 2 to 6 at 7:45 AM) and scale in at 6 PM. Layer a Target Tracking policy on top (targeting 60% CPU utilization) to handle any unexpected traffic deviations. Scheduled scaling handles the predictable pattern; target tracking handles the unpredictable variance.
+You should implement a hybrid strategy using both Scheduled Scaling and Target Tracking policies. Because the traffic pattern is highly predictable, you can configure a Scheduled Action to proactively scale out the fleet before 8 AM (e.g., increasing desired capacity from 2 to 6) and scale it back in at 6 PM, ensuring capacity is ready before the load hits. However, you should also layer a Target Tracking policy on top of this (e.g., targeting 60% CPU utilization). The scheduled scaling handles the known daily baseline efficiently, while the target tracking policy acts as a safety net to dynamically handle unpredictable spikes or sustained surges that exceed the daily norm.
 </details>
 
 <details>
 <summary>Question 8: A developer creates a custom AMI that includes their application and all dependencies. They share this AMI with another AWS account. The second account launches an instance from this AMI, but it fails with a "snapshot not found" error. What went wrong?</summary>
-The AMI references EBS snapshots. When sharing an AMI across accounts, you must also share the underlying EBS snapshots that the AMI references. If the AMI's EBS snapshots are not shared (or if they are encrypted with a KMS key that the other account does not have permission to use), the launch will fail. The fix is to share both the AMI and its associated snapshots, and if encrypted, grant the target account access to the KMS key.
+The launch failure is caused by permissions on the underlying EBS snapshots associated with the AMI. An AMI is essentially a metadata pointer to one or more EBS snapshots stored in S3. When you share an AMI across AWS accounts, you must explicitly share the referenced EBS snapshots as well; otherwise, the target account lacks permission to read the data to create the root volume. Furthermore, if those snapshots are encrypted, you must also share the KMS key used for encryption and ensure the target account has IAM permissions to use that specific key for decryption during the instance launch.
 </details>
 
 ## Hands-On Exercise: Auto-Scaling Web Fleet
@@ -685,8 +691,15 @@ echo "ALB: $ALB_ARN"
 # Wait for ALB to provision (takes ~2 mins)
 echo "Waiting for ALB to become active..."
 aws elbv2 wait load-balancer-available --load-balancer-arns $ALB_ARN
+```
 
-# Create Listener
+**Challenge: Create the Listener**
+The ALB is running, but it is not listening for traffic yet. Construct a command using the AWS CLI to create a listener on HTTP port 80 that forwards traffic to your Target Group (`$TG_ARN`).
+
+<details>
+<summary>Stuck? Click here for the solution</summary>
+
+```bash
 aws elbv2 create-listener \
     --load-balancer-arn $ALB_ARN \
     --protocol HTTP --port 80 \
@@ -698,9 +711,21 @@ ALB_DNS=$(aws elbv2 describe-load-balancers \
     --query 'LoadBalancers[0].DNSName' --output text)
 echo "ALB DNS: http://$ALB_DNS"
 ```
+</details>
 
-### Task 4: Create the Auto Scaling Group
-Link the Launch Template to the Target Group.
+### Task 4: Challenge - Create the Auto Scaling Group
+Instead of blind copy-pasting, construct the AWS CLI command to create the Auto Scaling Group yourself.
+
+**Requirements**:
+- **Name**: `DojoWebASG`
+- **Template**: Use `LaunchTemplateName=DojoWebTemplate,Version='$Latest'`
+- **Capacity**: Minimum `2`, Maximum `6`, Desired `2`
+- **Network**: Place instances in both `$SUBNET_1` and `$SUBNET_2`
+- **Routing**: Attach it to your Target Group (`$TG_ARN`)
+- **Health**: Set the health check type to `ELB` with a grace period of `180` seconds. *(Critical: If you use the default EC2 health check, the ASG will not replace instances that fail ALB health checks!)*
+
+<details>
+<summary>Stuck? Click here for the solution</summary>
 
 ```bash
 # Create ASG spanning two subnets, desired capacity 2
@@ -713,7 +738,12 @@ aws autoscaling create-auto-scaling-group \
     --health-check-type ELB \
     --health-check-grace-period 180 \
     --tags Key=Name,Value=DojoWeb-ASG,PropagateAtLaunch=false
+```
+</details>
 
+Once the ASG is created, apply the scaling policy to allow it to react to CPU spikes:
+
+```bash
 # Add a Target Tracking scaling policy (scale based on CPU)
 aws autoscaling put-scaling-policy \
     --auto-scaling-group-name DojoWebASG \
@@ -838,7 +868,7 @@ echo "Cleanup complete!"
 - [ ] I successfully created separate Security Groups for the ALB and web servers (defense in depth).
 - [ ] I created a Launch Template with User Data, IMDSv2 enforcement, and proper tagging.
 - [ ] I created an ALB with a Target Group using a custom health check path (`/health`).
-- [ ] I created an Auto Scaling Group with a Target Tracking scaling policy.
+- [ ] I successfully constructed the commands to create the ALB listener and Auto Scaling Group from raw requirements.
 - [ ] I hit the ALB DNS name in a browser and verified that my User Data script successfully configured the web servers, showing different Instance IDs on refresh.
 - [ ] I observed the ASG self-heal by terminating an instance and watching a replacement launch automatically.
 
