@@ -42,6 +42,10 @@ This module covers:
 >
 > Debugging is detective work. You arrive at a crime scene (broken pod) and must find clues. You check the victim's history (`describe`), examine the evidence (`logs`), interview witnesses (`events`), and sometimes need to go undercover (`exec`) to catch the culprit. Systematic investigation beats random guessing.
 
+> **War Story: The Two-Hour Typo**
+>
+> During a major production rollout, a critical microservice failed to start. The on-call engineer panicked and spent two hours randomly restarting the deployment, rolling back healthy database changes, and rewriting ingress rules. If they had simply followed a systematic workflow—starting with `kubectl describe pod` and reading the events—they would have immediately seen an `ErrImagePull` event caused by a typo in the image tag. A systematic workflow turns a two-hour panic attack into a two-minute fix. This same panic is what causes candidates to fail the CKAD exam when faced with a broken environment.
+
 ---
 
 ## The Debugging Workflow
