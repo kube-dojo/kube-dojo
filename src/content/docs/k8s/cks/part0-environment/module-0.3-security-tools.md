@@ -37,6 +37,38 @@ This module builds that fluency.
 
 ---
 
+## The Security Lifecycle
+
+Before diving into individual CLI commands, it is crucial to understand *where* each tool fits in a defense-in-depth strategy. Security in Kubernetes is not a single checkpoint; it is a continuous process applied across multiple stages of the container lifecycle.
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│                 THE SECURITY LIFECYCLE                      │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  1. BUILD / REGISTRY          2. CI/CD / MANIFESTS          │
+│  ┌─────────────────┐          ┌─────────────────┐           │
+│  │     Trivy       │          │    kubesec      │           │
+│  │ (Image Scanning)│ ───────> │(Static Analysis)│           │
+│  └─────────────────┘          └─────────────────┘           │
+│                                        │                    │
+│                                        ▼                    │
+│  4. RUNTIME                   3. INFRASTRUCTURE             │
+│  ┌─────────────────┐          ┌─────────────────┐           │
+│  │     Falco       │          │   kube-bench    │           │
+│  │(Threat Detect)  │ <─────── │ (CIS Auditing)  │           │
+│  └─────────────────┘          └─────────────────┘           │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+- **Trivy (Build/Registry):** Scans container images for known CVEs before they ever reach the cluster.
+- **kubesec (CI/CD Manifests):** Analyzes Kubernetes YAML manifests statically to prevent risky configurations (like `privileged: true`) from being deployed.
+- **kube-bench (Cluster Infrastructure):** Audits the underlying Kubernetes components (API server, kubelet, etcd) against CIS Benchmarks to ensure the cluster itself is locked down.
+- **Falco (Runtime):** Monitors active containers via system calls to detect real-time anomalies (e.g., someone opening a shell or reading `/etc/shadow`).
+
+---
+
 ## Trivy: Image Vulnerability Scanning
 
 ### Basic Scanning
