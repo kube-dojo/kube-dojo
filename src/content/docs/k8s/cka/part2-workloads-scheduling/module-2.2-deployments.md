@@ -561,6 +561,61 @@ kubectl describe deployment nginx | grep -A10 Conditions
 | `Progressing` | Rollout in progress |
 | `ReplicaFailure` | Failed to create pods |
 
+### 9.3 Diagnosing Stuck Rollouts
+
+> **Stop and think**: If a Deployment is stuck in a `Progressing` state but never becomes `Available`, where is the first place you should look to understand why the new pods aren't starting?
+
+When a rollout gets stuck, it's usually because the new pods are failing to start or become ready. The RollingUpdate strategy pauses to prevent a full outage. Here is a concrete workflow to diagnose and recover from a stuck rollout.
+
+**Step 1: Deploy a broken update**
+```bash
+# Update to an image tag that doesn't exist
+kubectl set image deployment/nginx nginx=nginx:broken-tag
+
+# The rollout will hang
+kubectl rollout status deployment/nginx
+# Output: Waiting for deployment "nginx" rollout to finish: 1 out of 3 new replicas have been updated...
+```
+*(Press Ctrl+C to exit the hanging rollout status)*
+
+**Step 2: Inspect the Deployment**
+Start at the top level to see the status and conditions.
+```bash
+kubectl describe deployment nginx
+```
+Look at the `Conditions` and `Events` at the bottom of the output. You will likely see that the deployment is `Progressing` but lacking minimum availability.
+
+**Step 3: Check the ReplicaSets**
+The Deployment creates a new ReplicaSet for the update. Let's find it.
+```bash
+kubectl get replicasets -l app=nginx
+```
+You will see the old ReplicaSet with desired/current pods matching your previous state, and a new ReplicaSet with `DESIRED` 1, `CURRENT` 1, but `READY` 0. 
+
+**Step 4: Inspect the Pod Events**
+Find the specific pod that is failing to start.
+```bash
+kubectl get pods -l app=nginx
+# Look for the pod in ImagePullBackOff or CrashLoopBackOff status
+```
+
+Describe the failing pod or check cluster events to identify the exact error.
+```bash
+# Describe the specific failing pod
+kubectl describe pod <failing-pod-name>
+
+# Or check recent events in the namespace
+kubectl get events --sort-by='.metadata.creationTimestamp' | tail -n 10
+```
+In this scenario, you will see a `Failed to pull image "nginx:broken-tag"` event revealing the root cause.
+
+**Step 5: Safely Rollback**
+Now that you have identified the root cause (a bad image tag), cancel the stuck rollout and restore the previous state.
+```bash
+kubectl rollout undo deployment/nginx
+kubectl rollout status deployment/nginx
+```
+
 ---
 
 ## Did You Know?
