@@ -102,6 +102,8 @@ aws eks describe-cluster --name my-cluster \
 
 Do not remove or restrict this security group unless you fully understand the consequences. Misconfiguring it is one of the fastest ways to make your nodes unable to join the cluster.
 
+> **Stop and think**: If a security group rule inadvertently blocks traffic from the worker nodes to the cross-account ENIs, what happens to the pods already running on those nodes? Do they crash immediately, or do they keep running? (Hint: Think about what the control plane actually does versus what the local kubelet does).
+
 ---
 
 ## Cluster Endpoint Access: Public, Private, or Both
@@ -220,6 +222,8 @@ aws eks update-cluster-config --name my-cluster \
 
 *War Story: The fintech failure described in the opening was exactly the "public only" pattern. When they switched to public + private with CIDR restrictions, their node fleet became completely independent of NAT Gateway health for control plane communication. The same data pipeline explosion that previously caused a four-hour outage became a non-event the next time it happened -- nodes never noticed because they were talking to the control plane through the private ENIs.*
 
+> **Pause and predict**: A developer using a laptop connected to the corporate VPN (which has a route to the VPC) tries to run `kubectl get pods` on an EKS cluster configured with a "Private Only" endpoint. Will the command succeed? Why or why not?
+
 ---
 
 ## Compute Options: Managed Node Groups vs. Self-Managed vs. Fargate
@@ -309,6 +313,8 @@ Fargate characteristics:
 
 Most production clusters use a hybrid approach: Managed Node Groups for the core workload, with Fargate profiles for specific namespaces that benefit from serverless isolation (like batch jobs or tenant-isolated services).
 
+> **Stop and think**: You have a mission-critical DaemonSet that ships logs to a central security account. You are considering migrating some of your high-burst, unpredictable web traffic to Fargate to save on over-provisioned EC2 nodes. What architectural trade-off will you immediately face regarding your logging strategy?
+
 ---
 
 ## EKS Add-ons: Managed Component Lifecycle
@@ -380,6 +386,8 @@ The `--resolve-conflicts` flag is important:
 - `PRESERVE`: Keep your custom configuration and only update what the add-on manages
 
 For production, always use `PRESERVE` unless you specifically want to reset to defaults.
+
+> **Pause and predict**: You trigger an EKS cluster upgrade from Kubernetes 1.30 to 1.31. You do not update the `vpc-cni` add-on. Several weeks later, nodes start scaling up, but new pods are stuck in `ContainerCreating`. What likely went wrong with the add-on lifecycle?
 
 ---
 
@@ -507,6 +515,8 @@ k delete configmap aws-auth -n kube-system
 
 > **Important**: You cannot go backwards. Once you switch from `API_AND_CONFIG_MAP` to `API`, you cannot re-enable the ConfigMap. Test thoroughly in the transitional mode before making the final switch.
 
+> **Stop and think**: Your team is in the `API_AND_CONFIG_MAP` transitional mode. A developer deletes the `aws-auth` ConfigMap prematurely to "clean up." Can the team still access the cluster? What determines their access?
+
 ---
 
 ## Did You Know?
@@ -545,39 +555,39 @@ The worker node uses the **private endpoint** via the cross-account ENIs inside 
 </details>
 
 <details>
-<summary>Question 2: You are migrating from aws-auth to EKS Access Entries. Can you switch directly from CONFIG_MAP mode to API mode?</summary>
+<summary>Question 2: Your platform team is under a tight deadline to deprecate legacy infrastructure. An engineer proposes updating the EKS cluster directly from `CONFIG_MAP` mode to `API` mode to save time and immediately delete the `aws-auth` ConfigMap. Should you approve this plan?</summary>
 
-**No.** You must first transition to `API_AND_CONFIG_MAP` mode, which enables both systems simultaneously. In this transitional mode, you create Access Entries for all your existing IAM-to-Kubernetes mappings and verify they work correctly. Only after thorough testing should you switch to `API` mode. This is a one-way migration -- once you move to `API` mode, you cannot re-enable the ConfigMap. Skipping the transitional step risks locking users out of the cluster.
+**No, you should not approve this plan.** You must first transition the cluster to `API_AND_CONFIG_MAP` mode, which enables both authentication systems simultaneously. In this transitional mode, your team must create Access Entries for all existing IAM-to-Kubernetes mappings and verify they function correctly alongside the legacy system. Only after thorough testing confirms that users and CI/CD pipelines can authenticate via the API should you switch to `API` mode. This is a one-way migration; once you move to `API` mode, you cannot re-enable the ConfigMap, meaning a premature switch risks locking all users out of the cluster permanently.
 </details>
 
 <details>
-<summary>Question 3: What happens if you accidentally delete the cross-account ENIs that EKS places in your VPC?</summary>
+<summary>Question 3: An automated cleanup script in your AWS account identifies several ENIs without attached EC2 instances and deletes them. These ENIs were tagged with `kubernetes.io/cluster/production`. What is the immediate impact on your production EKS cluster?</summary>
 
-Deleting the cross-account ENIs severs the network connection between the EKS control plane (in the AWS-managed account) and your worker nodes. Nodes will be unable to reach the API server, kubelet will stop receiving pod scheduling instructions, and existing pods will continue running but cannot be managed. The cluster will appear healthy in the EKS console (the control plane is fine), but `kubectl` commands through the private endpoint will time out. AWS will eventually re-create the ENIs, but the disruption can last several minutes. To prevent this, implement IAM policies that deny `ec2:DeleteNetworkInterface` on ENIs tagged with `kubernetes.io/cluster`.
+Deleting these cross-account ENIs immediately severs the network connection between the EKS control plane (in the AWS-managed account) and your worker nodes. Nodes will be unable to reach the API server, meaning the kubelet will stop receiving pod scheduling instructions and cannot report node health. Existing pods will continue running and serving traffic as long as they do not require control plane interaction, but the cluster cannot be managed or scaled. The cluster will appear healthy in the EKS console because the control plane itself is unharmed, but `kubectl` commands executing through the private endpoint will time out. AWS will eventually recreate the missing ENIs automatically, but the disruption can last several minutes and severely impact deployment pipelines.
 </details>
 
 <details>
 <summary>Question 4: A team wants zero-operational-overhead Kubernetes. They plan to run their entire application (15 microservices) on Fargate. Their architecture includes a Datadog agent DaemonSet, Istio service mesh, and a Redis StatefulSet with local SSD storage. Will this work?</summary>
 
-**No, this will not work.** Fargate does not support DaemonSets (so the Datadog agent cannot run), does not support privileged containers (required by some Istio components), and does not provide local persistent storage (Redis with local SSD is not possible). The team should use Managed Node Groups for the core workload and potentially use Fargate for specific stateless microservices that do not depend on DaemonSets. A sidecar-based approach for Datadog (injected per-pod) could work on Fargate, but it significantly increases resource consumption.
+**No, this architecture will not work on Fargate.** Fargate operates as a serverless compute engine and fundamentally does not support DaemonSets, meaning the Datadog agent cannot be deployed as a node-level background process. Furthermore, Fargate does not support privileged containers, which are strictly required by some Istio service mesh init components to configure iptables routing rules. Finally, Fargate does not provide local persistent storage options, making a Redis StatefulSet dependent on local SSDs impossible to deploy. The team must redesign their architecture to use Managed Node Groups for these specific workloads, or adopt a sidecar-based approach for logging and routing if they insist on a purely serverless environment.
 </details>
 
 <details>
 <summary>Question 5: You upgrade your EKS cluster from Kubernetes 1.31 to 1.32, but pods start failing DNS resolution. What is the likely cause?</summary>
 
-The most likely cause is that the **CoreDNS add-on was not updated** after the cluster upgrade. When you upgrade the Kubernetes version, add-ons are not automatically updated. If the CoreDNS version becomes incompatible with the new Kubernetes version, DNS resolution can fail or degrade. The fix is to update the CoreDNS add-on to a version compatible with Kubernetes 1.32 using `aws eks update-addon --cluster-name my-cluster --addon-name coredns --addon-version <compatible-version>`. Always update all add-ons immediately after a cluster version upgrade.
+The most likely cause is that the **CoreDNS add-on was not updated** after the cluster control plane upgrade. When you upgrade the Kubernetes version of an EKS cluster, managed add-ons like CoreDNS, VPC CNI, and kube-proxy are not automatically upgraded alongside the control plane. If the running CoreDNS version becomes deprecated or strictly incompatible with the new Kubernetes API version, DNS resolution within the cluster can fail or silently degrade. To resolve this issue, you must immediately update the CoreDNS add-on to a version explicitly tested and compatible with Kubernetes 1.32. As a best practice, always review and update all EKS add-ons to their compatible versions immediately following any cluster version upgrade.
 </details>
 
 <details>
-<summary>Question 6: What is the difference between the "cluster security group" and "additional security groups" in EKS?</summary>
+<summary>Question 6: A security auditor notices two different types of security groups attached to your EKS cluster configuration: the "cluster security group" and several "additional security groups." The auditor demands to know why the cluster security group has rules allowing all traffic between nodes and the control plane, and asks you to lock it down. How do you explain the architectural difference and defend the configuration?</summary>
 
-The **cluster security group** is automatically created by EKS and attached to both the cross-account ENIs (control plane side) and managed node groups. It allows unrestricted communication between the control plane and nodes. You should not modify or delete it. **Additional security groups** are ones you optionally specify during cluster creation -- they are attached only to the cross-account ENIs, not to nodes. They provide extra control over what non-node traffic (like from a bastion host) can reach the control plane ENIs. In practice, the cluster security group handles node-to-control-plane traffic, while additional security groups handle everything else.
+The **cluster security group** is a foundational networking component automatically created and managed by EKS, explicitly designed to be attached to both the cross-account ENIs and your managed node groups. It contains default rules allowing unrestricted communication between the control plane and nodes, and modifying or restricting these rules is highly dangerous as it can easily break node registration and pod networking. In contrast, **additional security groups** are custom groups you optionally specify during cluster creation that are attached *only* to the cross-account ENIs, not to the worker nodes. You use these additional security groups to provide granular, restrictive control over what non-node external traffic (such as requests from a bastion host or corporate VPN) is allowed to reach the Kubernetes API server endpoints. Therefore, the cluster security group must remain open to facilitate internal cluster operations, while the additional security groups are the correct mechanism for satisfying the auditor's request to restrict administrative access.
 </details>
 
 <details>
 <summary>Question 7: Your company requires that the Kubernetes API server is never accessible from the public internet. However, your CI/CD pipeline runs on GitHub Actions (outside your VPC). How can you satisfy both requirements?</summary>
 
-Enable only the **private endpoint** on the EKS cluster, then establish connectivity from GitHub Actions to your VPC. Options include: (1) Run GitHub Actions self-hosted runners inside your VPC on EC2 instances, (2) Use AWS PrivateLink with a VPC endpoint service to expose the cluster API through a private channel, (3) Set up a site-to-site VPN between GitHub's network and your VPC (GitHub supports OIDC but not VPN natively, so self-hosted runners are the most common approach). The key insight is that "private endpoint only" means you must bring your CI/CD compute into the VPC, not expose the cluster to the internet.
+To satisfy the security requirement, you must configure the EKS cluster with only the **private endpoint** enabled, completely removing the public attack surface. Because the API server DNS now resolves exclusively to internal VPC IP addresses, external CI/CD platforms like GitHub Actions cannot reach the cluster over the public internet. To bridge this gap, you must establish private connectivity by running self-hosted GitHub Actions runners directly on EC2 instances inside your VPC. Alternatively, you could utilize AWS PrivateLink or establish a site-to-site VPN connection between the external CI/CD network and your AWS environment. The critical architectural principle here is that securing the cluster behind a private endpoint shifts the burden of connectivity to the client, requiring you to bring your deployment tools into the private network boundary.
 </details>
 
 ---
