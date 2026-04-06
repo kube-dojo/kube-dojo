@@ -124,7 +124,7 @@ k create deploy web --image=nginx $kdr > deploy.yaml
 
 ---
 
-> **Pause and predict**: What happens if you run `k run nginx --image=nginx` without `--restart=Never`? What resource type does Kubernetes actually create? Think about it before reading on.
+> **Pause and predict**: What happens if you run a test pod using `k run test --image=busybox -- wget ...` without including the `--restart=Never` flag? What happens to the Pod's lifecycle after the `wget` command completes successfully? Think about it before reading on.
 
 ## Multi-Container Pod YAML Generation
 
@@ -269,7 +269,7 @@ k get pods -n prod
 k get pods -A
 ```
 
-> **What would happen if**: You forget to switch namespaces between two consecutive exam tasks. The first task uses `dev` namespace and the second uses `prod`. What goes wrong, and how long might it take you to realize the mistake?
+> **Stop and think**: What would happen if you forget to switch namespaces between two consecutive exam tasks? If the first task uses the `dev` namespace and the second uses `prod`, what goes wrong, and how long might it take you to realize the mistake?
 
 ### Pro Tip: Check Namespace First
 
@@ -343,11 +343,10 @@ When adding a sidecar container, you'll copy an existing container spec:
 
 ## Did You Know?
 
-- **The `--restart=Never` flag** is crucial for test pods. Without it, Kubernetes creates a Deployment instead of a bare Pod. The `--rm` flag deletes the pod after it exits—perfect for one-off tests.
-
-- **You can combine `-it` and `--rm`** for ephemeral debug sessions. The pod runs interactively and disappears when you exit.
-
-- **JSONPath in kubectl** uses the same syntax as the Kubernetes API. Practicing it helps with both the exam and real-world automation.
+- **The `--restart=Never` flag** sets the pod's `restartPolicy` to `Never`. This is crucial for test pods that run a single command and exit, preventing Kubernetes from continuously restarting the container after it finishes.
+- **The `--rm` flag** deletes the pod after it exits, which is perfect for one-off tests and keeps your environment clean.
+- **You can combine `-it` and `--rm`** for ephemeral debug sessions. The pod runs interactively and disappears entirely when you exit the shell.
+- **JSONPath in kubectl** uses the exact same syntax as the Kubernetes API. Practicing it helps with both the exam and real-world automation scripts.
 
 ---
 
@@ -355,8 +354,8 @@ When adding a sidecar container, you'll copy an existing container spec:
 
 | Mistake | Why It Hurts | Solution |
 |---------|--------------|----------|
-| Forgetting `--restart=Never` | Creates Deployment instead of Pod | Make it part of your test pattern |
-| Wrong namespace | Resources created in default | Always check/set namespace first |
+| Forgetting `--restart=Never` on test pods | Pod enters CrashLoopBackOff as it restarts continuously after exiting | Make it part of your one-off test pattern |
+| Wrong namespace | Resources are created in default or previous namespace | Always check/set namespace first |
 | Editing YAML with wrong indent | Invalid YAML, cryptic errors | Use `:set paste` in Vim before pasting |
 | Not using `--dry-run` | Slower YAML creation | Make `$kdr` variable second nature |
 | Searching docs too much | Time wasted | Memorize common specs |
@@ -368,25 +367,25 @@ When adding a sidecar container, you'll copy an existing container spec:
 1. **Your team lead asks you to quickly generate the YAML for a new batch Job without actually running it in the cluster. You need to hand off the YAML file for code review. What's the fastest approach?**
    <details>
    <summary>Answer</summary>
-   Use `kubectl create job myjob --image=busybox -- echo done --dry-run=client -o yaml > job.yaml`. The `--dry-run=client` flag generates valid YAML without contacting the API server, and `-o yaml` outputs it in YAML format. This is the standard generate-then-edit workflow for CKAD -- you generate a skeleton imperatively, then customize the YAML as needed. This saves significant time compared to writing YAML from scratch.
+   Use `kubectl create job myjob --image=busybox -- echo done --dry-run=client -o yaml > job.yaml`. The `--dry-run=client` flag generates valid YAML without contacting the API server, and `-o yaml` outputs it in YAML format. This is the standard generate-then-edit workflow for CKAD because you generate a skeleton imperatively, then customize the YAML as needed. This practice saves significant time compared to writing YAML completely from scratch.
    </details>
 
 2. **After deploying a new Service called `api-gateway`, you need to verify it's reachable from inside the cluster -- but you don't want to leave any debug resources behind. How do you test this cleanly?**
    <details>
    <summary>Answer</summary>
-   Run `kubectl run test --image=busybox --rm -it --restart=Never -- wget -qO- http://api-gateway`. The `--rm` flag automatically deletes the pod when it exits, `--restart=Never` ensures a bare Pod (not a Deployment) is created, and `-it` gives you interactive output. This one-liner is essential for CKAD -- you'll use it repeatedly to verify Services, DNS resolution, and connectivity without polluting the cluster.
+   Run `kubectl run test --image=busybox --rm -it --restart=Never -- wget -qO- http://api-gateway`. The `--rm` flag automatically deletes the pod when it exits, and `-it` gives you interactive output. The `--restart=Never` flag is critical because it ensures the Pod does not continuously restart itself after the `wget` command finishes successfully. This one-liner is essential for CKAD, as you will use it repeatedly to verify Services, DNS resolution, and connectivity without polluting the cluster.
    </details>
 
 3. **A CKAD exam task says: "Write the image used by the first container in pod `web-app` to the file `/opt/answer.txt`." You need to extract just the image string, not the full pod spec. How do you do this efficiently?**
    <details>
    <summary>Answer</summary>
-   Use `kubectl get pod web-app -o jsonpath='{.spec.containers[0].image}' > /opt/answer.txt`. JSONPath lets you drill into the pod spec and extract exactly the field you need. The `{.spec.containers[0].image}` path navigates to the first container's image field. This is faster than `describe` + manual copy and less error-prone than `grep` on YAML output.
+   Use `kubectl get pod web-app -o jsonpath='{.spec.containers[0].image}' > /opt/answer.txt`. JSONPath allows you to drill directly into the pod spec and extract exactly the field you need without any extra text. The `{.spec.containers[0].image}` path navigates exactly to the first container's image field. This approach is much faster than running a `describe` followed by manual copying, and it is far less error-prone than attempting to `grep` on YAML output.
    </details>
 
 4. **You just completed a task in the `payments` namespace and moved to the next task, which requires working in `inventory`. You create a Deployment, but `kubectl get pods` shows nothing. What likely went wrong, and what's the fastest fix?**
    <details>
    <summary>Answer</summary>
-   You're still in the `payments` namespace. Your Deployment was created in `payments` instead of `inventory`, or you're looking in the wrong namespace. Fix with `kubectl config set-context --current --namespace=inventory`, then verify with `kubectl get pods`. To prevent this, always check or set your namespace at the start of every exam task. Many candidates lose points to namespace errors -- it's one of the most common exam mistakes.
+   You are likely still operating in the `payments` namespace, meaning your Deployment was created there instead of in `inventory`. The fastest fix is to switch contexts immediately using `kubectl config set-context --current --namespace=inventory`, then verify with `kubectl get pods`. To prevent this frustrating issue, you must always check or explicitly set your namespace at the start of every single exam task. Many candidates lose points purely to namespace placement errors.
    </details>
 
 ---
