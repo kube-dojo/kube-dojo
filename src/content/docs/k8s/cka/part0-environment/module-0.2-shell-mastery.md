@@ -59,7 +59,9 @@ After:  kx production<TAB>  → switches context with autocomplete
 
 ## Part 1: kubectl Autocomplete
 
-> **Try this comparison**: Type `kubectl get pods --all-namespaces -o wide` in your terminal. Now imagine typing that 30 times during a 2-hour exam. With the alias `k get po -A -o wide` and tab completion for pod names, you'll type half the characters. These aren't nice-to-haves — they're the difference between finishing the exam and running out of time.
+> **Pause and predict**: You need to describe a specific pod named `payment-processor-deployment-7f89c5b4d-9xt2z`. Without autocomplete, what happens if you misspell a single character in the pod name while rushing during the exam?
+>
+> You will get a "NotFound" error, forcing you to run `kubectl get pods` again, find the exact name, and retype or carefully copy-paste it. This small mistake just cost you 30-60 seconds. Autocomplete eliminates this risk entirely, allowing you to hit `<TAB>` and let the shell do the exact matching.
 
 This is **non-negotiable**. Autocomplete saves more time than any alias.
 
@@ -191,6 +193,10 @@ The CKA exam uses **multiple clusters**. You'll need to switch contexts constant
 > **War Story: The $15,000 Mistake**
 >
 > A DevOps engineer meant to delete a test namespace in the staging cluster. They typed `kubectl delete ns payment-service` and hit enter. Then their stomach dropped—they were in the production context. 47 pods serving real customers vanished. Recovery took 3 hours. The fix? They now have `PS1` configured to show the current context in their prompt, highlighted in red when it's production. Context awareness isn't optional—it's survival.
+
+> **Stop and think**: You just finished a complex troubleshooting task on `cluster-a` and the next exam question asks you to fix a deployment on `cluster-b`. If you forget to switch contexts and accidentally apply your fix to `cluster-a`, what is the double penalty you incur?
+>
+> First, you fail to earn the points for the current question because the fix was applied to the wrong cluster. Second, you might have just broken the working state of the previous question, potentially losing points you had already earned. Always verify your context before typing any mutating command.
 
 ### 3.1 Understand Contexts
 
@@ -391,29 +397,28 @@ k run nginx --image=nginx $do > nginx.yaml                              # (<2 se
 
 ## Quiz
 
-1. **What does this command do: `k get po -A -o wide`?**
+1. **Scenario**: You are in the middle of the CKA exam and need to find the IP address of a pod running in the `kube-system` namespace, but you can't remember its exact name. You only have a few seconds to spare. **Which command combination is the most efficient way to find this information?**
    <details>
    <summary>Answer</summary>
-   Lists all pods in all namespaces with extended information (node, IP, etc.). `-A` is short for `--all-namespaces`, `-o wide` shows additional columns.
+   The most efficient command is `k get po -n kube-system -o wide` (or `k get po -A -o wide` to search everywhere). Using the `k` alias combined with the `po` short name drastically reduces typing overhead compared to typing out the full `kubectl get pods`. The `-o wide` flag is crucial because the standard output does not display pod IP addresses or the nodes they are scheduled on. Finally, scoping with `-n kube-system` or using `-A` ensures you are looking in the right place without needing to switch your default namespace first.
    </details>
 
-2. **How do you quickly generate a deployment YAML without creating it?**
+2. **Scenario**: The exam asks you to create a new deployment named `web-app` using the `nginx:1.19` image, but it also requires you to add specific resource limits and a node selector before it starts running. **How should you approach creating this deployment efficiently without manually writing the entire YAML from scratch?**
    <details>
    <summary>Answer</summary>
-   `k create deploy nginx --image=nginx --dry-run=client -o yaml > deploy.yaml`
-   Or with the alias: `k create deploy nginx --image=nginx $do > deploy.yaml`
+   You should use the imperative command with the dry-run flag to generate a base template: `k create deploy web-app --image=nginx:1.19 $do > deploy.yaml`. By utilizing the `$do` variable (which expands to `--dry-run=client -o yaml`), you instruct the API server to format the output as YAML without actually persisting the object to the cluster. This provides you with a perfectly formatted, schema-valid skeleton file. You can then quickly open `deploy.yaml` in Vim, append the required resource limits and node selector, and finally apply it using `k apply -f deploy.yaml`.
    </details>
 
-3. **What's the first thing you should do when starting a new exam question?**
+3. **Scenario**: You read question 4 of the exam, which asks you to troubleshoot a failing CoreDNS deployment. You immediately type `k get po -n kube-system` and see that CoreDNS is running perfectly fine, leaving you confused. **What critical step did you likely forget to perform before starting to troubleshoot?**
    <details>
    <summary>Answer</summary>
-   Switch to the correct context. Each question specifies which cluster to use. Working on the wrong cluster is a common exam mistake.
+   You almost certainly forgot to switch to the correct Kubernetes context for the new question. The CKA exam environment consists of multiple distinct clusters, and each question specifies which context you must use at the very top of the prompt. If you don't run `kubectl config use-context <name>` (or your `kx` alias) before starting, you will be interacting with the cluster from the previous question. This is a common pitfall that leads candidates to waste precious time troubleshooting healthy systems or applying fixes to the wrong cluster.
    </details>
 
-4. **What's the short name for persistentvolumeclaims?**
+4. **Scenario**: You need to delete a pod named `stuck-pod` that is stuck in the `Terminating` state, and standard deletion is hanging indefinitely. You want to force its removal immediately to proceed with the exam. **How do you execute this deletion safely and quickly using your shell optimizations?**
    <details>
    <summary>Answer</summary>
-   `pvc` — as in `k get pvc`
+   You should execute the command `k delete po stuck-pod $now` to instantly remove the resource. The `$now` variable is an export for `--force --grace-period=0`, which instructs the kubelet to immediately terminate the processes without waiting for the standard graceful shutdown sequence. While this is dangerous in production as it can lead to data corruption or orphaned resources, it is a necessary technique in the time-constrained exam environment when dealing with unresponsive pods. Always ensure you are deleting the correct pod in the correct context before using force deletion.
    </details>
 
 ---
@@ -500,7 +505,7 @@ kubectl config current-context  # Verify
 kx practice-3
 kubectl config current-context  # Verify
 
-kx kubernetes-admin@kubernetes  # Back to default
+kx kubernetes-admin @src/content/docs/uk/prerequisites/cloud-native-101/module-1.3-what-is-kubernetes.md  # Back to default
 kubectl config current-context  # Verify
 
 # Stop timer. Target: <1 minute for all 4 switches + verifications
