@@ -21,6 +21,8 @@ After completing this module, you will be able to:
 
 In 2023, a major European bank began migrating its trading platform from on-premises data centers to AWS. The migration was planned as a "lift and shift" over 18 months. Six months in, they discovered a fundamental problem: their regulatory framework required that certain trading data never leave the country. Their on-premises data centers were in Frankfurt, but the low-latency market data feeds connected directly to those data centers via dedicated fiber. Moving the trading engine to the cloud meant adding 3-8 milliseconds of latency to market data -- enough to cost them $12 million per year in missed arbitrage opportunities. They also could not fully decommission the data center because their mainframe-based settlement system had 22 years of business logic that would take 5+ years to rewrite.
 
+> **Stop and think**: If the bank's trading engine stayed on-premises but analytics moved to the cloud, how might they keep the data in sync without overwhelming the network?
+
 The bank's CTO made the pragmatic decision that most enterprises eventually reach: they would not fully migrate to the cloud. Instead, they would build a hybrid architecture where the trading engine stayed on-premises (for latency-sensitive market data), the settlement system stayed on-premises (until the rewrite completed), and everything else -- customer-facing APIs, analytics, machine learning workloads, and new microservices -- ran on EKS in AWS. This required seamless networking between on-premises and cloud, unified identity across both environments, consistent Kubernetes operations regardless of where the cluster ran, and data replication strategies that respected regulatory boundaries.
 
 This module teaches you how to build that architecture. You will learn how to connect on-premises infrastructure to cloud providers via VPN and dedicated connections, how to extend cloud identity to on-premises Kubernetes clusters, how to replicate data across the hybrid boundary, and how to use EKS Anywhere, Anthos, and other solutions to create a unified Kubernetes control plane.
@@ -30,6 +32,8 @@ This module teaches you how to build that architecture. You will learn how to co
 ## Connectivity: VPN vs Dedicated Connections
 
 The foundation of any hybrid architecture is the network connection between your data center and the cloud. There are two fundamental approaches, and the choice between them affects everything from latency to cost to reliability.
+
+> **Pause and predict**: Given the 1.25 Gbps bandwidth limit of an AWS Site-to-Site VPN tunnel, how long would it take to transfer a 500GB database backup? What does this mean for disaster recovery planning?
 
 ### Site-to-Site VPN
 
@@ -187,6 +191,8 @@ aws ec2 create-transit-gateway-route \
 ## Extending Cloud Identity to On-Premises
 
 In a hybrid architecture, you need a single identity system that works across both cloud and on-premises Kubernetes clusters. Developers should not need separate credentials for each environment.
+
+> **Stop and think**: If your corporate Identity Provider goes down, what happens to developers trying to access the on-premises Kubernetes cluster via Pinniped? How would break-glass access work?
 
 ### Identity Architecture Options
 
@@ -415,6 +421,86 @@ spec:
 
 ---
 
+## Workload Migration Strategies
+
+Once your hybrid infrastructure is connected and identities are unified, the next challenge is actually moving workloads from on-premises to the cloud. A "big bang" cutover is rarely successful for complex applications. Instead, enterprises use progressive traffic shifting to migrate workloads safely.
+
+> **Pause and predict**: If you shift 1% of traffic to a new cloud cluster and monitor it for 24 hours, what specific metrics would tell you it is safe to increase the traffic to 10%?
+
+### Pattern 1: Weighted DNS Routing
+
+The simplest approach to traffic shifting is at the DNS layer. By configuring your DNS provider (like Route 53 or external-dns) to return multiple IP addresses with specific weights, you can control the percentage of users routed to each environment.
+
+```yaml
+# Example: AWS Route 53 Weighted Record via ExternalDNS annotation
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api-gateway
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: api.company.com
+    external-dns.alpha.kubernetes.io/aws-weight: "10" # 10% to cloud
+    external-dns.alpha.kubernetes.io/set-identifier: "cloud-eks-cluster"
+spec:
+  rules:
+    - host: api.company.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 80
+```
+
+*Pros*: Simple to implement, works across any geographic distance.
+*Cons*: DNS caching by client browsers and ISPs can cause traffic to linger on the old cluster long after you update the weights. Fails over slowly.
+
+### Pattern 2: Multi-Cluster Ingress
+
+For HTTP/HTTPS workloads, a multi-cluster Ingress controller (like GKE Multi-Cluster Ingress or a globally distributed load balancer like AWS Global Accelerator) can distribute traffic across on-premises and cloud clusters.
+
+```text
+┌──────────────────────────────────────────────────────────────┐
+│  GLOBAL LOAD BALANCER                                          │
+│                                                                │
+│                   api.company.com (100% traffic)               │
+│                            │                                   │
+│            90% traffic     │      10% traffic                  │
+│            ┌───────────────┴───────────────┐                   │
+│            ▼                               ▼                   │
+│  ┌────────────────────┐          ┌────────────────────┐        │
+│  │   On-Premises      │          │    Cloud EKS       │        │
+│  │   Data Center      │          │    Cluster         │        │
+│  │                    │          │                    │        │
+│  │  ┌──────────────┐  │          │  ┌──────────────┐  │        │
+│  │  │ Ingress      │  │          │  │ Ingress      │  │        │
+│  │  │ Controller   │  │          │  │ Controller   │  │        │
+│  │  └──────┬───────┘  │          │  └──────┬───────┘  │        │
+│  │         │          │          │         │          │        │
+│  │  ┌──────▼───────┐  │          │  ┌──────▼───────┐  │        │
+│  │  │ API Pods     │  │          │  │ API Pods     │  │        │
+│  │  └──────────────┘  │          │  └──────────────┘  │        │
+│  └────────────────────┘          └────────────────────┘        │
+└──────────────────────────────────────────────────────────────┘
+```
+
+*Pros*: Immediate traffic shifting without DNS caching issues. Can route based on HTTP headers (e.g., routing internal test users to the cloud cluster first).
+*Cons*: Requires a centralized load balancer that can reach both environments (often requiring Direct Connect).
+
+### Pattern 3: Multi-Cluster Service Mesh
+
+The most advanced migration strategy uses a service mesh like Istio or Linkerd configured for multi-cluster routing. This allows you to shift traffic not just at the edge, but for internal service-to-service communication across the hybrid boundary.
+
+If `Service A` (on-prem) calls `Service B`, the service mesh can route 90% of those calls to the on-prem `Service B` pods and 10% to the cloud `Service B` pods over the hybrid network link.
+
+*Pros*: Granular control, mutual TLS across the hybrid boundary, deep observability.
+*Cons*: High complexity. Requires a fast, reliable network connection (Direct Connect) to prevent cross-cluster latency from causing cascading timeouts.
+
+---
+
 ## EKS Anywhere, Anthos, and Hybrid Kubernetes Platforms
 
 Several solutions exist for running cloud-managed Kubernetes on-premises. Each takes a different approach to the "same Kubernetes, different infrastructure" problem.
@@ -432,6 +518,8 @@ Several solutions exist for running cloud-managed Kubernetes on-premises. Each t
 | **Best for** | AWS-centric orgs | GCP-centric orgs | Azure-centric orgs | Multi-cloud, vendor-neutral |
 
 ### EKS Anywhere Architecture
+
+> **Pause and predict**: If the EKS Anywhere Management Cluster loses connectivity to the Workload Cluster, do the applications on the Workload Cluster stop running? Why or why not?
 
 ```text
 ┌──────────────────────────────────────────────────────────────┐
@@ -579,6 +667,8 @@ eksctl anywhere install package harbor \
 ## Unified Control Plane Patterns
 
 The ultimate goal of hybrid architecture is a single pane of glass for managing Kubernetes across all environments.
+
+> **Stop and think**: In a Hub-Spoke GitOps architecture, what happens if the network link between the Cloud Hub and the On-Prem Spoke goes down for 4 hours while developers are merging code to the main branch?
 
 ### Pattern 1: Hub-Spoke with GitOps
 
