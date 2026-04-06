@@ -226,7 +226,7 @@ trivy image --timeout 10m large-image:1.0
 
 ---
 
-> **What would happen if**: Your CI/CD pipeline uses `trivy image --exit-code 1 --severity CRITICAL` to gate deployments. A new CRITICAL CVE is published in a base library. Suddenly, no team in the organization can deploy anything -- even unrelated services. How do you design a scanning gate that catches real issues without causing deployment paralysis?
+> **Pause and predict**: Your CI/CD pipeline uses `trivy image --exit-code 1 --severity CRITICAL` to gate deployments. A new CRITICAL CVE is published in a base library. Suddenly, no team in the organization can deploy anything -- even unrelated services. How do you design a scanning gate that catches real issues without causing deployment paralysis?
 
 ## Scanning Kubernetes Clusters
 
@@ -512,7 +512,9 @@ trivy image --download-db-only
 
 ## Hands-On Exercise
 
-**Task**: Scan images and identify security issues.
+**Scenario**: You are tasked with assessing the security posture of a deployment before it reaches production. You must evaluate the base image for vulnerabilities, compare it against a hardened alternative, and ensure the Kubernetes pod definition does not introduce runtime misconfigurations.
+
+**Task**: Use Trivy to scan images, parse the JSON output to count vulnerabilities, evaluate an Alpine alternative, and scan a Pod manifest for privilege escalation risks.
 
 ```bash
 # Step 1: Update Trivy database
@@ -560,7 +562,7 @@ echo "Report saved to scan-report.json"
 rm -f test-pod.yaml scan-report.json
 ```
 
-**Success criteria**: Understand how to scan images and interpret results.
+**Success criteria**: You have successfully updated the vulnerability database, parsed JSON scan results using `jq`, identified fixable critical vulnerabilities, and detected privilege escalation risks in a Kubernetes manifest.
 
 ---
 
