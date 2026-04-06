@@ -178,14 +178,14 @@ Should this valid, authorized request be allowed?
 
 Important security-related configuration:
 
-| Flag | Purpose | Secure Setting |
-|------|---------|----------------|
-| `--anonymous-auth` | Allow unauthenticated requests | `false` for production |
-| `--authorization-mode` | How to authorize requests | `Node,RBAC` |
-| `--enable-admission-plugins` | Which admission controllers | Include `PodSecurity,NodeRestriction` |
-| `--audit-log-path` | Where to write audit logs | Set to valid path |
-| `--tls-cert-file` | API server TLS certificate | Must be configured |
-| `--etcd-cafile` | CA to verify etcd | Must be configured |
+| Flag | Purpose | Secure Setting | CIS Benchmark |
+|------|---------|----------------|---------------|
+| `--anonymous-auth` | Allow unauthenticated requests | `false` for production | CIS 1.2.1 |
+| `--authorization-mode` | How to authorize requests | `Node,RBAC` | CIS 1.2.7, 1.2.8 |
+| `--enable-admission-plugins` | Which admission controllers | Include `PodSecurity,NodeRestriction` | CIS 1.2.15, 1.2.16 |
+| `--audit-log-path` | Where to write audit logs | Set to valid path | CIS 1.2.19 |
+| `--tls-cert-file` | API server TLS certificate | Must be configured | CIS 1.2.26 |
+| `--etcd-cafile` | CA to verify etcd | Must be configured | CIS 1.2.28 |
 
 ---
 
@@ -227,15 +227,15 @@ etcd stores all cluster state, including secrets. Its security is paramount.
 │  └── No direct access from pods                            │
 │                                                             │
 │  ENCRYPTION IN TRANSIT                                     │
-│  ├── TLS for client-to-server communication               │
-│  ├── TLS for peer-to-peer (etcd cluster) communication    │
-│  └── Mutual TLS (mTLS) preferred                          │
+│  ├── TLS for client-to-server (CIS 2.1)                    │
+│  ├── TLS for peer-to-peer (CIS 2.3, 2.4)                   │
+│  └── Mutual TLS (mTLS) preferred (CIS 2.2)                 │
 │                                                             │
 │  ENCRYPTION AT REST                                        │
-│  ├── Kubernetes secrets encryption (EncryptionConfig)     │
-│  ├── Provider options: aescbc, aesgcm, kms               │
-│  ├── KMS integration for key management                   │
-│  └── Envelope encryption pattern                          │
+│  ├── Kubernetes secrets encryption (CIS 1.2.31)            │
+│  ├── Provider options: aescbc, aesgcm, kms                 │
+│  ├── KMS integration for key management                    │
+│  └── Envelope encryption pattern                           │
 │                                                             │
 │  BACKUP SECURITY                                           │
 │  ├── Encrypt backups                                       │
@@ -299,6 +299,8 @@ The scheduler decides where pods run. Its compromise could place pods strategica
 │  SECURITY CONTROLS                                         │
 │  ├── Client certificate authentication to API server      │
 │  ├── Minimal RBAC permissions (built-in binding)          │
+│  ├── Bind address to localhost (127.0.0.1) (CIS 1.4.2)    │
+│  ├── Disable profiling if not needed (CIS 1.4.1)          │
 │  ├── Run on dedicated control plane nodes                 │
 │  └── Network isolation from workload nodes                │
 │                                                             │
@@ -330,12 +332,12 @@ The controller manager runs control loops that maintain desired state.
 │  └── Compromise = cluster-wide impact                     │
 │                                                             │
 │  KEY SECURITY FLAGS                                        │
-│  ├── --use-service-account-credentials=true               │
-│  │   (Use separate SA for each controller)                │
-│  ├── --root-ca-file                                       │
-│  │   (CA for verifying API server)                        │
-│  └── --service-account-private-key-file                   │
-│      (Key for signing SA tokens)                          │
+│  ├── --use-service-account-credentials=true (CIS 1.3.3)   │
+│  │   (Use separate SA for each controller)                 │
+│  ├── --root-ca-file (CIS 1.3.5)                           │
+│  │   (CA for verifying API server)                         │
+│  └── --service-account-private-key-file (CIS 1.3.4)       │
+│      (Key for signing SA tokens)                           │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -433,7 +435,7 @@ The controller manager runs control loops that maintain desired state.
 5. **You notice that mutating admission webhooks run before validating admission webhooks in the API server request flow. A security team member asks whether a malicious mutating webhook could bypass a validating webhook's security checks. Is this possible?**
    <details>
    <summary>Answer</summary>
-   Yes, this is a real risk. A malicious or compromised mutating webhook could modify a request to pass validation — for example, removing a `privileged: true` field before the validating webhook checks for it, then re-adding it through another mechanism. However, validating webhooks see the final mutated request, so they validate what will actually be stored. The real risk is a mutating webhook that adds dangerous fields after all validation. Mitigation: restrict who can create/modify webhook configurations via RBAC, use the `reinvocationPolicy: IfNeeded` to re-validate after mutations, and audit webhook configurations regularly. This is why webhook security is critical.
+   No, this is not possible. The Kubernetes API server strictly enforces the admission control flow: all mutating admission webhooks execute *before* any validating admission webhooks. Because validating webhooks always run last, they inspect the final, fully mutated object exactly as it will be persisted to etcd. Even if a malicious mutating webhook attempts to inject a dangerous field (like `privileged: true`), the validating webhook will catch it and reject the request. This strict separation ensures there are no post-validation mutations, completely preventing mutation bypasses. To handle cases where a mutating webhook's changes might affect other mutating webhooks, Kubernetes uses a reinvocation policy (`reinvocationPolicy: IfNeeded`), but this only loops within the mutation phase; validation always remains the absolute final step.
    </details>
 ---
 
