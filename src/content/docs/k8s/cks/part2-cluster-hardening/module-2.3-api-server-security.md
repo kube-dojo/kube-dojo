@@ -35,6 +35,14 @@ The API server is the control plane's front door. Every `kubectl` command, every
 
 CKS tests your ability to harden API server configuration and understand its security boundaries.
 
+### War Story: The Anonymous API Takeover
+
+In 2020, cloud security researchers discovered thousands of Kubernetes clusters actively hijacked by the TeamTNT threat group. The root cause wasn't a sophisticated zero-day vulnerability; it was a simple configuration oversight. 
+
+Administrators had exposed their API servers to the internet without explicitly setting `--anonymous-auth=false`. Worse, someone had previously bound the `system:anonymous` user to the `cluster-admin` role for "troubleshooting purposes" and forgot to remove it. 
+
+The attackers simply ran `kubectl --server=https://<target-ip>:6443 get secrets -A` without needing any credentials. Within minutes, they extracted cloud IAM keys stored in cluster secrets, deployed daemonsets running crypto-miners, and wiped the audit logs to hide their tracks. This incident illustrates why the API server is the ultimate prize for attackers and why defense-in-depth (disabling anonymous auth *plus* strict RBAC) is non-negotiable.
+
 ---
 
 ## API Server Authentication Flow
@@ -492,54 +500,50 @@ kubectl get $POD -n kube-system -o yaml | grep -E "profiling=false" || echo "  M
 
 ---
 
-## Hands-On Exercise
+## Practice Scenario: Securing the Control Plane
 
-**Task**: Audit and verify API server security configuration.
+Before diving into the exercise, let's look at how to troubleshoot an API server that fails to start after a configuration change.
 
-```bash
-# This exercise inspects existing configuration
-# (Modifying API server requires control plane access)
+### Worked Example: Diagnosing a CrashLooping API Server
 
-# Step 1: Get API server configuration
-kubectl get pods -n kube-system -l component=kube-apiserver -o yaml > /tmp/apiserver.yaml
+**The Situation**: You added audit logging flags to `/etc/kubernetes/manifests/kube-apiserver.yaml`, but now `kubectl` commands immediately fail with `The connection to the server <ip>:6443 was refused`. 
 
-# Step 2: Check authentication settings
-echo "=== Authentication ==="
-grep -E "anonymous-auth|client-ca-file" /tmp/apiserver.yaml
+**The Thought Process**:
+1. **Identify the failure**: Since the API server is a static pod managed by the kubelet, `kubectl` won't work if the API server is down. I need to check the container runtime directly on the control plane node.
+2. **Check the logs**: I run `crictl ps -a | grep kube-apiserver` to find the recently exited container ID, then inspect it with `crictl logs <container-id>`.
+3. **Spot the error**: The logs clearly show `Error: unknown flag: --audit-log-pathh`.
+4. **Fix and verify**: I edit the manifest to correct the typo to `--audit-log-path`, wait 30 seconds for the kubelet to detect the change and restart the pod, and run `kubectl get nodes` to confirm recovery.
 
-# Step 3: Check authorization settings
-echo "=== Authorization ==="
-grep -E "authorization-mode" /tmp/apiserver.yaml
+### Your Turn: Fix the Misconfigured API Server
 
-# Step 4: Check admission plugins
-echo "=== Admission Plugins ==="
-grep -E "enable-admission-plugins|disable-admission-plugins" /tmp/apiserver.yaml
+**Task**: You have inherited a cluster with a dangerously misconfigured API server. Your job is to secure it without breaking existing cluster operations.
 
-# Step 5: Check audit configuration
-echo "=== Audit ==="
-grep -E "audit-log|audit-policy" /tmp/apiserver.yaml
+1. **Verify the Vulnerability**:
+   Test if the API server currently accepts anonymous requests by running:
+   ```bash
+   curl -k https://localhost:6443/api/v1/namespaces
+   ```
+   *(If it returns a JSON list of namespaces instead of an "Unauthorized" message, your cluster is vulnerable).*
 
-# Step 6: Check encryption
-echo "=== Encryption ==="
-grep -E "encryption-provider" /tmp/apiserver.yaml
+2. **Harden the Configuration**:
+   Edit the API server manifest at `/etc/kubernetes/manifests/kube-apiserver.yaml` to enforce the following security boundaries:
+   * Disable anonymous authentication completely.
+   * Ensure kubelets are restricted by adding the `Node` authorization mode (ensure `RBAC` remains in the list).
+   * Enable the `NodeRestriction` admission plugin.
 
-# Step 7: Test anonymous access (should fail if properly configured)
-echo "=== Anonymous Access Test ==="
-curl -k https://$(kubectl get svc kubernetes -o jsonpath='{.spec.clusterIP}')/api/v1/namespaces 2>/dev/null | head -5
+3. **Validate the Fix**:
+   Monitor the API server restart using the container runtime:
+   ```bash
+   watch crictl ps
+   ```
+   Once the `kube-apiserver` container is up and running again for more than 30 seconds, re-run the `curl` command. You should now receive a `401 Unauthorized` error. 
+   
+   Finally, verify that legitimate authenticated traffic still works:
+   ```bash
+   kubectl get nodes
+   ```
 
-# Expected output for secure cluster:
-# {
-#   "kind": "Status",
-#   "apiVersion": "v1",
-#   "status": "Failure",
-#   "message": "Unauthorized"
-# }
-
-# Cleanup
-rm /tmp/apiserver.yaml
-```
-
-**Success criteria**: Identify current security settings and verify anonymous access is denied.
+**Success criteria**: Anonymous access is explicitly denied, kubelets are restricted to their own nodes, and `kubectl` continues to function normally.
 
 ---
 
