@@ -31,9 +31,9 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-Seccomp (Secure Computing Mode) restricts which system calls a process can make. Containers use syscalls to interact with the kernel—file operations, network connections, process management. Limiting syscalls reduces the attack surface dramatically.
+Imagine a nightclub with a strict, unbribable bouncer at the door to the VIP lounge (the Linux kernel). Instead of checking IDs, this bouncer checks every single request a guest (container process) makes. Want to read a file? "Allowed." Want to change the system clock or trace another process? "Absolutely not." That bouncer is Seccomp (Secure Computing Mode). 
 
-CKS tests your ability to apply and create seccomp profiles.
+Containers share the host kernel. Because of this, a compromised container can weaponize obscure or dangerous system calls to attack the host or escape its isolation. By strictly limiting which syscalls a process can execute, Seccomp dramatically shrinks the attack surface. CKS tests your ability to configure this bouncer by applying default policies and writing custom rules.
 
 ---
 
@@ -101,6 +101,9 @@ CKS tests your ability to apply and create seccomp profiles.
 
 ## Default Seccomp Profile
 
+> **War Story: Stopping Dirty COW and Container Escapes**
+> In 2016, the "Dirty COW" vulnerability (CVE-2016-5195) allowed privilege escalation via the `ptrace` system call. Attackers who compromised a container could use `ptrace` to manipulate host processes and break out. Simply having a Seccomp profile that blocked `ptrace` stopped this container escape dead in its tracks, long before patches were applied.
+
 Kubernetes 1.22+ applies the `RuntimeDefault` profile by default when Pod Security Admission is configured.
 
 ```bash
@@ -116,6 +119,12 @@ kubectl get pod mypod -o jsonpath='{.spec.securityContext.seccompProfile}'
 # - clock_settime (change system time)
 # And about 40+ other dangerous syscalls
 ```
+
+### Operational Overhead: Custom vs. RuntimeDefault
+
+Writing custom Seccomp profiles for every application offers the absolute lowest attack surface, but it comes with immense operational overhead. Every time an application updates a library or changes its behavior, it might need a new syscall (like `epoll_wait` instead of `select`), instantly crashing the app in production. 
+
+For 95% of workloads, the `RuntimeDefault` profile strikes the perfect balance. It automatically blocks the ~40 most dangerous system calls (like `ptrace`, `mount`, and `kexec_load` used for container escapes) while allowing the standard ~260 syscalls that normal applications need. You should only maintain custom profiles for highly sensitive, static workloads where the exact system call footprint is known and heavily tested.
 
 ---
 
