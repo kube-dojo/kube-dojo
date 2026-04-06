@@ -69,6 +69,8 @@ CKS expects you to understand both container and host network security.
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Pause and predict**: Beyond the listed services, what other components on a Linux node (e.g., system services, container runtimes, other applications) could expose network ports and become part of the attack surface, potentially bypassing Kubernetes controls?
+
 ---
 
 ## Essential Kubernetes Ports
@@ -184,6 +186,8 @@ sudo firewall-cmd --reload
 # Check open ports
 sudo firewall-cmd --list-ports
 ```
+
+> **Stop and think**: You've configured your firewall rules. How would you *test* these rules to ensure they are actually blocking unwanted traffic and allowing legitimate traffic, especially from a remote machine? What tools would you use?
 
 ---
 
@@ -319,6 +323,8 @@ net.ipv4.icmp_ignore_bogus_error_responses = 1
 sudo sysctl -p /etc/sysctl.d/99-network-security.conf
 ```
 
+> **Pause and predict**: Why are `net.ipv4.conf.all.accept_redirects = 0` and `net.ipv4.conf.all.send_redirects = 0` important for security, particularly in a multi-host Kubernetes environment where network traffic might be routed between nodes? What attack does this prevent?
+
 ---
 
 ## Real Exam Scenarios
@@ -386,6 +392,8 @@ sudo iptables -A INPUT -p tcp --dport 2380 -s <etcd-node-1-ip> -j ACCEPT
 sudo iptables -A INPUT -p tcp --dport 2380 -s <etcd-node-2-ip> -j ACCEPT
 sudo iptables -A INPUT -p tcp --dport 2380 -j DROP
 ```
+
+> **Stop and think**: etcd is often described as the "brain" of Kubernetes. If an attacker gains full access to etcd, what is the worst-case scenario for your cluster? Consider both data confidentiality and cluster integrity.
 
 ---
 
