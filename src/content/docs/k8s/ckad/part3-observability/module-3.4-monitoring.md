@@ -23,7 +23,7 @@ lab:
 After completing this module, you will be able to:
 - **Diagnose** resource pressure using `kubectl top pods` and `kubectl top nodes`
 - **Explain** the relationship between resource requests, limits, and actual usage metrics
-- **Configure** metrics-server and verify it is collecting data from cluster nodes
+- **Verify** metrics-server availability and confirm it is collecting data from cluster nodes
 - **Evaluate** whether an application needs more resources based on observed CPU and memory consumption
 
 ---
