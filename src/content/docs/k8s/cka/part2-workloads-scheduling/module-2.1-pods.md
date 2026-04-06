@@ -475,9 +475,73 @@ spec:
 
 ---
 
-## Part 6: Pod Networking Basics
+## Part 6: Health Checks and Probes
 
-### 6.1 Pod Network Model
+Kubernetes needs to know if your application is healthy to make routing and restart decisions. It does this using three types of probes: Liveness, Readiness, and Startup probes.
+
+### 6.1 Probe Types
+
+| Probe | Purpose | Action on Failure | When to Use |
+|-------|---------|-------------------|-------------|
+| **Startup** | Checks if the application has started successfully | Restarts the container | For slow-starting legacy applications that need extra time to initialize without failing liveness checks. |
+| **Liveness** | Checks if the application is healthy and running | Restarts the container | To recover from deadlocks or application crashes where the process is running but unresponsive. |
+| **Readiness** | Checks if the application is ready to accept traffic | Removes pod from Service endpoints | When the app is running but temporarily unable to serve traffic (e.g., loading large caches, database connection dropped). |
+
+> **Stop and think**: Your application takes 2 minutes to start up and load data into memory, but once running, it responds in milliseconds. If you only configure a liveness probe that checks every 10 seconds, what will happen during startup?
+
+### 6.2 Probe Mechanisms
+
+Probes can check health using three main mechanisms:
+1. `httpGet`: Performs an HTTP GET request. Success is any 2xx or 3xx status code.
+2. `tcpSocket`: Attempts to open a TCP connection to the specified port.
+3. `exec`: Executes a command inside the container. Success is a zero exit status.
+
+### 6.3 Configuring Probes in YAML
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: probe-demo
+spec:
+  containers:
+  - name: myapp
+    image: nginx
+    ports:
+    - containerPort: 80
+    
+    # 1. Startup Probe: Wait up to 300 seconds (30 * 10) for slow start
+    startupProbe:
+      httpGet:
+        path: /
+        port: 80
+      failureThreshold: 30
+      periodSeconds: 10
+
+    # 2. Liveness Probe: Restart if deadlocked
+    livenessProbe:
+      exec:
+        command:
+        - cat
+        - /usr/share/nginx/html/index.html
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      
+    # 3. Readiness Probe: Stop sending traffic if backend disconnected
+    readinessProbe:
+      tcpSocket:
+        port: 80
+      initialDelaySeconds: 5
+      periodSeconds: 10
+```
+
+> **Pause and predict**: If a pod's liveness probe passes but its readiness probe fails, what will `kubectl get pods` show in the `READY` and `STATUS` columns? Will the pod be restarted?
+
+---
+
+## Part 7: Pod Networking Basics
+
+### 7.1 Pod Network Model
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
@@ -505,7 +569,7 @@ spec:
 └────────────────────────────────────────────────────────────────┘
 ```
 
-### 6.2 Container Communication in Pod
+### 7.2 Container Communication in Pod
 
 ```bash
 # Containers in same pod communicate via localhost
@@ -516,7 +580,7 @@ spec:
 kubectl exec -it pod-name -c sidecar -- curl localhost:80
 ```
 
-### 6.3 Finding Pod IPs
+### 7.3 Finding Pod IPs
 
 ```bash
 # Get pod IP
@@ -533,11 +597,11 @@ kubectl get pods -o custom-columns='NAME:.metadata.name,IP:.status.podIP'
 
 ---
 
-## Part 7: Restart Policies
+## Part 8: Restart Policies
 
 > **Pause and predict**: A pod with `restartPolicy: Always` has a container that exits with code 0 (success). Will Kubernetes restart it? What about a pod with `restartPolicy: OnFailure`?
 
-### 7.1 Restart Policy Options
+### 8.1 Restart Policy Options
 
 | Policy | Behavior | Use Case |
 |--------|----------|----------|
@@ -558,7 +622,7 @@ spec:
     command: ["sh", "-c", "exit 1"]  # Will be restarted
 ```
 
-### 7.2 Restart Behavior
+### 8.2 Restart Behavior
 
 ```bash
 # Check restart count
@@ -608,6 +672,12 @@ kubectl describe pod nginx | grep -A5 "Last State"
    <details>
    <summary>Answer</summary>
    Use two init containers (run sequentially) and two regular containers (run in parallel). The first init container waits for the database (e.g., `until nc -z db-service 5432`), the second runs the migration script. The regular containers are the main app and the log-shipping sidecar. If the migration init container fails, the pod restarts from the beginning (re-running the first init container too, unless `restartPolicy: Never`). Init containers run in order and all must succeed before app containers start. This design ensures the app never starts with an incompatible schema, and the sidecar ships logs for the entire app lifetime.
+   </details>
+
+5. **During a load test, your application's database connection pool becomes saturated, causing the app to take 30 seconds to respond to HTTP requests. The app is configured with a liveness probe checking the `/health` endpoint every 5 seconds with a 1-second timeout. Soon, the cluster is continuously restarting your application pods. How do probes contribute to this outage, and how would you fix it using the correct probe types?**
+   <details>
+   <summary>Answer</summary>
+   The liveness probe fails because the application takes longer than the 1-second timeout to respond due to database saturation. When a liveness probe fails repeatedly, Kubernetes forcefully restarts the container. This creates a cascading failure: restarting the application drops all current connections and forces it to initialize again, worsening the load issue rather than helping the database recover. To fix this, you should use a readiness probe instead for dependencies like databases. A failing readiness probe simply removes the pod from the Service load balancer, stopping new traffic and giving the application time to recover, without killing the process. Liveness probes should only check internal application health (like deadlocks), not external dependencies.
    </details>
 
 ---
