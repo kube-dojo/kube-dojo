@@ -64,7 +64,7 @@ CKS heavily tests secrets security practices.
 
 ---
 
-> **Stop and think**: Run `echo "mysecretpassword" | base64` -- you get `bXlzZWNyZXRwYXNzd29yZAo=`. Now run `echo "bXlzZWNyZXRwYXNzd29yZAo=" | base64 -d`. You get the password back. If anyone with `get secrets` RBAC permission can decode every secret in the namespace, is Kubernetes actually protecting your passwords?
+> **Stop and think**: You've perfectly configured RBAC so no unauthorized users can run `kubectl get secrets`. However, considering how Kubernetes natively stores and distributes these base64-encoded values, what underlying operational processes (like disaster recovery backups, centralized logging, or node administration) could still expose your plaintext passwords to an attacker who has zero API access?
 
 ## Creating Secrets
 
@@ -183,7 +183,7 @@ spec:
 
 ---
 
-> **What would happen if**: You mount a secret as an environment variable (`env.valueFrom.secretKeyRef`) and the application crashes. The crash dump includes environment variables and gets logged to your centralized logging system. Who can now see the secret?
+> **Pause and predict**: You mount a secret as an environment variable (`env.valueFrom.secretKeyRef`) and the application crashes. The crash dump includes environment variables and gets logged to your centralized logging system. Who can now see the secret?
 
 ## Encryption at Rest
 
