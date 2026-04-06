@@ -299,13 +299,49 @@ CURRENT MODULE:
 """
 
 
-def step_write(module_path: Path, plan: str, model: str = MODELS["write"]) -> str | None:
-    """Gemini drafts improvements based on the plan."""
+REWRITE_PROMPT_TEMPLATE = """CRITICAL INSTRUCTION: Your response must be ONLY the raw markdown content. Start with the --- frontmatter delimiter. No preamble, no explanation — ONLY the markdown file.
+
+TASK: Write a complete KubeDojo educational module FROM SCRATCH. The existing module scored too low to improve — rewrite it completely.
+
+The file path is: {file_path}
+Keep the EXACT same frontmatter (title, slug, sidebar order).
+
+Use the existing module ONLY for topic reference — do NOT preserve its structure or text.
+
+TOPICS TO COVER (from audit):
+{plan}
+
+QUALITY REQUIREMENTS:
+- 600-800 lines of content minimum (visual aids don't count toward this)
+- Learning Outcomes: 3-5 measurable, Bloom's L3+ verbs (debug, design, evaluate, compare, diagnose, implement)
+- Why This Module Matters: open with dramatic real-world incident, real company, real financial impact. 2-3 paragraphs.
+- Core content (3-6 sections): explanations with analogies, runnable code blocks, ASCII diagrams, tables, war stories
+- At least 2 inline active learning prompts distributed throughout: > **Pause and predict**: or > **Stop and think**:
+- Did You Know?: exactly 4 facts with real numbers/dates
+- Common Mistakes: table with 6-8 rows (Mistake | Why | Fix)
+- Quiz: 6-8 questions in <details> tags, at least 4 scenario-based. Answers 3-5 sentences explaining WHY.
+- Hands-On Exercise: 4-6 progressive tasks with solutions in <details> tags, success checklist
+- Next Module: link with teaser
+- NO emojis, NO recall quiz questions, NO thin outlines, NO number 47
+
+EXISTING MODULE (for topic reference only):
+{content}
+"""
+
+
+def step_write(module_path: Path, plan: str, model: str = MODELS["write"],
+               rewrite: bool = False) -> str | None:
+    """Gemini drafts improvements or full rewrite based on the plan."""
     content = module_path.read_text()
     key = module_key_from_path(module_path)
-    print(f"\n  WRITE: {key} (using {model})")
+    mode = "REWRITE" if rewrite else "WRITE"
+    print(f"\n  {mode}: {key} (using {model})")
 
-    prompt = WRITE_PROMPT_TEMPLATE.format(plan=plan, content=content)
+    if rewrite:
+        prompt = REWRITE_PROMPT_TEMPLATE.format(
+            file_path=key, plan=plan, content=content)
+    else:
+        prompt = WRITE_PROMPT_TEMPLATE.format(plan=plan, content=content)
 
     ok, output = dispatch_gemini_with_retry(prompt, model=model, timeout=300)
 
@@ -524,10 +560,16 @@ def run_module(module_path: Path, state: dict, max_retries: int = 2,
         plan = f"Resume improvement. Last scores: {ms.get('scores', 'unknown')}."
 
     # WRITE → REVIEW loop (max retries)
+    # Auto-detect rewrite mode: score < 25 means "improve" won't cut it
+    needs_rewrite = (ms.get("sum") or 0) < 25
+    if needs_rewrite:
+        print(f"  Score {ms.get('sum')}/35 < 25 — using REWRITE mode")
+
     improved = None
     for attempt in range(max_retries + 1):
         if ms["phase"] in ("write",):
-            improved = step_write(module_path, plan, model=m["write"])
+            improved = step_write(module_path, plan, model=m["write"],
+                                  rewrite=needs_rewrite)
             if improved is None:
                 ms["errors"].append(f"Write failed attempt {attempt+1}")
                 save_state(state)
