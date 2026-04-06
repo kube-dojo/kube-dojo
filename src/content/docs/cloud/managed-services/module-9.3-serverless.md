@@ -68,6 +68,8 @@ Cost ($)
 
 The exact crossover depends on execution time, memory, and provider pricing. But the general shape is always the same: serverless is cheaper at low volume, Kubernetes is cheaper at scale.
 
+> **Stop and think**: If a service handles 5 million requests per month but each request takes 10 milliseconds and requires very little memory, would it still strictly follow the "Kubernetes wins above 2M requests" rule? Why might serverless still be cheaper here?
+
 ---
 
 ## Triggering Cloud Functions from Kubernetes
@@ -209,6 +211,8 @@ spec:
                   print(f"Dispatched: {obj['Key']}")
 ```
 
+> **Pause and predict**: If the Kubernetes Job fails halfway through fanning out 10,000 Lambda invocations, and the Job restarts, what happens to the items that were already processed? How should you design the Lambda function to handle this?
+
 ---
 
 ## API Gateways: Bridging Both Worlds
@@ -294,6 +298,8 @@ Knative brings serverless semantics directly into your cluster. Instead of deplo
                     | (scale 0 -> N)    |
                     +-------------------+
 ```
+
+> **Stop and think**: When the Knative Activator buffers an incoming request for a scaled-to-zero service, the caller experiences latency while the new pod starts. If your container image is 2GB and takes 15 seconds to initialize its application framework, what will happen to the caller's HTTP request? How would you design the application differently for Knative compared to a standard Kubernetes Deployment?
 
 ### Installing Knative
 
@@ -577,39 +583,39 @@ A real-world architecture combining Kubernetes and serverless:
 ## Quiz
 
 <details>
-<summary>1. At roughly what request volume does Kubernetes become more cost-effective than serverless functions?</summary>
+<summary>1. You are the lead architect for a retail company. The marketing team wants to launch a flash sale service that will receive near zero traffic for 29 days a month, but on one day it will receive 500,000 requests over a 4-hour period. Your infrastructure team already manages a large EKS cluster. Should you deploy this service as a standard Kubernetes Deployment or an AWS Lambda function?</summary>
 
-The crossover point is typically around 2 million requests per month, though it varies by execution duration and memory allocation. Below this threshold, serverless pay-per-invocation pricing wins because you are not paying for idle time. Above it, Kubernetes on reserved or spot instances becomes cheaper because the per-request cost of always-on compute decreases as utilization increases. The crossover shifts higher if your functions have very short execution times (< 100ms) and lower if they run for seconds.
+You should deploy this service as an AWS Lambda function (or similar serverless offering). Even though your team already manages Kubernetes, this extreme spiky traffic pattern with long idle periods is the perfect use case for serverless. If deployed on Kubernetes, you would either pay for idle capacity for 29 days or risk the cluster auto-scaler not provisioning nodes fast enough to handle the sudden 4-hour spike. Lambda scales instantly to meet the burst and scales to zero when the sale ends, meaning you only pay for the exact compute used during those 4 hours.
 </details>
 
 <details>
-<summary>2. What is Knative's Activator component and why is it necessary for scale-to-zero?</summary>
+<summary>2. A developer on your team deploys a Knative Service configured with `min-scale: "0"`. During a load test, they notice that the very first request after a period of inactivity takes 4 seconds to respond, while subsequent requests take 50ms. They believe Knative is broken. How do you explain what is happening and the role of the Knative architecture in this behavior?</summary>
 
-The Activator is a Knative component that receives requests when a Service has been scaled to zero pods. When no pods are running and a request arrives, the Activator buffers the request, tells the Autoscaler to create a pod, waits for the pod to become ready, and then forwards the buffered request to the new pod. Without the Activator, requests to a scaled-to-zero Service would get connection refused errors. The Activator acts as a proxy that absorbs the cold-start delay, making the experience seamless for callers.
+Knative is functioning exactly as designed, demonstrating a "cold start" inherent to scale-to-zero serverless architectures. When the service scaled to zero, the Knative Activator intercepted the new incoming request because no pods were running to handle it. The Activator buffered this request, signaled the Autoscaler to spin up a new pod, and waited for the pod to become ready before forwarding the request. The 4-second delay is the time it took Kubernetes to schedule the pod, pull the image, and start the container application; to mitigate this, the developer could set `min-scale: "1"` if strict latency is required for all requests.
 </details>
 
 <details>
-<summary>3. Why does EKS Fargate not support DaemonSets, and what is the workaround?</summary>
+<summary>3. Your security team mandates that every container running in your AWS environment must run a proprietary security scanning agent. On your standard EKS cluster, you deploy this agent using a DaemonSet. You are planning to migrate several batch processing jobs to EKS Fargate to save costs. How will this security mandate impact your migration to Fargate?</summary>
 
-Fargate runs each pod in its own isolated microVM -- there is no shared node. DaemonSets run one pod per node, but in Fargate there are no "nodes" in the traditional sense. The workaround is to use sidecars instead. If you need a log collector (Fluent Bit) or monitoring agent (Datadog), add it as a sidecar container in the pod spec. AWS also provides native Fargate logging via the `fluentbit` log router that can be configured through pod annotations without a sidecar.
+The security mandate will require you to change how the scanning agent is deployed, because EKS Fargate does not support DaemonSets. Fargate provisions a dedicated, isolated microVM for each individual pod, meaning there is no shared "node" concept where a DaemonSet can run a node-level agent. To comply with the mandate on Fargate, you will need to inject the security scanning agent as a sidecar container directly into every batch job's pod specification. If this sidecar approach is not feasible or supported by the security vendor, those specific workloads cannot be migrated to Fargate.
 </details>
 
 <details>
-<summary>4. Explain the queue-triggered Lambda pattern and why it works well with Kubernetes producers.</summary>
+<summary>4. Your e-commerce platform generates PDF invoices when customers complete an order. The order processing microservice runs on Kubernetes and is highly latency-sensitive. PDF generation is CPU-intensive and takes up to 5 seconds. You decide to offload PDF generation to a Cloud Function. How should you architect the communication between the Kubernetes pod and the Cloud Function to ensure the order microservice remains fast and reliable?</summary>
 
-In this pattern, Kubernetes pods publish messages to a managed queue (SQS, Pub/Sub), and a Lambda function is configured with the queue as an event source trigger. Lambda automatically polls the queue, batches messages, and invokes the function. This works well because it decouples the Kubernetes workload (which handles steady-state traffic) from burst processing. The K8s pods write at their natural rate, the queue buffers load, and Lambda scales independently to process messages. The Kubernetes side does not need to know or care that Lambda is doing the processing -- it just publishes messages.
+You should use a queue-triggered asynchronous pattern rather than having the Kubernetes pod call the Cloud Function directly via HTTP. The Kubernetes pod should publish an "InvoiceRequested" message to a message broker (like SQS or Pub/Sub) and immediately return a fast response to the customer. The Cloud Function should be configured to trigger off this queue, pulling messages and generating the PDFs in the background. This architecture decouples the fast, synchronous order flow from the slow, CPU-intensive generation process, ensuring that a spike in orders doesn't cause cascading timeouts if the Cloud Functions take time to scale up.
 </details>
 
 <details>
-<summary>5. What is the difference between GKE Autopilot and EKS Fargate in how they handle pod scheduling?</summary>
+<summary>5. A startup wants to use Kubernetes for their new platform but has no dedicated operations team. They want to avoid managing node pools, OS upgrades, and capacity planning. They are debating between GKE Autopilot and EKS Fargate. If they choose GKE Autopilot, how will their experience differ from using standard EKS with Fargate profiles?</summary>
 
-GKE Autopilot manages the entire cluster -- all pods run on Google-managed nodes, and you never see or configure node pools. It supports DaemonSets, GPUs, and behaves like a normal GKE cluster from the user's perspective. EKS Fargate is selective -- you create Fargate profiles that match specific namespaces and labels. Only matching pods run on Fargate; other pods still need managed node groups. Autopilot replaces cluster node management entirely, while Fargate adds serverless compute alongside existing node groups.
+With GKE Autopilot, the entire cluster is managed as a serverless container platform by default, meaning they never have to configure node pools, and even cluster-wide workloads like DaemonSets and GPU workloads are supported transparently. It provides a full, standard Kubernetes experience without the node management overhead. In contrast, EKS Fargate is a selective compute engine applied alongside a standard cluster. While Fargate handles the node-less execution for specific pods matching a profile, the team is still responsible for managing the EKS control plane add-ons and CoreDNS. Furthermore, they would be restricted from using DaemonSets for those Fargate pods.
 </details>
 
 <details>
-<summary>6. How does Knative traffic splitting differ from a standard Kubernetes canary deployment?</summary>
+<summary>6. Your team is releasing v2 of a payment processing service on Knative. You want to test the new version with exactly 5% of live traffic before fully rolling it out. In a standard Kubernetes deployment, this was difficult because you had 10 replicas and couldn't easily route 5%. How does Knative solve this problem without requiring you to deploy 95 pods of v1 and 5 pods of v2?</summary>
 
-Knative traffic splitting is built into the Service resource as a first-class feature. You specify percentage weights for each revision (e.g., 90% to v1, 10% to v2), and Knative's networking layer routes traffic accordingly at the request level. Standard Kubernetes canary deployments typically use replica ratios (e.g., 9 pods of v1 and 1 pod of v2) which gives approximate but not precise traffic splitting. Knative's approach is more accurate and does not require adjusting replica counts. Additionally, Knative automatically creates new revisions on each update, maintaining a history for easy rollback.
+Knative solves this by handling traffic splitting at the networking and request routing layer, rather than relying on the ratio of running pod replicas. You simply update the Knative Service definition with a `traffic` block, explicitly mapping 95% to the v1 revision name and 5% to the v2 revision name. Knative configures the underlying ingress gateway (like Kourier or Istio) to route exactly 5% of incoming HTTP requests to the v2 pods, regardless of how many pods are currently running. This allows for precise, percentage-based canary rollouts even for services with very low request volumes or minimal replica counts.
 </details>
 
 ---
