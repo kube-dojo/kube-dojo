@@ -10,10 +10,10 @@ sidebar:
 
 After completing this module, you will be able to:
 
-- **Configure GKE Dataplane V2 (Cilium-based) with network policies, FQDN filtering, and bandwidth management**
-- **Implement Gateway API on GKE for multi-cluster ingress, traffic splitting, and header-based routing**
-- **Deploy Private Service Connect and internal load balancers for secure service-to-service connectivity on GKE**
-- **Diagnose GKE networking issues related to IP exhaustion, firewall rules, and pod-to-service communication failures**
+- **Configure GKE Dataplane V2 (Cilium-based) with network policies and network policy logging**
+- **Implement Gateway API on GKE for traffic splitting and header-based routing**
+- **Deploy Private Service Connect for secure control plane access on GKE**
+- **Diagnose GKE networking issues related to IP exhaustion and pod-to-service communication failures**
 
 ---
 
@@ -81,6 +81,8 @@ gcloud container clusters describe my-cluster \
 ```
 
 ### IP Address Planning
+
+> **Stop and think**: If a VPC-native cluster uses alias IPs directly from the VPC, what happens if your VPC doesn't have a large enough secondary range for your planned number of nodes and pods at maximum scale?
 
 Poor IP planning is the number one networking regret for teams that scale. You cannot resize secondary ranges after cluster creation.
 
@@ -157,6 +159,8 @@ Traditional Kubernetes networking uses iptables rules for service routing and ku
 ```
 
 ### Dataplane V2 Benefits
+
+> **Pause and predict**: If Dataplane V2 uses eBPF hash maps instead of iptables, how might this change the way you troubleshoot dropped packets or connection timeouts compared to legacy clusters?
 
 | Capability | iptables/kube-proxy | Dataplane V2 |
 | :--- | :--- | :--- |
@@ -299,6 +303,8 @@ GKE integrates tightly with Google Cloud Load Balancing. When you create a Kuber
 
 ### External Network Load Balancer (L4)
 
+> **Stop and think**: If you expose an internal gRPC service that requires L7 routing and TLS termination, which GKE service type or ingress method should you choose instead of a standard LoadBalancer?
+
 ```yaml
 # Simple L4 load balancer
 apiVersion: v1
@@ -372,6 +378,8 @@ spec:
 The Gateway API is a Kubernetes-native evolution of Ingress that provides richer routing capabilities, better role separation, and a more consistent experience across implementations. GKE fully supports the Gateway API and it is the recommended approach for new deployments.
 
 ### Why Gateway API Over Ingress
+
+> **Pause and predict**: In the Gateway API model, if the infrastructure team modifies the Gateway resource to restrict allowed namespaces, what happens to the existing HTTPRoutes in namespaces that are no longer allowed?
 
 ```text
   Ingress Model (flat):
@@ -649,6 +657,8 @@ gcloud container clusters create psc-cluster \
 
 ### Private Cluster Considerations
 
+> **Stop and think**: If you use Private Service Connect for your GKE control plane and have disabled public IP access, how will your cloud-hosted CI/CD pipeline (e.g., GitHub Actions) authenticate and deploy manifests to the cluster?
+
 | Consideration | Impact | Solution |
 | :--- | :--- | :--- |
 | Nodes cannot pull from internet | Container images fail | Use Artifact Registry (in same region) or configure Cloud NAT |
@@ -701,39 +711,39 @@ gcloud compute routers nats create nat-config \
 ## Quiz
 
 <details>
-<summary>1. What is the fundamental difference between iptables-based routing and eBPF-based routing in Dataplane V2?</summary>
+<summary>1. Your e-commerce platform just scaled from 500 to 5,000 microservices. The platform team notices that network routing latency between pods has increased significantly on your older clusters, but remains flat on your new Dataplane V2 clusters. What fundamental architectural difference explains this behavior?</summary>
 
-iptables-based routing uses a **linear chain of rules** that the kernel evaluates sequentially for every packet. When you have 5,000 Services, there are thousands of iptables rules, and each packet must traverse this chain until a match is found. This is O(n) complexity. Dataplane V2 uses eBPF **hash maps** compiled directly into the kernel. Service routing becomes a hash table lookup: the kernel hashes the destination IP and port, looks up the backend pod in O(1) constant time, and rewrites the packet. This means routing performance does not degrade as you add more services. In benchmarks, the difference becomes measurable at around 1,000 services and dramatic at 10,000+.
+iptables-based routing uses a linear chain of rules that the kernel evaluates sequentially for every packet. When you have 5,000 Services, there are thousands of iptables rules, and each packet must traverse this chain until a match is found, resulting in O(n) complexity. Dataplane V2 uses eBPF hash maps compiled directly into the kernel. Service routing becomes a hash table lookup where the kernel hashes the destination IP and port, looks up the backend pod in O(1) constant time, and rewrites the packet. This means routing performance does not degrade as you add more services, resolving the latency issues seen in older clusters.
 </details>
 
 <details>
-<summary>2. Why must you always include a DNS egress rule when writing deny-all egress NetworkPolicies?</summary>
+<summary>2. You deploy a strict `deny-all` egress NetworkPolicy to your `payments` namespace to meet PCI compliance. Suddenly, all pods in the namespace start crash-looping, reporting that they cannot connect to the internal database service `db.backend.svc.cluster.local`, even though you added an egress rule explicitly allowing traffic to the database's IP range. What critical rule is missing?</summary>
 
-When you create a NetworkPolicy with `policyTypes: ["Egress"]` and no egress rules, you block **all** outbound traffic from the selected pods, including DNS resolution. Pods resolve service names (like `my-service.default.svc.cluster.local`) by querying the kube-dns (CoreDNS) pods on UDP port 53. Without a DNS exception, pods cannot resolve any service names, and virtually all application functionality breaks. The fix is to always include an egress rule allowing traffic to kube-dns pods on both UDP and TCP port 53. TCP is needed for DNS responses larger than 512 bytes.
+When you create a NetworkPolicy with `policyTypes: ["Egress"]` and no egress rules, you implicitly block all outbound traffic from the selected pods, including DNS resolution. Pods resolve service names (like `db.backend.svc.cluster.local`) by querying the kube-dns (CoreDNS) pods on UDP port 53. Without a DNS exception, pods cannot resolve any service names to IP addresses, meaning your application cannot even attempt the connection to the database. The critical missing rule is an explicit egress rule allowing traffic to kube-dns pods on both UDP and TCP port 53. TCP is required as a fallback for DNS responses larger than 512 bytes.
 </details>
 
 <details>
-<summary>3. How does the Gateway API separate concerns between infrastructure and application teams?</summary>
+<summary>3. Your organization is moving from Ingress to the Gateway API. The security team wants to strictly control which TLS certificates are used and which namespaces can expose public endpoints, while application developers need the freedom to create path-based routing rules and canary deployments without submitting IT tickets. How does the Gateway API resource model satisfy both teams?</summary>
 
-The Gateway API uses a **three-tier resource model**. The **GatewayClass** is managed by the cluster administrator and defines which load balancer implementation to use. The **Gateway** is managed by the infrastructure or platform team and configures listeners (ports, protocols, TLS certificates) and which namespaces are allowed to attach routes. The **HTTPRoute** (or TCPRoute, GRPCRoute) is managed by the application team and defines routing rules like path matching, header matching, and backend service references. This separation means the app team can update their routing without touching infrastructure configuration, and the platform team can enforce policies (like "only namespaces with label X can use this gateway") without knowing about individual routes.
+The Gateway API uses a three-tier resource model designed specifically for role-based access. The GatewayClass is managed by the cluster administrator and defines the load balancer implementation. The Gateway is managed by the platform or security team, allowing them to strictly configure TLS certificates, listening ports, and which namespaces can attach routes. The HTTPRoute is managed by the application team, giving them the freedom to define host matching, path routing, headers, and canary weights. This separation means the app team can update their routing autonomously, while the platform team enforces global security policies.
 </details>
 
 <details>
-<summary>4. What happens if you create a regional cluster with a /24 pod CIDR?</summary>
+<summary>4. A junior engineer provisions a new regional GKE cluster (spanning 3 zones, 2 nodes per zone) and assigns a `/24` CIDR block for the pod secondary range. During the deployment of the first application, several pods remain in a `Pending` state, and the cluster autoscaler fails to add new nodes. What is the root cause of this failure?</summary>
 
-A /24 CIDR provides only 256 IP addresses for pods. Since each node in a VPC-native cluster gets its own /24 slice by default (for up to 110 pods), a /24 pod CIDR can only support **1 node**. If your regional cluster has 3 zones with 2 nodes each (6 nodes total), you need at least a /21 for the pod range. If you plan to scale to 50 nodes, you need a /18 or larger. The cluster creation will succeed, but you will hit scheduling failures when the pod CIDR is exhausted and new pods cannot get IPs. This is not recoverable---you must create a new cluster with a larger range.
+A /24 CIDR block provides only 256 IP addresses for the entire pod network. In a VPC-native cluster, each node is allocated its own /24 slice by default to support up to 110 pods. Because a regional cluster with 3 zones and 2 nodes per zone requires 6 nodes in total, it would need at least a /21 for the pod range to accommodate them. The cluster creation will initially succeed, but you will hit scheduling failures and autoscaling blocks when the pod CIDR is immediately exhausted and new pods cannot be assigned IPs. This situation is unrecoverable, as secondary ranges cannot be resized, requiring a full cluster recreation.
 </details>
 
 <details>
-<summary>5. How does traffic splitting work in Gateway API canary deployments?</summary>
+<summary>5. You are rolling out a critical update to the authentication service and want to route exactly 5% of traffic to the new version. Your cluster uses the Gateway API, but you do not have a service mesh like Istio installed. How can you achieve this granular traffic splitting, and where does the actual routing decision take place?</summary>
 
-Gateway API supports traffic splitting through the `weight` field on `backendRefs` within an HTTPRoute rule. You specify multiple backend services with different weights (e.g., 90 for stable, 10 for canary). The load balancer distributes incoming requests proportionally based on these weights. Unlike Istio's traffic splitting, which happens at the sidecar level, GKE Gateway API traffic splitting happens at the **Google Cloud Load Balancer** level, meaning there is no additional proxy hop. You update the weights by patching the HTTPRoute resource, and the load balancer reconfigures within seconds. This makes canary deployments a first-class feature without requiring a service mesh.
+Gateway API supports traffic splitting natively through the `weight` field on `backendRefs` within an HTTPRoute rule. You can specify multiple backend services with different weights (e.g., 95 for stable, 5 for canary), and the load balancer distributes incoming requests proportionally. Unlike Istio's traffic splitting, which requires a sidecar proxy injecting hops into the data path, GKE Gateway API traffic splitting is programmed directly into the Google Cloud Load Balancer. You update the weights by patching the HTTPRoute resource, and the external load balancer reconfigures within seconds. This provides robust canary deployments as a first-class infrastructure feature without the operational overhead of a service mesh.
 </details>
 
 <details>
-<summary>6. Why is Private Service Connect (PSC) preferred over the legacy private cluster approach for control plane access?</summary>
+<summary>6. Your enterprise network team mandates that all new GKE clusters must be private, but they have exhausted the 25 VPC Peering connections limit on the central shared VPC. They also require that the GKE control plane be accessible via a specific private IP address on your on-premises network through Cloud Interconnect. Why is Private Service Connect (PSC) the only viable architecture for this requirement?</summary>
 
-The legacy private cluster model uses VPC peering between your VPC and the Google-managed VPC hosting the control plane. VPC peering has limitations: it is non-transitive (peered networks cannot reach each other through your VPC), consumes a peering slot (limit of 25 per VPC), and the master-ipv4-cidr range must not overlap with any existing ranges. PSC instead creates a **forwarding rule** in your VPC that routes traffic to the control plane through a Private Service Connect endpoint. This avoids VPC peering entirely, supports transitive connectivity through VPN/Interconnect, does not consume a peering slot, and gives you a private IP in your own subnet for the control plane. PSC is the recommended approach for all new private clusters.
+The legacy private cluster model relies on VPC peering between your VPC and the Google-managed VPC hosting the control plane. VPC peering is non-transitive, meaning peered networks cannot reach each other through your VPC, and it consumes a strict peering slot limit per VPC. Private Service Connect (PSC) instead creates a forwarding rule in your VPC that routes traffic to the control plane through a localized endpoint. This completely bypasses VPC peering, freeing up peering slots, and crucially supports transitive connectivity so on-premises networks can access the endpoint via Cloud Interconnect. PSC is the modern, scalable approach for private control plane access.
 </details>
 
 ---
@@ -1113,17 +1123,53 @@ done
 ```
 </details>
 
-**Task 6: Clean Up**
+**Task 6: Provision a Private Cluster with Private Service Connect (PSC)**
 
 <details>
 <summary>Solution</summary>
 
 ```bash
-# Delete the cluster (this removes all resources)
+# Create a dedicated subnet for PSC in the default network
+gcloud compute networks subnets create psc-subnet \
+  --network=default \
+  --region=$REGION \
+  --range=10.10.0.0/28
+
+# Create a private cluster using PSC instead of VPC peering
+gcloud container clusters create psc-demo \
+  --region=$REGION \
+  --num-nodes=1 \
+  --enable-private-nodes \
+  --private-endpoint-subnetwork=psc-subnet \
+  --enable-ip-alias \
+  --master-authorized-networks=0.0.0.0/0
+
+# Verify the PSC endpoint IP address
+gcloud container clusters describe psc-demo \
+  --region=$REGION \
+  --format="value(privateClusterConfig.privateEndpoint)"
+```
+</details>
+
+**Task 7: Clean Up**
+
+<details>
+<summary>Solution</summary>
+
+```bash
+# Delete the Gateway API demo cluster
 gcloud container clusters delete net-demo \
   --region=$REGION --quiet
 
-echo "Cluster deleted. Verify no orphaned load balancer resources:"
+# Delete the PSC demo cluster
+gcloud container clusters delete psc-demo \
+  --region=$REGION --quiet
+
+# Delete the PSC subnet
+gcloud compute networks subnets delete psc-subnet \
+  --region=$REGION --quiet
+
+echo "Clusters deleted. Verify no orphaned load balancer resources:"
 gcloud compute forwarding-rules list --filter="description~net-demo"
 gcloud compute target-http-proxies list --filter="description~net-demo"
 ```
@@ -1137,6 +1183,7 @@ gcloud compute target-http-proxies list --filter="description~net-demo"
 - [ ] Network policy allows frontend-to-backend traffic on port 8080
 - [ ] Gateway API HTTPRoute splits traffic 90/10 between stable and canary
 - [ ] Traffic shifting to 50/50 and full promotion works correctly
+- [ ] PSC cluster created with a dedicated private endpoint subnet
 - [ ] All resources cleaned up
 
 ---
