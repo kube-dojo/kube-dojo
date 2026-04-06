@@ -164,6 +164,8 @@ echo ${colors[red]}
 
 ### Command Substitution
 
+> **Pause and predict**: What happens if you run `files=$(ls -l /nonexistent)`? Does the error message get stored in the `files` variable or printed to the screen?
+
 ```bash
 # Modern syntax (preferred)
 now=$(date)
@@ -523,6 +525,8 @@ fi
 
 ### Error Handling Options
 
+> **Stop and think**: If your script uses `set -e` and runs `grep "error" log.txt`, what happens to your script if the word "error" is not found in the log file?
+
 ```bash
 #!/bin/bash
 set -e          # Exit on error
@@ -581,27 +585,26 @@ port=${PORT:-8080}
 ## Quiz
 
 ### Question 1
-What's wrong with this variable assignment: `name = "John"`?
+You are writing a script and try to set a name variable like this: `name = "John"`. When you run the script, you get an error saying `name: command not found`. Why does this happen and how do you fix it?
 
 <details>
 <summary>Show Answer</summary>
 
-**Spaces around the `=`** — Bash interprets this as running a command called `name` with arguments `=` and `"John"`.
+This happens because Bash is highly sensitive to spaces around the equals sign during variable assignment. When it sees `name = "John"`, it interprets `name` as a command to execute, and `=` and `"John"` as arguments passed to that command. Since there is no command called `name` on your system, it fails. To fix this, you must remove the spaces so Bash recognizes it as an assignment operation.
 
-Correct:
 ```bash
 name="John"
 ```
 
-No spaces around `=` for variable assignment. This is a common mistake for programmers coming from other languages.
-
 </details>
 
 ### Question 2
-How do you check if a file exists and is readable?
+Your automated backup script needs to read a configuration file at `/etc/backup.conf`. Before attempting to read the file, you want to ensure the script fails gracefully if the file is missing or lacks read permissions. How do you write this check?
 
 <details>
 <summary>Show Answer</summary>
+
+You should use conditional file test operators to verify the file's state before interacting with it. The `-f` flag checks if the path exists and is a regular file, while the `-r` flag checks if the script's execution context has permission to read it. Using `[[ ]]` allows you to combine these checks logically with `&&`. Alternatively, just checking `-r` is often sufficient because a file must exist to be readable, but explicitly checking both can make your intent clearer.
 
 ```bash
 if [[ -f "$file" && -r "$file" ]]; then
@@ -616,27 +619,15 @@ if [[ -r "$file" ]]; then  # -r implies file exists
 fi
 ```
 
-Key file tests:
-- `-e` exists
-- `-f` is regular file
-- `-d` is directory
-- `-r` is readable
-- `-w` is writable
-- `-x` is executable
-
 </details>
 
 ### Question 3
-What does `set -euo pipefail` do?
+Your CI/CD pipeline runs a script that fetches data and parses it: `curl -s https://api.example.com/data | jq '.items' > output.json`. The API goes down and `curl` fails, but the script still exits with a success code (`0`) and the pipeline continues, causing downstream errors. You already have `set -e` at the top of your script. Why did it still succeed, and how do you fix it?
 
 <details>
 <summary>Show Answer</summary>
 
-Three separate options:
-
-- **`-e`** (errexit): Exit immediately if a command fails
-- **`-u`** (nounset): Exit if undefined variable is used
-- **`-o pipefail`**: Exit if any command in a pipeline fails
+The script succeeded because `set -e` only triggers an exit if the last command in a pipeline fails. In your pipeline, `jq` succeeded (it successfully parsed empty input from the failed `curl` and wrote an empty file), so the overall pipeline returned `0`. To fix this, you need to enable `pipefail`, which forces the pipeline to return the exit code of the rightmost command that failed. This ensures that a failure anywhere in the pipeline will cause the entire script to halt when combined with `set -e`.
 
 Without `pipefail`:
 ```bash
@@ -648,15 +639,15 @@ With `pipefail`:
 false | true  # Returns 1 (failure)
 ```
 
-This is the recommended start for robust scripts.
-
 </details>
 
 ### Question 4
-How do you iterate over all arguments passed to a script?
+You have a script that needs to process a list of file paths passed as arguments. Some of the file paths contain spaces, such as `report 2023.pdf`. You need to loop through each argument exactly as it was provided, without splitting the paths with spaces into multiple arguments. How do you construct this loop?
 
 <details>
 <summary>Show Answer</summary>
+
+You must use `"$@"` to safely iterate through positional arguments while preserving spaces. When wrapped in double quotes, `$@` expands each positional parameter into a separate quoted string, matching exactly how they were passed to the script. If you omit the quotes and use `$@` or `$*`, Bash will perform word splitting on the spaces, treating `report` and `2023.pdf` as two completely different files. This quoting practice is essential for preventing silent data corruption in scripts dealing with user input or file systems.
 
 ```bash
 # Using $@
@@ -670,19 +661,15 @@ done
 # With $@: three iterations - "hello", "world", "foo"
 ```
 
-`$@` expands to all positional parameters as separate strings when quoted.
-
-`$#` gives the count of arguments.
-
 </details>
 
 ### Question 5
-What's the difference between `$(command)` and `` `command` ``?
+You are reviewing a legacy script that sets a timestamp variable using backticks: `` timestamp=`date +%s` ``. Your team's style guide requires updating this to modern syntax. What is the modern syntax, and why is it preferred over backticks?
 
 <details>
 <summary>Show Answer</summary>
 
-Both are **command substitution** — they run the command and substitute its output.
+The modern syntax uses `$()` for command substitution instead of backticks. While backticks still work for backward compatibility, `$()` is significantly easier to read visually and distinguishes clearly from single quotes. More importantly, `$()` can be easily nested without requiring complex backslash escaping, whereas nesting backticks requires escaping the inner backticks. This avoids the syntax errors and readability issues that are common when maintaining older scripts.
 
 ```bash
 # Modern syntax (preferred)
@@ -691,14 +678,6 @@ now=$(date)
 # Old syntax (still works)
 now=`date`
 ```
-
-`$()` advantages:
-- Easier to read
-- Easier to nest: `$(echo $(date))`
-- Clearer what's inside
-- Fewer escaping issues
-
-Backticks are legacy syntax — use `$()` in new scripts.
 
 </details>
 
