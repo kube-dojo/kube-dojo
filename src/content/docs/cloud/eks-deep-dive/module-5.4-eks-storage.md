@@ -90,6 +90,8 @@ allowVolumeExpansion: true
 
 The `volumeBindingMode: WaitForFirstConsumer` setting is critical. It delays volume creation until a pod actually needs it, ensuring the volume is created in the same AZ as the node running the pod. Without this, Kubernetes might create the volume in AZ-a while the pod gets scheduled to AZ-b, causing a permanent mismatch.
 
+> **Pause and predict**: If you forget to set `volumeBindingMode: WaitForFirstConsumer` and leave it as the default `Immediate`, and your EKS cluster spans 3 Availability Zones, what is the mathematical probability that your pod will successfully mount its newly provisioned EBS volume on the first try without node affinity rules?
+
 ### Using EBS Volumes in Pods
 
 ```yaml
@@ -223,6 +225,8 @@ k get pvc data-postgres-0 -n database -o json | \
 ```
 
 > **Important**: EBS volumes can only be expanded, never shrunk. You can modify the volume type (gp2 to gp3) and adjust IOPS/throughput without detaching the volume, but there is a 6-hour cooldown between modifications.
+
+> **Stop and think**: You just expanded an EBS volume from 100Gi to 200Gi for a temporary data migration. A week later, you realize you only need 50Gi long-term and want to reduce costs. Since EBS doesn't support shrinking volumes, what exact Kubernetes and AWS steps would you need to take to migrate your live StatefulSet data to a new 50Gi volume?
 
 ---
 
@@ -358,6 +362,8 @@ spec:
 ```
 
 All five replicas mount the same EFS filesystem at `/usr/share/nginx/html/media`. When one pod writes a file, all other pods can read it immediately. This is the primary use case for EFS on EKS: shared content, user uploads, configuration files, and ML training datasets.
+
+> **Stop and think**: EFS is a regional service, meaning your 5 `cms-web` replicas can be scheduled across 3 different Availability Zones and still read/write to the same filesystem. But what is the hidden cost of this convenience? Consider how data actually flows when a pod in AZ-a reads a file that was physically written by a pod in AZ-b, and what AWS charges for network traffic that crosses AZ boundaries.
 
 ---
 
