@@ -136,6 +136,13 @@ HYBRID TOPOLOGY
     between two specific VPCs.
 ```
 
+> **Pause and predict**: You have 30 VPCs that all need to communicate. Why is VPC Peering impractical at this scale?
+>
+> <details>
+> <summary>Answer</summary>
+> Full mesh VPC Peering for 30 VPCs requires N*(N-1)/2 = 435 peering connections. Each peering connection requires route table entries in both VPCs. The route table limit is 200 entries per route table (can be raised to 1,000, but at a performance cost). Beyond the route table pressure, managing 435 connections is operationally complex: adding VPC #31 requires 30 new peering connections and 60 new route table entries. Transit Gateway reduces this to N connections (one per VPC) with centralized routing.
+> </details>
+
 ---
 
 ## Transit Gateway Deep Dive (AWS)
@@ -296,6 +303,13 @@ resource "aws_route" "firewall_return" {
   transit_gateway_id     = aws_ec2_transit_gateway.main.id
 }
 ```
+
+> **Stop and think**: Why should you avoid using the default Transit Gateway route table?
+>
+> <details>
+> <summary>Answer</summary>
+> The default TGW route table propagates all routes from all attachments into a single routing domain. This means every VPC can reach every other VPC. For a production environment, this violates the principle of least privilege at the network level: a development VPC should not have network-layer routing to a production VPC. By disabling the default route table and creating separate route tables (production, staging, shared-services), you can control which VPCs can communicate. Production VPCs see only other production VPCs and shared services. Development VPCs see only development VPCs and shared services. This is network segmentation via routing policy.
+> </details>
 
 ---
 
@@ -687,6 +701,45 @@ CROSS-AZ COST EXAMPLE
 
 ---
 
+## Troubleshooting Transit Networks
+
+When transit hubs fail, they usually fail silently by dropping traffic (a "routing blackhole"). Because traffic traverses multiple hops (VPC A -> TGW -> Firewall VPC -> TGW -> VPC B), pinpointing the exact location of the drop requires a systematic approach using flow logs and route analysis tools.
+
+### Identifying Routing Blackholes with VPC Flow Logs
+
+VPC Flow Logs capture IP traffic going to and from network interfaces in your VPC. When troubleshooting transit connectivity, you are looking for `REJECT` records.
+
+```text
+# Sample VPC Flow Log (AWS)
+version account-id interface-id srcaddr dstaddr srcport dstport protocol packets bytes start end action log-status
+2 123456789012 eni-0a1b2c3d 10.0.1.50 10.1.2.75 443 49152 6 5 500 1620140761 1620140821 ACCEPT OK
+2 123456789012 eni-0a1b2c3d 10.0.1.50 10.2.3.10 443 49153 6 1 40 1620140761 1620140821 REJECT OK
+```
+
+In the example above, traffic from `10.0.1.50` to `10.1.2.75` is `ACCEPT`ed, but traffic to `10.2.3.10` is `REJECT`ed. 
+
+A `REJECT` can happen for two primary reasons:
+1. **Security Groups / Network ACLs**: The traffic reached the destination interface, but a firewall rule blocked it.
+2. **Missing Routes (Blackhole)**: The router (e.g., Transit Gateway or VPC Router) has no route to the destination, or the route exists but points to a dead attachment.
+
+To distinguish between the two, you must check flow logs at *both* the source and destination ENIs, as well as the transit hub ENIs in the source VPC. If the traffic leaves the source VPC but never appears in the destination VPC's flow logs, the drop occurred in the transit hub.
+
+### Route Analysis Tools
+
+Parsing flow logs manually across dozens of accounts is tedious. Cloud providers offer automated tools to simulate and trace network paths.
+
+#### AWS Reachability Analyzer
+AWS Reachability Analyzer performs static analysis of your network configuration without sending actual packets. You define a source (e.g., an EC2 instance) and a destination (e.g., an IP address in another peered VPC).
+
+The tool evaluates route tables, security groups, Network ACLs, and TGW attachments along the path. If the path is blocked, it tells you exactly which component is dropping the traffic (e.g., "Missing route in TGW route table 'tgw-rtb-prod' for destination 10.2.0.0/16").
+
+#### GCP Network Topology
+GCP's Network Topology provides a visual, graph-based view of your entire organization's network traffic. It overlays metrics (latency, packet loss, bandwidth) onto the topology map. 
+
+For troubleshooting, GCP offers **Connectivity Tests** (part of Network Intelligence Center). Similar to AWS Reachability Analyzer, it performs static and dynamic analysis to verify if an endpoint in Service Project A can reach an endpoint in Service Project B across a Shared VPC, instantly flagging missing IAM permissions, firewall rules, or routes.
+
+---
+
 ## Common Mistakes
 
 | Mistake | Why It Happens | How to Fix It |
@@ -705,39 +758,27 @@ CROSS-AZ COST EXAMPLE
 ## Quiz
 
 <details>
-<summary>1. You have 30 VPCs that all need to communicate. Why is VPC Peering impractical at this scale?</summary>
+<summary>1. You are a network architect moving from AWS to GCP. In AWS, you connected 50 project VPCs using Transit Gateway. How will your approach to multi-project connectivity fundamentally change in GCP, and why?</summary>
 
-Full mesh VPC Peering for 30 VPCs requires N*(N-1)/2 = 435 peering connections. Each peering connection requires route table entries in both VPCs. The route table limit is 200 entries per route table (can be raised to 1,000, but at a performance cost). Beyond the route table pressure, managing 435 connections is operationally complex: adding VPC #31 requires 30 new peering connections and 60 new route table entries. Transit Gateway reduces this to N connections (one per VPC) with centralized routing.
+In AWS, Transit Gateway connects separate VPCs (each with its own CIDR, route tables, and security groups) through a central router, maintaining network isolation. GCP uses a Shared VPC model where a single VPC is owned by a host project and its subnets are shared to service projects. There are no separate VPCs to connect—everything resides in one network. This eliminates the need for transit routing for intra-org traffic, but means firewall rules apply across all projects sharing the VPC.
 </details>
 
 <details>
-<summary>2. What is the key architectural difference between AWS Transit Gateway and GCP Shared VPC?</summary>
-
-AWS Transit Gateway connects separate VPCs (each with its own CIDR, route tables, security groups) through a central router. Each VPC maintains its own identity and network configuration. GCP Shared VPC uses a single VPC owned by a host project, with subnets shared to service projects. There are no separate VPCs to connect -- everything is in one network. This means GCP avoids the transit routing problem entirely (no need for a TGW-like product for intra-org traffic) but gives up network-level isolation between projects sharing the same VPC. Firewall rules in GCP Shared VPC apply to all projects using that VPC.
-</details>
-
-<details>
-<summary>3. Your EKS cluster spans 3 AZs and generates 50TB of cross-AZ traffic monthly. What are two strategies to reduce this cost?</summary>
+<summary>2. Your EKS cluster spans 3 AZs and generates 50TB of cross-AZ traffic monthly. What are two strategies to reduce this cost?</summary>
 
 Strategy 1: Enable topology-aware routing in Kubernetes. Configure Services with `internalTrafficPolicy: Local` where possible, and use topology hints (annotation `service.kubernetes.io/topology-mode: Auto`) so kube-proxy prefers endpoints in the same AZ. Strategy 2: Use pod topology spread constraints combined with service affinity to co-locate communicating services in the same AZ. For example, place the API server and its database cache in the same AZ. This requires understanding your service call graph. Together, these can reduce cross-AZ traffic by 40-70%, saving $500-$700/month on a 50TB workload.
 </details>
 
 <details>
-<summary>4. Why should you avoid using the default Transit Gateway route table?</summary>
-
-The default TGW route table propagates all routes from all attachments into a single routing domain. This means every VPC can reach every other VPC. For a production environment, this violates the principle of least privilege at the network level: a development VPC should not have network-layer routing to a production VPC. By disabling the default route table and creating separate route tables (production, staging, shared-services), you can control which VPCs can communicate. Production VPCs see only other production VPCs and shared services. Development VPCs see only development VPCs and shared services. This is network segmentation via routing policy.
-</details>
-
-<details>
-<summary>5. A partner company requires you to provide a static IP for their firewall allowlist. You have 12 VPCs across 3 accounts. How do you provide a single egress IP?</summary>
+<summary>3. A partner company requires you to provide a static IP for their firewall allowlist. You have 12 VPCs across 3 accounts. How do you provide a single egress IP?</summary>
 
 Create a centralized egress VPC with a NAT Gateway attached to an Elastic IP. Route all internet-bound traffic from your 12 VPCs through the Transit Gateway to the egress VPC. The NAT Gateway translates all outbound traffic to the single Elastic IP. The partner allowlists this one IP. This pattern also lets you add AWS Network Firewall in the egress VPC for domain-based filtering. The cost is one NAT Gateway ($32/month + $0.045/GB) instead of 12 NAT Gateways ($384/month), plus TGW data processing ($0.02/GB). At moderate traffic volumes, the centralized approach is cheaper and more manageable.
 </details>
 
 <details>
-<summary>6. What problem does AWS VPC IPAM solve that tagging and spreadsheets cannot?</summary>
+<summary>4. Your platform team has historically used a shared wiki spreadsheet to allocate VPC CIDR blocks. Recently, two different product teams accidentally claimed the same `10.4.0.0/16` block, causing a multi-day outage when their networks couldn't peer. How would implementing AWS VPC IPAM prevent this situation from happening again?</summary>
 
-AWS VPC IPAM provides automated, conflict-free CIDR allocation. When you create a VPC from an IPAM pool, IPAM guarantees the allocated CIDR does not overlap with any other allocation in the pool. Spreadsheets and tagging rely on human discipline -- someone must check the spreadsheet before creating a VPC, and nothing prevents them from ignoring it. IPAM also tracks actual usage versus allocation (identifying underutilized address space), supports compliance checks (ensuring all VPCs use CIDRs from approved pools), and integrates with AWS Organizations to enforce allocation policies across accounts. It turns IP address management from a manual process into an automated guardrail.
+AWS VPC IPAM provides automated, conflict-free CIDR allocation enforced at the API level. When you create a VPC from an IPAM pool, IPAM guarantees the allocated CIDR does not overlap with any other allocation in the pool. Spreadsheets and tagging rely entirely on human discipline—someone must manually check the spreadsheet, and nothing prevents them from bypassing it. Furthermore, IPAM tracks actual usage versus allocation and integrates with AWS Organizations to enforce allocation guardrails programmatically.
 </details>
 
 ---
