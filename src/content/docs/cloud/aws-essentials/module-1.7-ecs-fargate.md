@@ -204,6 +204,8 @@ Fargate does not let you choose arbitrary CPU/memory combinations. Here are the 
 | 8192 (8 vCPU) | 16384 - 61440 (in 4096 increments) |
 | 16384 (16 vCPU) | 32768 - 122880 (in 8192 increments) |
 
+> **Pause and predict**: You are migrating a legacy Java application that requires a large heap size (at least 6GB) but does very little processing (mostly waiting on database locks). You are also migrating a Node.js image processing worker that maxes out CPU but uses only 200MB of RAM. Which Fargate CPU/memory combinations would you choose for each, and why?
+
 ### IAM Roles: Execution Role vs Task Role
 
 This is one of the most commonly confused concepts in ECS.
@@ -295,6 +297,8 @@ aws iam put-role-policy \
     ]
   }'
 ```
+
+> **Stop and think**: You just deployed a new task. The ECS console shows the task is stuck in the `PENDING` state and eventually fails with a `CannotPullContainerError`. Later, you fix that, the container starts, but your application logs show an `AccessDenied` error when trying to write a file to an S3 bucket. Which IAM roles are misconfigured in each scenario?
 
 ### Registering the Task Definition
 
@@ -694,6 +698,8 @@ Time 4:  ALB     [TG-Blue: draining...]    <- Blue drains and terminates
 Rollback at any point: Shift traffic back to Blue instantly
 ```
 
+> **Pause and predict**: You manage a high-traffic payment processing API. A failed deployment that causes even 30 seconds of downtime will result in thousands of dropped transactions. The new version (v2) includes a subtle database connection pool bug that only manifests under high load, meaning it will pass the initial ALB health checks. If you use a Rolling Update, what will happen when v2 is deployed? How would Blue/Green mitigate this?
+
 ---
 
 ## Fargate Spot: Saving Up to 70%
@@ -762,39 +768,39 @@ This configuration guarantees 2 tasks on regular Fargate (`base: 2`) and distrib
 ## Quiz
 
 <details>
-<summary>1. What is the difference between an ECS task and an ECS service?</summary>
+<summary>1. Scenario: You are migrating a monolithic application to AWS. Your team wants to run a single container for a one-off database migration script, and a fleet of 5 containers for the main web application that must automatically replace any containers that crash. How do ECS Tasks and Services map to these two requirements?</summary>
 
-A task is a single running instance of a task definition -- it is one or more containers running together on a single compute unit. A service is a higher-level construct that maintains a desired count of tasks, handles deployments, integrates with load balancers, and replaces unhealthy tasks. Think of a task as a single process and a service as a process manager. You can run standalone tasks (for one-off jobs like database migrations) without a service, but long-running applications should always use a service for reliability and lifecycle management.
+For the database migration script, you would run a standalone ECS Task. A task is simply a running instance of a task definition, perfect for one-off jobs that start, do their work, and terminate. For the web application, you would create an ECS Service with a desired count of 5. The service acts as a process manager that ensures exactly 5 tasks are running at all times, integrates with your load balancer to distribute traffic, and automatically launches replacements if a task fails health checks or crashes.
 </details>
 
 <details>
-<summary>2. Why does ECS require the `awsvpc` networking mode for Fargate, and what does this mean for your architecture?</summary>
+<summary>2. Scenario: Your security team mandates that the `payment-processing` container must be completely isolated at the network level from the `public-api` container, even if they happen to be scheduled on the same underlying physical infrastructure. How does Fargate's `awsvpc` network mode achieve this, and what architectural constraint does this introduce?</summary>
 
-The `awsvpc` mode assigns each task its own Elastic Network Interface (ENI) with a private IP address from your VPC subnet. Fargate requires this because there is no host to share a network namespace with (unlike the `bridge` or `host` modes available on EC2). The architectural implications are significant: each task gets its own security group, enabling per-task network access control. However, each task consumes an IP address from your subnet, so you need subnets with enough IP space. For a service with 100 tasks, you need at least 100 available IPs in your subnets. This is why ECS clusters serving many tasks often use /19 or /20 subnets rather than the common /24.
+The `awsvpc` network mode assigns each individual task its own Elastic Network Interface (ENI) with a dedicated private IP address from your VPC. This means you can attach completely different Security Groups to the `payment-processing` task and the `public-api` task, providing strict network isolation at the ENI level regardless of where the tasks physically run. The architectural constraint this introduces is IP address exhaustion; because every single task consumes an IP address from your subnet, a service scaling out to hundreds of tasks requires a VPC and subnets with a sufficiently large CIDR block (e.g., /19 or /20) to accommodate them.
 </details>
 
 <details>
-<summary>3. You deploy a new task definition revision, but the new tasks keep failing health checks and the service never stabilizes. Without deployment circuit breaker enabled, what happens?</summary>
+<summary>3. Scenario: You deploy a new version of your application with a misconfigured environment variable causing the container to crash immediately on startup. Your ECS service has a desired count of 4. What exactly will ECS do in response to this bad deployment if the deployment circuit breaker is NOT enabled, versus if it IS enabled?</summary>
 
-Without the deployment circuit breaker, ECS enters an infinite loop: it launches new tasks, they fail health checks, ECS stops them, and immediately tries to launch new ones. The service never completes the deployment and never rolls back to the previous working version. You are stuck in a partially deployed state where old tasks might still be running (if `minimumHealthyPercent` is configured correctly) but the deployment never converges. You must manually update the service to use the previous task definition revision to resolve this. With the circuit breaker enabled, ECS detects the pattern of repeated failures and automatically rolls back to the last successful deployment.
+Without the deployment circuit breaker, ECS will enter an endless loop of launching new tasks, seeing them fail health checks, stopping them, and launching more replacements indefinitely. Your service will be stuck in a "deploying" state forever, consuming resources and muddying your logs without ever stabilizing. You would have to manually intervene by forcing a new deployment with the previous task definition to break the loop. With the circuit breaker enabled, ECS actively monitors the failure rate of the newly launched tasks; once a threshold of failures is reached, it automatically halts the deployment and rolls the service back to the last known healthy task definition revision, restoring stability without human intervention.
 </details>
 
 <details>
-<summary>4. How does ECS Exec work under the hood, and why does the task role need SSM permissions?</summary>
+<summary>4. Scenario: A memory leak is occurring in your production Fargate task, but it only happens after several hours of sustained traffic. The logs do not provide enough detail, and you need to run `jmap` (a Java profiling tool) inside the running container to dump the heap. How do you gain access to this container given that Fargate does not allow SSH to the host machine?</summary>
 
-ECS Exec uses AWS Systems Manager Session Manager to establish a secure, audited channel between your terminal and the container. The Fargate platform includes an SSM Agent sidecar that communicates with the SSM service. When you run `aws ecs execute-command`, the CLI connects to SSM, which establishes a WebSocket connection to the agent running alongside your container. The task role needs SSM permissions (ssmmessages:*) because the agent inside the task makes API calls to create and maintain these communication channels. The communication is encrypted and all commands are logged to CloudWatch or S3, providing an audit trail -- which is why ECS Exec is preferred over SSH for production debugging.
+You must use ECS Exec, which leverages AWS Systems Manager (SSM) Session Manager to establish a secure WebSocket connection directly into the running container. To make this work, your task role must have the necessary `ssmmessages` IAM permissions, and your ECS service must have been created or updated with the `--enable-execute-command` flag. Once configured, you can use the AWS CLI (`aws ecs execute-command`) to drop into an interactive shell inside the container without needing an SSH server. This allows you to run your profiling tools just like you would with `docker exec`, all while maintaining a secure, centrally logged audit trail of every command executed.
 </details>
 
 <details>
-<summary>5. When should you use EC2 launch type instead of Fargate?</summary>
+<summary>5. Scenario: Your company processes satellite imagery using a proprietary machine learning model that requires NVIDIA GPUs to complete processing within acceptable timeframes. At the same time, you have a lightweight Go-based API that serves the processed images to web clients with highly unpredictable traffic spikes. Which ECS launch type should you choose for each workload, and why?</summary>
 
-You should use EC2 launch type in three main scenarios. First, GPU workloads: Fargate does not support GPU instances, so machine learning inference or video processing requires EC2 instances with GPU (like p3 or g5 families). Second, very large containers: if your task needs more than 16 vCPU or 120 GB memory, you must use EC2. Third, extreme cost optimization: if you have predictable, steady-state workloads that run 24/7 at high utilization, Reserved Instances on EC2 can be 40-60% cheaper than Fargate. However, you must account for the operational overhead of managing EC2 instances (patching, AMI updates, capacity management) in that cost comparison. For most workloads, Fargate's simplicity outweighs EC2's potential cost savings.
+For the satellite imagery processing workload, you must use the EC2 launch type because Fargate does not support GPU instances as of the current AWS offerings. You will need to provision EC2 instances with GPUs (like the p3 or g5 families), manage their AMIs, and register them to your ECS cluster. Conversely, for the Go-based API, you should use the Fargate launch type because its unpredictable traffic spikes benefit from Fargate's ability to seamlessly scale out tasks. Fargate abstracts away the underlying infrastructure completely, allowing you to quickly scale up to meet demand and pay only for the precise compute the API consumes during those spikes.
 </details>
 
 <details>
-<summary>6. Explain the difference between Fargate and Fargate Spot. When is Spot appropriate?</summary>
+<summary>6. Scenario: You are designing the compute architecture for a system that generates end-of-month financial reports. The job takes about 45 minutes to run, is triggered asynchronously via an SQS queue, and if it fails, the system simply picks the message back up and tries again. You need to minimize AWS costs. How should you configure your ECS capacity providers for this workload?</summary>
 
-Fargate Spot runs your tasks on spare AWS capacity at up to 70% discount, but tasks can be interrupted with a 2-minute warning when AWS needs the capacity back. Spot is appropriate for workloads that are either stateless and can tolerate interruption (queue processors, batch jobs, data pipelines) or for non-critical environments (development, staging, testing). The pattern for production-adjacent workloads is to use a capacity provider strategy with a `base` count on regular Fargate (ensuring minimum availability) and additional capacity on Spot for cost savings. Never use Fargate Spot as the sole capacity provider for user-facing production services.
+You should run this workload entirely on Fargate Spot, which provides up to a 70% discount compared to regular Fargate pricing by utilizing spare AWS compute capacity. Because your application is driven by an SQS queue and is designed to retry automatically upon failure, it can perfectly tolerate the 2-minute interruption warning that Fargate Spot issues when AWS reclaims the capacity. By setting the capacity provider strategy to use Fargate Spot exclusively for this specific worker service, you achieve massive cost savings without risking data loss. This perfectly aligns with the architectural best practice of matching fault-tolerant, asynchronous background jobs to deeply discounted, interruptible compute.
 </details>
 
 ---
@@ -1040,13 +1046,127 @@ aws ecs execute-command \
 ```
 </details>
 
-### Task 6: Clean Up
+### Task 6: Configure Service Auto Scaling
+
+Configure the service to automatically scale out when average CPU utilization exceeds 50%.
 
 <details>
 <summary>Solution</summary>
 
 ```bash
-# Scale down the service
+# Register the service as a scalable target (min 2, max 6 tasks)
+aws application-autoscaling register-scalable-target \
+  --service-namespace ecs \
+  --resource-id service/${CLUSTER_NAME}/api-service \
+  --scalable-dimension ecs:service:DesiredCount \
+  --min-capacity 2 \
+  --max-capacity 6
+
+# Create a target tracking scaling policy for CPU
+aws application-autoscaling put-scaling-policy \
+  --service-namespace ecs \
+  --resource-id service/${CLUSTER_NAME}/api-service \
+  --scalable-dimension ecs:service:DesiredCount \
+  --policy-name cpu-scaling \
+  --policy-type TargetTrackingScaling \
+  --target-tracking-scaling-policy-configuration '{
+    "TargetValue": 50.0,
+    "PredefinedMetricSpecification": {
+      "PredefinedMetricType": "ECSServiceAverageCPUUtilization"
+    },
+    "ScaleInCooldown": 300,
+    "ScaleOutCooldown": 60
+  }'
+
+# Describe the policy to verify
+aws application-autoscaling describe-scaling-policies \
+  --service-namespace ecs \
+  --resource-id service/${CLUSTER_NAME}/api-service
+```
+</details>
+
+### Task 7: Prepare for Blue/Green Deployments
+
+To perform a CodeDeploy Blue/Green deployment, you need a secondary Target Group and a CodeDeploy Application setup.
+
+<details>
+<summary>Solution</summary>
+
+```bash
+# Create a second target group for Green deployments
+TG_GREEN_ARN=$(aws elbv2 create-target-group \
+  --name ecs-exercise-targets-green \
+  --protocol HTTP \
+  --port 8080 \
+  --vpc-id ${VPC_ID} \
+  --target-type ip \
+  --health-check-path /health \
+  --health-check-interval-seconds 15 \
+  --healthy-threshold-count 2 \
+  --query 'TargetGroups[0].TargetGroupArn' --output text)
+
+# Create CodeDeploy Service Role
+cat > /tmp/cd-trust.json <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {"Service": "codedeploy.amazonaws.com"},
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}
+EOF
+
+CD_ROLE_ARN=$(aws iam create-role --role-name ECSCodeDeployRole --assume-role-policy-document file:///tmp/cd-trust.json --query 'Role.Arn' --output text)
+aws iam attach-role-policy --role-name ECSCodeDeployRole --policy-arn arn:aws:iam::aws:policy/AWSCodeDeployRoleForECS
+
+# Create CodeDeploy Application
+aws deploy create-application \
+  --application-name ecs-exercise-app \
+  --compute-platform ECS
+
+# Create Deployment Group for Blue/Green
+LISTENER_ARN=$(aws elbv2 describe-listeners --load-balancer-arn ${ALB_ARN} --query 'Listeners[0].ListenerArn' --output text)
+
+aws deploy create-deployment-group \
+  --application-name ecs-exercise-app \
+  --deployment-group-name ecs-exercise-dg \
+  --service-role-arn ${CD_ROLE_ARN} \
+  --deployment-style deploymentType=BLUE_GREEN,deploymentOption=WITH_TRAFFIC_CONTROL \
+  --blue-green-deployment-configuration '{
+    "terminateBlueInstancesOnDeploymentSuccess": {
+      "action": "TERMINATE",
+      "terminationWaitTimeInMinutes": 5
+    },
+    "deploymentReadyOption": {
+      "actionOnTimeout": "CONTINUE_DEPLOYMENT"
+    }
+  }' \
+  --load-balancer-info '{
+    "targetGroupPairInfoList": [{
+      "targetGroups": [{"name": "ecs-exercise-targets"}, {"name": "ecs-exercise-targets-green"}],
+      "prodTrafficRoute": {"listenerArns": ["'"${LISTENER_ARN}"'"]}
+    }]
+  }' \
+  --ecs-services '[{"serviceName": "api-service", "clusterName": "'"${CLUSTER_NAME}"'"}]'
+```
+</details>
+
+### Task 8: Clean Up
+
+<details>
+<summary>Solution</summary>
+
+```bash
+# Delete CodeDeploy resources
+aws deploy delete-deployment-group --application-name ecs-exercise-app --deployment-group-name ecs-exercise-dg
+aws deploy delete-application --application-name ecs-exercise-app
+aws iam detach-role-policy --role-name ECSCodeDeployRole --policy-arn arn:aws:iam::aws:policy/AWSCodeDeployRoleForECS
+aws iam delete-role --role-name ECSCodeDeployRole
+
+# Scale down the service (this also deletes associated auto-scaling policies)
 aws ecs update-service \
   --cluster ${CLUSTER_NAME} \
   --service api-service \
@@ -1073,6 +1193,7 @@ aws elbv2 delete-listener \
     --query 'Listeners[0].ListenerArn' --output text)
 
 aws elbv2 delete-target-group --target-group-arn ${TG_ARN}
+aws elbv2 delete-target-group --target-group-arn ${TG_GREEN_ARN}
 aws elbv2 delete-load-balancer --load-balancer-arn ${ALB_ARN}
 
 # Delete security groups (wait for ALB to fully delete first)
@@ -1096,6 +1217,8 @@ echo "Cleanup complete"
 - [ ] Service running with 2 healthy tasks behind the ALB
 - [ ] HTTP requests through ALB return expected responses
 - [ ] ECS Exec provides interactive shell access to running containers
+- [ ] Auto Scaling policies applied to the ECS service
+- [ ] CodeDeploy Application and Deployment Group created with dual Target Groups
 - [ ] All resources cleaned up
 
 ---
