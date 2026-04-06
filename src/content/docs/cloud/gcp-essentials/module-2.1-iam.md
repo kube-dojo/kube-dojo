@@ -74,6 +74,12 @@ Before you can understand IAM in GCP, you must understand *where* IAM policies l
 
 **Resources**: The actual GCP services and objects you create. VMs, databases, storage buckets, Pub/Sub topics---they all live inside a project.
 
+> **Pause and predict**: If you move a Project from the "Engineering" folder to the "Finance" folder, what happens to the IAM policies applied to the Project?
+> <details>
+> <summary>Answer</summary>
+> The project will immediately lose all permissions inherited from the "Engineering" folder and instantly inherit all permissions applied to the "Finance" folder. Any IAM policies applied directly to the Project itself will remain unchanged. This dynamic inheritance is why moving projects across folders is a high-risk operation.
+> </details>
+
 ### Policy Inheritance: The Cascade Effect
 
 This is the single most important concept to understand about GCP IAM. **IAM policies are additive and inherit downward**. If you grant a user the `roles/editor` role at the Organization level, that user has Editor permissions on every single project in the entire organization. You cannot revoke an inherited permission at a lower level (though you can use Organization Policy Constraints or IAM Deny Policies to restrict specific actions).
@@ -188,6 +194,12 @@ Common predefined roles you will use constantly:
 | `roles/logging.viewer` | Read Cloud Logging logs |
 | `roles/monitoring.viewer` | Read Cloud Monitoring metrics |
 | `roles/iam.serviceAccountUser` | Act as (impersonate) a service account |
+
+> **Stop and think**: Your developers need to deploy Cloud Run services and connect them to Cloud SQL. Should you create a custom role combining both sets of permissions, or grant multiple predefined roles?
+> <details>
+> <summary>Answer</summary>
+> You should grant multiple predefined roles (e.g., `roles/run.admin` and `roles/cloudsql.client`). Predefined roles are maintained by Google and automatically updated when new permissions are added to a service. Custom roles must be manually maintained, which becomes an operational burden. Only use custom roles when predefined roles are explicitly too broad or too narrow.
+> </details>
 
 #### 3. Custom Roles
 
@@ -490,6 +502,30 @@ gcloud logging read 'logName="projects/my-project/logs/cloudaudit.googleapis.com
 
 ---
 
+## Diagnosing Access Issues: Policy Troubleshooter
+
+When a user or service account gets a `403 Permission Denied` error, guessing which role is missing is a frustrating waste of time. GCP provides the **Policy Troubleshooter** specifically to answer the question: *"Why does (or doesn't) this principal have this permission on this resource?"*
+
+The Policy Troubleshooter evaluates:
+1. The principal's direct IAM bindings on the resource.
+2. Inherited IAM bindings from parent projects, folders, and organizations.
+3. IAM Deny policies that might be blocking access.
+4. The roles granted, expanding them to check if the specific API permission is included.
+
+```bash
+# Check if a specific service account has permission to list objects in a bucket
+gcloud policy-troubleshoot iam \
+  //storage.googleapis.com/projects/_/buckets/my-bucket \
+  --principal="serviceAccount:gcs-reader@my-project.iam.gserviceaccount.com" \
+  --permission="storage.objects.list"
+```
+
+The output will clearly state whether access is `GRANTED` or `DENIED` and, crucially, it will show the exact binding (or lack thereof) that resulted in the decision. 
+
+**Pro-tip for troubleshooting with Audit Logs**: If you don't know exactly which permission is missing, look at the Cloud Audit Logs first. Find the `403` error in the logs, look at the `protoPayload.authorizationInfo` field, and it will tell you exactly which permission was evaluated and returned false. Then, use the Policy Troubleshooter to determine *why* they don't have that permission.
+
+---
+
 ## Did You Know?
 
 1. **GCP has over 11,000 individual IAM permissions** spread across hundreds of services. The `roles/editor` basic role grants access to roughly 6,000 of them. This is why predefined roles with 5-20 permissions are always the better choice.
@@ -520,45 +556,33 @@ gcloud logging read 'logName="projects/my-project/logs/cloudaudit.googleapis.com
 ## Quiz
 
 <details>
-<summary>1. You grant a user <code>roles/storage.admin</code> at the Organization level. You then try to remove that permission at a specific project using an IAM policy. Does this work?</summary>
+<summary>1. Scenario: An engineer leaves the company. You remove them from the 'gcp-developers' Google Group. However, they are still able to modify instances in the 'sandbox' project. Why might this happen, and how do you find out?</summary>
 
-No, it does not work. IAM policies in GCP are **additive**. You cannot revoke an inherited permission at a lower level by simply not including it in the project-level IAM policy. The permission from the Organization level will still apply. To block the permission, you must use an **IAM Deny Policy** that explicitly denies the specific permissions at the project level.
+They likely have a direct IAM binding on the project or a specific resource (like a VM), bypassing the Google Group. IAM policies are additive, so removing them from the group only removes the group's inherited permissions. To find out, use `gcloud asset search-all-iam-policies` to search across the organization for their specific email address, or use the Policy Troubleshooter if you know which resource they are modifying.
 </details>
 
 <details>
-<summary>2. What is the difference between a Project ID and a Project Number? Can either be changed after creation?</summary>
+<summary>2. Scenario: Your CI/CD pipeline in GitLab needs to deploy a container to Cloud Run. The security team has strictly forbidden the creation of long-lived service account JSON keys. How do you authenticate the pipeline?</summary>
 
-The **Project ID** is a human-readable string (e.g., `eng-dev-382910`) that you choose at project creation time and cannot change afterward. The **Project Number** is a system-assigned integer (e.g., `481726359042`) that also cannot be changed. Both are globally unique and permanent. Internally, GCP uses the Project Number for all operations. The Project ID is essentially an alias for human convenience. Neither can be reused even after a project is deleted.
+You must implement Workload Identity Federation. This involves creating a Workload Identity Pool and a Provider configured to trust GitLab's OIDC issuer. The GitLab pipeline uses its native JWT to authenticate to the provider, which exchanges it for a short-lived GCP STS token. The pipeline then uses this token to impersonate a specific GCP service account that holds the `roles/run.admin` permission, completely eliminating the need for persistent secrets.
 </details>
 
 <details>
-<summary>3. Why should you avoid using the default Compute Engine service account?</summary>
+<summary>3. Scenario: You assign <code>roles/storage.objectAdmin</code> to a service account at the Folder level. You want to prevent this service account from deleting objects in one specific production project within that folder. Can you do this by removing the role in the project's IAM policy? Why or why not?</summary>
 
-The default Compute Engine service account (`PROJECT_NUMBER-compute@developer.gserviceaccount.com`) is automatically granted `roles/editor` on the project. This means any VM using this service account has read-write access to almost every resource in the project. If the VM is compromised, the attacker gains broad access. You should create dedicated service accounts with only the specific permissions each workload needs, following the principle of least privilege.
+No, you cannot achieve this by modifying the project's allow policy. In GCP, IAM allow policies are additive and inherit downward; you cannot subtract or override an inherited allow permission by simply omitting it at a lower level. To block the deletion, you must create an IAM Deny Policy attached to the production project that explicitly denies the `storage.objects.delete` permission for that specific service account. The Deny policy will take precedence over the inherited Allow policy.
 </details>
 
 <details>
-<summary>4. What is Workload Identity Federation, and when would you use it instead of a service account key?</summary>
+<summary>4. Scenario: A developer complains they are getting a `403 Permission Denied` when trying to view Cloud SQL backups. They insist they have the `roles/editor` role on the project. How do you systematically identify the missing permission without blindly guessing?</summary>
 
-Workload Identity Federation allows external identities (from AWS, Azure, GitHub Actions, GitLab CI, or any OIDC/SAML provider) to access GCP resources without using static service account keys. You should use it whenever a workload running outside of GCP needs to access GCP resources. Instead of creating a key file (which can be leaked, never expires, and is hard to rotate), the external workload exchanges its native identity token for short-lived GCP credentials. It is the recommended approach for CI/CD pipelines, multi-cloud architectures, and on-premises applications.
+First, check the Cloud Audit Logs for the specific `403` error event. Expand the `protoPayload.authorizationInfo` field in the log entry to see the exact API permission that was evaluated and rejected (e.g., `cloudsql.backupRuns.get`). Once you have the exact permission string, use the IAM Policy Troubleshooter in the console or CLI, inputting the developer's email, the resource name, and the permission. The troubleshooter will analyze the role bindings and explain exactly why the permission is missing or blocked by a deny policy.
 </details>
 
 <details>
-<summary>5. An engineer needs temporary access to restart VMs in a production project for an on-call shift. What is the most secure way to grant this?</summary>
+<summary>5. Scenario: A developer manually created a VM to run an internal script without explicitly specifying a service account. Two days later, a security scanner alerts that the VM has full read-write access to every resource in the project. Why did this happen?</summary>
 
-Use an **IAM Condition** with a time-based expression. Grant the engineer `roles/compute.instanceAdmin.v1` on the production project with a condition that limits the binding to a specific time window (e.g., 8 hours from now). The condition uses the `request.time` attribute. Once the time window expires, the permission is automatically revoked without requiring any manual cleanup. Alternatively, you can use Privileged Access Manager (PAM) for a more formal just-in-time access workflow.
-</details>
-
-<details>
-<summary>6. What is the evaluation order when GCP receives an API request? (Organization Policies, Deny Policies, Allow Policies)</summary>
-
-The evaluation order is: (1) **Organization Policy Constraints** are checked first---these determine whether the action is even allowed to exist (e.g., "no external IPs on VMs"). (2) **IAM Deny Policies** are evaluated next---if any deny rule matches, the request is denied regardless of allow policies. (3) **IAM Allow Policies** are evaluated last---the request must match at least one allow policy. (4) If no allow policy matches, the default behavior is to **deny** the request. This means deny policies always win over allow policies.
-</details>
-
-<details>
-<summary>7. You need to audit which service accounts in your project have not been used in the last 90 days. How would you find this information?</summary>
-
-Use the **IAM Service Account Activity Analyzer**. Run `gcloud policy-intelligence query-activity --activity-type=serviceAccountLastAuthentication --project=my-project` to see when each service account was last used. Alternatively, use the **IAM Recommender** which automatically identifies unused service accounts and recommends disabling or deleting them. You can also query Cloud Audit Logs for `AuthenticationInfo.serviceAccountKeyName` to find which keys have been used recently.
+When a Compute Engine VM is created without specifying a service account, GCP automatically assigns it the default Compute Engine service account. This default service account is automatically granted the legacy `roles/editor` role on the project when the API is first enabled. Because `roles/editor` grants sweeping read-write access to almost all GCP services, the VM effectively inherited administrative power over the entire project. This violates the principle of least privilege.
 </details>
 
 ---
@@ -567,7 +591,7 @@ Use the **IAM Service Account Activity Analyzer**. Run `gcloud policy-intelligen
 
 ### Objective
 
-Set up a realistic multi-project environment with proper IAM controls: a Dev project and a Prod project, each with dedicated service accounts following least privilege.
+Set up a realistic multi-project environment with proper IAM controls: a Dev project and a Prod project, each with dedicated service accounts following least privilege, integrating Workload Identity Federation and utilizing the Policy Troubleshooter.
 
 ### Prerequisites
 
@@ -679,7 +703,61 @@ gcloud storage ls gs://${DEV_PROJECT}-artifacts/ \
 ```
 </details>
 
-**Task 4: Audit the IAM Configuration**
+**Task 4: Configure Workload Identity Federation for GitHub Actions**
+
+Simulate configuring keyless authentication for a GitHub repository deploying to the Dev project.
+
+<details>
+<summary>Solution</summary>
+
+```bash
+# Create a Workload Identity Pool
+gcloud iam workload-identity-pools create "github-actions-pool" \
+  --project=$DEV_PROJECT \
+  --location="global" \
+  --display-name="GitHub Actions Pool"
+
+# Create an OIDC Provider in the pool
+gcloud iam workload-identity-pools providers create-oidc "github-provider" \
+  --project=$DEV_PROJECT \
+  --location="global" \
+  --workload-identity-pool="github-actions-pool" \
+  --display-name="GitHub Provider" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
+  --issuer-uri="https://token.actions.githubusercontent.com"
+
+# Allow a specific GitHub repository to impersonate the dev service account
+export PROJECT_NUM=$(gcloud projects describe $DEV_PROJECT --format="value(projectNumber)")
+export REPO_NAME="my-org/my-repo"
+
+gcloud iam service-accounts add-iam-binding $DEV_SA \
+  --project=$DEV_PROJECT \
+  --role="roles/iam.workloadIdentityUser" \
+  --member="principalSet://iam.googleapis.com/projects/${PROJECT_NUM}/locations/global/workloadIdentityPools/github-actions-pool/attribute.repository/${REPO_NAME}"
+```
+</details>
+
+**Task 5: Diagnose Access with Policy Troubleshooter**
+
+Test why the Dev service account cannot delete objects in the Dev bucket.
+
+<details>
+<summary>Solution</summary>
+
+```bash
+# Attempt to check deletion permission using the troubleshooter
+# (Remember we only granted roles/storage.objectViewer earlier)
+gcloud policy-troubleshoot iam \
+  //storage.googleapis.com/projects/_/buckets/${DEV_PROJECT}-artifacts \
+  --principal="serviceAccount:$DEV_SA" \
+  --permission="storage.objects.delete" \
+  --project=$DEV_PROJECT
+
+# The output should clearly indicate "DENIED" and show that no bindings grant this permission.
+```
+</details>
+
+**Task 6: Audit the IAM Configuration**
 
 List all IAM bindings for both projects and identify any overly permissive roles.
 
@@ -716,7 +794,7 @@ done
 ```
 </details>
 
-**Task 5: Implement a Custom Role**
+**Task 7: Implement a Custom Role**
 
 Create a custom role that allows listing and reading GCS objects but not deleting them.
 
@@ -751,7 +829,7 @@ gcloud projects add-iam-binding $PROD_PROJECT \
 ```
 </details>
 
-**Task 6: Clean Up**
+**Task 8: Clean Up**
 
 Remove all resources to avoid charges.
 
@@ -775,6 +853,8 @@ echo "Cleanup complete. Projects scheduled for deletion (30-day recovery window)
 - [ ] Two projects created with billing linked
 - [ ] Dedicated service accounts created (not using default SA)
 - [ ] Cross-project access configured using minimal roles
+- [ ] Workload Identity Federation pool and provider configured
+- [ ] IAM access diagnosed using Policy Troubleshooter
 - [ ] Custom role created and assigned
 - [ ] No basic roles (Editor/Owner) granted to service accounts
 - [ ] All resources cleaned up
