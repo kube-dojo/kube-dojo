@@ -211,6 +211,8 @@ With immutability enabled, you are guaranteed that `v1.3.0` always refers to the
 | `latest` only | `latest` | Simple | No versioning, cannot roll back, dangerous |
 | Date-based | `2026-03-24-1432` | Chronological ordering | No semantic meaning |
 
+> **Stop and think**: Your CI pipeline successfully builds and pushes `myapp:latest` to a mutable ECR repository, overwriting the previous image. Five minutes later, the new code triggers a critical bug in production. You try to roll back by updating your ECS service to restart its tasks, hoping it pulls the old image. What will actually happen, and why is this an incident-response nightmare?
+
 The recommended approach for production: **tag every image with both the semantic version and the Git SHA.** Use `latest` only as a convenience pointer that also gets applied alongside the versioned tag.
 
 ```bash
@@ -435,6 +437,8 @@ aws ecr put-lifecycle-policy \
   }'
 ```
 
+> **Pause and predict**: You have a policy with two rules. Rule 1 (Priority 1) keeps 5 images with the prefix `prod-`. Rule 2 (Priority 2) expires all untagged images older than 7 days. You push an image with the tag `prod-v2.0` and immediately remove the tag because it was a mistake. 10 days later, will this image be deleted? Consider how ECR evaluates rules against image digests and tags.
+
 ### Preview Before You Apply
 
 Lifecycle policies can be destructive -- they delete images. Always preview first:
@@ -590,6 +594,32 @@ aws ecr put-registry-policy \
 
 ---
 
+## Securing ECR with VPC Endpoints (AWS PrivateLink)
+
+By default, when your ECS tasks, EKS worker nodes, or EC2 instances pull images from ECR, the traffic travels over the public internet. This requires your subnets to have a NAT Gateway (which incurs data processing charges) or an Internet Gateway (which requires public IP addresses).
+
+For enhanced security and to reduce NAT Gateway costs, you can configure VPC Endpoints (AWS PrivateLink) for ECR. This keeps all container image pull traffic entirely within the AWS private network.
+
+To use ECR privately, you must create two types of VPC endpoints:
+1. **ECR API Endpoint**: `com.amazonaws.region.ecr.api` (Used for authentication and API calls like `DescribeRepositories`)
+2. **ECR Docker Routing Layer Endpoint**: `com.amazonaws.region.ecr.dkr` (Used for the actual Docker `pull` and `push` operations)
+
+Because ECR stores image layers in S3, you **must also create an S3 Gateway Endpoint** (`com.amazonaws.region.s3`) in your VPC routing table. When the Docker daemon pulls an image layer, ECR provides a pre-signed S3 URL, and the actual layer data flows through the S3 Gateway Endpoint.
+
+```bash
+# Example: Creating the ECR Docker endpoint (requires a security group that allows inbound HTTPS from your compute nodes)
+aws ec2 create-vpc-endpoint \
+  --vpc-id vpc-12345678 \
+  --vpc-endpoint-type Interface \
+  --service-name com.amazonaws.us-east-1.ecr.dkr \
+  --subnet-ids subnet-11112222 subnet-33334444 \
+  --security-group-ids sg-55556666
+```
+
+If you block public internet access in your private subnets and forget the S3 Gateway Endpoint, your ECS tasks will authenticate successfully but hang indefinitely in the "PENDING" state while trying to download the image layers.
+
+---
+
 ## Did You Know?
 
 1. **ECR stores images in S3 under the hood**, but you cannot see or access the S3 buckets directly. Each image layer is stored as an individual S3 object, deduplicated across all repositories in the same account and region. If five of your repositories use the same base layer (like `ubuntu:22.04`), that layer is stored only once. This deduplication can reduce your storage costs by 40-60% for organizations with many similar images.
@@ -620,46 +650,46 @@ aws ecr put-registry-policy \
 ## Quiz
 
 <details>
-<summary>1. What is the difference between ECR Basic scanning and Enhanced scanning?</summary>
+<summary>1. Your security team mandates that all application dependencies (like npm packages and Python wheels) must be scanned for vulnerabilities before deployment. You enable ECR Basic scanning, but the security team reports that it is missing known vulnerabilities in your Node.js application. Why is this happening, and what must you change?</summary>
 
-Basic scanning uses the open-source Clair engine and only checks for known CVEs in operating system packages (the packages installed via apt, yum, apk, etc.). It runs once per image when triggered manually or on push. Enhanced scanning uses Amazon Inspector, which analyzes both OS packages and application dependencies (npm, pip, Maven, Go modules, and more). Enhanced scanning can also run continuously, re-scanning images when new CVEs are published. The trade-off is cost: Basic scanning is free, while Enhanced scanning costs per image scanned. For production workloads, Enhanced scanning is strongly recommended because application dependency vulnerabilities typically outnumber OS-level ones by a factor of 5-10.
+ECR Basic scanning uses the open-source Clair engine, which only checks for known CVEs in operating system packages (like those installed via apt or yum). It cannot look inside application-level dependency files like package.json or requirements.txt. To satisfy the security team's mandate, you must upgrade to Amazon Inspector Enhanced scanning. Enhanced scanning analyzes both OS packages and application dependencies across over 15 programming languages, catching vulnerabilities that Basic scanning completely ignores.
 </details>
 
 <details>
-<summary>2. Why can you not use the `latest` tag with ECR image tag immutability enabled?</summary>
+<summary>2. Your CI pipeline is configured to tag every build with both the Git SHA and the `latest` tag. After enabling ECR image tag immutability for your production repositories to improve security, your pipeline suddenly starts failing on the push step. Why is the pipeline failing, and what must you do to fix it?</summary>
 
-Image tag immutability means that once a tag is applied to an image, it cannot be reassigned to a different image. The `latest` tag, by convention, is meant to always point to the most recently pushed image -- which requires overwriting the tag with each push. These two concepts are fundamentally incompatible. If you push `myapp:latest` once with immutability enabled, every subsequent attempt to push `myapp:latest` will fail because the tag is already locked to the first image's digest. The solution is to either not use `latest` at all (preferred) or to maintain a separate mutable repository just for the `latest` pointer.
+Image tag immutability means that once a tag is applied to a specific image digest, it cannot be reassigned to a different image. The `latest` tag is designed to be a moving pointer that gets overwritten with every new build. Because these concepts are fundamentally incompatible, your pipeline fails when it tries to overwrite the `latest` tag from the previous build. To fix this, you must either remove the `latest` tag from your CI pipeline and deploy using the immutable Git SHA tags, or maintain a separate mutable repository specifically for the `latest` pointer.
 </details>
 
 <details>
 <summary>3. You have an ECR lifecycle policy that keeps the last 10 images tagged with "v" prefix and removes untagged images after 3 days. You push an image tagged v1.5.0 and also tag it as "latest". Later, the v1.5.0 tag is removed by the lifecycle policy (it becomes the 11th oldest). What happens to the "latest" tag?</summary>
 
-This is a subtle but important behavior. ECR lifecycle policies operate on images (identified by digest), not on individual tags. If an image has multiple tags and the lifecycle policy matches one of those tags for expiration, the entire image (and all its tags) is deleted. So when v1.5.0 is expired, the image itself is deleted, and the "latest" tag that pointed to the same digest is also removed. This is why relying on `latest` as a deployment reference is dangerous -- it can disappear when the versioned tag it shares a digest with gets cleaned up by lifecycle rules.
+This is a subtle but important behavior in ECR. Lifecycle policies operate on the underlying image digest, not on individual tags attached to that image. If an image has multiple tags and the lifecycle policy matches one of those tags for expiration, the entire image and all of its associated tags are deleted. Consequently, when v1.5.0 is expired, the underlying image is deleted, which also strips away the "latest" tag that pointed to it. This demonstrates why relying on `latest` as a deployment reference is highly dangerous in a repository with lifecycle policies.
 </details>
 
 <details>
-<summary>4. How does ECR pull-through cache help with Docker Hub rate limits?</summary>
+<summary>4. During a major traffic spike, your EKS cluster scales up rapidly, launching 50 new pods at once. The pods fail to start, and the Kubernetes events show 'Too Many Requests' errors from Docker Hub while trying to pull a public Nginx base image. How would implementing an ECR pull-through cache prevent this outage?</summary>
 
-Docker Hub imposes rate limits on image pulls: 100 pulls per 6 hours for anonymous users and 200 for authenticated free accounts. When your Kubernetes cluster scales up and 50 pods start simultaneously, each pulling an image from Docker Hub, you can hit these limits quickly. ECR pull-through cache solves this by acting as a local proxy. The first pull goes to Docker Hub and caches the image in your ECR registry. All subsequent pulls come from ECR, which has no rate limits for your own account. This means only 1 external pull instead of 50. It also improves reliability -- if Docker Hub has an outage, your cached images are still available.
+Docker Hub imposes strict rate limits on image pulls based on the IP address or authenticated user (e.g., 100 pulls per 6 hours for anonymous users). When 50 pods attempt to pull the Nginx image simultaneously from Docker Hub, you instantly exhaust your limit, causing the pulls to be throttled and the pods to fail. An ECR pull-through cache acts as a local proxy; the first pull goes to Docker Hub and caches the image in your ECR registry. All subsequent pod scaling events pull from the local ECR cache, which is not subject to Docker Hub rate limits, thereby ensuring reliable and fast container startups.
 </details>
 
 <details>
-<summary>5. Explain how ECR image layer deduplication works and why it matters for costs.</summary>
+<summary>5. Your organization has 30 different microservices, and you enforce a standard where every service uses the exact same `ubuntu:22.04` base image. Your finance department is concerned that storing 30 copies of a heavy OS image in ECR will cause storage costs to skyrocket. Why is their concern unfounded, and how does ECR handle this under the hood?</summary>
 
-Container images are composed of layers, each representing a filesystem change. When you push an image to ECR, each layer is stored individually and identified by its SHA256 digest. If multiple repositories contain images that share the same base layers (e.g., they all inherit from `python:3.12-slim`), those layers are stored only once in the underlying S3 storage. You are billed only for unique layer storage, not for each reference. For an organization with 30 microservices all built on the same base image, this can reduce storage costs by 40-60%. This is also why pushing images is faster when the base layers already exist -- Docker only uploads the layers that are new.
+Container images are composed of multiple filesystem layers, and ECR stores each of these layers individually based on their SHA256 digest. When multiple repositories within the same account and region push images that share identical base layers (like the standard `ubuntu:22.04` image), ECR recognizes the duplicate hashes. Instead of storing 30 redundant copies, ECR stores the base layer only once in its underlying S3 bucket and creates references to it for each repository. You are only billed for the unique layer storage, meaning standardizing on a single base image actually drastically reduces your overall storage costs.
 </details>
 
 <details>
-<summary>6. Your ECS tasks in eu-west-1 are pulling images from ECR in us-east-1. What problems does this cause and how do you fix them?</summary>
+<summary>6. Your primary infrastructure is in `us-east-1`, but you recently deployed a disaster recovery ECS cluster in `eu-west-1`. The disaster recovery tasks are configured to pull their container images from the existing ECR registry in `us-east-1`. During a simulated failover, you notice that tasks take significantly longer to start and you incur unexpected AWS data transfer charges. Why did this happen and what is the proper architectural fix?</summary>
 
-Cross-region image pulls cause three problems. First, latency: pulling a 500MB image across regions adds 2-8 seconds to container startup time, which compounds when you are scaling up many tasks simultaneously. Second, cost: inter-region data transfer is charged at $0.02/GB, so pulling that 500MB image 100 times costs $1.00 per scaling event. Third, reliability: if the network path between regions degrades, your tasks cannot start. The fix is ECR replication. Configure your us-east-1 registry to replicate to eu-west-1, then update your ECS task definitions to reference the eu-west-1 registry URL. Pulls become local, eliminating latency, cost, and cross-region dependency.
+Pulling container images across AWS regions introduces substantial network latency, which directly increases the time it takes for your ECS tasks to download the image and start. Additionally, AWS charges for inter-region data transfer, meaning every cross-region image pull increases your monthly bill. To resolve both the performance degradation and the cost issue, you must configure ECR cross-region replication. By setting your `us-east-1` registry to automatically replicate images to a registry in `eu-west-1`, the disaster recovery tasks can perform local image pulls, eliminating the cross-region network delay and data transfer fees.
 </details>
 
 ---
 
 ## Hands-On Exercise: Build, Push, Scan, and Lifecycle
 
-In this exercise, you will create an ECR repository, build and push images with proper tagging, run vulnerability scans, and configure lifecycle policies.
+In this exercise, you will create an ECR repository, build and push images with proper tagging, run vulnerability scans, configure lifecycle policies, and set up cross-account access.
 
 ### Setup
 
@@ -870,7 +900,48 @@ aws ecr get-lifecycle-policy-preview \
 ```
 </details>
 
-### Task 6: Clean Up
+### Task 6: Configure Cross-Account Repository Access
+
+Apply a repository policy that allows a simulated deployment account (e.g., AWS Account ID `999988887777`) to pull images from your repository.
+
+<details>
+<summary>Solution</summary>
+
+```bash
+# Create a policy JSON file
+cat > repo-policy.json <<'POLICY'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowCrossAccountPull",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::999988887777:root"
+      },
+      "Action": [
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:BatchGetImage",
+        "ecr:BatchCheckLayerAvailability"
+      ]
+    }
+  ]
+}
+POLICY
+
+# Apply the policy
+aws ecr set-repository-policy \
+  --repository-name ${REPO_NAME} \
+  --policy-text file://repo-policy.json
+
+# Verify the policy is applied
+aws ecr get-repository-policy \
+  --repository-name ${REPO_NAME} \
+  --query 'policyText' --output text | python3 -m json.tool
+```
+</details>
+
+### Task 7: Clean Up
 
 Remove all resources created during this exercise.
 
@@ -898,6 +969,7 @@ docker images --filter "reference=${REGISTRY}/${REPO_NAME}" -q | \
 
 # Clean up temporary files
 rm -rf /tmp/ecr-exercise
+rm -f repo-policy.json
 
 echo "Cleanup complete"
 ```
@@ -910,6 +982,7 @@ echo "Cleanup complete"
 - [ ] Multiple image versions pushed (simulating CI/CD history)
 - [ ] Vulnerability scan results reviewed and interpreted
 - [ ] Lifecycle policy applied that retains only the last 10 images
+- [ ] Configured cross-account repository access
 - [ ] All resources cleaned up
 
 ---
