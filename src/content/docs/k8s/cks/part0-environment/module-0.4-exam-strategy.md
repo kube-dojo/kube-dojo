@@ -39,7 +39,7 @@ This module adapts the three-pass strategy for security-specific challenges.
 
 ## The Security Three-Pass Strategy
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              CKS THREE-PASS STRATEGY                        │
 ├─────────────────────────────────────────────────────────────┤
@@ -115,7 +115,7 @@ Learn to recognize task complexity in seconds:
 
 ## Time Budget
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              120 MINUTE TIME BUDGET                         │
 ├─────────────────────────────────────────────────────────────┤
@@ -260,7 +260,7 @@ spec:
 
 > **Pause and predict**: You've completed Pass 1 in 45 minutes and scored an estimated 35%. You have 75 minutes left. Is that on track to pass, or should you be worried?
 
-> **What would happen if**: You spend 20 minutes on a complex Falco rule task during Pass 1, get it partially working, but now have only 55 minutes for the remaining 12 tasks. Calculate your likely final score versus the 67% passing threshold.
+> **Stop and think**: You spend 20 minutes on a complex Falco rule task during Pass 1, get it partially working, but now have only 55 minutes for the remaining 12 tasks. Calculate your likely final score versus the 67% passing threshold.
 
 ## When to Skip
 
@@ -299,11 +299,8 @@ trivy image <image>  # Scans correctly?
 ## Did You Know?
 
 - **67% pass rate means you can miss ~5-6 tasks** out of 15-20 and still pass. Don't panic if you skip some.
-
 - **Partial credit is possible.** Even incomplete answers may score points. Always submit something.
-
 - **The exam is open book.** Your challenge is finding information fast, not memorizing everything.
-
 - **Security tasks often have multiple valid approaches.** The exam checks the result, not the exact method.
 
 ---
@@ -322,28 +319,28 @@ trivy image <image>  # Scans correctly?
 
 ## Quiz
 
-1. **You're 30 minutes into the CKS exam. You've completed 6 quick tasks (RBAC fix, two NetworkPolicies, securityContext addition, AppArmor annotation, Trivy scan). You encounter a task asking you to create a seccomp profile from scratch. Which pass does this belong to, and what do you do next?**
+1. **You are exactly 30 minutes into the CKS exam and have just completed your 6th task (a mix of RBAC fixes, basic NetworkPolicies, and Trivy scans). The next task asks you to create a custom seccomp profile from scratch and apply it to a deployment. What is your immediate next action?**
    <details>
    <summary>Answer</summary>
-   Creating a seccomp profile from scratch is a Pass 2 (medium) task, typically taking 4-5 minutes. Since you're still in Pass 1 territory at 30 minutes, you should flag this task and continue scanning for remaining quick wins (1-3 minute tasks). Return to the seccomp task during Pass 2 when you've exhausted all quick wins. This maximizes your points-per-minute in the critical first hour.
+   You should immediately flag this task and return to scanning the remaining questions for quick Pass 1 tasks. Creating a seccomp profile from scratch requires writing JSON and referencing it correctly in the pod spec, which typically takes 4-5 minutes, placing it firmly in Pass 2. By getting bogged down in a medium-complexity task this early, you risk running out of time for the 1-2 minute tasks that guarantee easy points. Your primary goal in the first hour is to maximize your point accumulation rate, so you must aggressively defer anything that requires deeper thought or file creation.
    </details>
 
-2. **At the 90-minute mark, you've completed 12 of 17 tasks. The remaining 5 include: writing a custom Falco rule, investigating a runtime incident, a multi-namespace NetworkPolicy, fixing kube-bench failures, and configuring Pod Security Admission. You have 30 minutes. How do you prioritize?**
+2. **The exam timer shows 30 minutes remaining. You have completed 12 out of 17 tasks, leaving a custom Falco rule, a runtime incident investigation, a multi-namespace NetworkPolicy, a kube-bench remediation, and a Pod Security Admission setup. How do you prioritize these final tasks?**
    <details>
    <summary>Answer</summary>
-   With 30 minutes left, prioritize by points-per-minute: kube-bench failures (5 min, follow remediation steps) and Pod Security Admission (4-5 min, label namespaces) are medium tasks -- do these first. The multi-namespace NetworkPolicy (5-6 min) is next if time permits. Save Falco rules and incident investigation for last since they're the most time-consuming (7-10+ min each). Reserve 5 minutes at the end for verification of completed tasks. You already have ~70% if 12 tasks are correct -- focus on cementing the pass, not perfection.
+   You must prioritize the Pod Security Admission and kube-bench remediation tasks first because they offer the highest points-per-minute return. These are standard Pass 2 tasks that rely on predictable labeling or following direct tool outputs, taking about 4-5 minutes each. Conversely, Falco rules and incident investigations are complex Pass 3 tasks that can easily swallow 10-15 minutes troubleshooting syntax errors or parsing logs. Tackling the predictable tasks first cements your passing score, while leaving the high-risk, time-consuming tasks for the very end ensures you do not sacrifice guaranteed points.
    </details>
 
-3. **During the exam, you create a NetworkPolicy but forget to verify it. You move on and complete 3 more tasks. Later you realize the NetworkPolicy had a label mismatch and wasn't actually selecting any pods. What was the cost of skipping verification?**
+3. **You apply a NetworkPolicy for a task worth 6% of your total score, assume it works because the YAML applied without syntax errors, and immediately move to the next question. During your final 5-minute review, you realize the pod selector label was misspelled. What was the true cost of skipping verification?**
    <details>
    <summary>Answer</summary>
-   A NetworkPolicy that doesn't select any pods effectively does nothing -- it scores zero. You lost the full point value of that task. Worse, you lost the 30 seconds it would have taken to verify (`kubectl describe networkpolicy` and `kubectl exec` to test connectivity). Always verify before moving on: check that pods are selected, test connectivity, confirm RBAC with `kubectl auth can-i`, or verify security contexts with `kubectl get pod -o yaml`. The cost of not verifying is always higher than the time spent verifying.
+   You lost the entire 6% value of the task because a NetworkPolicy that does not select the intended pods effectively does nothing, and the exam grading script only checks the final cluster behavior. This catastrophic point loss occurred because you skipped the crucial 30-second verification step of checking effective pod selection. If you had run a quick `kubectl describe networkpolicy` or tested access via `kubectl exec`, you would have caught the typo instantly. The time cost of not verifying is always higher than the time spent running a quick check, as unverified tasks often yield zero points despite your upfront effort.
    </details>
 
-4. **A friend says "CKS is open-book, so I don't need to memorize anything -- I'll just look everything up during the exam." They score 45% and fail. What went wrong with their strategy?**
+4. **A colleague preparing for the CKS exam decides not to memorize any YAML structures or tool commands, reasoning that they can just search the official Kubernetes and tool documentation for everything during the test. Why is this strategy almost guaranteed to fail?**
    <details>
    <summary>Answer</summary>
-   While CKS allows access to documentation, looking everything up is far too slow under time pressure. With ~15-20 tasks in 120 minutes, you average 6-8 minutes per task. If each lookup takes 2-3 minutes, you lose half your time to navigation. You need security context fields, NetworkPolicy patterns, common Trivy/Falco commands, and kube-bench remediation steps in muscle memory. Use documentation for specific syntax details or edge cases, not for basic patterns. Practice until common tasks are automatic, then use docs as a reference, not a tutorial.
+   Your colleague will almost certainly fail due to severe time starvation caused by constant context switching and searching. With an average of 6 to 8 minutes available per task, spending 2 to 3 minutes just locating, reading, and adapting documentation for every single question consumes over half the exam time. While the exam is open-book, the documentation should only be used as a reference for specific syntax edge cases or forgotten arguments, not as a primary tutorial. You must have common security context fields, tool commands, and NetworkPolicy patterns committed to muscle memory to maintain the speed required to pass.
    </details>
 
 ---
