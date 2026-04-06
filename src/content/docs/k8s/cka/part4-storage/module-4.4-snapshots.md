@@ -509,6 +509,16 @@ This exercise requires a cluster with:
 
 If using kind or minikube, you may need to install these manually.
 
+> **Local Environment Setup**: To install the Snapshot CRDs and Controller in local environments like `kind` or `minikube`, you can apply the manifests directly from the official Kubernetes CSI external-snapshotter repository:
+> ```bash
+> # Install Snapshot CRDs
+> kubectl kustomize https://github.com/kubernetes-csi/external-snapshotter/client/config/crd | kubectl create -f -
+> 
+> # Install Snapshot Controller
+> kubectl -n kube-system kustomize https://github.com/kubernetes-csi/external-snapshotter/deploy/kubernetes/snapshot-controller | kubectl create -f -
+> ```
+> For more detailed instructions and to ensure compatibility with your cluster version, refer to the [external-snapshotter documentation](https://github.com/kubernetes-csi/external-snapshotter).
+
 ### Task 1: Check Snapshot Support
 
 ```bash
@@ -690,6 +700,14 @@ k api-resources | grep snapshot
 ### Drill 2: Create VolumeSnapshotClass (2 min)
 ```bash
 # Task: Create SnapshotClass for your CSI driver with Delete policy
+cat <<EOF | k apply -f -
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: practice-snapclass
+driver: ebs.csi.aws.com
+deletionPolicy: Delete
+EOF
 ```
 
 ### Drill 3: Check Snapshot Status (1 min)
@@ -702,12 +720,43 @@ k get volumesnapshot <name> -o jsonpath='{.status.readyToUse}'
 ```bash
 # Task: Create PVC from snapshot "backup-snap"
 # Key: dataSource with kind: VolumeSnapshot
+cat <<EOF | k apply -f -
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: restored-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  dataSource:
+    name: backup-snap
+    kind: VolumeSnapshot
+    apiGroup: snapshot.storage.k8s.io
+EOF
 ```
 
 ### Drill 5: Clone PVC (2 min)
 ```bash
 # Task: Clone PVC "source-pvc" to "clone-pvc"
 # Key: dataSource with kind: PersistentVolumeClaim
+cat <<EOF | k apply -f -
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: clone-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  dataSource:
+    name: source-pvc
+    kind: PersistentVolumeClaim
+EOF
 ```
 
 ### Drill 6: Find Snapshot Size (1 min)
