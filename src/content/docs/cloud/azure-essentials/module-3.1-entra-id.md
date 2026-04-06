@@ -105,6 +105,9 @@ Azure organizes resources in a four-level hierarchy. Understanding this hierarch
 
 A common mistake is treating subscriptions as purely a billing construct. They are also **security boundaries**. A user with Owner on Subscription A has zero access to Subscription B by default, even if both subscriptions are in the same tenant. This is why large organizations use multiple subscriptions to isolate environments and teams.
 
+> **Pause and predict**: If you assign a user the 'Contributor' role at the Subscription level, but explicitly assign them the 'Reader' role at a specific Resource Group level within that subscription, what effective permissions do they have on the Resource Group?
+> *Answer: They have 'Contributor' access. Azure RBAC is an additive model. Permissions flow down the hierarchy, and a lower-level assignment cannot subtract or restrict permissions granted at a higher level (unless you use Azure Blueprints or explicit Deny Assignments, which are advanced and rare).*
+
 ```bash
 # List management groups
 az account management-group list -o table
@@ -331,6 +334,9 @@ The four fundamental built-in roles:
 
 This is a critical detail: a **Global Administrator** in Entra ID does **not** automatically have Owner or Contributor access to Azure subscriptions. They can *elevate* themselves to get User Access Administrator at the root scope, but it is not automatic. Conversely, an **Owner** on an Azure subscription cannot create or manage Entra ID users.
 
+> **Stop and think**: A new security engineer is granted the 'Global Administrator' role in Entra ID. When they log into the Azure portal, they cannot see any Virtual Machines or Storage Accounts. Why?
+> *Answer: Global Administrator is a directory role that grants control over Entra ID (users, groups, policies), not an Azure RBAC role. The engineer has no default access to Azure resources. They must explicitly elevate their access to gain the User Access Administrator role at the root scope before they can grant themselves permissions to view or manage Azure resources.*
+
 ```bash
 # List Azure RBAC role assignments at subscription scope
 az role assignment list --scope "/subscriptions/<sub-id>" -o table
@@ -423,6 +429,33 @@ az rest --method GET \
 
 ---
 
+## Privileged Identity Management (PIM) & Access Reviews
+
+Even with least privilege and Conditional Access, standing access is a massive security risk. Standing access means a user has a highly privileged role (like Owner or Global Administrator) 24/7, even when they are sleeping or on vacation. If their account is compromised, the attacker instantly gets those privileges.
+
+Microsoft Entra Privileged Identity Management (PIM) solves this by providing **Just-In-Time (JIT) access**. 
+
+With PIM, users are made *eligible* for a role rather than being permanently assigned to it. When they need to perform a privileged task, they must *activate* the role. 
+
+The activation process can require:
+- **Time-bounding**: The role automatically expires after a set period (e.g., 2 hours).
+- **MFA**: The user must perform multi-factor authentication to activate.
+- **Approval**: A manager or security team member must approve the activation request.
+- **Ticketing**: The user must provide a valid Jira/ServiceNow ticket number as justification.
+
+> **Stop and think**: An engineer is *eligible* for the Subscription Owner role via PIM. They activate the role, which requires approval. After approval, they try to delete a resource group but get an authorization error. 15 minutes later, the deletion succeeds. Why? 
+> *Answer: Azure RBAC role assignments can take up to 10 minutes to propagate across the globally distributed authorization system. PIM works by dynamically creating a temporary role assignment when activated, so the standard propagation delay applies. The user must simply wait a few minutes after activation for the permissions to take effect.*
+
+### Access Reviews
+
+Over time, users accumulate permissions they no longer need—often from changing teams or temporary projects. **Access Reviews** automate the cleanup of these stale permissions.
+
+You can configure Access Reviews to periodically (e.g., quarterly) ask users, managers, or resource owners to attest whether specific access is still required. If the reviewer says "no" or fails to respond within the timeframe, Entra ID can automatically revoke the access. This is essential for compliance standards like SOC2 and ISO 27001.
+
+*Note: Both PIM and Access Reviews require Entra ID P2 or Microsoft Entra ID Governance licensing.*
+
+---
+
 ## Did You Know?
 
 1. **Microsoft Entra ID was renamed from Azure Active Directory in July 2023**, but the CLI commands still use `az ad` (not `az entra`), the PowerShell module is still `AzureAD`, and many API endpoints still reference `azure-active-directory`. This naming mismatch will persist for years because changing API surfaces would break millions of integrations worldwide.
@@ -453,45 +486,39 @@ az rest --method GET \
 ## Quiz
 
 <details>
-<summary>1. What is the fundamental difference between a Management Group and a Subscription in Azure?</summary>
+<summary>1. Your company acquired a startup. You need to enforce your corporate Azure Policies on the startup's cloud environment, but their cloud costs must be billed completely separately from your corporate resources. How should you architect the hierarchy?</summary>
 
-A Management Group is a governance container used to organize subscriptions into hierarchies for applying policies and access control at scale. A Subscription is both a billing boundary and an access control boundary where resources actually live. Management Groups cannot contain resources directly---they only contain other Management Groups or Subscriptions. Policies and RBAC assigned at a Management Group level are inherited by all Subscriptions beneath it, making Management Groups the tool for enterprise-wide governance.
+Create a new Management Group for the startup under your Root Management Group. Place the startup's Subscription under this new Management Group. You can apply your corporate Azure Policies at the Management Group level, which will inherit down to their Subscription. Because they remain in their own distinct Subscription, their billing is isolated and can be tied to a different payment method or invoice, while still sharing the same Entra ID tenant and governance boundaries.
 </details>
 
 <details>
-<summary>2. You assign the Global Administrator role to a user. Can they immediately create and delete Azure VMs? Why or why not?</summary>
+<summary>2. An external auditor needs to review your Entra ID Conditional Access policies and also verify the Network Security Group (NSG) rules on your production Azure Virtual Networks. What is the minimum combination of roles you must assign them?</summary>
 
-No, not immediately. Global Administrator is an Entra ID directory role, not an Azure RBAC role. It grants full control over the directory (users, groups, apps, policies) but does not automatically include Azure resource management permissions. A Global Administrator must first "elevate" their access in the Azure portal (Properties > Access management for Azure resources), which grants them the User Access Administrator role at the root scope (/). From there, they can assign themselves an Azure RBAC role like Owner or Contributor on the relevant subscription.
+You must assign them **Security Reader** (an Entra ID directory role) so they can view the Conditional Access policies in the tenant. You must also assign them **Reader** (an Azure RBAC resource role) at the Subscription or Resource Group scope so they can view the NSG configurations. This highlights the separation between directory management and resource management. No single read-only role spans both the directory and resource planes by default, requiring discrete assignments.
 </details>
 
 <details>
-<summary>3. When should you use a User-Assigned Managed Identity instead of a System-Assigned one?</summary>
+<summary>3. A microservices application consists of an Azure App Service, an Azure Function, and an Azure Container Instance. All three components need to authenticate to the same Azure SQL Database. How should you architect the identity solution to minimize maintenance overhead?</summary>
 
-Use a User-Assigned Managed Identity when multiple resources need the same set of permissions (e.g., three VMs all needing access to the same Key Vault and Storage Account). With system-assigned identities, you would need to create three separate role assignments. With a user-assigned identity, you create one identity, assign roles once, and attach it to all three VMs. User-assigned identities are also better for pre-provisioning scenarios where you need the identity to exist before the resource is created, or when the resource lifecycle and the identity lifecycle should be independent.
+You should create a single **User-Assigned Managed Identity**. You grant this user-assigned identity the required RBAC access to the Azure SQL Database. Then, you attach this single identity to the App Service, the Azure Function, and the Container Instance. If you used System-Assigned Managed Identities, you would have three separate identities to manage and three separate role assignments to maintain in the SQL database, increasing maintenance overhead.
 </details>
 
 <details>
-<summary>4. What is the difference between Actions and DataActions in an Azure RBAC role definition?</summary>
+<summary>4. You assigned the 'Contributor' role to a data scientist on a Resource Group containing a Storage Account. They report they can create new storage containers but get an 'Access Denied' error when trying to upload a CSV file into a container. What is causing this, and how do you fix it?</summary>
 
-Actions control management plane operations---creating, configuring, and deleting Azure resources. For example, `Microsoft.Storage/storageAccounts/write` lets you create or modify a storage account. DataActions control data plane operations---interacting with the data inside a resource. For example, `Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read` lets you read the contents of blobs. A role like Contributor has broad Actions but zero DataActions, meaning a Contributor can manage a storage account but cannot read the blobs inside it.
+The built-in 'Contributor' role has broad `Actions` permissions, which allow management plane operations like creating containers or deleting the storage account. However, it has zero `DataActions` permissions, which are required for data plane operations like reading or writing the actual blobs and files. To fix this, you must assign the data scientist a data-plane role, such as **Storage Blob Data Contributor**. This role contains the specific `DataActions` required to upload and manipulate files within the storage containers.
 </details>
 
 <details>
-<summary>5. Why is it a security risk to assign RBAC roles directly to individual users instead of groups?</summary>
+<summary>5. You are designing the RBAC model for a new platform engineering team. A junior engineer suggests creating a custom role and assigning it directly to each of the 12 team members. Why should you reject this proposal, and what is the standard approach?</summary>
 
-Assigning roles directly to users creates several problems. First, it does not scale---when you have 50 engineers, managing individual assignments becomes unworkable. Second, it is not auditable---you cannot quickly answer "who has access to what" without checking every resource. Third, when someone leaves the team, you must remember to remove every individual assignment instead of just removing them from a group. Fourth, it violates the principle of least privilege because over time, individuals accumulate role assignments that were meant to be temporary, and nobody cleans them up.
+Assigning roles directly to individual users does not scale and creates a nightmare for lifecycle management. When someone leaves the team or changes roles, you must manually track down and remove their individual role assignments across all resources. Over time, this leads to permission bloat and orphaned access rights. Instead, you should create an Entra ID Security Group (e.g., 'Platform Engineers'), assign the RBAC role to the group, and manage access solely by adding or removing users from that group.
 </details>
 
 <details>
-<summary>6. An application running on an Azure VM needs to read secrets from Key Vault. Describe the most secure way to set this up.</summary>
+<summary>6. You accidentally deleted a Virtual Machine that had a System-Assigned Managed Identity with access to a production Key Vault. You quickly restore the VM from a backup with the exact same name. However, the application on the VM is now failing to read from the Key Vault. Why?</summary>
 
-Enable a Managed Identity on the VM (system-assigned if the identity lifecycle should match the VM, user-assigned if shared across resources). Then create an RBAC role assignment granting the Managed Identity the "Key Vault Secrets User" role, scoped to the specific Key Vault resource (not the resource group or subscription). In the application code, use `DefaultAzureCredential` from the Azure SDK, which will automatically detect and use the Managed Identity to acquire tokens. No secrets, connection strings, or credentials are stored anywhere in code, configuration files, or environment variables.
-</details>
-
-<details>
-<summary>7. What happens to a system-assigned Managed Identity when you delete the Azure resource it is attached to?</summary>
-
-The system-assigned Managed Identity is automatically deleted along with the resource. This includes the service principal in Entra ID and all role assignments associated with that identity. This is one of the advantages of system-assigned identities---there are no orphaned identities to clean up. However, it is also a risk: if you accidentally delete and recreate a VM, the new VM gets a new identity with a different principal ID, and you must recreate all role assignments.
+A System-Assigned Managed Identity is inextricably tied to the specific lifecycle of the Azure resource it was created on. When you deleted the original VM, its managed identity (and all associated role assignments) was permanently destroyed by Azure. When you restored the VM, Azure generated a brand new System-Assigned Managed Identity with a completely different Principal ID. You must recreate the RBAC role assignments on the Key Vault for this new identity before the application can authenticate.
 </details>
 
 ---
