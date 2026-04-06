@@ -122,6 +122,8 @@ textPayload=~"error.*timeout"
 labels."compute.googleapis.com/resource_name"="my-vm"
 ```
 
+> **Stop and think**: If a log entry matches both an inclusion filter for BigQuery and an exclusion filter for the default Cloud Logging bucket, where does the log end up?
+
 ---
 
 ## Log Sinks: Routing Logs to Destinations
@@ -166,24 +168,77 @@ gcloud logging sinks delete archive-all-logs
 
 ### Log Exclusions (Reducing Cost)
 
-Exclusion filters prevent specific log entries from being ingested into Cloud Logging, reducing costs.
+Exclusion filters prevent specific log entries from being ingested into Cloud Logging's default storage, drastically reducing costs.
 
 ```bash
 # Exclude debug logs from Cloud Run (they are noisy and expensive)
-gcloud logging sinks create exclude-debug-logs \
-  --log-filter='resource.type="cloud_run_revision" AND severity="DEBUG"' \
-  --exclusion \
-  --description="Exclude debug-level Cloud Run logs"
+gcloud logging exclusions create exclude-debug-logs \
+  --description="Exclude debug-level Cloud Run logs" \
+  --filter='resource.type="cloud_run_revision" AND severity="DEBUG"'
 
 # Exclude health check logs (extremely noisy)
-gcloud logging sinks create exclude-health-checks \
-  --log-filter='httpRequest.requestUrl="/health" OR httpRequest.requestUrl="/healthz"' \
-  --exclusion \
-  --description="Exclude health check logs"
+gcloud logging exclusions create exclude-health-checks \
+  --description="Exclude health check logs" \
+  --filter='httpRequest.requestUrl="/health" OR httpRequest.requestUrl="/healthz"'
 
 # View exclusions
-gcloud logging sinks list --filter="exclusions"
+gcloud logging exclusions list
 ```
+
+---
+
+## Structured Logging
+
+Writing structured (JSON) logs instead of plain text enables powerful querying and log-based metrics. It allows you to parse custom fields (like latency or user ID) natively in the Log Explorer.
+
+### Python Structured Logging for Cloud Run
+
+```python
+import json
+import logging
+import sys
+
+class JSONFormatter(logging.Formatter):
+    def format(self, record):
+        log_entry = {
+            "severity": record.levelname,
+            "message": record.getMessage(),
+            "component": record.name,
+        }
+
+        # Add extra fields if present
+        if hasattr(record, "request_id"):
+            log_entry["request_id"] = record.request_id
+        if hasattr(record, "user_id"):
+            log_entry["user_id"] = record.user_id
+        if hasattr(record, "latency_ms"):
+            log_entry["latency_ms"] = record.latency_ms
+
+        return json.dumps(log_entry)
+
+# Configure logging
+handler = logging.StreamHandler(sys.stdout)
+handler.setFormatter(JSONFormatter())
+logger = logging.getLogger("my-api")
+logger.addHandler(handler)
+logger.setLevel(logging.INFO)
+
+# Usage
+logger.info("Request processed",
+            extra={"request_id": "abc-123", "latency_ms": 45, "user_id": "user-456"})
+# Output: {"severity": "INFO", "message": "Request processed",
+#          "request_id": "abc-123", "latency_ms": 45, "user_id": "user-456"}
+```
+
+In Cloud Logging, this is parsed as `jsonPayload`, allowing queries like:
+
+```text
+jsonPayload.latency_ms > 200
+jsonPayload.user_id = "user-456"
+jsonPayload.severity = "ERROR"
+```
+
+> **Pause and predict**: If you use standard `print()` statements in Python on Cloud Run, they appear in Cloud Logging as plain text within `textPayload`. How does this limit your ability to create specific alerting policies compared to JSON logging?
 
 ---
 
@@ -223,6 +278,8 @@ gcloud logging metrics create api_latency \
   --bucket-options='linear-buckets={"numFiniteBuckets": 20, "width": 100, "offset": 0}' \
   --value-extractor='EXTRACT(httpRequest.latency)'
 ```
+
+> **Pause and predict**: You create a log-based counter metric for HTTP 500 errors. Will this metric retroactively count the errors that occurred yesterday, or only the errors that happen from the moment of creation onward?
 
 ---
 
@@ -428,6 +485,8 @@ gcloud monitoring policies update POLICY_ID \
 | **Include runbook links** | Reduce MTTR by guiding responders | Link to troubleshooting playbook in alert description |
 | **Avoid alert fatigue** | Too many alerts = ignored alerts | Only alert on actionable conditions |
 
+> **Stop and think**: You set an alert policy for CPU utilization > 80% with a duration window of 5 minutes. The CPU spikes to 99% for 4 minutes, drops to 30% for 30 seconds, and goes back to 99% for 2 minutes. Does the alert trigger? Why or why not?
+
 ---
 
 ## Uptime Checks
@@ -481,58 +540,45 @@ EOF
 gcloud monitoring policies create --policy-from-file=/tmp/uptime-alert.json
 ```
 
+> **Pause and predict**: Why is it considered best practice to configure uptime checks to alert only when the check fails from multiple geographic regions rather than just a single region?
+
 ---
 
-## Structured Logging
+## Diagnosing Latency: Cloud Trace and Cloud Profiler
 
-Writing structured (JSON) logs instead of plain text enables powerful querying and log-based metrics.
+While logs and metrics tell you *that* a service is slow or experiencing high load, they often do not tell you *exactly where* the time is being spent inside the code or across a distributed microservice architecture.
 
-### Python Structured Logging for Cloud Run
+### Cloud Trace
 
-```python
-import json
-import logging
-import sys
+Cloud Trace is a distributed tracing system that collects latency data from your applications and displays it in the GCP Console. When a request enters your system, Trace assigns it a unique Trace ID. As the request passes through various microservices (e.g., Load Balancer → Cloud Run → Cloud SQL → external API), each service reports a "span" representing the time spent in that component.
 
-class JSONFormatter(logging.Formatter):
-    def format(self, record):
-        log_entry = {
-            "severity": record.levelname,
-            "message": record.getMessage(),
-            "component": record.name,
-        }
+- **Why use it**: To find the exact bottleneck in a chain of microservice calls. If an API request takes 5 seconds, Trace can visually show you that 4.8 seconds were spent waiting on a single slow database query.
+- **How to use it**: In managed environments like Cloud Run or App Engine, basic tracing is often automatic. For granular, code-level spans, you utilize OpenTelemetry libraries to instrument your application.
 
-        # Add extra fields if present
-        if hasattr(record, "request_id"):
-            log_entry["request_id"] = record.request_id
-        if hasattr(record, "user_id"):
-            log_entry["user_id"] = record.user_id
-        if hasattr(record, "latency_ms"):
-            log_entry["latency_ms"] = record.latency_ms
+### Cloud Profiler
 
-        return json.dumps(log_entry)
+Cloud Profiler provides continuous CPU and heap profiling for applications running on GCP. It statistically gathers performance data from your production applications with minimal overhead (< 1%) and generates flame graphs.
 
-# Configure logging
-handler = logging.StreamHandler(sys.stdout)
-handler.setFormatter(JSONFormatter())
-logger = logging.getLogger("my-api")
-logger.addHandler(handler)
-logger.setLevel(logging.INFO)
+- **Why use it**: To identify which specific functions or methods in your code are consuming the most CPU cycles or allocating the most memory. It helps you optimize code efficiency and reduce compute costs.
+- **How to use it**: You import the Profiler agent into your application code (available for Go, Java, Node.js, and Python) and initialize it when the application boots.
 
-# Usage
-logger.info("Request processed",
-            extra={"request_id": "abc-123", "latency_ms": 45, "user_id": "user-456"})
-# Output: {"severity": "INFO", "message": "Request processed",
-#          "request_id": "abc-123", "latency_ms": 45, "user_id": "user-456"}
-```
+> **Stop and think**: If users report that clicking "Checkout" takes 10 seconds, but your system CPU utilization is hovering at a very healthy 20%, which tool should you reach for first to diagnose the issue: Cloud Trace or Cloud Profiler? Why?
 
-In Cloud Logging, this is parsed as `jsonPayload`, allowing queries like:
+---
 
-```text
-jsonPayload.latency_ms > 200
-jsonPayload.user_id = "user-456"
-jsonPayload.severity = "ERROR"
-```
+## Multi-Project Monitoring
+
+In a real-world GCP organization, resources are rarely confined to a single project. You might have separate projects for networking, databases, frontend services, and backend APIs. Monitoring them individually leads to fragmented visibility.
+
+### Metrics Scopes
+
+A **Metrics Scope** allows you to view and manage monitoring data from multiple GCP projects through a single pane of glass. When you create a Metrics Scope, you designate one project as the "scoping project" (often a dedicated monitoring or DevOps project) and attach other "monitored projects" to it.
+
+- **Dashboards**: A dashboard created in the scoping project can query and display metrics side-by-side from all attached projects.
+- **Alerting**: You can create a single alert policy (e.g., "Alert if *any* Cloud SQL instance CPU > 80%") in the scoping project that applies universally to all databases across all attached projects.
+- **Access Control**: You can grant your SRE or Ops team access to the scoping project, giving them full observability across the organization without needing to provision IAM roles in every individual application project.
+
+> **Pause and predict**: If you have 10 separate production microservice projects, should you manage alert policies in each project separately, or centrally within a single metrics scoping project?
 
 ---
 
@@ -566,39 +612,39 @@ jsonPayload.severity = "ERROR"
 ## Quiz
 
 <details>
-<summary>1. What is the Log Router, and why is it important?</summary>
+<summary>1. Your company wants to retain all access logs for 5 years for compliance, but the security team is complaining that their default Cloud Logging bill is astronomically high due to debug logs from the staging environment. How do you configure the Log Router to satisfy both requirements?</summary>
 
-The Log Router is the central component in Cloud Logging that receives **every** log entry generated in GCP and decides where it goes. It evaluates each log entry against inclusion filters, exclusion filters, and sink configurations. This is important because it gives you control over log storage costs and destinations. You can route error logs to BigQuery for analytics, archive all logs to Cloud Storage for compliance, stream critical logs to Pub/Sub for real-time processing, and exclude noisy debug logs to reduce costs. Without the Log Router, all logs would simply go to the default Cloud Logging storage, which has a 30-day retention and can be expensive at scale.
+You should create a log sink that routes all access logs to a Cloud Storage bucket configured with a 5-year retention policy and a lifecycle rule for cost optimization. Simultaneously, you must create an exclusion filter in the Log Router for the staging environment's debug logs. The exclusion filter prevents the noisy debug logs from being ingested into the expensive default Cloud Logging storage, saving money. Because sinks and exclusions operate independently, the compliance sink will still capture the required access logs before any exclusions affect the default bucket.
 </details>
 
 <details>
-<summary>2. What is the difference between a log-based counter metric and a log-based distribution metric?</summary>
+<summary>2. An on-call engineer notices that the "Request Latency" log-based counter metric is firing alerts, but they cannot determine if the slow requests are taking 1 second or 30 seconds. What design flaw exists in their log-based metric, and how should it be redesigned?</summary>
 
-A **counter metric** counts the number of log entries matching a filter. For example, "count all log entries where `httpRequest.status >= 500`" gives you the number of 5xx errors per time period. A **distribution metric** captures the distribution of numeric values extracted from log entries. For example, extracting `httpRequest.latency` from each log entry gives you a histogram of latency values, allowing you to compute percentiles (P50, P95, P99). Counter metrics answer "how many?" while distribution metrics answer "how long/how big?" Both are computed in real-time as logs flow through the router.
+The engineer created a log-based counter metric, which simply counts the number of log entries matching a filter (e.g., latency > 500ms) without capturing the actual latency value itself. To fix this, they need to recreate it as a log-based distribution metric. A distribution metric uses a value extractor to pull the specific numeric latency value from each structured JSON log entry. This allows Cloud Monitoring to calculate percentiles like P95 and P99, giving the engineer precise visibility into exactly how slow the requests actually are during an incident.
 </details>
 
 <details>
-<summary>3. How do exclusion filters reduce Cloud Logging costs?</summary>
+<summary>3. You created an exclusion filter to drop noisy HTTP 200 health check logs to save money on Cloud Logging ingestion. However, the security team complains that these logs are now missing from their custom BigQuery sink, which they use for historical audits. How does the Log Router handle this, and what went wrong?</summary>
 
-Exclusion filters tell the Log Router to **drop** specific log entries before they are ingested into Cloud Logging. Dropped logs are never stored and never billed. This is critical because Cloud Logging charges per volume of ingested data. Common exclusions include: health check logs (extremely high volume, low value), debug-level logs in production, and repetitive informational messages. Important caveat: excluded logs are still available to sinks that were created **before** the exclusion---so you can exclude logs from default storage while still routing them to a cheaper destination like Cloud Storage.
+In GCP, the Log Router processes log exclusions and log sinks completely independently of one another. Creating an exclusion filter prevents the logs from being ingested into the `_Default` Cloud Logging storage bucket, saving ingestion costs. It does not, however, prevent those same logs from being routed to a custom sink, such as BigQuery or Cloud Storage. If the security team is missing logs in their custom sink, the issue is with that specific sink's inclusion/exclusion filter, not the general exclusion filter you created for the default bucket.
 </details>
 
 <details>
-<summary>4. Why should you "alert on symptoms, not causes"?</summary>
+<summary>4. Your team receives pager alerts every night at 3 AM because a database VM's CPU hits 95%. However, this coincides with a scheduled nightly backup, and customer-facing API latency remains completely normal during this time. How should you restructure this alerting strategy to prevent alert fatigue?</summary>
 
-Symptoms are what users experience (high error rate, slow response times, service unavailable). Causes are internal implementation details (high CPU, full disk, memory pressure). Alerting on symptoms means you get notified when users are actually affected, reducing false positives. A VM at 95% CPU is not inherently a problem if response times are still within SLA. Conversely, a VM at 50% CPU might have a memory leak causing request failures. If you alert on error rate exceeding 5%, you catch the user-facing problem regardless of the underlying cause. The cause is what you investigate after the alert fires, not what triggers the alert.
+This alert is currently firing on a "cause" (high CPU) rather than a "symptom" (user impact). Because the high CPU does not degrade the customer experience during the backup, this alert is unactionable and causes severe alert fatigue. You should restructure the alerting strategy to trigger on symptoms, such as the API's P99 latency exceeding a certain threshold or the HTTP 5xx error rate spiking. If you still want to monitor the CPU for capacity planning, you should change the notification channel from a paging system to a low-priority email or Slack message that can be reviewed asynchronously during business hours.
 </details>
 
 <details>
-<summary>5. You need to keep all logs for 7 years for regulatory compliance, but the default Cloud Logging retention is 30 days. How do you solve this?</summary>
+<summary>5. A developer complains that their microservice is intermittently taking 4 seconds to respond instead of the usual 50ms. The service calls three other downstream GCP services and a Cloud SQL database. They ask you to check the CPU metrics on the Cloud Run instances to find the problem. Which GCP observability tool should you recommend they use instead, and why?</summary>
 
-Create a **log sink** that routes all logs to a **Cloud Storage bucket** with a 7-year retention policy. Set a lifecycle rule on the bucket to transition logs from STANDARD to NEARLINE at 30 days, COLDLINE at 90 days, and ARCHIVE at 365 days to optimize costs. Lock the retention policy on the bucket to prevent anyone from deleting logs early. The logs are still available in Cloud Logging for 30 days for real-time querying, and in Cloud Storage for the full 7-year compliance period. For analytical queries on older logs, create a second sink to BigQuery (for the subset of logs you need to query regularly).
+You should recommend using Cloud Trace rather than simply looking at CPU metrics. High latency in a distributed system is often caused by network waits, database locks, or slow downstream API calls, none of which will show up as high CPU utilization. Cloud Trace tracks a single request as it propagates through all the microservices and the database, creating a visual waterfall diagram of spans. This will immediately show exactly which downstream service or specific database query is responsible for the 4-second delay, drastically reducing the time to resolution.
 </details>
 
 <details>
-<summary>6. What are the benefits of structured (JSON) logging compared to plain text logging?</summary>
+<summary>6. You are tasked with centralizing monitoring for 15 different GCP projects belonging to 3 different product teams. Currently, engineers have to switch between projects in the GCP console to view dashboards and alerts, leading to fragmented observability. How do you architect a solution in Cloud Monitoring to provide a "single pane of glass"?</summary>
 
-Structured logging outputs log entries as JSON objects with named fields, while plain text logging writes free-form strings. Benefits of structured logging: (1) **Queryable fields** - you can filter on specific fields like `jsonPayload.user_id="user-123"` instead of regex-matching text. (2) **Log-based metrics** - you can create metrics based on specific JSON fields (e.g., count entries where `status >= 500`). (3) **Automatic severity mapping** - Cloud Logging recognizes the `severity` field in JSON. (4) **Contextual data** - you can include structured metadata (request IDs, user IDs, latency) that is directly filterable. (5) **Machine parseable** - downstream systems (BigQuery, SIEM) can process structured logs without custom parsers.
+You should implement a Metrics Scope hosted in a dedicated, centralized monitoring project. By attaching the 15 individual product projects to this single scoping project, Cloud Monitoring will aggregate all their metrics into one unified view. This allows you to build centralized dashboards and configure global alerting policies that evaluate resources across all 15 projects simultaneously. Furthermore, you can grant the engineering teams IAM access to the scoping project, giving them full visibility into the organization's health without needing to grant them permissions in every individual production project.
 </details>
 
 ---
