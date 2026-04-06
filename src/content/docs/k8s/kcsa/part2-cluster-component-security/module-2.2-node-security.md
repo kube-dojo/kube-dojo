@@ -235,6 +235,8 @@ Kubernetes supports different runtime classes for stronger isolation:
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Pause and predict**: If an attacker gains access to the host's `/var/run/docker.sock` or containerd socket, what privileges do they effectively hold on that node?
+
 ### Node Compromise Impact
 
 ```
@@ -343,34 +345,34 @@ Benefits of minimal OS:
 
 ## Quiz
 
-1. **A security scan reveals that kubelet on your worker nodes has `--anonymous-auth=true` and `--authorization-mode=AlwaysAllow`. An attacker on the same network can reach port 10250. Describe the attack scenario and the potential impact.**
+1. **A security scan reveals that the kubelet on your production worker nodes has `--anonymous-auth=true` and `--authorization-mode=AlwaysAllow`. An attacker has gained access to the internal network and can reach port 10250 on these nodes. Describe the step-by-step attack scenario this enables and the potential impact on the cluster.**
    <details>
    <summary>Answer</summary>
-   The attacker can connect to the kubelet API without authentication and execute commands in any container on that node via the `/exec` endpoint. They can also read container logs via `/logs`, list all pods via `/pods`, and port-forward to containers. Impact: the attacker can steal secrets from any pod on the node, install backdoors, pivot to other systems using extracted credentials, and potentially escape to the host. Fix: set `anonymous.enabled: false`, `authorization.mode: Webhook`, and ensure the kubelet's client CA is configured. This is one of the most critical node-level misconfigurations.
+   With these settings, the attacker can connect directly to the kubelet API without any authentication and execute commands in any container on that node via the `/exec` endpoint. They can also read container logs via `/logs`, list all pods via `/pods`, and port-forward to containers. The impact is catastrophic: the attacker can steal sensitive secrets from any pod on the node, install backdoors, and pivot to other systems using extracted credentials. This could easily lead to container escape or full cluster compromise if administrative service account tokens are stolen. To fix this, administrators must set `anonymous.enabled: false` and `authorization.mode: Webhook` to enforce API server authorization checks.
    </details>
 
-2. **Your team debates whether to use gVisor or standard containerd for a multi-tenant platform where different customer workloads share nodes. What are the security trade-offs of each choice?**
+2. **Your team is deploying a multi-tenant platform where different customer workloads share the same Kubernetes nodes. The security team is debating whether to use gVisor or standard containerd as the runtime. What are the security trade-offs of each choice in this specific scenario?**
    <details>
    <summary>Answer</summary>
-   Standard containerd (runc): containers share the host kernel, so a kernel vulnerability could allow one tenant's container to escape and access another tenant's workloads. Performance is optimal but isolation relies solely on namespaces, cgroups, and seccomp — all bypassed by kernel exploits. gVisor: provides a user-space kernel that intercepts syscalls, so containers never directly touch the host kernel. Kernel vulnerabilities don't enable escape. Trade-off: gVisor has performance overhead (varies by workload), doesn't support all syscalls (~70% coverage), and some applications may not work. For multi-tenant with untrusted workloads, gVisor's stronger isolation typically justifies the overhead.
+   With standard containerd, containers share the host's Linux kernel, meaning a kernel vulnerability could allow a malicious tenant to escape their container and access another tenant's workloads. While performance is optimal, isolation relies solely on namespaces, cgroups, and seccomp, which can be bypassed by kernel exploits. gVisor mitigates this by providing a user-space kernel that intercepts system calls, ensuring containers never directly interact with the host kernel. Because kernel vulnerabilities do not enable escape in gVisor, it provides the strong isolation required for untrusted multi-tenant workloads. The trade-off is that gVisor introduces performance overhead and may not support all system calls, meaning some applications might require modification or fail to run.
    </details>
 
-3. **Container-Optimized OS, Bottlerocket, and Talos are all "minimal" node operating systems. What specific security advantage does an immutable, minimal OS provide over a traditional Linux distribution like Ubuntu on Kubernetes nodes?**
+3. **Your organization is migrating from standard Ubuntu worker nodes to Talos Linux. During the architecture review, a developer asks why they can no longer SSH into the nodes to run debugging tools. Explain the specific security advantages of an immutable, minimal OS in this scenario, and why removing SSH access is considered a security upgrade rather than just an inconvenience.**
    <details>
    <summary>Answer</summary>
-   Minimal OSes have dramatically smaller attack surfaces: fewer installed packages means fewer CVEs to patch and fewer tools available to attackers who gain node access. Immutability means the OS filesystem is read-only — attackers cannot persist changes, install rootkits, or modify system binaries. Traditional Ubuntu has hundreds of packages (shell utilities, package managers, compilers) that attackers use post-compromise. Talos goes further by removing SSH entirely, making the OS API-driven only. The security benefit is both preventive (fewer vulnerabilities) and detective (any filesystem change is anomalous and detectable).
+   Minimal OSes like Talos have dramatically smaller attack surfaces. By removing shells, package managers, and SSH, you eliminate the tools attackers rely on for post-exploitation and lateral movement. Immutability ensures the OS filesystem is read-only, meaning attackers cannot persist changes, install rootkits, or modify system binaries even if they achieve code execution. Traditional distributions like Ubuntu contain hundreds of packages that, if compromised, can be leveraged to escalate privileges. Removing SSH enforces immutable infrastructure principles, ensuring that all debugging is done via Kubernetes native APIs rather than manual node modification, which prevents configuration drift and undocumented backdoors.
    </details>
 
-4. **A pod specification includes `hostPID: true` and the container has `CAP_SYS_PTRACE`. The container image is a legitimate debugging tool used by the operations team. Is this configuration acceptable, and what risks does it introduce?**
+4. **A development team requests a pod specification that includes `hostPID: true` and the container has `CAP_SYS_PTRACE`. They claim this container image is a legitimate, critical debugging tool needed to troubleshoot node performance. Is this configuration acceptable in a production cluster, and what specific risks does it introduce?**
    <details>
    <summary>Answer</summary>
-   This combination is extremely dangerous even for legitimate use. hostPID lets the container see all host processes, and CAP_SYS_PTRACE allows attaching to and inspecting those processes — including reading process memory. An attacker who compromises this container could extract secrets from any process on the host, including kubelet credentials, other containers' environment variables, and encryption keys in memory. If this debugging tool is necessary, it should only run in dedicated maintenance namespaces with strict network policies, never in production, require manual approval, and be time-limited. Pod Security Standards (Baseline and above) block this configuration.
+   This configuration is extremely dangerous and should never be allowed in a standard production environment, even for legitimate operational use. The `hostPID` directive allows the container to see all processes running on the host node, while `CAP_SYS_PTRACE` allows attaching to and inspecting the memory of those processes. An attacker who compromises this debugging container could extract secrets from any process on the host, including kubelet credentials and encryption keys in memory. If this debugging tool is absolutely necessary, it should only be deployed temporarily during active incidents using strict network policies. Furthermore, Pod Security Standards at the Baseline or Restricted level would automatically block this configuration to prevent such severe privilege escalation.
    </details>
 
-5. **Node authorization mode was introduced specifically to address a real attack vector. Describe the attack that Node authorization prevents and explain why standard RBAC alone wasn't sufficient.**
+5. **An attacker has successfully escaped a container and gained root access to a worker node, extracting the kubelet's TLS certificates and kubeconfig. If the cluster relies solely on standard RBAC without Node authorization mode, what is the extent of the cluster compromise, and how does Node authorization mode specifically change this outcome?**
    <details>
    <summary>Answer</summary>
-   The attack: if a single node is compromised, the attacker gets the kubelet's credentials. Without Node authorization, those credentials could access secrets and configmaps for pods on ANY node — because RBAC only checks "can this identity access this resource type?" not "is this resource relevant to this node?" The attacker could enumerate and steal secrets from every pod in the cluster. Node authorization adds identity-awareness: it restricts kubelet credentials to only access resources for pods actually scheduled on that specific node. Standard RBAC lacks this node-affinity concept — it can grant or deny access to resource types but cannot scope access based on pod-to-node scheduling relationships.
+   Without Node authorization, standard RBAC would allow the kubelet's credentials to read secrets and configmaps for pods on any node in the cluster, because RBAC only checks if the identity has permission for the resource type, not its location. This means a single node compromise leads to a cluster-wide data breach. Node authorization mode adds identity-awareness by restricting the kubelet's credentials to only access resources for pods actually scheduled on that specific node. Standard RBAC lacks this node-affinity concept entirely. With Node authorization enabled, the blast radius is successfully contained to only the secrets of the pods running on the compromised node, preventing a full cluster takeover.
    </details>
 ---
 
