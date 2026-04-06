@@ -133,6 +133,8 @@ aws s3control put-public-access-block \
     "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
 ```
 
+> **Stop and think**: If an S3 bucket has Block Public Access enabled at the account level, but a developer explicitly writes a Bucket Policy granting `s3:GetObject` to `*` (everyone), which rule wins when an anonymous user tries to download a file?
+
 ### 2. IAM Policies
 
 As covered in Module 1.1, IAM policies are attached to the *identity* making the request (a User or a Role). If an EC2 instance has an IAM Role that allows `s3:PutObject` to a specific bucket, the instance can upload files.
@@ -246,6 +248,8 @@ Important details about pre-signed URLs:
 - Maximum expiration: 7 days when signed by an IAM user, 36 hours when signed by STS temporary credentials (roles).
 - Pre-signed URLs work for both GET (download) and PUT (upload) operations.
 
+> **Stop and think**: You generate a pre-signed URL valid for 7 days using your IAM User credentials. Two days later, your IAM User is deleted by an administrator. What happens when someone tries to use the URL on day 3?
+
 ---
 
 ## Storage Classes and Lifecycle Rules
@@ -316,6 +320,8 @@ S3 Standard
 ```
 
 You cannot transition from Glacier back to Standard-IA via a lifecycle rule. To move data "upward," you must restore and copy it manually.
+
+> **Pause and predict**: Look at the minimum object size for S3 Standard-IA (128 KB). If you configure a lifecycle rule to transition a bucket containing 10 million tiny 5 KB log files from Standard to Standard-IA, what do you expect will happen to your monthly storage bill?
 
 ---
 
@@ -510,7 +516,7 @@ Important versioning behaviors:
 | **Leaking data via public buckets** | Turning off Block Public Access because "the application is throwing a 403 error and this makes it work." | Never turn off BPA for private data. Fix the IAM policies or generate Pre-Signed URLs for the application. |
 | **Paying for millions of tiny files in IA** | Moving massive amounts of 5KB log files to Standard-IA to save money. | Standard-IA has a minimum billable object size of 128KB. Moving a 5KB file charges you for 128KB, completely destroying the cost savings. Bundle tiny files before tiering. |
 | **Using S3 as a database** | Because it has an API and stores JSON, developers try to use it for high-frequency transactional updates. | S3 is not optimized for rapid, sub-millisecond, concurrent transactional reads/writes. Use DynamoDB or RDS for transactional data. |
-| **Failing to manage versioning costs** | Enabling versioning on a bucket that receives constant updates, keeping thousands of old versions forever. | S3 charges for *every* stored version. If you enable versioning, you MUST configure a Lifecycle Rule to expire non-current versions after a set period. |
+| **Failing to manage versioning costs** | Enabling versioning on a bucket that receives constant updates, keeping thousands of old versions forever. | S3 charges for *every* stored version. If you enable versioning, you MUST configure a Lifecycle Rule to expire noncurrent versions after a set period. |
 | **Bucket name collisions** | Trying to create a bucket named `test-bucket`. | S3 bucket names must be globally unique across all AWS accounts in all regions. Use a naming convention involving your company name and account ID (e.g., `acme-corp-123456789012-prod-backups`). |
 | **Ignoring server-side encryption** | Forgetting to check the encryption box. | Always enable default S3 Server-Side Encryption (SSE-S3 or SSE-KMS) to ensure data is encrypted at rest automatically. As of 2023, SSE-S3 is applied by default, but SSE-KMS is recommended for audit trails. |
 | **Forgetting both ARN forms in IAM policies** | Writing an IAM policy with only the bucket ARN (`arn:aws:s3:::my-bucket`) or only the object ARN (`arn:aws:s3:::my-bucket/*`). | `ListBucket` requires the bucket ARN. `GetObject`/`PutObject` require the object ARN with `/*`. Always include **both** when granting read/write access. |
@@ -523,49 +529,49 @@ Important versioning behaviors:
 <details>
 <summary>Question 1: An auditor requires that your company keep application logs for exactly 7 years to meet compliance regulations. The logs are never accessed unless an audit occurs, at which point a 24-hour retrieval delay is perfectly acceptable. How should you store these logs most cost-effectively?</summary>
 
-Upload the logs directly to the S3 bucket and use a Lifecycle Rule to immediately transition them to the S3 Glacier Deep Archive storage class, which offers the lowest storage cost. Configure the lifecycle rule to delete the objects after 2,555 days (7 years).
+You should upload the logs directly to the S3 bucket and use a Lifecycle Rule to immediately transition them to the S3 Glacier Deep Archive storage class. Glacier Deep Archive offers the lowest possible storage cost, designed exactly for data that is rarely accessed but must be retained for compliance. Since the auditor accepts a 24-hour retrieval delay, the 12-48 hour retrieval time of Deep Archive perfectly fits the requirement. Finally, you would configure the lifecycle rule to permanently delete the objects after 2,555 days (7 years) to prevent paying for data you no longer legally need to keep.
 </details>
 
 <details>
 <summary>Question 2: You attempt to attach a Bucket Policy to an S3 bucket granting public read access to a specific prefix (`images/`). The AWS Console throws an error and refuses to save the policy. What is the most likely cause?</summary>
 
-S3 Block Public Access (BPA) is enabled on the bucket (or at the account level). BPA acts as a master override that actively prevents you from applying any bucket policy or ACL that grants public access, protecting you from accidental exposure.
+The most likely cause is that S3 Block Public Access (BPA) is enabled on the bucket or at the account level. BPA acts as a master security override that actively prevents you from applying any bucket policy or ACL that grants public access. Even if you have full administrative privileges, S3 will reject the policy save attempt to protect you from accidental exposure. You would need to intentionally disable the specific BPA settings before the public policy could be successfully attached.
 </details>
 
 <details>
 <summary>Question 3: A third-party data analytics company needs to upload a daily CSV file to a bucket in your AWS account. They provide you with their IAM Role ARN. How do you grant them access without creating an IAM user for them in your account?</summary>
 
-You create a Resource-Based Policy (a Bucket Policy) on your S3 bucket. The policy should specify an `Effect` of `Allow`, the `Action` `s3:PutObject`, the `Resource` of your bucket ARN, and crucially, the `Principal` should be set to the AWS account ID or the specific IAM Role ARN provided by the third-party company. For cross-account access, both the bucket policy on your side AND the IAM policy on their side must grant the permission.
+You should create a Resource-Based Policy (a Bucket Policy) on your S3 bucket that grants them access. The policy will specify an `Effect` of `Allow`, the `Action` as `s3:PutObject`, and the `Resource` as your bucket ARN. Crucially, the `Principal` in the policy must be set to the AWS account ID or the specific IAM Role ARN provided by the third-party company. Keep in mind that for cross-account access to work, the permissions must be explicitly granted on both sides: your bucket policy must allow their role, and their account's IAM policy must allow the role to upload to your bucket.
 </details>
 
 <details>
 <summary>Question 4: You delete a 1GB video file from an S3 bucket that has Object Versioning enabled. You realize it was a mistake. Is the file gone permanently, and how do you recover it?</summary>
 
-No, the file is not gone. When versioning is enabled, a standard delete operation simply inserts a "Delete Marker" over the object, hiding it from standard list commands. To recover it, you query the specific object versions and delete the "Delete Marker," which effectively restores the previous version of the object to the active state.
+No, the file is not permanently deleted. Because Object Versioning is enabled on the bucket, a standard delete operation does not destroy the data; instead, it simply inserts a "Delete Marker" over the object. This marker becomes the current version, effectively hiding the object from standard list or download commands. To recover the file, you simply query the object's version history and delete the "Delete Marker," which immediately restores the previous version of the video file to the active state.
 </details>
 
 <details>
 <summary>Question 5: Your team stores 50 million small JSON files (average 2 KB each) in S3 Standard. A cost optimization review suggests moving them to S3 Standard-IA. Will this save money?</summary>
 
-No, it will likely **increase** costs. S3 Standard-IA has a minimum billable object size of 128 KB. Each 2 KB file would be billed as if it were 128 KB, meaning you would pay for 6.4 TB of storage instead of the actual 100 GB. Additionally, Standard-IA charges a per-GB retrieval fee. S3 Intelligent-Tiering won't help either — while it accepts small files, objects under 128 KB are never transitioned to infrequent-access tiers, so they stay at the Standard rate plus a monitoring fee. The correct approach is to bundle the small files into larger archives (e.g., tar.gz files) before transitioning to a cheaper storage class.
+No, implementing this change will likely increase your monthly storage costs significantly. S3 Standard-IA has a minimum billable object size constraint of 128 KB per object. Since your files average only 2 KB, AWS will bill each file as if it were 128 KB, effectively charging you for over 6 TB of storage instead of the actual 100 GB. Additionally, Standard-IA charges a per-GB retrieval fee, meaning you would pay every time a log is accessed. The correct cost-optimization approach would be to bundle these small JSON files into larger archives before moving them to an infrequent access tier.
 </details>
 
 <details>
 <summary>Question 6: A user uploads an object to S3 via the console. At the exact same millisecond, a developer attempts to download that specific object via the AWS CLI. Will the developer get a 404 Not Found error, partial data, or the full object?</summary>
 
-Because S3 provides strong read-after-write consistency, the developer will receive the full object (or a 404 if the upload has not definitively completed yet). S3 will not return partial or corrupt data during an ongoing write operation.
+The developer will receive the full object without any corruption or partial data. S3 provides strong read-after-write consistency for all PUT operations, meaning that once S3 returns a success response for the upload, the data is immediately and fully available to all readers. If the developer's request hits S3 the exact millisecond before the upload definitively completes, they will simply receive a 404 Not Found error. In neither case will S3 return partial data during an ongoing write operation, ensuring strict data integrity.
 </details>
 
 <details>
 <summary>Question 7: Why is a Pre-Signed URL more secure than modifying a bucket policy to allow temporary access to a file?</summary>
 
-Modifying a bucket policy affects the permissions of the bucket broadly and relies on an administrator remembering to change the policy back later. A Pre-Signed URL uses programmatic cryptography to generate a specific, time-bound signature for a single object. Once the expiration time passes, the URL is mathematically invalid, requiring no cleanup or state changes to the bucket policy.
+A Pre-Signed URL is significantly more secure because it uses programmatic cryptography to generate a specific, time-bound signature for a single object operation. Modifying a bucket policy, on the other hand, affects the permissions of the bucket broadly and relies entirely on an administrator remembering to manually change the policy back later. Once the expiration time on a Pre-Signed URL passes, the signature becomes mathematically invalid, requiring no cleanup or state changes to the bucket itself. Furthermore, Pre-Signed URLs operate with the permissions of the identity that created them, meaning they never grant more access than the original user possessed.
 </details>
 
 <details>
 <summary>Question 8: You enable versioning on a bucket and then later decide you no longer want it. You call `put-bucket-versioning` with `Status=Suspended`. What happens to the existing object versions?</summary>
 
-All existing object versions remain in the bucket and continue to incur storage costs. Suspending versioning does **not** delete previous versions. It only affects new writes: new objects will receive a null version ID instead of a unique version ID. To actually free up storage, you must explicitly delete the old versions (or create a lifecycle rule to expire noncurrent versions).
+All existing object versions will remain in the bucket exactly as they were, and they will continue to incur standard storage costs. Suspending versioning does not delete any previous versions; it only affects how new write operations are handled. Any new objects or overwrites will receive a `null` version ID instead of a unique cryptographic version ID. If you actually want to free up storage space and stop paying for the old data, you must explicitly delete the old versions or configure a lifecycle rule to automatically expire noncurrent versions.
 </details>
 
 ---
@@ -584,21 +590,29 @@ echo "Bucket name: $MY_BUCKET"
 # Create the bucket (default region)
 aws s3 mb s3://$MY_BUCKET
 
+# Create a customer-managed KMS key
+export KMS_KEY_ID=$(aws kms create-key \
+    --description "KMS key for Dojo Backup Bucket" \
+    --query 'KeyMetadata.KeyId' --output text)
+echo "Created KMS Key: $KMS_KEY_ID"
+
 # Enforce Block Public Access (all four settings)
 aws s3api put-public-access-block \
     --bucket $MY_BUCKET \
     --public-access-block-configuration \
     "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
 
-# Enable default encryption (SSE-S3)
+# Enable default encryption (SSE-KMS)
 aws s3api put-bucket-encryption \
     --bucket $MY_BUCKET \
     --server-side-encryption-configuration '{
         "Rules": [
             {
                 "ApplyServerSideEncryptionByDefault": {
-                    "SSEAlgorithm": "AES256"
-                }
+                    "SSEAlgorithm": "aws:kms",
+                    "KMSMasterKeyID": "'$KMS_KEY_ID'"
+                },
+                "BucketKeyEnabled": true
             }
         ]
     }'
@@ -809,7 +823,7 @@ cat << EOF > bucket-policy.json
             "Resource": "arn:aws:s3:::${MY_BUCKET}/*",
             "Condition": {
                 "StringNotEquals": {
-                    "s3:x-amz-server-side-encryption": ["AES256", "aws:kms"]
+                    "s3:x-amz-server-side-encryption": "aws:kms"
                 }
             }
         },
@@ -864,19 +878,24 @@ EOF
 # Run script to delete bucket and contents
 python3 empty_bucket.py $MY_BUCKET
 
+# Schedule KMS key deletion (minimum 7 days)
+aws kms schedule-key-deletion \
+    --key-id $KMS_KEY_ID \
+    --pending-window-in-days 7
+
 # Clean up local files
 rm -rf ./backup-exercise lifecycle.json bucket-policy.json empty_bucket.py
 ```
 
 ### Success Criteria
 
-- [ ] I created a bucket with Block Public Access, default encryption, and versioning enabled.
+- [ ] I created a bucket with Block Public Access, a customer-managed KMS key for default encryption, and versioning enabled.
 - [ ] I uploaded multiple versions of the same file and listed the version history.
 - [ ] I recovered a specific previous version after a simulated data corruption.
 - [ ] I synced a local directory to S3 and generated a working pre-signed URL.
 - [ ] I applied a lifecycle configuration with multiple rules (transition, expiration, incomplete upload cleanup).
 - [ ] I applied a bucket policy that enforces encryption and denies insecure (non-HTTPS) transport.
-- [ ] I cleaned up all resources (bucket, local files).
+- [ ] I cleaned up all resources (bucket, local files, and KMS key).
 
 ---
 
