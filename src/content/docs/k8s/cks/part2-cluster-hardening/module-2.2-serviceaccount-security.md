@@ -290,6 +290,64 @@ kubectl get secrets -A -o json | jq -r '
 
 ---
 
+## Diagnosing Authentication Failures
+
+When configuring pods that legitimately need Kubernetes API access, you will inevitably encounter authentication or authorization errors. Knowing how to diagnose these quickly is essential for the CKS exam and real-world troubleshooting.
+
+> **Pause and predict**: A pod logs a `403 Forbidden` error when trying to list pods in its namespace. Is the issue a missing token, or missing RBAC permissions?
+
+### 401 Unauthorized vs. 403 Forbidden
+
+*   **401 Unauthorized**: The API server does not know who you are. The token is missing, expired, or invalid.
+*   **403 Forbidden**: The API server knows who you are (the token is valid), but the associated ServiceAccount lacks the required RBAC permissions to perform the requested action.
+
+### Step 1: Check Pod Logs
+
+The first indicator of a problem will be in the application logs.
+
+```bash
+# View logs for API connection errors
+kubectl logs my-api-pod
+# Look for: "Unauthorized" (401) or "Forbidden" (403)
+```
+
+### Step 2: Verify Token Mounts (for 401 errors)
+
+If a pod needs access but receives 401 errors, it likely does not have a token mounted.
+
+```bash
+# 1. Check if automount is disabled at the pod level
+kubectl get pod my-api-pod -o jsonpath='{.spec.automountServiceAccountToken}'
+
+# 2. Verify which ServiceAccount it is using
+kubectl get pod my-api-pod -o jsonpath='{.spec.serviceAccountName}'
+
+# 3. Exec into the pod and verify the token file exists
+kubectl exec my-api-pod -- ls -l /var/run/secrets/kubernetes.io/serviceaccount/
+# If this fails, the token is not mounted (check SA and Pod automount settings).
+```
+
+### Step 3: Check RBAC Bindings (for 403 errors)
+
+If the pod logs show 403 errors, the token is present but lacks permissions. You must verify the RoleBindings associated with the pod's ServiceAccount.
+
+```bash
+# 1. Identify the ServiceAccount and Namespace
+SA_NAME=$(kubectl get pod my-api-pod -o jsonpath='{.spec.serviceAccountName}')
+NS=$(kubectl get pod my-api-pod -o jsonpath='{.metadata.namespace}')
+
+# 2. Impersonate the ServiceAccount to test its permissions exactly
+kubectl auth can-i list pods -n $NS --as=system:serviceaccount:$NS:$SA_NAME
+# Output: no (This confirms the 403 is due to RBAC)
+
+# 3. Check existing RoleBindings to see what is actually bound
+kubectl get rolebindings,clusterrolebindings -A -o custom-columns='KIND:kind,NAMESPACE:metadata.namespace,NAME:metadata.name,SUBJECTS:subjects[*].name' | grep $SA_NAME
+```
+
+If `auth can-i` returns `no`, you must create or update a Role and RoleBinding to grant the specific API access the pod requires.
+
+---
+
 ## Real Exam Scenarios
 
 ### Scenario 1: Disable Token Automount
