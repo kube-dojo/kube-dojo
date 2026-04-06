@@ -21,7 +21,7 @@ lab:
 ## Learning Outcomes
 
 After completing this module, you will be able to:
-- **Create** a Dockerfile that follows best practices for size, security, and layer caching
+- **Analyze and optimize** a Dockerfile that follows best practices for size, security, and layer caching
 - **Configure** image pull policies and registry credentials for pod specifications
 - **Debug** image pull errors including `ImagePullBackOff` and authentication failures
 - **Explain** image tagging strategies and why `:latest` is dangerous in production
@@ -453,6 +453,12 @@ spec:
    `Never` means pods will fail to start on any node that doesn't already have the image cached -- this breaks scaling to new nodes and disaster recovery. The correct solution is `imagePullPolicy: IfNotPresent`, which is actually the default for specific version tags. If pods are still re-pulling, check whether someone has overridden the policy to `Always` in the pod spec. With `IfNotPresent`, the image is pulled once per node and cached, giving you fast restarts without the risk of `Never`.
    </details>
 
+5. **A developer shows you a Dockerfile that builds successfully, but the resulting image is 800MB and takes 5 minutes to build every time they change a single line of application code. The Dockerfile starts with `FROM ubuntu:latest`, runs a `COPY . .`, and then uses `RUN` to install heavily dependent packages. Why is this Dockerfile inefficient, and what are the two most impactful changes you can make to fix it?**
+   <details>
+   <summary>Answer</summary>
+   This Dockerfile suffers from poor layer caching and an overly large base image. Because `COPY . .` copies all application code before installing dependencies, any change to the source code invalidates the cache for the subsequent `RUN` commands, forcing a full dependency reinstallation on every build. Furthermore, `ubuntu:latest` is massive and contains tools unnecessary for most runtimes. The two most impactful changes are: 1) Switch to a minimal base image like an `-alpine` or `-slim` variant to drastically reduce the initial footprint. 2) Move the copying of dependency files (like `requirements.txt` or `package.json`) and the associated `RUN` install command above the `COPY . .` instruction so that dependencies remain cached unless the dependency manifest itself changes.
+   </details>
+
 ---
 
 ## Hands-On Exercise
@@ -667,6 +673,38 @@ k get pods -l app=webapp
 
 # Cleanup
 k delete deploy webapp
+```
+
+### Drill 7: Optimize a Dockerfile (Target: 5 minutes)
+
+**Scenario:** A colleague hands you this Dockerfile. It works, but it takes forever to build and results in an unnecessarily large image.
+
+```dockerfile
+FROM node:18
+WORKDIR /usr/src/app
+COPY . .
+RUN npm install
+CMD ["node", "index.js"]
+```
+
+**Your Tasks:**
+1. Identify the layer caching issue causing slow rebuilds.
+2. Identify the base image size issue.
+3. Rewrite the Dockerfile to optimize it.
+
+**Solution:**
+```dockerfile
+# 1. Switch to a smaller base image (alpine)
+FROM node:18-alpine
+WORKDIR /usr/src/app
+
+# 2. Copy ONLY package files first for layer caching
+COPY package*.json ./
+RUN npm install
+
+# 3. Copy the rest of the application code AFTER dependencies
+COPY . .
+CMD ["node", "index.js"]
 ```
 
 ---
