@@ -220,7 +220,7 @@ spec:
 
 ---
 
-> **What would happen if**: You set `capabilities: drop: ["ALL"]` on a container that needs to bind to port 80. The container crashes with "permission denied" on startup. What single capability do you need to add back, and why is the "drop all, add back" approach safer than the default?
+> **Pause and predict**: You set `capabilities: drop: ["ALL"]` on a container that needs to bind to port 80. The container crashes with "permission denied" on startup. What single capability do you need to add back, and why is the "drop all, add back" approach safer than the default?
 
 ## Complete Secure Pod Example
 
@@ -284,6 +284,18 @@ spec:
       runAsUser: 2000      # Overrides pod-level setting
       # This container runs as UID 2000, not 1000
 ```
+
+---
+
+## Real-World War Story: The Privileged Container Escape
+
+In a well-documented incident at a major tech company, a security team investigating a breached Kubernetes cluster discovered that attackers had completely compromised a worker node by escaping a seemingly harmless application container. The root cause? During initial troubleshooting months earlier, developers had temporarily set `privileged: true` in the pod's security context to "make it work quickly" and forgot to remove it before deploying to production.
+
+When the attackers found a basic remote code execution (RCE) vulnerability in the web application, they dropped into a shell. Because the container was privileged, it had all Linux capabilities enabled, including `CAP_SYS_MODULE` and `CAP_SYS_ADMIN`. The attackers compiled a malicious Linux kernel module, loaded it directly into the host's kernel from inside the container, and shattered the container's isolation boundary. From the host, they accessed the kubelet's TLS certificates and pivoted to compromise the entire cluster.
+
+> **Stop and think**: If the developers had instead run the container as root (`runAsUser: 0`) but without `privileged: true` and with default capabilities, would the attackers have been able to load the kernel module?
+
+**The Lesson:** If the developers had used `capabilities: drop: ["ALL"]` and explicitly added only the specific network capability they were trying to troubleshoot, the `CAP_SYS_MODULE` capability would have been dropped. The kernel module injection would have failed, trapping the attackers inside the container. Never use `privileged: true` as a shortcut for missing capabilities.
 
 ---
 
