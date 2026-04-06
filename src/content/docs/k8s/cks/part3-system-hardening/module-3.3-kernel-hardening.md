@@ -193,7 +193,7 @@ net.netfilter.nf_conntrack_max = 131072
 
 ---
 
-> **What would happen if**: You set `net.ipv4.ip_forward = 0` on a Kubernetes worker node to harden it. What breaks immediately, and why is this sysctl setting required for Kubernetes to function?
+> **Pause and predict**: You set `net.ipv4.ip_forward = 0` on a Kubernetes worker node to harden it. What breaks immediately, and why is this sysctl setting required for Kubernetes to function?
 
 ## Protecting /proc and /sys
 
