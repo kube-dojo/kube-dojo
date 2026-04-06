@@ -31,6 +31,8 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
+Imagine a highly exclusive nightclub or airport security. The authentication system checks if you have a valid ID. The authorization system checks if you have a boarding pass or are on the VIP list. But the **admission controller** is the bouncer or security screener at the door who checks if you're carrying a weapon, wearing forbidden items, or otherwise violating policy. Even if you have a valid ID and are on the list, the admission controller can still reject you, force you to check your coat (mutate), or let you pass (validate).
+
 Admission controllers are gatekeepers that intercept API requests before objects are persisted. They can validate, mutate, or reject requests based on custom logic. Understanding how to enable and configure admission controllers is essential for cluster security.
 
 CKS tests admission controller configuration and usage.
@@ -237,7 +239,7 @@ objectSelector:
 
 ---
 
-> **What would happen if**: A MutatingAdmissionWebhook silently injects a sidecar container into every pod. An attacker compromises the webhook service and changes the sidecar image to a malicious one. Every new pod in the cluster now contains the attacker's container. How do you protect against this?
+> **Stop and think**: A MutatingAdmissionWebhook silently injects a sidecar container into every pod. An attacker compromises the webhook service and changes the sidecar image to a malicious one. Every new pod in the cluster now contains the attacker's container. How do you protect against this?
 
 ## ImagePolicyWebhook
 
@@ -387,6 +389,41 @@ webhooks:
 ---
 
 > **Pause and predict**: You configure an ImagePolicyWebhook with `defaultAllow: false`. The webhook service crashes. A developer tries to deploy a pod. What happens -- does the pod get created, or is it blocked?
+
+## Debugging Webhook Failures
+
+When a validating or mutating webhook blocks a request, or the webhook service itself is unhealthy, it can cause confusing cluster behavior. Here is how to investigate and debug these failures.
+
+### 1. Direct API Rejections
+When you create a Pod directly via `kubectl run`, the API server will return the webhook's rejection message or timeout error immediately in your terminal.
+```bash
+$ kubectl run nginx --image=nginx
+Error from server (InternalError): Internal error occurred: failed calling webhook "validate.example.com": failed to call webhook: context deadline exceeded
+```
+
+### 2. Silent Deployment Failures
+If you create a Deployment, the Deployment object is created successfully (because the webhook is only targeting `pods`), but no Pods will appear. The ReplicaSet controller receives the webhook rejection and records it as an event.
+```bash
+# Check why a Deployment has 0 available replicas
+kubectl describe replicaset <deployment-name>
+# Look under 'Events:' for webhook rejection messages
+```
+
+### 3. API Server Logs
+If the webhook service is crashing or returning invalid JSON, the API server logs will contain the detailed communication errors.
+```bash
+# On control plane node or using kubectl (if you have access)
+kubectl logs -n kube-system -l component=kube-apiserver | grep -i webhook
+```
+
+### 4. Check Webhook Service Health
+Ensure the service backing the webhook configuration has healthy endpoints and the pods are running.
+```bash
+kubectl get endpoints -n <webhook-namespace> <webhook-service-name>
+kubectl logs -n <webhook-namespace> -l app=<webhook-app>
+```
+
+---
 
 ## Real Exam Scenarios
 
@@ -570,29 +607,32 @@ sudo vi /etc/kubernetes/manifests/kube-apiserver.yaml
 
 ## Hands-On Exercise
 
-**Task**: Enable admission controllers and create a webhook configuration.
+**Task**: Deploy a validating webhook configuration and observe how a failure impacts cluster operations. 
 
 ```bash
-# Step 1: Check current admission controllers
-echo "=== Current Admission Controllers ==="
-kubectl get pod kube-apiserver-* -n kube-system -o yaml 2>/dev/null | \
-  grep -A1 enable-admission-plugins || \
-  echo "Check /etc/kubernetes/manifests/kube-apiserver.yaml on control plane"
+# Step 1: Create a namespace for our test
+kubectl create namespace webhook-test
+kubectl label namespace webhook-test enforce-policy=true
 
-# Step 2: Create a ValidatingWebhookConfiguration (dry-run)
-cat <<EOF > webhook.yaml
+# Step 2: Deploy a "broken" ValidatingWebhookConfiguration
+# This webhook requires a service that doesn't exist, simulating a downed security tool.
+cat <<EOF | kubectl apply -f -
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
-  name: test-webhook
+  name: broken-bouncer
 webhooks:
-- name: test.webhook.example.com
+- name: bouncer.security.local
   admissionReviewVersions: ["v1"]
   sideEffects: None
-  failurePolicy: Ignore  # Using Ignore for testing
+  failurePolicy: Fail
+  timeoutSeconds: 3
   clientConfig:
-    url: "https://webhook.example.com/validate"
-    caBundle: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJrVENDQVRlZ0F3SUJBZ0lJYzNrMGJHRnVaR1V3Q2dZSUtvWkl6ajBFQXdJd0l6RWhNQjhHQTFVRQpBeE1ZYXpOekxXTnNhV1Z1ZEMxallVQXhOekUwT0RRME5qRXdNQjRYRFRJME1EUXdOREUyTkRNeE1Gb1gKRFRJMU1EUXdOREUyTkRNeE1Gb3dJekVoTUI4R0ExVUVBeE1ZYXpOekxXTnNhV1Z1ZEMxallVQXhOekUwCk9EUTBOakV3V1RBVEJnY3Foa2pPUFFJQkJnZ3Foa2pPUFFNQkJ3TkNBQVRITCs9PT0KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo=
+    service:
+      name: missing-service
+      namespace: default
+      path: /validate
+    caBundle: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCg== # Dummy CA
   rules:
   - apiGroups: [""]
     apiVersions: ["v1"]
@@ -600,31 +640,33 @@ webhooks:
     resources: ["pods"]
   namespaceSelector:
     matchLabels:
-      test-webhook: "enabled"
+      enforce-policy: "true"
 EOF
 
-echo "=== Webhook Configuration ==="
-cat webhook.yaml
+# Step 3: Attempt to create a pod in the labeled namespace
+# This will FAIL because the webhook service is unreachable and failurePolicy is Fail.
+kubectl run test-pod --image=nginx -n webhook-test
 
-# Step 3: List existing webhook configurations
-echo "=== Existing Webhooks ==="
-kubectl get validatingwebhookconfigurations
-kubectl get mutatingwebhookconfigurations
+# Step 4: Debug the failure
+# The direct pod creation shows the error immediately. Let's see how Deployments fail silently.
+kubectl create deployment test-deploy --image=nginx -n webhook-test
+kubectl get pods -n webhook-test
+# No pods are created! The Deployment controller succeeded, but the ReplicaSet failed.
 
-# Step 4: Check built-in admission controller recommendations
-echo "=== Recommended Security Controllers ==="
-cat <<EOF
-1. NodeRestriction - Limit kubelet permissions (ALWAYS enable)
-2. PodSecurity - Pod Security Standards enforcement
-3. AlwaysPullImages - Force image pulls (multi-tenant)
-4. DenyServiceExternalIPs - Prevent CVE-2020-8554
-EOF
+# Step 5: Check the ReplicaSet events to find the webhook error
+RS_NAME=$(kubectl get replicaset -n webhook-test -o jsonpath='{.items[0].metadata.name}')
+kubectl describe replicaset $RS_NAME -n webhook-test | grep -i webhook
+
+# Step 6: Fix the cluster by removing the broken webhook
+kubectl delete validatingwebhookconfiguration broken-bouncer
+kubectl get pods -n webhook-test -w
+# The deployment will now successfully create the pod!
 
 # Cleanup
-rm -f webhook.yaml
+kubectl delete namespace webhook-test
 ```
 
-**Success criteria**: Understand admission controller configuration.
+**Success criteria**: Understand how to configure a webhook and debug deployment failures when a webhook blocks pod creation.
 
 ---
 
