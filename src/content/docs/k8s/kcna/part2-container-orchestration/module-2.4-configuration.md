@@ -154,6 +154,33 @@ A **ConfigMap** stores non-sensitive configuration data:
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Exercise: Injecting Environment Variables**
+> You have a ConfigMap named `backend-config` with a key `LOG_LEVEL`. Complete this partial Pod definition to inject that value as an environment variable named `APP_LOG_LEVEL`.
+> ```yaml
+> apiVersion: v1
+> kind: Pod
+> metadata:
+>   name: backend-pod
+> spec:
+>   containers:
+>   - name: app
+>     image: my-app:v1
+>     # ADD YOUR CODE HERE
+> ```
+> <details>
+> <summary>Solution</summary>
+> 
+> ```yaml
+>     env:
+>     - name: APP_LOG_LEVEL
+>       valueFrom:
+>         configMapKeyRef:
+>           name: backend-config
+>           key: LOG_LEVEL
+> ```
+> By explicitly using `valueFrom` and `configMapKeyRef`, you map a specific key from your ConfigMap to a specific environment variable name inside the container.
+> </details>
+
 ---
 
 ## Secrets
@@ -238,6 +265,38 @@ A **Secret** stores sensitive data:
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Exercise: Mounting a Secret Volume**
+> Your application needs access to a TLS certificate stored in a Secret named `tls-certs`. Update this Deployment to mount the secret as a volume at `/etc/tls` and ensure it's read-only.
+> ```yaml
+> apiVersion: apps/v1
+> kind: Deployment
+> metadata:
+>   name: secure-app
+> spec:
+>   template:
+>     spec:
+>       containers:
+>       - name: app
+>         image: secure-app:v2
+>         # ADD VOLUME MOUNTS HERE
+>       # ADD VOLUMES HERE
+> ```
+> <details>
+> <summary>Solution</summary>
+> 
+> ```yaml
+>         volumeMounts:
+>         - name: cert-volume
+>           mountPath: /etc/tls
+>           readOnly: true
+>       volumes:
+>       - name: cert-volume
+>         secret:
+>           secretName: tls-certs
+> ```
+> Providing certificates as a read-only volume mount is the standard pattern because applications expect certificates to exist as files on the filesystem, and `readOnly: true` prevents accidental modification.
+> </details>
+
 ---
 
 ## ConfigMap vs Secret
@@ -273,6 +332,21 @@ A **Secret** stores sensitive data:
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+> **Exercise: Choose Your Configuration Object**
+> For each of the following data types, decide whether you should use a ConfigMap or a Secret, and explain why.
+> 1. A feature flag enabling a new UI layout (`ENABLE_NEW_UI=true`)
+> 2. A third-party payment gateway API token
+> 3. An NGINX configuration file (`nginx.conf`)
+> 4. A private SSH key for accessing a Git repository
+> <details>
+> <summary>Solution</summary>
+> 
+> 1. **ConfigMap**: Feature flags are not sensitive. If exposed, they don't pose a security risk.
+> 2. **Secret**: API tokens provide access to external systems and represent financial risk. They must be protected using RBAC and encryption at rest.
+> 3. **ConfigMap**: Configuration files define application behavior but typically don't contain credentials. They are meant to be visible and editable.
+> 4. **Secret**: SSH keys grant access to external resources. Exposing them could compromise your infrastructure or codebase.
+> </details>
 
 ---
 
