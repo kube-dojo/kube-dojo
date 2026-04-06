@@ -89,6 +89,8 @@ Use API Aggregation when you need:
 
 Use CRDs for everything else. CRDs are simpler, more maintainable, and get automatic features (watch, server-side apply, schema validation, admission, etc.).
 
+> **Stop and think**: Imagine you are building an integration with a legacy enterprise identity system. The system requires complex LDAP queries that take 3-5 seconds to resolve, and the data changes constantly. If you were forced to use a CRD instead of an Aggregated API, what specific architectural bottlenecks and scaling issues would your cluster face?
+
 ### 1.3 Architecture
 
 ```
@@ -191,6 +193,8 @@ Proxied request to your server:
   Impersonate-Group: system:authenticated
   Authorization: Bearer <aggregator-token>
 ```
+
+> **Pause and predict**: The kube-aggregator passes the original user's identity via `Impersonate-User` headers. If your extension API server is exposed on a NodePort and a malicious pod inside the cluster connects directly to your extension server's IP, forging these headers, what is the result? How must your extension server's authentication be configured to prevent this bypass?
 
 ---
 
@@ -1088,52 +1092,52 @@ func (h *RecordHandler) HandleWatch(w http.ResponseWriter, r *http.Request) {
 
 ## Quiz
 
-1. **What is the key difference between CRDs and API Aggregation in terms of data storage?**
+1. **You are designing a system to expose billions of historical IoT telemetry records to Kubernetes users so they can query them via standard `kubectl` commands. You must decide between a CRD and an Aggregated API. Which do you choose and why, specifically concerning the underlying storage architecture?**
    <details>
    <summary>Answer</summary>
-   CRDs store data in etcd, managed by the main API Server. API Aggregation proxies requests to your custom server, which can store data anywhere: an external database, a file system, an in-memory cache, a SaaS API, or even compute the response on the fly. This makes API Aggregation suitable for volatile or external data that should not (or cannot) be stored in etcd.
+   You should choose an Aggregated API because the telemetry data volume would immediately overwhelm etcd, which is designed for small, declarative configuration data, not high-volume time-series data. CRDs automatically force the API server to store their custom objects in the cluster's etcd ring, which is strictly limited in size (typically 2-8GB) and write throughput. An Aggregated API allows you to leave the billions of records in their native database (like TimescaleDB or Cassandra) while simply translating incoming Kubernetes API HTTP requests into the appropriate database queries on the fly, keeping etcd safe and stable.
    </details>
 
-2. **How does kube-aggregator forward user identity to the extension API server?**
+2. **A developer complains that their `kubectl get mycustomresources` command fails with a 403 Forbidden error from your new Aggregated API server, even though they have ClusterRole bindings granting them access. When you check your custom server's logs, you see the request arriving, but it lacks any JWT bearer token from the developer. How exactly is the user's identity supposed to reach your server, and what component in the request path is responsible for this?**
    <details>
    <summary>Answer</summary>
-   The aggregator strips the original user's authentication credentials and adds impersonation headers: `X-Remote-User` (username), `X-Remote-Group` (groups), and `X-Remote-Extra-*` (additional attributes). It authenticates to the extension server using its own credentials (service account token or client certificate). The extension server reads these headers to know who the original requester is.
+   The user's identity reaches your server via HTTP impersonation headers (e.g., `X-Remote-User`, `X-Remote-Group`), not via the original JWT bearer token. When the user sends a request to the main Kubernetes API server, the main API server authenticates the user, strips their original credentials, and then the kube-aggregator component proxies the request to your backend service. The aggregator attaches these headers to securely inform your extension server who originally made the request, while authenticating itself to your server using a front-proxy client certificate, meaning your server must be configured to extract these specific headers for its internal authorization checks rather than looking for a standard user token.
    </details>
 
-3. **An APIService shows `Available: False` with reason `FailedDiscoveryCheck`. What are the likely causes?**
+3. **After deploying your `APIService` manifest and the backing Deployment, you notice `kubectl api-resources` does not list your new custom resources. Running `kubectl get apiservice` shows `Available: False` with the reason `FailedDiscoveryCheck`. You verified the Pods are running and the Service is correctly selecting them. What specific endpoints is the aggregator attempting to reach, and what must your application return to resolve this error?**
    <details>
    <summary>Answer</summary>
-   The aggregator periodically checks the extension server's health by calling the discovery endpoint. Common causes: (a) The backend Service has no healthy endpoints (pods not running). (b) TLS is misconfigured (wrong CA bundle, expired cert, wrong SAN). (c) The extension server does not have a working discovery endpoint. (d) Network policy blocking traffic from the API Server to the extension server's namespace. (e) The server is returning non-200 status codes on the discovery endpoint.
+   The kube-aggregator is continuously polling your extension server's discovery endpoints, specifically the `/healthz`, `/apis/{group}`, and `/apis/{group}/{version}` paths. To resolve the `FailedDiscoveryCheck` error, your server must return an HTTP 200 OK on the health endpoint, and return correctly formatted Kubernetes `APIGroup` and `APIResourceList` JSON structures on the discovery paths. If your application returns a 404, times out, or returns improperly formatted JSON (such as missing the GVK or supported verbs), the aggregator will mark the APIService as unavailable and refuse to route traffic to it, preventing your resources from appearing in `kubectl`.
    </details>
 
-4. **Why does an extension API server need `system:auth-delegator` and `extension-apiserver-authentication-reader` RBAC?**
+4. **You are hardening your extension API server's deployment and decide to remove all ClusterRoleBindings to follow least-privilege principles. Immediately, your server begins rejecting all proxied requests from the kube-aggregator with authentication errors. Which specific RBAC roles must you restore to the extension server's ServiceAccount, and what exact API calls do these roles allow your server to make back to the main control plane?**
    <details>
    <summary>Answer</summary>
-   `system:auth-delegator` allows the extension server to call the `TokenReview` and `SubjectAccessReview` APIs, which are needed to verify the identity of incoming requests (authentication delegation) and check permissions (authorization delegation). `extension-apiserver-authentication-reader` allows reading the `extension-apiserver-authentication` ConfigMap in kube-system, which contains the CA certificates and other auth configuration the extension server needs to validate requests.
+   You must restore bindings to the `system:auth-delegator` ClusterRole and the `extension-apiserver-authentication-reader` Role in the `kube-system` namespace. The `system:auth-delegator` role is critical because it grants your extension server permission to POST to the `/apis/authentication.k8s.io/v1/tokenreviews` and `/apis/authorization.k8s.io/v1/subjectaccessreviews` endpoints on the main API server, allowing your custom server to delegate authorization checks back to the cluster's central RBAC system. The `extension-apiserver-authentication-reader` role allows your server to read the `extension-apiserver-authentication` ConfigMap, which contains the client CA certificates necessary to cryptographically verify that the incoming proxy requests genuinely originated from the kube-aggregator and not a malicious actor spoofing headers.
    </details>
 
-5. **You need to expose real-time GPU utilization metrics as a Kubernetes API. Would you use CRDs or API Aggregation? Why?**
+5. **A data science team wants to use the Horizontal Pod Autoscaler (HPA) to scale their Jupyter deployments based on real-time, hardware-level GPU temperature metrics scraped every 5 seconds. A junior engineer suggests creating a `GPUTemperature` CRD and writing a controller to update it continuously. Why is this a dangerous anti-pattern, and how does an Aggregated API solve this specific scenario?**
    <details>
    <summary>Answer</summary>
-   API Aggregation. Reasons: (a) GPU metrics are volatile and change every second -- storing them in etcd would be wasteful and generate excessive writes. (b) The data is computed on demand by scraping GPUs, not stored declaratively. (c) You might want custom query parameters (time range, aggregation) that CRDs do not support. (d) This is exactly the pattern used by `metrics-server` (for CPU/memory) and `custom-metrics-apiserver` (for application metrics). The extension server would scrape GPU metrics and serve them via the standard Kubernetes metrics API.
+   Using a CRD for high-frequency, ephemeral metric updates is a dangerous anti-pattern because every update triggers a write to etcd, which would quickly exhaust the cluster's storage I/O and etcd database size limits, potentially crashing the entire control plane. CRDs are strictly intended for declarative configuration state, not for volatile telemetry data. An Aggregated API solves this by bypassing etcd entirely; when the HPA queries the custom metrics API, the kube-aggregator routes the request to your extension server, which can dynamically fetch the current temperature directly from the nodes or a Prometheus backend in memory, returning the result instantly without ever persisting the raw data into the cluster's critical datastore.
    </details>
 
-6. **What discovery endpoints must an extension API server implement?**
+6. **Your team has deployed an extension API server handling the `data.kubedojo.io` group. A user runs `kubectl get datarecords -n default`, but the request mysteriously hangs and times out, even though `kubectl get datarecords` (cluster-scoped) works perfectly. Looking at your Go HTTP multiplexer configuration, what structural routing requirement for aggregated APIs have you likely missed?**
    <details>
    <summary>Answer</summary>
-   At minimum: (a) `/apis/{group}` returning an `APIGroup` object with available versions. (b) `/apis/{group}/{version}` returning an `APIResourceList` with all resources in that version, including names, verbs, namespaced flag, kind, and short names. The aggregator calls these to register your resources in the cluster's API discovery, which is what makes `kubectl api-resources` and tab completion work. The `/healthz` endpoint is also required for the APIService availability check.
+   You have likely failed to explicitly implement the namespace-scoped routing path (`/apis/{group}/{version}/namespaces/{namespace}/{resource}`) in your HTTP multiplexer, only implementing the cluster-scoped path (`/apis/{group}/{version}/{resource}`). Unlike CRDs where the main API server automatically handles the URL routing hierarchy for namespaced resources, an extension API server is just a raw HTTP server that receives exactly the URL path requested by the client. If your server does not explicitly parse the URL to extract the namespace parameter and route it to the appropriate handler, the request will fall through to a 404 handler or hang, causing namespace-specific queries to fail while global lists succeed.
    </details>
 
-7. **What is `groupPriorityMinimum` in an APIService and why does it matter?**
+7. **You are deploying a custom API server that serves the `v1alpha1` version of the `apps` API group to experiment with a new Deployment controller. However, after applying your `APIService` manifest, users report that standard `kubectl get deployments` commands are suddenly failing or returning unexpected schemas. Based on the `APIService` specification, what field was misconfigured to cause this collision with the core Kubernetes APIs, and why?**
    <details>
    <summary>Answer</summary>
-   `groupPriorityMinimum` determines the priority of your API group relative to other groups during API discovery. Higher values mean higher priority. This affects which version of a resource is returned as the "preferred" version when a client requests a resource without specifying a version. For extension APIs, a value of 1000 is typical. Built-in Kubernetes APIs use higher values (e.g., 9900 for core, 9800 for apps). Setting it too high could cause your API to shadow built-in APIs.
+   The `groupPriorityMinimum` and `versionPriority` fields in your `APIService` manifest were likely set higher than the priority of the built-in Kubernetes `apps` API group. The kube-aggregator uses these priority values to determine which API group and version should be preferred when a client requests a resource without fully specifying the version path, and also dictates the order of group discovery. By assigning your experimental extension API a higher priority than the core controllers (which typically sit in the 17000-18000 range), the aggregator effectively hijacked the default route for Deployment objects, routing standard user requests to your experimental server instead of the native Kubernetes API server.
    </details>
 
-8. **Explain the tradeoff between `insecureSkipTLSVerify: true` and providing a `caBundle`.**
+8. **During development of your extension API server, you set `insecureSkipTLSVerify: true` in the `APIService` manifest to save time. A security auditor flags this before production deployment, demanding you use a `caBundle` instead. Detail the specific attack vector that becomes possible if you ignore the auditor and deploy with TLS verification disabled.**
    <details>
    <summary>Answer</summary>
-   `insecureSkipTLSVerify: true` disables TLS certificate verification between the API Server and your extension server. This is convenient for development but creates a security vulnerability: a man-in-the-middle could intercept and modify API requests. In production, always use `caBundle` with the CA certificate that signed your server's TLS certificate. With cert-manager, use the annotation `cert-manager.io/inject-ca-from` to automatically keep the caBundle updated when certificates rotate.
+   Leaving `insecureSkipTLSVerify: true` enabled allows for a severe Man-in-the-Middle (MitM) attack within the cluster network, because the kube-aggregator will blindly trust any server that answers on the target Service IP without verifying its cryptographic identity. If a malicious actor compromises a pod in the cluster, they could potentially use ARP spoofing or DNS poisoning to hijack the traffic destined for your extension API service. Without the `caBundle` verifying the server's certificate against a trusted authority, the aggregator would happily send the attacker the highly sensitive impersonation headers and proxy tokens, allowing the attacker to intercept, read, or modify administrative API requests without detection.
    </details>
 
 ---
