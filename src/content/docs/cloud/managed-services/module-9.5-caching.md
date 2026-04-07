@@ -66,22 +66,13 @@ The "right" caching strategy depends on your read/write ratio and consistency re
 
 The most common pattern. The application checks the cache first; on a miss, it reads from the database and populates the cache.
 
-```
-  Client Request
-       |
-       v
-  [Check Cache] --hit--> Return cached data
-       |
-      miss
-       |
-       v
-  [Query Database]
-       |
-       v
-  [Write to Cache]
-       |
-       v
-  Return data
+```mermaid
+flowchart TD
+    A[Client Request] --> B{Check Cache}
+    B -- hit --> C[Return cached data]
+    B -- miss --> D[Query Database]
+    D --> E[Write to Cache]
+    E --> F[Return data]
 ```
 
 ```python
@@ -113,14 +104,11 @@ def get_product(product_id):
 
 Every write goes to both the cache and the database simultaneously.
 
-```
-  Write Request
-       |
-       v
-  [Write to Cache] --> [Write to Database]
-       |
-       v
-  Return success
+```mermaid
+flowchart TD
+    A[Write Request] --> B[Write to Cache]
+    B --> C[Write to Database]
+    C --> D[Return success]
 ```
 
 ```python
@@ -143,14 +131,11 @@ def update_product_price(product_id, new_price):
 
 Writes go to the cache immediately and are asynchronously flushed to the database.
 
-```
-  Write Request
-       |
-       v
-  [Write to Cache] --> Return success (fast!)
-       |
-       v (async, batched)
-  [Flush to Database]
+```mermaid
+flowchart TD
+    A[Write Request] --> B[Write to Cache]
+    B --> C[Return success fast!]
+    B -. async, batched .-> D[Flush to Database]
 ```
 
 **Pros**: Extremely fast writes. Database load is smoothed by batching.
@@ -166,6 +151,8 @@ Writes go to the cache immediately and are asynchronously flushed to the databas
 | API rate limiting | Cache-aside + TTL | Natural expiration, no DB needed |
 | Shopping cart | Write-through | Consistency critical for commerce |
 | Leaderboard scores | Cache-aside + sorted sets | Redis sorted sets are purpose-built for this |
+
+> **Stop and think**: You are designing a shopping cart service where every item added must be securely recorded, but users frequently refresh the page to view their cart. Which caching strategy provides the necessary consistency while handling the read traffic?
 
 ---
 
@@ -257,19 +244,25 @@ spec:
               memory: 512Mi
 ```
 
+> **Pause and predict**: If you provision an ElastiCache Redis cluster with 3 nodes (1 primary, 2 replicas), how should your Kubernetes application route write commands versus read commands?
+
 ---
 
 ## Cache Stampede Prevention
 
 A cache stampede (also called "thundering herd") happens when a popular cache key expires and hundreds of pods simultaneously query the database to rebuild it.
 
-```
-Normal:
-  100 pods --> [Cache HIT] --> Return cached data     (DB: 0 queries)
-
-Stampede (key expires):
-  100 pods --> [Cache MISS] --> 100 database queries  (DB: 100 queries)
-                            --> 100 cache writes
+```mermaid
+flowchart LR
+    subgraph Normal
+        A[100 pods] -->|Cache HIT| B[Return cached data]
+        B -.- C[DB: 0 queries]
+    end
+    subgraph Stampede
+        D[100 pods] -->|Cache MISS| E[100 database queries]
+        E --> F[100 cache writes]
+        F -.- G[DB: 100 queries]
+    end
 ```
 
 ### Prevention Strategies
@@ -375,6 +368,25 @@ spec:
 
 ---
 
+## Diagnosing Hot Key Distribution
+
+A "hot key" occurs when a single Redis key receives a disproportionate amount of traffic. Because Redis is single-threaded for command execution, a hot key on a clustered Redis setup will overwhelm a single shard, causing high CPU utilization on one node while other nodes remain idle.
+
+### Diagnosis
+
+1. **CPU Monitoring**: Monitor CPU utilization per shard. If one shard is at 99% CPU while others are at 10%, you likely have a hot key.
+2. **Redis CLI**: Use `redis-cli --hotkeys` (requires the `maxmemory-policy` to be an LFU policy like `allkeys-lfu`).
+3. **Command Monitoring**: Alternatively, use `OBJECT FREQ <key>` to check access frequencies. Avoid running the `MONITOR` command in production as it drastically reduces performance.
+
+### Mitigation
+
+- **Local Caching**: Cache the hot key in the application's memory (e.g., using a local in-memory cache variable) for a few seconds to absorb the read spike before it hits Redis.
+- **Key Duplication**: Create copies of the key (e.g., `product:123:1`, `product:123:2`) and have clients randomly read from one of the copies to distribute load across multiple shards.
+
+> **Stop and think**: If a celebrity tweets a link to a specific product, creating a sudden massive read spike on that single product's cache key, why won't simply adding more Redis cluster nodes solve the performance issue?
+
+---
+
 ## Connection Limits and Pool Management
 
 Managed Redis instances have maximum connection limits based on instance size. Exceeding them causes connection refused errors.
@@ -442,6 +454,8 @@ spec:
             summary: "Redis cache hit rate below 90%"
 ```
 
+> **Pause and predict**: Your application is scaling up during a Black Friday event. If each of your 100 pods opens 50 concurrent Redis connections, and your Redis instance limit is 65,000, why might you still see connection errors during a rolling deployment?
+
 ---
 
 ## Envoy Sidecar Caching
@@ -450,24 +464,17 @@ For HTTP-based APIs, you can add caching at the proxy layer using Envoy as a sid
 
 ### Architecture
 
-```
-  Client
-    |
-    v
-  K8s Service
-    |
-    v
-  +--Pod---------------------------+
-  |                                |
-  |  Envoy Sidecar (port 8080)    |
-  |    |                           |
-  |    |--> [Local Cache]          |
-  |    |        |                  |
-  |    |       miss                |
-  |    |        |                  |
-  |    +--> App Container (8081)   |
-  |                                |
-  +--------------------------------+
+```mermaid
+flowchart TD
+    A[Client] --> B[K8s Service]
+    B --> C[Pod]
+    subgraph Pod
+        D[Envoy Sidecar port 8080]
+        E[(Local Cache)]
+        F[App Container port 8081]
+        D -->|hit| E
+        D -->|miss| F
+    end
 ```
 
 ### Envoy Cache Filter Configuration
@@ -540,6 +547,8 @@ def get_product(product_id):
     return response
 ```
 
+> **Stop and think**: What HTTP headers are absolutely essential for the Envoy sidecar cache filter to know how long to retain a response?
+
 ---
 
 ## Did You Know?
@@ -572,39 +581,39 @@ def get_product(product_id):
 ## Quiz
 
 <details>
-<summary>1. Explain the cache-aside pattern and when you would use write-through instead.</summary>
+<summary>1. An e-commerce site experiences heavy read traffic on its product catalog, but product details rarely change. They also have a shopping cart service that updates constantly. Which caching strategies should they apply to each service, and why?</summary>
 
-Cache-aside (lazy loading) means the application first checks the cache, and on a miss, queries the database and populates the cache. Data is only cached when requested. Use it for read-heavy workloads where most data is rarely accessed. Write-through writes to both cache and database on every write operation. Use it when consistency between cache and database is critical -- for example, shopping carts or user session data where reading stale data after a write is unacceptable. Write-through has higher write latency but guarantees the cache is always up-to-date.
+For the product catalog, they should use the cache-aside (lazy loading) pattern. This pattern only caches data when it is requested, making it ideal for read-heavy workloads where most data is rarely accessed or updated, thus saving memory and reducing initial write overhead. For the shopping cart, they should use the write-through pattern. This pattern writes to both the cache and the database on every write operation. It ensures strict consistency between the cache and database, which is critical for commerce where reading stale cart data could lead to lost sales or customer frustration. The higher write latency is an acceptable trade-off for this consistency.
 </details>
 
 <details>
-<summary>2. What is a cache stampede and describe two different strategies to prevent it.</summary>
+<summary>2. Your marketing team sends out a push notification to 5 million users about a 90% off flash sale on a specific gaming console. The console's cache key expires exactly as the notification lands. Your database instantly crashes. What caused this, and how could you have architected the application to prevent it?</summary>
 
-A cache stampede occurs when a popular cache key expires and many concurrent requests simultaneously miss the cache and hit the database. Two prevention strategies: (1) Distributed locking -- when a cache miss occurs, the first request acquires a lock and rebuilds the cache while other requests either wait or serve stale data. The lock prevents multiple pods from querying the database simultaneously. (2) Probabilistic early expiration -- before the TTL expires, each request has an increasing probability of refreshing the cache. This spreads cache rebuilding over time so only one or two requests refresh the cache before it actually expires, preventing the sudden stampede.
+This was caused by a cache stampede. When the popular cache key expired, thousands of concurrent requests all missed the cache and simultaneously queried the database to rebuild it, overwhelming its connection limits. To prevent this, you could implement a distributed locking strategy. When the cache miss occurs, the first request acquires a Redis lock and queries the database, while all other requests either wait briefly or return slightly stale data. Alternatively, you could use probabilistic early expiration, where requests have an increasing chance of refreshing the cache before it actually expires, spreading the database load over time.
 </details>
 
 <details>
-<summary>3. Why should you separate your Redis cache instance from your Redis persistent data store?</summary>
+<summary>3. A junior engineer proposes saving money by running the application's user session data and its rendered HTML page cache on the exact same Redis cluster, as "they both just store key-value pairs." Why is this architectural decision dangerous for production reliability?</summary>
 
-A cache instance can be flushed, restarted, or scaled without data loss -- the database is the source of truth. A persistent data store (sessions, job queues, rate limiters) contains data that cannot be regenerated from the database. If you use the same instance for both, memory pressure from cache entries can cause eviction of persistent data, or a cache flush operation can accidentally destroy session data. Different eviction policies are appropriate too: `allkeys-lru` for cache (evict least-recently-used when full) vs `noeviction` for persistent data (reject writes rather than lose data).
+This decision is dangerous because caches and persistent data stores have fundamentally different lifecycles and memory requirements. A cache is designed to be ephemeral and can be safely flushed or evicted without data loss, as the database remains the source of truth. User sessions, however, are persistent data that cannot be easily regenerated; losing them logs out users. If placed on the same cluster, the heavy memory pressure from the HTML page cache would trigger Redis's eviction policies (like `allkeys-lru`), potentially deleting active user sessions to make room for cached pages.
 </details>
 
 <details>
-<summary>4. How do you calculate the connection budget for a Redis instance in a Kubernetes cluster?</summary>
+<summary>4. You are provisioning an ElastiCache Redis instance that supports up to 65,000 connections. Your application has 100 pods, each configured with a connection pool size of 50. During a rolling deployment, the database operations team alerts you that Redis connections are being refused. What went wrong with your connection budgeting?</summary>
 
-Multiply the maximum number of pods by the connection pool size per pod. For example, 50 pods with `max_connections=20` each requires 1,000 connections. During rolling deployments, both old and new pods exist, so double this to 2,000. Add connections for monitoring tools, CronJobs, and any other clients. The total must be well under the Redis instance's max connection limit. For managed Redis (ElastiCache, Memorystore), the default limit is typically 65,000, but the practical limit is lower because each connection consumes memory on the Redis server. Monitor `redis_connected_clients` and alert at 80% capacity.
+Your connection budget failed to account for the overlapping pods during a rolling deployment. While 100 pods with 50 connections each require 5,000 connections (well below the 65,000 limit), a rolling update can temporarily double the number of pods to 200, requiring 10,000 connections. Furthermore, if applications leak connections or if timeouts are configured improperly, old pods may not release their connections promptly. You must always calculate the budget based on the maximum possible simultaneous pods (including surge pods during deployments) plus overhead for monitoring and sidecars.
 </details>
 
 <details>
-<summary>5. When would you use Envoy sidecar caching instead of application-level Redis caching?</summary>
+<summary>5. Your company acquired a startup running a monolithic legacy API written in a proprietary language that no one knows how to safely modify. The API is crushing its backend database under read load. How can you implement caching for this API without touching a single line of its code?</summary>
 
-Envoy sidecar caching is best when you cannot modify the application code (third-party services, legacy applications) or when you want HTTP-level caching that respects standard Cache-Control headers. It requires no application changes -- just proper HTTP cache headers. It caches at the pod level, reducing calls to the backend service. However, it is limited to HTTP responses and cannot cache arbitrary data structures like Redis can. Use application-level Redis caching when you need to cache database query results, computed values, or complex data structures that are not tied to specific HTTP endpoints.
+You can implement caching by injecting an Envoy sidecar proxy into the legacy application's Kubernetes pods. Envoy can be configured with an HTTP cache filter that intercepts incoming requests before they reach the application container. If a request matches a cached response, Envoy serves it directly, entirely bypassing the application and the database. This approach requires no code changes, relying instead on standard HTTP `Cache-Control` headers (if the app emits them) or custom routing rules defined in the Envoy configuration to cache the REST API responses at the network layer.
 </details>
 
 <details>
-<summary>6. What happens when Redis reaches its memory limit and the eviction policy is set to `noeviction`?</summary>
+<summary>6. Your cache-aside implementation is throwing intermittent timeouts, and the database is seeing elevated load. You check the Redis cluster and see it is at 100% memory utilization with the `maxmemory-policy` set to `noeviction`. How is this policy directly causing your application's symptoms?</summary>
 
-With `noeviction` policy, Redis returns an error (OOM -- Out of Memory) for any write command when the memory limit is reached. Read commands continue to work. This is the default policy and is appropriate for persistent data stores where data loss is unacceptable. For cache workloads, this is problematic because new cache entries cannot be written, causing all cache misses to fall through to the database. Cache workloads should use `allkeys-lru` (evict least recently used keys) or `volatile-lru` (evict least recently used keys with a TTL set), which make room for new entries by removing old ones.
+The `noeviction` policy tells Redis to return an Out of Memory (OOM) error for any write command when it is full, rather than making space. Because your application uses the cache-aside pattern, every cache miss results in a database query followed by an attempt to write the result to Redis. Since Redis rejects the write, the data is never cached. Subsequent requests for the same data result in more cache misses and more database queries, causing the elevated database load. For a cache workload, you must use a policy like `allkeys-lru` or `volatile-lru` so Redis automatically deletes old entries to make room for new ones.
 </details>
 
 ---
@@ -616,8 +625,23 @@ With `noeviction` policy, Redis returns an error (OOM -- Out of Memory) for any 
 ```bash
 # Create kind cluster
 kind create cluster --name cache-lab
+```
 
-# Install Redis
+### Task 1: Provision Managed Redis via CLI Simulation
+
+Before deploying the application, let's practice provisioning a managed Redis instance. While we use Helm for local testing, the command syntax mirrors cloud CLI tools.
+
+<details>
+<summary>Solution</summary>
+
+```bash
+# In an AWS environment, you would use:
+# aws elasticache create-replication-group \
+#   --replication-group-id cache-lab-cluster \
+#   --engine redis --cache-node-type cache.t4g.micro \
+#   --num-cache-clusters 1
+
+# For our local Kubernetes lab, we simulate the managed service via Helm:
 helm repo add bitnami https://charts.bitnami.com/bitnami
 helm install redis bitnami/redis \
   --namespace cache --create-namespace \
@@ -625,11 +649,13 @@ helm install redis bitnami/redis \
   --set auth.password=cache-lab-pass \
   --set master.persistence.enabled=false \
   --set master.resources.requests.memory=128Mi
+
 k wait --for=condition=ready pod -l app.kubernetes.io/name=redis \
   --namespace cache --timeout=120s
 ```
+</details>
 
-### Task 1: Implement Cache-Aside Pattern
+### Task 2: Implement Cache-Aside Pattern
 
 Deploy a pod that demonstrates cache-aside with Redis.
 
@@ -715,7 +741,7 @@ k logs cache-aside-demo -n cache
 ```
 </details>
 
-### Task 2: Demonstrate Cache Stampede
+### Task 3: Demonstrate Cache Stampede
 
 Simulate a stampede by launching many concurrent requests after a cache key expires.
 
@@ -824,7 +850,7 @@ k logs stampede-demo -n cache
 ```
 </details>
 
-### Task 3: Monitor Redis Metrics
+### Task 4: Monitor Redis Metrics
 
 Create a pod that reports Redis statistics.
 
@@ -878,7 +904,7 @@ k logs redis-monitor -n cache
 ```
 </details>
 
-### Task 4: Configure Eviction Policy
+### Task 5: Configure Eviction Policy
 
 Change the Redis eviction policy and demonstrate eviction behavior.
 
@@ -943,6 +969,7 @@ k logs eviction-demo -n cache
 
 ### Success Criteria
 
+- [ ] Redis cluster is successfully provisioned via CLI simulation
 - [ ] Cache-aside demo shows cache hits on second and third rounds
 - [ ] Stampede demo shows fewer DB queries with lock protection
 - [ ] Redis monitor reports memory, clients, and keyspace stats
