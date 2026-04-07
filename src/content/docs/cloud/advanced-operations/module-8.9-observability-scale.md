@@ -39,31 +39,20 @@ The real fix required architectural changes: sharding Prometheus across clusters
 
 Observability at scale is fundamentally a data problem. More clusters, more pods, more services means more metrics, more logs, and more traces. The cost and complexity of processing this data grows faster than the infrastructure it monitors.
 
-```
-TELEMETRY VOLUME AT SCALE
-════════════════════════════════════════════════════════════════
+| Telemetry Volume at Scale | Small | Medium | Large |
+| :--- | :--- | :--- | :--- |
+| **Nodes** | 10 | 50 | 200 |
+| **Pods** | 200 | 2,000 | 15,000 |
+| **Services** | 20 | 100 | 500 |
+| **Metrics: Time series** | 50K | 500K | 5M+ |
+| **Metrics: Samples/second** | 5K | 50K | 500K |
+| **Metrics: Storage (30 days)** | 10GB | 100GB | 1TB+ |
+| **Logs: Lines/second** | 500 | 5,000 | 50,000 |
+| **Logs: Storage (30 days)** | 50GB | 500GB | 5TB+ |
+| **Traces: Spans/second** | 100 | 1,000 | 10,000 |
+| **Traces: Storage (30 days)**| 5GB | 50GB | 500GB+ |
 
-  Cluster size:           Small        Medium       Large
-  Nodes:                  10           50           200
-  Pods:                   200          2,000        15,000
-  Services:               20           100          500
-
-  Metrics:
-  Time series:            50K          500K         5M+
-  Samples/second:         5K           50K          500K
-  Storage (30 days):      10GB         100GB        1TB+
-
-  Logs:
-  Lines/second:           500          5,000        50,000
-  Storage (30 days):      50GB         500GB        5TB+
-
-  Traces:
-  Spans/second:           100          1,000        10,000
-  Storage (30 days):      5GB          50GB         500GB+
-
-  At scale, the monitoring infrastructure can become the
-  most expensive service in the cluster.
-```
+> At scale, the monitoring infrastructure can become the most expensive service in the cluster.
 
 ---
 
@@ -73,45 +62,32 @@ Prometheus was designed for a single cluster. When you have multiple clusters, y
 
 ### Thanos Architecture
 
-```
-THANOS ARCHITECTURE
-════════════════════════════════════════════════════════════════
-
-  Cluster A                    Cluster B
-  ┌───────────────────────┐   ┌───────────────────────┐
-  │ Prometheus + Sidecar  │   │ Prometheus + Sidecar  │
-  │ ┌─────────┐┌────────┐│   │ ┌─────────┐┌────────┐│
-  │ │Prometheus││ Thanos ││   │ │Prometheus││ Thanos ││
-  │ │ (scrape) ││Sidecar ││   │ │ (scrape) ││Sidecar ││
-  │ │          ││(upload) ││   │ │          ││(upload) ││
-  │ └─────────┘└───┬────┘│   │ └─────────┘└───┬────┘│
-  └───────────────┬┘──────┘   └───────────────┬┘──────┘
-                  │                            │
-                  │  Upload TSDB blocks        │
-                  ▼                            ▼
-          ┌──────────────────────────────────────┐
-          │     Object Storage (S3/GCS/Azure)    │
-          │     Long-term metric storage         │
-          │     (unlimited retention, cheap)      │
-          └──────────────┬───────────────────────┘
-                         │
-          ┌──────────────┴───────────────────────┐
-          │          Thanos Components            │
-          │                                      │
-          │  ┌─────────────┐  ┌───────────────┐  │
-          │  │ Store Gateway│  │    Compactor  │  │
-          │  │ (reads from  │  │ (downsample,  │  │
-          │  │  object store│  │  compact      │  │
-          │  │  for old data│  │  blocks)      │  │
-          │  └──────┬──────┘  └───────────────┘  │
-          │         │                            │
-          │  ┌──────┴──────┐                     │
-          │  │   Querier   │  ← Grafana queries  │
-          │  │ (fan-out to │     this endpoint    │
-          │  │  all sources│                     │
-          │  │  Prom+Store)│                     │
-          │  └─────────────┘                     │
-          └──────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Cluster A
+        A_Prom[Prometheus] -->|scrape| A_Sidecar[Thanos Sidecar]
+    end
+    subgraph Cluster B
+        B_Prom[Prometheus] -->|scrape| B_Sidecar[Thanos Sidecar]
+    end
+    
+    A_Sidecar -->|Upload TSDB blocks| ObjStore[(Object Storage\nS3/GCS/Azure)]
+    B_Sidecar -->|Upload TSDB blocks| ObjStore
+    
+    subgraph Thanos Components
+        StoreGW[Store Gateway\nreads old data]
+        Compactor[Compactor\ndownsample blocks]
+        Querier[Querier\nfan-out to all sources]
+    end
+    
+    ObjStore --> StoreGW
+    ObjStore --> Compactor
+    
+    A_Sidecar -.-> Querier
+    B_Sidecar -.-> Querier
+    StoreGW -.-> Querier
+    
+    Grafana[Grafana] -->|queries| Querier
 ```
 
 ### Deploying Thanos with Prometheus Operator
@@ -254,35 +230,59 @@ spec:
 | Best for | Multi-cluster with existing Prometheus | Large multi-tenant platforms | Large multi-tenant platforms |
 | License | Apache 2.0 | Apache 2.0 | AGPL 3.0 |
 
+> **Stop and think**: If the Thanos Compactor goes down for 48 hours, what happens to your Grafana dashboards? Would you lose data, or just experience slower queries when looking at historical data from a week ago?
+
 ---
 
 ## OpenTelemetry Collector at Scale
 
 The OpenTelemetry Collector is a vendor-agnostic pipeline for receiving, processing, and exporting telemetry data (metrics, logs, traces). At scale, it becomes the single most important component in your observability architecture.
 
-```
-OTEL COLLECTOR PIPELINE
-════════════════════════════════════════════════════════════════
-
-  Applications          OTel Collector (per node)     Backends
-  ┌────────────┐       ┌──────────────────────────┐
-  │ Pod (OTLP) │──────▶│  Receivers:              │
-  │ Pod (OTLP) │       │  - OTLP (gRPC + HTTP)    │
-  │ Pod (prom)  │       │  - Prometheus scrape      │──▶ Thanos/Mimir
-  └────────────┘       │  - Filelog (container logs)│      (metrics)
-                        │                          │
-  kubelet metrics ────▶│  Processors:             │──▶ Loki/Elasticsearch
-  cadvisor metrics ──▶│  - batch (aggregate)      │      (logs)
-  node-exporter ─────▶│  - filter (drop noise)    │
-                        │  - transform (enrich)     │──▶ Tempo/Jaeger
-                        │  - tail_sampling          │      (traces)
-                        │  - memory_limiter         │
-                        │                          │
-                        │  Exporters:              │
-                        │  - prometheusremotewrite  │
-                        │  - loki                   │
-                        │  - otlp (to Tempo)        │
-                        └──────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph Applications
+        Pod1[Pod OTLP]
+        Pod2[Pod OTLP]
+        Pod3[Pod Prom]
+    end
+    
+    Kubelet[kubelet metrics]
+    cAdvisor[cadvisor metrics]
+    NodeExp[node-exporter]
+    
+    subgraph OTel Collector per node
+        direction TB
+        subgraph Receivers
+            R_OTLP[OTLP gRPC/HTTP]
+            R_Prom[Prometheus scrape]
+            R_Filelog[Filelog container logs]
+        end
+        subgraph Processors
+            P_Batch[batch]
+            P_Filter[filter]
+            P_Trans[transform]
+            P_Samp[tail_sampling]
+            P_Mem[memory_limiter]
+        end
+        subgraph Exporters
+            E_Prom[prometheusremotewrite]
+            E_Loki[loki]
+            E_OTLP[otlp to Tempo]
+        end
+        Receivers --> Processors --> Exporters
+    end
+    
+    Pod1 --> R_OTLP
+    Pod2 --> R_OTLP
+    Pod3 -.-> R_Prom
+    
+    Kubelet --> R_Prom
+    cAdvisor --> R_Prom
+    NodeExp --> R_Prom
+    
+    E_Prom --> Thanos[Thanos/Mimir\nmetrics]
+    E_Loki --> Loki[Loki/Elasticsearch\nlogs]
+    E_OTLP --> Tempo[Tempo/Jaeger\ntraces]
 ```
 
 ### OTel Collector Configuration
@@ -401,44 +401,43 @@ spec:
           exporters: [otlp/tempo]
 ```
 
+> **Pause and predict**: If you configure the `memory_limiter` processor in the OTel Collector to drop telemetry when it hits 90% memory, and there is a sudden spike in log volume, which signal (metrics, logs, or traces) gets dropped first? Or are they dropped equally?
+
 ---
 
 ## Centralized Logging at Scale
 
 ### Loki: The Log Aggregation System Built for Kubernetes
 
+```mermaid
+flowchart TD
+    subgraph Clusters
+        C_A[Cluster A OTel]
+        C_B[Cluster B OTel]
+        C_C[Cluster C OTel]
+    end
+    
+    subgraph Loki Distributed
+        Distributor[Distributor\nreceives streams]
+        Ingester[Ingester\nWAL + in-memory index]
+        ObjStore[(Object Storage\nchunks + index)]
+        Querier[Querier\nreads ingesters + storage]
+        QueryFE[Query Frontend\ncaching, splitting]
+    end
+    
+    C_A --> Distributor
+    C_B --> Distributor
+    C_C --> Distributor
+    
+    Distributor --> Ingester
+    Ingester --> ObjStore
+    
+    QueryFE --> Querier
+    Querier --> Ingester
+    Querier --> ObjStore
 ```
-LOKI ARCHITECTURE
-════════════════════════════════════════════════════════════════
 
-  Cluster A              Cluster B              Cluster C
-  ┌────────────┐        ┌────────────┐        ┌────────────┐
-  │OTel Collector       │OTel Collector       │OTel Collector
-  │  (filelog   │        │  (filelog   │        │  (filelog   │
-  │   receiver) │        │   receiver) │        │   receiver) │
-  └──────┬─────┘        └──────┬─────┘        └──────┬─────┘
-         │                      │                      │
-         └──────────────┬───────┴──────────────────────┘
-                        │
-                        ▼
-  ┌──────────────────────────────────────────────┐
-  │              Loki (Distributed)               │
-  │                                              │
-  │  Distributor ──▶ Ingester ──▶ Object Storage │
-  │  (receives      (WAL +        (S3/GCS:       │
-  │   log streams)   in-memory     chunks +       │
-  │                  index)        index)         │
-  │                                              │
-  │  Querier ◀── Query Frontend                  │
-  │  (reads from    (caching,                    │
-  │   ingesters     query splitting)             │
-  │   + storage)                                 │
-  └──────────────────────────────────────────────┘
-
-  Key insight: Loki indexes LABELS, not log content.
-  This makes it 10-100x cheaper than Elasticsearch for logs.
-  Trade-off: full-text search is slower (grep over chunks).
-```
+> Key insight: Loki indexes LABELS, not log content. This makes it 10-100x cheaper than Elasticsearch for logs. Trade-off: full-text search is slower (grep over chunks).
 
 ### Loki Deployment for Multi-Cluster
 
@@ -521,6 +520,8 @@ processors:
           - delete_key(attributes, "response_body")
           - truncate_all(attributes, 4096)
 ```
+
+> **Stop and think**: You just deployed a new microservice that logs a unique `request_id` as a label for every single log line. What will happen to your Loki cluster's performance and storage costs over the next few hours?
 
 ---
 
@@ -610,32 +611,32 @@ count by (pod) (http_requests_total)
 
 Tracing across clusters and clouds requires a unified trace context that propagates through every service call, regardless of where the services run.
 
-```
-CROSS-CLUSTER TRACING
-════════════════════════════════════════════════════════════════
-
-  Cluster A (us-east-1)                Cluster B (eu-west-1)
-  ┌─────────────────────────┐         ┌─────────────────────────┐
-  │  Frontend Service       │         │  Payment Service        │
-  │  trace_id: abc123       │  HTTP   │  trace_id: abc123       │
-  │  span_id: span-1        │────────▶│  span_id: span-3        │
-  │  parent: none           │ header: │  parent: span-2         │
-  │                         │ tracep- │                         │
-  │  API Gateway            │ arent   │  Fraud Check Service    │
-  │  trace_id: abc123       │         │  trace_id: abc123       │
-  │  span_id: span-2        │         │  span_id: span-4        │
-  │  parent: span-1         │         │  parent: span-3         │
-  └─────────────────────────┘         └─────────────────────────┘
-         │                                     │
-         │  OTel Collector                     │  OTel Collector
-         ▼                                     ▼
-  ┌──────────────────────────────────────────────────┐
-  │              Tempo (Grafana)                      │
-  │  or Jaeger / Zipkin                              │
-  │                                                  │
-  │  Stores all spans for trace abc123               │
-  │  Displays the full trace across both clusters    │
-  └──────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Cluster A us-east-1
+        FES[Frontend Service\ntrace_id: abc123\nspan_id: span-1]
+        API[API Gateway\ntrace_id: abc123\nspan_id: span-2\nparent: span-1]
+    end
+    
+    subgraph Cluster B eu-west-1
+        Pay[Payment Service\ntrace_id: abc123\nspan_id: span-3\nparent: span-2]
+        Fraud[Fraud Check Service\ntrace_id: abc123\nspan_id: span-4\nparent: span-3]
+    end
+    
+    FES -->|HTTP header: traceparent| Pay
+    FES --> API
+    Pay --> Fraud
+    
+    OTelA[OTel Collector]
+    OTelB[OTel Collector]
+    
+    API --> OTelA
+    Fraud --> OTelB
+    
+    Tempo[(Tempo / Jaeger\nStores all spans for abc123)]
+    
+    OTelA --> Tempo
+    OTelB --> Tempo
 ```
 
 ### Tail-Based Sampling for Traces
@@ -729,46 +730,46 @@ spec:
 ## Quiz
 
 <details>
-<summary>1. Why does a single Prometheus instance fail at multi-cluster scale?</summary>
+<summary>1. Your organization has just acquired a startup, adding 5 new Kubernetes clusters to your existing 3. You decide to point your central Prometheus instance to scrape all 8 clusters. Within hours, Prometheus starts crash-looping. Why did this architectural decision fail, and what specific limitations were hit?</summary>
 
-Prometheus was designed for a single cluster with a pull-based scraping model. At multi-cluster scale, it faces several limits: (a) memory -- every active time series is held in memory, and 1M+ series requires 32-64GB RAM; (b) single-node architecture -- Prometheus does not support horizontal scaling; (c) network -- scraping targets across cluster boundaries requires exposing metrics endpoints or using federation, both of which add latency and complexity; (d) long-term storage -- local disk retention is limited by disk size and query performance degrades with data volume; (e) HA -- running two Prometheus instances for redundancy doubles the scrape load on targets. Thanos and Mimir solve these by distributing the query and storage layers while keeping Prometheus as the per-cluster scraper.
+Prometheus was designed with a single-node, pull-based architecture that fundamentally assumes all targets are within the same cluster boundaries. When you point a single Prometheus at 8 clusters, it attempts to hold all active time series from every cluster in memory simultaneously, which quickly leads to catastrophic out-of-memory (OOM) crashes. Additionally, pulling metrics across cluster networks introduces significant latency and requires exposing secure metric endpoints to the public internet or managing complex VPNs. By adopting a distributed approach like Thanos or Mimir, you can keep a lightweight Prometheus scraper inside each cluster to handle local ingestion. These tools then push or serve the data to a centralized query tier, preventing any single instance from bearing the memory burden of the entire fleet.
 </details>
 
 <details>
-<summary>2. How does Thanos differ architecturally from Grafana Mimir?</summary>
+<summary>2. You are tasked with designing a multi-cluster metrics platform. Your manager asks you to choose between Thanos and Grafana Mimir. You currently have Prometheus deployed in all clusters and rely heavily on it for local alerting. Which architectural differences should drive your decision?</summary>
 
-Thanos uses a sidecar-based architecture: a Thanos Sidecar runs alongside each Prometheus instance, uploading TSDB blocks to object storage and serving real-time data to the Thanos Querier. Prometheus continues to scrape and store data locally; Thanos adds long-term storage and cross-cluster querying on top. Mimir uses a push-based architecture: Prometheus uses `remote_write` to push metrics to Mimir's centralized ingest tier. Prometheus is just a scraper; Mimir handles all storage, querying, and compaction. Thanos is better for adding multi-cluster capabilities to existing Prometheus setups. Mimir is better for large-scale multi-tenant platforms where centralized control over ingestion, limits, and storage is important.
+The core architectural difference lies in how data is transported and queried across the platform. Thanos uses a decentralized, sidecar-based approach where your existing Prometheus instances continue to store short-term data, while the Thanos Querier reaches into each cluster to fan-out queries. This is ideal when you want to heavily leverage existing Prometheus deployments for local alerting, as local data remains accessible even if the central control plane is disconnected. Grafana Mimir, conversely, uses a push-based model where Prometheus simply acts as an agent forwarding data via `remote_write` to a centralized Mimir backend. Mimir is generally preferred if you need robust multi-tenancy and want to centralize all storage and querying, but it requires completely offloading storage responsibilities from your local Prometheus instances.
 </details>
 
 <details>
-<summary>3. A metric has 200 million unique time series. What is the likely cause and how do you fix it?</summary>
+<summary>3. During a major marketing event, your Prometheus memory usage spikes from 32GB to 128GB in 10 minutes, and queries for `http_requests_total` time out. You discover this metric now has 200 million unique time series. What specific anti-pattern likely caused this sudden cardinality explosion, and how do you resolve it?</summary>
 
-200M time series indicates a cardinality explosion caused by high-cardinality labels. Common culprits: a label containing user IDs, request IDs, UUIDs, IP addresses, or full URL paths (each unique value creates a new time series). To fix: (1) identify the high-cardinality labels using `count by (<label>) (<metric_name>)` in PromQL, (2) remove or bucket the offending label -- e.g., replace full URL paths with path patterns (/api/users/* instead of /api/users/12345), (3) add recording rules to pre-aggregate at a lower cardinality, (4) set per-metric series limits in Prometheus or Mimir to prevent future explosions, (5) move high-cardinality data to traces (where unique IDs are appropriate) instead of metrics.
+This sudden explosion in time series is almost certainly caused by developers injecting high-cardinality data—such as unique user IDs, transaction IDs, or raw request paths—into metric labels. Because every unique combination of label values creates an entirely new time series in the TSDB, a surge in unique users directly translates to a surge in memory consumption. To resolve this, you must immediately drop the offending labels using Prometheus relabeling rules or OTel Collector processors to stabilize the system. Moving forward, high-cardinality identifiers should be migrated to distributed trace attributes or structured logs, while metrics should only use bounded categories like HTTP status codes or normalized route templates.
 </details>
 
 <details>
-<summary>4. Why does Loki index only labels, not full log content, and what are the trade-offs?</summary>
+<summary>4. Your security team is complaining that searching for a specific IP address across a month of Loki logs takes several minutes, whereas it took seconds in their old Elasticsearch cluster. However, your infrastructure bill is now 90% lower. What fundamental design choice in Loki explains both the cost savings and the slow query performance for this specific task?</summary>
 
-Loki indexes only labels (like namespace, pod name, log level) to minimize storage costs. A full-text index (like Elasticsearch's) stores an inverted index of every word in every log line, which can be 10-100x larger than the original log data. By indexing only labels, Loki's index is tiny, making it dramatically cheaper to operate. The trade-off is query performance: a full-text search (e.g., "find all logs containing 'NullPointerException'") requires Loki to scan through compressed log chunks, which is slower than Elasticsearch's index lookup. In practice, this trade-off works well for Kubernetes because most log queries start with a label filter (namespace=payments, pod=api-server-xyz) that narrows the search space, and then grep within that subset.
+Loki deliberately avoids building full-text inverted indexes of the actual log content, which is the primary driver of both storage costs and compute overhead in systems like Elasticsearch. Instead, Loki only indexes the metadata labels (such as namespace, application name, and log level) attached to the log streams. When the security team searches for an IP address, Loki must first use the label index to find the relevant chunks of compressed log text, and then literally scan through those text chunks to find the IP matches. This architectural trade-off sacrifices raw full-text search speed in exchange for massive storage efficiency, making it perfect for targeted operational debugging but less optimal for needle-in-a-haystack security forensics.
 </details>
 
 <details>
-<summary>5. What is tail-based sampling for traces and why is it superior to head-based sampling?</summary>
+<summary>5. You are implementing distributed tracing for a high-traffic e-commerce site. You configure your OTel Collectors to sample 10% of all traces. The next day, developers complain that whenever a checkout fails, the corresponding trace is almost always missing from Tempo. Why did this sampling strategy fail your team, and what approach would guarantee error traces are kept?</summary>
 
-Head-based sampling makes the keep/drop decision at the start of a trace (when the first span is created). It uses a probability: "keep 10% of traces." The problem is that it randomly drops traces, including traces that contain errors or high latency -- the exact traces you want to investigate. Tail-based sampling waits until the entire trace is complete (all spans have arrived), then makes the decision. It can apply intelligent policies: always keep traces with errors, always keep traces slower than 2 seconds, and sample 5% of everything else. This ensures you have 100% of interesting traces while dramatically reducing storage volume. The trade-off is that tail-based sampling requires buffering complete traces in memory, which adds complexity and memory usage to the sampling collector.
+You implemented head-based sampling, which makes a randomized keep-or-drop decision at the very beginning of the request lifecycle before the system knows whether the transaction will succeed or fail. Because failures are statistically rare, a 10% random sample means there is a 90% chance that the trace for a failed checkout is immediately discarded. To guarantee that valuable traces are retained, you must implement tail-based sampling in your OTel Collector architecture. Tail-based sampling buffers the entire trace in memory until it completes, allowing you to evaluate the full transaction and apply intelligent policies that always keep traces containing errors or high latency while randomly sampling the successful, routine requests.
 </details>
 
 <details>
-<summary>6. How do you control log volume at scale without losing important data?</summary>
+<summary>6. A poorly configured Java application goes into a crash loop, spamming multiline stack traces at DEBUG level. Within an hour, it consumes your entire daily logging quota in Loki, causing logs from other critical services to be dropped. How can you design a multi-layered filtering strategy to prevent this single service from monopolizing your log pipeline?</summary>
 
-Layer multiple controls: (1) At the source: set log levels appropriately (INFO in production, DEBUG only for active debugging). (2) In the OTel Collector: filter out known noise (health check logs, metrics endpoint access logs, kube-system routine logs). (3) Sampling: for very verbose services, use probabilistic sampling to keep 10-20% of DEBUG/TRACE logs while keeping 100% of WARN/ERROR. (4) Truncation: limit individual log line length (4KB is typical) and drop oversized payloads like full request/response bodies. (5) Retention policies: keep recent logs at full fidelity (7 days), then age out to cheaper storage (30 days), then delete. (6) Per-namespace quotas: set ingestion rate limits in Loki to prevent one team's chatty service from consuming the entire logging budget.
+To prevent a single runaway application from taking down your logging infrastructure, you must implement controls at multiple stages of the telemetry pipeline. First, establish strict log level configurations at the application level to ensure production services default to INFO or WARN, preventing DEBUG spam from ever being emitted. Second, deploy OpenTelemetry Collectors configured with filtering processors to drop known noisy patterns or truncate excessively large log bodies before they consume network bandwidth. Finally, configure tenant-based rate limiting and quota enforcement within Loki itself. This ensures that even if an application bypasses local filters, it will only exhaust its own isolated namespace quota without impacting the observability of other critical infrastructure.
 </details>
 
 ---
 
 ## Hands-On Exercise: Build a Multi-Cluster Monitoring Stack
 
-In this exercise, you will deploy a monitoring stack with Prometheus, Thanos Sidecar, and Grafana in a local cluster.
+In this exercise, you will deploy a monitoring stack with Prometheus, Thanos Sidecar, OpenTelemetry Collector, Loki, and Grafana in a local cluster.
 
 ### Prerequisites
 
@@ -787,7 +788,6 @@ kind create cluster --name obs-lab
 
 # Add Helm repos
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm repo add grafana https://grafana.github.io/helm-charts
 helm repo update
 
 # Install kube-prometheus-stack with Thanos sidecar
@@ -807,7 +807,68 @@ echo "Prometheus deployed with cluster labels"
 ```
 </details>
 
-### Task 2: Deploy Sample Workloads with Metrics
+### Task 2: Deploy Loki and OpenTelemetry Collector
+
+<details>
+<summary>Solution</summary>
+
+```bash
+# Add Loki helm repo
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repo update
+
+# Install Loki in single-binary mode for the lab
+helm install loki grafana/loki \
+  --namespace monitoring \
+  --set deploymentMode=SingleBinary \
+  --set loki.auth_enabled=false \
+  --set loki.commonConfig.replication_factor=1 \
+  --set loki.storage.type=filesystem \
+  --set singleBinary.replicas=1
+
+# Install OpenTelemetry Operator/Collector
+helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts
+helm repo update
+
+# Create OTel Collector values
+cat <<'EOF' > otel-values.yaml
+mode: daemonset
+config:
+  receivers:
+    filelog:
+      include: [ /var/log/pods/*/*/*.log ]
+  processors:
+    memory_limiter:
+      check_interval: 1s
+      limit_percentage: 75
+      spike_limit_percentage: 15
+    batch:
+      send_batch_size: 10000
+      timeout: 10s
+  exporters:
+    loki:
+      endpoint: "http://loki:3100/loki/api/v1/push"
+  service:
+    pipelines:
+      logs:
+        receivers: [filelog]
+        processors: [memory_limiter, batch]
+        exporters: [loki]
+EOF
+
+helm install otel-collector open-telemetry/opentelemetry-collector \
+  --namespace monitoring \
+  -f otel-values.yaml
+
+# Wait for components
+kubectl wait --for=condition=Ready pod -l app.kubernetes.io/name=loki -n monitoring --timeout=300s
+kubectl wait --for=condition=Ready pod -l app.kubernetes.io/name=opentelemetry-collector -n monitoring --timeout=300s
+
+echo "Loki and OTel Collector deployed successfully"
+```
+</details>
+
+### Task 3: Deploy Sample Workloads with Metrics
 
 <details>
 <summary>Solution</summary>
@@ -864,7 +925,7 @@ kubectl wait --for=condition=Ready pod -l app=web-server -n sample-app --timeout
 ```
 </details>
 
-### Task 3: Query Cross-Cluster Metrics
+### Task 4: Query Cross-Cluster Metrics
 
 <details>
 <summary>Solution</summary>
@@ -893,7 +954,28 @@ kill %1 2>/dev/null
 ```
 </details>
 
-### Task 4: Create a Cardinality Report
+### Task 5: Query Loki Logs via CLI
+
+<details>
+<summary>Solution</summary>
+
+```bash
+# Port-forward to Loki
+kubectl port-forward -n monitoring svc/loki 3100:3100 &
+
+sleep 3
+
+echo "=== Recent Log Lines from Sample App ==="
+# We use LogQL to fetch logs from the sample app namespace
+curl -s -G "http://localhost:3100/loki/api/v1/query_range" \
+  --data-urlencode 'query={namespace="sample-app"}' \
+  --data-urlencode 'limit=5' | jq '.data.result[0].stream'
+
+kill %1 2>/dev/null
+```
+</details>
+
+### Task 6: Create a Cardinality Report
 
 <details>
 <summary>Solution</summary>
@@ -928,7 +1010,7 @@ kill %1 2>/dev/null
 ```
 </details>
 
-### Task 5: Set Up Grafana Dashboard
+### Task 7: Set Up Grafana Dashboard
 
 <details>
 <summary>Solution</summary>
@@ -990,8 +1072,10 @@ kind delete cluster --name obs-lab
 ### Success Criteria
 
 - [ ] Prometheus deployed with external labels (cluster, region)
-- [ ] Sample workloads scraped by Prometheus
+- [ ] Loki and OpenTelemetry Collector deployed and streaming logs
+- [ ] Sample workloads scraped by Prometheus and logs collected by OTel
 - [ ] PromQL queries return results with cluster labels
+- [ ] LogQL queries return application logs from Loki
 - [ ] Cardinality report identifies top metrics by series count
 - [ ] Grafana accessible with Prometheus data source configured
 
