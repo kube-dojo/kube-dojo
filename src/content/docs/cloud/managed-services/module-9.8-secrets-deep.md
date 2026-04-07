@@ -68,32 +68,15 @@ ESO is the most widely adopted solution for syncing secrets from cloud secret ma
 
 ### Architecture
 
+```mermaid
+graph TD
+    A[AWS Secrets Manager] --- B[External Secrets Operator]
+    C[GCP Secret Manager] --- B
+    B -- Creates/Updates --> D[K8s Secret (managed by ESO)]
+    D -- Volume mount / env var --> E[Application Pod]
 ```
-  +------------------+         +------------------+
-  |  AWS Secrets     |         |  GCP Secret      |
-  |  Manager         |         |  Manager         |
-  +--------+---------+         +--------+---------+
-           |                            |
-           +----------+  +--------------+
-                      |  |
-              +-------+--+-------+
-              | External Secrets |
-              | Operator         |
-              +-------+----------+
-                      |
-                      | Creates/Updates
-                      v
-              +------------------+
-              | K8s Secret       |
-              | (managed by ESO) |
-              +------------------+
-                      |
-                      | Volume mount / env var
-                      v
-              +------------------+
-              | Application Pod  |
-              +------------------+
-```
+
+> **Pause and predict**: Given this architecture, what's a critical operational consideration for ESO concerning network connectivity and permissions? How would you secure the communication path between ESO and your cloud secret manager?
 
 ### Installing ESO
 
@@ -193,6 +176,8 @@ spec:
         property: connection_string
 ```
 
+> **Stop and think**: You have an existing application expecting secrets in a specific format, e.g., a single `config.json` file. How would you use ESO to fetch multiple individual secrets from AWS Secrets Manager and combine them into this single `config.json` within a Kubernetes Secret?
+
 ### ExternalSecret: Templating
 
 ESO can transform secret data using Go templates:
@@ -241,11 +226,14 @@ The Secrets Store CSI Driver mounts secrets directly from a vault as files in a 
 
 ### Architecture Difference from ESO
 
+```mermaid
+graph TD
+    Vault_CSI(Vault) --> CSI_Driver(CSI Driver)
+    CSI_Driver --> Pod_Filesystem(Pod Filesystem)
+    Pod_Filesystem -- Mounted as files --> Pod_CSI(Application Pod)
 ```
-ESO:                                    CSI Driver:
-  Vault --> ESO --> K8s Secret --> Pod     Vault --> CSI Driver --> Pod Filesystem
-                    (in etcd)                       (no K8s Secret)
-```
+
+> **Pause and predict**: If a secret never lands in etcd when using the CSI Driver, what are the primary security advantages and potential operational challenges compared to ESO? Consider auditability and secret rotation.
 
 ### Installing the CSI Driver
 
@@ -320,6 +308,8 @@ spec:
           secretProviderClass: db-secrets
 ```
 
+> **Stop and think**: Your security team mandates that secrets should *never* be exposed as environment variables, only mounted as files. However, an older legacy application *only* reads secrets from environment variables. How might you adapt the CSI Driver approach to meet both requirements, or what alternative would you consider?
+
 ### ESO vs CSI Driver: When to Use Each
 
 | Factor | ESO | Secrets Store CSI |
@@ -342,24 +332,25 @@ Dynamic secrets are generated on-demand and automatically expire. Instead of a s
 
 ### Dynamic Secret Lifecycle
 
+```mermaid
+sequenceDiagram
+    participant P as Pod
+    participant V as Vault
+    participant D as Database
+
+    P->>V: Request credentials
+    V->>D: Create temporary user (TTL: 1h)
+    D-->>V: Temporary user created
+    V-->>P: Credentials (username, password)
+    P->>D: Use credentials (for 1 hour)
+    loop After TTL expires
+        V->>D: Revoke user
+        D-->>V: User revoked
+        P->>V: Request new credentials (or renew lease)
+    end
 ```
-  Pod starts
-    |
-    v
-  Request credentials from Vault
-    |
-    v
-  Vault creates temporary DB user (TTL: 1h)
-    |
-    v
-  Pod uses credentials for 1 hour
-    |
-    v
-  Vault automatically revokes the user
-    |
-    v
-  Pod requests new credentials (or renews lease)
-```
+
+> **Pause and predict**: What potential issues could arise if a pod crashes and restarts frequently when using Vault's dynamic secrets with a very short TTL (e.g., 5 minutes)? How might you design your application or Vault policy to handle this gracefully?
 
 ### Vault Setup for Database Dynamic Secrets
 
@@ -427,6 +418,8 @@ spec:
             - -c
             - "source /vault/secrets/db-creds && ./start-server"
 ```
+
+> **Stop and think**: You need to provide different database credentials (read-only vs. read-write) to two different containers within the *same* pod based on their function. How would you modify the Vault Agent annotations and container configuration to achieve this isolation?
 
 ### Vault vs Cloud Secret Managers
 
