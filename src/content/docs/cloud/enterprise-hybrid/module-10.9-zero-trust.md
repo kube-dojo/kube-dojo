@@ -31,24 +31,30 @@ Zero Trust flips this model. Instead of "trust everything inside the network," Z
 
 ### The Three Pillars
 
-```text
-┌──────────────────────────────────────────────────────────────┐
-│                    ZERO TRUST PILLARS                          │
-│                                                                │
-│  ┌──────────────────┐  ┌─────────────────┐  ┌──────────────┐ │
-│  │  1. VERIFY        │  │  2. LEAST       │  │  3. ASSUME   │ │
-│  │     EXPLICITLY     │  │     PRIVILEGE    │  │     BREACH   │ │
-│  │                    │  │                  │  │              │ │
-│  │  - Identity        │  │  - Just-in-time │  │  - Segment   │ │
-│  │  - Device health  │  │  - Just-enough   │  │  - Encrypt   │ │
-│  │  - Location       │  │  - Time-limited  │  │  - Monitor   │ │
-│  │  - Service ID     │  │  - Scope-limited │  │  - Detect    │ │
-│  │  - Risk score     │  │  - Reviewed      │  │  - Respond   │ │
-│  └──────────────────┘  └─────────────────┘  └──────────────┘ │
-│                                                                │
-│  Trust is never binary. Trust is a spectrum that is            │
-│  continuously evaluated based on real-time signals.            │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A[ZERO TRUST PILLARS]
+    A --> B[1. VERIFY EXPLICITLY]
+    A --> C[2. LEAST PRIVILEGE]
+    A --> D[3. ASSUME BREACH]
+
+    B --> B1[Identity]
+    B --> B2[Device health]
+    B --> B3[Location]
+    B --> B4[Service ID]
+    B --> B5[Risk score]
+
+    C --> C1[Just-in-time]
+    C --> C2[Just-enough]
+    C --> C3[Time-limited]
+    C --> C4[Scope-limited]
+    C --> C5[Reviewed]
+
+    D --> D1[Segment]
+    D --> D2[Encrypt]
+    D --> D3[Monitor]
+    D --> D4[Detect]
+    D --> D5[Respond]
 ```
 
 ### Zero Trust vs Perimeter Security
@@ -68,44 +74,23 @@ Zero Trust flips this model. Instead of "trust everything inside the network," Z
 
 ## BeyondCorp: Google's Zero Trust Implementation
 
+> **Stop and think**: If there is no VPN, how do employees securely access internal applications without exposing those applications to the public internet?
+
 Google pioneered Zero Trust at enterprise scale with BeyondCorp, their internal access model that eliminated the corporate VPN entirely. Every Google employee accesses internal applications the same way from any network -- there is no "corporate network" that grants additional trust.
 
 ### BeyondCorp Architecture
 
-```text
-┌──────────────────────────────────────────────────────────────┐
-│  BEYONDCORP ACCESS MODEL                                       │
-│                                                                │
-│  Employee (any network)                                        │
-│       │                                                        │
-│       │  HTTPS (always encrypted)                              │
-│       ▼                                                        │
-│  ┌─────────────────────────────────┐                          │
-│  │  Identity-Aware Proxy (IAP)     │                          │
-│  │                                  │                          │
-│  │  Checks:                         │                          │
-│  │  1. Identity (OIDC/SAML)        │                          │
-│  │  2. Device trust (MDM enrolled?) │                          │
-│  │  3. Context (location, time)    │                          │
-│  │  4. Risk score (behavioral)     │                          │
-│  │  5. Access policy (per-app)     │                          │
-│  └────────────┬────────────────────┘                          │
-│               │                                                │
-│       ┌───────┴───────┐                                       │
-│       │  ALLOW?        │                                       │
-│       │  Yes → Proxy   │                                       │
-│       │  to backend    │                                       │
-│       │  No → 403      │                                       │
-│       └───────┬────────┘                                       │
-│               │                                                │
-│  ┌────────────▼────────────────────┐                          │
-│  │  Internal Application           │                          │
-│  │  (K8s Service, VM, SaaS)       │                          │
-│  │                                  │                          │
-│  │  No public endpoint needed      │                          │
-│  │  IAP handles all external access│                          │
-│  └─────────────────────────────────┘                          │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A[Employee any network] -- "HTTPS (always encrypted)" --> B[Identity-Aware Proxy IAP]
+    
+    B --> C["Checks:<br>1. Identity (OIDC/SAML)<br>2. Device trust (MDM enrolled?)<br>3. Context (location, time)<br>4. Risk score (behavioral)<br>5. Access policy (per-app)"]
+    
+    C --> D{ALLOW?}
+    D -- Yes --> E[Proxy to backend]
+    D -- No --> F[403 Forbidden]
+    
+    E --> G["Internal Application<br>(K8s Service, VM, SaaS)<br><br>No public endpoint needed<br>IAP handles all external access"]
 ```
 
 ### Identity-Aware Proxy Implementations
@@ -234,40 +219,32 @@ data:
 
 ## Micro-Segmentation in Kubernetes
 
+> **Pause and predict**: If an attacker compromises a frontend pod in a default Kubernetes cluster, what prevents them from reaching the database pod directly?
+
 Micro-segmentation applies the Zero Trust principle of "assume breach" at the network level. Instead of a flat network where any pod can talk to any other pod, micro-segmentation restricts communication to only explicitly allowed paths.
 
 ### Defense in Depth with Network Policies
 
-```text
-┌──────────────────────────────────────────────────────────────┐
-│  MICRO-SEGMENTATION LAYERS                                     │
-│                                                                │
-│  Layer 1: Namespace Isolation                                  │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │
-│  │ payments NS │  │ identity NS │  │ search NS   │          │
-│  │ (default    │  │ (default    │  │ (default    │          │
-│  │  deny all)  │  │  deny all)  │  │  deny all)  │          │
-│  └─────────────┘  └─────────────┘  └─────────────┘          │
-│                                                                │
-│  Layer 2: Service-Level Policies                               │
-│  ┌─────────────┐       ┌─────────────┐                       │
-│  │ frontend ──────────► │ backend     │  Only frontend can   │
-│  │ (port 80)   │       │ (port 8080) │  reach backend        │
-│  └─────────────┘       └──────┬──────┘                       │
-│                                │                              │
-│                        ┌───────▼──────┐                       │
-│                        │ database     │  Only backend can     │
-│                        │ (port 5432)  │  reach database       │
-│                        └──────────────┘                       │
-│                                                                │
-│  Layer 3: mTLS (Service Mesh)                                  │
-│  Every connection authenticated + encrypted                    │
-│  SPIFFE identities verified per request                        │
-│                                                                │
-│  Layer 4: Application-Level Authorization                      │
-│  HTTP method + path + headers checked per request             │
-│  Istio AuthorizationPolicy or OPA                             │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph "Layer 1: Namespace Isolation"
+        A["payments NS<br>(default deny all)"]
+        B["identity NS<br>(default deny all)"]
+        C["search NS<br>(default deny all)"]
+    end
+
+    subgraph "Layer 2: Service-Level Policies"
+        D["frontend<br>(port 80)"] -- "Only frontend can reach backend" --> E["backend<br>(port 8080)"]
+        E -- "Only backend can reach database" --> F["database<br>(port 5432)"]
+    end
+
+    subgraph "Layer 3: mTLS (Service Mesh)"
+        G["Every connection authenticated + encrypted<br>SPIFFE identities verified per request"]
+    end
+
+    subgraph "Layer 4: Application-Level Authorization"
+        H["HTTP method + path + headers checked per request<br>Istio AuthorizationPolicy or OPA"]
+    end
 ```
 
 ### Comprehensive Network Policy Set
@@ -451,28 +428,15 @@ spec:
 
 ### The VPN Replacement Architecture
 
-```text
-┌──────────────────────────────────────────────────────────────┐
-│  FROM VPN TO ZERO TRUST                                        │
-│                                                                │
-│  BEFORE (VPN):                                                 │
-│  ┌──────────┐     ┌─────────┐     ┌──────────────────────┐   │
-│  │ Employee  │────►│   VPN   │────►│  FLAT NETWORK        │   │
-│  │ Laptop    │     │ Gateway │     │  (access to 83% of   │   │
-│  └──────────┘     └─────────┘     │   internal services)  │   │
-│                                    └──────────────────────┘   │
-│                                                                │
-│  AFTER (Zero Trust):                                           │
-│  ┌──────────┐     ┌─────────────────┐     ┌──────────────┐   │
-│  │ Employee  │────►│ Identity-Aware  │────►│ Only the ONE │   │
-│  │ Laptop    │     │ Proxy           │     │ service they │   │
-│  │           │     │                 │     │ need access  │   │
-│  │ Checks:   │     │ Checks:         │     │ to           │   │
-│  │ - Device  │     │ - Identity      │     │              │   │
-│  │ - Posture │     │ - Authorization │     │ mTLS, logged │   │
-│  │ - Cert    │     │ - Context       │     │ per-request  │   │
-│  └──────────┘     └─────────────────┘     └──────────────┘   │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph "BEFORE (VPN)"
+        A["Employee Laptop"] -- "VPN Gateway" --> B["FLAT NETWORK<br>(access to 83% of internal services)"]
+    end
+
+    subgraph "AFTER (Zero Trust)"
+        C["Employee Laptop<br><br>Checks:<br>- Device<br>- Posture<br>- Cert"] -- "Identity-Aware Proxy<br><br>Checks:<br>- Identity<br>- Authorization<br>- Context" --> D["Only the ONE service<br>they need access to<br><br>mTLS, logged per-request"]
+    end
 ```
 
 ### kubectl Access Without VPN
@@ -562,6 +526,8 @@ kubectl get pods -n payments
 ---
 
 ## SLSA in Enterprise CI/CD
+
+> **Stop and think**: Even with perfect network security, how could an attacker compromise a workload before it is even deployed to Kubernetes?
 
 Supply chain security is a critical component of Zero Trust. SLSA (Supply-chain Levels for Software Artifacts) provides a framework for securing the CI/CD pipeline.
 
@@ -700,11 +666,11 @@ spec:
 ## Quiz
 
 <details>
-<summary>Question 1: Explain the difference between perimeter security and Zero Trust using a Kubernetes-specific example.</summary>
+<summary>Question 1: A developer's laptop is stolen while logged into the corporate VPN with a valid kubeconfig file. Under a traditional perimeter security model, what happens next compared to a Zero Trust architecture using an Identity-Aware Proxy (IAP) like Teleport?</summary>
 
-**Perimeter security**: A developer connects to the corporate VPN, which gives them network access to the Kubernetes API server. Once authenticated to the cluster (often via a shared kubeconfig), they can access any namespace because broad RBAC roles were granted for convenience. If their VPN credentials are compromised, the attacker has the same broad access.
+Under a **perimeter security model**, the attacker now has full network access to the corporate environment and the Kubernetes API server because the VPN provides a binary "inside/trusted" state. The valid kubeconfig file allows the attacker to authenticate to the cluster and execute commands with the developer's broad RBAC permissions, potentially compromising the entire environment.
 
-**Zero Trust**: The developer accesses the Kubernetes cluster through an Identity-Aware Proxy (like Teleport or Pomerium). They authenticate via SSO with MFA. Their device must have an up-to-date OS and an MDM-enrolled certificate. Teleport checks their group membership and grants access only to specific namespaces with specific verbs (e.g., get/list pods in the payments namespace, no exec, no delete). The session is recorded and time-limited (expires after 8 hours). If their credentials are compromised, the attacker also needs their device, their MFA, and can only access the limited scope granted by the policy. No VPN, no broad network access.
+In a **Zero Trust architecture**, the stolen laptop and VPN connection are useless on their own. The IAP continuously verifies identity and context per request. Even if the attacker has the laptop, they would need the developer's SSO credentials and physical MFA token to establish a new session. Furthermore, the IAP enforces device health checks (which might fail if the device is reported stolen) and limits access strictly to the namespaces the developer needs, minimizing the blast radius. Trust is never binary; it is continuously evaluated.
 </details>
 
 <details>
@@ -714,19 +680,21 @@ The most likely cause is that **the CNI plugin does not support Network Policies
 </details>
 
 <details>
-<summary>Question 3: How does SLSA Level 3 protect against a compromised CI/CD system?</summary>
+<summary>Question 3: A sophisticated attacker compromises your CI/CD worker node and injects malicious code during the build process of your payment service. How does SLSA Level 3 prevent this compromised container image from running in your production Kubernetes cluster?</summary>
 
 SLSA Level 3 requires a **hardened build platform** and **non-falsifiable provenance**. The build platform is isolated so that individual builds cannot influence each other or tamper with the build process. Provenance is generated by the build platform itself (not by the build script), and it is cryptographically signed in a way that the build script cannot forge. If an attacker compromises a CI/CD worker (e.g., injects malicious code into a build), the provenance will either: (1) accurately reflect that the build used a modified source (because provenance is generated independently of the build script), or (2) be absent (if the attacker tries to skip provenance generation, the admission webhook rejects the artifact). The key insight is that at SLSA 3, provenance is a property of the build platform, not of the build. The build cannot lie about its own origin.
 </details>
 
 <details>
-<summary>Question 4: Your company wants to remove the corporate VPN and adopt Zero Trust. What is the migration plan? What should be deployed first?</summary>
+<summary>Question 4: The CISO mandates the removal of the corporate VPN within 6 months in favor of a Zero Trust architecture. The infrastructure team proposes shutting down the VPN next weekend and routing all traffic through a newly installed Identity-Aware Proxy (IAP) to force adoption. Why is this approach likely to fail, and what sequence of steps should be taken instead?</summary>
 
-Migration plan: (1) **First: Deploy identity foundation** -- ensure all employees use SSO with MFA, all devices are enrolled in MDM, and all Kubernetes service accounts use SPIFFE or workload identity. (2) **Second: Deploy Identity-Aware Proxy** (Pomerium, Teleport, or cloud-native IAP) in parallel with the VPN. Route a subset of applications through the IAP while the VPN remains available. (3) **Third: Migrate applications incrementally** -- start with low-risk internal tools (Grafana, Backstage), then move to development cluster access, then staging, then production. (4) **Fourth: Implement micro-segmentation** -- deploy default-deny Network Policies and service mesh AuthorizationPolicies. (5) **Fifth: Decommission VPN** -- after 3-6 months of parallel operation, with all access patterns migrated, shut down the VPN. Throughout: monitor access patterns, gather feedback from developers, and maintain an exception process for edge cases. The most common failure mode is rushing step 5 -- decommissioning the VPN before all legitimate access patterns are covered by the IAP.
+This "rip and replace" approach is highly likely to fail and cause a massive business disruption because it assumes all applications and access patterns are immediately compatible with the IAP. Without a strong identity foundation already in place, users will be locked out of critical services, leading to shadow IT workarounds and halted productivity.
+
+Instead, the migration must be incremental and run in parallel. First, you must establish a strong identity foundation (SSO, MFA, device MDM). Second, deploy the IAP alongside the existing VPN without disrupting current workflows. Third, incrementally migrate applications starting with low-risk internal tools (like Grafana or Backstage) to test the IAP, before moving to production Kubernetes access. You must monitor access patterns over 3-6 months to ensure all legitimate traffic has shifted to the IAP before finally decommissioning the VPN. Rushing the VPN shutdown is the most common failure mode in Zero Trust migrations.
 </details>
 
 <details>
-<summary>Question 5: What is the relationship between Kubernetes Network Policies and Istio Authorization Policies? Do you need both?</summary>
+<summary>Question 5: A security auditor reviews your cluster and notices you are using Istio Authorization Policies to restrict traffic between services, but you have no Kubernetes Network Policies. They flag this as a vulnerability. Why would they require both if Istio already controls access?</summary>
 
 **Network Policies** operate at **Layer 3/4** (IP addresses and ports). They control which pods can establish TCP/UDP connections to which other pods. They are enforced by the CNI plugin and work without a service mesh. **Istio Authorization Policies** operate at **Layer 7** (HTTP methods, paths, headers, service identities). They control what requests are allowed within an established connection. They require the Istio sidecar proxy.
 
@@ -734,7 +702,7 @@ Migration plan: (1) **First: Deploy identity foundation** -- ensure all employee
 </details>
 
 <details>
-<summary>Question 6: An engineer argues that mTLS in Istio makes Network Policies unnecessary because "mTLS already verifies identity." Why is this wrong?</summary>
+<summary>Question 6: An engineer argues that implementing mTLS in your Istio service mesh makes Network Policies unnecessary because "mTLS already verifies identity and encrypts traffic." Why is this assertion dangerous in a Zero Trust environment?</summary>
 
 mTLS verifies the **identity** of the communicating parties (via SPIFFE certificates) and **encrypts** the traffic. But it does not **restrict** which communications can happen. By default, Istio's mTLS allows any service with a valid mesh certificate to communicate with any other service. mTLS ensures that the caller is who they claim to be; it does not ensure the caller is authorized for that specific action. You still need: (1) **AuthorizationPolicies** to restrict which identities can call which services (Layer 7). (2) **Network Policies** as a backup in case the Istio sidecar is bypassed (e.g., host-networked pods, init containers that run before the sidecar, or pods without the sidecar injected). mTLS is an authentication mechanism, not an authorization mechanism. Confusing the two is a common and dangerous mistake.
 </details>
