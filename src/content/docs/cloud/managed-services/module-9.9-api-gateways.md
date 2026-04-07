@@ -33,27 +33,11 @@ These are not competing technologies. They operate at different layers and solve
 
 ### Where Each Lives
 
-```
-Internet
-    |
-    v
-+------------------------+
-| Cloud API Gateway      |  <-- Layer 7: Auth, WAF, rate limit, caching
-| (AWS API GW, GCP API   |      Managed by cloud provider
-|  GW, Azure APIM)       |      Outside the cluster
-+------------------------+
-    |
-    v
-+------------------------+
-| K8s Gateway API /      |  <-- Layer 7: Routing, TLS termination,
-| Ingress Controller     |      traffic splitting
-| (Envoy, NGINX, Istio)  |      Inside the cluster
-+------------------------+
-    |
-    v
-+------------------------+
-| K8s Services / Pods    |  <-- Your application
-+------------------------+
+```mermaid
+flowchart TD
+    Internet --> CloudGW[Cloud API Gateway<br>Layer 7: Auth, WAF, rate limit, caching<br>Managed by cloud provider<br>Outside the cluster]
+    CloudGW --> K8sGW[K8s Gateway API / Ingress Controller<br>Layer 7: Routing, TLS termination, traffic splitting<br>Inside the cluster]
+    K8sGW --> Pods[K8s Services / Pods<br>Your application]
 ```
 
 ### Feature Comparison
@@ -88,24 +72,12 @@ The Gateway API is the successor to the Ingress resource. It provides more expre
 
 ### Core Resources
 
-```
-                        +-------------------+
-                        | GatewayClass      |  <-- Infra provider
-                        | (who provides it) |
-                        +--------+----------+
-                                 |
-                        +--------+----------+
-                        | Gateway           |  <-- Platform team
-                        | (listeners, TLS)  |
-                        +--------+----------+
-                                 |
-               +-----------------+-----------------+
-               |                 |                 |
-    +----------+---+  +----------+---+  +----------+---+
-    | HTTPRoute    |  | GRPCRoute    |  | TCPRoute     |
-    | (HTTP rules) |  | (gRPC rules) |  | (TCP rules)  |
-    +--------------+  +--------------+  +--------------+
-         App team          App team          App team
+```mermaid
+flowchart TD
+    GC[GatewayClass<br>Infra provider] --> G[Gateway<br>Platform team<br>listeners, TLS]
+    G --> HTTP[HTTPRoute<br>App team<br>HTTP rules]
+    G --> GRPC[GRPCRoute<br>App team<br>gRPC rules]
+    G --> TCP[TCPRoute<br>App team<br>TCP rules]
 ```
 
 ### Gateway and HTTPRoute
@@ -219,24 +191,11 @@ A Web Application Firewall inspects HTTP traffic and blocks known attack pattern
 
 ### Cloud WAF Architecture
 
-```
-  Internet
-      |
-      v
-  +--------+
-  | WAF    |  Block: SQLi, XSS, bot, geo-restrict
-  +--------+
-      |
-      v
-  +--------+
-  | API GW |  Auth, rate limit, cache
-  +--------+
-      |
-      v
-  +--------+
-  | K8s    |  Route to pods
-  | Gateway|
-  +--------+
+```mermaid
+flowchart TD
+    Internet --> WAF[WAF<br>Block: SQLi, XSS, bot, geo-restrict]
+    WAF --> APIGW[API GW<br>Auth, rate limit, cache]
+    APIGW --> K8sGW[K8s Gateway<br>Route to pods]
 ```
 
 ### AWS WAF with ALB Ingress
@@ -394,6 +353,13 @@ spec:
     - port: 8080
 ```
 
+> **Pause and predict**: You deployed a WAF in front of your Kubernetes API. The WAF successfully blocks a known SQL injection payload. However, the next day, an attacker sends the exact same payload directly to the Ingress controller's public IP address, bypassing the WAF entirely, and successfully compromises the database. How did this happen, and how should the architecture be modified to prevent it?
+> <details>
+> <summary>Answer</summary>
+>
+> This happened because the Ingress controller was exposed directly to the internet (likely via a LoadBalancer service) without restricting incoming traffic. The attacker discovered the Ingress IP (e.g., using Shodan or checking DNS history) and bypassed the WAF completely. To fix this, you must configure the Ingress controller's security group or firewall rules to *only* accept traffic originating from the WAF's IP ranges. Alternatively, for AWS ALB, ensure the ALB is private or uses security group rules that only allow the CloudFront/WAF IP ranges to connect to it.
+> </details>
+
 ---
 
 ## Rate Limiting That Actually Works
@@ -499,6 +465,13 @@ spec:
       port: 8081
 ```
 
+> **Stop and think**: Your e-commerce API is experiencing a sudden spike of 50,000 requests per second to the `/api/v1/checkout` endpoint. The traffic originates from thousands of residential IP addresses, and every request contains a valid, distinct user JWT. Your per-IP rate limit of 100 req/sec is not triggering. What type of rate limiting strategy is missing, and why is it necessary here?
+> <details>
+> <summary>Answer</summary>
+>
+> You are missing a global or per-path rate limit, as well as potentially a per-user limit. Because the attack is distributed across thousands of IPs (such as a botnet using residential proxies), no single IP hits the 100 req/sec threshold, making per-IP limiting entirely useless. Since the attackers are using valid JWTs, they might be using compromised accounts or have registered thousands of free accounts. Implementing a global ceiling on the `/checkout` path (e.g., 2,000 req/sec total) would protect the backend service from catastrophic failure, while a per-user rate limit (extracted from the JWT) would effectively throttle the individual abusive accounts even if they continuously rotate their IP addresses.
+> </details>
+
 ---
 
 ## OAuth2/OIDC Proxying
@@ -507,22 +480,10 @@ Instead of implementing authentication in every service, use an authentication p
 
 ### OAuth2 Proxy Architecture
 
-```
-  Client (with cookie/token)
-       |
-       v
-  +-----------------+
-  | OAuth2 Proxy    |  Validates token, redirects to IdP
-  | (or gateway     |  if unauthenticated
-  |  built-in)      |
-  +--------+--------+
-           |
-           | X-Forwarded-User: alice@example.com
-           | X-Forwarded-Groups: engineering,admin
-           v
-  +-----------------+
-  | Application Pod |  Trusts headers from proxy
-  +-----------------+
+```mermaid
+flowchart TD
+    Client[Client with cookie/token] --> Proxy[OAuth2 Proxy or gateway built-in<br>Validates token, redirects to IdP if unauthenticated]
+    Proxy -- "X-Forwarded-User: alice@example.com<br>X-Forwarded-Groups: engineering,admin" --> Pod[Application Pod<br>Trusts headers from proxy]
 ```
 
 ### OAuth2 Proxy Deployment
@@ -772,39 +733,39 @@ spec:
 ## Quiz
 
 <details>
-<summary>1. What is the fundamental difference between a cloud API gateway and the Kubernetes Gateway API?</summary>
+<summary>1. You are designing an architecture for a new B2B SaaS platform. The product team wants to offer tiered API access (Free, Pro, Enterprise) with different rate limits, generate API keys for customers, and monetize API usage. The engineering team wants to use the Kubernetes Gateway API for internal service-to-service routing. Which layer (Cloud API Gateway or K8s Gateway API) should handle the customer-facing API key management and usage plans, and why?</summary>
 
-A cloud API gateway (AWS API Gateway, GCP API Gateway, Azure APIM) runs outside the Kubernetes cluster as a managed service. It handles edge concerns: WAF, authentication, rate limiting, API key management, and usage plans. The Kubernetes Gateway API runs inside the cluster as a controller (Envoy, NGINX, Istio). It handles routing: path-based routing, header matching, traffic splitting, TLS termination, and protocol-specific routing (HTTP, gRPC, TCP). In production, you often use both: the cloud gateway for security and the Kubernetes gateway for routing. They are complementary layers, not competitors.
+The Cloud API Gateway should handle the customer-facing API key management and usage plans. Cloud API gateways (like AWS API Gateway or Azure APIM) have built-in, managed features specifically designed for API monetization, usage quotas, and developer portal integration. The Kubernetes Gateway API runs inside the cluster and is focused on Layer 7 routing, traffic splitting, and protocol translation, but lacks native constructs for API billing or plan management. By layering them, the Cloud API Gateway handles the business logic of API access at the edge, while the Kubernetes Gateway API handles the technical routing within the cluster.
 </details>
 
 <details>
-<summary>2. Why does per-IP rate limiting fail against distributed attacks?</summary>
+<summary>2. During a marketing campaign, your Kubernetes-hosted application is targeted by a distributed scraping botnet. The attackers use a pool of 20,000 rotating IP addresses. You implement a strict per-IP rate limit on your Ingress controller, but the backend database still crashes from the load. Why did the per-IP rate limit fail, and what combination of rate limiting strategies would be effective here?</summary>
 
-Per-IP rate limiting blocks a single IP address after it exceeds a threshold. Distributed attacks (botnets, residential proxies) use thousands of different IP addresses, each staying below the per-IP limit. If your limit is 100 requests per second per IP, an attacker with 10,000 IPs can send 1,000,000 requests per second while every individual IP stays under the limit. Effective defense requires layered rate limiting: per-IP (catches simple floods), per-API-key or per-user (catches application-level abuse), and global ceiling (protects total capacity).
+The per-IP rate limit failed because the attack was distributed across so many addresses that no single IP ever crossed the threshold. If your limit is 50 requests per second per IP, 20,000 IPs can generate 1,000,000 requests per second without triggering the rule. To effectively mitigate this, you need layered rate limiting. A global rate limit (a total ceiling for the endpoint) protects the backend from being overwhelmed, while a per-user or per-API-key limit (if the endpoint requires authentication) restricts the total capacity any single actor can consume, regardless of how many IPs they use.
 </details>
 
 <details>
-<summary>3. Explain why WAF rules should be deployed in count/monitor mode before switching to block mode.</summary>
+<summary>3. A security auditor recommends deploying a WAF to protect your legacy monolithic API running in Kubernetes. The development team immediately deploys the WAF rules in strict "block" mode. The next morning, the customer support queue is flooded with complaints that the main file upload feature is returning 403 Forbidden errors. Why did this happen, and what is the standard operational practice for deploying new WAF rules?</summary>
 
-WAF rules use pattern matching that can produce false positives -- blocking legitimate requests that happen to match an attack pattern. For example, a SQL injection rule might block a legitimate search query containing the word "SELECT" or "UNION." Deploying in count mode lets you see what would be blocked without actually blocking it. You can review the matched requests, identify false positives, add exceptions for legitimate patterns, and then confidently switch to block mode. Deploying directly in block mode risks breaking legitimate traffic, which is often worse than the attack you are trying to prevent.
+The WAF likely blocked the file uploads because the payload contained byte sequences or file metadata that matched a known exploit signature, resulting in a false positive. WAF rules rely on pattern matching and do not understand the application's intended context. The standard operational practice is to always deploy new WAF rules in "count" or "monitor" mode first. This allows the security team to observe which requests would be blocked, identify false positives in legitimate traffic, tune the rules or add exceptions, and only switch to "block" mode once they are confident legitimate traffic will not be impacted.
 </details>
 
 <details>
-<summary>4. How does the Kubernetes Gateway API improve on the Ingress resource?</summary>
+<summary>4. Your platform team is migrating from the legacy Ingress controller to the Gateway API. An application team wants to route HTTP requests with the header `X-Customer-Tier: premium` to a dedicated set of high-performance pods, and all other traffic to the standard pods. Why does the Gateway API make this significantly easier to implement and manage than the old Ingress resource?</summary>
 
-The Ingress resource had three main limitations: (1) complex configurations required non-standard annotations that were different for every controller vendor, making configs non-portable; (2) no support for protocols beyond HTTP (no native gRPC, TCP, or UDP routing); (3) no role separation -- a single resource handled both infrastructure concerns (TLS, listeners) and application concerns (routes). The Gateway API solves all three: it uses typed resources (GatewayClass, Gateway, HTTPRoute, GRPCRoute) instead of annotations, supports multiple protocols natively, and separates infrastructure (Gateway, managed by platform teams) from routing (Routes, managed by application teams).
+The Gateway API makes this easier because it has native, structured support for header-based routing within the `HTTPRoute` resource. You simply define a rule with a `matches` block specifying the header and route it to the premium backend service. In contrast, the legacy Ingress resource only natively supported path-based routing. Achieving header-based routing with Ingress required using complex, vendor-specific annotations (like NGINX configuration snippets), which were difficult to test, prone to syntax errors, and locked you into a specific Ingress controller implementation.
 </details>
 
 <details>
-<summary>5. When would you use OAuth2 Proxy versus JWT validation at the gateway?</summary>
+<summary>5. Your architecture includes a React single-page application (SPA) and a backend API. You need to implement user authentication using Google Workspace. You are deciding between using OAuth2 Proxy or having the API Gateway directly validate JWTs. Which component should you use to secure the SPA's access to the API, and why?</summary>
 
-OAuth2 Proxy is needed when you have browser-based applications that use the OAuth2 Authorization Code flow with cookies. The proxy handles the redirect to the identity provider, token exchange, and cookie management. JWT validation at the gateway is for API clients that already have a JWT token (obtained through client credentials, device flow, or a frontend that handles the OAuth flow). Gateway JWT validation just checks the token signature and claims -- it does not handle the OAuth flow itself. Use OAuth2 Proxy for user-facing web apps; use gateway JWT validation for API-to-API communication and mobile apps.
+You should use OAuth2 Proxy for the SPA. A React application running in a browser needs to perform the OAuth2 Authorization Code flow to securely authenticate users and establish a session, which involves redirects to the identity provider and managing secure cookies. OAuth2 Proxy is designed to handle this entire flow and abstract it away from the application. Direct gateway JWT validation assumes the client already possesses a valid JWT (like an API-to-API call or a mobile app managing its own tokens), and it cannot perform the interactive login redirects required by the browser-based SPA.
 </details>
 
 <details>
-<summary>6. What special considerations exist for routing gRPC traffic through API gateways?</summary>
+<summary>6. A microservices team replaces their REST APIs with gRPC for better performance. They update their Ingress rules, but suddenly all external gRPC calls start failing with protocol errors. Their Ingress controller is configured with standard HTTP/1.1 backend connections. Why are the gRPC calls failing, and what must be changed at the gateway layer?</summary>
 
-gRPC requires HTTP/2 support (not HTTP/1.1), which not all gateways handle correctly. The gateway must support HTTP/2 end-to-end or at minimum for the backend connection. gRPC uses `application/grpc` content type, which some WAF rules may block as unexpected. gRPC services use a single HTTP/2 connection with multiplexed streams, so connection-based rate limiting is ineffective -- you need stream-based or request-based limiting. Additionally, gRPC health checking uses a different protocol than HTTP health checks, requiring the gateway to support gRPC health checking or fall back to TCP checks.
+The gRPC calls are failing because gRPC fundamentally requires HTTP/2, which provides the multiplexing and long-lived stream capabilities it relies on. Standard HTTP/1.1 connections cannot carry gRPC traffic. To fix this, the gateway layer must be explicitly configured to use HTTP/2 for its upstream connections to the backend pods. Depending on the controller, this involves setting specific annotations (like `alb.ingress.kubernetes.io/backend-protocol-version: GRPC` for AWS ALB) or using the native `GRPCRoute` resource in the Gateway API to ensure the controller negotiates the correct protocol end-to-end.
 </details>
 
 ---
@@ -1045,50 +1006,83 @@ k run header-test --rm -it --image=curlimages/curl --restart=Never -- \
 ```
 </details>
 
-### Task 4: Simulate Rate Limiting with a Test Client
+### Task 4: Apply Rate Limiting at the Gateway
 
-Send rapid requests and observe behavior under load.
+Configure an Envoy Extension Policy to limit requests sent through the Gateway.
 
 <details>
 <summary>Solution</summary>
 
-```bash
-# Deploy a load generator
-cat <<'EOF' | k apply -f -
-apiVersion: v1
-kind: Pod
+```yaml
+# Apply Envoy Gateway ClientTrafficPolicy
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: ClientTrafficPolicy
 metadata:
-  name: load-test
+  name: rate-limit-policy
+  namespace: default
 spec:
-  restartPolicy: Never
-  containers:
-    - name: load
-      image: curlimages/curl
-      command:
-        - /bin/sh
-        - -c
-        - |
-          GW_IP=$(getent hosts lab-gateway-eg.default.svc.cluster.local | awk '{print $1}')
-          # If gateway service is not resolvable, use the gateway IP
-          GW_IP=${GW_IP:-$(cat /tmp/gw-ip 2>/dev/null)}
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: echo-route
+  rateLimit:
+    type: Global
+    global:
+      rules:
+        - limit:
+            requests: 2
+            unit: Second
+```
 
-          echo "Sending 100 rapid requests..."
-          SUCCESS=0
-          FAIL=0
-          for i in $(seq 1 100); do
-            STATUS=$(curl -s -o /dev/null -w '%{http_code}' http://echo-v1:8080/ 2>/dev/null)
-            if [ "$STATUS" = "200" ]; then
-              SUCCESS=$((SUCCESS + 1))
-            else
-              FAIL=$((FAIL + 1))
-            fi
-          done
-          echo "Results: $SUCCESS successful, $FAIL failed/rate-limited"
-EOF
+```bash
+k apply -f /tmp/rate-limit.yaml
 
-k wait --for=condition=ready pod/load-test --timeout=30s
-sleep 10
-k logs load-test
+# Test the rate limit through the gateway
+GW_IP=$(k get gateway lab-gateway -o jsonpath='{.status.addresses[0].value}')
+
+echo "Sending 10 rapid requests to Gateway IP: $GW_IP..."
+for i in $(seq 1 10); do
+  STATUS=$(k run rate-test-$i --rm -i --image=curlimages/curl --restart=Never -- curl -s -o /dev/null -w '%{http_code}' http://$GW_IP/ 2>/dev/null)
+  echo "Request $i returned HTTP $STATUS"
+done
+# You should see HTTP 200 for the first few requests, followed by HTTP 429 (Too Many Requests)
+```
+</details>
+
+### Task 5: Enforce JWT Authentication
+
+Apply a SecurityPolicy to the HTTPRoute to require a valid JWT for access.
+
+<details>
+<summary>Solution</summary>
+
+```yaml
+# Apply Envoy Gateway SecurityPolicy
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: jwt-auth
+  namespace: default
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: echo-route
+  jwt:
+    providers:
+      - name: example
+        remoteJWKS:
+          uri: https://raw.githubusercontent.com/envoyproxy/gateway/main/examples/kubernetes/jwt/jwks.json
+```
+
+```bash
+k apply -f /tmp/security-policy.yaml
+
+GW_IP=$(k get gateway lab-gateway -o jsonpath='{.status.addresses[0].value}')
+
+# Test without a token (should return 401 Unauthorized)
+k run auth-test --rm -i --image=curlimages/curl --restart=Never -- \
+  curl -s -o /dev/null -w '%{http_code}' http://$GW_IP/
 ```
 </details>
 
@@ -1097,7 +1091,8 @@ k logs load-test
 - [ ] Gateway is created and programmed
 - [ ] HTTPRoute splits traffic ~80/20 between v1 and v2
 - [ ] Header-based routing sends X-Version: v2 requests to v2
-- [ ] Load test completes and shows request results
+- [ ] Rate limiting policy correctly returns 429 Too Many Requests under load
+- [ ] Security policy blocks unauthenticated requests with 401 Unauthorized
 
 ### Cleanup
 
