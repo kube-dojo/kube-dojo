@@ -95,7 +95,7 @@ KCSA tests your understanding of software supply chain risks and the controls to
 └─────────────────────────────────────────────────────────────┘
 ```
 
-> **Stop and think**: Your CI/CD pipeline scans images for vulnerabilities before deployment. A supply chain attacker inserts a backdoor that contains no known CVEs — it's custom malicious code. Would your scanning catch it? What additional control is needed?
+> **Stop and think**: You pin your base images by SHA256 digest to ensure immutability. If the maintainers of that exact base image release an emergency patch for a zero-day vulnerability, what happens to your build pipeline, and how does your cluster respond?
 
 ### 2. Compromised Dependencies
 
@@ -374,7 +374,7 @@ KCSA tests your understanding of software supply chain risks and the controls to
 
 ## Supply Chain Frameworks
 
-> **Pause and predict**: You enforce that all images must come from your private registry. An attacker compromises a developer's machine and pushes a malicious image to your private registry with a legitimate tag. What supply chain control would catch this?
+> **Pause and predict**: You have successfully implemented Sigstore/Cosign to sign all images built by your CI/CD pipeline. However, during a red team exercise, an attacker manages to bypass this by deploying a malicious container. Assuming the cryptographic signatures themselves weren't forged, what misconfiguration in the cluster's admission control could allow this to happen?
 
 ### SLSA (Supply-chain Levels for Software Artifacts)
 
@@ -471,34 +471,39 @@ KCSA tests your understanding of software supply chain risks and the controls to
 
 ## Quiz
 
-1. **A critical vulnerability (like Log4Shell) is announced. You have 500 container images in your registry. Without an SBOM, how would you identify which images are affected? With an SBOM? Explain why this difference matters for incident response time.**
+1. **Scenario:** A zero-day vulnerability is announced in a popular JSON parsing library used across your organization. Your security team needs to know exactly which of the 500 running microservices are vulnerable within the next hour.
+   **Question:** How does having a Software Bill of Materials (SBOM) integrated into your CI/CD pipeline fundamentally change your incident response capabilities in this scenario compared to traditional container scanning?
    <details>
    <summary>Answer</summary>
-   Without SBOM: you must scan every single image with a vulnerability scanner, waiting for each scan to complete and hoping your scanner's database includes the CVE. For 500 images, this could take hours. Images no longer running but still in the registry might be missed. With SBOM: query your SBOM database for any image containing the affected library (e.g., "which images contain log4j-core?"). This is a database query that returns results in seconds, including exact versions. You immediately know which running workloads need patching and which images need rebuilding. The difference is hours vs. seconds for identification, which is critical when a zero-day is being actively exploited.
+   Traditional container scanning requires actively analyzing the filesystem of every running or stored image to detect the vulnerable library, a resource-intensive process that can take hours for 500 microservices. An SBOM acts as a comprehensive, pre-computed inventory of all dependencies, licenses, and packages embedded within an application at build time. By querying the SBOM database, the security team can instantly identify which specific images and versions contain the vulnerable JSON parser. This fundamental shift from reactive scanning to proactive querying drastically reduces the mean time to identify (MTTI), allowing teams to focus immediately on patching rather than discovery.
    </details>
 
-2. **Your team uses `npm install` during the Docker build. An attacker publishes a package called `lodash-utils` to the public npm registry, similar to your internal package `@company/lodash-utils`. One of your developers accidentally references `lodash-utils` without the scope. What attack is this, and what controls prevent it?**
+2. **Scenario:** Your build pipeline relies on a mix of public and private npm packages. During a routine build, the pipeline unexpectedly pulls a malicious version of an internal package named `auth-helpers` from the public npm registry instead of your private repository, leading to compromised credentials.
+   **Question:** Why did the build system prioritize the malicious public package over the internal one, and what specific architectural controls must be implemented to prevent this supply chain vector?
    <details>
    <summary>Answer</summary>
-   This is a dependency confusion (or namespace confusion) attack. The public package takes priority over the unscoped internal name, so the build pulls the attacker's malicious package. Prevention: (1) Always use scoped package names (`@company/lodash-utils`) that can't be hijacked on the public registry; (2) Configure `.npmrc` to route scoped packages to your private registry; (3) Use `npm ci` with a lockfile (`package-lock.json`) to pin exact versions and registries; (4) Claim your package names on the public registry even if you don't publish to them; (5) Use a registry proxy (Artifactory, Nexus) that can block unknown public packages.
+   This incident is a classic dependency confusion attack, which occurs because package managers often default to pulling the highest available version number from public registries over private ones. The attacker exploited this behavior by publishing `auth-helpers` to the public registry with an artificially high version number, causing the build system to "upgrade" to the malicious payload. To prevent this, organizations must enforce namespace scoping (e.g., `@company/auth-helpers`) to segregate internal packages. Additionally, build systems must be explicitly configured to route private scopes exclusively to internal registries or use proxy caches that block upstream resolution for internal namespace patterns.
    </details>
 
-3. **Your admission controller enforces that all images must come from your private registry (gcr.io/my-project). An attacker compromises a CI/CD service account and pushes a backdoored image to gcr.io/my-project/backend:v2.1. The image passes the registry allowlist. What additional supply chain control would detect this?**
+3. **Scenario:** Your cluster is configured with an admission controller that strictly enforces an allowed registry policy, blocking any image not pulled from your organization's private ECR. Despite this, an attacker who compromised a developer's laptop successfully deployed a backdoored image into the production namespace.
+   **Question:** Since the allowed registry policy was not bypassed, how did the malicious image execute, and what cryptographic control is missing from the admission process to validate the artifact's integrity?
    <details>
    <summary>Answer</summary>
-   Image signing verification. If your CI/CD pipeline signs images with Cosign after a successful build and security scan, and the admission controller verifies signatures before allowing pods, the attacker's manually pushed image would be unsigned (or signed with different credentials) and would be rejected at admission. Additional controls: (1) Only the CI/CD pipeline's identity should be authorized to sign images; (2) Use keyless signing tied to the CI/CD OIDC identity so you can verify WHO built the image; (3) Require provenance attestation (SLSA) proving the image came from a specific git commit through a specific build process; (4) Immutable tags in the registry would prevent overwriting existing tags.
+   The allowed registry policy only verifies the source location of the image, not the authenticity or integrity of the image itself. The attacker was able to push a backdoored image to the private ECR using stolen credentials, meaning the admission controller saw a valid registry URI and permitted the deployment. To prevent this, the cluster requires an image signing validation mechanism, such as Cosign integrated with Kyverno or Gatekeeper. By enforcing signature verification at admission time, the cluster ensures that only images cryptographically signed by the automated CI/CD pipeline—and not those pushed manually by a compromised user—are allowed to run.
    </details>
 
-4. **Your Dockerfile uses `FROM node:20` as the base image. Over a weekend, the `node:20` tag is updated with a new build. Monday's deployments use a different base image than Friday's, despite no code changes. Explain the risk and the fix.**
+4. **Scenario:** A development team frequently deploys a microservice using the `FROM node:20-alpine` base image. A critical production bug appears on Wednesday, but developers cannot reproduce it locally using the exact same Git commit that was deployed on Tuesday.
+   **Question:** Why might the container environment differ between the Tuesday deployment and Wednesday's local debugging session despite identical source code, and how does this highlight a fundamental flaw in using mutable image references?
    <details>
    <summary>Answer</summary>
-   Mutable tags mean the image content can change without the tag changing. Risks: (1) The new base image might introduce vulnerabilities or breaking changes; (2) Different nodes may pull different versions of `node:20`, causing inconsistent behavior; (3) If the tag was overwritten by an attacker (registry compromise), you'd pull a malicious image; (4) You can't reproduce Friday's builds because the base image is different. Fix: pin to digest — `FROM node:20@sha256:abc123...`. Digests are content-addressable and immutable — the exact same bytes are pulled every time. Update the digest explicitly when you want a new base image, after scanning and testing. This makes builds reproducible and tamper-evident.
+   The `node:20-alpine` tag is mutable, meaning the underlying image it points to can be updated by its maintainers at any time. Between the Tuesday deployment and the Wednesday debugging session, the maintainers likely pushed a new version of the base image (e.g., updating system libraries), resulting in the local build pulling a different filesystem than the one running in production. This non-deterministic build behavior makes troubleshooting nearly impossible and introduces the risk of upstream vulnerabilities being pulled automatically. To fix this, the Dockerfile must pin the base image to an immutable SHA256 digest (e.g., `FROM node:20-alpine@sha256:1234...`), ensuring the exact same byte-for-byte environment is used across all stages.
    </details>
 
-5. **A compliance audit requires that you can prove the provenance of every container image running in production. You use GitHub Actions for CI/CD and ECR for image storage. Design the minimal set of supply chain controls that would satisfy this requirement.**
+5. **Scenario:** An external auditor is evaluating your Kubernetes environment against the SLSA (Supply-chain Levels for Software Artifacts) framework. They find that while all your container images are cryptographically signed using Cosign, you cannot definitively prove that the images were built from the approved main branch of your source repository.
+   **Question:** Why does image signing alone fail to satisfy the auditor's requirement, and what specific metadata must be generated during the build process to establish verifiable provenance?
    <details>
    <summary>Answer</summary>
-   Minimal provenance controls: (1) Sign images with Cosign using keyless signing — this ties each image to the GitHub Actions OIDC identity that built it, proving WHO built it and WHEN; (2) Generate SLSA provenance attestation during the build, recording the git commit SHA, repository URL, and build workflow — proving WHAT source was used; (3) Store signatures and attestations alongside images in ECR (OCI artifacts); (4) Deploy a Kyverno or Connaisseur admission policy that verifies the Cosign signature and checks that provenance matches expected values (correct repository, correct workflow); (5) Generate and attach SBOMs to prove WHAT'S INSIDE. Together, this creates an auditable chain: git commit → GitHub Actions build → signed image with provenance → verified at admission → running in production.
+   Image signing guarantees that an artifact has not been tampered with after it was built, and verifies the identity of the signer, but it provides no context about the build process itself. An attacker with access to the signing keys could build an image from a compromised local machine or a malicious branch and sign it successfully. To establish verifiable provenance, the CI/CD pipeline must generate a cryptographic attestation (such as an in-toto formatted SLSA provenance document) that records the exact Git commit SHA, the build instructions used, and the environment details. This metadata must be stored alongside the signature so the admission controller can independently verify both the integrity of the image and that it originated from the approved source code workflow.
    </details>
 
 ---
