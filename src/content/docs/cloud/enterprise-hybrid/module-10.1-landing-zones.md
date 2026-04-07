@@ -35,28 +35,24 @@ Before diving into specific cloud implementations, you need to understand what a
 
 Every enterprise Landing Zone, regardless of cloud provider, addresses four pillars:
 
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│                    ENTERPRISE LANDING ZONE                       │
-│                                                                  │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
-│  │  IDENTITY &   │  │  NETWORK     │  │  SECURITY &  │          │
-│  │  ACCESS       │  │  TOPOLOGY    │  │  COMPLIANCE  │          │
-│  │              │  │              │  │              │          │
-│  │ - SSO/IdP    │  │ - Hub-spoke  │  │ - SCPs/Policy│          │
-│  │ - IAM roles  │  │ - Transit GW │  │ - Guardrails │          │
-│  │ - RBAC       │  │ - DNS        │  │ - Logging    │          │
-│  │ - Federation │  │ - Firewall   │  │ - Encryption │          │
-│  └──────────────┘  └──────────────┘  └──────────────┘          │
-│                                                                  │
-│  ┌──────────────────────────────────────────────────┐           │
-│  │              ACCOUNT VENDING MACHINE              │           │
-│  │                                                    │           │
-│  │  Template → Provision → Wire → Validate → Deliver │           │
-│  └──────────────────────────────────────────────────┘           │
-│                                                                  │
-│  Time: Request to Ready  =  < 30 minutes                        │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph LZ [ENTERPRISE LANDING ZONE]
+        direction TB
+        subgraph Pillars [The Four Pillars]
+            direction LR
+            ID["Identity & Access<br/>- SSO/IdP<br/>- IAM roles<br/>- RBAC<br/>- Federation"]
+            NET["Network Topology<br/>- Hub-spoke<br/>- Transit GW<br/>- DNS<br/>- Firewall"]
+            SEC["Security & Compliance<br/>- SCPs/Policy<br/>- Guardrails<br/>- Logging<br/>- Encryption"]
+        end
+        subgraph AVM [ACCOUNT VENDING MACHINE]
+            Flow["Template → Provision → Wire → Validate → Deliver"]
+        end
+        Pillars --> AVM
+        Time["Time: Request to Ready = < 30 minutes"]
+        AVM --- Time
+        style Time fill:none,stroke:none
+    end
 ```
 
 **Identity and Access**: Who can do what, across every account, with centralized SSO and federated identity. This must extend from cloud IAM into Kubernetes RBAC seamlessly.
@@ -75,37 +71,35 @@ AWS Control Tower is Amazon's opinionated Landing Zone solution. It builds on to
 
 ### Architecture Overview
 
-```text
-┌──────────────────────────────────────────────────────────────┐
-│                    AWS Organization                            │
-│                                                                │
-│  Root OU                                                       │
-│  ├── Security OU                                               │
-│  │   ├── Log Archive Account (CloudTrail, Config logs)        │
-│  │   └── Audit Account (Security Hub, GuardDuty delegated)    │
-│  │                                                             │
-│  ├── Infrastructure OU                                         │
-│  │   ├── Network Hub Account (Transit GW, DNS, firewalls)     │
-│  │   └── Shared Services Account (CI/CD, container registry)  │
-│  │                                                             │
-│  ├── Sandbox OU (relaxed guardrails)                           │
-│  │   └── Developer sandbox accounts                           │
-│  │                                                             │
-│  ├── Workloads OU                                              │
-│  │   ├── Production OU (strict guardrails)                    │
-│  │   │   ├── Team-Alpha-Prod                                  │
-│  │   │   └── Team-Beta-Prod                                   │
-│  │   └── Non-Production OU                                    │
-│  │       ├── Team-Alpha-Dev                                   │
-│  │       └── Team-Beta-Staging                                │
-│  │                                                             │
-│  └── Suspended OU (decommissioned accounts)                   │
-│                                                                │
-│  Guardrails: SCPs attached at each OU level                    │
-│  Identity: IAM Identity Center with permission sets            │
-│  Logging: Centralized in Log Archive account                   │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Root[Root OU] --> Sec[Security OU]
+    Root --> Infra[Infrastructure OU]
+    Root --> Sand[Sandbox OU]
+    Root --> Work[Workloads OU]
+    Root --> Susp[Suspended OU]
+
+    Sec --> LogArchive["Log Archive Account<br/>(CloudTrail, Config logs)"]
+    Sec --> Audit["Audit Account<br/>(Security Hub, GuardDuty)"]
+
+    Infra --> NetHub["Network Hub Account<br/>(Transit GW, DNS, firewalls)"]
+    Infra --> Shared["Shared Services Account<br/>(CI/CD, container registry)"]
+
+    Sand --> DevSand[Developer sandbox accounts]
+
+    Work --> Prod["Production OU<br/>(strict guardrails)"]
+    Work --> NonProd[Non-Production OU]
+
+    Prod --> AlphaProd[Team-Alpha-Prod]
+    Prod --> BetaProd[Team-Beta-Prod]
+
+    NonProd --> AlphaDev[Team-Alpha-Dev]
+    NonProd --> BetaStage[Team-Beta-Staging]
+
+    Susp --> Decomm[Decommissioned accounts]
 ```
+
+> **Pause and predict**: If your organization acquires a startup running a legacy, high-risk monolithic application, which AWS Organizational Unit (OU) would you place their accounts in to isolate them from your core workloads?
 
 ### Setting Up Control Tower
 
@@ -224,33 +218,29 @@ Azure takes a similar but structurally different approach. Instead of accounts, 
 
 ### Azure Landing Zone Architecture
 
-```text
-┌──────────────────────────────────────────────────────────────┐
-│                    Azure AD Tenant                             │
-│                                                                │
-│  Root Management Group                                         │
-│  ├── Platform                                                  │
-│  │   ├── Management (Log Analytics, Automation)               │
-│  │   ├── Identity (Active Directory, DNS)                     │
-│  │   └── Connectivity (Hub VNet, ExpressRoute, Firewall)      │
-│  │                                                             │
-│  ├── Landing Zones                                             │
-│  │   ├── Corp (internal apps, private networking)             │
-│  │   │   ├── Team-Alpha-Prod Subscription                     │
-│  │   │   └── Team-Beta-Prod Subscription                      │
-│  │   └── Online (internet-facing apps)                        │
-│  │       ├── Team-Alpha-Web Subscription                      │
-│  │       └── Team-Beta-API Subscription                       │
-│  │                                                             │
-│  ├── Sandbox                                                   │
-│  │   └── Developer subscriptions (relaxed policies)           │
-│  │                                                             │
-│  └── Decommissioned                                            │
-│                                                                │
-│  Hub-Spoke Network: Azure Firewall + VNet Peering             │
-│  Policy: Azure Policy assigned at Management Group level       │
-│  Identity: Azure AD + RBAC + AKS Azure AD integration         │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Tenant[Azure AD Tenant] --> RootMG[Root Management Group]
+    
+    RootMG --> Platform[Platform]
+    RootMG --> LZ[Landing Zones]
+    RootMG --> Sandbox[Sandbox]
+    RootMG --> Decomm[Decommissioned]
+    
+    Platform --> Mgmt["Management<br/>(Log Analytics, Automation)"]
+    Platform --> Ident["Identity<br/>(Active Directory, DNS)"]
+    Platform --> Conn["Connectivity<br/>(Hub VNet, ExpressRoute, Firewall)"]
+    
+    LZ --> Corp["Corp<br/>(internal apps, private networking)"]
+    LZ --> Online["Online<br/>(internet-facing apps)"]
+    
+    Corp --> AlphaCorp[Team-Alpha-Prod Subscription]
+    Corp --> BetaCorp[Team-Beta-Prod Subscription]
+    
+    Online --> AlphaWeb[Team-Alpha-Web Subscription]
+    Online --> BetaAPI[Team-Beta-API Subscription]
+    
+    Sandbox --> DevSubs["Developer subscriptions<br/>(relaxed policies)"]
 ```
 
 ### Subscription Vending with Bicep
@@ -335,6 +325,8 @@ az role assignment create \
   --scope "/subscriptions/$SUB_ID/resourceGroups/rg-alpha/providers/Microsoft.ContainerService/managedClusters/aks-alpha-prod"
 ```
 
+> **Stop and think**: Look at the Azure identity integration. If an engineer transfers from Team Alpha to Team Beta, how many Kubernetes role bindings need to be updated to revoke their old access and grant their new access?
+
 ---
 
 ## GCP Organization Hierarchy and Project Factory
@@ -343,28 +335,26 @@ Google Cloud organizes resources under an Organization, with Folders providing t
 
 ### GCP Landing Zone Structure
 
-```text
-┌──────────────────────────────────────────────────────────────┐
-│                    GCP Organization                            │
-│                                                                │
-│  org-policies/  (Organization-level constraints)              │
-│                                                                │
-│  Folders:                                                      │
-│  ├── Bootstrap (Terraform state, CI/CD service accounts)      │
-│  ├── Common (shared VPC host projects, logging, DNS)          │
-│  ├── Production                                                │
-│  │   ├── team-alpha-prod (project)                            │
-│  │   └── team-beta-prod (project)                             │
-│  ├── Non-Production                                            │
-│  │   ├── team-alpha-dev (project)                             │
-│  │   └── team-beta-staging (project)                          │
-│  └── Sandbox                                                   │
-│      └── developer-sandbox-* (projects)                       │
-│                                                                │
-│  Shared VPC: Host project in Common, service projects in LZ   │
-│  Identity: Google Workspace / Cloud Identity + Workload ID    │
-│  Logging: Organization sink → BigQuery + Cloud Logging        │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Org["GCP Organization<br/>org-policies/"] --> Folders
+    
+    subgraph Folders [Folders]
+        direction TB
+        Boot["Bootstrap<br/>(Terraform state, CI/CD)"]
+        Common["Common<br/>(shared VPC, logging, DNS)"]
+        Prod["Production"]
+        NonProd["Non-Production"]
+        Sand["Sandbox"]
+    end
+    
+    Prod --> AlphaProd[team-alpha-prod]
+    Prod --> BetaProd[team-beta-prod]
+    
+    NonProd --> AlphaDev[team-alpha-dev]
+    NonProd --> BetaStaging[team-beta-staging]
+    
+    Sand --> DevSand[developer-sandbox-*]
 ```
 
 ### Project Factory with Terraform
@@ -503,27 +493,17 @@ Landing Zones without guardrails are just organized chaos. Guardrails come in tw
 
 The key insight that most organizations miss is that cloud guardrails and Kubernetes policy engines must work together as a unified system. A cloud SCP can prevent a public EKS endpoint, but it cannot prevent a Kubernetes Service of type LoadBalancer from creating a public-facing ALB. For that, you need an in-cluster policy engine.
 
-```text
-┌─────────────────────────────────────────────────────────┐
-│                    GUARDRAIL LAYERS                       │
-│                                                           │
-│  Layer 1: Cloud Provider   ──► SCPs / Azure Policy / Org │
-│           (Preventive)          Policy                    │
-│           What resources can be created?                  │
-│                                                           │
-│  Layer 2: Infrastructure   ──► Terraform/Crossplane       │
-│           as Code               validation (pre-apply)    │
-│           Is the configuration correct?                   │
-│                                                           │
-│  Layer 3: Kubernetes       ──► Kyverno / OPA Gatekeeper   │
-│           Admission             (ValidatingWebhook)       │
-│           Is the K8s manifest compliant?                  │
-│                                                           │
-│  Layer 4: Runtime          ──► Falco / KubeArmor          │
-│           Detection             (eBPF runtime policy)     │
-│           Is the workload behaving correctly?             │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    L1["Layer 1: Cloud Provider (Preventive)<br/>SCPs / Azure Policy / Org Policy<br/>What resources can be created?"]
+    L2["Layer 2: Infrastructure as Code<br/>Terraform/Crossplane validation (pre-apply)<br/>Is the configuration correct?"]
+    L3["Layer 3: Kubernetes Admission<br/>Kyverno / OPA Gatekeeper (ValidatingWebhook)<br/>Is the K8s manifest compliant?"]
+    L4["Layer 4: Runtime Detection<br/>Falco / KubeArmor (eBPF runtime policy)<br/>Is the workload behaving correctly?"]
+
+    L1 --> L2 --> L3 --> L4
 ```
+
+> **Pause and predict**: Before we look at Backstage, list out the automated steps a pipeline should take to fulfill a 'New Kubernetes Cluster' request. What needs to happen between the developer clicking 'Submit' and them receiving a kubeconfig?
 
 ---
 
@@ -533,29 +513,13 @@ Backstage, originally built by Spotify and now a CNCF incubating project, has be
 
 ### How Backstage Fits Into Account Vending
 
-```text
-┌───────────────────────────────────────────────────────────┐
-│  Developer clicks "New Project" in Backstage               │
-│                                                            │
-│  ┌──────────┐     ┌──────────────┐     ┌──────────────┐  │
-│  │ Backstage │────►│  Software    │────►│  Git Repo    │  │
-│  │ Template  │     │  Template    │     │  (with TF/   │  │
-│  │ Wizard    │     │  Engine      │     │   Crossplane)│  │
-│  └──────────┘     └──────────────┘     └──────┬───────┘  │
-│                                                │          │
-│                                        ┌───────▼───────┐  │
-│                                        │  CI/CD Pipeline│  │
-│                                        │  (AFT / Azure  │  │
-│                                        │   Pipelines)   │  │
-│                                        └───────┬───────┘  │
-│                                                │          │
-│  ┌──────────────────────────────────────────────▼───────┐  │
-│  │  Provisioned Account/Subscription/Project            │  │
-│  │  + VPC/VNet + EKS/AKS/GKE Cluster                   │  │
-│  │  + GitOps repo + ArgoCD Application                  │  │
-│  │  + Registered in Backstage Catalog                   │  │
-│  └──────────────────────────────────────────────────────┘  │
-└───────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    User(["Developer clicks 'New Project' in Backstage"]) --> Wizard[Backstage Template Wizard]
+    Wizard --> Engine[Software Template Engine]
+    Engine --> Repo["Git Repo<br/>(with TF/Crossplane)"]
+    Repo --> Pipeline["CI/CD Pipeline<br/>(AFT / Azure Pipelines)"]
+    Pipeline --> Output["Provisioned Account/Subscription/Project<br/>+ VPC/VNet + EKS/AKS/GKE Cluster<br/>+ GitOps repo + ArgoCD Application<br/>+ Registered in Backstage Catalog"]
 ```
 
 ### Backstage Software Template for K8s Environment
@@ -704,45 +668,45 @@ spec:
 ## Quiz
 
 <details>
-<summary>Question 1: Your organization has 15 teams, each with dev, staging, and production environments. A colleague suggests using a single AWS account with namespaces to isolate teams. Why is this a bad idea for enterprise Kubernetes?</summary>
+<summary>Question 1: You are the lead architect for a retail company moving to Kubernetes. A colleague suggests saving time by creating a single AWS account containing one massive EKS cluster, and using Kubernetes namespaces to isolate the 15 different product teams. Why is this a dangerous architectural decision for an enterprise?</summary>
 
-A single account creates a **blast radius problem** and an **IAM complexity nightmare**. First, all teams share the same AWS service quotas (like EC2 instance limits, EBS volumes, and EKS cluster count). One team's runaway autoscaling can exhaust quotas for everyone. Second, IAM policies in a single account must use resource-level conditions to separate access, which becomes unmanageably complex with 15 teams. Third, billing attribution requires complex tagging instead of simple per-account cost reports. Fourth, a security breach in one team's workload potentially exposes all teams' data since they share the same account boundary. The multi-account pattern gives each team (or each environment) its own blast radius, its own quotas, its own billing, and its own security boundary.
+A single account creates an insurmountable blast radius problem and an IAM complexity nightmare. First, all teams share the same AWS service quotas (like EC2 instance limits, EBS volumes, and VPC IP addresses). One team's runaway autoscaling event can easily exhaust quotas, causing outages for all other teams sharing the account. Second, restricting AWS API access via IAM requires writing incredibly complex, error-prone resource-level conditions to ensure teams cannot modify each other's cloud resources outside the cluster. Finally, a security breach escaping one team's namespace or a compromised node could potentially expose the IAM credentials used by other teams, making the entire organization vulnerable to a single point of failure.
 </details>
 
 <details>
-<summary>Question 2: What is the difference between a preventive guardrail and a detective guardrail? Give one example of each for Kubernetes in the cloud.</summary>
+<summary>Question 2: Your security team discovers that several development clusters were accidentally provisioned with public API endpoints. They want to ensure this never happens again, but they also want to audit existing clusters. Which types of guardrails should you implement for each requirement, and how do they function differently?</summary>
 
-A **preventive guardrail** stops a non-compliant action before it happens. Example: an AWS SCP that denies `eks:CreateCluster` when `endpointPublicAccess` is true. The cluster simply cannot be created with a public endpoint. A **detective guardrail** identifies non-compliant resources after they are created and alerts or remediates. Example: an AWS Config rule that checks all EKS clusters for enabled audit logging and flags non-compliant clusters in Security Hub. Preventive guardrails are stronger (they prevent the problem) but more rigid. Detective guardrails are more flexible (they allow creation but monitor compliance) and work better for existing resources that predate the guardrail. A mature Landing Zone uses both in combination.
+To stop new public endpoints from being created, you must implement a preventive guardrail, such as an AWS Service Control Policy (SCP) or an Azure Policy with a Deny effect. Preventive guardrails actively intercept and block non-compliant API requests before the resource is ever provisioned, ensuring the problem cannot occur. To audit the existing clusters, you need a detective guardrail, such as AWS Config rules or Azure Policy in Audit mode. Detective guardrails scan already-provisioned resources, identify non-compliant configurations, and generate alerts without breaking existing workloads. Using both in tandem provides a comprehensive governance strategy.
 </details>
 
 <details>
-<summary>Question 3: A developer wants to provision a new Kubernetes cluster. With the Landing Zone described in this module, what is the sequence of events from request to running cluster?</summary>
+<summary>Question 3: A new engineering team joins the company and urgently needs a staging environment. They log into the Backstage portal and submit a 'New Kubernetes Environment' request. Describe the exact automated sequence of events that translates this web form submission into a fully provisioned, registered Kubernetes cluster.</summary>
 
-The sequence is: (1) Developer opens Backstage and selects the "New Kubernetes Environment" template. (2) They fill in team name, environment, cloud provider, region, and cluster size. (3) Backstage's scaffolder generates infrastructure-as-code files from the template skeleton. (4) The scaffolder creates a new Git repository with the generated code. (5) A CI/CD pipeline (triggered by the repository creation) runs the IaC -- this provisions the cloud account (via AFT/subscription vending/project factory), creates the VPC, deploys the K8s cluster, installs baseline add-ons, and configures identity. (6) The pipeline registers the new cluster in the Backstage catalog. (7) The developer sees the cluster appear in Backstage with connection instructions. Total time: under 30 minutes for the automation, zero manual approvals for non-production environments.
+The process begins when Backstage takes the form inputs and uses its software template engine to generate infrastructure-as-code files tailored to the team's parameters. Next, Backstage creates a new Git repository and commits these generated files to it. The creation of this repository triggers a CI/CD pipeline (such as GitHub Actions or AFT) which acts as the vending machine. This pipeline executes the Terraform or Bicep code to provision the cloud account, establish the VPC network topology, deploy the Kubernetes cluster, and configure identity integrations. Finally, the pipeline concludes by making an API call back to Backstage to register the newly created cluster in the service catalog, completing the self-service loop.
 </details>
 
 <details>
-<summary>Question 4: Why does the Landing Zone need to account for Kubernetes pod CIDRs when designing the VPC/VNet IP address plan?</summary>
+<summary>Question 4: The networking team has assigned your new AWS account a /24 VPC CIDR block (256 IP addresses) because they assume you are only deploying a single EKS cluster with 10 worker nodes. Six weeks later, your cluster networking completely fails. What architectural reality of cloud-native Kubernetes did the networking team fail to account for?</summary>
 
-In cloud-native Kubernetes deployments like EKS with VPC CNI, **each pod gets a real VPC IP address**. A node running 30 pods consumes 30+ IP addresses from the subnet. A cluster with 50 nodes could consume 1,500+ IPs just for pods. If the Landing Zone designed VPCs with /24 subnets (251 usable IPs), the cluster would be IP-exhausted almost immediately. The IPAM strategy must allocate large enough CIDRs -- typically /16 or /17 per VPC -- with dedicated subnets for nodes, pods, and services. Azure CNI has similar requirements. GKE uses secondary IP ranges (alias IPs) which need dedicated /14 ranges for pod CIDRs. Ignoring pod IP requirements during Landing Zone design is the number one cause of retroactive VPC redesigns in enterprise Kubernetes.
+The networking team failed to account for the fact that in cloud-native networking models like AWS VPC CNI, every single Kubernetes pod is assigned a real, routable IP address directly from the VPC subnet. If a node runs 30 pods, that single node consumes 30+ IP addresses. A relatively small cluster of 10 nodes running standard microservices can easily consume 400 or more IP addresses, completely exhausting a /24 allocation. Enterprise landing zones must utilize centralized IP Address Management (IPAM) to assign large CIDR blocks (typically /16 or /17) to Kubernetes accounts to prevent this exact type of catastrophic IP exhaustion.
 </details>
 
 <details>
-<summary>Question 5: How does identity propagation work from the cloud Landing Zone into Kubernetes RBAC? Compare the AWS and Azure approaches.</summary>
+<summary>Question 5: You are designing the identity architecture for a multi-cloud landing zone spanning AWS and Azure. The security mandate requires that a user's corporate identity directly maps to their Kubernetes namespace permissions. Contrast how you will implement this identity propagation mechanism in AWS EKS versus Azure AKS.</summary>
 
-In **AWS**, identity propagation works through EKS Access Entries (modern) or the aws-auth ConfigMap (legacy). An IAM role from the Landing Zone (e.g., `TeamAlphaDevRole`) is mapped to a Kubernetes RBAC identity via an Access Entry and Access Policy. The chain is: AWS IAM Identity Center -> Assume IAM Role -> EKS Access Entry -> Kubernetes RBAC. In **Azure**, the chain is more direct: Azure AD user/group -> AKS Azure AD integration -> Kubernetes RBAC. Azure AD groups can be directly referenced in Kubernetes ClusterRoleBindings. Azure's approach is more seamless because AKS natively understands Azure AD tokens, while EKS requires the explicit mapping layer. Both approaches should be automated as part of the account/subscription vending process so that teams have correct RBAC from day one.
+In Azure AKS, the implementation is highly direct because AKS natively integrates with Azure AD (Entra ID). You can directly reference Azure AD Group Object IDs inside your Kubernetes `RoleBinding` manifests, allowing AKS to natively validate the Azure AD tokens passed by developers. In contrast, AWS EKS requires an intermediary translation layer to bridge AWS IAM and Kubernetes RBAC. You must configure EKS Access Entries (or the legacy aws-auth ConfigMap) to explicitly map an AWS IAM Role ARN to a Kubernetes username and group. Therefore, in Azure the identity flows seamlessly from tenant to cluster, whereas AWS requires your vending pipeline to explicitly build and maintain mapping configurations.
 </details>
 
 <details>
-<summary>Question 6: What is the risk of deploying a Landing Zone without including the Kubernetes platform team in the design?</summary>
+<summary>Question 6: The central IT department spent six months building a pristine GCP Landing Zone with strict organizational policies, centralized networking, and standardized service accounts. They hand it over to the Kubernetes platform team to deploy GKE. Within days, the platform team reports they are completely blocked. What is the most likely architectural cause of this failure?</summary>
 
-The Landing Zone will have **architectural blind spots** that create friction or outright blockers for Kubernetes workloads. Common issues include: (1) VPC subnets too small for pod IP allocation, forcing expensive VPC redesigns. (2) Transit Gateway routing that does not account for pod CIDR ranges, breaking cross-cluster communication. (3) SCPs that inadvertently block Kubernetes operations (like denying EC2 actions needed by the cluster autoscaler). (4) DNS delegation that does not support ExternalDNS or cert-manager. (5) Logging pipelines that cannot ingest Kubernetes audit logs. (6) IAM role designs that do not support IRSA or Pod Identity. Each of these is expensive to fix after deployment and could have been prevented with a single architecture review session.
+The failure occurred because the Landing Zone was designed without accommodating the specific, complex infrastructure requirements of a Kubernetes control plane and its add-ons. Common blind spots include strict firewall policies that break webhook communication between the GKE control plane and worker nodes, or Shared VPC subnet allocations that are far too small for alias IP ranges required by pods. Furthermore, organization-level policies might inadvertently deny the creation of internal load balancers or restrict the service account permissions required by the cluster autoscaler to provision new nodes. To prevent this, enterprise landing zones must be co-designed with Kubernetes architects to ensure the foundation actually supports the intended workloads.
 </details>
 
 <details>
-<summary>Question 7: Your company uses Backstage for self-service infrastructure. A team submits a request for a production Kubernetes cluster. Should this be automatically provisioned without approval?</summary>
+<summary>Question 7: A junior developer uses the Backstage portal to request a 100-node production Kubernetes cluster with expensive GPU instances, intended to process a massive new data pipeline. As the platform architect, how should you design the account vending workflow to handle this specific request safely while still maintaining automated self-service?</summary>
 
-**It depends on the environment and the organization's risk tolerance.** For non-production environments (dev, staging), automatic provisioning is ideal -- it maximizes developer velocity and the cost risk is low. For production environments, most enterprises implement an **approval gate** within the Backstage workflow. This is not a manual infrastructure review (the automation handles correctness) but a business approval: confirming the cost center has budget, the team has completed security training, and there is a documented service owner. The key principle is that the approval should be about **business readiness**, not technical correctness. If your guardrails are properly configured, the technical correctness is guaranteed by the automation itself.
+The workflow should process this request using an automated business approval gate rather than blocking it for a manual infrastructure code review. Because the Backstage template generates standardized, pre-approved infrastructure code with built-in guardrails, the technical correctness of the cluster is already guaranteed. However, because this request targets a production environment and incurs massive cost, the workflow should pause and automatically route an approval request to the team's cost center owner and the security lead. Once those stakeholders approve the business case and budget, the CI/CD pipeline should resume and automatically provision the cluster without any human engineer needing to touch the provisioning tools.
 </details>
 
 ---
@@ -753,22 +717,27 @@ In this exercise, you will simulate an enterprise Landing Zone using local tools
 
 **What you will build:**
 
-```text
-┌──────────────────────────────────────────────────┐
-│  Simulated Landing Zone (using kind + Crossplane) │
-│                                                    │
-│  Management Cluster (kind)                         │
-│  ├── Crossplane (infrastructure provisioner)       │
-│  ├── Kyverno (guardrails)                          │
-│  └── Backstage (self-service portal)               │
-│                                                    │
-│  Vending Pipeline:                                 │
-│  1. Create namespace (simulates account)           │
-│  2. Apply network policies (simulates VPC)         │
-│  3. Deploy workload cluster (kind-in-kind)         │
-│  4. Install baseline (monitoring, policy)           │
-│  5. Register in catalog                            │
-└──────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Local Environment
+        direction TB
+        subgraph Mgmt["Management Cluster (kind)"]
+            direction TB
+            CP["Crossplane (infrastructure provisioner)"]
+            KY["Kyverno (guardrails)"]
+            BS["Backstage (self-service portal)"]
+        end
+        subgraph Pipeline["Vending Pipeline"]
+            direction TB
+            S1["1. Create namespace (simulates account)"]
+            S2["2. Apply network policies (simulates VPC)"]
+            S3["3. Deploy workload cluster (kind-in-kind)"]
+            S4["4. Install baseline (monitoring, policy)"]
+            S5["5. Register in catalog"]
+            
+            S1 --> S2 --> S3 --> S4 --> S5
+        end
+    end
 ```
 
 ### Task 1: Create the Management Cluster
