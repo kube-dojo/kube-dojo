@@ -43,26 +43,19 @@ Most enterprises do not choose multi-cloud strategically. They end up there thro
 
 ### The Real Cost of Multi-Cloud
 
-```text
-┌──────────────────────────────────────────────────────────────┐
-│  MULTI-CLOUD COST MULTIPLIERS                                 │
-│                                                                │
-│  Category              Single Cloud    Multi-Cloud (3 CSPs)   │
-│  ──────────────        ────────────    ────────────────────   │
-│  Platform team size    5-8 engineers   12-20 engineers         │
-│  Training budget       $15K/year       $45-60K/year           │
-│  Tooling licenses      $50K/year       $100-200K/year         │
-│  Data transfer costs   Internal only   $50-200K/year          │
-│  Compliance audits     1 scope         3 scopes               │
-│  Incident complexity   Low             High (finger-pointing) │
-│  Negotiation leverage  Low             Medium                  │
-│                                                                │
-│  Net effect: 2-3x operational cost for marginal benefit       │
-│  Exception: If you genuinely use best-of-breed per provider   │
-└──────────────────────────────────────────────────────────────┘
-```
+| Category | Single Cloud | Multi-Cloud (3 CSPs) |
+| :--- | :--- | :--- |
+| **Platform team size** | 5-8 engineers | 12-20 engineers |
+| **Training budget** | $15K/year | $45-60K/year |
+| **Tooling licenses** | $50K/year | $100-200K/year |
+| **Data transfer costs** | Internal only | $50-200K/year |
+| **Compliance audits** | 1 scope | 3 scopes |
+| **Incident complexity** | Low | High (finger-pointing) |
+| **Negotiation leverage** | Low | Medium |
 
-This does not mean multi-cloud is wrong. It means you should be deliberate about it and invest in fleet management tooling proportional to your fleet size.
+*Net effect: 2-3x operational cost for marginal benefit. Exception: If you genuinely use best-of-breed per provider.*
+
+> **Stop and think**: Look at the table above. If your organization is operating in multiple clouds purely due to an un-merged acquisition, are you extracting any of the "best-of-breed" benefits, or are you just paying the multi-cloud operational tax?
 
 ---
 
@@ -72,36 +65,25 @@ Azure Arc extends Azure's management plane to any Kubernetes cluster, regardless
 
 ### How Azure Arc Works
 
-```text
-┌──────────────────────────────────────────────────────────────┐
-│                    AZURE ARC ARCHITECTURE                      │
-│                                                                │
-│  ┌──────────────────────────────────────────┐                 │
-│  │           Azure Control Plane             │                 │
-│  │                                            │                 │
-│  │  Azure Resource Manager ◄──── Azure Portal│                 │
-│  │  Azure Policy Engine                       │                 │
-│  │  Azure Monitor                             │                 │
-│  │  Microsoft Defender                        │                 │
-│  └───────────────┬──────────────────────────┘                 │
-│                   │ HTTPS (outbound only)                       │
-│                   │                                             │
-│  ┌────────────────▼─────────────────────────┐                 │
-│  │  Arc Agent (runs IN your cluster)         │                 │
-│  │                                            │                 │
-│  │  ┌─────────────────┐  ┌────────────────┐ │                 │
-│  │  │ cluster-connect  │  │ config-agent   │ │                 │
-│  │  │ (reverse proxy)  │  │ (GitOps/Flux)  │ │                 │
-│  │  └─────────────────┘  └────────────────┘ │                 │
-│  │  ┌─────────────────┐  ┌────────────────┐ │                 │
-│  │  │ azure-policy     │  │ monitoring     │ │                 │
-│  │  │ (Gatekeeper)     │  │ (omsagent)     │ │                 │
-│  │  └─────────────────┘  └────────────────┘ │                 │
-│  └──────────────────────────────────────────┘                 │
-│                                                                │
-│  KEY: All communication is OUTBOUND from your cluster.        │
-│  No inbound ports needed. No VPN required.                    │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Azure ["Azure Control Plane"]
+        ARM["Azure Resource Manager\n(Azure Portal)"]
+        Policy["Azure Policy Engine"]
+        Monitor["Azure Monitor"]
+        Defender["Microsoft Defender"]
+    end
+    
+    subgraph Cluster ["Target Cluster"]
+        subgraph Agent ["Arc Agent"]
+            CC["cluster-connect\n(reverse proxy)"]
+            CA["config-agent\n(GitOps/Flux)"]
+            AP["azure-policy\n(Gatekeeper)"]
+            OM["monitoring\n(omsagent)"]
+        end
+    end
+    
+    Agent -- "HTTPS (outbound only)\nNo inbound ports needed.\nNo VPN required." --> Azure
 ```
 
 ### Connecting a Cluster to Azure Arc
@@ -160,6 +142,8 @@ az policy state list \
   --output table
 ```
 
+> **Pause and predict**: If you assign a "deny privileged containers" policy to your fleet, what happens to existing privileged pods that were deployed before the policy was assigned? Will they be terminated? (Hint: Think about how admission controllers work.)
+
 ### GitOps with Arc (Flux)
 
 ```bash
@@ -186,35 +170,32 @@ Google's approach to fleet management is built around the concept of a "fleet" -
 
 ### GKE Fleet Architecture
 
-```text
-┌──────────────────────────────────────────────────────────────┐
-│                 GOOGLE FLEET ARCHITECTURE                      │
-│                                                                │
-│  ┌──────────────────────────────────────────┐                 │
-│  │           GCP Fleet Host Project          │                 │
-│  │                                            │                 │
-│  │  Fleet API ◄──── GCP Console              │                 │
-│  │  Config Sync (GitOps)                      │                 │
-│  │  Policy Controller (OPA)                   │                 │
-│  │  Service Mesh (Istio/ASM)                  │                 │
-│  │  Binary Authorization                      │                 │
-│  └───────────────┬──────────────────────────┘                 │
-│                   │                                             │
-│  ┌────────────────┼─────────────────────────────────┐         │
-│  │                │                                   │         │
-│  │  ┌─────────────▼──┐  ┌──────────────┐  ┌────────▼────┐   │
-│  │  │ GKE Cluster    │  │ EKS Cluster  │  │ On-Prem     │   │
-│  │  │ (native fleet  │  │ (attached    │  │ K8s         │   │
-│  │  │  member)       │  │  via agent)  │  │ (attached)  │   │
-│  │  │                │  │              │  │             │   │
-│  │  │ Config Sync    │  │ Config Sync  │  │ Config Sync │   │
-│  │  │ Policy Ctrl    │  │ Policy Ctrl  │  │ Policy Ctrl │   │
-│  │  └────────────────┘  └──────────────┘  └─────────────┘   │
-│  │                                                   │         │
-│  │  Fleet Features: applied uniformly across all     │         │
-│  │  members regardless of where they run             │         │
-│  └───────────────────────────────────────────────────┘         │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph GCP ["GCP Fleet Host Project"]
+        API["Fleet API\n(GCP Console)"]
+        CS["Config Sync (GitOps)"]
+        PC["Policy Controller (OPA)"]
+        SM["Service Mesh (Istio/ASM)"]
+        BA["Binary Authorization"]
+    end
+    
+    subgraph Fleet ["Fleet Members"]
+        subgraph GKE ["GKE Cluster\n(native fleet member)"]
+            GKE_CS["Config Sync"]
+            GKE_PC["Policy Ctrl"]
+        end
+        subgraph EKS ["EKS Cluster\n(attached via agent)"]
+            EKS_CS["Config Sync"]
+            EKS_PC["Policy Ctrl"]
+        end
+        subgraph OnPrem ["On-Prem K8s\n(attached)"]
+            OP_CS["Config Sync"]
+            OP_PC["Policy Ctrl"]
+        end
+    end
+    
+    GCP -->|Fleet Features:\napplied uniformly across all\nmembers regardless of where they run| Fleet
 ```
 
 ### Registering Clusters in a Fleet
@@ -337,29 +318,26 @@ A fleet without centralized observability is a fleet in name only. You need a si
 
 ### Telemetry Architecture
 
-```text
-┌──────────────────────────────────────────────────────────────┐
-│              CENTRALIZED FLEET TELEMETRY                       │
-│                                                                │
-│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐        │
-│  │ AWS     │  │ Azure   │  │ GCP     │  │ On-Prem │        │
-│  │ Cluster │  │ Cluster │  │ Cluster │  │ Cluster │        │
-│  │         │  │         │  │         │  │         │        │
-│  │ OTel    │  │ OTel    │  │ OTel    │  │ OTel    │        │
-│  │ Collector│  │ Collector│  │ Collector│  │ Collector│        │
-│  └────┬────┘  └────┬────┘  └────┬────┘  └────┬────┘        │
-│       │            │            │            │               │
-│       └────────────┼────────────┼────────────┘               │
-│                    │            │                             │
-│              ┌─────▼────────────▼─────┐                      │
-│              │  CENTRAL TELEMETRY HUB  │                      │
-│              │                          │                      │
-│              │  Metrics: Thanos/Cortex │                      │
-│              │  Logs: Loki/Elasticsearch│                      │
-│              │  Traces: Tempo/Jaeger   │                      │
-│              │  Dashboards: Grafana    │                      │
-│              └──────────────────────────┘                      │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Clusters ["Fleet Clusters"]
+        AWS["AWS Cluster\nOTel Collector"]
+        Azure["Azure Cluster\nOTel Collector"]
+        GCP["GCP Cluster\nOTel Collector"]
+        OnPrem["On-Prem Cluster\nOTel Collector"]
+    end
+    
+    subgraph Hub ["CENTRAL TELEMETRY HUB"]
+        Metrics["Metrics: Thanos/Cortex"]
+        Logs["Logs: Loki/Elasticsearch"]
+        Traces["Traces: Tempo/Jaeger"]
+        Dashboards["Dashboards: Grafana"]
+    end
+    
+    AWS --> Hub
+    Azure --> Hub
+    GCP --> Hub
+    OnPrem --> Hub
 ```
 
 ### OpenTelemetry Collector for Fleet Telemetry
@@ -430,6 +408,8 @@ data:
           processors: [resource, batch]
           exporters: [otlphttp/traces]
 ```
+
+> **Stop and think**: If your central telemetry hub goes down, what happens to the telemetry data generated by your 50 clusters? How should you configure your OTel Collectors to handle this scenario?
 
 ### Fleet Health Dashboard Query Examples
 
@@ -607,43 +587,39 @@ patches:
 ## Quiz
 
 <details>
-<summary>Question 1: What is the fundamental architectural difference between Azure Arc and Google Fleet (GKE Enterprise) for managing non-native clusters?</summary>
+<summary>Question 1: Your organization recently acquired a company that runs 15 EKS clusters. You currently manage 20 GKE clusters using Google Fleet. Your CTO asks if you should use Azure Arc or Google Fleet to unify management, noting they heard Arc requires inbound firewall ports. How do you evaluate the architectural differences to advise the CTO?</summary>
 
-**Azure Arc** uses an agent installed inside the target cluster that maintains an outbound HTTPS connection to Azure. All communication is initiated by the agent (outbound only), so no inbound firewall rules are needed. The agent makes the cluster appear as an Azure resource in ARM (Azure Resource Manager), which means all Azure management tools (Policy, Monitor, Defender) work on it.
-
-**Google Fleet** also uses an agent for non-GKE clusters, but Fleet has a stronger concept of "fleet features" -- capabilities like Config Sync, Policy Controller, and Service Mesh that are enabled at the fleet level and automatically distributed to all members. Google's approach is more opinionated: if you enable a feature on the fleet, every member gets it. Arc is more a-la-carte: you choose which extensions to install on each cluster.
-
-The practical difference is that Fleet is better for homogeneous fleets (where you want identical configuration everywhere), while Arc is more flexible for heterogeneous fleets (where different clusters need different extensions).
+Azure Arc does not require inbound firewall ports; it uses an agent installed inside the target cluster that maintains an outbound HTTPS connection to the Azure Control Plane. This allows it to bypass inbound firewall restrictions safely. Google Fleet also uses an agent for non-GKE clusters, but it operates with a stronger concept of "fleet features"—capabilities like Config Sync and Policy Controller that are enabled at the fleet level and distributed to all members. Because you already use Google Fleet for 20 GKE clusters, attaching the 15 EKS clusters to your existing Fleet is likely the most seamless approach. Fleet excels in homogeneous configuration distribution, whereas Arc would be more suited if you were heavily invested in Azure management tools (like Azure Monitor or Defender) and needed a-la-carte extension selection per cluster.
 </details>
 
 <details>
-<summary>Question 2: Your company has 40 clusters: 25 on AWS, 10 on Azure, and 5 on-premises. You need to choose between Azure Arc and Google Fleet. What factors should drive the decision?</summary>
+<summary>Question 2: Your company has 40 clusters: 25 on AWS, 10 on Azure, and 5 on-premises. You are tasked with selecting a fleet management platform and need to choose between Azure Arc and Google Fleet. What factors should drive the decision for your specific environment?</summary>
 
-Key factors: (1) **Existing cloud investment**: If the company already uses Azure AD for identity, Azure Monitor for observability, and Azure DevOps for CI/CD, Arc integrates seamlessly with these tools. If using GCP services, Fleet is more natural. (2) **Team expertise**: Arc requires Azure knowledge, Fleet requires GCP knowledge. Pick the one your team already knows. (3) **Feature requirements**: If you need built-in service mesh (Istio), Fleet has tighter integration. If you need integration with Windows containers or Azure SQL, Arc is stronger. (4) **Cost**: Arc charges per-vCPU for extensions. Fleet charges per-vCPU for GKE Enterprise. Compare total cost for your fleet size. (5) **Vendor neutrality**: Both create dependency on a cloud provider for your management plane. If this is a concern, consider Rancher (self-hosted, vendor-neutral). Given 25/40 clusters are on AWS, you might also evaluate EKS Connector + ArgoCD as a lighter-weight option that does not introduce a third cloud dependency.
+You need to consider several key factors to make an informed decision. First, evaluate your existing cloud investment: if the company already uses Azure AD for identity, Azure Monitor for observability, and Azure DevOps for CI/CD, Arc integrates seamlessly with these tools. Second, assess team expertise; Arc requires Azure knowledge, while Fleet requires GCP knowledge, so you should lean towards the ecosystem your team already understands. Third, analyze your feature requirements, such as whether you need Fleet's built-in Istio service mesh or Arc's integration with Windows containers. Finally, compare the total cost for your fleet size and consider vendor neutrality, potentially evaluating self-hosted options like Rancher or EKS Connector with ArgoCD if avoiding a third cloud dependency is a priority.
 </details>
 
 <details>
-<summary>Question 3: How does the base/overlay pattern in GitOps solve the multi-cloud configuration problem?</summary>
+<summary>Question 3: Your platform team is struggling to manage GitOps deployments across 50 clusters spread across AWS, Azure, and on-premises environments. Engineers are currently copying and pasting entire configuration repositories for each cluster, leading to massive configuration drift. How should you restructure your GitOps approach to solve this multi-cloud configuration problem?</summary>
 
-The base/overlay pattern separates **what** you want to deploy (base) from **how** it differs per environment (overlay). The base directory contains configurations that are identical across all clusters: monitoring stack, policy definitions, security tools. Overlay directories contain patches specific to each cloud provider or environment: AWS clusters use ECR image registries, Azure clusters use ACR, on-prem uses Harbor. A Kustomization file in each overlay references the base and applies patches. When you change a policy in the base, it propagates to all clusters automatically. When you need a provider-specific adjustment, you only change the relevant overlay. Without this pattern, you end up with N copies of every configuration file (one per cluster), and keeping them in sync becomes impossible at scale.
+You should implement the base/overlay pattern using a tool like Kustomize to separate what you want to deploy from how it differs per environment. The base directory will contain configurations that are identical across all clusters, such as the standard monitoring stack, core policy definitions, and security tools. Overlay directories will contain patches specific to each cloud provider or environment, such as overriding the image registry URL for AWS (ECR) versus Azure (ACR). When you need to update a fleet-wide policy, you only change the base, and the change propagates to all clusters automatically. This completely eliminates the need to maintain multiple distinct copies of configuration files, ensuring consistency at scale while cleanly managing provider-specific deviations.
 </details>
 
 <details>
 <summary>Question 4: A fleet-wide policy update is pushed via GitOps. It works on 39 out of 40 clusters. The 40th cluster (an on-premises kubeadm cluster running Kubernetes 1.28) rejects the policy. What happened and how do you handle it?</summary>
 
-The most likely cause is a **Kubernetes version incompatibility**. If the policy uses an API version or feature available in 1.30+ (like a newer Gatekeeper constraint template), the 1.28 cluster will reject it. This is a common fleet management challenge: version skew across clusters. Solutions: (1) Include **version gates** in your GitOps configuration -- only sync policies that match the cluster's Kubernetes version. ArgoCD ApplicationSets can filter by cluster labels including version. (2) **Upgrade the outlier** -- if one cluster is significantly behind the fleet, it creates ongoing friction. (3) **Use conditional patches** in Kustomize overlays that adjust policies for older clusters. (4) **Add automated pre-flight checks** in the GitOps pipeline that validate each configuration against the target cluster's capabilities before syncing.
+The most likely cause is a Kubernetes version incompatibility between the policy manifest and the older API server. If the policy uses an API version or feature only available in Kubernetes 1.30+ (such as a newer Gatekeeper constraint template format), the 1.28 cluster's API server will reject the resource during the apply phase. This highlights a common fleet management challenge where version skew across clusters breaks unified deployments. To handle this, you should include version gates in your GitOps configuration, such as using ArgoCD ApplicationSets to filter which policies sync based on cluster version labels. Alternatively, you can use conditional patches in Kustomize overlays to adjust policies for older clusters, or implement automated pre-flight checks in your pipeline to validate manifests against target cluster versions before attempting to sync.
 </details>
 
 <details>
-<summary>Question 5: What are the telemetry cost implications of centralizing monitoring for a 50-cluster fleet?</summary>
+<summary>Question 5: The CFO noticed a massive spike in cloud spending after your team enabled centralized monitoring for a 50-cluster fleet. The observability platform bill is now $40,000 per month. What are the primary drivers of these telemetry costs at fleet scale, and how can you architect a solution to reduce them?</summary>
 
-A single Kubernetes cluster with 20 nodes and 200 pods generates approximately 50,000-100,000 active metric time series. At 50 clusters, that is 2.5-5 million time series. Managed services like Grafana Cloud charge $8/1000 active series/month, making the metrics bill $20,000-40,000/month. Logs are even more expensive: 50 clusters can generate 500GB-2TB of logs per day. At $0.50/GB ingestion, that is $250-1,000/day for logs alone. **Mitigation strategies**: (1) Filter metrics at the source -- only ship golden signals (latency, traffic, errors, saturation) to the central hub. (2) Aggregate before shipping -- pre-aggregate per-pod metrics into per-deployment metrics. (3) Sample traces -- 1-5% sampling for normal traffic, 100% for errors. (4) Set retention tiers -- 7 days hot storage, 30 days warm, 365 days cold (S3/GCS). (5) Use open-source central stores (Thanos, Loki, Tempo) instead of managed services if the team has capacity to operate them.
+The primary drivers of telemetry costs at fleet scale are the sheer volume of active metric time series and log ingestion data. A single Kubernetes cluster can generate up to 100,000 active metric time series and gigabytes of logs per day, which scales linearly and becomes prohibitively expensive when using managed services charging per metric or gigabyte. To reduce these costs, you should implement filtering at the source, shipping only golden signals (latency, traffic, errors, saturation) to the central hub rather than all available metrics. You can also aggregate per-pod metrics into per-deployment metrics before shipping and apply strict sampling rates to distributed traces (e.g., 1% for normal traffic, 100% for errors). Finally, setting aggressive retention tiers—keeping data hot for only 7 days and moving the rest to cold storage like S3—will drastically cut the ongoing storage costs.
 </details>
 
 <details>
-<summary>Question 6: Why is fleet management not a replacement for per-cluster management tools? Give two specific examples.</summary>
+<summary>Question 6: An executive mandates that since the company has adopted Azure Arc for fleet management, you must uninstall all provider-specific tools like `eksctl` and Terraform AWS providers to "simplify tooling". Why will this mandate cause operational failures, and what specific examples should you provide to push back?</summary>
 
-Fleet management tools handle **cross-cluster concerns** but cannot handle **cluster-internal operations** that require deep provider-specific knowledge. Example 1: **Node autoscaling**. Azure Arc can push policies to an EKS cluster, but it cannot configure Karpenter provisioners or EKS managed node group scaling parameters. Those are AWS-specific operations that require EKS-specific tools (eksctl, Terraform with AWS provider, or AWS console). Example 2: **Storage management**. Fleet tools can deploy a StorageClass manifest, but configuring the underlying storage (EBS CSI driver, Azure Disk CSI driver, or on-prem Ceph) requires provider-specific knowledge and tools. The fleet tool cannot resize an EBS volume or configure a Ceph pool. Fleet management is best understood as a coordination layer on top of per-cluster management, not a replacement for it.
+This mandate will cause operational failures because fleet management tools handle cross-cluster concerns, not the deep, provider-specific cluster-internal operations required for lifecycle management. Fleet tools act as a coordination layer for policy, configuration, and observability, but they lack the APIs to interact with the underlying cloud infrastructure. For example, while Azure Arc can push an OPA Gatekeeper policy to an EKS cluster, it cannot configure Karpenter provisioners or adjust EKS managed node group scaling parameters, which still require AWS-specific tools. Similarly, Arc can deploy a Kubernetes StorageClass manifest, but it cannot provision or resize the underlying AWS EBS volumes or Azure Disks, meaning per-cluster management tools remain absolutely essential.
 </details>
 
 ---
@@ -654,18 +630,19 @@ In this exercise, you will create a fleet of three kind clusters simulating diff
 
 **What you will build:**
 
-```text
-┌──────────────────────────────────────────────────────┐
-│  Fleet Management Lab                                  │
-│                                                        │
-│  Management Cluster (ArgoCD)                           │
-│  ├── fleet-aws-prod (kind, simulates AWS)             │
-│  ├── fleet-azure-staging (kind, simulates Azure)      │
-│  └── fleet-onprem-prod (kind, simulates on-prem)      │
-│                                                        │
-│  GitOps: ArgoCD ApplicationSets deploy platform        │
-│  services to all fleet members                         │
-└──────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Mgmt ["Management Cluster (ArgoCD)"]
+        Argo["ArgoCD ApplicationSets\ndeploy platform services\nto all fleet members"]
+    end
+    
+    AWS["fleet-aws-prod\n(kind, simulates AWS)"]
+    Azure["fleet-azure-staging\n(kind, simulates Azure)"]
+    OnPrem["fleet-onprem-prod\n(kind, simulates on-prem)"]
+    
+    Mgmt --> AWS
+    Mgmt --> Azure
+    Mgmt --> OnPrem
 ```
 
 ### Task 1: Create the Fleet Clusters
