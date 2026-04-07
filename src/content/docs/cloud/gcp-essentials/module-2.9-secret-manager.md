@@ -33,29 +33,27 @@ In this module, you will learn how to create and manage secrets, understand the 
 
 Secret Manager uses a two-level model: **Secrets** and **Versions**.
 
-```text
-  ┌────────────────────────────────────────────────┐
-  │  Secret: prod-database-password                 │
-  │  Project: my-project                            │
-  │  Replication: automatic                         │
-  │                                                  │
-  │  Versions:                                       │
-  │  ┌──────────────────────────────────────────┐   │
-  │  │ Version 3 (latest, ENABLED)               │   │
-  │  │ Created: 2024-01-15                       │   │
-  │  │ Data: "n3wS3cur3P@ss!"                    │   │
-  │  └──────────────────────────────────────────┘   │
-  │  ┌──────────────────────────────────────────┐   │
-  │  │ Version 2 (ENABLED)                       │   │
-  │  │ Created: 2023-07-20                       │   │
-  │  │ Data: "0ldP@ssw0rd123"                    │   │
-  │  └──────────────────────────────────────────┘   │
-  │  ┌──────────────────────────────────────────┐   │
-  │  │ Version 1 (DISABLED)                      │   │
-  │  │ Created: 2023-01-10                       │   │
-  │  │ Data: "initialP@ss"                       │   │
-  │  └──────────────────────────────────────────┘   │
-  └────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Secret [Secret: prod-database-password]
+        direction TB
+        Meta["Project: my-project<br>Replication: automatic"]
+        
+        subgraph Versions [Versions]
+            direction TB
+            V3["Version 3 (latest, ENABLED)<br>Created: 2024-01-15<br>Data: n3wS3cur3P@ssw0rd!"]
+            V2["Version 2 (ENABLED)<br>Created: 2023-07-20<br>Data: 0ldP@ssw0rd123"]
+            V1["Version 1 (DISABLED)<br>Created: 2023-01-10<br>Data: initialP@ss"]
+            V3 ~~~ V2 ~~~ V1
+        end
+        Meta ~~~ Versions
+    end
+    style Secret fill:transparent,stroke:#333,stroke-width:2px
+    style Versions fill:transparent,stroke:none
+    style V3 fill:#d4edda,stroke:#28a745,color:#000
+    style V2 fill:#d4edda,stroke:#28a745,color:#000
+    style V1 fill:#f8d7da,stroke:#dc3545,color:#000
+    style Meta fill:transparent,stroke:none
 ```
 
 **Secret**: A named container that holds versions. The secret itself has IAM policies, labels, and replication settings, but does not contain the actual sensitive data.
@@ -116,6 +114,8 @@ gcloud secrets versions access 2 --secret=prod-db-password
 gcloud secrets versions list prod-db-password \
   --format="table(name, state, createTime)"
 ```
+
+> **Pause and predict**: If you add a new version to a secret but do not explicitly update applications to use the new version, what determines whether they automatically receive the new data?
 
 ### Disabling and Destroying Versions
 
@@ -222,6 +222,8 @@ gcloud run deploy my-api \
   --region=us-central1 \
   --set-secrets="DB_PASSWORD=prod-db-password:3"
 ```
+
+> **Stop and think**: If an attacker gains Code Execution within a Cloud Run container, can they access secrets injected as environment variables? How does this compare to mounting them as files?
 
 ### As Mounted Files
 
@@ -382,21 +384,15 @@ gcloud secrets versions destroy 2 --secret=prod-db-password
 
 ### Automated Rotation with Cloud Functions
 
-```text
-  ┌────────────────┐     Triggers      ┌────────────────┐
-  │  Cloud Scheduler│ ─────────────────>│  Cloud Function │
-  │  (every 90 days)│                    │  (rotate-secret)│
-  └────────────────┘                    └───────┬────────┘
-                                                │
-                                    1. Generate new credential
-                                    2. Update the service (DB, API)
-                                    3. Add new version to Secret Manager
-                                    4. Disable old version
-                                                │
-                                        ┌───────▼────────┐
-                                        │ Secret Manager  │
-                                        │ (new version)   │
-                                        └────────────────┘
+```mermaid
+flowchart TD
+    Scheduler["Cloud Scheduler<br>(every 90 days)"] -- "Triggers" --> Function["Cloud Function<br>(rotate-secret)"]
+    
+    Function -- "1. Generate new credential<br>2. Update the service (DB, API)<br>3. Add new version to Secret Manager<br>4. Disable old version" --> SM["Secret Manager<br>(new version)"]
+    
+    style Scheduler fill:transparent,stroke:#333,stroke-width:2px
+    style Function fill:#e2f0d9,stroke:#28a745,stroke-width:2px,color:#000
+    style SM fill:#cce5ff,stroke:#004085,stroke-width:2px,color:#000
 ```
 
 ```python
@@ -519,39 +515,39 @@ gcloud logging read '
 ## Quiz
 
 <details>
-<summary>1. What is the difference between a Secret and a Secret Version in Secret Manager?</summary>
+<summary>1. Scenario: You are auditing the GCP billing report and notice separate line items for Secret Manager related to metadata and stored data. A junior engineer asks you why a single "secret" has different components. How do you explain the architectural difference between a Secret and a Secret Version to clarify this?</summary>
 
-A **Secret** is a named container (like `prod-db-password`) that holds metadata, IAM policies, labels, and replication settings. It does not contain the actual sensitive data. A **Secret Version** is the actual secret data (the password, API key, or certificate content). Versions are immutable---once created, their data cannot be changed. To update a secret, you add a new version. Each version has a state (ENABLED, DISABLED, or DESTROYED) and a version number. You can access a specific version by number or use the `latest` alias to get the most recent enabled version.
+A **Secret** is a named container (like `prod-db-password`) that holds metadata, IAM policies, labels, and replication settings. It does not contain the actual sensitive data, acting primarily as a management boundary. A **Secret Version** is the actual secret data (the password, API key, or certificate content) stored inside that container. Versions are immutable—once created, their data cannot be changed. To update a secret, you add a new version, each with its own state (ENABLED, DISABLED, or DESTROYED).
 </details>
 
 <details>
-<summary>2. A Cloud Run service is deployed with --set-secrets="DB_PASSWORD=prod-db-password:latest". You add a new version to the secret. Does the running service automatically use the new version?</summary>
+<summary>2. Scenario: Your production Cloud Run application accesses its database using a secret pinned to the `latest` alias (`--set-secrets="DB_PASSWORD=prod-db-password:latest"`). During an emergency credential rotation, you add a new version to the Secret Manager. Five minutes later, the application is still failing to connect to the database. Why is the service not using the new password, and what must you do to fix it?</summary>
 
-**No.** When using `latest`, Cloud Run resolves the version at **deployment time**, not at runtime. The service continues using the version that was "latest" when it was last deployed. To pick up the new secret version, you must **redeploy** the service (or run `gcloud run services update` with the same `--set-secrets` flag). This is a deliberate safety feature that prevents untested secret changes from automatically propagating to production services. For this reason, it is recommended to pin to a specific version number in production and explicitly redeploy when rotating secrets.
+When using `latest`, Cloud Run resolves the version at **deployment time**, not at runtime. The service continues using the version that was "latest" when it was last deployed, preventing untested secret changes from automatically propagating to production services and causing surprise outages. To pick up the new secret version, you must **redeploy** the service (or run `gcloud run services update` with the same `--set-secrets` flag) so the container fetches the newly created version during its launch sequence.
 </details>
 
 <details>
-<summary>3. What is the difference between disabling and destroying a secret version?</summary>
+<summary>3. Scenario: A developer accidentally committed a database password to a public repository. You need to immediately invalidate this credential in Secret Manager. You are debating whether to use the `disable` command or the `destroy` command on the affected version. What is the critical difference between these two actions, and why would you choose one over the other in an incident response scenario?</summary>
 
-**Disabling** a version makes it temporarily inaccessible---any attempt to access it returns an error. However, the version still exists and can be **re-enabled** at any time. The secret data is preserved. You are still billed for the storage of a disabled version. **Destroying** a version permanently deletes the secret data. It is irrecoverable---there is no undo. The version number still appears in listings (showing state DESTROYED), but the data is gone. You are no longer billed for destroyed versions. Use disable as a safe first step during rotation; destroy only after you are confident the old version is no longer needed.
+**Disabling** a version makes it temporarily inaccessible—any attempt to access it returns an error, but the data is preserved and can be re-enabled. You are still billed for disabled versions. **Destroying** a version permanently deletes the secret data in an irrecoverable way, stopping billing. In a panicked incident response, you should always **disable** first. This stops access immediately but provides a rollback safety net if you realize you broke a critical system; you can then destroy it once you are certain the old credential has been safely rotated out of all dependent systems.
 </details>
 
 <details>
-<summary>4. Why should you use echo -n instead of echo when piping a secret value to Secret Manager?</summary>
+<summary>4. Scenario: You are using a bash script to automate the creation of API keys in Secret Manager. You use `echo "my_api_key_123" | gcloud secrets create...` to store the value. Later, a Python application reading this secret consistently receives an "Invalid API Key" error from the external service, even though the key looks correct in the GCP Console. What subtle issue is causing this failure, and how do you resolve it?</summary>
 
-The `echo` command appends a trailing newline character (`\n`) to its output by default. If you pipe `echo "mypassword"` to Secret Manager, the stored secret is actually `mypassword\n` (with a newline). When your application reads this secret and uses it as a database password, it sends `mypassword\n` to the database, which does not match the actual password `mypassword`. This causes authentication failures that are extremely difficult to debug because the secret *looks* correct when displayed. Using `echo -n` suppresses the trailing newline, ensuring the secret data is exactly what you intend.
+The `echo` command appends a trailing newline character (`\n`) to its output by default. By piping `echo "my_api_key_123"`, the stored secret is actually `my_api_key_123\n`. The application sends this exact string, including the hidden newline, to the external service, causing a silent authentication failure. Using `echo -n` suppresses the trailing newline, ensuring the secret data is exactly what you intend and perfectly matches the required API key payload.
 </details>
 
 <details>
-<summary>5. How would you implement a secret rotation strategy that avoids downtime?</summary>
+<summary>5. Scenario: Your security policy requires rotating the master database password every 90 days. The database is actively used by a fleet of 50 Compute Engine instances. You need to perform this rotation without causing any dropped connections or application downtime. How do you orchestrate the versioning in Secret Manager and the application updates to achieve zero-downtime rotation?</summary>
 
-Use a **dual-version strategy**: (1) Generate a new credential and add it as a new version in Secret Manager. (2) Update the backend service (database, API provider) to accept **both** the old and new credentials simultaneously. (3) Redeploy your application services to use the new version. (4) Verify that all services are successfully using the new credential. (5) Disable the old version in Secret Manager (but do not destroy it yet). (6) After a grace period (24-48 hours), update the backend to only accept the new credential. (7) Destroy the old version after the grace period. The key is that the backend accepts both credentials during the transition window, so there is no moment where a credential mismatch causes downtime.
+To prevent downtime, you must use a **dual-version strategy**. First, generate a new credential and add it as a new version in Secret Manager. Second, update the backend database to accept **both** the old and new passwords simultaneously. Third, gradually redeploy or restart your instances so they fetch the new Secret Manager version. Finally, once all 50 instances are verified to be using the new credential, you disable the old version in Secret Manager and remove it from the backend database.
 </details>
 
 <details>
-<summary>6. What IAM role should a Cloud Run service have to read secrets, and where should the binding be applied?</summary>
+<summary>6. Scenario: You are designing the IAM policies for a new microservices architecture. You have a Cloud Run service (`order-processor`) that needs to read a Stripe API key from Secret Manager. A colleague suggests granting `roles/secretmanager.secretAccessor` to the service account at the project level to make future integrations easier. Why is this a security risk, and how should you apply the binding instead?</summary>
 
-The Cloud Run service account needs the `roles/secretmanager.secretAccessor` role. This should be granted **at the individual secret level**, not at the project level. Granting it at the project level would allow the service to read every secret in the project, violating the principle of least privilege. Use `gcloud secrets add-iam-policy-binding SECRET_NAME --member="serviceAccount:SA_EMAIL" --role="roles/secretmanager.secretAccessor"` for each secret the service needs. If the service needs to read 3 secrets, create 3 IAM bindings. This ensures that if the service is compromised, the attacker can only access the specific secrets the service was authorized to use.
+Granting access at the project level would allow the `order-processor` service to read **every** secret in the project, violating the principle of least privilege. If the service is compromised via a vulnerability, the attacker gains access to all databases and external APIs across the entire architecture. Instead, apply the `roles/secretmanager.secretAccessor` role directly on the individual secret using `gcloud secrets add-iam-policy-binding SECRET_NAME`. This guarantees the service account can only access the exact keys it needs to function.
 </details>
 
 ---
