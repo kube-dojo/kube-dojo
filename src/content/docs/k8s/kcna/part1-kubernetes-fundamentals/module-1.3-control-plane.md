@@ -76,7 +76,7 @@ The control plane is the **brain of Kubernetes**. Understanding what each compon
 
 ### 1. kube-apiserver
 
-The **API server** is the front door to Kubernetes:
+The **API server** acts as the front door to the Kubernetes cluster. It is the central management entity that receives all REST requests, validates them, and updates the state in etcd:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -106,7 +106,7 @@ The **API server** is the front door to Kubernetes:
 
 ### 2. etcd
 
-The **etcd** is the cluster's database:
+The **etcd** component serves as the highly available, consistent, and distributed database for your cluster:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -136,11 +136,11 @@ The **etcd** is the cluster's database:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-> **Pause and predict**: The API server is the only component that talks to etcd. Why do you think the architecture was designed this way, instead of letting all components read and write to etcd directly?
+> **Pause and predict**: The API server is the only component that directly talks to etcd. Why do you think the architecture was designed this way, instead of letting all components read and write to etcd independently?
 
 ### 3. kube-scheduler
 
-The **scheduler** places Pods on nodes:
+The **kube-scheduler** acts as the cluster's decision-maker for workload placement, determining exactly which node should host each newly created Pod:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -172,7 +172,7 @@ The **scheduler** places Pods on nodes:
 
 ### 4. kube-controller-manager
 
-The **controller manager** runs controllers:
+The **kube-controller-manager** operates as the cluster's continuous background reconciliation engine, running various controllers that work to match the current state to the desired state:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -207,7 +207,7 @@ The **controller manager** runs controllers:
 
 ### 5. cloud-controller-manager
 
-The **cloud controller manager** integrates with cloud providers:
+The **cloud-controller-manager** bridges the gap between your Kubernetes cluster and the underlying cloud provider's APIs (like AWS, GCP, or Azure):
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -277,11 +277,11 @@ The **cloud controller manager** integrates with cloud providers:
 
 ---
 
-> **Stop and think**: If the scheduler assigns Pods to nodes but does not actually run them, what component does? Trace the full path: a user creates a Deployment -- what sequence of components is involved before a container is actually running?
+> **Stop and think**: If the scheduler is responsible for assigning Pods to nodes but does not actually run them, what component does? Trace the complete path: a user creates a Deployment—what exact sequence of components is involved before a container is actively running on a worker node?
 
 ## High Availability
 
-In production, control plane components are replicated:
+In production environments, control plane components are heavily replicated to prevent a single point of failure:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -311,6 +311,8 @@ In production, control plane components are replicated:
 └─────────────────────────────────────────────────────────────┘
 ```
 
+> **Pause and predict**: Notice that etcd clusters usually run with an odd number of nodes (3, 5, or 7). Based on how distributed consensus algorithms work, what specific failure scenario does having an odd number of nodes prevent compared to an even number?
+
 ---
 
 ## Did You Know?
@@ -321,7 +323,7 @@ In production, control plane components are replicated:
 
 - **API server is stateless** - It stores nothing locally. All state is in etcd. This makes scaling easy.
 
-- **Controllers use a watch pattern** - They don't poll. They receive notifications when objects change, making them efficient.
+- **Controllers use a watch pattern** - They don't poll. They receive notifications when objects change, making them incredibly efficient compared to continuous polling.
 
 ---
 
@@ -338,34 +340,34 @@ In production, control plane components are replicated:
 
 ## Quiz
 
-1. **Your cluster's etcd database becomes corrupted and all data is lost. No backups exist. What happens to the cluster, and which resources are affected?**
+1. **Your team is investigating a catastrophic failure where the cluster's etcd database became corrupted and all data was lost. Unfortunately, no backups exist. What exactly happens to the cluster's operations, and which specific resources are affected?**
    <details>
    <summary>Answer</summary>
-   The entire cluster state is lost because etcd is the single source of truth for all Kubernetes objects. Every Pod definition, Service configuration, Secret, ConfigMap, RBAC policy, and node registration is gone. Running containers will continue to run (kubelet keeps them alive locally), but the control plane cannot manage them -- no new scheduling, no healing, no scaling. This is why etcd backup is critical in production. Without it, you must rebuild the entire cluster configuration from scratch.
+   Because etcd serves as the single source of truth for all Kubernetes objects, the entire cluster state is lost permanently. Every Pod definition, Service configuration, Secret, ConfigMap, RBAC policy, and node registration is wiped out. Interestingly, running containers will continue to execute because the kubelet on each node keeps them alive locally based on its last known state. However, the control plane cannot manage them anymore, meaning no new scheduling, no self-healing, and no scaling can occur. This catastrophic scenario highlights exactly why regular etcd backups are a critical production requirement, as you must otherwise rebuild the entire cluster configuration from scratch.
    </details>
 
-2. **An intern asks: "If the API server goes down, does everything stop running?" What would you explain about how existing workloads are affected versus new operations?**
+2. **An intern is reviewing the cluster architecture and asks: "If the API server goes down, does everything stop running?" How would you explain the impact on existing workloads versus the impact on new cluster operations?**
    <details>
    <summary>Answer</summary>
-   Existing workloads continue running because kubelet on each node independently manages its assigned containers. Pods already scheduled and running will keep serving traffic. However, no new operations can happen: no new Pods can be created, no scaling events can occur, no scheduling decisions can be made, and kubectl commands will fail. The cluster is in a "frozen" state -- it cannot react to changes. This is why production clusters run multiple API server instances behind a load balancer for high availability.
+   You should explain that existing workloads will continue running normally because the kubelet on each node independently manages its assigned containers. The pods that are already scheduled and running will keep serving traffic without interruption. However, the cluster becomes entirely "frozen" regarding any new operations or changes. No new pods can be created, no scaling events can occur, no scheduling decisions can be made, and all `kubectl` commands will fail. This split behavior perfectly illustrates why production clusters run multiple API server instances behind a load balancer to maintain high availability for cluster management.
    </details>
 
-3. **A colleague claims that the kube-scheduler both decides where Pods run and starts them on the target node. Is this correct? If not, what actually happens after the scheduler makes its decision?**
+3. **During a system design discussion, a colleague claims that the `kube-scheduler` both decides where Pods should run and is responsible for actually starting them on the target node. Is this understanding correct? If not, what is the actual mechanism that gets a container running after the scheduler makes its decision?**
    <details>
    <summary>Answer</summary>
-   This is incorrect. The scheduler only makes the placement decision -- it writes the node assignment to the Pod object via the API server. The kubelet on the assigned node watches the API server, notices a Pod assigned to its node, and then instructs the container runtime (like containerd) to pull the image and start the container. This separation of concerns is a deliberate design choice: the scheduler focuses on optimal placement, the kubelet focuses on container lifecycle management.
+   Your colleague's understanding is incorrect, as the scheduler only makes the placement decision and writes the node assignment to the Pod object via the API server. It is actually the `kubelet` on the assigned node that watches the API server, notices a new Pod has been assigned to its node, and takes action. The `kubelet` then instructs the local container runtime (such as containerd) to pull the necessary image and start the container. This strict separation of concerns is a deliberate architectural design choice. It allows the scheduler to focus entirely on optimal placement algorithms while the `kubelet` focuses exclusively on local container lifecycle management.
    </details>
 
-4. **Your production cluster runs 3 control plane nodes, each with an etcd member. One node experiences a hardware failure. Can the cluster still function? What about if two nodes fail?**
+4. **Your production cluster runs three control plane nodes, each hosting an etcd member. During a routine update, one node experiences a severe hardware failure. Can the cluster still function normally, and what would happen to the cluster's state if a second node were to fail simultaneously?**
    <details>
    <summary>Answer</summary>
-   With one node down (2 of 3 remaining), the cluster continues functioning normally because etcd requires a quorum of more than half the members. With 3 members, the quorum is 2, so losing 1 is safe. If two nodes fail (only 1 of 3 remaining), the cluster loses quorum and etcd becomes read-only -- no new writes can be made, meaning no new Pods, no scaling, no configuration changes. This is why etcd uses odd numbers: with 3 members you tolerate 1 failure, with 5 you tolerate 2.
+   With one node down, leaving two out of three nodes operational, the cluster will continue functioning normally. This is because etcd relies on the Raft consensus algorithm, which requires a quorum of strictly more than half the members to operate. With three members, the required quorum is two, making the loss of a single node perfectly safe. However, if a second node fails, leaving only one operational node, the cluster loses its quorum and etcd immediately becomes read-only to prevent split-brain scenarios. In this state, no new writes can be processed, meaning no new pods can be deployed, scaling stops, and configuration changes are impossible until quorum is restored.
    </details>
 
-5. **You create a Deployment with 3 replicas. Walk through the chain of control plane components involved from the moment you run the command until Pods are running on nodes.**
+5. **You execute a command to create a new Deployment with 3 replicas. Walk through the exact chain of control plane components involved, step-by-step, from the moment you hit enter until the requested pods are actually running on the worker nodes.**
    <details>
    <summary>Answer</summary>
-   The chain involves multiple components in sequence: (1) kubectl sends the Deployment object to the API server, (2) API server validates it and stores it in etcd, (3) the Deployment controller (in controller-manager) detects the new Deployment and creates a ReplicaSet, (4) the ReplicaSet controller detects the new ReplicaSet and creates 3 Pod objects, (5) the scheduler detects 3 unscheduled Pods, evaluates nodes, and assigns each Pod to a node, (6) kubelet on each assigned node sees the Pod assignment, pulls the container image via the container runtime, and starts the containers. Each component watches for changes and acts on its specific responsibility.
+   The sequence begins when `kubectl` sends the Deployment object to the API server, which validates the request and stores the new desired state in etcd. Next, the Deployment controller detects this new Deployment and creates a corresponding ReplicaSet, which in turn causes the ReplicaSet controller to create three individual Pod objects. At this point, the `kube-scheduler` detects three unscheduled Pods, evaluates the available nodes, and assigns each Pod to an optimal node by updating the API server. Finally, the `kubelet` on each assigned node sees the new Pod assignment, pulls the container image using the local container runtime, and starts the containers. Throughout this entire process, each component operates independently by watching the API server for changes and reacting only to its specific responsibilities.
    </details>
 
 ---
