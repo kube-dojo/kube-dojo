@@ -39,27 +39,16 @@ Key Vault manages three distinct categories of cryptographic and sensitive mater
 | **Keys** | RSA or EC cryptographic keys | Data encryption, signing, wrapping other keys | `https://myvault.vault.azure.net/keys/` |
 | **Certificates** | X.509 certificates + private keys | TLS/SSL for web apps, code signing, mTLS | `https://myvault.vault.azure.net/certificates/` |
 
-```text
-    ┌──────────────────────────────────────────────────────────┐
-    │                  Azure Key Vault                         │
-    │                  "myvault"                               │
-    │                                                         │
-    │  ┌─────────────────┐  ┌────────────────┐  ┌───────────┐│
-    │  │    Secrets       │  │     Keys        │  │   Certs    ││
-    │  │                 │  │                │  │           ││
-    │  │ db-password     │  │ data-encrypt   │  │ api-tls   ││
-    │  │ api-key-stripe  │  │ signing-key    │  │ mtls-cert ││
-    │  │ cosmos-conn-str │  │ wrapping-key   │  │ code-sign ││
-    │  │ redis-password  │  │                │  │           ││
-    │  └─────────────────┘  └────────────────┘  └───────────┘│
-    │                                                         │
-    │  Features:                                              │
-    │  - HSM-backed (FIPS 140-2 Level 2)                     │
-    │  - Versioned (every update creates new version)         │
-    │  - Audit logged (every access is recorded)              │
-    │  - Soft delete + purge protection                      │
-    │  - Private endpoint support                            │
-    └──────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph Azure Key Vault [Azure Key Vault 'myvault']
+        S[Secrets<br/>- db-password<br/>- api-key-stripe<br/>- cosmos-conn-str]
+        K[Keys<br/>- data-encrypt<br/>- signing-key<br/>- wrapping-key]
+        C[Certificates<br/>- api-tls<br/>- mtls-cert<br/>- code-sign]
+    end
+    F[Features:<br/>• HSM-backed FIPS 140-2 Level 2<br/>• Versioned updates<br/>• Audit logged access<br/>• Soft delete & purge protection<br/>• Private endpoint support]
+    Azure Key Vault --- F
+    style F text-align:left
 ```
 
 ```bash
@@ -125,6 +114,8 @@ az keyvault secret show \
 
 Key Vault keys are special: the key material never leaves the HSM. When you need to encrypt data, you send the data to Key Vault, and it returns the ciphertext. You never see the raw key.
 
+> **Stop and think**: If the raw key material for a Key Vault key never leaves the HSM, how does an application encrypt a 50 GB video file? Sending a 50 GB payload over the network to Key Vault for encryption would be incredibly slow and inefficient. What pattern might be used instead?
+
 ```bash
 # Create an RSA key
 az keyvault key create \
@@ -173,6 +164,55 @@ az keyvault certificate download \
   --name "api-tls-cert" \
   --file /tmp/api-cert.pem \
   --encoding PEM
+```
+
+---
+
+## Automated Secret Rotation
+
+Storing secrets securely is only half the battle; secrets must be rotated regularly to limit the impact of a potential compromise. Azure Key Vault provides native rotation policies for Keys, and integrates with Event Grid to orchestrate rotation for Secrets.
+
+### Key Vault Rotation Policies (Keys)
+For cryptographic keys, you can define an automated rotation policy directly within Key Vault. This instructs the HSM to generate new key material at a scheduled interval.
+
+```bash
+# Create a rotation policy for a key (rotate 30 days before expiry)
+cat > policy.json <<EOF
+{
+  "lifetimeActions": [
+    {
+      "trigger": {
+        "timeBeforeExpiry": "P30D"
+      },
+      "action": {
+        "type": "Rotate"
+      }
+    }
+  ],
+  "attributes": {
+    "expiryTime": "P90D"
+  }
+}
+EOF
+
+az keyvault key rotation-policy update \
+  --vault-name kubedojo-vault \
+  --name "data-encryption-key" \
+  --value @policy.json
+```
+
+> **Pause and predict**: If Key Vault automatically rotates the key material for `data-encryption-key`, what happens to the data that was encrypted using the *old* key version? Does Key Vault automatically re-encrypt your database?
+
+### Secret Rotation via Event Grid
+For secrets (like database passwords), Key Vault cannot magically change the password in the target system (e.g., Azure SQL). Instead, Key Vault emits an Event Grid event 30 days before a secret expires. This event triggers an Azure Function, which connects to the database, generates a new password, updates the database user, and saves the new version to Key Vault.
+
+```bash
+# Example flow for Secret Rotation:
+# 1. Secret approaches 'Expiration Date'
+# 2. Key Vault publishes 'SecretNearExpiry' event to Event Grid
+# 3. Event Grid triggers an Azure Function
+# 4. Function connects to Azure SQL and changes the password
+# 5. Function writes the new password to Key Vault as a new version
 ```
 
 ---
@@ -240,42 +280,31 @@ az role assignment create \
   --scope "$VAULT_ID/secrets/db-password"
 ```
 
-```text
-    Access Policies vs RBAC:
+```mermaid
+graph TD
+    subgraph AP [Access Policies - Legacy]
+        AP_V[Vault: kubedojo-vault]
+        AP_U1[alice@company.com<br/>Secrets: get, list, set]
+        AP_U2[app-managed-identity<br/>Keys: get, wrapKey, unwrapKey<br/>Secrets: get]
+        AP_V --> AP_U1
+        AP_V --> AP_U2
+        AP_N[Limitation: Cannot scope to individual secrets/keys]
+        style AP_N stroke-dasharray: 5 5
+    end
 
-    Access Policies (legacy):
-    ┌────────────────────────────────────┐
-    │ Vault: kubedojo-vault              │
-    │                                    │
-    │ Policy 1: alice@company.com        │
-    │   Secrets: get, list, set          │
-    │   Keys: (none)                     │
-    │   Certs: (none)                    │
-    │                                    │
-    │ Policy 2: app-managed-identity     │
-    │   Secrets: get                     │
-    │   Keys: get, wrapKey, unwrapKey    │
-    │   Certs: (none)                    │
-    │                                    │
-    │ Limitation: Cannot scope to        │
-    │ individual secrets/keys            │
-    └────────────────────────────────────┘
-
-    RBAC (recommended):
-    ┌────────────────────────────────────┐
-    │ Vault: kubedojo-vault              │
-    │                                    │
-    │ alice@company.com                  │
-    │   Role: Key Vault Secrets Officer  │
-    │   Scope: /secrets/db-password      │  ← Per-secret scope!
-    │                                    │
-    │ app-managed-identity               │
-    │   Role: Key Vault Secrets User     │
-    │   Scope: / (entire vault)          │
-    │                                    │
-    │ Advantage: Standard Azure RBAC,    │
-    │ Conditional Access, PIM support    │
-    └────────────────────────────────────┘
+    subgraph RBAC [Azure RBAC - Recommended]
+        RBAC_V[Vault: kubedojo-vault]
+        RBAC_S1[Scope: /secrets/db-password]
+        RBAC_S2[Scope: / entire vault]
+        RBAC_U1[alice@company.com<br/>Role: Key Vault Secrets Officer]
+        RBAC_U2[app-managed-identity<br/>Role: Key Vault Secrets User]
+        RBAC_V --> RBAC_S1
+        RBAC_V --> RBAC_S2
+        RBAC_S1 --> RBAC_U1
+        RBAC_S2 --> RBAC_U2
+        RBAC_N[Advantage: Standard Azure RBAC, Conditional Access, PIM support]
+        style RBAC_N stroke-dasharray: 5 5
+    end
 ```
 
 **War Story**: A company using Access Policies had 150 identities with vault-level secret access. When an audit asked "who can read the production database password specifically?", the answer was "all 150 identities." They could not scope Access Policies to individual secrets. After migrating to RBAC, they granted `Key Vault Secrets User` at the individual secret scope, reducing the blast radius of each identity to only the secrets it needed.
@@ -306,20 +335,49 @@ az keyvault secret recover --vault-name kubedojo-vault --name "db-password"
 # With purge protection enabled, this command fails until retention expires.
 ```
 
-```text
-    Secret Lifecycle with Soft Delete + Purge Protection:
-
-    Active ──► Deleted (soft) ──► Purged (permanent)
-                    │                    ▲
-                    │                    │ (only after retention
-                    │                    │  period expires)
-                    ▼                    │
-                 Recovered ──────────────┘
-                 (back to Active)
-
-    With purge protection: No shortcut to Purged state.
-    Must wait for retention period (7-90 days) to expire.
+```mermaid
+stateDiagram-v2
+    Active --> Deleted : Soft Delete
+    Deleted --> Recovered : Recover
+    Recovered --> Active
+    Deleted --> Purged : Permanent Deletion<br/>(Only after retention period)
+    note right of Deleted
+        With purge protection enabled,
+        there is no shortcut to Purged.
+        Must wait 7-90 days.
+    end note
 ```
+
+---
+
+## Multi-Region Architectures and Disaster Recovery
+
+For mission-critical applications deployed across multiple Azure regions (e.g., East US and West Europe), depending on a single Key Vault creates a single point of failure and introduces cross-region latency.
+
+### High Availability within a Region
+Behind the scenes, Azure Key Vault automatically replicates its contents within the region and to a paired region (e.g., East US to West US). If a single node fails, traffic is transparently routed to a healthy node.
+
+### The Active-Active Vault Pattern
+However, if an entire region goes down, the vault in the paired region enters read-only mode. For active-active applications that need to *write* secrets or manage keys during a regional outage, you must deploy independent Key Vaults in each region.
+
+```mermaid
+graph TD
+    subgraph Region A: East US
+        App_East[App Service - East]
+        KV_East[Key Vault - East]
+        App_East -->|Reads/Writes| KV_East
+    end
+    subgraph Region B: West Europe
+        App_West[App Service - West]
+        KV_West[Key Vault - West]
+        App_West -->|Reads/Writes| KV_West
+    end
+    KV_East -.->|Manual/Scripted Sync| KV_West
+```
+
+When using multiple vaults, your CI/CD pipeline or a dedicated synchronization function must ensure that identical secrets (like a third-party API key) are pushed to both vaults. For regional resources (like a region-specific database password), the local vault stores the local credential.
+
+> **Stop and think**: If you use an Active-Active Vault pattern and rely on a CI/CD pipeline to push the same Stripe API key to `KV-East` and `KV-West`, what happens to your application if the pipeline partially fails, updating `KV-East` but failing to update `KV-West`?
 
 ---
 
@@ -361,6 +419,8 @@ az functionapp config appsettings set \
 # The application reads DB_PASSWORD as a normal environment variable.
 # Azure resolves the Key Vault reference automatically.
 ```
+
+> **Stop and think**: When passing a Key Vault reference into an App Service or Container App environment variable, the application itself is completely unaware of Key Vault. It just reads a standard environment variable. What are the security tradeoffs of this convenience compared to having the application use the Azure SDK directly?
 
 ### Pattern 3: Container Apps with Key Vault
 
@@ -444,6 +504,8 @@ az network private-endpoint create \
   --connection-name kv-connection
 ```
 
+> **Pause and predict**: If a user is granted `Key Vault Administrator` at the Subscription level, and a specific Key Vault has an explicit `Deny` network rule for all IP addresses except one, can the administrator still read secrets from their home IP? Which takes precedence: RBAC or Network Firewalls?
+
 ---
 
 ## Did You Know?
@@ -476,39 +538,39 @@ az network private-endpoint create \
 ## Quiz
 
 <details>
-<summary>1. What are the three types of objects that Azure Key Vault can store, and when would you use each?</summary>
+<summary>1. You are designing the security architecture for a new e-commerce application. The application needs to connect to a SQL database, encrypt credit card numbers before storing them, and serve traffic over HTTPS. How would you categorize these requirements into Azure Key Vault object types, and why?</summary>
 
-Secrets store any sensitive string value (up to 25 KB): database passwords, API keys, connection strings, and configuration values. Use secrets when you need to store and retrieve a raw value. Keys store RSA or EC cryptographic keys that never leave the HSM. Use keys when you need to encrypt/decrypt data or sign/verify signatures without exposing the raw key material. Certificates store X.509 certificates with their private keys and can handle automated renewal. Use certificates for TLS/SSL endpoints, mTLS between services, and code signing. The key distinction is that keys and certificates have cryptographic operations that happen inside Key Vault, while secrets are just stored and retrieved.
+The three requirements directly map to Key Vault's three object types. The SQL database password should be stored as a **Secret**, because it is a raw string value that the application needs to retrieve and pass to the database driver. The credit card encryption mechanism should use a **Key**, because Key Vault can perform the cryptographic operations (encrypt/decrypt) entirely within its HSM without ever exposing the raw key material to the application. The HTTPS traffic requirement should be handled by a **Certificate**, because Key Vault can manage the X.509 certificate, securely store its private key, and automatically handle the renewal process with integrated certificate authorities.
 </details>
 
 <details>
-<summary>2. Why is Azure RBAC recommended over Access Policies for Key Vault?</summary>
+<summary>2. Your organization currently manages Key Vault using Access Policies, but the security team has mandated that all access to production database passwords must be strictly limited to the specific application that uses them, and access must require Multi-Factor Authentication. How does migrating to Azure RBAC solve this, and why couldn't Access Policies meet the requirement?</summary>
 
-RBAC provides several advantages: (1) Per-object scoping---you can grant access to a specific secret, not the entire vault. (2) Conditional Access integration---you can require MFA or compliant devices for Key Vault access. (3) PIM (Privileged Identity Management) support---you can make access time-limited and require approval. (4) Consistency with the rest of Azure---the same role assignment model used everywhere else. (5) Azure Policy compliance---RBAC assignments can be audited and enforced by Azure Policy. Access Policies lack all of these capabilities and operate only at the vault level.
+Migrating to Azure RBAC allows you to apply granular access controls down to the individual secret level, whereas Access Policies only operate at the vault level. With Access Policies, granting an application access to read the database password would inherently grant it access to read every other secret in the vault. Furthermore, Access Policies are a legacy Key Vault-specific mechanism that does not integrate with modern Azure AD features. By using Azure RBAC, the security team can leverage Conditional Access policies to enforce MFA, and use Privileged Identity Management (PIM) to require just-in-time access approvals for human users requesting the `Key Vault Secrets Officer` role.
 </details>
 
 <details>
-<summary>3. What happens when you delete a secret from a vault with soft delete enabled and purge protection enabled?</summary>
+<summary>3. A rogue administrator account executes a script that deletes all secrets from your production Key Vault and then immediately attempts to permanently purge them to cause maximum disruption. Your vault was configured with soft delete and purge protection enabled. Walk through what happens to the secrets and why the attacker's plan fails.</summary>
 
-The secret enters a "soft-deleted" state. It no longer appears in the active secrets list, and applications that reference it will get a 404 error. However, it can be recovered (restored to active state) at any time during the retention period. With purge protection enabled, nobody---not even a Global Administrator---can permanently destroy (purge) the secret before the retention period expires. After the retention period ends (7-90 days, depending on configuration), the secret is automatically and permanently deleted. This two-layer protection ensures that both accidental deletions and malicious purge attempts are prevented.
+When the attacker executes the deletion script, the secrets are not permanently destroyed; instead, they are moved into a soft-deleted state. In this state, the applications will immediately lose access (resulting in downtime), but the secrets themselves are safely preserved in the vault's recycle bin. When the attacker attempts to purge the soft-deleted secrets, the Key Vault service rejects the request because purge protection is enabled. Purge protection enforces a mandatory waiting period (between 7 and 90 days, depending on configuration) during which absolutely no one—including Global Administrators—can bypass the retention period. The organization can simply restore the soft-deleted secrets and revoke the rogue administrator's access.
 </details>
 
 <details>
-<summary>4. How does the DefaultAzureCredential pattern work for Key Vault access across development and production environments?</summary>
+<summary>4. Your development team is struggling with "it works on my machine" errors because they hardcode Key Vault credentials locally, but the application uses Managed Identities in production. You rewrite the code to use `DefaultAzureCredential()`. Walk through how this single line of code resolves authentication in both the local development environment and the production Container App.</summary>
 
-DefaultAzureCredential tries multiple authentication methods in a priority order. On a developer's laptop, it finds Azure CLI credentials (from `az login`) and uses those to authenticate with Key Vault. On an Azure VM or Container App with a Managed Identity, it finds the Managed Identity token endpoint and uses that. On a CI/CD pipeline with environment variables, it uses those credentials. The application code is identical in all environments---`DefaultAzureCredential()` with no parameters. This eliminates environment-specific authentication code and prevents developers from hardcoding credentials for "just this environment."
+The `DefaultAzureCredential` class operates by iterating through a prioritized chain of authentication providers based on the environment it detects. When a developer runs the application locally, it discovers the developer's cached Azure CLI credentials (`az login`) and uses their personal identity to request an access token for Key Vault. When the exact same code is deployed to the production Container App, the local developer credentials do not exist, so the chain falls back to the Managed Identity endpoint injected by Azure into the container environment. This abstracts the authentication mechanism away from the application logic, ensuring that no raw credentials are ever hardcoded in the source repository.
 </details>
 
 <details>
-<summary>5. A team reads 3 secrets from Key Vault on every HTTP request. Their API handles 500 requests per second. What problem will they encounter, and how should they fix it?</summary>
+<summary>5. On Black Friday, your application automatically scales out from 10 to 200 instances in response to traffic. Immediately, the new instances crash on startup with HTTP 429 (Too Many Requests) errors originating from Azure Key Vault. The developers configured the app to fetch its 5 database connection strings from Key Vault on every incoming user request. Why did this cause an outage, and what architectural pattern should they implement to fix it?</summary>
 
-They will hit Key Vault's throttling limit. At 500 RPS with 3 secret reads each, that is 1,500 Key Vault transactions per second, or 15,000 per 10 seconds. Key Vault throttles at roughly 4,000 transactions per vault per 10 seconds for secret operations. They will start getting 429 (Too Many Requests) responses. The fix is to cache secrets in memory with a periodic refresh. Read secrets from Key Vault once at application startup and refresh every 5-15 minutes. The Azure SDK provides `SecretClient` which can be combined with a simple in-memory cache. For .NET, the `Azure.Extensions.AspNetCore.Configuration.Secrets` package handles caching automatically.
+The outage occurred because Key Vault is designed as a secure storage repository, not a high-throughput, low-latency database; it strictly throttles secret read operations to approximately 4,000 transactions per 10 seconds per vault. By reading 5 secrets on every request across thousands of concurrent operations, the scaled-out application instances massively exceeded the service limit and triggered 429 errors. To fix this architectural flaw, the team must implement an in-memory caching layer within the application. The application should fetch the secrets once during startup, cache them in memory, and only periodically poll Key Vault (e.g., every 10 minutes) to check for rotated values.
 </details>
 
 <details>
-<summary>6. Compare storing a database password in an environment variable vs. Azure Key Vault. What are the security implications of each?</summary>
+<summary>6. A startup currently injects its database password into its App Service via an environment variable called `DB_PASS`. A security consultant recommends moving this to Azure Key Vault and using a Managed Identity to access it. Compare these two approaches: what specific vulnerabilities exist in the environment variable method that Key Vault eliminates?</summary>
 
-Environment variable: The password is visible in process listings (`/proc/<pid>/environ` on Linux), in crash dumps, in application settings in the Azure portal, in deployment scripts, and in CI/CD pipeline logs if accidentally echoed. Anyone with read access to the App Service configuration can see it. There is no audit trail of who read the password and when. Rotating requires redeploying the application. Key Vault: The password is stored encrypted in an HSM. Access requires authentication (Managed Identity or Entra ID credential). Every read is logged in Key Vault diagnostic logs (who, when, what, from where). RBAC controls who can read vs. manage the secret. Rotating the secret in Key Vault does not require redeploying the application (if using Key Vault references with version rotation). Soft delete and purge protection prevent accidental or malicious deletion.
+Storing a password directly in an environment variable leaves the plaintext credential exposed in memory dumps, process listings, debugging logs, and the Azure Portal interface for anyone with read access to the App Service. It also provides no audit trail of who viewed the password, and requires a full application restart to rotate the credential. By moving the password to Azure Key Vault and using a Managed Identity, the credential is encrypted at rest in a hardware security module (HSM) and the application's identity is authenticated via Entra ID. This approach provides fine-grained RBAC scoping, generates an immutable audit log of every access attempt, and allows the secret to be rotated independently of the application deployment lifecycle.
 </details>
 
 ---
@@ -561,7 +623,7 @@ az keyvault show -n "$VAULT_NAME" \
 az keyvault secret set \
   --vault-name "$VAULT_NAME" \
   --name "db-connection-string" \
-  --value "Server=tcp:myserver.database.windows.net,1433;Database=mydb;User=admin;Password=S3cureP@ss!;"
+  --value "Server=tcp:myserver.database.windows.net,1433;Database=mydb;User=admin;Password=SuperS3cretP@ssw0rd!;"
 
 # Store an API key
 az keyvault secret set \
