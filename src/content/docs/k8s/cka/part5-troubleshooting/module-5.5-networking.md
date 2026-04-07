@@ -62,33 +62,23 @@ By the end of this module, you'll be able to:
 
 ### 1.1 The Network Layers
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                KUBERNETES NETWORK LAYERS                      │
-│                                                               │
-│   Layer 4: External Access                                    │
-│   ┌─────────────────────────────────────────────────────┐    │
-│   │ Ingress / LoadBalancer / NodePort                    │    │
-│   └─────────────────────────────────────────────────────┘    │
-│                            │                                  │
-│   Layer 3: Service Network │                                  │
-│   ┌─────────────────────────────────────────────────────┐    │
-│   │ ClusterIP Services (virtual IPs via kube-proxy)     │    │
-│   └─────────────────────────────────────────────────────┘    │
-│                            │                                  │
-│   Layer 2: DNS             │                                  │
-│   ┌─────────────────────────────────────────────────────┐    │
-│   │ CoreDNS (service.namespace.svc.cluster.local)       │    │
-│   └─────────────────────────────────────────────────────┘    │
-│                            │                                  │
-│   Layer 1: Pod Network     │                                  │
-│   ┌─────────────────────────────────────────────────────┐    │
-│   │ CNI Plugin (pod-to-pod, cross-node)                 │    │
-│   └─────────────────────────────────────────────────────┘    │
-│                                                               │
-│   Troubleshoot bottom-up: Pod → DNS → Service → External    │
-│                                                               │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    L4["<b>Layer 4: External Access</b><br>Ingress / LoadBalancer / NodePort"]
+    L3["<b>Layer 3: Service Network</b><br>ClusterIP Services (virtual IPs via kube-proxy)"]
+    L2["<b>Layer 2: DNS</b><br>CoreDNS (service.namespace.svc.cluster.local)"]
+    L1["<b>Layer 1: Pod Network</b><br>CNI Plugin (pod-to-pod, cross-node)"]
+    
+    L4 --> L3
+    L3 --> L2
+    L2 --> L1
+    
+    style L4 fill:#f9f9f9,stroke:#333,stroke-width:1px
+    style L3 fill:#f9f9f9,stroke:#333,stroke-width:1px
+    style L2 fill:#f9f9f9,stroke:#333,stroke-width:1px
+    style L1 fill:#f9f9f9,stroke:#333,stroke-width:1px
+    
+    Note["Troubleshoot bottom-up: Pod → DNS → Service → External"]
 ```
 
 ### 1.2 Quick Connectivity Test
@@ -105,6 +95,8 @@ k run debug --image=busybox:1.36 --rm -it --restart=Never -- sh
 
 ## Part 2: Pod-to-Pod Connectivity
 
+> **Pause and predict**: When checking pod-to-pod connectivity, if ICMP (ping) traffic works but TCP traffic (curl) fails on a specific port, what layer is most likely intercepting the traffic?
+
 ### 2.1 Testing Pod Connectivity
 
 ```bash
@@ -119,19 +111,20 @@ k exec <source-pod> -- nc -zv <target-pod-ip> <port>
 
 ### 2.2 Pod-to-Pod Failure Symptoms
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│              POD-TO-POD TROUBLESHOOTING                       │
-│                                                               │
-│   Symptom                        Likely Cause                 │
-│   ─────────────────────────────────────────────────────────  │
-│   ping fails to any pod          CNI not working              │
-│   ping works, TCP fails          NetworkPolicy or app issue   │
-│   Same node works, cross fails   CNI cross-node issue         │
-│   Some pods work, some don't     Specific pod/node problem    │
-│   Intermittent failures          MTU mismatch, overload       │
-│                                                               │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Start["<b>POD-TO-POD TROUBLESHOOTING</b>"]
+    S1["ping fails to any pod"] --> C1["Likely Cause: CNI not working"]
+    S2["ping works, TCP fails"] --> C2["Likely Cause: NetworkPolicy or app issue"]
+    S3["Same node works, cross fails"] --> C3["Likely Cause: CNI cross-node issue"]
+    S4["Some pods work, some don't"] --> C4["Likely Cause: Specific pod/node problem"]
+    S5["Intermittent failures"] --> C5["Likely Cause: MTU mismatch, overload"]
+    
+    Start --> S1
+    Start --> S2
+    Start --> S3
+    Start --> S4
+    Start --> S5
 ```
 
 ### 2.3 Diagnosing CNI Issues
@@ -167,26 +160,20 @@ ls -la /opt/cni/bin/
 
 ### 3.1 Kubernetes DNS Overview
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                    DNS RESOLUTION FLOW                        │
-│                                                               │
-│   Pod makes DNS query                                         │
-│        │                                                      │
-│        ▼                                                      │
-│   /etc/resolv.conf (points to kube-dns service)              │
-│        │                                                      │
-│        ▼                                                      │
-│   kube-dns Service (10.96.0.10 typically)                    │
-│        │                                                      │
-│        ▼                                                      │
-│   CoreDNS Pods (in kube-system)                              │
-│        │                                                      │
-│        ├── Cluster domain (*.svc.cluster.local) → resolve    │
-│        │                                                      │
-│        └── External domain → forward to upstream DNS          │
-│                                                               │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A["Pod makes DNS query"]
+    B["/etc/resolv.conf<br>(points to kube-dns service)"]
+    C["kube-dns Service<br>(10.96.0.10 typically)"]
+    D["CoreDNS Pods<br>(in kube-system)"]
+    E["Cluster domain (*.svc.cluster.local) → resolve"]
+    F["External domain → forward to upstream DNS"]
+
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+    D --> F
 ```
 
 ### 3.2 Testing DNS
@@ -274,29 +261,30 @@ cat /var/lib/kubelet/config.yaml | grep -A 5 "clusterDNS"
 
 ## Part 4: Service Troubleshooting
 
+> **Stop and think**: You verified that DNS successfully resolves a service name to its ClusterIP, but `curl` still returns "Connection refused". What is the next logical component to inspect?
+
 ### 4.1 Service Connectivity Flow
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                SERVICE CONNECTIVITY PATH                      │
-│                                                               │
-│   Client Pod                                                  │
-│        │                                                      │
-│        ▼                                                      │
-│   DNS Resolution (service.namespace → ClusterIP)             │
-│        │                                                      │
-│        ▼                                                      │
-│   kube-proxy Rules (iptables/IPVS)                           │
-│        │                                                      │
-│        ▼                                                      │
-│   Endpoint Selection (one of the backend pods)               │
-│        │                                                      │
-│        ▼                                                      │
-│   Target Pod                                                  │
-│                                                               │
-│   Each step can fail - check systematically                  │
-│                                                               │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A["Client Pod"]
+    B["DNS Resolution<br>(service.namespace → ClusterIP)"]
+    C["kube-proxy Rules<br>(iptables/IPVS)"]
+    D["Endpoint Selection<br>(one of the backend pods)"]
+    E["Target Pod"]
+
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+
+    style A fill:#f9f9f9,stroke:#333
+    style B fill:#f9f9f9,stroke:#333
+    style C fill:#f9f9f9,stroke:#333
+    style D fill:#f9f9f9,stroke:#333
+    style E fill:#f9f9f9,stroke:#333
+    
+    Note["Each step can fail - check systematically"]
 ```
 
 ### 4.2 Testing Service Connectivity
@@ -377,24 +365,18 @@ k patch svc my-service -p '{"spec":{"ports":[{"port":80,"targetPort":8080}]}}'
 
 ### 5.1 NetworkPolicy Behavior
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                NETWORKPOLICY LOGIC                            │
-│                                                               │
-│   No NetworkPolicy selecting pod → All traffic allowed        │
-│                                                               │
-│   Any NetworkPolicy selecting pod → Default deny, then:       │
-│   ┌─────────────────────────────────────────────────────┐    │
-│   │ Ingress rules: What can connect TO this pod         │    │
-│   │ Egress rules:  What this pod can connect TO         │    │
-│   │                                                      │    │
-│   │ If no ingress rules → All ingress denied            │    │
-│   │ If no egress rules  → All egress denied             │    │
-│   └─────────────────────────────────────────────────────┘    │
-│                                                               │
-│   Policies are additive: If ANY policy allows, it's allowed  │
-│                                                               │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A["No NetworkPolicy selecting pod"] --> B["All traffic allowed"]
+    C["Any NetworkPolicy selecting pod"] --> D["Default deny, then:"]
+    
+    D --> E["Ingress rules: What can connect TO this pod"]
+    D --> F["Egress rules: What this pod can connect TO"]
+    
+    E -.-> G["If no ingress rules → All ingress denied"]
+    F -.-> H["If no egress rules → All egress denied"]
+    
+    I["Policies are additive: If ANY policy allows, it's allowed"]
 ```
 
 ### 5.2 Diagnosing NetworkPolicy Issues
@@ -523,12 +505,12 @@ curl -H "Host: <hostname>" http://<ingress-ip>
 ## Quiz
 
 ### Q1: Empty Endpoints
-A service exists but `k get endpoints <svc>` shows no endpoints. What's the most likely cause?
+You have deployed a new backend application and exposed it via a ClusterIP service. However, when frontend pods try to connect, they receive connection refused errors. You check the service with `k get endpoints <svc>` and it returns an empty list. What is the most likely cause for this behavior and how do you investigate it?
 
 <details>
 <summary>Answer</summary>
 
-The service **selector doesn't match any pod labels**, or the matching pods aren't in **Ready** state.
+The most likely cause is that the service **selector doesn't match any pod labels**, or the matching pods aren't in a **Ready** state. When a service cannot find any pods that match its selector labels, it has no target IPs to route traffic to, resulting in an empty endpoints list. Additionally, if pods match but are failing their readiness probes, they are automatically removed from the endpoints list to prevent traffic from being sent to unhealthy instances. You must verify both the label alignment and the health of the underlying pods.
 
 Debug steps:
 ```bash
@@ -543,10 +525,12 @@ k get pods -l <selector> -o wide
 </details>
 
 ### Q2: DNS Failure
-All DNS lookups fail in pods. External DNS (8.8.8.8) is reachable. What do you check?
+A developer reports that their application pods can no longer resolve any internal Kubernetes services (like `db-service.backend.svc.cluster.local`) or external domains. However, when you exec into the pod and run `ping 8.8.8.8`, you receive successful responses, indicating external IP connectivity is working. What should you check to restore DNS resolution?
 
 <details>
 <summary>Answer</summary>
+
+Since external IP routing is working but DNS resolution is completely failing, the issue is isolated to the cluster's DNS provider, which is typically CoreDNS. You should start by checking if the **CoreDNS pods** in the `kube-system` namespace are actually running, healthy, and not crash-looping. If the pods are running, you must also verify that the `kube-dns` service exists and that its endpoints are properly populated with the CoreDNS pod IPs. Finally, check the client pod's `/etc/resolv.conf` to ensure it is correctly pointing to the `kube-dns` service IP.
 
 Check **CoreDNS pods** in kube-system:
 ```bash
@@ -555,33 +539,25 @@ k -n kube-system logs -l k8s-app=kube-dns
 k -n kube-system get endpoints kube-dns
 ```
 
-Also verify the kube-dns service exists and pods' /etc/resolv.conf points to it.
-
 </details>
 
 ### Q3: NetworkPolicy Default Behavior
-You create a NetworkPolicy with `podSelector: {}` and only ingress rules. What happens to egress traffic?
+You are tasked with securing a namespace and apply a NetworkPolicy with `podSelector: {}` to target all pods. In the specification, you define several `ingress` rules to allow specific incoming traffic, but you do not define any `egress` rules or include `Egress` in the `policyTypes` array. How does this policy affect the outbound traffic originating from the pods in this namespace?
 
 <details>
 <summary>Answer</summary>
 
-**Egress remains unrestricted.** A NetworkPolicy only affects the traffic types listed in `policyTypes`. If you only specify ingress rules and have `policyTypes: [Ingress]`, egress is not affected.
-
-However, if `policyTypes: [Ingress, Egress]` but no egress rules, all egress is **denied**.
+**Egress remains completely unrestricted.** A NetworkPolicy only affects the specific types of traffic that are explicitly listed in the `policyTypes` field of the specification. Because you only specified ingress rules and the implicit or explicit `policyTypes` list only covers `Ingress`, outbound traffic is not evaluated by this policy at all. However, if you were to add `Egress` to the `policyTypes` array but still provide no egress rules, the default deny behavior would activate, and all outbound traffic would be immediately blocked.
 
 </details>
 
 ### Q4: Cross-Node Pod Communication
-Pods on the same node can communicate, but pods on different nodes cannot. What's likely broken?
+During a routine cluster test, you discover that pods running on `worker-node-1` can successfully ping each other. However, when a pod on `worker-node-1` attempts to ping a pod on `worker-node-2`, the connection times out. What component is likely responsible for this cross-node communication failure?
 
 <details>
 <summary>Answer</summary>
 
-The **CNI plugin's cross-node networking** is not working. This could be:
-- CNI pods not running on all nodes
-- Network connectivity between nodes blocked
-- Overlay network (VXLAN/IPinIP) not configured
-- MTU mismatch causing packet drops
+The **CNI plugin's cross-node networking** overlay or routing is not functioning correctly. While same-node pod communication often relies on simple local bridge routing, cross-node communication requires the CNI (like Calico or Flannel) to encapsulate traffic (via VXLAN or IP-in-IP) or configure routing tables across the cluster infrastructure. This failure could be caused by CNI pods crashing on specific nodes, firewalls blocking the overlay network ports (like UDP 8472 for Flannel) between the nodes, or an MTU mismatch causing packet drops over the network path.
 
 Check:
 ```bash
@@ -592,27 +568,22 @@ k -n kube-system get pods -o wide | grep <cni-name>
 </details>
 
 ### Q5: Service Port Mapping
-Service has `port: 80, targetPort: 8080`. The container listens on 80. Will it work?
+You are troubleshooting an issue where a web application is inaccessible through its Kubernetes service. Upon inspecting the YAML manifests, you see the service is configured with `port: 80` and `targetPort: 8080`, while the deployment's container is configured to bind and listen on port 80. Will clients be able to reach the application through the service?
 
 <details>
 <summary>Answer</summary>
 
-**No.** The service will route traffic to pod port 8080, but the container is listening on 80.
-
-- `port`: The port clients use to access the service
-- `targetPort`: The port on the pod/container
-
-Fix: Either change `targetPort: 80` or make the app listen on 8080.
+**No, the connection will fail.** The service is explicitly instructed to accept incoming client traffic on port 80 and then route that traffic to port 8080 on the backend pods. However, because the actual application container is only listening on port 80, any traffic arriving at the pod's port 8080 will be rejected with a connection refused error. To resolve this mismatch, you must align the ports: either update the service's `targetPort` to 80 to match the container, or reconfigure the application to listen on 8080.
 
 </details>
 
 ### Q6: CoreDNS Loop
-CoreDNS keeps crashing with "Loop detected" in logs. What's the fix?
+Cluster users report intermittent DNS resolution failures. When you investigate the CoreDNS pods in the `kube-system` namespace, you notice they are frequently crashing and restarting. Checking the logs reveals a recurring "Loop detected" error message. What is causing this condition and how can you permanently fix it?
 
 <details>
 <summary>Answer</summary>
 
-This happens when CoreDNS detects it's forwarding to itself (often in environments where node's /etc/resolv.conf points to localhost).
+This error occurs when CoreDNS detects a routing loop where it is essentially forwarding DNS queries back to itself. This often happens in specific environments (like local clusters or certain cloud VMs) where the host node's `/etc/resolv.conf` points to a local loopback address (like `127.0.0.53`), confusing the CoreDNS forwarder plugin. To fix this, you need to modify the CoreDNS configuration to break the loop. You can do this by editing the ConfigMap to either remove the `loop` plugin entirely, or by explicitly setting upstream DNS servers (like `8.8.8.8`) instead of relying on the host's `/etc/resolv.conf`.
 
 Fix by editing the CoreDNS ConfigMap:
 ```bash
