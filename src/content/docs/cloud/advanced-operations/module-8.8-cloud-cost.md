@@ -37,36 +37,30 @@ After implementing the techniques in this module -- right-sizing, committed use 
 
 ## The Four Pillars of Cloud Cost Optimization
 
-```
-COST OPTIMIZATION FRAMEWORK
-════════════════════════════════════════════════════════════════
+```mermaid
+graph TD
+    classDef pillar fill:#f9f9f9,stroke:#333,stroke-width:2px;
+    classDef header fill:#e1f5fe,stroke:#0288d1,stroke-width:2px;
 
-  ┌──────────────────────────────────────────────────────────┐
-  │                    COST OPTIMIZATION                      │
-  │                                                          │
-  │  1. VISIBILITY         2. RIGHT-SIZING                   │
-  │  "Where does the       "Are resources matched             │
-  │   money go?"            to actual usage?"                 │
-  │                                                          │
-  │  - Cost allocation     - CPU/memory utilization          │
-  │  - Showback/chargeback - VPA recommendations             │
-  │  - Kubecost/OpenCost   - Node right-sizing               │
-  │                                                          │
-  │  3. RATE OPTIMIZATION  4. ARCHITECTURAL                  │
-  │  "Are we paying the    "Can we change HOW                │
-  │   best price?"          we run things?"                   │
-  │                                                          │
-  │  - Savings Plans/CUDs  - Spot/preemptible instances      │
-  │  - Reserved Instances  - Topology-aware routing           │
-  │  - Committed Use       - Ephemeral environments          │
-  │                        - Orphaned resource cleanup       │
-  └──────────────────────────────────────────────────────────┘
+    title[COST OPTIMIZATION FRAMEWORK]:::header
 
-  Implementation order: 1 -> 2 -> 3 -> 4
-  You can't optimize what you can't see.
+    subgraph Optimization Process [ ]
+        direction LR
+        P1["1. VISIBILITY<br/>'Where does the money go?'<br/>- Cost allocation<br/>- Showback/chargeback<br/>- Kubecost/OpenCost"]:::pillar
+        P2["2. RIGHT-SIZING<br/>'Are resources matched to actual usage?'<br/>- CPU/memory utilization<br/>- VPA recommendations<br/>- Node right-sizing"]:::pillar
+        P3["3. RATE OPTIMIZATION<br/>'Are we paying the best price?'<br/>- Savings Plans/CUDs<br/>- Reserved Instances<br/>- Committed Use"]:::pillar
+        P4["4. ARCHITECTURAL<br/>'Can we change HOW we run things?'<br/>- Spot/preemptible instances<br/>- Topology-aware routing<br/>- Ephemeral environments<br/>- Orphaned resource cleanup"]:::pillar
+
+        P1 --> P2 --> P3 --> P4
+    end
+    
+    note[Implementation order: 1 --> 2 --> 3 --> 4<br/>You can't optimize what you can't see.]
+    Optimization Process --> note
 ```
 
 ---
+
+> **Pause and predict**: If three teams share a single Kubernetes node, how can you determine who pays for what?
 
 ## Pillar 1: Visibility with Kubecost and OpenCost
 
@@ -74,37 +68,37 @@ Kubernetes makes cost allocation hard because workloads share nodes. If three te
 
 ### Kubecost Architecture
 
-```
-KUBECOST COST ALLOCATION
-════════════════════════════════════════════════════════════════
+```mermaid
+flowchart TD
+    classDef external fill:#fff3e0,stroke:#e65100,stroke-width:2px;
+    classDef core fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
 
-  Cloud Billing API              Kubernetes Metrics
-  (AWS CUR / GCP Billing /      (Prometheus / metrics-server)
-   Azure Cost Export)
-       │                              │
-       ▼                              ▼
-  ┌──────────────────────────────────────────┐
-  │              Kubecost                     │
-  │                                          │
-  │  Cost allocation engine:                 │
-  │  1. Get actual cloud cost per node       │
-  │  2. Get resource usage per pod per node  │
-  │  3. Allocate node cost to pods based on  │
-  │     resource consumption                 │
-  │  4. Aggregate by namespace, label, team  │
-  │                                          │
-  │  Example:                                │
-  │  Node cost: $100/day (m7i.xlarge)        │
-  │  Pod A uses 40% CPU, 30% memory         │
-  │  Pod B uses 20% CPU, 50% memory         │
-  │  Pod C uses 10% CPU, 10% memory         │
-  │                                          │
-  │  Allocation (weighted average):          │
-  │  Pod A: $100 * (0.4+0.3)/2 = $35/day    │
-  │  Pod B: $100 * (0.2+0.5)/2 = $35/day    │
-  │  Pod C: $100 * (0.1+0.1)/2 = $10/day    │
-  │  Idle: $100 - $35 - $35 - $10 = $20/day │
-  └──────────────────────────────────────────┘
+    B["Cloud Billing API<br/>(AWS CUR / GCP Billing / Azure Cost Export)"]:::external
+    M["Kubernetes Metrics<br/>(Prometheus / metrics-server)"]:::external
+    
+    subgraph Kubecost ["Kubecost Allocation Engine"]
+        direction TB
+        S1["1. Get actual cloud cost per node"]
+        S2["2. Get resource usage per pod per node"]
+        S3["3. Allocate node cost to pods based on resource consumption"]
+        S4["4. Aggregate by namespace, label, team"]
+        
+        S1 ~~~ S2 ~~~ S3 ~~~ S4
+        
+        subgraph Example ["Example Scenario"]
+            direction TB
+            N["Node cost: $100/day (m7i.xlarge)"]
+            PA["Pod A uses 40% CPU, 30% memory<br/>Allocation: $100 * (0.4+0.3)/2 = $35/day"]
+            PB["Pod B uses 20% CPU, 50% memory<br/>Allocation: $100 * (0.2+0.5)/2 = $35/day"]
+            PC["Pod C uses 10% CPU, 10% memory<br/>Allocation: $100 * (0.1+0.1)/2 = $10/day"]
+            I["Idle: $100 - $35 - $35 - $10 = $20/day"]
+            
+            N --> PA & PB & PC --> I
+        end
+    end
+
+    B --> Kubecost
+    M --> Kubecost
 ```
 
 ### Installing Kubecost
@@ -221,33 +215,34 @@ EOF
 
 ---
 
+> **Stop and think**: Why is over-provisioning a pod's requested CPU worse than over-provisioning its limits?
+
 ## Pillar 2: Right-Sizing with VPA and HPA
 
 The most common waste pattern in Kubernetes: developers set resource requests based on guesswork, then never revisit them.
 
 ### Vertical Pod Autoscaler (VPA) for Right-Sizing
 
-```
-VPA RIGHT-SIZING EXAMPLE
-════════════════════════════════════════════════════════════════
+```mermaid
+graph TD
+    classDef before fill:#ffebee,stroke:#c62828,stroke-width:2px,text-align:left;
+    classDef after fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,text-align:left;
+    classDef note fill:#fff9c4,stroke:#fbc02d,stroke-width:1px;
 
-  Before VPA analysis:                After VPA recommendation:
-  ┌──────────────────────┐           ┌──────────────────────┐
-  │  Request: 4 CPU      │           │  Request: 800m CPU   │
-  │  ████                │           │  ██                  │
-  │  ████                │           │  Actual usage: 600m  │
-  │  ████                │           │                      │
-  │  Actual: 600m        │           │  Request: 2Gi mem    │
-  │                      │           │  ████████            │
-  │  Request: 8Gi mem    │           │  Actual usage: 1.5Gi │
-  │  ████████████████    │           │                      │
-  │  Actual: 1.5Gi      │           │  Savings: 80% CPU    │
-  │                      │           │           75% memory │
-  └──────────────────────┘           └──────────────────────┘
+    subgraph Before["Before VPA analysis"]
+        B_CPU["Request: 4 CPU<br/>████<br/>████<br/>████<br/>Actual: 600m"]:::before
+        B_MEM["Request: 8Gi mem<br/>████████████████<br/>Actual: 1.5Gi"]:::before
+    end
 
-  Over-provisioning wastes money because K8s schedules based on
-  REQUESTS, not actual usage. A pod requesting 4 CPU blocks
-  4 CPU from being used by other pods, even if it only uses 600m.
+    subgraph After["After VPA recommendation"]
+        A_CPU["Request: 800m CPU<br/>██<br/>Actual usage: 600m"]:::after
+        A_MEM["Request: 2Gi mem<br/>████<br/>Actual usage: 1.5Gi"]:::after
+    end
+
+    Before -->|Savings: 80% CPU, 75% memory| After
+
+    N["Over-provisioning wastes money because K8s schedules based on<br/>REQUESTS, not actual usage. A pod requesting 4 CPU blocks<br/>4 CPU from being used by other pods, even if it only uses 600m."]:::note
+    After --> N
 ```
 
 ```yaml
@@ -350,36 +345,39 @@ spec:
 
 ### Savings Plans and Committed Use Discounts
 
-```
-RATE OPTIMIZATION COMPARISON
-════════════════════════════════════════════════════════════════
+```mermaid
+graph TD
+    classDef provider fill:#eceff1,stroke:#607d8b,stroke-width:2px;
+    classDef strategy fill:#e3f2fd,stroke:#1565c0,stroke-width:2px;
 
-AWS:
-  On-Demand:          $0.192/hr (m7i.xlarge)
-  1yr Savings Plan:   $0.121/hr (-37%)
-  3yr Savings Plan:   $0.077/hr (-60%)
-  Spot:               $0.058/hr (-70%, but can be interrupted)
+    subgraph AWS ["AWS (m7i.xlarge)"]
+        A1["On-Demand: $0.192/hr"]
+        A2["1yr Savings Plan: $0.121/hr (-37%)"]
+        A3["3yr Savings Plan: $0.077/hr (-60%)"]
+        A4["Spot: $0.058/hr (-70%, interruptible)"]
+    end:::provider
 
-GCP:
-  On-Demand:          $0.189/hr (n2-standard-4)
-  1yr CUD:            $0.119/hr (-37%)
-  3yr CUD:            $0.085/hr (-55%)
-  Spot:               $0.057/hr (-70%)
-  SUDs (automatic):   $0.151/hr (-20%, auto-applied after 25% month)
+    subgraph GCP ["GCP (n2-standard-4)"]
+        G1["On-Demand: $0.189/hr"]
+        G2["1yr CUD: $0.119/hr (-37%)"]
+        G3["3yr CUD: $0.085/hr (-55%)"]
+        G4["Spot: $0.057/hr (-70%)"]
+        G5["SUDs (automatic): $0.151/hr (-20%)"]
+    end:::provider
 
-Azure:
-  On-Demand:          $0.192/hr (D4s v5)
-  1yr Reserved:       $0.124/hr (-35%)
-  3yr Reserved:       $0.079/hr (-59%)
-  Spot:               ~$0.038/hr (-80%, varies)
+    subgraph Azure ["Azure (D4s v5)"]
+        Z1["On-Demand: $0.192/hr"]
+        Z2["1yr Reserved: $0.124/hr (-35%)"]
+        Z3["3yr Reserved: $0.079/hr (-59%)"]
+        Z4["Spot: ~$0.038/hr (-80%)"]
+    end:::provider
 
-  STRATEGY:
-  ┌─────────────────────────────────────────────────────┐
-  │  Baseline (24/7 workloads)    → Savings Plan / CUD  │
-  │  Bursty (predictable peaks)   → On-demand           │
-  │  Fault-tolerant (batch, CI)   → Spot instances       │
-  │  Development                  → Spot + auto-shutdown │
-  └─────────────────────────────────────────────────────┘
+    subgraph STRATEGY ["Optimization Strategy"]
+        S1["Baseline (24/7 workloads) --> Savings Plan / CUD"]
+        S2["Bursty (predictable peaks) --> On-demand"]
+        S3["Fault-tolerant (batch, CI) --> Spot instances"]
+        S4["Development --> Spot + auto-shutdown"]
+    end:::strategy
 ```
 
 ### Calculating Your Savings Plan Commitment
@@ -669,15 +667,15 @@ spec:
 ## Quiz
 
 <details>
-<summary>1. Why can't you simply look at the cloud bill to determine per-team Kubernetes costs?</summary>
+<summary>1. Your CFO hands you the monthly AWS bill, pointing to a single $45,000 line item for EC2 instances in your production EKS cluster. She asks you to split this cost between the Data Science team and the Frontend team. Why is this impossible to do accurately using just the AWS Billing Console?</summary>
 
-Cloud bills show costs per resource (EC2 instances, EBS volumes, load balancers), not per workload. In Kubernetes, multiple teams' pods share the same nodes. A $500/month EC2 instance might run pods from three different teams, but the bill shows one line item for the instance. Cost allocation requires understanding which pods ran on which nodes, for how long, and how much CPU/memory they consumed. Tools like Kubecost and OpenCost perform this allocation by combining cloud billing data (actual cost per node) with Kubernetes metrics (resource usage per pod), then aggregating by team labels to produce per-team costs. Without this layer, the best you can do is per-account or per-cluster costs, which are too coarse for team-level accountability.
+Cloud billing consoles only show costs per infrastructure resource (like EC2 instances or EBS volumes), not per Kubernetes workload. Because Kubernetes schedules pods from multiple teams onto the same shared nodes, a single $500/month EC2 instance might be running three Data Science jobs and two Frontend APIs simultaneously. To accurately split this cost, you need a tool like Kubecost or OpenCost that merges the billing data (the node's actual price) with Kubernetes metrics (how much CPU and memory each team's pods consumed on that specific node) and aggregates it via namespace or label. Without this workload-level correlation, any cost splitting is just a blind guess.
 </details>
 
 <details>
-<summary>2. What is the difference between VPA and HPA, and how do they optimize costs differently?</summary>
+<summary>2. During a cost review, you notice the `recommendation-engine` deployment is consistently using only 15% of its requested CPU, while traffic patterns are highly unpredictable. Your junior engineer suggests implementing VPA in auto-update mode to fix the waste. Why might a combination of VPA (in recommendation mode) and HPA be a better financial and architectural decision?</summary>
 
-VPA (Vertical Pod Autoscaler) adjusts resource requests and limits for individual pods based on observed usage. It optimizes cost by reducing over-provisioned requests, allowing more pods to fit on each node. HPA (Horizontal Pod Autoscaler) adjusts the number of pod replicas based on metrics (CPU, memory, custom). It optimizes cost by scaling down replicas during low-traffic periods. VPA answers "how big should each pod be?" while HPA answers "how many pods should we run?" They complement each other: VPA right-sizes each pod, and HPA scales the count based on demand. Using both together (with VPA in recommendation mode) provides the best cost optimization.
+If you use VPA in auto-update mode on an unpredictable workload, it will aggressively scale down the pod's CPU requests during quiet periods, which can lead to severe CPU throttling and performance degradation when traffic spikes suddenly. Instead, you should use VPA in "Off" (recommendation) mode to determine the optimal baseline size for a single pod based on historical data. Then, implement HPA to dynamically add or remove those correctly-sized pods based on real-time traffic demand. By right-sizing the individual pods with VPA insights and scaling their count horizontally with HPA, you eliminate the baseline waste of over-provisioning while maintaining the elasticity needed to handle sudden traffic peaks gracefully.
 </details>
 
 <details>
@@ -687,9 +685,9 @@ No. Commit to $6,000-$7,000 (60-70% of current usage). Savings Plans commit you 
 </details>
 
 <details>
-<summary>4. How do Spot instance interruptions affect Kubernetes workloads, and what makes them safe for some workloads?</summary>
+<summary>4. Your team wants to migrate a legacy monolithic application to a Spot instance node group to save 70% on compute costs. The application takes 5 minutes to gracefully shut down, requires persistent local disk state, and runs as a single replica. Why will this migration result in a catastrophic production outage?</summary>
 
-When a Spot instance is interrupted, AWS sends a 2-minute warning. The Node Termination Handler detects this and cordons the node (preventing new scheduling) then drains it (evicting pods with graceful termination). Kubernetes' ReplicaSet controller detects the missing pods and schedules replacements on other nodes. This makes Spot safe for workloads that are: (a) stateless (no local data to lose), (b) replicated (losing one pod doesn't affect availability if others run on non-Spot nodes), (c) fault-tolerant (batch jobs that can checkpoint and resume), or (d) have PodDisruptionBudgets that ensure enough replicas survive the drain. Spot is NOT safe for: single-replica stateful workloads, control plane components, or workloads that take more than 2 minutes to gracefully shutdown.
+Spot instances can be reclaimed by the cloud provider with only a 2-minute interruption warning. Since the legacy monolith takes 5 minutes to shut down, it will be forcefully terminated before it finishes its shutdown sequence, leading to data corruption or incomplete transactions. Furthermore, because it relies on local disk state and runs as a single replica, the entire application will go offline and lose its state when the underlying node disappears. Spot instances are only safe for stateless, fault-tolerant workloads that can gracefully terminate within 2 minutes and have multiple replicas distributed across different nodes to ensure continuous availability during interruptions.
 </details>
 
 <details>
@@ -699,9 +697,9 @@ Business hours represent roughly 45 hours per week out of 168 total hours (27% o
 </details>
 
 <details>
-<summary>6. What are the most commonly orphaned cloud resources in Kubernetes environments?</summary>
+<summary>6. You recently deleted a large development namespace containing StatefulSets, LoadBalancer services, and hundreds of pods. A month later, your cloud bill shows an unexpected $800 charge associated with the deleted environment. What specific Kubernetes architectural mechanisms likely caused these resources to be orphaned and continue accruing charges?</summary>
 
-The most common orphans are: (1) EBS volumes from deleted PVCs where the StorageClass had `reclaimPolicy: Retain` -- the PV is released but the underlying volume persists and incurs charges. (2) Load balancers from deleted Services of type LoadBalancer -- if the Service is deleted without proper finalizers, the cloud LB may remain. (3) Elastic IPs allocated for Services that are later deleted. (4) EBS snapshots from old Velero backups with no TTL configured. (5) Target groups in ALBs that no longer have any registered targets. (6) Security groups created by Kubernetes that are no longer referenced. These accumulate over months and can represent 5-15% of total cloud spend. Weekly automated scans with alerts are the most effective prevention.
+When deleting Kubernetes resources, the underlying cloud infrastructure isn't always automatically cleaned up due to default retention policies. The most likely culprit for the $800 charge is unattached EBS volumes left behind by the StatefulSets, because the default `StorageClass` often uses `reclaimPolicy: Retain`, meaning the cloud disk persists even after the PersistentVolumeClaim is deleted. Additionally, if the LoadBalancer services were forcefully deleted or the namespace was abruptly terminated without allowing controllers to finalize cleanup, the cloud provider's Load Balancers and associated Elastic IPs would remain active. To prevent this, you must configure `reclaimPolicy: Delete` for non-critical storage and implement automated scanning tools to detect and alert on unattached cloud resources.
 </details>
 
 ---
