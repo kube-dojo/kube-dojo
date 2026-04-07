@@ -60,75 +60,33 @@ By the end of this module, you will be able to:
 
 ### 1.1 Scheduling Cycle Overview
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                 Scheduling Framework Pipeline                        │
-│                                                                     │
-│   Pod enters scheduling queue                                       │
-│        │                                                            │
-│        ▼                                                            │
-│   ┌────────────────────────┐                                       │
-│   │  1. PreEnqueue         │  Reject pods before queuing           │
-│   └────────────┬───────────┘                                       │
-│                ▼                                                    │
-│   ┌────────────────────────┐                                       │
-│   │  2. Sort               │  Order pods in the queue              │
-│   └────────────┬───────────┘                                       │
-│                ▼                                                    │
-│   ══════════════════════════  SCHEDULING CYCLE (per pod) ═══════   │
-│                │                                                    │
-│                ▼                                                    │
-│   ┌────────────────────────┐                                       │
-│   │  3. PreFilter          │  Compute shared state for filtering   │
-│   └────────────┬───────────┘                                       │
-│                ▼                                                    │
-│   ┌────────────────────────┐                                       │
-│   │  4. Filter             │  Eliminate infeasible nodes           │
-│   │     (per node)         │  ← YOUR EXTENSION POINT              │
-│   └────────────┬───────────┘                                       │
-│                ▼                                                    │
-│   ┌────────────────────────┐                                       │
-│   │  5. PostFilter         │  Handle case when no node fits       │
-│   │     (preemption)       │  (try preempting lower-priority pods) │
-│   └────────────┬───────────┘                                       │
-│                ▼                                                    │
-│   ┌────────────────────────┐                                       │
-│   │  6. PreScore           │  Compute shared state for scoring     │
-│   └────────────┬───────────┘                                       │
-│                ▼                                                    │
-│   ┌────────────────────────┐                                       │
-│   │  7. Score              │  Rank feasible nodes 0-100           │
-│   │     (per node)         │  ← YOUR EXTENSION POINT              │
-│   └────────────┬───────────┘                                       │
-│                ▼                                                    │
-│   ┌────────────────────────┐                                       │
-│   │  8. NormalizeScore     │  Normalize scores to [0, 100]        │
-│   └────────────┬───────────┘                                       │
-│                ▼                                                    │
-│   ┌────────────────────────┐                                       │
-│   │  9. Reserve            │  Optimistically assume placement     │
-│   └────────────┬───────────┘                                       │
-│                ▼                                                    │
-│   ┌────────────────────────┐                                       │
-│   │  10. Permit            │  Hold, allow, or deny binding        │
-│   └────────────┬───────────┘                                       │
-│                ▼                                                    │
-│   ══════════════════════════  BINDING CYCLE ════════════════════   │
-│                │                                                    │
-│                ▼                                                    │
-│   ┌────────────────────────┐                                       │
-│   │  11. PreBind           │  Pre-binding operations              │
-│   └────────────┬───────────┘                                       │
-│                ▼                                                    │
-│   ┌────────────────────────┐                                       │
-│   │  12. Bind              │  Actually bind Pod to Node           │
-│   └────────────┬───────────┘                                       │
-│                ▼                                                    │
-│   ┌────────────────────────┐                                       │
-│   │  13. PostBind          │  Informational, after binding        │
-│   └────────────────────────┘                                       │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Start([Pod enters scheduling queue]) --> PreEnqueue
+
+    subgraph Queueing Phase
+        PreEnqueue[1. PreEnqueue<br/>Reject pods before queuing] --> Sort[2. Sort<br/>Order pods in the queue]
+    end
+
+    Sort --> PreFilter
+
+    subgraph Scheduling Cycle
+        PreFilter[3. PreFilter<br/>Compute shared state] --> Filter[4. Filter<br/>Eliminate infeasible nodes]
+        Filter -- If no nodes fit --> PostFilter[5. PostFilter<br/>Handle preemption]
+        Filter -- If nodes pass --> PreScore[6. PreScore<br/>Compute shared score state]
+        PostFilter -. Retry scheduling .-> PreFilter
+        PreScore --> Score[7. Score<br/>Rank feasible nodes 0-100]
+        Score --> Normalize[8. NormalizeScore<br/>Normalize scores]
+        Normalize --> Reserve[9. Reserve<br/>Optimistically assume placement]
+        Reserve --> Permit[10. Permit<br/>Hold, allow, or deny binding]
+    end
+
+    Permit --> PreBind
+
+    subgraph Binding Cycle
+        PreBind[11. PreBind<br/>Pre-binding operations] --> Bind[12. Bind<br/>Actually bind Pod to Node]
+        Bind --> PostBind[13. PostBind<br/>Informational, after binding]
+    end
 ```
 
 ### 1.2 Extension Points Reference
@@ -323,6 +281,8 @@ func New(ctx context.Context, obj runtime.Object, handle framework.Handle) (fram
 	}, nil
 }
 ```
+
+> **Stop and think**: In a cluster with thousands of nodes and hundreds of pods being scheduled per second, reading labels directly from the API server inside the `Score` function would cause massive latency. How does the Scheduling Framework prevent this API server bottleneck when you call `pl.handle.SnapshotSharedLister().NodeInfos().Get(nodeName)`?
 
 ### 2.3 Writing a Filter Plugin
 
@@ -826,6 +786,8 @@ PostFilter: DefaultPreemption
     └── Evict victim Pods → retry scheduling
 ```
 
+> **Pause and predict**: If a custom `PostFilter` plugin successfully preempts lower-priority pods to make room for a critical workload, does the `PostFilter` plugin directly bind the pending pod to the newly freed node? What must happen next?
+
 Custom PostFilter plugins can implement alternative preemption strategies.
 
 ---
@@ -848,40 +810,40 @@ Custom PostFilter plugins can implement alternative preemption strategies.
 
 ## Quiz
 
-1. **What is the difference between a Filter plugin and a Score plugin?**
+1. **You are developing a plugin to ensure machine learning workloads only land on nodes with specific compliance certifications. Another plugin is needed to distribute these workloads across multiple availability zones to minimize blast radius. Which plugin types should you use for each requirement, and why?**
    <details>
    <summary>Answer</summary>
-   A Filter plugin makes a binary decision: either a node is feasible (passes) or it is not (eliminated). It reduces the set of candidate nodes. A Score plugin ranks the feasible nodes by assigning each a score from 0 to 100. Filtering happens before scoring. If no node passes filtering, PostFilter (preemption) is attempted. The node with the highest combined score from all Score plugins is selected.
+   You should use a Filter plugin for the compliance certifications and a Score plugin for the availability zone distribution. The compliance requirement is a hard constraint; if a node lacks the certification, it must be completely eliminated from consideration, which is exactly what a Filter plugin does by returning a pass/fail status. The availability zone distribution is a soft preference; all certified nodes are technically valid, but you want to rank nodes in underutilized zones higher using a Score plugin. The scheduler will then evaluate the surviving nodes and place the Pod on the one with the highest normalized score.
    </details>
 
-2. **How does a Pod select which scheduler should schedule it?**
+2. **Your cluster administrator has deployed a new `gpu-scheduler` alongside the `default-scheduler`. You submit a Deployment with a pod template that requires a GPU, but you forget to add any scheduler-specific fields to the manifest. The `gpu-scheduler` is perfectly configured to handle this workload. What will happen to your Pods?**
    <details>
    <summary>Answer</summary>
-   Via the `spec.schedulerName` field. If not set, it defaults to `default-scheduler`. If set to `custom-scheduler`, only a scheduler with a profile named `custom-scheduler` will process it. If no scheduler matches the name, the Pod stays in Pending indefinitely.
+   Your Pods will be processed by the `default-scheduler` instead of the `gpu-scheduler` and may remain in a Pending state if the default scheduler lacks the necessary logic to place them. By default, if the `spec.schedulerName` field is omitted from a Pod's specification, the Kubernetes API server implicitly assigns it to the `default-scheduler`. The secondary `gpu-scheduler` operates completely independently and only watches for Pods explicitly requesting its exact profile name. To fix this, you must update the pod template to include `schedulerName: gpu-scheduler` so the default scheduler ignores it and the custom scheduler picks it up.
    </details>
 
-3. **Explain the purpose of PreFilter and how it relates to Filter.**
+3. **You are writing a Filter plugin that needs to perform a complex, computationally expensive calculation based on a Pod's annotations to determine compatibility. If you perform this calculation inside the `Filter` extension point on a 5,000-node cluster, you notice significant scheduling delays. How can you redesign your plugin to resolve this performance bottleneck?**
    <details>
    <summary>Answer</summary>
-   PreFilter runs once per scheduling cycle (before any Filter calls). It computes shared state that all Filter invocations can use, avoiding redundant computation. For example, if a Filter checks whether a node has enough GPUs, PreFilter can compute the pod's GPU requirements once and store them in CycleState. Each Filter call (one per node) then reads from CycleState instead of re-parsing the pod spec. PreFilter can also return Skip to skip the Filter entirely (e.g., if the pod does not need GPU, skip the GPU filter).
+   You should move the computationally expensive calculation into the `PreFilter` extension point and store the result in the `CycleState`. The `Filter` extension point is invoked individually for every single feasible node in the cluster, meaning your calculation was being executed up to 5,000 times per Pod. The `PreFilter` extension point, however, is invoked exactly once per scheduling cycle before any node filtering begins. By computing the value once in `PreFilter` and reading that shared state inside the `Filter` function, you reduce the time complexity significantly and eliminate the scheduling delays.
    </details>
 
-4. **What happens when a Score plugin returns inconsistent scores (e.g., 200 for one node)?**
+4. **Your team creates a custom Score plugin that assigns a score of 500 to nodes with high network bandwidth and 10 to nodes with low bandwidth. However, during testing, you notice that the default scheduler plugins (like `NodeResourcesFit`) are completely ignoring your scores, and workloads are not being placed optimally. What architectural requirement of the Scheduling Framework did your team violate?**
    <details>
    <summary>Answer</summary>
-   The NormalizeScore extension point handles this. After all Score plugins run, NormalizeScore normalizes the scores to the [0, MaxNodeScore] range (where MaxNodeScore is 100). The normalization typically divides by the maximum score in the batch. However, returning scores > 100 from Score() is technically valid only if your NormalizeScore implementation handles it. The built-in framework expects plugins to return scores in a reasonable range.
+   Your team violated the requirement that all final scores must be normalized to a standard range, specifically between 0 and 100 (`framework.MaxNodeScore`). When a plugin returns raw scores outside this boundary, it must implement the `NormalizeScore` extension point to mathematically map its internal scoring system down to the 0-100 scale. Because your plugin returned a raw score of 500 without normalizing it, the framework either rejected the score or improperly weighted it against built-in plugins that correctly operate within the 0-100 range. Implementing the `NormalizeScore` function to scale 500 down to 100 will fix the aggregation issue.
    </details>
 
-5. **You have two schedulers: default-scheduler and custom-scheduler. Can they schedule the same Pod?**
+5. **You deploy a mission-critical Pod with `schedulerName: fast-scheduler`, but the `fast-scheduler` deployment has crashed and currently has zero running replicas. The `default-scheduler` is perfectly healthy and capable of placing the Pod. How will the cluster handle this failure scenario to ensure the Pod gets scheduled?**
    <details>
    <summary>Answer</summary>
-   No. A Pod specifies exactly one scheduler via `spec.schedulerName`. Only the scheduler with a matching profile name will process that Pod. If `schedulerName` is not set, only `default-scheduler` processes it. There is no fallback mechanism -- if the named scheduler is not running, the Pod stays Pending. This is by design to prevent scheduling conflicts.
+   The cluster will not schedule the Pod at all, and it will remain in a Pending state indefinitely until the `fast-scheduler` is restored. Kubernetes does not have a fallback mechanism for scheduler assignment; the `spec.schedulerName` is a strict, exclusive contract. The `default-scheduler` explicitly filters out any Pods that do not match its own name, meaning it will completely ignore your mission-critical Pod. This architectural design prevents race conditions and conflicts that would occur if multiple schedulers attempted to bind the same Pod simultaneously.
    </details>
 
-6. **What is the `weight` field in a Score plugin configuration, and how does it affect scheduling?**
+6. **You have configured a custom KubeSchedulerConfiguration profile with your `NodePreference` plugin and the built-in `InterPodAffinity` plugin. Your plugin correctly scores premium nodes at 100, but Pods are still consistently landing on standard nodes (score 50) because they already contain other Pods from the same application. How can you configure the scheduler to prioritize your custom tier preference over the built-in pod affinity?**
    <details>
    <summary>Answer</summary>
-   The weight multiplies the plugin's normalized score before combining with other plugins' scores. A weight of 25 means this plugin's score counts 25x more than a plugin with weight 1. The final node score is the weighted sum of all plugin scores. This lets cluster admins tune how much each factor (resource balance, node preference, affinity, etc.) influences the scheduling decision without modifying plugin code.
+   You need to adjust the `weight` field for your `NodePreference` plugin within the `KubeSchedulerConfiguration` profile to be significantly higher than the weight of the `InterPodAffinity` plugin. The final node score is a weighted sum of all active Score plugins, meaning a plugin with a higher weight has a proportionally larger mathematical impact on the final decision. By default, if your plugin has a weight of 1 and `InterPodAffinity` has a weight of 5, the built-in affinity will easily override your tier preference. Increasing your plugin's weight to 10 or 20 will ensure the framework mathematically favors premium nodes even when pod affinity suggests otherwise.
    </details>
 
 ---
