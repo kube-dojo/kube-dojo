@@ -31,27 +31,25 @@ In this module, you will learn the Knative concepts that underpin Cloud Run, how
 
 Cloud Run is a managed implementation of Knative Serving. Understanding the Knative model helps you reason about Cloud Run's behavior.
 
-```text
-  ┌─────────────────────────────────────────────────────────────┐
-  │  Cloud Run Service: my-api                                   │
-  │                                                               │
-  │  ┌─────────────────────────────────────────────────────────┐ │
-  │  │  Route (Traffic Splitting)                                │ │
-  │  │  100% → Revision: my-api-00003 (latest)                  │ │
-  │  │  ← or split: 90% → rev-00003, 10% → rev-00004 (canary) │ │
-  │  └──────────────────┬──────────────────────────────────────┘ │
-  │                     │                                         │
-  │           ┌─────────┼──────────┐                              │
-  │           │         │          │                              │
-  │     ┌─────▼───┐ ┌───▼────┐ ┌──▼──────┐                      │
-  │     │ Instance │ │Instance│ │Instance │  ← Autoscaled        │
-  │     │  (Rev 3) │ │(Rev 3) │ │(Rev 3)  │    (0 to 1000)       │
-  │     │          │ │        │ │         │                      │
-  │     │ Container│ │Container││Container│  ← Your Docker image  │
-  │     │  Port    │ │ Port   │ │ Port    │    listening on $PORT  │
-  │     │  8080    │ │ 8080   │ │ 8080    │                      │
-  │     └─────────┘ └────────┘ └─────────┘                      │
-  └─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Service["Cloud Run Service: my-api"]
+    
+    subgraph Route ["Route (Traffic Splitting)"]
+        direction TB
+        R1["100% → Revision: my-api-00003 (latest)"]
+        R2["← or split: 90% → rev-00003, 10% → rev-00004 (canary)"]
+    end
+    
+    Service --> Route
+    
+    Route --> I1["Instance (Rev 3)<br>Container Port 8080"]
+    Route --> I2["Instance (Rev 3)<br>Container Port 8080"]
+    Route --> I3["Instance (Rev 3)<br>Container Port 8080"]
+    
+    style I1 stroke-dasharray: 5 5
+    style I2 stroke-dasharray: 5 5
+    style I3 stroke-dasharray: 5 5
 ```
 
 **Service**: The top-level resource. A service has a stable URL, manages multiple revisions, and controls traffic routing.
@@ -135,6 +133,22 @@ gcloud run services update my-api \
   --set-secrets="DB_PASSWORD=db-password:latest"
 ```
 
+### Custom Domains
+
+By default, Cloud Run provides a stable `*.a.run.app` URL for your service with a managed TLS certificate. For production workloads, you will likely want to map a custom domain (e.g., `api.example.com`).
+
+You can configure a custom domain in two main ways:
+1. **Global External Application Load Balancer**: The recommended approach for production. You place a Google Cloud Load Balancer in front of Cloud Run, which gives you a static Anycast IP, integration with Cloud Armor (WAF), and custom domains with Google-managed certificates.
+2. **Cloud Run Domain Mappings**: A simpler, built-in feature where you map a verified domain directly to the service. Cloud Run provisions the TLS certificate automatically. Note: This feature has limited availability in some regions and does not support Cloud Armor.
+
+```bash
+# Map a custom domain directly to a Cloud Run service
+gcloud beta run domain-mappings create \
+  --service=my-api \
+  --domain=api.example.com \
+  --region=us-central1
+```
+
 ---
 
 ## Concurrency: The Key to Cost Optimization
@@ -172,6 +186,8 @@ gcloud run services update my-api \
 
 **War Story**: A team set their Cloud Run concurrency to 1 because they assumed it worked "like Lambda." Their API received 500 requests per second, which meant Cloud Run spun up 500 instances. Their monthly bill jumped from $200 to $12,000. Setting concurrency to 80 reduced the required instances from 500 to 7, and the bill dropped back to $250.
 
+> **Stop and think**: If your Node.js application is heavily CPU-bound (e.g., synchronously resizing large images on the main thread) and you leave the concurrency at the default of 80, what will happen when 50 requests arrive simultaneously? Since Node.js is single-threaded, the requests will be queued inside the single instance, leading to massive latency spikes and likely timeouts for the user. In this scenario, lowering concurrency to 1 or 2 is critical for performance.
+
 ---
 
 ## CPU Allocation: Throttled vs Always-On
@@ -200,6 +216,8 @@ You need always-on CPU if your application:
 - Maintains WebSocket connections
 - Pre-warms caches or connection pools
 - Performs async processing after sending the response
+
+> **Pause and predict**: You deployed a microservice to Cloud Run that receives an HTTP request, immediately returns a `202 Accepted` response, and then spawns a background goroutine to process the data over the next 10 seconds. In production, you notice that the background processing rarely finishes, or only finishes sporadically when new requests come in. Why? Because the CPU is throttled immediately after the `202` response is sent. The background thread is effectively frozen until a new request arrives and wakes the CPU up again. You must enable `--no-cpu-throttling`.
 
 ---
 
@@ -347,27 +365,18 @@ gcloud run deploy my-api \
 
 By default, Cloud Run services can only access the public internet. To reach private resources (Cloud SQL, Memorystore, internal VMs), you need Serverless VPC Access.
 
-```text
-  ┌────────────────────────────────────────────────┐
-  │  Cloud Run Service                              │
-  │  (runs outside your VPC)                        │
-  │                                                  │
-  │  Needs to reach:                                 │
-  │  - Cloud SQL (10.10.1.5, private IP)            │
-  │  - Memorystore Redis (10.10.2.10)               │
-  │  - Internal API on a VM (10.10.0.50:8080)       │
-  └──────────┬───────────────────────────────────────┘
-             │
-             │  Serverless VPC Access Connector
-             │  (or Direct VPC Egress)
-             │
-  ┌──────────▼───────────────────────────────────────┐
-  │  VPC: prod-vpc                                    │
-  │                                                    │
-  │  10.10.1.5 (Cloud SQL)                            │
-  │  10.10.2.10 (Memorystore)                         │
-  │  10.10.0.50 (Internal VM)                         │
-  └────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    CR["Cloud Run Service<br>(runs outside your VPC)"]
+    
+    subgraph VPC ["VPC: prod-vpc"]
+        direction TB
+        DB["10.10.1.5 (Cloud SQL)"]
+        Redis["10.10.2.10 (Memorystore)"]
+        VM["10.10.0.50 (Internal VM)"]
+    end
+    
+    CR -->|Serverless VPC Access Connector<br>or Direct VPC Egress| VPC
 ```
 
 ### Option 1: VPC Access Connector (Legacy)
@@ -414,6 +423,22 @@ gcloud run deploy my-api \
 | **Throughput** | Limited by connector size | Higher throughput |
 | **IP range** | Requires a /28 subnet | Uses existing subnet |
 | **Recommended** | Legacy deployments | All new deployments |
+
+---
+
+## Evaluating Cloud Run vs. GKE
+
+When designing your architecture on GCP, you must choose where to run your containers. While Google Kubernetes Engine (GKE) is the industry standard for orchestration, Cloud Run has become the default recommendation for most web applications and microservices. Understanding the trade-offs is crucial.
+
+| Feature | Cloud Run | Google Kubernetes Engine (GKE) |
+| :--- | :--- | :--- |
+| **Operational Complexity** | Very Low. No clusters, nodes, or control plane to manage. You only manage the container and service config. | High. Requires expertise in Kubernetes manifests, node pools, cluster upgrades, and networking (Ingress, Services). |
+| **Cost Model** | Pay-per-use. Scales to zero. You only pay for CPU/Memory while processing requests (unless always-on is enabled). | Pay-for-allocation. You pay for the underlying VMs (nodes) regardless of whether your containers are actively receiving traffic. |
+| **Cold Starts** | Occur when scaling from zero or during rapid scale-up. Can add 1-3 seconds of latency to the first request. | Rare. Containers are kept running on the nodes, so traffic hits pre-warmed pods immediately. |
+| **Infrastructure Control** | Limited. You cannot access the underlying host, run privileged containers, or use custom DaemonSets. | Full. You have complete control over the cluster, nodes, networking plugins, and can run any Kubernetes-native software. |
+| **Best For** | Stateless web apps, REST/gRPC APIs, event-driven workers, and startups wanting to minimize DevOps overhead. | Complex microservice architectures, stateful workloads, legacy apps requiring custom networking, and large enterprise platforms. |
+
+> **Stop and think**: If your team is migrating a legacy monolithic application that takes 45 seconds to start up and relies on a local disk for temporary caching, which platform should you choose? GKE is the better choice. Cloud Run's cold starts would be disastrous with a 45-second startup time, and its ephemeral filesystem is not suited for heavy local disk caching.
 
 ---
 
@@ -485,39 +510,39 @@ gcloud scheduler jobs create http daily-processor \
 ## Quiz
 
 <details>
-<summary>1. What is the difference between a Cloud Run service and a Cloud Run revision?</summary>
+<summary>1. A developer deploys a new version of their API to Cloud Run, but users immediately report critical errors. The developer needs to restore the previous version instantly. How should they accomplish this using Cloud Run's architecture?</summary>
 
-A **service** is the top-level resource that has a stable URL and manages traffic routing. It persists across deployments. A **revision** is an immutable snapshot of a specific deployment---it captures the container image, environment variables, memory, CPU, and all other configuration settings at the time of deployment. Every time you deploy or update a service, a new revision is created. Old revisions are kept and can still receive traffic. The service's traffic configuration determines what percentage of requests goes to each revision. This separation is what enables traffic splitting, canary deployments, and instant rollbacks.
+The developer should update the service traffic configuration to route 100% of incoming requests back to the previous revision ID. Cloud Run treats every deployment as an immutable snapshot called a revision, which is never deleted automatically when a new deployment occurs. By using a command like `gcloud run services update-traffic`, the developer shifts the routing rules at the load balancer level, resulting in an instant rollback without needing to rebuild or redeploy the older container image.
 </details>
 
 <details>
-<summary>2. A Cloud Run service has concurrency set to 80 and receives 320 simultaneous requests. How many instances will Cloud Run create?</summary>
+<summary>2. You have a Python API running on Cloud Run with the default concurrency setting (80). Load testing shows that when 100 simultaneous requests hit the service, 20 of them fail with database connection pool exhaustion errors. The database is configured to allow a maximum of 10 connections per instance. What is the most cost-effective way to fix this?</summary>
 
-Cloud Run will create approximately **4 instances** (320 / 80 = 4). Each instance handles up to 80 concurrent requests. The autoscaler distributes the incoming requests across instances such that no instance exceeds the concurrency limit. In practice, Cloud Run may create slightly more instances as a buffer (e.g., 5 or 6) to handle request spikes and ensure that no single instance is overloaded. If traffic drops, the excess instances are scaled down after a cooldown period.
+You must lower the Cloud Run concurrency setting to 10 to match your application's database connection pool limit. By default, Cloud Run sends up to 80 concurrent requests to a single instance. If your code is configured to only handle 10 simultaneous database connections, the 11th request on that instance will fail to acquire a connection and time out. By aligning the concurrency setting (10) with the connection pool size (10), Cloud Run's autoscaler will automatically spin up a new instance for the 11th request, ensuring stability while remaining cost-effective.
 </details>
 
 <details>
-<summary>3. When would you use "always-on CPU" instead of the default throttled CPU mode?</summary>
+<summary>3. Your team deployed a Node.js service to Cloud Run that processes webhooks. The service receives a webhook, immediately sends a `200 OK` HTTP response to the caller, and then attempts to upload the payload to Cloud Storage asynchronously in the background. However, the files are rarely arriving in the storage bucket. What is causing this failure?</summary>
 
-Use always-on CPU (`--no-cpu-throttling`) when your application needs to do work **between or after** request processing. Specific scenarios include: applications that maintain WebSocket connections (CPU is needed to process frames even when no HTTP request is active), services that run background threads (like cache warming, health checking, or async processing), applications that pre-warm connection pools to databases, and services that perform cleanup or logging after sending the response. With throttled CPU, the container's CPU is taken away between requests, which will freeze any background threads and can cause connection timeouts.
+The failure is caused by Cloud Run's default "CPU throttled" mode, which removes CPU allocation from the container immediately after the HTTP response is sent. Because the Node.js application attempts to perform the Cloud Storage upload asynchronously after returning the `200 OK`, the background thread is frozen before it can complete the network transfer. To resolve this, you must configure the service to use "Always-on CPU" (`--no-cpu-throttling`), which ensures the CPU remains active and available for background tasks between requests.
 </details>
 
 <details>
-<summary>4. How do you perform a blue/green deployment on Cloud Run?</summary>
+<summary>4. You want to test a risky new feature in production without affecting all users. You deploy the container to Cloud Run, but you don't want it to receive general traffic immediately. Instead, you want developers to access it via a specific URL for verification before routing 5% of real user traffic to it. How do you implement this?</summary>
 
-First, deploy the new version with `--no-traffic` to create a new revision without sending any production traffic to it: `gcloud run deploy my-api --image=v2 --no-traffic --tag=green`. This gives you a tagged URL (e.g., `https://green---my-api-abc123-uc.a.run.app`) to test the new version. After verifying the green revision works correctly, switch 100% of traffic to it: `gcloud run services update-traffic my-api --to-revisions=my-api-00002=100`. If something goes wrong, instantly roll back by routing traffic to the old revision: `gcloud run services update-traffic my-api --to-revisions=my-api-00001=100`. The entire process requires no downtime.
+First, deploy the new container image using the `--no-traffic` and `--tag=canary` flags. This creates a new revision and generates a dedicated testing URL (e.g., `https://canary---my-api.run.app`) without shifting any production traffic to it. Once the developers verify the feature using the tagged URL, you can safely initiate a canary release by using the `update-traffic` command to route 5% of traffic to the new revision ID and 95% to the existing revision ID. This minimizes risk by isolating the initial deployment and allowing gradual exposure.
 </details>
 
 <details>
-<summary>5. Your Cloud Run service needs to connect to a Cloud SQL instance using a private IP. What do you need to configure?</summary>
+<summary>5. A newly deployed Cloud Run service needs to execute queries against a private Cloud SQL PostgreSQL database located in your production VPC. Currently, the service logs show connection timeouts when trying to reach the database's internal IP (10.10.1.5). What networking configuration is missing?</summary>
 
-You need to configure **VPC connectivity** so that Cloud Run can reach the private IP of the Cloud SQL instance inside your VPC. The recommended approach is **Direct VPC Egress**: deploy the service with `--network=your-vpc --subnet=your-subnet --vpc-egress=private-ranges-only`. Alternatively, use a VPC Access Connector. You also need to ensure that the Cloud SQL instance has a private IP enabled and that firewall rules allow traffic from the Cloud Run subnet to the Cloud SQL instance on port 5432 (PostgreSQL) or 3306 (MySQL). The Cloud Run service account must also have the `roles/cloudsql.client` IAM role.
+The Cloud Run service requires Serverless VPC Access to route traffic into your private network. Because Cloud Run instances operate outside of your VPC by default, they cannot route packets to private IP addresses like `10.10.1.5`. You must configure the service to use Direct VPC Egress by specifying the target network and subnet in the deployment command (e.g., `--network=prod-vpc --subnet=app-subnet`). This creates the necessary networking bridge, allowing the container to resolve and communicate with the database's private IP.
 </details>
 
 <details>
-<summary>6. What is the difference between Cloud Run services and Cloud Run jobs?</summary>
+<summary>6. Your company is launching a new stateless microservice. The engineering team is debating whether to deploy it on their existing Google Kubernetes Engine (GKE) cluster or use Cloud Run. The service will experience massive traffic spikes during marketing events but will sit idle overnight. Which platform is the better choice and why?</summary>
 
-**Cloud Run services** handle HTTP requests continuously---they listen on a port, process incoming requests, and scale based on traffic. They are designed for web APIs, websites, and any workload that needs to respond to incoming network requests. **Cloud Run jobs** run to completion and then exit---they do not listen for incoming requests. Jobs are designed for batch processing, data migrations, scheduled tasks, and any workload that has a defined start and end. Jobs support parallel execution with configurable task count and parallelism. A service stays running indefinitely (scaling to zero when idle); a job runs, completes, and stops.
+Cloud Run is the superior choice for this specific workload because of its pay-per-use cost model and operational simplicity. Cloud Run can automatically scale from zero to thousands of instances in seconds to handle the marketing spikes, and then scale back down to zero overnight, meaning you pay nothing during idle hours. In contrast, GKE requires you to pay for the underlying VMs (nodes) running the cluster 24/7, even when the service is idle, and managing the node autoscaling to handle sudden, massive spikes is significantly more complex and slower.
 </details>
 
 ---
