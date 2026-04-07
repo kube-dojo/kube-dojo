@@ -155,6 +155,8 @@ k auth can-i --list
 - **Mutating**: Can modify the incoming object (e.g., inject sidecar containers, set defaults)
 - **Validating**: Can only accept or reject (e.g., enforce naming conventions, deny privileged pods)
 
+> **Pause and predict**: If a user has RBAC permissions to create a Pod, but a Validating Admission Webhook is configured to reject Pods using the `latest` image tag, at which exact stage will their request fail, and what HTTP status code will they likely receive?
+
 ### 1.3 Extensibility Points Map
 
 Here is every place you can extend Kubernetes, organized by where it fits in the pipeline:
@@ -170,6 +172,17 @@ Here is every place you can extend Kubernetes, organized by where it fits in the
 | Custom controllers | Post-persist | Controller pattern | 1.3, 1.4 |
 | Scheduler plugins | Scheduling | Scheduling framework | 1.7 |
 | CNI / CSI / CRI | Node level | Plugin interfaces | Outside scope |
+
+#### Decision Framework: Which Extensibility Hook to Use?
+
+When extending the API, use this decision tree to choose the right tool:
+
+1. **Do you need to store new configuration or state in the cluster?**
+   - **Yes, and it is mostly declarative data**: Use **Custom Resource Definitions (CRDs)**. This is the default for the vast majority of use cases.
+   - **Yes, but it requires custom storage (e.g., a SQL database) or extremely specialized REST semantics**: Use **API Aggregation**.
+2. **Do you need to intercept and modify existing resources (like Pods or Deployments)?**
+   - **Yes, to set defaults or inject sidecars**: Use **Mutating Admission Webhooks**.
+   - **Yes, to enforce security policies or complex validation**: Use **Validating Admission Webhooks** (or Validating Admission Policies).
 
 ---
 
@@ -254,6 +267,8 @@ Watch events come as newline-delimited JSON:
 {"type":"MODIFIED","object":{"kind":"Pod","metadata":{"name":"new-pod",...},...}}
 {"type":"DELETED","object":{"kind":"Pod","metadata":{"name":"new-pod",...},...}}
 ```
+
+> **Stop and think**: If your script loses its network connection while watching a resource, what happens if you reconnect and do not provide the `resourceVersion` from the last event you received? How would this affect your local cache state?
 
 ---
 
@@ -533,6 +548,8 @@ func processNextItem(queue workqueue.TypedRateLimitingInterface[string]) bool {
 }
 ```
 
+> **Stop and think**: If your controller's processing logic encounters a temporary network error when talking to an external API, what happens if you return an error to the Workqueue versus acknowledging the item and dropping the error? How does the Workqueue's rate limiter prevent this failure from overwhelming the API Server?
+
 ---
 
 ## Part 4: API Server Internals
@@ -593,6 +610,8 @@ k get deployment my-app -o yaml | head -40
 
 Server-side apply is crucial for controllers. It prevents conflicts when multiple controllers modify the same resource by tracking which controller owns which fields.
 
+> **Stop and think**: Why is Server-Side Apply crucial for controllers that manage different fields of the same resource, compared to traditional client-side apply? What specific problem does field ownership solve if two controllers update the same object concurrently?
+
 ### 4.4 API Priority and Fairness
 
 Since Kubernetes 1.29+, API Priority and Fairness (APF) replaced the old max-in-flight request limiting:
@@ -609,6 +628,22 @@ k get prioritylevelconfigurations
 ```
 
 APF ensures that one misbehaving controller cannot starve the API Server. Requests are classified into priority levels and queued fairly within each level.
+
+### 4.5 Interpreting API Server Audit Logs
+
+Audit logs provide a security-relevant, chronological set of records documenting the sequence of actions in a cluster. The API Server can log requests at different stages (e.g., RequestReceived, ResponseComplete).
+
+To view audit logs (typically found on the control plane node at `/var/log/kubernetes/audit/audit.log`, depending on your distribution), you will see JSON entries like this:
+
+```json
+{"kind":"Event","apiVersion":"audit.k8s.io/v1","level":"Metadata","auditID":"1234-abcd","stage":"ResponseComplete","requestURI":"/api/v1/namespaces/default/pods","verb":"create","user":{"username":"kubernetes-admin","groups":["system:masters","system:authenticated"]},"sourceIPs":["192.168.1.100"],"userAgent":"kubectl/v1.27.0","objectRef":{"resource":"pods","namespace":"default","name":"nginx","apiVersion":"v1"},"responseStatus":{"metadata":{},"code":201}}
+```
+
+**How to interpret this log entry:**
+- **`verb` and `requestURI`**: Tells you exactly what action was attempted (`create` on `/api/v1/namespaces/default/pods`).
+- **`user`**: Identifies who made the request (`kubernetes-admin`).
+- **`stage`**: `ResponseComplete` means the request went through the entire pipeline and a response was sent.
+- **`responseStatus.code`**: A `201` means the pod was successfully created. A `403` would mean Authorization rejected it, and a `400` or `422` might mean an Admission Webhook rejected it.
 
 ---
 
@@ -887,46 +922,46 @@ func main() {
 
 ## Quiz
 
-1. **What are the three main stages of the API Server request pipeline (in order)?**
+1. **Scenario:** You are troubleshooting a custom controller that keeps receiving `403 Forbidden` errors when trying to patch Pods, even though you verified the ServiceAccount token is valid. Based on the API Server request pipeline, which stage is rejecting the request, and what are the preceding and subsequent stages?
    <details>
    <summary>Answer</summary>
-   Authentication, Authorization, Admission Control. After admission, the object is validated and persisted to etcd. Admission itself has two sub-stages: mutating admission (can modify the object) and validating admission (can only accept/reject).
+   The request is being rejected at the Authorization (AuthZ) stage, which is the second main stage of the pipeline. Because the ServiceAccount token is valid, the request successfully passed the first stage, Authentication (AuthN). However, the API server determined that the authenticated identity does not have the necessary RBAC permissions to patch Pods. Since it was rejected at Authorization, the request will never reach the third stage, Admission Control (Mutating and Validating), nor will it be persisted to etcd.
    </details>
 
-2. **Why do Kubernetes controllers use Informers instead of polling the API with List calls?**
+2. **Scenario:** A junior engineer on your team proposes writing a quick script that runs `kubectl get pods -o json` in a `while true; do ... sleep 1; done` loop to monitor Pod phases. You need to explain why this architectural approach is dangerous for the cluster and what pattern should be used instead. How do you justify the alternative?
    <details>
    <summary>Answer</summary>
-   Informers use a single initial List followed by a long-lived Watch stream. This reduces API Server load dramatically compared to periodic List calls. The Informer also maintains a local cache (Indexer) so reads do not hit the API Server at all. Additionally, Informers handle reconnection, bookmark events, and resource version tracking automatically.
+   Polling the API Server in a tight loop places immense load on the control plane, forcing the API Server to query etcd, serialize large JSON payloads, and transmit them over the network every second. In a large cluster, this can quickly lead to rate-limiting or API Server degradation for all users. Instead, the engineer should use the Informer pattern (via client-go), which performs a single initial List followed by a highly efficient, long-lived Watch stream. This stream only pushes incremental delta events (Adds, Updates, Deletes) when actual state changes occur, and the Informer maintains a local in-memory cache allowing instant queries without hitting the API.
    </details>
 
-3. **What is the purpose of a Workqueue in the controller pattern?**
+3. **Scenario:** You are reviewing a custom controller's code and notice the developer is executing long-running database queries directly inside the Informer's `UpdateFunc` event handler. What specific architectural component is missing from this design, and what systemic failures will occur if this code is deployed to production?
    <details>
    <summary>Answer</summary>
-   A Workqueue decouples event reception (from Informer event handlers) from event processing. This provides: (a) rate limiting to avoid overwhelming downstream systems, (b) retry with exponential backoff for failed items, (c) deduplication when multiple events for the same object arrive before processing.
+   The controller is missing a Workqueue to decouple event reception from event processing. By executing slow operations directly inside the `UpdateFunc`, the developer is blocking the Informer's internal goroutines that are responsible for draining the DeltaFIFO queue. This will cause the controller to fall behind the API Server's watch stream, potentially leading to missed events or memory exhaustion as the internal queues fill up. A Workqueue solves this by allowing the event handler to instantly enqueue a string key and return immediately, while separate worker goroutines safely process the keys at a controlled rate with built-in retries.
    </details>
 
-4. **You run `curl http://localhost:8080/api/v1/namespaces/default/pods?watch=true` and the connection drops. What data might you miss?**
+4. **Scenario:** Your network connection to the API Server is unstable, and your raw HTTP Watch stream (`?watch=true`) drops repeatedly. When you reconnect, you notice your local state is out of sync with the cluster. How does the concept of `resourceVersion` solve this problem, and what specific error must you handle if your disconnected period is too long?
    <details>
    <summary>Answer</summary>
-   You could miss any events that occurred between the connection dropping and your reconnection. To avoid this, you must track the last `resourceVersion` you received and reconnect with `?watch=true&resourceVersion=<last-seen>`. If the requested resourceVersion is too old (compacted from etcd), the API Server returns 410 Gone and you must re-list. This is exactly what the Reflector in client-go handles automatically.
+   When a watch connection drops, you lose any events that occur between the disconnect and your subsequent reconnection. To prevent this data loss, you must track the `resourceVersion` of the last event you successfully processed and include it in your next request. This tells the API Server to replay all events that happened after that specific etcd revision, ensuring you don't miss any state changes. However, if you are disconnected for too long and etcd compacts that old revision, the API Server will return a `410 Gone` error, forcing you to perform a full List operation to resync your state from scratch.
    </details>
 
-5. **What happens if a Mutating Admission Webhook modifies a pod spec, and then a Validating Admission Webhook rejects it?**
+5. **Scenario:** You deploy a Mutating Admission Webhook that automatically injects a sidecar container into all Pods. Simultaneously, a security team deploys a Validating Admission Webhook that strictly forbids Pods with more than one container. When a user creates a single-container Pod, what is the exact outcome of the API request, and what does the user see?
    <details>
    <summary>Answer</summary>
-   The request is rejected entirely. Validating webhooks run after all mutating webhooks, and they see the final mutated version of the object. If any validating webhook rejects the request, the object is not persisted to etcd and the mutation has no effect. The client receives a 403 Forbidden or similar error.
+   The API request will be completely rejected, and the Pod will not be persisted to etcd. In the API Server pipeline, Mutating Admission always runs before Validating Admission. Therefore, your webhook will first successfully inject the sidecar, modifying the in-flight object to have two containers. Subsequently, the security team's Validating Webhook will inspect this mutated object, see that it violates the single-container policy, and deny the request, returning a `403 Forbidden` to the user.
    </details>
 
-6. **Explain the difference between `client-go`'s `Clientset` and a `DynamicClient`.**
+6. **Scenario:** You are tasked with writing a generic cluster backup tool that must iterate over every possible resource in the cluster, including newly installed Custom Resource Definitions (CRDs) that are unknown at compile time. Why would you choose a `DynamicClient` over a standard `Clientset` for this task, and what trade-off are you making?
    <details>
    <summary>Answer</summary>
-   A `Clientset` is typed -- it has specific methods for each built-in resource (e.g., `CoreV1().Pods().List()`). It provides compile-time type safety and is the standard for working with built-in resources. A `DynamicClient` works with `unstructured.Unstructured` objects and can interact with any resource type, including CRDs, without needing generated types. The trade-off is no compile-time type safety, but it works with any GVR (Group-Version-Resource).
+   You must choose a `DynamicClient` because it operates on unstructured data and can interact with any arbitrary Group-Version-Resource (GVR) discovered at runtime. A standard `Clientset` is strictly typed and its methods are generated at compile time, meaning it fundamentally cannot understand or interact with CRDs that were not compiled into your binary. The major trade-off of using a `DynamicClient` is the complete loss of compile-time type safety. You cannot access fields directly; instead, you must use string-based map lookups, which increases the risk of runtime panics or typos.
    </details>
 
-7. **What is a "resync period" in an Informer, and when should you set it?**
+7. **Scenario:** You are writing a controller that ensures a specific external cloud load balancer is configured to match the state of Kubernetes Services. Even though your controller handles all Update events perfectly, you notice that if the cloud provider's API goes down temporarily, the load balancer sometimes remains in a broken state forever. How does configuring an Informer's "resync period" solve this edge case?
    <details>
    <summary>Answer</summary>
-   The resync period triggers a periodic re-list of all objects from the cache (not from the API Server). It causes synthetic Update events for every object, allowing controllers to re-reconcile even if they missed an event or if external state changed. Typical values are 30 seconds to 10 minutes. Set it shorter for controllers where correctness depends on periodic rechecks; set it to 0 to disable resyncs if your controller handles all events reliably.
+   Configuring a resync period solves this by periodically forcing the Informer to re-evaluate all objects currently held in its local cache. When the resync timer fires, the Informer generates synthetic Update events for every cached object, even if nothing has actually changed in the Kubernetes API. This triggers your controller's event handlers and subsequent Workqueue processing, providing a self-healing mechanism to retry synchronization with the external cloud provider. It guarantees that temporary failures or missed edge cases are eventually reconciled, ensuring the desired state is strictly maintained over time.
    </details>
 
 ---
