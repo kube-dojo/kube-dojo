@@ -53,24 +53,17 @@ Before diving into secret storage, you need to understand AWS Key Management Ser
 
 ### Key Concepts
 
-```
-+--------------------------------------------------+
-|                  AWS KMS                          |
-|                                                   |
-|  +------------------+   +---------------------+  |
-|  | AWS Managed Keys |   | Customer Managed    |  |
-|  | (aws/ssm,        |   | Keys (CMKs)         |  |
-|  |  aws/secretsmanager) | - You control policy |  |
-|  | - AWS controls    |   | - You control       |  |
-|  | - Free            |   |   rotation          |  |
-|  | - Can't customize |   | - $1/month each     |  |
-|  +------------------+   +---------------------+  |
-|                                                   |
-|  Key Operations:                                  |
-|  - Encrypt / Decrypt (up to 4KB directly)         |
-|  - GenerateDataKey (envelope encryption)          |
-|  - CreateGrant (delegate access)                  |
-+--------------------------------------------------+
+```mermaid
+flowchart TD
+    subgraph AWS KMS
+        direction TB
+        subgraph Keys
+            A["AWS Managed Keys<br>(aws/ssm, aws/secretsmanager)<br>- AWS controls<br>- Free<br>- Cannot customize"]
+            B["Customer Managed Keys (CMKs)<br>- You control policy<br>- You control rotation<br>- $1/month each"]
+        end
+        C["Key Operations:<br>- Encrypt / Decrypt (up to 4KB directly)<br>- GenerateDataKey (envelope encryption)<br>- CreateGrant (delegate access)"]
+        Keys --> C
+    end
 ```
 
 There are two types of keys you will encounter:
@@ -83,34 +76,27 @@ There are two types of keys you will encounter:
 
 This is the pattern that makes large-scale encryption practical:
 
-```
-Step 1: Ask KMS for a data key
-+--------+         +--------+
-|  App   | ------> |  KMS   |
-|        | <------ |        |
-+--------+  Returns:+-------+
-            - Plaintext data key
-            - Encrypted data key
-
-Step 2: Encrypt your secret locally
-+--------+
-|  App   |  plaintext key + secret = encrypted secret
-+--------+
-
-Step 3: Store encrypted secret + encrypted data key
-+--------+         +------------+
-|  App   | ------> | Storage    |
-+--------+         | (S3, SSM,  |
-  Throws away       | SecretsMgr)|
-  plaintext key     +------------+
-
-Step 4: To decrypt, send encrypted data key back to KMS
-+--------+         +--------+
-|  App   | ------> |  KMS   |
-|        | <------ |        |
-+--------+  Returns:+-------+
-            plaintext data key
-            (use it to decrypt the secret locally)
+```mermaid
+sequenceDiagram
+    participant App
+    participant KMS
+    participant Storage as Storage (S3, SSM, SecretsMgr)
+    
+    Note over App,KMS: Step 1: Ask KMS for a data key
+    App->>KMS: Request Data Key
+    KMS-->>App: Returns:<br>- Plaintext data key<br>- Encrypted data key
+    
+    Note over App: Step 2: Encrypt your secret locally
+    App->>App: plaintext key + secret = encrypted secret
+    
+    Note over App,Storage: Step 3: Store encrypted secret + encrypted data key
+    App->>Storage: Store encrypted secret + encrypted data key
+    Note over App: Throws away plaintext key
+    
+    Note over App,KMS: Step 4: To decrypt, send encrypted data key back to KMS
+    App->>KMS: Send encrypted data key
+    KMS-->>App: Returns plaintext data key
+    Note over App: App decrypts secret locally
 ```
 
 The critical insight: KMS never sees your secret. It only sees the small data key. This means even if someone compromised KMS's internal logging, your actual database password or API key would not be exposed.
@@ -136,6 +122,8 @@ aws kms create-alias \
 # Verify the key exists
 aws kms describe-key --key-id alias/app-secrets-key
 ```
+
+> **Stop and think**: If an attacker gains full read access to your S3 bucket where your encrypted secrets are stored, can they decrypt your data if they do not have access to the KMS key? Why or why not?
 
 ---
 
@@ -219,6 +207,8 @@ aws ssm get-parameter-history \
   --name "/myapp/production/database/host"
 ```
 
+> **Pause and predict**: You need to store an API key that changes once a year and is read thousands of times per second by your application. Based on the features and pricing of SSM Parameter Store versus Secrets Manager, which service is more cost-effective for this specific workload?
+
 This is invaluable for debugging. When someone says "the app broke after the config change," you can see exactly what changed and when.
 
 ---
@@ -229,21 +219,33 @@ While Parameter Store can hold encrypted strings, AWS Secrets Manager is designe
 
 ### What Sets Secrets Manager Apart
 
-```
-+-------------------------------------------------------+
-|              Secrets Manager vs SSM Parameter Store    |
-+-------------------------------------------------------+
-|                                                       |
-|  SSM Parameter Store          Secrets Manager         |
-|  - General config             - Credentials focus     |
-|  - Free (Standard tier)       - $0.40/secret/month    |
-|  - Manual rotation            - Auto rotation (!)     |
-|  - No cross-region            - Cross-region replica  |
-|  - 40 TPS (standard)          - 10,000 TPS            |
-|  - Path hierarchy             - Flat namespace         |
-|  - Versioned                  - Versioned + Staging   |
-|                                                       |
-+-------------------------------------------------------+
+```mermaid
+flowchart TB
+    classDef default fill:#f9f9f9,stroke:#333,stroke-width:1px,color:#000;
+    
+    subgraph Secrets Manager vs SSM Parameter Store
+        direction LR
+        subgraph SSM Parameter Store
+            direction TB
+            S1["- General config"]
+            S2["- Free (Standard tier)"]
+            S3["- Manual rotation"]
+            S4["- No cross-region"]
+            S5["- 40 TPS (standard)"]
+            S6["- Path hierarchy"]
+            S7["- Versioned"]
+        end
+        subgraph Secrets Manager
+            direction TB
+            M1["- Credentials focus"]
+            M2["- $0.40/secret/month"]
+            M3["- Auto rotation (!)"]
+            M4["- Cross-region replica"]
+            M5["- 10,000 TPS"]
+            M6["- Flat namespace"]
+            M7["- Versioned + Staging"]
+        end
+    end
 ```
 
 ### Creating and Retrieving Secrets
@@ -269,17 +271,21 @@ aws secretsmanager get-secret-value \
 
 Secrets Manager uses version stages to manage credential rotation without downtime:
 
-```
-Before rotation:
-  Version v1 --> AWSCURRENT  (active, apps use this)
+```mermaid
+flowchart LR
+    subgraph Before Rotation
+        V1_B[Version v1] -->|active, apps use this| C_B[AWSCURRENT]
+    end
 
-During rotation:
-  Version v1 --> AWSCURRENT  (still active)
-  Version v2 --> AWSPENDING  (new creds being tested)
+    subgraph During Rotation
+        V1_D[Version v1] -->|still active| C_D[AWSCURRENT]
+        V2_D[Version v2] -->|new creds being tested| P_D[AWSPENDING]
+    end
 
-After rotation:
-  Version v1 --> AWSPREVIOUS (kept as fallback)
-  Version v2 --> AWSCURRENT  (apps now use this)
+    subgraph After Rotation
+        V1_A[Version v1] -->|kept as fallback| PR_A[AWSPREVIOUS]
+        V2_A[Version v2] -->|apps now use this| C_A[AWSCURRENT]
+    end
 ```
 
 This two-phase approach means your application never sees a moment where the old password is invalid but the new one is not yet available.
@@ -323,6 +329,8 @@ Step 4: finishSecret
 ```
 
 If any step fails, the rotation rolls back and the existing AWSCURRENT credentials remain valid. Your application never breaks.
+
+> **Stop and think**: During a database credential rotation via Secrets Manager, what happens if the `testSecret` step fails because the newly generated password does not meet the database's internal complexity requirements? How does this affect the application currently using the database?
 
 ---
 
@@ -560,45 +568,45 @@ git secrets --scan
 ## Quiz
 
 <details>
-<summary>1. What is the fundamental difference between SSM Parameter Store SecureString and AWS Secrets Manager?</summary>
+<summary>1. Your team is debating whether to use SSM Parameter Store or AWS Secrets Manager to store a third-party API key that must be rotated every 90 days. Which service should you choose and why?</summary>
 
-Both encrypt data at rest using KMS, but Secrets Manager is purpose-built for credential lifecycle management. Its defining feature is **automatic rotation** -- it can change database passwords, API keys, and other credentials on a schedule using Lambda functions. Parameter Store can store encrypted strings but has no built-in rotation mechanism; you would need to build rotation yourself. Secrets Manager also supports cross-region replication and version staging (AWSCURRENT, AWSPREVIOUS, AWSPENDING), which are essential for zero-downtime rotation.
+You should choose AWS Secrets Manager because it is purpose-built for credential lifecycle management. Its defining feature is automatic rotation, allowing it to seamlessly change database passwords, API keys, and other credentials on a defined schedule using Lambda functions. While Parameter Store can store encrypted strings securely, it has no built-in rotation mechanism, meaning your team would have to build and maintain custom rotation scripts. Furthermore, Secrets Manager supports version staging (AWSCURRENT, AWSPREVIOUS, AWSPENDING), which is essential for ensuring zero-downtime during the rotation process.
 </details>
 
 <details>
-<summary>2. In envelope encryption, why does KMS never see your actual secret?</summary>
+<summary>2. You are presenting your security architecture to an auditor who is concerned that AWS administrators might be able to read your database passwords stored in Secrets Manager. How does envelope encryption ensure that KMS never actually sees your plaintext secret?</summary>
 
-In envelope encryption, KMS generates a **data key** -- both a plaintext version and an encrypted version. Your application uses the plaintext data key to encrypt the secret locally, then discards the plaintext key and stores only the encrypted secret alongside the encrypted data key. To decrypt, you send the encrypted data key to KMS, which returns the plaintext data key, and you decrypt locally. KMS only ever handles the small data key (256 bits), never the potentially large secret itself. This design reduces latency, works for secrets of any size, and means KMS has no exposure to your actual sensitive data.
+In envelope encryption, KMS is only responsible for generating and decrypting a small data key, not the secret itself. When an application encrypts a secret, KMS provides both a plaintext data key and an encrypted data key. The application uses the plaintext data key to encrypt the sensitive payload locally, discards the plaintext key, and stores only the encrypted secret alongside the encrypted data key. Because KMS only ever handles the 256-bit data key during decryption requests, it has zero exposure to your actual sensitive data, completely preventing AWS or its administrators from accessing the underlying plaintext secret.
 </details>
 
 <details>
-<summary>3. An ECS Fargate task fails to start with "ResourceInitializationError: unable to pull secrets." What is the most likely cause?</summary>
+<summary>3. You have just deployed a new ECS Fargate service that injects database credentials from Secrets Manager into the container as environment variables. However, the task immediately fails to start with the error message "ResourceInitializationError: unable to pull secrets." What is the most likely configuration error?</summary>
 
-The most likely cause is that the **execution role** lacks permissions. When ECS injects secrets at container startup, it uses the execution role (not the task role) to call `secretsmanager:GetSecretValue` or `ssm:GetParameters`. Many teams correctly grant permissions to the task role but forget that secret injection happens before the container starts, using the execution role. Check the execution role's IAM policy and ensure it includes the necessary secret-read and KMS decrypt permissions.
+The most likely cause is that the task's execution role lacks the necessary IAM permissions to read the secret. When ECS injects secrets at container startup, the ECS agent uses the execution role—not the task role—to call `secretsmanager:GetSecretValue` and `kms:Decrypt`. Many teams incorrectly grant these permissions to the task role, forgetting that secret injection happens at the infrastructure level before the container actually starts. To fix this, you must update the execution role's IAM policy to explicitly allow reading the specific secret ARN and using the associated KMS key.
 </details>
 
 <details>
-<summary>4. You need to store 50 application configuration values (mix of plaintext and sensitive) for a microservice. Which service(s) should you use and why?</summary>
+<summary>4. Your startup is launching a new microservice that requires 50 configuration values, including plaintext feature flags, internal service URLs, and a few static API tokens that do not require rotation. You have a strict infrastructure budget. Which AWS service or combination of services provides the most cost-effective solution?</summary>
 
-Use **SSM Parameter Store** for the plaintext configuration values (String type) and for sensitive values that do not need automatic rotation (SecureString type). Use **Secrets Manager** only for credentials that need automatic rotation (e.g., database passwords, third-party API keys). This hybrid approach keeps costs low -- Parameter Store standard tier is free for up to 10,000 parameters -- while providing automatic rotation where it matters most. Use a consistent path hierarchy like `/myservice/production/` so you can load all config with a single `get-parameters-by-path` call.
+You should use SSM Parameter Store for all 50 configuration values to minimize infrastructure costs. The standard tier of Parameter Store is completely free for up to 10,000 parameters per account, and it supports both plaintext strings and KMS-encrypted SecureStrings for your static API tokens. Since none of the credentials require automatic rotation, paying $0.40 per secret per month for Secrets Manager would be an unnecessary expense. By structuring your parameters with a consistent path hierarchy (e.g., `/myservice/production/`), your application can also efficiently retrieve all 50 values using a single `get-parameters-by-path` API call.
 </details>
 
 <details>
-<summary>5. What happens to active database connections during a Secrets Manager rotation?</summary>
+<summary>5. A critical batch processing job runs for four hours every night. Halfway through the job, Secrets Manager triggers an automatic rotation of the database credentials. Will the batch job's active database connection drop?</summary>
 
-Existing database connections are **not affected** by rotation. Rotation changes the password stored in Secrets Manager and updates the password in the database, but connections that are already established and authenticated continue to work. The risk comes at the next connection attempt -- if your application caches the old credentials and tries to open a new connection after rotation, it will fail. This is why the rotation protocol keeps the AWSPREVIOUS version: applications using the old password can still authenticate while they refresh their cached credentials. Well-designed applications should handle authentication failures by re-fetching the secret and retrying.
+The batch job's existing database connections will not be affected by the rotation and will not drop. Secrets Manager rotation changes the password stored in AWS and updates the password in the database, but connections that are already established and authenticated remain perfectly valid. The only risk occurs if the batch job drops its connection and attempts to open a new one using a cached, outdated password. To handle this gracefully, AWS retains the old password under the `AWSPREVIOUS` label, ensuring that applications have a buffer period to fetch the new credentials upon encountering an authentication failure.
 </details>
 
 <details>
-<summary>6. Why should you use the 6-character wildcard (??????) in IAM policy resource ARNs for Secrets Manager?</summary>
+<summary>6. A developer creates an IAM policy to allow a Lambda function to read a secret named `myapp/prod/db-creds`. They copy the secret name directly into the Resource ARN of the policy, but the Lambda function receives an Access Denied error. What did the developer miss regarding Secrets Manager ARNs?</summary>
 
-When you create a secret in Secrets Manager, AWS appends a random 6-character suffix to the ARN (e.g., `myapp/prod/db-creds-a1b2c3`). This suffix is generated at creation time and is not predictable. If you write an IAM policy with the exact secret name (without the suffix), the policy will **not match** the actual secret ARN, and access will be denied. Using `??????` or a simple `*` wildcard at the end ensures the policy matches regardless of the random suffix. This is one of the most common permission debugging issues with Secrets Manager.
+The developer failed to account for the random 6-character suffix that Secrets Manager automatically appends to the end of every secret ARN upon creation. Because this suffix is dynamically generated and unpredictable, an IAM policy written with just the exact secret name will not match the actual deployed ARN, resulting in an Access Denied error. To resolve this, the developer must append a 6-character wildcard (`??????`) or an asterisk (`*`) to the end of the resource ARN in the IAM policy. This ensures the policy consistently matches the secret regardless of the random characters added by AWS.
 </details>
 
 <details>
-<summary>7. A Lambda function's cold start increased by 800ms after adding Secrets Manager calls. How do you fix this?</summary>
+<summary>7. You recently updated a high-traffic Lambda function to retrieve an API key from Secrets Manager instead of hardcoding it. Since the deployment, latency metrics show that cold starts have increased by 800ms, causing timeouts for some downstream clients. How can you optimize the function to eliminate this latency?</summary>
 
-Add the **AWS Parameters and Secrets Lambda Extension** as a Lambda layer. This extension runs as a sidecar process, caches secrets locally with a configurable TTL, and serves them via a local HTTP endpoint. It adds approximately 50ms to the cold start (versus 300-800ms for a direct API call) and eliminates Secrets Manager API calls on warm invocations entirely. You configure it with environment variables like `SECRETS_MANAGER_TTL=300` (seconds). For the application code, you call the local extension endpoint instead of making a direct SDK call to Secrets Manager.
+You should optimize the function by attaching the AWS Parameters and Secrets Lambda Extension to your Lambda function. This extension runs as a sidecar process within the execution environment, automatically retrieving and caching secrets locally based on a configurable time-to-live (TTL). By configuring your application code to query the local extension endpoint rather than making a direct SDK call over the internet to Secrets Manager, you eliminate the API overhead on warm invocations completely. Even during cold starts, the extension typically only adds about 50ms of latency, which is a massive improvement over the 800ms penalty of a direct SDK call.
 </details>
 
 ---
