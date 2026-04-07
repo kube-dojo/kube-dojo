@@ -25,7 +25,7 @@ One Tuesday, a broker lost its EBS volume due to an AZ-level storage event. Kafk
 
 They evaluated Amazon MSK (Managed Streaming for Kafka) and Confluent Cloud. The migration to MSK took five weeks. The same 6-broker cluster now costs $7,200/month (cheaper because MSK handles the control plane), and the platform team spends 2 hours per week on Kafka-related tasks instead of 15. Broker replacements happen automatically. ZooKeeper is gone (MSK uses KRaft since 2024). The operational difference is transformative.
 
-This module teaches you when to use managed Kafka versus running Strimzi in-cluster, how partitioning and consumer groups work at scale, how to monitor consumer lag and prevent data loss, how schema registries maintain data contracts, and how to build stream processing pipelines on Kubernetes.
+This module teaches you when to use managed Kafka versus running Strimzi in-cluster, how partitioning and consumer groups work at scale, how exactly-once semantics prevent duplicate processing, how to monitor consumer lag and prevent data loss, how schema registries maintain data contracts, and how to build stream processing pipelines on Kubernetes.
 
 ---
 
@@ -117,22 +117,18 @@ A Kafka topic is divided into partitions. Partitions are the unit of parallelism
 
 ### How Partitions Work
 
-```
-Topic: order-events (6 partitions)
-
-  Producer
-     |
-     | key: order-123 --> hash(key) % 6 = partition 2
-     v
-  +----+----+----+----+----+----+
-  | P0 | P1 | P2 | P3 | P4 | P5 |
-  +----+----+----+----+----+----+
-                |
-                v
-           offset 0: order-123 created
-           offset 1: order-123 confirmed
-           offset 2: order-123 shipped
-           (ordered within partition)
+```mermaid
+graph TD
+    Prod[Producer] -->|key: order-123 --> hash%6 = P2| P2
+    subgraph Topic: order-events
+        P0
+        P1
+        P2
+        P3
+        P4
+        P5
+    end
+    P2 --> Events["offset 0: order-123 created<br/>offset 1: order-123 confirmed<br/>offset 2: order-123 shipped<br/>(ordered within partition)"]
 ```
 
 ### Partition Count Guidelines
@@ -188,31 +184,40 @@ def delivery_report(err, msg):
 - **Null key**: Round-robin across partitions (maximum throughput, no ordering)
 - **Tenant ID**: Multi-tenant isolation per partition
 
+> **Pause and predict**: If you have a topic with 12 partitions and a consumer deployment with 15 replicas, what exactly happens to the last 3 pods? How will Kubernetes metrics report their status compared to their actual utility?
+
 ---
 
 ## Consumer Groups and Lag Monitoring
 
 ### Consumer Group Mechanics
 
+```mermaid
+graph TD
+    subgraph Topic: order-events
+        P0
+        P1
+        P2
+        P3
+        P4
+        P5
+    end
+    
+    subgraph Consumer Group: order-processor
+        Pod1[Pod 1]
+        Pod2[Pod 2]
+        Pod3[Pod 3]
+    end
+    
+    P0 --> Pod1
+    P1 --> Pod1
+    P2 --> Pod2
+    P3 --> Pod2
+    P4 --> Pod3
+    P5 --> Pod3
 ```
-Topic: order-events (6 partitions)
 
-Consumer Group: order-processor (3 pods)
-
-  +----+----+----+----+----+----+
-  | P0 | P1 | P2 | P3 | P4 | P5 |
-  +--+-+--+-+----+----+--+-+--+-+
-     |    |              |    |
-     v    v              v    v
-  +------+  +------+  +------+
-  | Pod1 |  | Pod2 |  | Pod3 |
-  | P0,P1|  | P2,P3|  | P4,P5|
-  +------+  +------+  +------+
-
-Each pod gets an equal share of partitions.
-Adding a 4th pod triggers rebalancing.
-A 7th pod would be idle (6 partitions, 7 consumers).
-```
+Each pod gets an equal share of partitions. Adding a 4th pod triggers rebalancing. A 7th pod would be idle (6 partitions, 7 consumers).
 
 ### Kubernetes Consumer Deployment
 
@@ -355,6 +360,87 @@ spec:
 
 ---
 
+## Exactly-Once Processing and Stateful Consumers
+
+For financial transactions or inventory updates, processing a message more than once (at-least-once semantics) or dropping it (at-most-once) is unacceptable. Kafka achieves exactly-once semantics (EOS) through the combination of idempotent producers and transactional APIs.
+
+### The Transactional Pipeline
+
+When a stream processing application consumes from Topic A, processes the event, and writes to Topic B, the consumer offset commitment and the producer write must happen atomically.
+
+```python
+from confluent_kafka import Producer, Consumer
+
+# 1. Producer requires a transactional.id
+producer = Producer({
+    'bootstrap.servers': 'msk-cluster:9092',
+    'transactional.id': 'order-processor-txn-1',
+    'enable.idempotence': True
+})
+producer.init_transactions()
+
+# 2. Consume an event
+msg = consumer.poll(timeout=1.0)
+if msg:
+    producer.begin_transaction()
+    try:
+        # 3. Process and produce derived event
+        producer.produce('enriched-orders', key=msg.key(), value=enrich(msg.value()))
+        
+        # 4. Send the consumer offsets as part of the transaction
+        producer.send_offsets_to_transaction(
+            consumer.position(consumer.assignment()), 
+            consumer.consumer_group_metadata()
+        )
+        # 5. Commit atomically
+        producer.commit_transaction()
+    except Exception:
+        producer.abort_transaction()
+```
+
+### Why StatefulSets for Kafka Streams?
+
+When using frameworks like Kafka Streams that maintain local state (e.g., using RocksDB to aggregate windowed data or join topics), Deployments are an anti-pattern. If a Deployment pod is restarted, its local state is wiped out. When the new pod joins the consumer group, it must download the entire state from Kafka's changelog topic before it can process a single new message, which can take hours for large states.
+
+Instead, stream processors with local state should be deployed as a `StatefulSet` with persistent volume claims:
+
+```yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: payment-aggregator
+  namespace: streaming
+spec:
+  serviceName: "payment-aggregator"
+  replicas: 6
+  selector:
+    matchLabels:
+      app: payment-aggregator
+  template:
+    metadata:
+      labels:
+        app: payment-aggregator
+    spec:
+      containers:
+        - name: processor
+          image: mycompany/payment-aggregator:1.2.0
+          volumeMounts:
+            - name: state-store
+              mountPath: /var/lib/kafka-streams
+  volumeClaimTemplates:
+    - metadata:
+        name: state-store
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 50Gi
+```
+
+By using a `StatefulSet`, `payment-aggregator-0` maintains its stable network identity and keeps its `state-store` volume across restarts. When the pod comes back up, its RocksDB cache is already populated, requiring only a minimal delta update before processing resumes.
+
+---
+
 ## Schema Registry: Data Contracts for Events
 
 Without schema management, producers can change the event structure without warning, breaking consumers.
@@ -368,22 +454,21 @@ Week 2: {"orderId": "123", "total": 49.99}  <-- broke every consumer
 
 ### Schema Registry Architecture
 
-```
-  Producer                           Consumer
-     |                                  |
-     | 1. Register schema               | 3. Get schema by ID
-     v                                  v
-  +---------------------+    +---------------------+
-  | Schema Registry     |    | Schema Registry     |
-  | (schema ID: 42)     |    | (schema ID: 42)     |
-  +---------------------+    +---------------------+
-     |                                  |
-     | 2. Produce with schema ID        | 4. Deserialize with schema
-     v                                  v
-  +-------------------------------------------+
-  |              Kafka Cluster                 |
-  |  [schema_id=42][serialized_data]           |
-  +-------------------------------------------+
+```mermaid
+sequenceDiagram
+    participant P as Producer
+    participant SR as Schema Registry
+    participant K as Kafka Cluster
+    participant C as Consumer
+    
+    P->>SR: 1. Register schema
+    SR-->>P: Returns schema ID: 42
+    P->>K: 2. Produce [schema_id=42][serialized_data]
+    C->>K: Poll messages
+    K-->>C: Returns [schema_id=42][serialized_data]
+    C->>SR: 3. Get schema by ID (42)
+    SR-->>C: Returns schema definition
+    Note over C: 4. Deserialize with schema
 ```
 
 ### Confluent Schema Registry on Kubernetes
@@ -461,6 +546,8 @@ curl -XPUT "http://schema-registry:8081/config/order-events-value" \
 | **NONE** | No compatibility checking | Any change allowed (dangerous) |
 
 For most pipelines, **BACKWARD** compatibility is the safest choice. It ensures that new consumers can always read messages produced by older producers.
+
+> **Stop and think**: Your team decides to deploy a new schema that changes an integer field `quantity` to a string field `quantity_str` to support formats like "1 dozen". If you are using BACKWARD compatibility, what will the schema registry do when the producer tries to register this schema?
 
 ---
 
@@ -623,39 +710,39 @@ aws kafka create-cluster \
 ## Quiz
 
 <details>
-<summary>1. Why should you never have more consumer pods than topic partitions in a consumer group?</summary>
+<summary>1. Your team deploys an e-commerce order processing service scaling via HPA. During a flash sale, the HPA scales the consumer Deployment to 20 pods to handle a massive spike in CPU usage. However, the Kafka topic `orders-raw` only has 12 partitions. Despite having 20 pods running, processing throughput hits a hard ceiling. What is happening to pods 13-20, and how should you re-architect to handle this scale?</summary>
 
-In a Kafka consumer group, each partition is assigned to exactly one consumer. If you have 6 partitions and 8 consumers, 2 consumers will be completely idle -- they receive no messages. They consume cluster resources (CPU, memory, network connections) without doing any work. The maximum useful parallelism equals the partition count. If you need more throughput, increase the partition count first, then add consumers to match. Note that increasing partitions is a one-way operation in Kafka -- you cannot reduce partition count after creation.
+In a Kafka consumer group, each partition is exclusively assigned to a single consumer to guarantee ordering. Because there are only 12 partitions, pods 13 through 20 are completely starved of data; they sit entirely idle, receiving zero messages and processing nothing, while consuming cluster resources. The hard throughput ceiling is bound by the 12 active pods. To handle this scale, you must first increase the partition count of the `orders-raw` topic to at least 20 (or higher, like 50) so that the incoming data stream can be fanned out. Only then can the additional pods take ownership of the new partitions and begin contributing to the overall throughput.
 </details>
 
 <details>
-<summary>2. Explain the difference between managed Kafka (MSK) and in-cluster Kafka (Strimzi) and when you would choose each.</summary>
+<summary>2. You are designing an architecture for a healthcare startup that processes 500 MB/s of patient telemetry data across three AWS regions. The team is small, consisting of four application developers and zero dedicated database administrators. They are debating between deploying Strimzi on EKS or paying for Amazon MSK. Which solution should they choose, and what operational realities drive this decision?</summary>
 
-Managed Kafka (MSK, Confluent Cloud) handles broker provisioning, patching, storage management, and automatic recovery. You pay more per-broker but save significant engineering time on operations. Choose managed when your team lacks Kafka expertise, when durability is critical, or when you process high volumes. In-cluster Kafka (Strimzi) runs Kafka as a StatefulSet in your Kubernetes cluster. It gives you sub-millisecond latency (no VPC hop), full control over configuration, and lower base cost. Choose it for development environments, low-volume workloads, or when you need Kafka in environments without managed services (air-gapped, on-premises).
+The startup should unequivocally choose Amazon MSK (or Confluent Cloud). At 500 MB/s of sustained throughput, a Kafka cluster is a massive, IO-heavy distributed system requiring continuous tuning, disk monitoring, partition rebalancing, and failover management. Deploying Strimzi means the four application developers become part-time Kafka administrators. When a broker disk fails at 3 AM or ZooKeeper/KRaft desynchronizes, the developers are responsible for the repair, directly detracting from product velocity. While MSK carries a higher line-item cost on the AWS bill, it absorbs the operational burden of node replacements, patching, and control-plane management, ensuring data durability for critical healthcare telemetry without requiring the team to hire a dedicated infrastructure engineer.
 </details>
 
 <details>
-<summary>3. What is consumer lag and why is it the most important Kafka metric to monitor?</summary>
+<summary>3. At 3:00 AM on Black Friday, your alerting system triggers. CPU and memory metrics for your payment processing pods are well within normal limits, and pod logs show zero error messages. However, the `kafka_consumergroup_lag` metric has spiked from 50 to 85,000 for the `payment-events` topic. What is happening in your system, and why is this metric catching an issue that standard Kubernetes metrics missed?</summary>
 
-Consumer lag is the difference between the latest offset in a partition (the most recent message produced) and the committed offset of a consumer group (the last message the consumer acknowledged). High lag means consumers are not keeping up with producers -- messages are accumulating faster than they can be processed. This indicates either under-provisioned consumers, slow processing logic, or a sudden spike in production rate. If lag grows continuously, it will eventually exceed the topic's retention period, causing data loss as old messages are deleted before being consumed. Monitoring lag is critical because everything can appear healthy (no errors, pods running) while data is silently falling behind.
+Your payment processing pods are failing to keep pace with the incoming surge of payment events. The producers are writing messages to the topic much faster than the consumers can process and acknowledge them, resulting in a rapidly growing backlog (lag). This situation often occurs when consumers become bottlenecked by a downstream system, such as a sluggish database or external API. In these scenarios, the consumer pods are simply blocked waiting for I/O; they aren't crashing, generating errors, or maxing out CPU/memory. Standard Kubernetes metrics indicate the pods are "healthy" because they are running, but only the `kafka_consumergroup_lag` metric reveals the true business reality: the data pipeline is silently falling dangerously behind.
 </details>
 
 <details>
-<summary>4. Why is BACKWARD compatibility the recommended schema compatibility mode?</summary>
+<summary>4. The data engineering team proposes changing the schema compatibility mode from BACKWARD to FORWARD in the Confluent Schema Registry. They argue this will force producers to update their applications before consumers can read the new data formats. In a decoupled microservices architecture where you manage the consumer but another team manages the producer, why is switching away from BACKWARD compatibility a dangerous anti-pattern?</summary>
 
-BACKWARD compatibility means that a new version of a schema can read data written by the previous version. This is the safest default because in Kubernetes environments, consumers are typically updated before producers (or independently). When you deploy a new consumer with an updated schema, it must still be able to read messages that were produced with the old schema. Backward compatibility allows adding new fields (with defaults) and removing optional fields. It prevents breaking changes like renaming fields or changing types, which would cause deserialization failures in the new consumer when reading old messages.
+Switching away from BACKWARD compatibility severely jeopardizes deployment safety because it destroys the guarantee that an updated consumer can read historical data. In event-driven architectures, topics act as ledgers containing older messages. If the producer team introduces a schema change and you deploy a new version of your consumer, your consumer will immediately encounter older messages on the topic that were serialized with the previous schema. If the new schema is not backward compatible, your consumer will fail to deserialize those older messages, resulting in a catastrophic pipeline crash or a poison-pill loop. BACKWARD compatibility is strictly required to ensure that consumers can be safely upgraded at any time without coordinating downtime with the producers.
 </details>
 
 <details>
-<summary>5. How does KEDA scale Kafka consumers differently from CPU-based HPA scaling?</summary>
+<summary>5. You configured a standard Kubernetes HPA targeting 80% CPU utilization for a legacy inventory syncing consumer. During a database slowdown, the inventory consumers spend all their time waiting for the database to respond (I/O bound). The Kafka topic backs up with 200,000 unprocessed messages, but the HPA does not scale up the deployment. Why did the CPU-based HPA fail to scale, and how would replacing it with KEDA solve this exact problem?</summary>
 
-CPU-based HPA measures how busy consumer pods are, but Kafka consumers are often I/O-bound, not CPU-bound. A consumer waiting on network I/O uses minimal CPU even when the queue is backing up. KEDA scales based on consumer lag -- the actual number of unprocessed messages. If lag increases, KEDA adds pods regardless of CPU usage. If lag is zero, KEDA can scale down. This directly aligns scaling with the business metric that matters: how many messages are waiting to be processed. KEDA also respects the partition count limit, preventing over-scaling beyond useful parallelism.
+The CPU-based HPA failed because threads blocked on network I/O (waiting for a database response) do not consume CPU cycles. The pods appeared idle to the Kubernetes metrics server, hovering well below the 80% threshold, so the HPA saw no reason to scale out, despite the massive backlog of work. Replacing the standard HPA with KEDA solves this by shifting the scaling metric from internal resource utilization (CPU) to external queue depth (Kafka lag). KEDA directly queries the Kafka cluster for the consumer group lag and scales the deployment proportionally. If the lag crosses the configured threshold, KEDA will immediately spawn new pods to help chew through the backlog, entirely bypassing the misleading CPU metrics.
 </details>
 
 <details>
-<summary>6. What is the purpose of `min.insync.replicas` and why should it be set to 2 when using `acks=all`?</summary>
+<summary>6. An SRE configures a critical financial ledger topic with a replication factor of 3, `min.insync.replicas=1`, and instructs developers to use `acks=all` in their producers. Later that day, broker 2 crashes, followed shortly by broker 3. The producer successfully writes a deposit event to the remaining broker 1, but then broker 1's disk fails before any other broker recovers. Why did `acks=all` fail to prevent data loss in this scenario, and how would changing `min.insync.replicas` have changed the outcome?</summary>
 
-`min.insync.replicas` (ISR) defines the minimum number of replicas that must acknowledge a write before the producer considers it successful. With `acks=all`, the producer waits for all in-sync replicas to acknowledge. Setting ISR to 2 (with replication factor 3) means at least 2 of 3 replicas must be available and up-to-date for writes to succeed. If only 1 replica is in-sync (because 2 brokers are down), writes are rejected rather than accepted with insufficient replication. This prevents data loss scenarios where a single remaining replica fails after acknowledging a write. The trade-off is reduced availability -- writes fail when fewer than ISR replicas are healthy.
+The `acks=all` setting guarantees that the producer will wait for all *currently in-sync* replicas to acknowledge the write. However, because `min.insync.replicas` was set to 1, the cluster was perfectly willing to accept writes even when only a single broker (broker 1) was alive and in-sync. The producer received a success acknowledgment after writing solely to broker 1. When broker 1's disk failed, that un-replicated data was permanently lost. If `min.insync.replicas` had been configured to 2, the cluster would have proactively rejected the producer's write attempt once brokers 2 and 3 went down. The producer would have received an error instead of a false confirmation, allowing the application to safely retry or alert, thereby preserving data integrity at the cost of temporary unavailability.
 </details>
 
 ---
