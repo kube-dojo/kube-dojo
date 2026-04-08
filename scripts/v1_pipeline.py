@@ -1638,25 +1638,48 @@ def cmd_e2e(args):
 
     # UK translations: sync modules for completed sections
     if not getattr(args, "no_translate", False):
+        uk_sync_script = REPO_ROOT / "scripts" / "uk_sync.py"
         for section in sections_to_run:
             uk_section = CONTENT_ROOT / "uk" / section
-            # Only translate sections that already have UK translations started
             if not uk_section.exists():
                 continue
+
+            # Find EN modules that have UK counterparts (or should)
+            section_path = CONTENT_ROOT / section
+            en_modules = sorted(section_path.glob("**/module-*.md"))
+            en_modules = [m for m in en_modules if "/uk/" not in str(m) and ".staging" not in str(m)]
+            if not en_modules:
+                continue
+
             print(f"\n{'='*60}")
-            print(f"  UK TRANSLATE: {section}")
+            print(f"  UK TRANSLATE: {section} ({len(en_modules)} modules)")
             print(f"{'='*60}")
-            uk_sync_script = REPO_ROOT / "scripts" / "uk_sync.py"
-            # Stream output directly to stdout so user sees progress
-            proc = subprocess.Popen(
-                [sys.executable, str(uk_sync_script), "e2e", section],
-                cwd=str(REPO_ROOT),
-            )
-            try:
-                proc.wait(timeout=7200)  # 2 hours max per section
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                print(f"  ⚠ uk_sync timed out after 2 hours for {section}")
+
+            translated = 0
+            failed = 0
+            for en_path in en_modules:
+                rel = en_path.relative_to(CONTENT_ROOT)
+                uk_path = CONTENT_ROOT / "uk" / rel
+                # Translate or fix one module at a time
+                if uk_path.exists():
+                    cmd = [sys.executable, str(uk_sync_script), "fix", str(uk_path)]
+                else:
+                    cmd = [sys.executable, str(uk_sync_script), "translate", str(en_path)]
+
+                print(f"  UK: {rel.name}")
+                proc = subprocess.Popen(cmd, cwd=str(REPO_ROOT))
+                try:
+                    proc.wait(timeout=600)  # 10 min per module
+                    if proc.returncode == 0:
+                        translated += 1
+                    else:
+                        failed += 1
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    failed += 1
+                    print(f"  ⚠ Timed out: {rel.name}")
+
+            print(f"\n  UK: {translated} translated, {failed} failed")
 
     # Final summary
     state = load_state()
