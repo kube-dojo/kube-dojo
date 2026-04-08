@@ -64,12 +64,12 @@ This analogy will carry you all the way from here to Kubernetes, where you'll ma
 | 0.3 | [First Terminal Commands](module-0.3-first-commands/) | 25 min | Navigate, create, move, and delete files |
 | 0.4 | [Files and Directories](module-0.4-files-and-directories/) | 25 min | Paths, file types, organizing your filesystem |
 | 0.5 | [Editing Files](module-0.5-editing-files/) | 25 min | Edit files with nano, write your first script |
-| 0.6 | [Git Basics](module-0.6-git-basics/) | 45 min | Track your work with Git -- init, add, commit, log |
+| 0.6 | [Git Basics — Track Your Work](module-0.6-git-basics/) | 45 min | Track your work with Git -- init, add, commit, log |
 | 0.7 | [What is Networking?](module-0.7-what-is-networking/) | 25 min | IPs, ports, DNS -- how computers talk to each other |
 | 0.8 | [Servers and SSH](module-0.8-servers-and-ssh/) | 25 min | What servers are, how to connect remotely |
 | 0.9 | [Software and Packages](module-0.9-software-and-packages/) | 25 min | Installing and managing software from the terminal |
 | 0.10 | [What is the Cloud?](module-0.10-what-is-the-cloud/) | 20 min | Cloud computing, AWS/Azure/GCP, where K8s fits |
-| **0.11** | [**Your First Server**](module-0.11-your-first-server/) | **45 min** | **Capstone: deploy a real website using everything you've learned** |
+| 0.11 | [Your First Server -- Putting It All Together](module-0.11-your-first-server/) | 45 min | Capstone: deploy a real website using everything you've learned |
 
 ---
 
