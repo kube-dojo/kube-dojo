@@ -504,45 +504,98 @@ IMPROVED MODULE:
 """
 
 
-def update_index_table(module_path: Path) -> None:
-    """Update the module's row in its section index.md table.
+INDEX_PROMPT_TEMPLATE = """CRITICAL INSTRUCTION: Your response must be ONLY the raw markdown content. Start with the --- frontmatter delimiter. No preamble, no explanation — ONLY the markdown file.
 
-    Reads the module's title from frontmatter and updates the corresponding
-    row in the parent directory's index.md. Preserves all other content.
-    """
-    index_path = module_path.parent / "index.md"
+You are rewriting the index.md for a KubeDojo section. This page introduces the section and lists its modules.
+
+Keep the EXACT same frontmatter (title, sidebar order, label).
+
+SECTION: {section_path}
+
+MODULE LIST (current titles and filenames):
+{module_list}
+
+CURRENT INDEX:
+{current_index}
+
+RULES:
+- Preserve the overall structure and voice of the current index
+- Update the module table to match the current module titles and filenames
+- Keep any prose, analogies, learning paths, prerequisites, and "what's next" sections
+- Update descriptions in the table if they no longer match the module content
+- Links must use relative paths: [Title](module-slug/)
+- Ensure sidebar.order: 0 in frontmatter (index always sorts first)
+- NO emojis
+- If the current index is just a stub (< 10 lines of body), write a proper introduction (2-3 paragraphs) + module table
+"""
+
+
+def step_update_index(section_path: Path, model: str = MODELS["write"]) -> bool:
+    """Rewrite section index.md via Gemini based on current module titles."""
+    index_path = section_path / "index.md"
     if not index_path.exists():
-        return
+        return False
 
-    # Extract title from module frontmatter
-    content = module_path.read_text()
-    if not content.startswith("---"):
-        return
-    fm_text = content.split("---", 2)[1]
-    title_match = re.search(r'^title:\s*["\']?(.+?)["\']?\s*$', fm_text, re.MULTILINE)
-    if not title_match:
-        return
-    title = title_match.group(1).strip()
-    # Strip "Module X.Y: " prefix from title for the link text
-    link_text = re.sub(r'^Module\s+[\d.]+:\s*', '', title)
+    # Gather module info
+    modules = sorted(section_path.glob("module-*.md"))
+    modules = [m for m in modules if ".staging" not in str(m)]
+    if not modules:
+        return False
 
-    # Build the expected link slug from filename
-    slug = module_path.stem  # e.g., module-1.1-what-are-containers
+    module_list_lines = []
+    for m in modules:
+        content = m.read_text()
+        fm_text = content.split("---", 2)[1] if content.startswith("---") else ""
+        title_match = re.search(r'^title:\s*["\']?(.+?)["\']?\s*$', fm_text, re.MULTILINE)
+        title = title_match.group(1).strip() if title_match else m.stem
+        module_list_lines.append(f"- {m.stem} → {title}")
 
-    index_content = index_path.read_text()
+    module_list = "\n".join(module_list_lines)
+    current_index = index_path.read_text()
+    rel_section = str(section_path.relative_to(CONTENT_ROOT))
 
-    # Find and update the table row containing this module's link
-    # Match patterns like: [Title](module-1.1-what-are-containers/) or [Title](slug/)
-    pattern = re.compile(
-        r'(\|[^|]*\[)[^\]]*(\]\(' + re.escape(slug) + r'/?\))',
-        re.MULTILINE,
+    prompt = INDEX_PROMPT_TEMPLATE.format(
+        section_path=rel_section,
+        module_list=module_list,
+        current_index=current_index,
     )
-    match = pattern.search(index_content)
-    if match:
-        new_content = index_content[:match.start(1)] + match.group(1) + link_text + match.group(2) + index_content[match.end():]
-        if new_content != index_content:
-            index_path.write_text(new_content)
-            print(f"  ✓ Updated index: {index_path.parent.name}/index.md")
+
+    print(f"\n  INDEX: {rel_section} (using {model})")
+    ok, output = dispatch_gemini_with_retry(prompt, model=model, timeout=120)
+
+    if not ok or not output.strip():
+        print(f"  ❌ INDEX rewrite failed")
+        return False
+
+    # Strip markdown wrapper
+    if output.startswith("```markdown"):
+        output = output[len("```markdown"):].strip()
+    if output.startswith("```md"):
+        output = output[len("```md"):].strip()
+    if output.startswith("```"):
+        output = output[3:].strip()
+    if output.endswith("```"):
+        output = output[:-3].strip()
+
+    if not output.startswith("---"):
+        print(f"  ❌ INDEX rewrite has no frontmatter")
+        return False
+
+    index_path.write_text(output)
+    print(f"  ✓ INDEX written: {rel_section}/index.md ({len(output)} chars)")
+
+    # Also update UK translation if it exists
+    uk_index = CONTENT_ROOT / "uk" / rel_section / "index.md"
+    if uk_index.exists():
+        print(f"  ℹ UK index exists — will need translation: {uk_index}")
+
+    # Git add
+    subprocess.run(
+        ["git", "add", str(index_path)],
+        cwd=str(REPO_ROOT), capture_output=True, text=True,
+    )
+
+    return True
 
 
 def step_review(module_path: Path, improved: str, model: str = MODELS["review"]) -> dict | None:
@@ -778,10 +831,6 @@ def run_module(module_path: Path, state: dict, max_retries: int = 2,
         save_state(state)
 
     # SCORE
-    # UPDATE INDEX — update module table row in section index.md
-    if ms["phase"] in ("score",):
-        update_index_table(module_path)
-
     if ms["phase"] == "score":
         scores = ms.get("scores", [4, 4, 4, 4, 4, 4, 4])
         total = sum(scores)
@@ -796,13 +845,9 @@ def run_module(module_path: Path, state: dict, max_retries: int = 2,
 
         if passes:
             print(f"\n  ✓ PASS: {total}/35 (min: {minimum})")
-            # Auto-commit (module + index if updated)
-            files_to_add = [str(module_path)]
-            index_path = module_path.parent / "index.md"
-            if index_path.exists():
-                files_to_add.append(str(index_path))
+            # Auto-commit
             add_result = subprocess.run(
-                ["git", "add"] + files_to_add,
+                ["git", "add", str(module_path)],
                 cwd=str(REPO_ROOT), capture_output=True, text=True,
             )
             if add_result.returncode != 0:
@@ -1363,6 +1408,27 @@ def cmd_e2e(args):
                 break
 
         print(f"\n  {section}: {passed} passed, {failed} failed, {skipped} skipped")
+
+        # Update section index.md if any modules passed this run
+        if passed > 0:
+            # Find all unique directories containing modules (handles subsections)
+            module_dirs = sorted({m.parent for m in modules})
+            for mdir in module_dirs:
+                if (mdir / "index.md").exists():
+                    step_update_index(mdir, model=models["write"])
+
+            # Commit index updates
+            subprocess.run(
+                ["git", "add", "-A"], cwd=str(REPO_ROOT),
+                capture_output=True, text=True,
+            )
+            idx_commit = subprocess.run(
+                ["git", "commit", "-m",
+                 f"docs: update section indexes for {section}"],
+                cwd=str(REPO_ROOT), capture_output=True, text=True,
+            )
+            if idx_commit.returncode == 0:
+                print(f"  ✓ Index updates committed")
 
     # Final summary
     state = load_state()
