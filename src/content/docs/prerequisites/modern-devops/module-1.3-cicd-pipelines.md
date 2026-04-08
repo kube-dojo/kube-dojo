@@ -103,24 +103,29 @@ Think of a pipeline like a high-end commercial kitchen during dinner service:
 - **Step:** The specific actions a chef takes. Chop onions, season meat, sear in pan. These must happen in strict sequential order within a Job.
 - **Artifact:** The completed, plated dish passed to the waiter to be delivered to the customer (or passed to the next Stage).
 
-```ascii
-+-----------------------------------------------------------------------------------+
-|                              PIPELINE / WORKFLOW                                  |
-|                                                                                   |
-|  +-----------------+    +-----------------+    +-----------------+    +--------+  |
-|  |     STAGE 1     |    |     STAGE 2     |    |     STAGE 3     |    | STAGE 4|  |
-|  |     (Build)     |    |     (Test)      |    |    (Package)    |    | (Deploy|  |
-|  |                 |    |                 |    |                 |    |        |  |
-|  |  +-----------+  |    |  +-----------+  |    |  +-----------+  |    | +----+ |  |
-|  |  |   JOB A   +---------->   JOB B   +---------->   JOB D   +--------->JOB E |  |
-|  |  | (Compile) |  |    |  | (Unit Tst)|  |    |  | (Docker)  |  |    | |(K8s)||  |
-|  |  +-----------+  |    |  +-----------+  |    |  +-----------+  |    | +----+ |  |
-|  |                 |    |                 |    |                 |    |        |  |
-|  |                 |    |  +-----------+  |    |                 |    |        |  |
-|  |                 |    |  |   JOB C   |  |    |                 |    |        |  |
-|  |                 |    |  | (Linting) |  |    |                 |    |        |  |
-|  |                 |    |  +-----------+  |    |                 |    |        |  |
-+--+-----------------+----+-----------------+----+-----------------+----+--------+--+
+```mermaid
+flowchart LR
+    subgraph Pipeline [PIPELINE / WORKFLOW]
+        direction LR
+        subgraph S1 [STAGE 1: Build]
+            J_A[JOB A: Compile]
+        end
+        subgraph S2 [STAGE 2: Test]
+            J_B[JOB B: Unit Test]
+            J_C[JOB C: Linting]
+        end
+        subgraph S3 [STAGE 3: Package]
+            J_D[JOB D: Docker]
+        end
+        subgraph S4 [STAGE 4: Deploy]
+            J_E[JOB E: K8s]
+        end
+        J_A --> J_B
+        J_A --> J_C
+        J_B --> J_D
+        J_C --> J_D
+        J_D --> J_E
+    end
 ```
 
 1. **Pipeline/Workflow:** The overarching process triggered by an event (e.g., a push to the `main` branch, a pull request creation, or a nightly cron schedule).
@@ -268,7 +273,7 @@ The pipeline maintains two completely identical environments: Blue (current live
 
 ### 4. Canary Deployment
 
-The pipeline routes a very small percentage of live user traffic (e.g., 5%) to the new version (the "canary"). The pipeline then automatically monitors observability metrics (error rates, latency). If the metrics are healthy for a set time (e.g., 10 minutes), the pipeline automatically increases the traffic percentage (10%, 25%, 50%, 100%) until the new version serves everyone.
+The pipeline routes a very small percentage of live user traffic (e.g., 5%) to the new version (the "canary"). The pipeline then automatically monitors observability metrics (error rates, latency). If the pipeline metrics are healthy for a set time (e.g., 10 minutes), the pipeline automatically increases the traffic percentage (10%, 25%, 50%, 100%) until the new version serves everyone.
 *   **War Story: "The Poisonous Canary."** A team rolled out a canary to 1% of traffic. However, their load balancer routed traffic based on user ID hashes, and that specific 1% happened to accidentally include all the company's internal administrators doing heavy, slow database reporting queries, skewing the latency metrics and falsely failing the deployment. Canary rollouts require truly randomized or carefully, deliberately segmented traffic.
 *   **Pros:** Lowest risk of broad impact. Tests against real user traffic and real, unpredictable usage patterns. Automated rollback based on cold mathematical thresholds, not human intuition.
 *   **Cons:** Highly complex to set up. Requires advanced Ingress controllers or Service Meshes (like Istio or Linkerd) and extremely tight integration with a metrics system (like Prometheus). Results in a very slow deployment process.
@@ -349,7 +354,7 @@ The pipeline was missing a vulnerability scanning (or Container Image scanning) 
 
 <details>
 <summary>7. Scenario: Your organization recently suffered a data breach because a developer accidentally committed an AWS access key into the `main` branch. The key was valid and exploited within minutes. To prevent this, your security team wants to block such commits from ever being integrated. Where is the most effective place in the CI/CD workflow to implement this control, and why?</summary>
-You should implement static code analysis and secret scanning during the Continuous Integration (CI) phase, specifically triggered on Pull Requests before they are merged. By shifting security left, the pipeline acts as an automated gatekeeper. If the CI job detects a secret pattern (like an AWS key signature), it immediately fails the build and blocks the PR from merging into the main branch, preventing the exposed secret from becoming part of the shared codebase or reaching the deployment phase.
+You should implement static code analysis and secret scanning during the Continuous Integration (CI) phase, specifically triggered on Pull Requests before they are merged. By shifting security left, the pipeline acts as an automated gatekeeper that stops sensitive data before it reaches the main repository. If the CI job detects a secret pattern (like an AWS key signature), it immediately fails the build and blocks the PR from merging into the main branch. This approach prevents the exposed secret from ever becoming part of the shared codebase, ensuring it never reaches the deployment phase or gets permanently written into the Git history.
 </details>
 
 <details>
@@ -453,8 +458,8 @@ Create a GitHub Actions workflow file that sets up Node.js, caches npm dependenc
 3. Configure it to trigger on `push` events to the `main` branch.
 4. Add a job named `build-and-test` that runs on `ubuntu-latest`.
 5. Add steps to:
-   - Checkout the code using `actions/checkout @v4`.
-   - Setup Node.js using `actions/setup-node @v4` and configure it to cache `npm` dependencies.
+   - Checkout the code using `actions/checkout@v4`.
+   - Setup Node.js using `actions/setup-node@v4` and configure it to cache `npm` dependencies.
    - Run `npm install`.
    - Build the Docker image (tag it `kubedojo-app:test`).
 
@@ -474,11 +479,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
-      uses: actions/checkout @v4
+      uses: actions/checkout@v4
 
     # This action natively handles caching node_modules based on package-lock.json
     - name: Setup Node.js and Cache
-      uses: actions/setup-node @v4
+      uses: actions/setup-node@v4
       with:
         node-version: '20'
         cache: 'npm'
@@ -598,10 +603,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
-      uses: actions/checkout @v4
+      uses: actions/checkout@v4
 
     - name: Setup Node.js and Cache
-      uses: actions/setup-node @v4
+      uses: actions/setup-node@v4
       with:
         node-version: '20'
         cache: 'npm'
@@ -661,7 +666,7 @@ jobs:
     timeout-minutes: 15
     steps:
     - name: Checkout code
-      uses: actions/checkout @v4
+      uses: actions/checkout@v4
       # ...rest of steps...
 ```
 
