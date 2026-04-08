@@ -1,17 +1,38 @@
 #!/usr/bin/env python3
 """KubeDojo Module Quality Pipeline — v1.
 
-Processes each module through all 7 quality dimensions to reach 29/35.
-Uses Gemini for writing/translating, Claude for evaluation/review,
-and deterministic Python checks as quality gates.
+Processes each module through 7 quality dimensions to reach 29/35.
+Uses Gemini for writing/translating, deterministic Python checks as gates.
+
+Pipeline per module: AUDIT → WRITE/REWRITE → REVIEW → CHECK → SCORE → COMMIT
+Pipeline per section: modules + INDEX rewrite (EN) + INDEX translate (UK)
+
+Features:
+- Knowledge packet extraction: preserves code blocks, tables, diagrams, quiz
+  blocks, inline prompts, and links during rewrites
+- ASCII→Mermaid conversion instruction in WRITE/REWRITE prompts
+- Deterministic checks: frontmatter, sections, inline prompts, quiz format,
+  emojis, K8s API versions (WARNING only, strips code blocks + inline code)
+- Section index.md: Gemini rewrite after section completes, auto-translates UK
+- Safety: truncation guard, frontmatter validation, thinking leak detection,
+  circuit breaker (5 consecutive failures), atomic state writes
 
 Usage:
-    python scripts/v1_pipeline.py audit <module-path>
-    python scripts/v1_pipeline.py audit-all [--section cloud/aws-essentials]
-    python scripts/v1_pipeline.py run <module-path>
-    python scripts/v1_pipeline.py run-section <section-path>
     python scripts/v1_pipeline.py status
-    python scripts/v1_pipeline.py resume
+    python scripts/v1_pipeline.py e2e ztt              # single section
+    python scripts/v1_pipeline.py e2e prereqs           # track (all sections)
+    python scripts/v1_pipeline.py e2e k8s/cka           # auto-discovers parts
+    python scripts/v1_pipeline.py e2e certs linux cloud  # multiple tracks
+    python scripts/v1_pipeline.py run <module-path>      # single module
+    python scripts/v1_pipeline.py run-section <path>     # section without index
+    python scripts/v1_pipeline.py resume                 # retry stuck modules
+    python scripts/v1_pipeline.py audit <module-path>    # score only
+    python scripts/v1_pipeline.py audit-all              # deterministic checks only
+
+Section aliases: ztt, git, cn101, k8sbasics, philosophy, devops,
+    cka, ckad, cks, kcna, kcsa, extending, aws, gcp, azure, eks, gke, aks
+Track aliases: prereqs, certs, specialty, cloud, platform, on-prem, linux
+Any directory path also works: e2e on-premises, e2e platform/foundations
 """
 
 from __future__ import annotations

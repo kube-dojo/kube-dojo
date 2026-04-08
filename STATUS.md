@@ -138,14 +138,25 @@
 - [x] ZTT module numbering collision fixed (0.6 git-basics + 0.6 networking → renumbered 0.7-0.11)
 - [x] Pipeline v2: Gemini defaults, e2e command, track aliases, safety hardening
 - [x] uk_sync.py consolidated: status/detect/fix/translate/e2e with track aliases
-- [ ] Cert tracks pipeline: CKA 5/75, CKAD 0/47, CKS 0/60, KCNA 14/41, KCSA 1/50 — 110 stuck at CHECK, 19 at WRITE
-- [ ] UK prereqs translation: ZTT done (10/11), other prereq sections in progress via uk_sync.py e2e
-- [ ] UK git-basics (module-0.6) has broken frontmatter — delete and re-translate via uk_sync.py
-- [ ] Remaining pipeline: Cloud (84), Platform (209), On-Premises (30) — #180
+- [x] Certs pipeline: 150/164 pass, 3 fail, 8 WIP — #180
+- [x] Cloud pipeline: 80/86 pass — #180
+- [x] Linux pipeline: 34/38 pass — #180
+- [x] Pipeline v3: knowledge packets, block-level rewrite, ASCII→Mermaid — #192
+- [x] Pipeline: section index.md rewrite (EN) + auto-translate (UK) after section completes
+- [x] Pipeline: 41 integration tests (test_pipeline.py)
+- [x] Pipeline: subsection aliases (ztt, cka, aws, etc.) + auto-discover from any dir path
+- [x] Nav fix: all 156 index.md files (EN+UK) set to sidebar.order: 0
+- [x] Nav fix: slug corrections for ZTT module-0.6, git-deep-dive modules 1 and 9
+- [x] K8S_API check: demoted to WARNING, strips code blocks + inline code (false positives)
+- [x] .staging file glob bug fixed (was creating bogus state entries)
+- [x] Token analysis: subagents are 74% of volume but mostly cheap cache reads. Not the cost monster claimed.
+- [ ] Remaining pipeline: On-Premises (30), Platform (209), Specialty (18) — #180
+- [ ] Stuck modules: ~11 at WRITE (Gemini rejection loop), need knowledge packet retry
+- [ ] ASCII→Mermaid conversion pass for all 587 modules — #193 (after #180)
+- [ ] UK prereqs translation: re-sync after pipeline rewrites
 - [ ] Lab quality audit and improvements — #179
 
 ## Blockers
-- uk_sync.py needs frontmatter validation on Gemini output (same guard as v1_pipeline step_check)
 - Gemini CLI output inconsistency: sometimes writes to files, sometimes returns to stdout — handled but fragile
 
 ## Key Decisions
