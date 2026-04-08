@@ -103,10 +103,10 @@ You want to build and deploy apps at scale? Learn containers, Docker, and Kubern
 
 Most senior engineers know both. Start with whichever excites you more -- the other path will be here when you're ready. Both paths converge at **Platform Engineering** (SRE, GitOps, DevSecOps, MLOps).
 
-```
+```text
                Zero to Terminal
                      |
-              Module 0.10 (Capstone)
+              Module 0.11 (Capstone)
                      |
           +----------+----------+
           |                     |
