@@ -1657,6 +1657,7 @@ def cmd_e2e(args):
 
             translated = 0
             failed = 0
+            consecutive_uk_failures = 0
             for en_path in en_modules:
                 rel = en_path.relative_to(CONTENT_ROOT)
                 uk_path = CONTENT_ROOT / "uk" / rel
@@ -1672,12 +1673,19 @@ def cmd_e2e(args):
                     proc.wait(timeout=600)  # 10 min per module
                     if proc.returncode == 0:
                         translated += 1
+                        consecutive_uk_failures = 0
                     else:
                         failed += 1
+                        consecutive_uk_failures += 1
                 except subprocess.TimeoutExpired:
                     proc.kill()
                     failed += 1
+                    consecutive_uk_failures += 1
                     print(f"  ⚠ Timed out: {rel.name}")
+
+                if consecutive_uk_failures >= 3:
+                    print(f"  CIRCUIT BREAKER: 3 consecutive UK translation failures — skipping rest")
+                    break
 
             print(f"\n  UK: {translated} translated, {failed} failed")
 

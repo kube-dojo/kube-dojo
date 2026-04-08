@@ -2,8 +2,6 @@
 title: "Модуль 0.6: Основи Git — Відстежуйте свою роботу"
 sidebar:
   order: 7
-en_commit: "6f416ad1a4e4c7b8cf41d78c5735d1efdd20ac16"
-en_file: "src/content/docs/prerequisites/zero-to-terminal/module-0.6-git-basics.md"
 ---
 
 # Модуль 0.6: Основи Git — Відстежуйте свою роботу
