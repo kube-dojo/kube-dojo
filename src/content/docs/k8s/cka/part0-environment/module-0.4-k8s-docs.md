@@ -72,6 +72,8 @@ kubernetes.io/docs/
 
 **Tasks** is your primary destination during the exam.
 
+> **Stop and think**: You're configuring a complex Pod with multiple volume mounts and specific security contexts. You've found a basic Pod example in the Tasks section, but it's missing the security fields. What is the most time-efficient strategy to complete your YAML without getting lost in the documentation?
+
 ---
 
 ## Part 2: Bookmark These URLs
@@ -162,6 +164,8 @@ This works offline and shows exactly what fields are available.
 ---
 
 ## Part 4: Finding YAML Examples
+
+> **Pause and predict**: You search for "ingress" on kubernetes.io and the first result is a Concepts page explaining how Ingress controllers work. If you click it and scroll to the bottom, what type of content are you most likely to find, and how should that influence your next click?
 
 ### Pattern: Every Task Has Examples
 
@@ -380,28 +384,28 @@ Or search "PVC accessModes"
 
 ## Quiz
 
-1. **Where do you find step-by-step guides for specific tasks?**
+1. **Scenario**: You are 15 minutes into the exam and need to configure a Pod to use a PersistentVolumeClaim. You remember seeing a page about this, but you can't remember the exact YAML structure for the `volumes` array. You open the kubernetes.io search bar. How do you quickly locate the exact YAML snippet you need without reading through conceptual explanations?
    <details>
    <summary>Answer</summary>
-   kubernetes.io/docs/tasks/ — The Tasks section contains how-to guides with examples.
+   You should search for "Configure a Pod to Use a PersistentVolumeClaim" and specifically look for a result under the **Tasks** section, bypassing any **Concepts** or **Reference** results. The Tasks section is designed as a collection of how-to guides that almost always include copy-pasteable YAML examples. By prioritizing Tasks, you avoid wasting time reading architectural theory and immediately get a working template that you can adapt for your specific exam question.
    </details>
 
-2. **What's the fastest way to see available fields for a PVC spec?**
+2. **Scenario**: You are tasked with creating a NetworkPolicy that denies all ingress traffic except from a specific namespace. You found a YAML example in the docs, but it uses `podSelector` instead of `namespaceSelector`. You need to know the exact syntax for `namespaceSelector`. What is the fastest method to discover this specific field's syntax without returning to the web browser?
    <details>
    <summary>Answer</summary>
-   `kubectl explain pvc.spec` — Works offline, shows all fields with descriptions.
+   The fastest method is to use the command line tool directly by running `kubectl explain networkpolicy.spec.ingress.from.namespaceSelector`. During the exam, switching context back to the browser and searching through API reference pages can be slow and distracting. The `kubectl explain` command queries the cluster's OpenAPI schema directly, providing you with instant, offline documentation for the exact structure and fields available. This approach keeps your hands on the keyboard and your focus on the terminal, saving you precious minutes.
    </details>
 
-3. **You need a Gateway API HTTPRoute example. Where do you look?**
+3. **Scenario**: You are answering a question that requires deploying a Gateway API `HTTPRoute`. You type "HTTPRoute" into the kubernetes.io search bar, but the results are overwhelming and mostly point to blog posts from 2022. Knowing the structure of the documentation, where should you manually navigate to find the authoritative example?
    <details>
    <summary>Answer</summary>
-   kubernetes.io/docs/concepts/services-networking/gateway/ — Gateway API docs with examples.
+   You should navigate to the **Concepts → Services, Load Balancing → Gateway API** section of the documentation. While the Tasks section is generally best for examples, newer APIs or heavily architectural features sometimes have their primary examples embedded in the Concepts pages where they are introduced. Knowing the documentation tree allows you to bypass a failing search function and go directly to the networking section where the Gateway API is housed. This ensures you find up-to-date, exam-valid YAML without relying on unpredictable keyword matching.
    </details>
 
-4. **The search returns too many results for "network policy." How do you narrow it down?**
+4. **Scenario**: While troubleshooting a failing Deployment, you realize you need to add an `initContainer` to delay startup. You have the main Deployment YAML ready but need the `initContainers` array structure. You run `kubectl explain deployment.spec.template.spec.initContainers`, but the output scrolls off your terminal screen, making it hard to read. How do you efficiently extract just the fields you need?
    <details>
    <summary>Answer</summary>
-   Add specifics: "network policy ingress example" or go directly to Tasks → Administer Cluster → Network Policies.
+   You should pipe the output of the explain command to a pager like `less` or use `grep`, for example: `kubectl explain pod.spec.initContainers | grep -A 5 volumeMounts`. The exam terminal can be restrictive, and scrolling back through hundreds of lines of API documentation is inefficient and prone to user error. Using standard Linux text manipulation tools with `kubectl explain` allows you to control the output and read the definitions at your own pace. This technique helps you quickly identify the required fields without getting overwhelmed by the sheer volume of API information.
    </details>
 
 ---

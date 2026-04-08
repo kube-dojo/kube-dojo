@@ -33,34 +33,15 @@ KCSA tests your awareness of common vulnerability patterns and their mitigations
 
 ## Vulnerability Categories
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              KUBERNETES VULNERABILITY TYPES                 │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  CVEs (Code Vulnerabilities)                               │
-│  • Bugs in Kubernetes, container runtime, or dependencies  │
-│  • Require patching to fix                                 │
-│  • Tracked with CVE identifiers                            │
-│  • Examples: runc escape, API server bypass                │
-│                                                             │
-│  MISCONFIGURATIONS                                         │
-│  • Insecure settings in your cluster                       │
-│  • Fixed by configuration changes                          │
-│  • Most common vulnerability type                          │
-│  • Examples: privileged pods, exposed secrets              │
-│                                                             │
-│  INSECURE DEFAULTS                                         │
-│  • Default settings that aren't secure                     │
-│  • Require proactive hardening                             │
-│  • Examples: anonymous auth, no network policies           │
-│                                                             │
-│  SUPPLY CHAIN                                              │
-│  • Vulnerabilities in images or dependencies               │
-│  • Inherited from upstream sources                         │
-│  • Examples: vulnerable base images, malicious packages    │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph KUBERNETES_VULNERABILITY_TYPES["KUBERNETES VULNERABILITY TYPES"]
+    direction TB
+    A["<b>CVEs (Code Vulnerabilities)</b><br/>• Bugs in Kubernetes, container runtime, or dependencies<br/>• Require patching to fix<br/>• Tracked with CVE identifiers<br/>• Examples: runc escape, API server bypass"]
+    B["<b>MISCONFIGURATIONS</b><br/>• Insecure settings in your cluster<br/>• Fixed by configuration changes<br/>• Most common vulnerability type<br/>• Examples: privileged pods, exposed secrets"]
+    C["<b>INSECURE DEFAULTS</b><br/>• Default settings that aren't secure<br/>• Require proactive hardening<br/>• Examples: anonymous auth, no network policies"]
+    D["<b>SUPPLY CHAIN</b><br/>• Vulnerabilities in images or dependencies<br/>• Inherited from upstream sources<br/>• Examples: vulnerable base images, malicious packages"]
+    end
 ```
 
 ---
@@ -69,63 +50,29 @@ KCSA tests your awareness of common vulnerability patterns and their mitigations
 
 ### Container Escape CVEs
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              CONTAINER ESCAPE VULNERABILITIES               │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  CVE-2019-5736 (runc)                                      │
-│  ├── Impact: Container escape via malicious image          │
-│  ├── Attack: Overwrite host runc binary                    │
-│  ├── Affected: Docker, containerd, CRI-O                   │
-│  └── Fix: Update runc                                      │
-│                                                             │
-│  CVE-2020-15257 (containerd)                               │
-│  ├── Impact: Container escape via API                      │
-│  ├── Attack: Access containerd-shim API socket             │
-│  ├── Affected: containerd before 1.4.3                     │
-│  └── Fix: Update containerd                                │
-│                                                             │
-│  CVE-2022-0811 (CRI-O)                                     │
-│  ├── Impact: Container escape via kernel parameters        │
-│  ├── Attack: Set kernel.core_pattern to escape             │
-│  ├── Affected: CRI-O                                       │
-│  └── Fix: Update CRI-O                                     │
-│                                                             │
-│  LESSON: Container runtimes are critical security layer    │
-│  Keep them updated!                                        │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph CONTAINER_ESCAPE_VULNERABILITIES["CONTAINER ESCAPE VULNERABILITIES"]
+    direction TB
+    A["<b>CVE-2019-5736 (runc)</b><br/>Impact: Container escape via malicious image<br/>Attack: Overwrite host runc binary<br/>Affected: Docker, containerd, CRI-O<br/>Fix: Update runc"]
+    B["<b>CVE-2020-15257 (containerd)</b><br/>Impact: Container escape via API<br/>Attack: Access containerd-shim API socket<br/>Affected: containerd before 1.4.3<br/>Fix: Update containerd"]
+    C["<b>CVE-2022-0811 (CRI-O)</b><br/>Impact: Container escape via kernel parameters<br/>Attack: Set kernel.core_pattern to escape<br/>Affected: CRI-O<br/>Fix: Update CRI-O"]
+    D("<b>LESSON:</b> Container runtimes are critical security layer. Keep them updated!")
+    end
 ```
 
 > **Stop and think**: CVE-2019-5736 affected runc — the container runtime used by Docker, containerd, and CRI-O. If your cluster uses containerd, does patching Kubernetes itself fix this vulnerability? What component actually needs updating?
 
 ### Kubernetes Core CVEs
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              KUBERNETES API/AUTHZ CVEs                      │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  CVE-2018-1002105 (Privilege Escalation)                   │
-│  ├── Impact: Any user → cluster-admin                      │
-│  ├── Attack: Upgrade API connection to backend             │
-│  ├── Severity: Critical (9.8)                              │
-│  └── Fix: Kubernetes 1.10.11, 1.11.5, 1.12.3              │
-│                                                             │
-│  CVE-2020-8554 (MITM via LoadBalancer)                     │
-│  ├── Impact: Intercept traffic to external IPs             │
-│  ├── Attack: Create service with ExternalIP                │
-│  ├── Severity: Medium                                      │
-│  └── Fix: Restrict ExternalIP via admission                │
-│                                                             │
-│  CVE-2021-25741 (Symlink Attack)                           │
-│  ├── Impact: Access files outside volume                   │
-│  ├── Attack: Symlink in subPath mount                      │
-│  ├── Affected: All Kubernetes before fix                   │
-│  └── Fix: Update Kubernetes                                │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph KUBERNETES_API_AUTHZ_CVEs["KUBERNETES API/AUTHZ CVEs"]
+    direction TB
+    A["<b>CVE-2018-1002105 (Privilege Escalation)</b><br/>Impact: Any user → cluster-admin<br/>Attack: Upgrade API connection to backend<br/>Severity: Critical (9.8)<br/>Fix: Kubernetes 1.10.11, 1.11.5, 1.12.3"]
+    B["<b>CVE-2020-8554 (MITM via LoadBalancer)</b><br/>Impact: Intercept traffic to external IPs<br/>Attack: Create service with ExternalIP<br/>Severity: Medium<br/>Fix: Restrict ExternalIP via admission"]
+    C["<b>CVE-2021-25741 (Symlink Attack)</b><br/>Impact: Access files outside volume<br/>Attack: Symlink in subPath mount<br/>Affected: All Kubernetes before fix<br/>Fix: Update Kubernetes"]
+    end
 ```
 
 ---
@@ -134,97 +81,43 @@ KCSA tests your awareness of common vulnerability patterns and their mitigations
 
 ### RBAC Misconfigurations
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              RBAC MISCONFIGURATIONS                         │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  EXCESSIVE PERMISSIONS                                     │
-│  ├── Issue: Wildcards (*) in roles                         │
-│  ├── Risk: Access to unintended resources                  │
-│  └── Fix: Specify exact resources and verbs                │
-│                                                             │
-│  CLUSTER-WIDE WHEN NAMESPACE ENOUGH                        │
-│  ├── Issue: ClusterRoleBinding for namespaced access       │
-│  ├── Risk: Access to all namespaces                        │
-│  └── Fix: Use RoleBinding with namespace scope             │
-│                                                             │
-│  BINDING TO DEFAULT SERVICE ACCOUNT                        │
-│  ├── Issue: Roles bound to default SA                      │
-│  ├── Risk: All pods in namespace get permissions           │
-│  └── Fix: Create dedicated ServiceAccounts                 │
-│                                                             │
-│  DANGEROUS PERMISSIONS                                     │
-│  ├── create pods → Can create privileged pods              │
-│  ├── get secrets → Can read all secrets in scope           │
-│  ├── impersonate → Can act as any user                     │
-│  └── Fix: Audit and restrict these permissions             │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph RBAC_MISCONFIGURATIONS["RBAC MISCONFIGURATIONS"]
+    direction TB
+    A["<b>EXCESSIVE PERMISSIONS</b><br/>Issue: Wildcards (*) in roles<br/>Risk: Access to unintended resources<br/>Fix: Specify exact resources and verbs"]
+    B["<b>CLUSTER-WIDE WHEN NAMESPACE ENOUGH</b><br/>Issue: ClusterRoleBinding for namespaced access<br/>Risk: Access to all namespaces<br/>Fix: Use RoleBinding with namespace scope"]
+    C["<b>BINDING TO DEFAULT SERVICE ACCOUNT</b><br/>Issue: Roles bound to default SA<br/>Risk: All pods in namespace get permissions<br/>Fix: Create dedicated ServiceAccounts"]
+    D["<b>DANGEROUS PERMISSIONS</b><br/>create pods → Can create privileged pods<br/>get secrets → Can read all secrets in scope<br/>impersonate → Can act as any user<br/>Fix: Audit and restrict these permissions"]
+    end
 ```
 
 ### Pod Security Misconfigurations
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              POD SECURITY MISCONFIGURATIONS                 │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  PRIVILEGED CONTAINERS                                     │
-│  privileged: true                                          │
-│  └── Impact: Full host access, easy container escape       │
-│                                                             │
-│  HOST NAMESPACE SHARING                                    │
-│  hostPID: true, hostNetwork: true, hostIPC: true          │
-│  └── Impact: See host processes, network, IPC             │
-│                                                             │
-│  DANGEROUS CAPABILITIES                                    │
-│  capabilities: { add: [SYS_ADMIN, SYS_PTRACE] }           │
-│  └── Impact: Near-root privileges                         │
-│                                                             │
-│  RUNNING AS ROOT                                           │
-│  runAsUser: 0, runAsNonRoot: false                        │
-│  └── Impact: Higher privilege if exploited                │
-│                                                             │
-│  WRITABLE ROOT FILESYSTEM                                  │
-│  readOnlyRootFilesystem: false                            │
-│  └── Impact: Attacker can persist changes                 │
-│                                                             │
-│  SENSITIVE HOST PATHS                                      │
-│  hostPath: { path: /etc, path: /var/run/docker.sock }     │
-│  └── Impact: Host filesystem access, container escape     │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph POD_SECURITY_MISCONFIGURATIONS["POD SECURITY MISCONFIGURATIONS"]
+    direction TB
+    A["<b>PRIVILEGED CONTAINERS</b><br/>privileged: true<br/>Impact: Full host access, easy container escape"]
+    B["<b>HOST NAMESPACE SHARING</b><br/>hostPID: true, hostNetwork: true, hostIPC: true<br/>Impact: See host processes, network, IPC"]
+    C["<b>DANGEROUS CAPABILITIES</b><br/>capabilities: { add: [SYS_ADMIN, SYS_PTRACE] }<br/>Impact: Near-root privileges"]
+    D["<b>RUNNING AS ROOT</b><br/>runAsUser: 0, runAsNonRoot: false<br/>Impact: Higher privilege if exploited"]
+    E["<b>WRITABLE ROOT FILESYSTEM</b><br/>readOnlyRootFilesystem: false<br/>Impact: Attacker can persist changes"]
+    F["<b>SENSITIVE HOST PATHS</b><br/>hostPath: { path: /etc, path: /var/run/docker.sock }<br/>Impact: Host filesystem access, container escape"]
+    end
 ```
 
 ### Network Misconfigurations
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              NETWORK MISCONFIGURATIONS                      │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  NO NETWORK POLICIES                                       │
-│  ├── Default: All pods can reach all pods                  │
-│  ├── Risk: Lateral movement after compromise               │
-│  └── Fix: Implement default deny + explicit allow          │
-│                                                             │
-│  EXPOSED API SERVER                                        │
-│  ├── Issue: Public API server endpoint                     │
-│  ├── Risk: Direct attacks, credential stuffing             │
-│  └── Fix: Private endpoint, VPN access                     │
-│                                                             │
-│  UNNECESSARY SERVICE EXPOSURE                              │
-│  ├── Issue: NodePort/LoadBalancer for internal services    │
-│  ├── Risk: Expanded attack surface                         │
-│  └── Fix: Use ClusterIP, ingress for external              │
-│                                                             │
-│  NO EGRESS CONTROL                                         │
-│  ├── Issue: Pods can reach any external endpoint           │
-│  ├── Risk: Data exfiltration, C2 communication             │
-│  └── Fix: Egress network policies                          │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph NETWORK_MISCONFIGURATIONS["NETWORK MISCONFIGURATIONS"]
+    direction TB
+    A["<b>NO NETWORK POLICIES</b><br/>Default: All pods can reach all pods<br/>Risk: Lateral movement after compromise<br/>Fix: Implement default deny + explicit allow"]
+    B["<b>EXPOSED API SERVER</b><br/>Issue: Public API server endpoint<br/>Risk: Direct attacks, credential stuffing<br/>Fix: Private endpoint, VPN access"]
+    C["<b>UNNECESSARY SERVICE EXPOSURE</b><br/>Issue: NodePort/LoadBalancer for internal services<br/>Risk: Expanded attack surface<br/>Fix: Use ClusterIP, ingress for external"]
+    D["<b>NO EGRESS CONTROL</b><br/>Issue: Pods can reach any external endpoint<br/>Risk: Data exfiltration, C2 communication<br/>Fix: Egress network policies"]
+    end
 ```
 
 ---
@@ -233,36 +126,18 @@ KCSA tests your awareness of common vulnerability patterns and their mitigations
 
 ## Vulnerability Scoring (CVSS)
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              CVSS SCORING                                   │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  CVSS (Common Vulnerability Scoring System)                │
-│  Standard method to rate vulnerability severity            │
-│                                                             │
-│  SCORE RANGES:                                             │
-│  ├── 0.0       - None                                      │
-│  ├── 0.1-3.9   - Low                                       │
-│  ├── 4.0-6.9   - Medium                                    │
-│  ├── 7.0-8.9   - High                                      │
-│  └── 9.0-10.0  - Critical                                  │
-│                                                             │
-│  FACTORS CONSIDERED:                                       │
-│  ├── Attack Vector (Network/Adjacent/Local/Physical)       │
-│  ├── Attack Complexity (Low/High)                          │
-│  ├── Privileges Required (None/Low/High)                   │
-│  ├── User Interaction (None/Required)                      │
-│  ├── Scope (Unchanged/Changed)                             │
-│  ├── Impact (Confidentiality/Integrity/Availability)       │
-│  └── Base/Temporal/Environmental scores                    │
-│                                                             │
-│  USE FOR PRIORITIZATION:                                   │
-│  Critical/High → Immediate action                          │
-│  Medium → Plan remediation                                 │
-│  Low → Address in regular cycles                           │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph CVSS_SCORING["CVSS SCORING"]
+    direction TB
+    A["<b>CVSS (Common Vulnerability Scoring System)</b><br/>Standard method to rate vulnerability severity"]
+    
+    B["<b>SCORE RANGES:</b><br/>0.0 - None<br/>0.1-3.9 - Low<br/>4.0-6.9 - Medium<br/>7.0-8.9 - High<br/>9.0-10.0 - Critical"]
+    
+    C["<b>FACTORS CONSIDERED:</b><br/>Attack Vector (Network/Adjacent/Local/Physical)<br/>Attack Complexity (Low/High)<br/>Privileges Required (None/Low/High)<br/>User Interaction (None/Required)<br/>Scope (Unchanged/Changed)<br/>Impact (Confidentiality/Integrity/Availability)<br/>Base/Temporal/Environmental scores"]
+    
+    D["<b>USE FOR PRIORITIZATION:</b><br/>Critical/High → Immediate action<br/>Medium → Plan remediation<br/>Low → Address in regular cycles"]
+    end
 ```
 
 ---
@@ -300,38 +175,13 @@ KCSA tests your awareness of common vulnerability patterns and their mitigations
 
 ## Vulnerability Response
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              VULNERABILITY RESPONSE PROCESS                 │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  1. IDENTIFY                                               │
-│     • CVE announcements                                    │
-│     • Scanning tools                                       │
-│     • Security advisories                                  │
-│                                                             │
-│  2. ASSESS                                                 │
-│     • Does it affect my environment?                       │
-│     • What's the severity (CVSS)?                          │
-│     • Is it being exploited?                               │
-│                                                             │
-│  3. PRIORITIZE                                             │
-│     • Critical + Active exploit → Immediate                │
-│     • High + Public exploit → Days                         │
-│     • Medium → Weeks                                       │
-│     • Low → Regular patch cycle                            │
-│                                                             │
-│  4. REMEDIATE                                              │
-│     • Patch/upgrade if available                           │
-│     • Mitigate if patch unavailable                        │
-│     • Accept risk with documentation                       │
-│                                                             │
-│  5. VERIFY                                                 │
-│     • Confirm fix applied                                  │
-│     • Re-scan for vulnerability                            │
-│     • Update documentation                                 │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A["<b>1. IDENTIFY</b><br/>• CVE announcements<br/>• Scanning tools<br/>• Security advisories"] --> B
+    B["<b>2. ASSESS</b><br/>• Does it affect my environment?<br/>• What's the severity (CVSS)?<br/>• Is it being exploited?"] --> C
+    C["<b>3. PRIORITIZE</b><br/>• Critical + Active exploit → Immediate<br/>• High + Public exploit → Days<br/>• Medium → Weeks<br/>• Low → Regular patch cycle"] --> D
+    D["<b>4. REMEDIATE</b><br/>• Patch/upgrade if available<br/>• Mitigate if patch unavailable<br/>• Accept risk with documentation"] --> E
+    E["<b>5. VERIFY</b><br/>• Confirm fix applied<br/>• Re-scan for vulnerability<br/>• Update documentation"]
 ```
 
 ---
@@ -383,7 +233,7 @@ KCSA tests your awareness of common vulnerability patterns and their mitigations
 4. **CVE-2018-1002105 allowed any authenticated user to escalate to cluster-admin through the API server. Your cluster is on a version that's affected. You can't upgrade immediately due to application compatibility concerns. What short-term mitigations could reduce the risk?**
    <details>
    <summary>Answer</summary>
-   Short-term mitigations: (1) Restrict who can authenticate — remove unnecessary user accounts, audit all ClusterRoleBindings, and limit the number of authenticated users who could exploit this; (2) Enable and monitor audit logging to detect exploitation attempts; (3) Make the API server private (VPN/bastion only) to reduce who can reach it; (4) Use network policies to restrict pod access to the API server; (5) Disable the aggregation layer if not in use (the vulnerability exploited API aggregation). These reduce likelihood while you plan the upgrade. However, for a CVSS 9.8 vulnerability with a public exploit, the upgrade should be prioritized over application compatibility — the risk of cluster compromise outweighs the risk of temporary application disruption.
+   Short-term mitigations: (1) Restrict who can authenticate — remove unnecessary user accounts, audit all ClusterRoleBindings, and limit the number of authenticated users who could exploit this; (2) Enable and monitor audit logging to detect exploitation attempts; (3) Make the API server private (VPN/bastion only) to reduce who can reach it; (4) Use network policies to restrict pod access to the API server; (5) Disable the aggregation layer if not in use (the vulnerability exploited API aggregation). These reduce likelihood while you plan the upgrade. However, for a CVSS 9.8 vulnerability with a public exploit, the upgrade should be prioritized over application compatibility. The risk of cluster compromise heavily outweighs the risk of temporary application disruption. Delaying the patch provides a massive window of opportunity for an attacker to gain full control of the environment.
    </details>
 
 5. **Your organization has both a vulnerability scanning tool (Trivy) and a configuration auditing tool (kube-bench). Explain what each tool catches that the other misses, and why you need both.**

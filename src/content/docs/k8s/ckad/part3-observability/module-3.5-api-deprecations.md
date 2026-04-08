@@ -266,11 +266,20 @@ The answer: it would error out immediately. `extensions/v1beta1` Deployments wer
 
 ### Timeline Example
 
-```
+```text
 1.19: v1beta1 deprecated (warning)
 1.20: v1beta1 still works (warning continues)
 1.21: v1beta1 still works (warning continues)
 1.22: v1beta1 REMOVED (error if used)
+```
+
+```mermaid
+timeline
+    title API Deprecation Lifecycle (v1beta1 Example)
+    1.19 : API Deprecated : Warning Printed
+    1.20 : Grace Period : Still Works
+    1.21 : Grace Period : Warning Continues
+    1.22 : API Removed : Manifests Fail
 ```
 
 ---
@@ -332,10 +341,10 @@ The answer: it would error out immediately. `extensions/v1beta1` Deployments wer
    You cannot trust the apiVersion from any online example — only `kubectl explain` on your actual cluster tells you the truth. `extensions/v1beta1` Deployments were removed in Kubernetes 1.16 (released 2019). To adapt: change `apiVersion` to `apps/v1`, then verify the spec structure with `k explain deployment.spec`. For Deployments, the v1 spec is essentially the same as v1beta1, so the rest of the manifest likely works. For other resources like Ingress, the spec changed significantly between versions. Always validate with `--dry-run=client -o yaml` before applying.
    </details>
 
-6. **What's the difference between a "deprecated" API and a "removed" API? Why does this distinction matter for your workflow?**
+6. **You are reviewing a pull request that updates a Helm chart. The author noticed deprecation warnings for `policy/v1beta1` PodSecurityPolicies in the CI logs and simply changed the `apiVersion` to `policy/v1` to make the warnings stop. Is this the correct approach for this specific API, and what consequences might this have?**
    <details>
    <summary>Answer</summary>
-   A deprecated API still works — the server accepts it and processes it, but prints a warning in the response. A removed API is gone — the server returns an error and refuses the request. This distinction matters because deprecated APIs give you a grace period (minimum 3 releases) to update. During this window, everything works but you're on borrowed time. Removed APIs cause immediate failures. The practical implication: if you see deprecation warnings in your CI/CD logs, treat them as non-critical bugs to fix in the next sprint. If you see removal errors, it's a production incident.
+   No, this is not the correct approach, as PodSecurityPolicy was completely removed in Kubernetes 1.25 and does not have a `v1` equivalent API. The author is assuming that all beta APIs simply graduate to stable by changing the version string, which is a dangerous assumption. By blindly changing the version without checking `kubectl explain podsecuritypolicy`, the updated chart will immediately fail to apply on the cluster, causing a deployment outage. The correct action is to read the deprecation notice, research the replacement (which is Pod Security Admission), and migrate the security controls entirely rather than just bumping the version string.
    </details>
 
 ---

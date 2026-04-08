@@ -6,44 +6,56 @@ sidebar:
 lab:
   id: "prereq-k8s-1.2-kubectl"
   url: "https://killercoda.com/kubedojo/scenario/prereq-k8s-1.2-kubectl"
-  duration: "30 min"
+  duration: "30 хв"
   difficulty: "beginner"
   environment: "kubernetes"
+en_commit: "68c548ea6c0f246cc6ac716524e04ddee5baeccc"
+en_file: "src/content/docs/prerequisites/kubernetes-basics/module-1.2-kubectl-basics.md"
 ---
-> **Складність**: `[MEDIUM]` — Основні команди, які потрібно опанувати
->
-> **Час на виконання**: 40–45 хвилин
->
-> **Передумови**: Модуль 1.1 (Запущений перший кластер)
 
-## Що ви зможете робити після цього модуля
-
-Після цього модуля ви зможете:
-- **Навігувати** ресурсами Kubernetes за допомогою `kubectl get`, `kubectl describe` та `kubectl explain`
-- **Створювати** ресурси як імперативно (швидкі команди), так і декларативно (YAML-файли)
-- **Дебажити** проблеми з ресурсами за допомогою подій `kubectl describe` та `kubectl logs`
-- **Використовувати** форматування виводу (`-o wide`, `-o yaml`, `-o json`) для отримання потрібної інформації
+> **Складність**: `[СЕРЕДНЯ]` — Основні команди для опанування
+>
+> **Час на проходження**: 40-45 хвилин
+>
+> **Передумови**: Модуль 1 (Перший запущений кластер)
 
 ---
 
-## Чому цей модуль важливий
+Уявіть, що о 3-й годині ночі спрацьовує пейджер. Основний сервіс оплати вашої компанії не працює, і щохвилини випаровуються тисячі доларів. У вас є термінал і лише один інструмент: `kubectl`. Якщо ви точно знаєте, як надіслати запит до кластера, отримати логи та знайти несправний Pod, ви — герой. Якщо ж ви порпаєтеся в документації, намагаючись згадати прапорець для фільтрації простору імен (namespace), аварія триває. `kubectl` — це не просто CLI-інструмент; це ваша центральна нервова система для спілкування з Kubernetes.
 
-`kubectl` — це ваш основний інтерфейс для роботи з Kubernetes. Будь-яка взаємодія — створення ресурсів, налагодження проблем, перевірка статусу — проходить через `kubectl`. Опанування цього інструменту є критично важливим як для щоденної роботи, так і для складання іспитів на сертифікацію.
+## Що ви зможете зробити
+
+Після завершення цього модуля ви зможете:
+- **Орієнтуватися** в ресурсах Kubernetes за допомогою `kubectl get`, `kubectl describe` та `kubectl explain`
+- **Створювати** ресурси як імперативно (швидкими командами), так і декларативно (через YAML-файли)
+- **Налагоджувати** проблеми з ресурсами, використовуючи події `kubectl describe` та логи `kubectl logs`
+- **Використовувати** форматування виводу (`-o wide`, `-o yaml`, `-o json`), щоб отримати необхідну інформацію
+
+---
+
+## Чому це важливо
+
+kubectl — це ваш основний інтерфейс для роботи з Kubernetes. Кожна взаємодія — створення ресурсів, налагодження проблем, перевірка статусу — проходить через kubectl. Опанування цього інструменту є критично важливим як для щоденної роботи, так і для складання сертифікаційних іспитів.
+
+**Збій через «неправильний контекст» (Реальна історія)**
+У 2019 році відомий фінтех-стартап (назва прихована) пережив катастрофічний 45-хвилинний збій, який коштував приблизно 120 000 доларів втрачених транзакцій. Причиною була не складна мережева помилка чи вразливість нульового дня. Досвідчений інженер, маючи намір очистити ресурси в середовищі розробки (staging), виконав команду `kubectl delete namespace payments`. На жаль, його контекст `kubectl` все ще був налаштований на production. Оскільки `kubectl` виконує саме те, що ви йому кажете, щодо поточного активного контексту без жодної системи захисту, весь рівень маршрутизації платежів у production був миттєво видалений. Ось чому опанування керування контекстами `kubectl`, використання тестових запусків (dry-runs) та обережне виконання команд — це не лише про швидкість, а й про виживання.
 
 ---
 
 ## Структура команди kubectl
 
 ```
-kubectl [команда] [ТИП] [НАЗВА] [прапорці]
+kubectl [command] [TYPE] [NAME] [flags]
 
-Приклади:
-kubectl get pods                    # Список усіх подів
-kubectl get pod nginx              # Отримати конкретний под
-kubectl get pods -o wide           # Більше колонок у виводі
-kubectl describe pod nginx         # Детальна інформація
-kubectl delete pod nginx           # Видалити ресурс
+Examples:
+kubectl get pods                    # List all pods
+kubectl get pod nginx              # Get specific pod
+kubectl get pods -o wide           # More output columns
+kubectl describe pod nginx         # Detailed info
+kubectl delete pod nginx           # Delete resource
 ```
+
+> **Зупиніться та подумайте**: Якщо `kubectl get pods` виводить список Pod-ів, то яка команда, на вашу думку, виводить список вузлів (nodes), з яких складається ваш кластер?
 
 ---
 
@@ -52,22 +64,22 @@ kubectl delete pod nginx           # Видалити ресурс
 ### Отримання інформації
 
 ```bash
-# Список ресурсів
-kubectl get pods                   # Поди у поточному просторі імен
-kubectl get pods -A                # Поди у всіх просторах імен
-kubectl get pods -n kube-system    # Поди у конкретному просторі імен
-kubectl get pods -o wide           # Більше колонок (вузол, IP)
-kubectl get pods -o yaml           # Повний YAML вивід
-kubectl get pods -o json           # Вивід у форматі JSON
+# List resources
+kubectl get pods                   # Pods in current namespace
+kubectl get pods -A                # Pods in all namespaces
+kubectl get pods -n kube-system    # Pods in specific namespace
+kubectl get pods -o wide           # More columns (node, IP)
+kubectl get pods -o yaml           # Full YAML output
+kubectl get pods -o json           # JSON output
 
-# Популярні типи ресурсів
-kubectl get nodes                  # Вузли кластера
-kubectl get deployments           # Деплойменти
-kubectl get services              # Сервіси
-kubectl get all                   # Усі основні ресурси
-kubectl get events                # Події кластера
+# Common resource types
+kubectl get nodes                  # Cluster nodes
+kubectl get deployments           # Deployments
+kubectl get services              # Services
+kubectl get all                   # Common resources
+kubectl get events                # Cluster events
 
-# Describe (детальна інформація)
+# Describe (detailed info)
 kubectl describe pod nginx
 kubectl describe node kind-control-plane
 kubectl describe deployment myapp
@@ -76,55 +88,57 @@ kubectl describe deployment myapp
 ### Створення ресурсів
 
 ```bash
-# З YAML-файлу
+# From YAML file
 kubectl apply -f pod.yaml
-kubectl apply -f .                  # Усі YAML-файли в директорії
-kubectl apply -f https://example.com/resource.yaml  # За URL-адресою
+kubectl apply -f .                  # All YAML files in directory
+kubectl apply -f https://example.com/resource.yaml  # From URL
 
-# Імперативно (швидке створення)
+# Imperatively (quick creation)
 kubectl run nginx --image=nginx
 kubectl create deployment nginx --image=nginx
 kubectl expose deployment nginx --port=80
 
-# Генерація YAML без створення ресурсу
+# Generate YAML without creating
 kubectl run nginx --image=nginx --dry-run=client -o yaml
 kubectl create deployment nginx --image=nginx --dry-run=client -o yaml
 ```
 
+> **Зупиніться та подумайте**: Що станеться, якщо ви запустите `kubectl apply -f .` у директорії, де є як коректні YAML-файли Kubernetes, так і звичайний текстовий файл `README.md`? (Він спробує застосувати все, видасть помилку на README, але все одно успішно застосує коректні YAML-файли).
+
 ### Зміна ресурсів
 
 ```bash
-# Застосувати зміни
+# Apply changes
 kubectl apply -f updated-pod.yaml
 
-# Редагувати "живий" ресурс
+# Edit live resource
 kubectl edit deployment nginx
 
-# Патчинг (швидка зміна поля)
+# Patch resource
 kubectl patch deployment nginx -p '{"spec":{"replicas":3}}'
 
-# Масштабування
+# Scale
 kubectl scale deployment nginx --replicas=5
 
-# Оновлення образу
+# Set image
 kubectl set image deployment/nginx nginx=nginx:1.25
 ```
 
 ### Видалення ресурсів
 
 ```bash
-# Видалення за назвою
+# Delete by name
 kubectl delete pod nginx
 kubectl delete deployment nginx
 
-# Видалення за файлом
+# Delete from file
 kubectl delete -f pod.yaml
 
-# Видалення всіх ресурсів певного типу
+# Delete all of a type
 kubectl delete pods --all
 kubectl delete pods --all -n my-namespace
 
-# Примусове видалення (якщо под "застряг")
+# Force delete (stuck pods)
 kubectl delete pod nginx --force --grace-period=0
 ```
 
@@ -133,12 +147,12 @@ kubectl delete pod nginx --force --grace-period=0
 ## Формати виводу
 
 ```bash
-# За замовчуванням (таблиця)
+# Default (table)
 kubectl get pods
 # NAME    READY   STATUS    RESTARTS   AGE
 # nginx   1/1     Running   0          5m
 
-# Wide (додаткові колонки)
+# Wide (more columns)
 kubectl get pods -o wide
 # NAME    READY   STATUS    RESTARTS   AGE   IP           NODE
 # nginx   1/1     Running   0          5m    10.244.0.5   kind-control-plane
@@ -148,15 +162,16 @@ kubectl get pod nginx -o yaml
 
 # JSON
 kubectl get pod nginx -o json
+
 ```
 
-> **Бонус: Синтаксис для просунутих** (поверніться до цього, коли освоїте базу)
+> **Бонус: Синтаксис для досвідчених користувачів** (поверніться до цього, коли освоїте базу)
 >
 > ```bash
-> # Кастомні колонки (чудово для дашбордів)
+> # Custom columns (great for dashboards)
 > kubectl get pods -o custom-columns=NAME:.metadata.name,STATUS:.status.phase
 >
-> # JSONPath (вилучення конкретних полів — "золото" для іспитів!)
+> # JSONPath (extract specific fields — exam gold!)
 > kubectl get pod nginx -o jsonpath='{.status.podIP}'
 > kubectl get pods -o jsonpath='{.items[*].metadata.name}'
 > ```
@@ -166,48 +181,48 @@ kubectl get pod nginx -o json
 ## Робота з просторами імен (Namespaces)
 
 ```bash
-# Список просторів імен
+# List namespaces
 kubectl get namespaces
 kubectl get ns
 
-# Встановити простір імен за замовчуванням
+# Set default namespace
 kubectl config set-context --current --namespace=my-namespace
 
-# Створити простір імен
+# Create namespace
 kubectl create namespace my-namespace
 
-# Виконати команду в конкретному просторі імен
+# Run command in specific namespace
 kubectl get pods -n kube-system
 kubectl get pods --namespace=my-namespace
 
-# У всіх просторах імен одночасно
+# All namespaces
 kubectl get pods -A
 kubectl get pods --all-namespaces
 ```
 
 ---
 
-## Команди для налагодження (Debugging)
+## Команди для налагодження
 
 ```bash
-# Перегляд логів
-kubectl logs nginx                  # Поточні логи
-kubectl logs nginx -f               # Стрімінг логів (follow)
-kubectl logs nginx --tail=100       # Останні 100 рядків
-kubectl logs nginx -c container1    # Логи конкретного контейнера
-kubectl logs nginx --previous       # Логи попереднього екземпляра
+# View logs
+kubectl logs nginx                  # Current logs
+kubectl logs nginx -f               # Follow (stream) logs
+kubectl logs nginx --tail=100       # Last 100 lines
+kubectl logs nginx -c container1    # Specific container
+kubectl logs nginx --previous       # Previous instance logs
 
-# Виконання команди всередині контейнера
-kubectl exec nginx -- ls /          # Просто виконати команду
-kubectl exec -it nginx -- bash      # Інтерактивна оболонка
-kubectl exec -it nginx -- sh        # Якщо bash недоступний
+# Execute command in container
+kubectl exec nginx -- ls /          # Run command
+kubectl exec -it nginx -- bash      # Interactive shell
+kubectl exec -it nginx -- sh        # If bash not available
 
-# Прокидання портів (Port forwarding)
+# Port forwarding
 kubectl port-forward pod/nginx 8080:80
 kubectl port-forward svc/nginx 8080:80
-# Доступ за адресою localhost:8080
+# Access at localhost:8080
 
-# Копіювання файлів
+# Copy files
 kubectl cp nginx:/etc/nginx/nginx.conf ./nginx.conf
 kubectl cp ./local-file.txt nginx:/tmp/
 ```
@@ -217,26 +232,26 @@ kubectl cp ./local-file.txt nginx:/tmp/
 ## Корисні прапорці
 
 ```bash
-# Watch (автоматичне оновлення)
+# Watch (auto-refresh)
 kubectl get pods -w
 kubectl get pods --watch
 
-# Мітки та селектори (Labels and selectors)
+# Labels and selectors
 kubectl get pods -l app=nginx
 kubectl get pods --selector=app=nginx,tier=frontend
 
-# Сортування виводу
+# Sort output
 kubectl get pods --sort-by=.metadata.creationTimestamp
 kubectl get pods --sort-by=.status.startTime
 
-# Фільтрація полях
+# Field selectors
 kubectl get pods --field-selector=status.phase=Running
 kubectl get pods --field-selector=spec.nodeName=kind-control-plane
 
-# Показати мітки
+# Show labels
 kubectl get pods --show-labels
 
-# Вивід у файл
+# Output to file
 kubectl get pod nginx -o yaml > pod.yaml
 ```
 
@@ -245,18 +260,18 @@ kubectl get pod nginx -o yaml > pod.yaml
 ## Конфігурація та контекст
 
 ```bash
-# Перегляд поточної конфігурації
+# View current config
 kubectl config view
 kubectl config current-context
 
-# Список контекстів
+# List contexts
 kubectl config get-contexts
 
-# Перемикання контексту
+# Switch context
 kubectl config use-context kind-kind
 kubectl config use-context my-cluster
 
-# Встановити простір імен за замовчуванням для контексту
+# Set default namespace for context
 kubectl config set-context --current --namespace=default
 ```
 
@@ -270,25 +285,25 @@ kubectl config set-context --current --namespace=default
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │  ┌─────────────────┐                                       │
-│  │  Ваш термінал   │                                       │
-│  │  $ kubectl ...  │                                       │
+│  │ Ваш термінал    │                                       │
+│  │ $ kubectl ...   │                                       │
 │  └────────┬────────┘                                       │
 │           │                                                 │
 │           ▼                                                 │
 │  ┌─────────────────┐                                       │
-│  │  ~/.kube/config │  ← Креденшали, інфо про кластери     │
-│  │  (kubeconfig)   │                                       │
+│  │ ~/.kube/config  │  ← Облікові дані, інформація про кластер│
+│  │ (kubeconfig)    │                                       │
 │  └────────┬────────┘                                       │
 │           │                                                 │
 │           ▼  HTTPS                                         │
 │  ┌─────────────────┐                                       │
-│  │   API Server    │  ← Перевіряє, обробляє запит         │
+│  │   API Server    │  ← Перевіряє, обробляє                │
 │  │ (K8s кластер)   │                                       │
 │  └────────┬────────┘                                       │
 │           │                                                 │
 │           ▼                                                 │
 │  ┌─────────────────┐                                       │
-│  │    Відповідь    │  ← YAML / JSON / Таблиця             │
+│  │    Відповідь    │  ← YAML/JSON/Таблиця                  │
 │  │                 │                                       │
 │  └─────────────────┘                                       │
 │                                                             │
@@ -299,7 +314,7 @@ kubectl config set-context --current --namespace=default
 
 ## Корисні скорочення
 
-### Аліаси (Додайте в ~/.bashrc або ~/.zshrc)
+### Аліаси для оболонки (додайте в ~/.bashrc або ~/.zshrc)
 
 ```bash
 alias k='kubectl'
@@ -312,123 +327,174 @@ alias klog='kubectl logs'
 alias kexec='kubectl exec -it'
 ```
 
-### Автодоповнення kubectl (Autocomplete)
+### Автодоповнення kubectl
 
 ```bash
-# Для Bash
+# Bash
 source <(kubectl completion bash)
 echo 'source <(kubectl completion bash)' >> ~/.bashrc
 
-# Для Zsh
+# Zsh
 source <(kubectl completion zsh)
 echo 'source <(kubectl completion zsh)' >> ~/.zshrc
 
-# Разом з аліасом
+# With alias
 complete -F __start_kubectl k  # Bash
 compdef k=kubectl              # Zsh
 ```
 
 ---
 
-## Швидкий довідник
+## Шпаргалка
 
 | Дія | Команда |
-|-----|---------|
-| Список подів | `kubectl get pods` |
+|:---|:---|
+| Показати Pod-и | `kubectl get pods` |
 | Усі простори імен | `kubectl get pods -A` |
-| Детальна інформація | `kubectl describe pod НАЗВА` |
-| Перегляд логів | `kubectl logs НАЗВА` |
-| Доступ до оболонки | `kubectl exec -it НАЗВА -- bash` |
-| Прокидання порту | `kubectl port-forward pod/НАЗВА 8080:80` |
-| Створити з файлу | `kubectl apply -f файл.yaml` |
-| Видалити | `kubectl delete pod НАЗВА` |
-| Згенерувати YAML | `kubectl run НАЗВА --image=ОБРАЗ --dry-run=client -o yaml` |
+| Детальна інформація | `kubectl describe pod NAME` |
+| Переглянути логи | `kubectl logs NAME` |
+| Доступ до оболонки | `kubectl exec -it NAME -- bash` |
+| Прокидання портів | `kubectl port-forward pod/NAME 8080:80` |
+| Створити з файлу | `kubectl apply -f file.yaml` |
+| Видалити | `kubectl delete pod NAME` |
+| Згенерувати YAML | `kubectl run NAME --image=IMG --dry-run=client -o yaml` |
 
 ---
 
-## Чи знали ви?
+## Практичні поради з передової
 
-- **kubectl спілкується з API-сервером через HTTPS.** Усі команди — це виклики API. Ви могли б використовувати `curl`, але це набагато складніше.
+- **kubectl спілкується з API-сервером через HTTPS.** Усі команди — це виклики API. Ви могли б використовувати `curl` замість нього (але навіщо?).
 
-- **`-o yaml` — це порятунок на іспиті.** Отримайте будь-який ресурс як YAML, змініть його та застосуйте назад. Це швидше, ніж писати з нуля.
+- **`-o yaml` — це справжній скарб.** Отримайте будь-який ресурс у форматі YAML, змініть його та застосуйте назад. Це швидше, ніж писати з нуля.
 
-- **`--dry-run=client -o yaml` створює шаблони.** Ніколи не запам'ятовуйте структуру YAML — генеруйте її.
+- **`--dry-run=client -o yaml` генерує шаблони.** Ніколи не зазубрюйте структуру YAML — генеруйте її.
 
-- **В kubectl вбудована довідка.** `kubectl explain pod.spec.containers` покаже документацію до конкретного поля.
+- **kubectl має вбудовану довідку.** `kubectl explain pod.spec.containers` показує документацію по полях.
 
 ---
 
 ## Типові помилки
 
-| Помилка | Вирішення |
-|---------|-----------|
-| Забули простір імен | Використовуйте `-n простір-імен` або встановіть його за замовчуванням |
-| Не той контекст | `kubectl config use-context` |
-| Друкарські помилки | Використовуйте Tab для автодоповнення |
-| Не використовуєте `-o yaml` | Завжди генеруйте шаблони, не пишіть по пам'яті |
-| Використання `create` замість `apply` | `apply` є ідемпотентним (безпечним), надавайте йому перевагу |
+| Помилка | Рішення |
+|:---|:---|
+| Забутий простір імен | Використовуйте `-n namespace` або встановіть його за замовчуванням |
+| Неправильний контекст | Перевіряйте `kubectl config current-context` перед виконанням |
+| Опичатки в назвах ресурсів | Використовуйте клавішу Tab для автодоповнення назв |
+| Відсутність `-o yaml` для шаблонів | Завжди генеруйте шаблони через dry-run, не вчіть їх напам'ять |
+| Використання `create` замість `apply` | `apply` є ідемпотентним і коректно обробляє оновлення, віддавайте перевагу йому |
+| Видалення Pod-а замість його батьківського ресурсу | ReplicaSet миттєво створить Pod заново. Натомість видаляйте Deployment. |
+| Забагато інформації в `kubectl get events` | Використовуйте `--sort-by='.metadata.creationTimestamp'` для хронології |
+| Спроба змінити незмінні поля | Згенеруйте YAML, видаліть ресурс і застосуйте новий YAML замість `kubectl edit` |
 
 ---
 
-## Тест
+## Контрольні запитання
 
-1. **Як побачити всі поди у всіх просторах імен кластера?**
+1. **Вам повідомили, що Pod `payment-processor` постійно перезавантажується (crash-looping) у просторі імен `finance`. Вам потрібно переглянути логи попереднього екземпляра контейнера, щоб зрозуміти причину падіння. Яку команду ви виконаєте?**
    <details>
    <summary>Відповідь</summary>
-   `kubectl get pods -A` або `kubectl get pods --all-namespaces`
+   `kubectl logs payment-processor -n finance --previous`
+
+   *Чому?* Прапорець `--previous` (або `-p`) є критично важливим для налагодження помилок CrashLoopBackOff. За замовчуванням `kubectl logs` показує логи лише того контейнера, що працює зараз. Коли контейнер падає і перезапускається, поточні логи можуть бути порожніми. `--previous` витягує логи з «мертвого» контейнера перед самим виходом.
    </details>
 
-2. **Як згенерувати YAML-маніфест для пода без його створення в кластері?**
+2. **Ви пишете скрипт для моніторингу IP-адрес усіх запущених Pod-ів у кластері, але вам потрібні лише чисті IP-адреси без заголовків чи зайвих колонок. Як витягнути саме це поле?**
    <details>
    <summary>Відповідь</summary>
-   `kubectl run nginx --image=nginx --dry-run=client -o yaml`
+   `kubectl get pods -o jsonpath='{.items[*].status.podIP}'`
+
+   *Чому?* Хоча `-o wide` показує IP-адресу, він включає заголовки, які важко розпарсити скриптом. `jsonpath` дозволяє орієнтуватися в структурі JSON відповіді API та витягувати саме потрібні дані.
    </details>
 
-3. **Як отримати інтерактивну оболонку всередині запущеного контейнера?**
+3. **Розробник просить вас оновити Deployment, щоб використовувати новий тег образу (`v2.1.0`). У нього немає оригінального YAML-файлу, і вам потрібно зробити це швидко, не ризикуючи допустити помилку в ручному сеансі `kubectl edit`. Яка найбезпечніша імперативна команда?**
    <details>
    <summary>Відповідь</summary>
-   `kubectl exec -it НАЗВА_ПОДА -- bash` (або `-- sh`, якщо bash недоступний)
+   `kubectl set image deployment/myapp myapp=nginx:v2.1.0`
+
+   *Чому?* Використання `kubectl set image` безпечніше за `kubectl edit`, бо виконує цільове атомарне оновлення без відкриття текстового редактора, де можна випадково змінити інші рядки.
    </details>
 
-4. **Як стежити за логами пода в режимі реального часу?**
+4. **Ви створили YAML-файл `app.yaml` і застосували його, але Pod поводиться некоректно і застряг у стані Pending. Ви хочете переглянути детальні події, пов'язані з цим конкретним Pod-ом. Що ви зробите?**
    <details>
    <summary>Відповідь</summary>
-   `kubectl logs НАЗВА_ПОДА -f` або `kubectl logs НАЗВА_ПОДА --follow`
+   `kubectl describe pod <pod-name>`
+
+   *Чому?* Команда `kubectl describe` збирає дані з кількох кінцевих точок API, зокрема події кластера (Events). Якщо Pod застряг у `Pending` або `ImagePullBackOff`, `get` не скаже чому, а `describe` покаже конкретну скаргу планувальника (scheduler) або kubelet.
+   </details>
+
+5. **Ваша команда переходить на декларативний робочий процес GitOps. Вам потрібно створити складний Deployment, але ви хочете уникнути написання YAML з нуля, щоб не помилитися з відступами. Як змусити `kubectl` написати «скелет» за вас?**
+   <details>
+   <summary>Відповідь</summary>
+   `kubectl create deployment myapp --image=nginx --dry-run=client -o yaml > myapp.yaml`
+
+   *Чому?* Комбінація `--dry-run=client` та `-o yaml` — це ультимативний чит-код. Клієнт обробляє команду і форматує запит як YAML, але не відправляє його на сервер.
+   </details>
+
+6. **Ви розслідуєте проблему продуктивності й вам потрібно виконати інструмент діагностики мережі (`curl`) зсередини існуючого запущеного Pod-а з назвою `api-backend`. Як потрапити в інтерактивну оболонку всередині цього Pod-а?**
+   <details>
+   <summary>Відповідь</summary>
+   `kubectl exec -it api-backend -- sh`
+
+   *Чому?* Команда `kubectl exec` працює аналогічно до `docker exec`. Прапорці `-i` (інтерактивність) та `-t` (tty) виділяють термінальну сесію, щоб ви могли вводити команди й бачити результат у реальному часі.
+   </details>
+
+7. **Ви працюєте з двома різними кластерами: `dev-cluster` та `prod-cluster`. Ви хочете перевірити, на який кластер зараз вказують ваші команди `kubectl`, перш ніж випадково видалити критичний ресурс. Як це перевірити?**
+   <details>
+   <summary>Відповідь</summary>
+   `kubectl config current-context`
+
+   *Чому?* Файл `~/.kube/config` може містити дані для десятків кластерів. «Контекст» визначає, з яким кластером і користувачем спілкується `kubectl`. Перевірка контексту має стати м'язовою пам'яттю перед деструктивними командами.
+   </details>
+
+8. **Ви помітили, що Pod `cache-worker` зовсім не відповідає і застряг у стані `Terminating` понад 30 хвилин. Звичайні команди видалення просто «висять». Як примусово видалити його з API-сервера?**
+   <details>
+   <summary>Відповідь</summary>
+   `kubectl delete pod cache-worker --force --grace-period=0`
+
+   *Чому?* Іноді kubelet на вузлі втрачає зв'язок, залишаючи Pod у стані `Terminating`. Параметр `--grace-period=0` каже Kubernetes не чекати коректного завершення, а `--force` негайно видаляє об'єкт з бази даних API-сервера.
    </details>
 
 ---
 
 ## Практична вправа
 
-**Завдання**: Попрактикуйтеся з основними командами kubectl.
+**Завдання**: Попрактикуйтеся в основних командах kubectl.
 
 ```bash
-# 1. Створіть простір імен
+# 1. Create a namespace
 kubectl create namespace practice
 
-# 2. Запустіть под у цьому просторі імен
+# 2. Run a pod in that namespace
 kubectl run nginx --image=nginx -n practice
 
-# 3. Список подів у просторі імен
+# 3. List pods in the namespace
 kubectl get pods -n practice
 
-# 4. Отримайте детальну інформацію
+# 4. Get detailed info
 kubectl describe pod nginx -n practice
 
-# 5. Перегляньте логи
+# 5. View logs
 kubectl logs nginx -n practice
 
-# 6. Виконайте команду всередині контейнера
+# 6. Execute a command
 kubectl exec nginx -n practice -- nginx -v
 
-# 7. Отримайте вивід у форматі YAML
+# 7. Get YAML output
 kubectl get pod nginx -n practice -o yaml
 
-# 8. Видаліть усе створене
+# 8. Delete everything
 kubectl delete namespace practice
 ```
 
-**Критерії успіху**: Усі команди виконуються без помилок.
+**Критерії успіху**:
+- [ ] Ви успішно створили новий простір імен `practice`.
+- [ ] Ви розгорнули Pod `nginx` у просторі імен `practice`.
+- [ ] Ви підтвердили, що Pod працює, вивівши список Pod-ів.
+- [ ] Ви успішно отримали детальну інформацію за допомогою `describe`.
+- [ ] Ви отримали логи запущеного контейнера.
+- [ ] Ви виконали команду всередині контейнера і побачили результат.
+- [ ] Ви вивели YAML-визначення Pod-а в термінал.
+- [ ] Ви чисто видалили простір імен та весь його вміст.
 
 ---
 
@@ -437,26 +503,27 @@ kubectl delete namespace practice
 Основні команди kubectl:
 
 **Інформація**:
-- `kubectl get` — список ресурсів.
-- `kubectl describe` — детальна інформація.
-- `kubectl logs` — вивід контейнера.
+- `kubectl get` — Список ресурсів
+- `kubectl describe` — Детальна інформація
+- `kubectl logs` — Вивід контейнера
 
 **Створення**:
-- `kubectl apply -f` — створення/оновлення з файлу.
-- `kubectl run` — швидке створення пода.
-- `kubectl create` — створення ресурсів певних типів.
+- `kubectl apply -f` — Створити/оновити з файлу
+- `kubectl run` — Швидке створення Pod-а
+- `kubectl create` — Створення ресурсів
 
 **Зміна**:
-- `kubectl edit` — редагування "живого" ресурсу.
-- `kubectl scale` — зміна кількості реплік.
-- `kubectl delete` — видалення ресурсів.
+- `kubectl edit` — Редагувати ресурс «наживо»
+- `kubectl scale` — Змінити кількість реплік
+- `kubectl delete` — Видалити ресурси
 
 **Налагодження**:
-- `kubectl exec` — команди всередині контейнера.
-- `kubectl port-forward` — локальний доступ до подів.
+- `kubectl exec` — Виконати команду в контейнері
+- `kubectl port-forward` — Локальний доступ
+- `kubectl logs` — Перегляд виводу
 
 ---
 
 ## Наступний модуль
 
-[Модуль 1.3: Поди](../module-1.3-pods/) — Атомарна одиниця Kubernetes.
+[Модуль 1.3: Pods](../module-1.3-pods/) — атомарна одиниця Kubernetes.

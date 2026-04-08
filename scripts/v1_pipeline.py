@@ -21,6 +21,7 @@ import builtins
 import fcntl
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -58,7 +59,7 @@ def _logged_print(*args, **kwargs):
         _original_print(*args, **kwargs)
     elif any(k in msg for k in ("PASS", "FAIL", "CIRCUIT", "E2E COMPLETE", "SECTION:", "PHASE 1",
                                   "SKIP:", "Resumed:", "passed,", "BREAKER")):
-        _original_print(*args, **kwargs)
+        _original_print(f"[{datetime.now(UTC).strftime('%H:%M:%S')}] {msg}")
 
 
 builtins.print = _logged_print
@@ -288,6 +289,7 @@ RULES:
 - Quiz questions must be scenario-based (lead with realistic situation, test understanding not recall)
 - Every quiz answer must explain WHY (3-5 sentences minimum)
 - Keep the module's existing voice and style
+- CONVERT any ASCII art diagrams to Mermaid (```mermaid blocks) — Mermaid renders natively in our site
 
 IMPROVEMENT PLAN:
 {plan}
@@ -301,12 +303,15 @@ CURRENT MODULE:
 
 REWRITE_PROMPT_TEMPLATE = """CRITICAL INSTRUCTION: Your response must be ONLY the raw markdown content. Start with the --- frontmatter delimiter. No preamble, no explanation — ONLY the markdown file.
 
-TASK: Write a complete KubeDojo educational module FROM SCRATCH. The existing module scored too low to improve — rewrite it completely.
+TASK: Rewrite a KubeDojo educational module. The existing module scored too low — rewrite it while preserving all technical assets listed in the KNOWLEDGE PACKET below.
 
 The file path is: {file_path}
 Keep the EXACT same frontmatter (title, slug, sidebar order).
 
-Use the existing module ONLY for topic reference — do NOT preserve its structure or text.
+KNOWLEDGE PACKET — MUST PRESERVE:
+The following technical assets are extracted from the original module. You MUST include ALL of them in your rewrite, placed in the appropriate sections. Do NOT omit, summarize, or simplify any of these.
+
+{knowledge_packet}
 
 TOPICS TO COVER (from audit):
 {plan}
@@ -315,7 +320,7 @@ QUALITY REQUIREMENTS:
 - 600-800 lines of content minimum (visual aids don't count toward this)
 - Learning Outcomes: 3-5 measurable, Bloom's L3+ verbs (debug, design, evaluate, compare, diagnose, implement)
 - Why This Module Matters: open with dramatic real-world incident, real company, real financial impact. 2-3 paragraphs.
-- Core content (3-6 sections): explanations with analogies, runnable code blocks, ASCII diagrams, tables, war stories
+- Core content (3-6 sections): explanations with analogies, runnable code blocks, Mermaid diagrams (preferred over ASCII), tables, war stories
 - At least 2 inline active learning prompts distributed throughout: > **Pause and predict**: or > **Stop and think**:
 - Did You Know?: exactly 4 facts with real numbers/dates
 - Common Mistakes: table with 6-8 rows (Mistake | Why | Fix)
@@ -323,10 +328,89 @@ QUALITY REQUIREMENTS:
 - Hands-On Exercise: 4-6 progressive tasks with solutions in <details> tags, success checklist
 - Next Module: link with teaser
 - NO emojis, NO recall quiz questions, NO thin outlines, NO number 47
+- CONVERT all ASCII art diagrams to Mermaid (```mermaid blocks). Use flowchart for architecture, sequenceDiagram for flows, graph TD for hierarchies. ASCII art is fragile and hard to maintain — Mermaid renders natively in our site.
 
-EXISTING MODULE (for topic reference only):
+EXISTING MODULE (rewrite this, preserving all knowledge packet assets):
 {content}
 """
+
+
+# ---------------------------------------------------------------------------
+# Knowledge packet extraction — preserves technical assets for rewrites
+# ---------------------------------------------------------------------------
+
+def extract_knowledge_packet(content: str) -> str:
+    """Extract preservable technical assets from a module.
+
+    Returns a formatted string with labeled code blocks, tables, diagrams,
+    quiz questions, inline prompts, and links for the REWRITE prompt.
+    """
+    sections = []
+
+    # 1. Code blocks with context
+    code_blocks = []
+    for i, match in enumerate(re.finditer(r"(^#{2,3} .+\n)?(?:.*\n)*?(```[\w]*\n[\s\S]*?```)", content, re.MULTILINE), 1):
+        heading = match.group(1).strip() if match.group(1) else "unknown section"
+        code = match.group(2)
+        code_blocks.append(f"[CODE-{i}] (from: {heading})\n{code}")
+    if code_blocks:
+        sections.append("### CODE BLOCKS\n" + "\n\n".join(code_blocks))
+
+    # Simpler approach: just extract all fenced code blocks in order
+    if not code_blocks:
+        raw_blocks = re.findall(r"```[\w]*\n[\s\S]*?```", content)
+        if raw_blocks:
+            labeled = [f"[CODE-{i}]\n{b}" for i, b in enumerate(raw_blocks, 1)]
+            sections.append("### CODE BLOCKS\n" + "\n\n".join(labeled))
+
+    # 2. Tables
+    table_pattern = re.compile(r"(\|.+\|)\n(\|[-| :]+\|)\n((?:\|.+\|\n?)+)", re.MULTILINE)
+    tables = table_pattern.findall(content)
+    if tables:
+        labeled_tables = []
+        for i, (header, sep, rows) in enumerate(tables, 1):
+            labeled_tables.append(f"[TABLE-{i}]\n{header}\n{sep}\n{rows.strip()}")
+        sections.append("### TABLES\n" + "\n\n".join(labeled_tables))
+
+    # 3. Mermaid and ASCII diagrams
+    mermaid = re.findall(r"```mermaid\n[\s\S]*?```", content)
+    if mermaid:
+        labeled = [f"[DIAGRAM-{i}]\n{d}" for i, d in enumerate(mermaid, 1)]
+        sections.append("### MERMAID DIAGRAMS\n" + "\n\n".join(labeled))
+
+    # ASCII diagrams (lines with box-drawing chars or +--+)
+    ascii_blocks = re.findall(
+        r"(?:^[ ]*[+|┌┐└┘├┤┬┴┼─│╔╗╚╝║═].*\n){3,}",
+        content, re.MULTILINE
+    )
+    if ascii_blocks:
+        labeled = [f"[ASCII-{i}]\n{b.strip()}" for i, b in enumerate(ascii_blocks, 1)]
+        sections.append("### ASCII DIAGRAMS (convert to Mermaid if possible)\n" + "\n\n".join(labeled))
+
+    # 4. Quiz questions (just the scenarios)
+    quiz_qs = re.findall(r"<summary>(.*?)</summary>", content)
+    if quiz_qs:
+        labeled = [f"[QUIZ-{i}] {q}" for i, q in enumerate(quiz_qs, 1)]
+        sections.append("### QUIZ QUESTIONS\n" + "\n".join(labeled))
+
+    # 5. Inline prompts
+    prompts = re.findall(
+        r">\s*\*\*(Pause and predict|Stop and think|What would happen|Try it yourself|Before you look)[^*]*\*\*:?[^\n]*",
+        content
+    )
+    if prompts:
+        sections.append("### INLINE PROMPTS\n" + "\n".join(f"- {p}" for p in prompts))
+
+    # 6. Links (internal and external)
+    links = re.findall(r"\[([^\]]+)\]\(([^)]+)\)", content)
+    if links:
+        unique_links = list(dict.fromkeys((text, url) for text, url in links))[:20]
+        sections.append("### KEY LINKS\n" + "\n".join(f"- [{t}]({u})" for t, u in unique_links))
+
+    if not sections:
+        return "(No technical assets extracted — module may be a stub)"
+
+    return "\n\n".join(sections)
 
 
 def step_write(module_path: Path, plan: str, model: str = MODELS["write"],
@@ -338,8 +422,9 @@ def step_write(module_path: Path, plan: str, model: str = MODELS["write"],
     print(f"\n  {mode}: {key} (using {model})")
 
     if rewrite:
+        packet = extract_knowledge_packet(content)
         prompt = REWRITE_PROMPT_TEMPLATE.format(
-            file_path=key, plan=plan, content=content)
+            file_path=key, plan=plan, content=content, knowledge_packet=packet)
     else:
         prompt = WRITE_PROMPT_TEMPLATE.format(plan=plan, content=content)
 

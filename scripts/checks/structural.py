@@ -145,8 +145,17 @@ def check_no_emojis(content: str) -> list[CheckResult]:
 
 
 def check_k8s_versions(content: str) -> list[CheckResult]:
-    """Check for deprecated K8s API versions and old version strings."""
+    """Check for deprecated K8s API versions outside code blocks.
+
+    Modules about API deprecations/upgrades legitimately reference old APIs
+    in code blocks, inline code, tables, and prose as teaching examples.
+    Demoted to WARNING — the LLM scoring catches real misuse.
+    """
     results = []
+
+    # Strip fenced code blocks and inline code
+    stripped = re.sub(r"```[\s\S]*?```", "", content)
+    stripped = re.sub(r"`[^`]+`", "", stripped)
 
     # Deprecated API versions
     deprecated = [
@@ -159,8 +168,9 @@ def check_k8s_versions(content: str) -> list[CheckResult]:
     ]
 
     for pattern, msg in deprecated:
-        if re.search(pattern, content):
-            results.append(CheckResult("K8S_API", False, f"Deprecated API: {msg}"))
+        if re.search(pattern, stripped):
+            results.append(CheckResult("K8S_API", False, f"Deprecated API: {msg}",
+                                       severity="WARNING"))
 
     if not results:
         results.append(CheckResult("K8S_API", True, "No deprecated K8s APIs found"))

@@ -2,6 +2,13 @@
 
 KubeDojo — free, open-source cloud native curriculum.
 
+## Agent Usage
+
+- Don't spawn agents for work a single Grep/Read/Glob can do — it's slower and wasteful.
+- Agents ARE worth it for genuinely parallel work and context isolation (large refactors, independent research).
+- Batch direct tool calls in one message when possible (3 Greps > 3 agents).
+- Keep sessions long (`/continue`) — cache hits are ~95% within a session.
+
 ## Project Overview
 
 **Website**: https://kube-dojo.github.io/ (Starlight/Astro)

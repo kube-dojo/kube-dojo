@@ -464,13 +464,65 @@ spec:
         statusCode: 301
 ```
 
+### 5.4 Request Mirroring
+
+Request mirroring allows you to duplicate traffic and send a copy to another backend without affecting the primary response. This is useful for safely testing new versions with live production traffic.
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: mirror-route
+spec:
+  parentRefs:
+  - name: example-gateway
+  rules:
+  - filters:
+    - type: RequestMirror
+      requestMirror:
+        backendRef:
+          name: api-canary
+          port: 80
+    backendRefs:
+    - name: api-stable
+      port: 80
+```
+
+---
+
+## Part 6: GRPCRoute
+
+Gateway API provides native support for gRPC traffic through the `GRPCRoute` resource, allowing you to route requests based on gRPC services and methods rather than HTTP paths.
+
+### 6.1 Simple GRPCRoute
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: GRPCRoute
+metadata:
+  name: grpc-route
+spec:
+  parentRefs:
+  - name: example-gateway
+  rules:
+  - matches:
+    - method:
+        service: myapp.v1.MyService
+        method: MyMethod
+    backendRefs:
+    - name: grpc-backend
+      port: 50051
+```
+
+> **Stop and think**: Why would you use a dedicated `GRPCRoute` instead of just an `HTTPRoute`, given that gRPC uses HTTP/2? A dedicated resource allows the gateway to parse the specific protobuf service and method structures natively, making configuration much less error-prone than manual HTTP path matching.
+
 ---
 
 > **What would happen if**: An HTTPRoute in namespace `team-a` tries to reference a Service in namespace `team-b`, but no ReferenceGrant exists in `team-b`. Does the route silently fail, return an error, or route somewhere unexpected?
 
-## Part 6: Cross-Namespace Routing
+## Part 7: Cross-Namespace Routing
 
-### 6.1 ReferenceGrant
+### 7.1 ReferenceGrant
 
 Allows routes in one namespace to reference services in another:
 
@@ -510,9 +562,9 @@ spec:
 
 ---
 
-## Part 7: TLS Configuration
+## Part 8: TLS Configuration
 
-### 7.1 Gateway with TLS Termination
+### 8.1 Gateway with TLS Termination
 
 ```yaml
 apiVersion: gateway.networking.k8s.io/v1
@@ -536,7 +588,7 @@ spec:
         from: All
 ```
 
-### 7.2 TLS Modes
+### 8.2 TLS Modes
 
 | Mode | Behavior |
 |------|----------|
@@ -545,9 +597,9 @@ spec:
 
 ---
 
-## Part 8: Debugging Gateway API
+## Part 9: Debugging Gateway API
 
-### 8.1 Debugging Workflow
+### 9.1 Debugging Workflow
 
 ```
 Gateway API Issue?
@@ -570,7 +622,7 @@ Gateway API Issue?
         kubectl get svc,endpoints
 ```
 
-### 8.2 Common Commands
+### 9.2 Common Commands
 
 ```bash
 # List all Gateway API resources
@@ -586,7 +638,7 @@ k describe httproute my-route
 k get httproute my-route -o jsonpath='{.status.parents[0].conditions}'
 ```
 
-### 8.3 Common Issues
+### 9.3 Common Issues
 
 | Symptom | Cause | Solution |
 |---------|-------|----------|

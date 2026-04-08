@@ -31,9 +31,11 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-Running outdated Kubernetes versions is a security risk. Each release patches vulnerabilities—some critical. The CKS exam may ask you to verify versions, understand upgrade paths, or ensure security patches are applied.
+In 2018, Tesla's Kubernetes administrative console was left exposed without authentication. But the real danger often lies in what's *inside* the cluster. Consider the devastating cryptojacking attacks where hackers exploited an unpatched vulnerability in an older Kubernetes version to deploy DaemonSets running Monero miners across thousands of nodes. Because the victim clusters were running an unsupported version, the known CVE had never been patched.
 
-This module focuses on the security aspects of upgrades, not the mechanical process (which you know from CKA).
+Running outdated Kubernetes versions is a massive security risk. Each release patches vulnerabilities—some critical. The CKS exam expects you to evaluate CVEs, verify versions, and execute upgrades without leaving the cluster vulnerable.
+
+This module focuses on the security aspects of upgrades, not just the mechanical process you learned for the CKA.
 
 ---
 
@@ -192,7 +194,7 @@ kubectl get psp 2>&1 | grep -q "the server doesn't have" && echo "PSP already re
 
 ---
 
-> **What would happen if**: You upgrade the API server to 1.35 first (correct order), but a junior admin accidentally upgrades one worker node's kubelet to 1.35 before upgrading the controller-manager (still on 1.33). Does this violate the version skew policy? What could break?
+> **Pause and predict**: What would happen if you upgrade the API server to 1.35 first (correct order), but a junior admin accidentally upgrades one worker node's kubelet to 1.35 before upgrading the controller-manager (still on 1.33). Does this violate the version skew policy? What could break?
 
 ## Version Skew Policy
 
@@ -408,13 +410,13 @@ kubeadm upgrade plan | grep -E "v1\.[0-9]+\.[0-9]+"
 3. **You run `kubeadm upgrade plan` and it shows an available upgrade to 1.35.0. A colleague says "just run `kubeadm upgrade apply` and we're done." What security-critical steps are they skipping before and after the upgrade?**
    <details>
    <summary>Answer</summary>
-   Before upgrade: (1) Back up etcd with `etcdctl snapshot save` -- if the upgrade fails, you need to recover. (2) Review the release notes for security-relevant changes, deprecated APIs, and removed features. (3) Check for deprecated API usage with `kubectl get --raw /metrics | grep apiserver_requested_deprecated`. (4) Verify current workloads are healthy as a baseline. After upgrade: (1) Upgrade kubelet and kubectl on the control plane node. (2) Upgrade worker nodes one at a time with drain/uncordon. (3) Run `kube-bench` to verify security configuration survived the upgrade. (4) Verify RBAC, admission controllers, and audit logging are still functioning. (5) Check that security contexts on running pods are enforced.
+   Running `kubeadm upgrade apply` without preparation is extremely risky because it ignores the necessary security validations and backup procedures. Before the upgrade, they skipped backing up etcd (`etcdctl snapshot save`), which is critical because if the upgrade corrupts the datastore, you cannot roll back securely. They also failed to review release notes for deprecated APIs or removed security features (like PodSecurityPolicy), which could cause workloads to fail upon restart. After the upgrade, they are missing critical validation steps: they must upgrade the kubelets on the nodes, run `kube-bench` to ensure the new control plane components are configured securely, and verify that RBAC and admission controllers are still actively restricting access. Failing to perform these steps leaves the cluster in an unknown, potentially vulnerable state where security policies might silently fail.
    </details>
 
 4. **Your organization runs three clusters: dev (1.33), staging (1.34), and production (1.34). Kubernetes 1.36 is released, making 1.33 unsupported. The dev team says "it's just dev, we don't need to upgrade." Why is this thinking dangerous from a security perspective?**
    <details>
    <summary>Answer</summary>
-   Running an unsupported version in dev is dangerous because: (1) Dev clusters often have access to production secrets, container registries, and cloud credentials. An exploited CVE in dev could lead to production compromise. (2) Dev clusters are often less hardened than production, making them easier targets. (3) No security patches means known vulnerabilities accumulate over time. (4) Developers may test and deploy images from a compromised dev cluster to production. (5) Compliance requirements often apply to all environments, not just production. The upgrade path: dev to 1.34, then staging and production to 1.35, maintaining dev always at or near production version.
+   Running an unsupported version in a development environment is highly dangerous because attackers often use less-secure environments as a stepping stone into production. Development clusters frequently have access to shared resources like container registries, CI/CD pipelines, or cloud credentials. If an unpatched CVE allows an attacker to compromise the dev cluster, they can pivot to steal those credentials or inject malicious code into the development pipeline. Furthermore, compliance frameworks typically require all environments connected to the corporate network to be actively patched, meaning an unsupported dev cluster is a direct compliance violation. You should establish a cadence where the dev cluster is upgraded first to test the process, followed shortly by staging and production.
    </details>
 
 ---
@@ -423,11 +425,15 @@ kubeadm upgrade plan | grep -E "v1\.[0-9]+\.[0-9]+"
 
 **Task**: Practice pre-upgrade security assessment and post-upgrade verification.
 
-```bash
-# Step 1: Create a test namespace to verify state before/after "upgrade"
-kubectl create namespace upgrade-test
+First, create an isolated namespace for our testing. This ensures we don't interfere with existing workloads while we simulate an upgrade scenario.
 
-# Step 2: Deploy test workload with security context
+```bash
+kubectl create namespace upgrade-test
+```
+
+Next, deploy a test workload configured with strict security contexts. We will use this pod to verify that security settings (like `runAsNonRoot` and `readOnlyRootFilesystem`) remain intact and are enforced after an upgrade.
+
+```bash
 cat <<EOF | kubectl apply -f -
 apiVersion: v1
 kind: Pod
@@ -446,43 +452,69 @@ spec:
       allowPrivilegeEscalation: false
       readOnlyRootFilesystem: true
 EOF
+```
 
-# Step 3: Capture pre-upgrade state (always backup before upgrade!)
+Before initiating any upgrade, you must capture the current state of your critical workloads. If an upgrade fails, this backup is your lifeline.
+
+```bash
 echo "=== Pre-Upgrade State Capture ==="
 kubectl get all -n upgrade-test -o yaml > /tmp/pre-upgrade-backup.yaml
 echo "Backup saved to /tmp/pre-upgrade-backup.yaml"
+```
 
-# Step 4: Check current cluster versions
+Audit the current versions of your cluster components. You need to know exactly what versions are running to determine if they are vulnerable to known CVEs and to plan the upgrade path.
+
+```bash
 echo "=== Current Versions ==="
 kubectl version --short 2>/dev/null || kubectl version
 
 echo "=== Node Versions ==="
 kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}: {.status.nodeInfo.kubeletVersion}{"\n"}{end}'
+```
 
-# Step 5: Check for deprecated API usage (important before upgrades)
+Deprecated APIs are a major source of failed upgrades. Check your manifests and running resources to ensure none are using APIs that will be removed in the target version.
+
+```bash
 echo "=== Checking Deprecated APIs ==="
 # Look for deprecated API versions in our resources
 kubectl get pod security-test -n upgrade-test -o yaml | grep "apiVersion"
+```
 
-# Step 6: Verify RBAC still works (key post-upgrade check)
+> **Stop and think**: If you find a deprecated API in use, do you fix it before or after the upgrade?
+
+After the upgrade (simulated here), verify that Role-Based Access Control (RBAC) is still functioning correctly. An upgrade should never silently escalate or drop permissions.
+
+```bash
 echo "=== RBAC Verification ==="
 kubectl auth can-i list pods -n upgrade-test --as=system:serviceaccount:upgrade-test:default
+```
 
-# Step 7: Run security verification (simulates post-upgrade checks)
+Confirm that the security contexts applied to your workloads are still present and actively enforced by the new API server version.
+
+```bash
 echo "=== Security Context Verification ==="
 kubectl get pod security-test -n upgrade-test -o jsonpath='{.spec.securityContext}' && echo ""
 kubectl get pod security-test -n upgrade-test -o jsonpath='{.spec.containers[0].securityContext}' && echo ""
+```
 
-# Step 8: Verify pod is running correctly
+Ensure the pod remains in a running state and hasn't been blocked by any new admission controllers.
+
+```bash
 echo "=== Pod Status ==="
 kubectl get pod security-test -n upgrade-test
+```
 
-# Step 9: Check for kube-bench findings (would run on actual node)
+In a real scenario, you would run a security benchmarking tool like `kube-bench` against your nodes to ensure the new components are configured securely.
+
+```bash
 echo "=== Security Benchmark Check ==="
 echo "On control plane, would run: ./kube-bench run --targets=master"
 echo "On worker nodes, would run: ./kube-bench run --targets=node"
+```
 
-# Step 10: Verify NetworkPolicy support (important for security)
+Verify that NetworkPolicies are still supported and active. Some CNI plugins require specific updates to remain compatible with new Kubernetes versions.
+
+```bash
 echo "=== Testing NetworkPolicy Support ==="
 cat <<EOF | kubectl apply -f -
 apiVersion: networking.k8s.io/v1
@@ -500,8 +532,11 @@ spec:
 EOF
 
 kubectl get networkpolicy -n upgrade-test
+```
 
-# Cleanup
+Finally, clean up the testing environment.
+
+```bash
 echo "=== Cleanup ==="
 kubectl delete namespace upgrade-test
 rm -f /tmp/pre-upgrade-backup.yaml
