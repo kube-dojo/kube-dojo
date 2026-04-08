@@ -1452,7 +1452,24 @@ def cmd_e2e(args):
             if s in TRACK_ALIASES:
                 expanded.extend(TRACK_ALIASES[s])
             else:
-                expanded.append(s)
+                # Auto-discover: if path is a directory, find all subsections with modules
+                section_path = CONTENT_ROOT / s
+                if section_path.is_dir():
+                    # Check if this dir itself has modules
+                    has_modules = list(section_path.glob("module-*.md"))
+                    if has_modules:
+                        expanded.append(s)
+                    # Also add any subdirs that have modules
+                    for sub in sorted(section_path.rglob("index.md")):
+                        subdir = sub.parent
+                        if list(subdir.glob("module-*.md")) and str(subdir) != str(section_path):
+                            expanded.append(str(subdir.relative_to(CONTENT_ROOT)))
+                    if not expanded or expanded[-1] != s:
+                        # Fallback: just use the path as-is
+                        if s not in expanded:
+                            expanded.append(s)
+                else:
+                    expanded.append(s)
         sections_to_run = expanded
 
     section_prefixes = tuple(sections_to_run)
