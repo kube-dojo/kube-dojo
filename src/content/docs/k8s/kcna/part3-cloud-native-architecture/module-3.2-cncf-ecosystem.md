@@ -31,29 +31,18 @@ The **Cloud Native Computing Foundation (CNCF)** is the home of Kubernetes and h
 
 ## What is the CNCF?
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              CLOUD NATIVE COMPUTING FOUNDATION              │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  Part of the Linux Foundation                              │
-│                                                             │
-│  Mission:                                                  │
-│  "Make cloud native computing ubiquitous"                 │
-│                                                             │
-│  What CNCF does:                                           │
-│  ─────────────────────────────────────────────────────────  │
-│  • Hosts open source projects                              │
-│  • Provides governance and support                         │
-│  • Certifies Kubernetes distributions                      │
-│  • Runs KubeCon conferences                               │
-│  • Creates training and certifications (like KCNA!)       │
-│  • Maintains the Cloud Native Landscape                   │
-│                                                             │
-│  Founded: 2015                                             │
-│  First project: Kubernetes (donated by Google)            │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph CNCF [CLOUD NATIVE COMPUTING FOUNDATION]
+        direction TB
+        Info["<b>Part of the Linux Foundation</b><br>Mission: 'Make cloud native computing ubiquitous'"]
+        
+        Actions["<b>What CNCF does:</b><br>• Hosts open source projects<br>• Provides governance and support<br>• Certifies Kubernetes distributions<br>• Runs KubeCon conferences<br>• Creates training and certifications (like KCNA!)<br>• Maintains the Cloud Native Landscape"]
+        
+        History["<b>History:</b><br>Founded: 2015<br>First project: Kubernetes (donated by Google)"]
+        
+        Info ~~~ Actions ~~~ History
+    end
 ```
 
 ---
@@ -62,32 +51,17 @@ The **Cloud Native Computing Foundation (CNCF)** is the home of Kubernetes and h
 
 CNCF projects have three maturity levels:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              CNCF PROJECT MATURITY                          │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│                    GRADUATED                                │
-│                        │                                    │
-│                        │ Production ready                  │
-│                        │ Proven adoption                   │
-│                        │ Strong governance                 │
-│                        │                                    │
-│                   INCUBATING                               │
-│                        │                                    │
-│                        │ Growing adoption                  │
-│                        │ Healthy community                 │
-│                        │ Technical due diligence passed   │
-│                        │                                    │
-│                    SANDBOX                                 │
-│                        │                                    │
-│                        │ Early stage                       │
-│                        │ Experimental                      │
-│                        │ Promising technology             │
-│                                                             │
-│  Journey: Sandbox → Incubating → Graduated                │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Maturity [CNCF PROJECT MATURITY]
+        direction TB
+        G["<b>GRADUATED</b><br>Production ready<br>Proven adoption<br>Strong governance"]
+        I["<b>INCUBATING</b><br>Growing adoption<br>Healthy community<br>Technical due diligence passed"]
+        S["<b>SANDBOX</b><br>Early stage<br>Experimental<br>Promising technology"]
+        
+        S -->|Journey| I
+        I -->|Journey| G
+    end
 ```
 
 ---
@@ -98,46 +72,22 @@ CNCF projects have three maturity levels:
 
 These are production-ready projects you should know:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              GRADUATED PROJECTS                             │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  KUBERNETES                                                │
-│  Container orchestration platform                          │
-│  The foundation of cloud native                            │
-│                                                             │
-│  PROMETHEUS                                                │
-│  Monitoring and alerting                                   │
-│  Time-series database for metrics                         │
-│                                                             │
-│  ENVOY                                                     │
-│  Service proxy / data plane                               │
-│  Used by service meshes (Istio)                           │
-│                                                             │
-│  CONTAINERD                                                │
-│  Container runtime                                         │
-│  Default runtime for Kubernetes                           │
-│                                                             │
-│  HELM                                                      │
-│  Package manager for Kubernetes                           │
-│  Charts for installing applications                       │
-│                                                             │
-│  ETCD                                                      │
-│  Distributed key-value store                              │
-│  Kubernetes uses it for state                             │
-│                                                             │
-│  FLUENTD                                                   │
-│  Log collection and forwarding                            │
-│  Unified logging layer                                     │
-│                                                             │
-│  HARBOR                                                    │
-│  Container registry                                        │
-│  With security scanning                                   │
-│                                                             │
-│  And many more...                                         │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph GraduatedProjects [GRADUATED PROJECTS]
+        direction TB
+        K8s["<b>KUBERNETES</b><br>Container orchestration platform<br>The foundation of cloud native"]
+        Prom["<b>PROMETHEUS</b><br>Monitoring and alerting<br>Time-series database for metrics"]
+        Env["<b>ENVOY</b><br>Service proxy / data plane<br>Used by service meshes (Istio)"]
+        Cont["<b>CONTAINERD</b><br>Container runtime<br>Default runtime for Kubernetes"]
+        Helm["<b>HELM</b><br>Package manager for Kubernetes<br>Charts for installing applications"]
+        Etcd["<b>ETCD</b><br>Distributed key-value store<br>Kubernetes uses it for state"]
+        Flu["<b>FLUENTD</b><br>Log collection and forwarding<br>Unified logging layer"]
+        Harb["<b>HARBOR</b><br>Container registry<br>With security scanning"]
+        More["And many more..."]
+        
+        K8s ~~~ Prom ~~~ Env ~~~ Cont ~~~ Helm ~~~ Etcd ~~~ Flu ~~~ Harb ~~~ More
+    end
 ```
 
 ### Project Categories
@@ -158,37 +108,33 @@ These are production-ready projects you should know:
 
 ## The CNCF Landscape
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              CNCF LANDSCAPE                                 │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  landscape.cncf.io                                         │
-│                                                             │
-│  What it is:                                               │
-│  • Interactive map of cloud native technologies           │
-│  • Includes CNCF projects AND commercial products         │
-│  • Organized by category                                   │
-│                                                             │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐  │   │
-│  │  │Provision│ │ Runtime │ │ Orchestr│ │ App Def │  │   │
-│  │  │ ing     │ │         │ │ ation   │ │         │  │   │
-│  │  └─────────┘ └─────────┘ └─────────┘ └─────────┘  │   │
-│  │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐  │   │
-│  │  │Platform │ │Observab │ │Serverles│ │ Special │  │   │
-│  │  │         │ │ility    │ │ s       │ │         │  │   │
-│  │  └─────────┘ └─────────┘ └─────────┘ └─────────┘  │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                             │
-│  1000+ projects and products!                             │
-│                                                             │
-│  Use it to:                                               │
-│  • Discover tools for specific needs                      │
-│  • Compare alternatives                                    │
-│  • See what's popular/mature                              │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Landscape [CNCF LANDSCAPE - landscape.cncf.io]
+        direction TB
+        Info["<b>What it is:</b><br>• Interactive map of cloud native technologies<br>• Includes CNCF projects AND commercial products<br>• Organized by category"]
+        
+        subgraph Categories [Categories Include:]
+            direction LR
+            Prov[Provisioning]
+            Run[Runtime]
+            Orch[Orchestration]
+            App[App Def]
+            Plat[Platform]
+            Obs[Observability]
+            Serv[Serverless]
+            Spec[Special]
+            
+            Prov ~~~ Run ~~~ Orch ~~~ App
+            Plat ~~~ Obs ~~~ Serv ~~~ Spec
+        end
+        
+        Stats["1000+ projects and products!"]
+        
+        Usage["<b>Use it to:</b><br>• Discover tools for specific needs<br>• Compare alternatives<br>• See what's popular/mature"]
+        
+        Info ~~~ Categories ~~~ Stats ~~~ Usage
+    end
 ```
 
 ---
@@ -197,106 +143,48 @@ These are production-ready projects you should know:
 
 ### Observability Stack
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              OBSERVABILITY                                  │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  PROMETHEUS (Graduated)                                    │
-│  ─────────────────────────────────────────────────────────  │
-│  • Metrics collection and storage                         │
-│  • Pull-based model                                        │
-│  • PromQL query language                                  │
-│  • AlertManager for alerting                              │
-│                                                             │
-│  GRAFANA (Not CNCF, but commonly paired)                  │
-│  ─────────────────────────────────────────────────────────  │
-│  • Dashboards and visualization                           │
-│  • Works with Prometheus                                  │
-│                                                             │
-│  JAEGER (Graduated)                                        │
-│  ─────────────────────────────────────────────────────────  │
-│  • Distributed tracing                                     │
-│  • Track requests across services                         │
-│                                                             │
-│  FLUENTD (Graduated)                                       │
-│  ─────────────────────────────────────────────────────────  │
-│  • Log collection                                          │
-│  • Routes logs to storage                                 │
-│                                                             │
-│  OPENTELEMETRY (Incubating)                               │
-│  ─────────────────────────────────────────────────────────  │
-│  • Unified observability framework                        │
-│  • Traces, metrics, logs                                  │
-│  • Vendor-neutral                                         │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Observability [OBSERVABILITY]
+        direction TB
+        Prom["<b>PROMETHEUS (Graduated)</b><br>• Metrics collection and storage<br>• Pull-based model<br>• PromQL query language<br>• AlertManager for alerting"]
+        Graf["<b>GRAFANA (Not CNCF, but commonly paired)</b><br>• Dashboards and visualization<br>• Works with Prometheus"]
+        Jaeg["<b>JAEGER (Graduated)</b><br>• Distributed tracing<br>• Track requests across services"]
+        Flu["<b>FLUENTD (Graduated)</b><br>• Log collection<br>• Routes logs to storage"]
+        Otel["<b>OPENTELEMETRY (Incubating)</b><br>• Unified observability framework<br>• Traces, metrics, logs<br>• Vendor-neutral"]
+        
+        Prom ~~~ Graf ~~~ Jaeg ~~~ Flu ~~~ Otel
+    end
 ```
 
 ### Networking & Service Mesh
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              NETWORKING                                     │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  ENVOY (Graduated)                                         │
-│  ─────────────────────────────────────────────────────────  │
-│  • L7 proxy                                               │
-│  • Data plane for service meshes                          │
-│  • Dynamic configuration via API                          │
-│                                                             │
-│  ISTIO (Not CNCF - but very popular)                      │
-│  ─────────────────────────────────────────────────────────  │
-│  • Service mesh                                           │
-│  • Uses Envoy                                             │
-│  • Traffic management, security, observability           │
-│                                                             │
-│  LINKERD (Graduated)                                       │
-│  ─────────────────────────────────────────────────────────  │
-│  • Service mesh                                           │
-│  • Lightweight, focused on simplicity                     │
-│                                                             │
-│  CILIUM (Graduated)                                        │
-│  ─────────────────────────────────────────────────────────  │
-│  • eBPF-based networking                                  │
-│  • CNI plugin                                             │
-│  • Network policies, observability                        │
-│                                                             │
-│  COREDNS (Graduated)                                       │
-│  ─────────────────────────────────────────────────────────  │
-│  • DNS server for Kubernetes                              │
-│  • Default DNS in Kubernetes                              │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Networking [NETWORKING]
+        direction TB
+        Env["<b>ENVOY (Graduated)</b><br>• L7 proxy<br>• Data plane for service meshes<br>• Dynamic configuration via API"]
+        Istio["<b>ISTIO (Not CNCF - but very popular)</b><br>• Service mesh<br>• Uses Envoy<br>• Traffic management, security, observability"]
+        Link["<b>LINKERD (Graduated)</b><br>• Service mesh<br>• Lightweight, focused on simplicity"]
+        Cil["<b>CILIUM (Graduated)</b><br>• eBPF-based networking<br>• CNI plugin<br>• Network policies, observability"]
+        Core["<b>COREDNS (Graduated)</b><br>• DNS server for Kubernetes<br>• Default DNS in Kubernetes"]
+        
+        Env ~~~ Istio ~~~ Link ~~~ Cil ~~~ Core
+    end
 ```
 
 ### Security
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              SECURITY                                       │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  FALCO (Graduated)                                         │
-│  ─────────────────────────────────────────────────────────  │
-│  • Runtime security                                        │
-│  • Detects abnormal behavior                              │
-│  • Uses syscall monitoring                                │
-│                                                             │
-│  OPA - OPEN POLICY AGENT (Graduated)                      │
-│  ─────────────────────────────────────────────────────────  │
-│  • Policy as code                                         │
-│  • Admission control                                       │
-│  • General-purpose policy engine                          │
-│                                                             │
-│  SPIFFE/SPIRE (Graduated)                                 │
-│  ─────────────────────────────────────────────────────────  │
-│  • Service identity                                        │
-│  • Workload authentication                                │
-│  • Zero-trust security                                    │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Security [SECURITY]
+        direction TB
+        Falco["<b>FALCO (Graduated)</b><br>• Runtime security<br>• Detects abnormal behavior<br>• Uses syscall monitoring"]
+        OPA["<b>OPA - OPEN POLICY AGENT (Graduated)</b><br>• Policy as code<br>• Admission control<br>• General-purpose policy engine"]
+        Spiffe["<b>SPIFFE/SPIRE (Graduated)</b><br>• Service identity<br>• Workload authentication<br>• Zero-trust security"]
+        
+        Falco ~~~ OPA ~~~ Spiffe
+    end
 ```
 
 ---
@@ -305,40 +193,23 @@ These are production-ready projects you should know:
 
 ## CNCF Certifications
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              CNCF CERTIFICATIONS                            │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  Kubernetes Certifications:                                │
-│  ─────────────────────────────────────────────────────────  │
-│                                                             │
-│  KCNA - Kubernetes and Cloud Native Associate             │
-│  • Entry-level, multiple choice                           │
-│  • Foundational knowledge                                 │
-│  • THIS exam!                                             │
-│                                                             │
-│  KCSA - Kubernetes and Cloud Native Security Associate    │
-│  • Security fundamentals                                   │
-│  • Multiple choice                                        │
-│                                                             │
-│  CKA - Certified Kubernetes Administrator                 │
-│  • Hands-on, performance-based                            │
-│  • Cluster administration                                 │
-│                                                             │
-│  CKAD - Certified Kubernetes Application Developer        │
-│  • Hands-on, performance-based                            │
-│  • Application deployment                                 │
-│                                                             │
-│  CKS - Certified Kubernetes Security Specialist           │
-│  • Hands-on, performance-based                            │
-│  • Security hardening                                     │
-│  • Requires CKA first                                     │
-│                                                             │
-│  Path: KCNA → CKA/CKAD → CKS                             │
-│  All five = Kubestronaut!                                 │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Certs [CNCF CERTIFICATIONS]
+        direction TB
+        KCNA["<b>KCNA - Kubernetes and Cloud Native Associate</b><br>• Entry-level, multiple choice<br>• Foundational knowledge<br>• THIS exam!"]
+        KCSA["<b>KCSA - Kubernetes and Cloud Native Security Associate</b><br>• Security fundamentals<br>• Multiple choice"]
+        CKA["<b>CKA - Certified Kubernetes Administrator</b><br>• Hands-on, performance-based<br>• Cluster administration"]
+        CKAD["<b>CKAD - Certified Kubernetes Application Developer</b><br>• Hands-on, performance-based<br>• Application deployment"]
+        CKS["<b>CKS - Certified Kubernetes Security Specialist</b><br>• Hands-on, performance-based<br>• Security hardening<br>• Requires CKA first"]
+        
+        KCNA --> CKA
+        KCNA --> CKAD
+        CKA --> CKS
+        
+        Path["<b>Path:</b> KCNA → CKA/CKAD → CKS<br>All five = Kubestronaut!"]
+        KCSA ~~~ Path
+    end
 ```
 
 ---

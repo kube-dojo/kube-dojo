@@ -797,7 +797,7 @@ def cmd_audit_all(args):
 
     modules = sorted(root.glob("**/module-*.md"))
     # Exclude UK translations for now
-    modules = [m for m in modules if "/uk/" not in str(m)]
+    modules = [m for m in modules if "/uk/" not in str(m) and ".staging" not in str(m)]
 
     print(f"Found {len(modules)} modules to audit")
 
@@ -862,7 +862,7 @@ def cmd_run_section(args):
         sys.exit(1)
 
     modules = sorted(section_path.glob("**/module-*.md"))
-    modules = [m for m in modules if "/uk/" not in str(m)]
+    modules = [m for m in modules if "/uk/" not in str(m) and ".staging" not in str(m)]
 
     print(f"Found {len(modules)} modules in {args.section}")
 
@@ -1261,7 +1261,7 @@ def cmd_e2e(args):
             continue
 
         modules = sorted(section_path.glob("**/module-*.md"))
-        modules = [m for m in modules if "/uk/" not in str(m)]
+        modules = [m for m in modules if "/uk/" not in str(m) and ".staging" not in str(m)]
         if not modules:
             continue
 
