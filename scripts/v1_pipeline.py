@@ -818,6 +818,18 @@ def step_check(content: str, path: Path) -> tuple[bool, list]:
         print(f"  ✗ CHECK: broken YAML frontmatter — {e}")
         return False, []
 
+    # Language guard: reject Ukrainian content in EN files (and vice versa)
+    is_uk = "/uk/" in str(path)
+    has_cyrillic_title = bool(re.search(r'^title:.*[а-яіїєґ]', parts[1], re.MULTILINE))
+    has_uk_slug = bool(re.search(r'^slug:\s*uk/', parts[1], re.MULTILINE))
+    has_en_commit = "en_commit:" in parts[1]
+    if not is_uk and (has_cyrillic_title or has_uk_slug or has_en_commit):
+        print(f"  ✗ CHECK: Ukrainian content in EN file (title/slug/en_commit detected)")
+        return False, []
+    if is_uk and not has_cyrillic_title and not has_en_commit:
+        print(f"  ✗ CHECK: English content in UK file (no Cyrillic title or en_commit)")
+        return False, []
+
     # Asset preservation check: compare original vs improved
     original_assets = count_assets(original)
     new_assets = count_assets(content)
