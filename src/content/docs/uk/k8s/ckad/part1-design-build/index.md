@@ -1,7 +1,7 @@
 ---
 title: "Частина 1: Проєктування та створення"
 sidebar:
-  order: 1
+  order: 0
   label: "Part 1: Design & Build"
 ---
 

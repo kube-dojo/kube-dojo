@@ -1,7 +1,7 @@
 ---
 title: "Частина 4: Вразливості мікросервісів"
 sidebar:
-  order: 1
+  order: 0
   label: "Part 4: Microservice Vulns"
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: "Основи Cloud Native"
 sidebar:
-  order: 3
+  order: 0
 en_commit: "515bf2335e4b8174a8df3b0aaa1cd38c357c067a"
 en_file: "src/content/docs/prerequisites/cloud-native-101/index.md"
 ---

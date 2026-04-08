@@ -1,7 +1,7 @@
 ---
 title: "Частина 5: Безпека ланцюга постачання"
 sidebar:
-  order: 1
+  order: 0
   label: "Part 5: Supply Chain Security"
 ---
 

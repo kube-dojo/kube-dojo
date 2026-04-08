@@ -1,7 +1,7 @@
 ---
 title: "Глибоке занурення в Azure AKS"
 sidebar:
-  order: 1
+  order: 0
 ---
 **Промисловий Kubernetes в Azure — від пулів вузлів до масштабування через KEDA.**
 

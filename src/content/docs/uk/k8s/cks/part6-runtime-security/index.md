@@ -1,7 +1,7 @@
 ---
 title: "Частина 6: Безпека середовища виконання"
 sidebar:
-  order: 1
+  order: 0
   label: "Part 6: Runtime Security"
 ---
 

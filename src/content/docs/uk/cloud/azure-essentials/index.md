@@ -1,7 +1,7 @@
 ---
 title: "Основи Azure DevOps"
 sidebar:
-  order: 1
+  order: 0
   label: "Основи Azure"
 ---
 **Все, що вам потрібно для продуктивної роботи в Microsoft Azure — перш ніж торкатися AKS.**

@@ -1,7 +1,7 @@
 ---
 title: "Основи Kubernetes"
 sidebar:
-  order: 4
+  order: 0
 ---
 Практичні основи: кластери, kubectl, базові ресурси та YAML.
 

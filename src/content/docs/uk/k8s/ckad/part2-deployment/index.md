@@ -1,7 +1,7 @@
 ---
 title: "Частина 2: Розгортання"
 sidebar:
-  order: 1
+  order: 0
   label: "Part 2: Deployment"
 ---
 

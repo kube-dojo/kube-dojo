@@ -1,7 +1,7 @@
 ---
 title: "Частина 3: Спостережуваність"
 sidebar:
-  order: 1
+  order: 0
   label: "Part 3: Observability"
 ---
 

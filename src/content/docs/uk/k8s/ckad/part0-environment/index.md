@@ -1,7 +1,7 @@
 ---
 title: "Частина 0: Середовище"
 sidebar:
-  order: 1
+  order: 0
   label: "Part 0: Environment"
 ---
 

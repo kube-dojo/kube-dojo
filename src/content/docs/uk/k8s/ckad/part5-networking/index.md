@@ -1,7 +1,7 @@
 ---
 title: "Частина 5: Сервіси та мережа"
 sidebar:
-  order: 1
+  order: 0
   label: "Part 5: Services & Networking"
 ---
 

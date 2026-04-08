@@ -1,7 +1,7 @@
 ---
 title: "Глибоке занурення в GCP GKE"
 sidebar:
-  order: 1
+  order: 0
 ---
 **Промисловий Kubernetes в Google Cloud — від Autopilot до управління флотом.**
 

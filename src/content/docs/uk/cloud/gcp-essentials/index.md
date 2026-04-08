@@ -1,7 +1,7 @@
 ---
 title: "Основи GCP DevOps"
 sidebar:
-  order: 1
+  order: 0
   label: "Основи GCP"
 ---
 **Все, що вам потрібно для продуктивної роботи в Google Cloud — перш ніж торкатися GKE.**
