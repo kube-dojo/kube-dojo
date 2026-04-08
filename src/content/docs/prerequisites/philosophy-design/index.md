@@ -1,7 +1,7 @@
 ---
 title: "Philosophy & Design"
 sidebar:
-  order: 5
+  order: 0
 ---
 Why Kubernetes exists, the philosophy behind it, and what we intentionally skip.
 

@@ -1,7 +1,7 @@
 ---
 title: "Modern DevOps"
 sidebar:
-  order: 6
+  order: 0
 ---
 The practices and tools that define modern software delivery.
 
