@@ -1382,7 +1382,26 @@ def cmd_e2e(args):
 
     # Track aliases for convenience
     TRACK_ALIASES = {
+        # Subsection aliases — run a single section
         "ztt": ["prerequisites/zero-to-terminal"],
+        "git": ["prerequisites/git-deep-dive"],
+        "cn101": ["prerequisites/cloud-native-101"],
+        "k8sbasics": ["prerequisites/kubernetes-basics"],
+        "philosophy": ["prerequisites/philosophy-design"],
+        "devops": ["prerequisites/modern-devops"],
+        "cka": ["k8s/cka"],
+        "ckad": ["k8s/ckad"],
+        "cks": ["k8s/cks"],
+        "kcna": ["k8s/kcna"],
+        "kcsa": ["k8s/kcsa"],
+        "extending": ["k8s/extending"],
+        "aws": ["cloud/aws-essentials"],
+        "gcp": ["cloud/gcp-essentials"],
+        "azure": ["cloud/azure-essentials"],
+        "eks": ["cloud/eks-deep-dive"],
+        "gke": ["cloud/gke-deep-dive"],
+        "aks": ["cloud/aks-deep-dive"],
+        # Track aliases — run all sections in a track
         "prereqs": [
             "prerequisites/zero-to-terminal", "prerequisites/git-deep-dive",
             "prerequisites/cloud-native-101", "prerequisites/kubernetes-basics",
