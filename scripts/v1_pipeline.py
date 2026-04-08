@@ -62,7 +62,7 @@ def _logged_print(*args, **kwargs):
         "PASS", "FAIL", "CIRCUIT", "E2E COMPLETE", "SECTION:", "PHASE 1",
         "SKIP:", "Resumed:", "passed,", "BREAKER",
         # Pipeline steps — so user sees what's happening
-        "PIPELINE:", "AUDIT:", "WRITE:", "REWRITE:", "REVIEW:", "CHECK:",
+        "PIPELINE:", "AUDIT:", "WRITE:", "REWRITE:", "REVIEW:", "CHECK:", "INDEX:",
         # Key decisions and results
         "Verdict:", "Scores:", "REWRITE mode", "already passes",
         "Rejected", "produced", "file written", "Committed",
@@ -561,7 +561,7 @@ def step_update_index(section_path: Path, model: str = MODELS["write"]) -> bool:
     )
 
     print(f"\n  INDEX: {rel_section} (using {model})")
-    ok, output = dispatch_gemini_with_retry(prompt, model=model, timeout=120)
+    ok, output = dispatch_gemini_with_retry(prompt, model=model, timeout=300)
 
     if not ok or not output.strip():
         print(f"  ❌ INDEX rewrite failed")
