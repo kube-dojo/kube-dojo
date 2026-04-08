@@ -1,7 +1,7 @@
 ---
 title: "Part 4: Microservice Vulnerabilities"
 sidebar:
-  order: 1
+  order: 0
   label: "Part 4: Microservice Vulns"
 ---
 

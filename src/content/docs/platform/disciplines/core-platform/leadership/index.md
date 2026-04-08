@@ -1,7 +1,7 @@
 ---
 title: "Platform Leadership"
 sidebar:
-  order: 1
+  order: 0
   label: "Platform Leadership"
 ---
 > **Discipline Track** | 5 Modules | ~5 hours total

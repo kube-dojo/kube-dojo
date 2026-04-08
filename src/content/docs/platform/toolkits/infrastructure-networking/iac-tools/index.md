@@ -1,7 +1,7 @@
 ---
 title: "IaC Tools Toolkit"
 sidebar:
-  order: 1
+  order: 0
   label: "IaC Tools"
 ---
 > **Toolkit Track** | 10 Modules | ~8.5 hours total

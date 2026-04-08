@@ -1,7 +1,7 @@
 ---
 title: "Enterprise & Hybrid Cloud"
 sidebar:
-  order: 1
+  order: 0
   label: "Enterprise & Hybrid"
 ---
 **Landing zones, governance, compliance, hybrid connectivity, fleet management, and multi-cloud operations for organizations running Kubernetes at scale.**

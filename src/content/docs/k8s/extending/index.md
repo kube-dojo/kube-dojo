@@ -1,7 +1,7 @@
 ---
 title: "Extending Kubernetes"
 sidebar:
-  order: 1
+  order: 0
   label: "Extending Kubernetes"
 ---
 **Build ON Kubernetes, not just USE it.**

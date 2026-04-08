@@ -1,7 +1,7 @@
 ---
 title: "AWS EKS Deep Dive"
 sidebar:
-  order: 1
+  order: 0
 ---
 **Production-grade Kubernetes on AWS -- from architecture to cost optimization.**
 

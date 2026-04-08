@@ -1,7 +1,7 @@
 ---
 title: "Networking Toolkit"
 sidebar:
-  order: 1
+  order: 0
   label: "Networking"
 ---
 > **Toolkit Track** | 5 Modules | ~4.5 hours total

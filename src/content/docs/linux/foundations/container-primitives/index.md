@@ -1,7 +1,7 @@
 ---
 title: "Container Primitives"
 sidebar:
-  order: 1
+  order: 0
 ---
 > **The Linux features that make containers possible.**
 

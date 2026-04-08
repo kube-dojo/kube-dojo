@@ -1,7 +1,7 @@
 ---
 title: "Engineering Leadership"
 sidebar:
-  order: 1
+  order: 0
   label: "Engineering Leadership"
 ---
 **The non-technical skills that make senior platform engineers effective.**

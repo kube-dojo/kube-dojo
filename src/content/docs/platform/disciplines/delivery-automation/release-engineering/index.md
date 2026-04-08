@@ -1,7 +1,7 @@
 ---
 title: "Release Engineering"
 sidebar:
-  order: 1
+  order: 0
   label: "Release Engineering"
 ---
 **How to ship software reliably at scale.**

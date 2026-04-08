@@ -1,7 +1,7 @@
 ---
 title: "Cloud-Native Managed Services"
 sidebar:
-  order: 1
+  order: 0
   label: "Managed Services"
 ---
 **Integrating Kubernetes workloads with managed databases, message brokers, serverless functions, caching, search, and analytics services.**

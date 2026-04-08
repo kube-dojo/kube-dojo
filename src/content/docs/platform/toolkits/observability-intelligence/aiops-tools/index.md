@@ -1,7 +1,7 @@
 ---
 title: "AIOps Tools Toolkit"
 sidebar:
-  order: 1
+  order: 0
   label: "AIOps Tools"
 ---
 > **Toolkit Track** | 4 Modules | ~3 hours total

@@ -1,7 +1,7 @@
 ---
 title: "Data Engineering on Kubernetes"
 sidebar:
-  order: 1
+  order: 0
   label: "Data Engineering"
 ---
 **Run data infrastructure where your applications already live.**

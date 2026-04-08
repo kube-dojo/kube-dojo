@@ -1,7 +1,7 @@
 ---
 title: "ML Platforms Toolkit"
 sidebar:
-  order: 1
+  order: 0
   label: "ML Platforms"
 ---
 > **Toolkit Track** | 6 Modules | ~5 hours total

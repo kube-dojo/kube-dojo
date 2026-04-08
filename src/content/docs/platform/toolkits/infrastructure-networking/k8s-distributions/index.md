@@ -1,7 +1,7 @@
 ---
 title: "Kubernetes Distributions Toolkit"
 sidebar:
-  order: 1
+  order: 0
   label: "K8s Distributions"
 ---
 > **Toolkit Track** | 6 Modules | ~5 hours total

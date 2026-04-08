@@ -1,7 +1,7 @@
 ---
 title: "Networking"
 sidebar:
-  order: 1
+  order: 0
 ---
 > **The network stack that powers container and Kubernetes networking.**
 

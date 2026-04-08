@@ -1,7 +1,7 @@
 ---
 title: "Platform Engineering Discipline"
 sidebar:
-  order: 1
+  order: 0
   label: "Platform Engineering"
 ---
 > Building internal products that make developers productive.

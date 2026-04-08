@@ -1,7 +1,7 @@
 ---
 title: "System Essentials"
 sidebar:
-  order: 1
+  order: 0
 ---
 > **The foundation of Linux knowledge. Understanding these concepts makes everything else click.**
 

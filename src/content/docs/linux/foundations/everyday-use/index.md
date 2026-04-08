@@ -1,7 +1,7 @@
 ---
 title: "Everyday Use"
 sidebar:
-  order: 1
+  order: 0
   label: "Linux Everyday Use"
 ---
 **The practical Linux skills you need before going deep.**

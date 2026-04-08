@@ -1,7 +1,7 @@
 ---
 title: "Scaling & Reliability Toolkit"
 sidebar:
-  order: 1
+  order: 0
   label: "Scaling & Reliability"
 ---
 > **Toolkit Track** | 3 Modules | ~2.5 hours total

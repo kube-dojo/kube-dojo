@@ -1,7 +1,7 @@
 ---
 title: "Part 4: Storage"
 sidebar:
-  order: 1
+  order: 0
   label: "Part 4: Storage"
 ---
 ## Modules

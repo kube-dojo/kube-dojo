@@ -1,7 +1,7 @@
 ---
 title: "CAPA - Certified Argo Project Associate"
 sidebar:
-  order: 1
+  order: 0
   label: "CAPA"
 ---
 > **Multiple-choice exam** | 90 minutes | Passing score: 75% | $250 USD | **CNCF Certification**

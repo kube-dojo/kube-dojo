@@ -1,7 +1,7 @@
 ---
 title: "Security & Compliance"
 sidebar:
-  order: 1
+  order: 0
 ---
 
 On-premises Kubernetes gives you physical control that cloud never can -- but that control comes with responsibility. You own the hardware, the network perimeter, the key material, and every audit artifact. These four modules cover the security and compliance concerns unique to self-hosted infrastructure.

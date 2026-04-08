@@ -1,7 +1,7 @@
 ---
 title: "K8s Storage Deep Dive Toolkit"
 sidebar:
-  order: 1
+  order: 0
   label: "Storage"
 ---
 > **Toolkit Track** | 3 Modules | ~2.5 hours total

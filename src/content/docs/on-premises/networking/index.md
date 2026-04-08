@@ -1,7 +1,7 @@
 ---
 title: "Networking"
 sidebar:
-  order: 1
+  order: 0
 ---
 
 On-premises networking is fundamentally different from cloud networking. There is no VPC wizard, no managed load balancer, no automatic DNS. You design the physical topology, configure the switches, and run the protocols that make Kubernetes networking work on bare metal.

@@ -1,7 +1,7 @@
 ---
 title: "Part 4: Environment Config & Security"
 sidebar:
-  order: 1
+  order: 0
   label: "Part 4: Environment & Security"
 ---
 

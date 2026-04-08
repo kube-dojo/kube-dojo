@@ -1,7 +1,7 @@
 ---
 title: "Zero to Terminal"
 sidebar:
-  order: 1
+  order: 0
 ---
 > **From "I've never used a terminal" to "I deployed a website using nothing but the command line"**
 

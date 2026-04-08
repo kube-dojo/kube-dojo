@@ -1,7 +1,7 @@
 ---
 title: "AWS DevOps Essentials"
 sidebar:
-  order: 1
+  order: 0
   label: "AWS Essentials"
 ---
 **Everything you need to be productive on AWS — before touching EKS.**

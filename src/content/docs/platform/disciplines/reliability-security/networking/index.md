@@ -1,7 +1,7 @@
 ---
 title: "Kubernetes Networking"
 sidebar:
-  order: 1
+  order: 0
   label: "Kubernetes Networking"
 ---
 > **Discipline Track** | 5 Modules | ~5-6 hours total

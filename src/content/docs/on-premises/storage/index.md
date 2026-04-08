@@ -1,7 +1,7 @@
 ---
 title: "Storage"
 sidebar:
-  order: 1
+  order: 0
 ---
 
 On-premises storage is the most consequential infrastructure decision you will make. Cloud storage (EBS, Persistent Disk, Azure Disk) is abstracted — you request a volume and it appears. On bare metal, you choose the physical drives, design the storage topology, and run the software that turns local disks into a distributed storage system.

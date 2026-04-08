@@ -1,7 +1,7 @@
 ---
 title: "Security Hardening"
 sidebar:
-  order: 1
+  order: 0
 ---
 > **Protecting Linux systems and containers through kernel-level security.**
 

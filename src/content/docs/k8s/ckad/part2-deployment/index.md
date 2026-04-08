@@ -1,7 +1,7 @@
 ---
 title: "Part 2: Deployment"
 sidebar:
-  order: 1
+  order: 0
   label: "Part 2: Deployment"
 ---
 

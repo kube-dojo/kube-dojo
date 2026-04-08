@@ -1,7 +1,7 @@
 ---
 title: "MLOps Discipline"
 sidebar:
-  order: 1
+  order: 0
   label: "MLOps"
 ---
 > **Discipline Track** | 6 Modules | ~4 hours total

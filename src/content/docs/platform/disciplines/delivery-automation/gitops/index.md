@@ -1,7 +1,7 @@
 ---
 title: "GitOps Discipline"
 sidebar:
-  order: 1
+  order: 0
   label: "GitOps"
 ---
 > Git as the single source of truth for infrastructure and applications.

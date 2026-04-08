@@ -1,7 +1,7 @@
 ---
 title: "Day-2 Operations"
 sidebar:
-  order: 1
+  order: 0
 ---
 
 Day-2 operations on bare metal Kubernetes clusters are fundamentally different from managed cloud services. There is no "upgrade cluster" button, no auto-replacing failed nodes, no built-in observability stack. You own the hardware, the OS, the control plane, and every component in between.

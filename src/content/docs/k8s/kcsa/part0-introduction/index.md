@@ -1,7 +1,7 @@
 ---
 title: "Part 0: Introduction"
 sidebar:
-  order: 1
+  order: 0
   label: "Part 0: Introduction"
 ---
 Get oriented with the KCSA exam format, domains, and develop a security-first mindset.

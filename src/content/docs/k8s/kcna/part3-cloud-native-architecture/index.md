@@ -1,7 +1,7 @@
 ---
 title: "Part 3: Cloud Native Architecture (16%)"
 sidebar:
-  order: 1
+  order: 0
   label: "Part 3: Cloud Native Architecture"
 ---
 Cloud native principles, the CNCF ecosystem, architectural patterns, observability, security, and emerging topics.

@@ -1,7 +1,7 @@
 ---
 title: "GitOps & Deployments Toolkit"
 sidebar:
-  order: 1
+  order: 0
   label: "GitOps & Deployments"
 ---
 > **Toolkit Track** | 4 Modules | ~3 hours total

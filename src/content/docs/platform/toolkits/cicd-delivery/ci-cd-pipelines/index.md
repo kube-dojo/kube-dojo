@@ -1,7 +1,7 @@
 ---
 title: "CI/CD Pipelines Toolkit"
 sidebar:
-  order: 1
+  order: 0
   label: "CI/CD Pipelines"
 ---
 > **Toolkit Track** | 3 Modules | ~2.5 hours total

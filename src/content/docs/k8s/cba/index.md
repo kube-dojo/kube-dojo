@@ -1,7 +1,7 @@
 ---
 title: "CBA - Certified Backstage Associate"
 sidebar:
-  order: 1
+  order: 0
   label: "CBA"
 ---
 > **Multiple-choice exam** | 90 minutes | Passing score: 66% | $250 USD | **Launched 2025**

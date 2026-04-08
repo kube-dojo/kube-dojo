@@ -1,7 +1,7 @@
 ---
 title: "Part 2: Container Orchestration (22%)"
 sidebar:
-  order: 1
+  order: 0
   label: "Part 2: Container Orchestration"
 ---
 How Kubernetes schedules, scales, stores data, and manages configuration.

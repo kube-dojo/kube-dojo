@@ -1,7 +1,7 @@
 ---
 title: "KCA - Kyverno Certified Associate"
 sidebar:
-  order: 1
+  order: 0
   label: "KCA"
 ---
 > **Multiple-choice exam** | 90 minutes | Passing score: 75% | $250 USD | **Launched 2024**

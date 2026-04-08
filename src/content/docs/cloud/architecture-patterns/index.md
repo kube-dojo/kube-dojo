@@ -1,7 +1,7 @@
 ---
 title: "Cloud Architecture Patterns"
 sidebar:
-  order: 1
+  order: 0
   label: "Architecture Patterns"
 ---
 **Vendor-neutral theory for designing Kubernetes on any cloud provider.**

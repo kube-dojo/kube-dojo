@@ -1,7 +1,7 @@
 ---
 title: "Advanced Cloud Operations"
 sidebar:
-  order: 1
+  order: 0
   label: "Advanced Operations"
 ---
 **Scaling Kubernetes beyond a single cluster -- multi-account strategies, cross-region networking, disaster recovery, and operational excellence at enterprise scale.**

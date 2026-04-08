@@ -1,7 +1,7 @@
 ---
 title: "Developer Experience Toolkit"
 sidebar:
-  order: 1
+  order: 0
   label: "Developer Experience"
 ---
 > **Toolkit Track** | 5 Modules | ~3.5 hours total

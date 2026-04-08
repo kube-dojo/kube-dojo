@@ -1,7 +1,7 @@
 ---
 title: "Planning & Economics"
 sidebar:
-  order: 1
+  order: 0
 ---
 
 Before buying a single server, you need to answer fundamental questions: Should we go on-prem at all? How many servers do we need? How should we organize our clusters? What will it cost over three years?

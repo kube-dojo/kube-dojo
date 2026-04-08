@@ -1,7 +1,7 @@
 ---
 title: "Bare Metal Provisioning"
 sidebar:
-  order: 1
+  order: 0
 ---
 
 How do you go from a rack of blank servers to a running Kubernetes cluster? This section covers the boot process, OS installation, and declarative infrastructure that turns hardware into a platform.

@@ -1,7 +1,7 @@
 ---
 title: "Operations"
 sidebar:
-  order: 1
+  order: 0
 ---
 
 Develop operational Linux skills including system administration, performance tuning, troubleshooting, and shell scripting.

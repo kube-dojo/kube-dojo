@@ -1,7 +1,7 @@
 ---
 title: "Resilience & Migration"
 sidebar:
-  order: 1
+  order: 0
 ---
 
 Production on-premises Kubernetes does not end at deployment. You need disaster recovery across sites, secure connectivity to cloud environments, and a strategy for moving workloads between cloud and on-prem. This section covers the full resilience lifecycle -- from multi-site failover to hybrid cloud networking to cloud repatriation.

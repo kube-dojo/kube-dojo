@@ -1,7 +1,7 @@
 ---
 title: "Part 0: Introduction"
 sidebar:
-  order: 1
+  order: 0
   label: "Part 0: Introduction"
 ---
 Get oriented with the KCNA exam format, domains, and a study strategy to pass efficiently.

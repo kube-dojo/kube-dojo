@@ -1,7 +1,7 @@
 ---
 title: "Infrastructure as Code Discipline"
 sidebar:
-  order: 1
+  order: 0
   label: "Infrastructure as Code"
 ---
 > **Discipline Track** | 6 Modules | ~4 hours total

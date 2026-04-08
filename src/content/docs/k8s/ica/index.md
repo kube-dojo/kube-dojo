@@ -1,7 +1,7 @@
 ---
 title: "ICA - Istio Certified Associate"
 sidebar:
-  order: 1
+  order: 0
   label: "ICA"
 ---
 > **Performance-based exam** | 120 minutes | Passing score: 68% | $250 USD

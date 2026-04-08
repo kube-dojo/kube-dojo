@@ -1,7 +1,7 @@
 ---
 title: "DevSecOps Discipline"
 sidebar:
-  order: 1
+  order: 0
   label: "DevSecOps"
 ---
 > **Discipline Track** | 6 Modules | ~3.5 hours total

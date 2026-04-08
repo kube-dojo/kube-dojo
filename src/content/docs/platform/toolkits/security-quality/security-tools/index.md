@@ -1,7 +1,7 @@
 ---
 title: "Security Tools Toolkit"
 sidebar:
-  order: 1
+  order: 0
   label: "Security Tools"
 ---
 > **Toolkit Track** | 6 Modules | ~5 hours total

@@ -1,7 +1,7 @@
 ---
 title: "GCP GKE Deep Dive"
 sidebar:
-  order: 1
+  order: 0
 ---
 **Production-grade Kubernetes on Google Cloud -- from Autopilot to Fleet management.**
 

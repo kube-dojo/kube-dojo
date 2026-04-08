@@ -1,7 +1,7 @@
 ---
 title: "Site Reliability Engineering (SRE)"
 sidebar:
-  order: 1
+  order: 0
   label: "SRE"
 ---
 > **Discipline Track** | 7 Modules | ~4 hours total

@@ -1,7 +1,7 @@
 ---
 title: "Part 6: Runtime Security"
 sidebar:
-  order: 1
+  order: 0
   label: "Part 6: Runtime Security"
 ---
 

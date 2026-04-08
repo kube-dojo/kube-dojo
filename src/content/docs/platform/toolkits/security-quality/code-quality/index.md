@@ -1,7 +1,7 @@
 ---
 title: "Code Quality & Security Scanning Toolkit"
 sidebar:
-  order: 1
+  order: 0
   label: "Code Quality"
 ---
 > **Toolkit Track** | 5 Modules | ~4 hours total

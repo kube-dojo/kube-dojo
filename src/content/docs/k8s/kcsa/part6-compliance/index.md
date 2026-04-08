@@ -1,7 +1,7 @@
 ---
 title: "Part 6: Compliance and Security Frameworks (10%)"
 sidebar:
-  order: 1
+  order: 0
   label: "Part 6: Compliance"
 ---
 This part covers compliance requirements and security frameworks relevant to Kubernetes environments.

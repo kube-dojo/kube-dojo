@@ -1,7 +1,7 @@
 ---
 title: "Part 2: Cluster Hardening"
 sidebar:
-  order: 1
+  order: 0
   label: "Part 2: Cluster Hardening"
 ---
 

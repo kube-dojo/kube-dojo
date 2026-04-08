@@ -1,7 +1,7 @@
 ---
 title: "Performance"
 sidebar:
-  order: 1
+  order: 0
 ---
 > **Understanding system performance to optimize Kubernetes workloads.**
 

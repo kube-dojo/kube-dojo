@@ -1,7 +1,7 @@
 ---
 title: "Part 5: Platform Security (16%)"
 sidebar:
-  order: 1
+  order: 0
   label: "Part 5: Platform Security"
 ---
 This part covers platform-level security controls including image security, observability, and security tooling.

@@ -1,7 +1,7 @@
 ---
 title: "Azure DevOps Essentials"
 sidebar:
-  order: 1
+  order: 0
   label: "Azure Essentials"
 ---
 **Everything you need to be productive on Microsoft Azure — before touching AKS.**

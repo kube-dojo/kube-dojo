@@ -1,7 +1,7 @@
 ---
 title: "Part 5: Services & Networking"
 sidebar:
-  order: 1
+  order: 0
   label: "Part 5: Services & Networking"
 ---
 

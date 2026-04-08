@@ -1,7 +1,7 @@
 ---
 title: "Container Registries Toolkit"
 sidebar:
-  order: 1
+  order: 0
   label: "Container Registries"
 ---
 > **Toolkit Track** | 3 Modules | ~2.5 hours total

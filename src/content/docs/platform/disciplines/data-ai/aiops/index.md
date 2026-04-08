@@ -1,7 +1,7 @@
 ---
 title: "AIOps Discipline"
 sidebar:
-  order: 1
+  order: 0
   label: "AIOps"
 ---
 > **Discipline Track** | 6 Modules | ~4 hours total

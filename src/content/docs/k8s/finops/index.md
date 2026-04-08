@@ -1,7 +1,7 @@
 ---
 title: "FinOps Certified Practitioner (FOCP)"
 sidebar:
-  order: 1
+  order: 0
   label: "FinOps"
 ---
 > **Multiple-choice exam** | 60 minutes | 50 questions | $325 USD | 75% passing score

@@ -1,7 +1,7 @@
 ---
 title: "GCP DevOps Essentials"
 sidebar:
-  order: 1
+  order: 0
   label: "GCP Essentials"
 ---
 **Everything you need to be productive on Google Cloud — before touching GKE.**

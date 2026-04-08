@@ -1,7 +1,7 @@
 ---
 title: "AI/GPU Infrastructure on Kubernetes"
 sidebar:
-  order: 1
+  order: 0
   label: "AI Infrastructure"
 ---
 **The infrastructure side of AI — GPU scheduling, distributed training, and LLM serving at scale.**

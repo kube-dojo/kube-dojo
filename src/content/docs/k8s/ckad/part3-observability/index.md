@@ -1,7 +1,7 @@
 ---
 title: "Part 3: Observability"
 sidebar:
-  order: 1
+  order: 0
   label: "Part 3: Observability"
 ---
 

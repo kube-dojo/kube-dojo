@@ -1,7 +1,7 @@
 ---
 title: "Part 4: Kubernetes Threat Model (18%)"
 sidebar:
-  order: 1
+  order: 0
   label: "Part 4: Threat Model"
 ---
 This part introduces threat modeling for Kubernetes and common attack surfaces, setting context before platform security and compliance.

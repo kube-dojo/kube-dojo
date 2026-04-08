@@ -1,7 +1,7 @@
 ---
 title: "Part 1: Cluster Setup"
 sidebar:
-  order: 1
+  order: 0
   label: "Part 1: Cluster Setup"
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: "Observability Toolkit"
 sidebar:
-  order: 1
+  order: 0
   label: "Observability"
 ---
 > **Toolkit Track** | 8 Modules | ~6.5 hours total

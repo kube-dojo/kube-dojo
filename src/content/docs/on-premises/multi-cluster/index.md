@@ -1,7 +1,7 @@
 ---
 title: "Multi-Cluster & Platform"
 sidebar:
-  order: 1
+  order: 0
 ---
 
 On-premises organizations rarely run a single Kubernetes cluster. As teams grow and workloads diversify, the need for multiple clusters emerges -- dev/staging/prod separation, regional deployments, tenant isolation, or simply blast-radius reduction. But unlike the cloud, where spinning up a new cluster takes minutes and costs only API calls, on-premises multi-cluster means managing physical servers, control plane placement, and lifecycle automation with limited hardware.

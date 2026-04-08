@@ -1,7 +1,7 @@
 ---
 title: "Shell Scripting"
 sidebar:
-  order: 1
+  order: 0
 ---
 > **Automating Linux tasks with Bash.**
 

@@ -1,7 +1,7 @@
 ---
 title: "Azure AKS Deep Dive"
 sidebar:
-  order: 1
+  order: 0
 ---
 **Production-grade Kubernetes on Azure -- from node pools to KEDA-driven scaling.**
 

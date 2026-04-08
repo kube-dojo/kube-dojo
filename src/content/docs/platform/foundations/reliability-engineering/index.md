@@ -1,7 +1,7 @@
 ---
 title: "Reliability Engineering"
 sidebar:
-  order: 1
+  order: 0
   label: "Reliability Engineering"
 ---
 > **Foundation Track** | 4 Modules | ~2 hours total

@@ -1,7 +1,7 @@
 ---
 title: "PCA - Prometheus Certified Associate"
 sidebar:
-  order: 1
+  order: 0
   label: "PCA"
 ---
 > **Multiple-choice exam** | 90 minutes | Passing score: 75% | $250 USD | **CNCF Certification**

@@ -1,7 +1,7 @@
 ---
 title: "Troubleshooting"
 sidebar:
-  order: 1
+  order: 0
 ---
 > **Systematic approaches to diagnosing Linux problems.**
 

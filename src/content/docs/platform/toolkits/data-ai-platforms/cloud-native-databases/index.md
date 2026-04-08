@@ -1,7 +1,7 @@
 ---
 title: "Cloud-Native Databases Toolkit"
 sidebar:
-  order: 1
+  order: 0
   label: "Cloud-Native Databases"
 ---
 > **Toolkit Track** | 5 Modules | ~4 hours total
