@@ -1330,6 +1330,24 @@ def cmd_status(args):
         mark = " ok" if t["pass"] == t["total"] else ""
         print(f"  {track:30s} {t['pass']:>6d} {t['fail']:>5d} {t['wip']:>5d} {todo:>5d} {t['total']:>5d}  {avg:>4s} {lo:>3s}  {uk:>3s}{mark}")
 
+    # Index pages summary
+    all_idx = sorted(CONTENT_ROOT.glob("**/index.md"))
+    all_idx = [f for f in all_idx if "/uk/" not in str(f) and f != CONTENT_ROOT / "index.md"]
+    idx_by_track: dict[str, dict] = {}
+    for f in all_idx:
+        rel = str(f.relative_to(CONTENT_ROOT))
+        track = _track_from_key(rel.replace("/index.md", "/dummy"))
+        t = idx_by_track.setdefault(track, {"total": 0, "stub": 0})
+        t["total"] += 1
+        if len(f.read_text().splitlines()) < 30:
+            t["stub"] += 1
+    idx_total = sum(t["total"] for t in idx_by_track.values())
+    idx_stubs = sum(t["stub"] for t in idx_by_track.values())
+    print(f"\n  Index pages: {idx_total} total | {idx_total - idx_stubs} with content | {idx_stubs} stubs (<30 lines)")
+    stub_tracks = [(track, t["stub"]) for track, t in sorted(idx_by_track.items()) if t["stub"] > 0]
+    if stub_tracks:
+        print(f"    Stubs: {', '.join(f'{track} ({n})' for track, n in stub_tracks)}")
+
     # Errors (only with --verbose)
     failed = [k for k, m in modules.items() if m.get("errors")]
     if failed:
