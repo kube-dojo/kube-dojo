@@ -102,9 +102,16 @@ from dispatch import (
     dispatch_gemini_with_retry,
     dispatch_claude,
 )
+from uk_sync import (
+    translate_new_module as uk_translate,
+    fix_module as uk_fix,
+    _find_content_files as uk_find_content_files,
+    CONTENT_ROOT as UK_CONTENT_ROOT,
+    UK_ROOT,
+)
 
 
-def dispatch_auto(prompt: str, model: str, timeout: int = 120) -> tuple[bool, str]:
+def dispatch_auto(prompt: str, model: str, timeout: int = 300) -> tuple[bool, str]:
     """Route to Gemini or Claude based on model name."""
     if model.startswith("gemini"):
         return dispatch_gemini_with_retry(prompt, model=model, timeout=timeout)
@@ -121,7 +128,7 @@ MODELS = {
     "audit": "gemini-3.1-pro-preview",     # AUDIT+PLAN: rubric evaluation + plan
     "write": "gemini-3.1-pro-preview",     # WRITE: draft improvements
     "review": "gemini-3.1-pro-preview",    # REVIEW: strict rubric review
-    "translate": "gemini-3.1-pro-preview", # TRANSLATE: Ukrainian with MCP
+    # "translate" removed — uk_sync.CHUNKED_MODEL owns translation model config
 }
 
 # Pipeline phases in order
@@ -243,7 +250,7 @@ def step_audit(module_path: Path, model: str = MODELS["audit"]) -> dict | None:
     prompt = f"{RUBRIC_PROMPT}\n\n---\n\nMODULE PATH: {key}\n\n{content}"
 
     print(f"\n  Scoring with {model}...")
-    ok, output = dispatch_auto(prompt, model=model, timeout=120)
+    ok, output = dispatch_auto(prompt, model=model, timeout=300)
 
     if not ok:
         print(f"  ❌ LLM scoring failed")
@@ -659,85 +666,16 @@ def step_update_index(section_path: Path, model: str = MODELS["write"]) -> bool:
     return True
 
 
-INDEX_TRANSLATE_PROMPT = """You are translating a KubeDojo section index page from English to Ukrainian.
-
-RULES:
-- Translate ALL prose content to Ukrainian
-- Keep technical terms in English: kubectl, Kubernetes, Pod, Deployment, Service, etc.
-- Follow glossary: cluster=кластер, container=контейнер, namespace=простір імен, node=вузол
-- Translate section headings: "Modules" → "Модулі", "What You'll Learn" → "Що ви вивчите", "Prerequisites" → "Передумови", "Where This Leads" → "Куди далі", "How to Use This Track" → "Як використовувати цей трек", "Key Concepts" → "Ключові поняття"
-- Keep module link paths UNCHANGED (they use the English slug)
-- Translate module titles in the table but keep the link URL as-is
-- No Russicisms (no ы, ё, ъ, э)
-- Keep code blocks, diagrams, and ASCII art UNCHANGED
-- Output the COMPLETE Ukrainian file starting with --- frontmatter
-- CRITICAL: slug MUST start with "uk/" prefix
-- sidebar.order: 0
-
-Use MCP tools to verify Ukrainian quality:
-- verify_words for VESUM validation
-- query_r2u to check for Russicisms
-
-ENGLISH INDEX:
-{en_content}
-"""
-
-
-def _translate_index(en_content: str, uk_path: Path, rel_section: str) -> bool:
-    """Translate an EN index.md to Ukrainian."""
+def _translate_index(_en_content: str, uk_path: Path, rel_section: str) -> bool:
+    """Translate an EN index.md to Ukrainian. Delegates to uk_sync."""
     print(f"  INDEX-UK: uk/{rel_section} (translating)")
-
-    prompt = INDEX_TRANSLATE_PROMPT.format(en_content=en_content)
-    ok, output = dispatch_gemini_with_retry(prompt, mcp=True, timeout=300)
-
-    if not ok or not output.strip():
-        print(f"  ❌ UK INDEX translation failed")
-        return False
-
-    # Strip markdown wrapper
-    if output.startswith("```markdown"):
-        output = output[len("```markdown"):].strip()
-    if output.startswith("```md"):
-        output = output[len("```md"):].strip()
-    if output.startswith("```"):
-        output = output[3:].strip()
-    if output.endswith("```"):
-        output = output[:-3].strip()
-
-    if not output.startswith("---"):
-        print(f"  ❌ UK INDEX has no frontmatter")
-        return False
-
-    # Validate frontmatter
-    parts = output.split("---", 2)
-    if len(parts) < 3:
-        print(f"  ❌ UK INDEX malformed frontmatter")
-        return False
-    try:
-        fm = yaml.safe_load(parts[1])
-        if not isinstance(fm, dict) or "title" not in fm:
-            print(f"  ❌ UK INDEX missing title")
-            return False
-    except yaml.YAMLError as e:
-        print(f"  ❌ UK INDEX broken YAML: {e}")
-        return False
-
-    # Ensure slug has uk/ prefix
-    slug = fm.get("slug", "")
-    if slug and not slug.startswith("uk/"):
-        output = re.sub(r'^slug:\s*.+$', f'slug: uk/{slug}', output, count=1, flags=re.MULTILINE)
-    elif not slug:
-        # Add slug with uk/ prefix
-        output = output.replace("\n---\n", f'\nslug: uk/{rel_section}\n---\n', 1)
-
-    # Ensure sidebar.order: 0
-    if "order:" in parts[1] and "order: 0" not in parts[1]:
-        output = re.sub(r'(  order: )\d+', r'\g<1>0', output, count=1)
-
-    uk_path.parent.mkdir(parents=True, exist_ok=True)
-    uk_path.write_text(output)
-    print(f"  ✓ INDEX-UK written: uk/{rel_section}/index.md ({len(output)} chars)")
-    return True
+    en_path = UK_CONTENT_ROOT / rel_section / "index.md"
+    if uk_path.exists():
+        # Re-translate existing UK index
+        return uk_fix(uk_path)
+    else:
+        # New translation
+        return uk_translate(en_path)
 
 
 def step_review(module_path: Path, improved: str, model: str = MODELS["review"]) -> dict | None:
@@ -748,7 +686,7 @@ def step_review(module_path: Path, improved: str, model: str = MODELS["review"])
 
     prompt = REVIEW_PROMPT_TEMPLATE.format(original=original, improved=improved)
 
-    ok, output = dispatch_auto(prompt, model=model, timeout=120)
+    ok, output = dispatch_auto(prompt, model=model, timeout=300)
 
     if not ok:
         print(f"  ❌ REVIEW failed")
@@ -1638,50 +1576,40 @@ def cmd_e2e(args):
 
     # UK translations: sync modules for completed sections
     if not getattr(args, "no_translate", False):
-        uk_sync_script = REPO_ROOT / "scripts" / "uk_sync.py"
         for section in sections_to_run:
             uk_section = CONTENT_ROOT / "uk" / section
             if not uk_section.exists():
                 continue
 
-            # Find EN modules that have UK counterparts (or should)
-            section_path = CONTENT_ROOT / section
-            en_modules = sorted(section_path.glob("**/module-*.md"))
-            en_modules = [m for m in en_modules if "/uk/" not in str(m) and ".staging" not in str(m)]
-            if not en_modules:
+            # Find EN content files (modules + index.md, excluding staging)
+            en_files = uk_find_content_files(CONTENT_ROOT / section)
+            en_files = [m for m in en_files if "/uk/" not in str(m)]
+            if not en_files:
                 continue
 
             print(f"\n{'='*60}")
-            print(f"  UK TRANSLATE: {section} ({len(en_modules)} modules)")
+            print(f"  UK TRANSLATE: {section} ({len(en_files)} files)")
             print(f"{'='*60}")
 
             translated = 0
             failed = 0
             consecutive_uk_failures = 0
-            for en_path in en_modules:
-                rel = en_path.relative_to(CONTENT_ROOT)
-                uk_path = CONTENT_ROOT / "uk" / rel
-                # Translate or fix one module at a time
-                if uk_path.exists():
-                    cmd = [sys.executable, str(uk_sync_script), "fix", str(uk_path)]
-                else:
-                    cmd = [sys.executable, str(uk_sync_script), "translate", str(en_path)]
+            for en_path in en_files:
+                rel = en_path.relative_to(UK_CONTENT_ROOT)
+                uk_path = UK_ROOT / rel
 
                 print(f"  UK: {rel.name}")
-                proc = subprocess.Popen(cmd, cwd=str(REPO_ROOT))
-                try:
-                    proc.wait(timeout=600)  # 10 min per module
-                    if proc.returncode == 0:
-                        translated += 1
-                        consecutive_uk_failures = 0
-                    else:
-                        failed += 1
-                        consecutive_uk_failures += 1
-                except subprocess.TimeoutExpired:
-                    proc.kill()
+                if uk_path.exists():
+                    ok = uk_fix(uk_path)
+                else:
+                    ok = uk_translate(en_path)
+
+                if ok:
+                    translated += 1
+                    consecutive_uk_failures = 0
+                else:
                     failed += 1
                     consecutive_uk_failures += 1
-                    print(f"  ⚠ Timed out: {rel.name}")
 
                 if consecutive_uk_failures >= 3:
                     print(f"  CIRCUIT BREAKER: 3 consecutive UK translation failures — skipping rest")

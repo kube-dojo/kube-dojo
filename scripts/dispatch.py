@@ -195,7 +195,7 @@ def dispatch_gemini(prompt: str, model: str = GEMINI_DEFAULT_MODEL,
         if timed_out:
             print(f"Gemini timed out after {timeout}s", file=sys.stderr)
             _log("gemini", model, full_prompt, "", False, elapsed, "TIMEOUT")
-            return False, ""
+            return False, "TIMEOUT"
 
         if proc.returncode != 0:
             output = "".join(output_lines).strip()
@@ -239,7 +239,11 @@ def dispatch_gemini_with_retry(prompt: str, model: str = GEMINI_DEFAULT_MODEL,
             # All retries exhausted on rate limit — don't try fallback (same quota)
             return False, output
 
-        # Non-rate-limit failure — try fallback model once
+        # Timeout — don't retry, just fail (Gemini is slow, not broken)
+        if output == "TIMEOUT":
+            return False, output
+
+        # Non-rate-limit, non-timeout failure — try fallback model once
         if model != GEMINI_FALLBACK_MODEL:
             print(f"Retrying with fallback model: {GEMINI_FALLBACK_MODEL}", file=sys.stderr)
             return dispatch_gemini(prompt, GEMINI_FALLBACK_MODEL, review, timeout, mcp)
