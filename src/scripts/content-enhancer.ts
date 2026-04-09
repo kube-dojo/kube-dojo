@@ -106,6 +106,24 @@ function enhanceMetaChips(root: Element): void {
  * War Stories: Find headings containing "War Story" and wrap
  * the heading + following content in a styled card.
  */
+/** Get the outermost element for a heading (may be wrapped in .sl-heading-wrapper by Starlight) */
+function headingRoot(heading: Element): Element {
+  const wrapper = heading.closest('.sl-heading-wrapper');
+  return wrapper || heading;
+}
+
+/** Check if an element is a heading of given level or lower */
+function isHeadingAtOrAbove(el: Element, level: number): boolean {
+  // Direct heading tag
+  if (el.tagName.match(/^H[1-6]$/) && parseInt(el.tagName[1]) <= level) return true;
+  // Starlight heading wrapper containing such a heading
+  if (el.classList.contains('sl-heading-wrapper')) {
+    const h = el.querySelector('h1, h2, h3, h4, h5, h6');
+    if (h && parseInt(h.tagName[1]) <= level) return true;
+  }
+  return false;
+}
+
 function enhanceWarStories(root: Element): void {
   const headings = root.querySelectorAll('h2, h3, h4');
   headings.forEach((heading) => {
@@ -116,19 +134,21 @@ function enhanceWarStories(root: Element): void {
     // Extract impact from heading text (e.g. "$2.3M lost revenue")
     const impactMatch = text.match(/\$[\d.,]+[MBK]?\s*[\w\s]*/i);
 
-    // Collect sibling elements until next heading of same or higher level
+    // Walk siblings from the heading's root (wrapper div or heading itself)
+    const hRoot = headingRoot(heading);
     const level = parseInt(heading.tagName[1]);
     const siblings: Element[] = [];
-    let next = heading.nextElementSibling;
+    let next = hRoot.nextElementSibling;
     while (next) {
-      if (next.tagName.match(/^H[1-6]$/) && parseInt(next.tagName[1]) <= level) break;
+      if (isHeadingAtOrAbove(next, level)) break;
       siblings.push(next);
       next = next.nextElementSibling;
     }
 
-    // Build wrapper
+    // Build wrapper — preserve heading ID for anchor links
     const wrapper = document.createElement('div');
     wrapper.className = 'kd-warstory';
+    if (heading.id) wrapper.id = heading.id;
 
     const header = document.createElement('div');
     header.className = 'kd-warstory-header';
@@ -146,8 +166,8 @@ function enhanceWarStories(root: Element): void {
     wrapper.appendChild(header);
     wrapper.appendChild(body);
 
-    // Replace heading with wrapper
-    heading.replaceWith(wrapper);
+    // Replace the heading root (wrapper or heading) with the war story card
+    hRoot.replaceWith(wrapper);
   });
 }
 
@@ -163,13 +183,14 @@ function enhanceDidYouKnow(root: Element): void {
     if (!text.toLowerCase().includes('did you know')) return;
     if (heading.closest('.kd-dyk')) return;
 
-    // Collect following blockquotes
+    // Walk siblings from the heading's root (wrapper div or heading itself)
+    const hRoot = headingRoot(heading);
     const blockquotes: Element[] = [];
-    let next = heading.nextElementSibling;
+    let next = hRoot.nextElementSibling;
     while (next) {
       if (next.tagName === 'BLOCKQUOTE') {
         blockquotes.push(next);
-      } else if (next.tagName === 'HR' || next.tagName.match(/^H[1-6]$/)) {
+      } else if (next.tagName === 'HR' || isHeadingAtOrAbove(next, parseInt(heading.tagName[1]))) {
         break;
       }
       next = next.nextElementSibling;
@@ -179,6 +200,7 @@ function enhanceDidYouKnow(root: Element): void {
 
     const wrapper = document.createElement('div');
     wrapper.className = 'kd-dyk';
+    if (heading.id) wrapper.id = heading.id;
 
     const header = document.createElement('div');
     header.className = 'kd-dyk-header';
@@ -192,9 +214,9 @@ function enhanceDidYouKnow(root: Element): void {
       wrapper.appendChild(div);
     });
 
-    // Replace heading and blockquotes
+    // Replace heading root and blockquotes
     blockquotes.forEach((bq) => bq.remove());
-    heading.replaceWith(wrapper);
+    hRoot.replaceWith(wrapper);
   });
 }
 

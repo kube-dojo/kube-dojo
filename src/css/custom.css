@@ -161,7 +161,7 @@ starlight-toc a[href*="complexity"], starlight-toc a[href*="time-to-complete"] {
 .kd-chip-advanced { background: var(--danger-red-light); color: var(--danger-red); }
 
 /* ===== WAR STORY (content-enhancer) — exact POC values ===== */
-.kd-warstory { background: white; border: 2px solid var(--g200); border-radius: var(--kube-radius); overflow: hidden; margin: 1.375rem 0; }
+.kd-warstory { background: white; border: 2px solid var(--g200); border-radius: var(--kube-radius); margin: 1.375rem 0; }
 :root[data-theme='dark'] .kd-warstory { background: var(--g800); border-color: var(--g700); }
 .kd-warstory-header { background: var(--g900); color: white; padding: 0.875rem 1.25rem; display: flex; align-items: center; gap: 0.625rem; font-weight: 700; font-size: 0.875rem; }
 .kd-warstory-header .impact { margin-left: auto; background: var(--danger-red); padding: 0.15rem 0.625rem; border-radius: 4px; font-size: 0.6875rem; }
