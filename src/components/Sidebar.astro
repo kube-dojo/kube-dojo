@@ -116,12 +116,43 @@ function findActiveBranch(entries: any[]): { label: string; entries: any[] } | n
   return null;
 }
 
+// Build breadcrumb trail to the active branch
+function findBreadcrumbs(entries: any[], trail: { label: string; href?: string }[] = []): { label: string; href?: string }[] | null {
+  for (const e of entries) {
+    if (e.type !== 'group' || !hasCurrent(e.entries || [])) continue;
+
+    // Find index link for this group (for a clickable breadcrumb)
+    const idxLink = e.entries.find((c: any) => c.type === 'link' && !getModNum(c.label) && c.label !== e.label);
+    const crumb = { label: e.label, href: idxLink?.href };
+    const newTrail = [...trail, crumb];
+
+    // Check if a child group has the active page
+    const activeChild = e.entries.find((c: any) => c.type === 'group' && hasCurrent(c.entries || []));
+    if (activeChild) {
+      const deeper = findBreadcrumbs(e.entries, newTrail);
+      if (deeper) return deeper;
+    }
+    return newTrail;
+  }
+  return null;
+}
+
+const breadcrumbs = findBreadcrumbs(sidebar) || [];
 const currentBranch = findActiveBranch(sidebar);
 const section = currentBranch?.label || '';
 const entriesToRender = currentBranch ? currentBranch.entries : sidebar;
 ---
 
 <div class="kd-sb">
+  {breadcrumbs.length > 1 && (
+    <nav class="kd-bc" aria-label="Breadcrumb">
+      {breadcrumbs.slice(0, -1).map((crumb) => (
+        crumb.href
+          ? <a href={crumb.href} class="kd-bc-link">{crumb.label}</a>
+          : <span class="kd-bc-text">{crumb.label}</span>
+      ))}
+    </nav>
+  )}
   {section && <div class="kd-st"><span class="kd-dot"></span><span>{section}</span></div>}
   <Fragment set:html={entriesToRender.map((e: any) => renderEntry(e)).join('')} />
 </div>
@@ -130,6 +161,13 @@ const entriesToRender = currentBranch ? currentBranch.entries : sidebar;
 <style>
   /* Exact POC v2 sidebar values */
   .kd-sb { font-size: 0.8125rem; padding: 0 0.5rem; }
+
+  /* Breadcrumb trail for navigating back up */
+  .kd-bc { display: flex; flex-wrap: wrap; gap: 0.25rem; padding: 0.5rem 0.75rem 0.375rem; margin-bottom: 0.25rem; font-size: 0.6875rem; color: #9CA3AF; }
+  .kd-bc-link { color: #326CE5; text-decoration: none; font-weight: 500; }
+  .kd-bc-link:hover { text-decoration: underline; }
+  .kd-bc-link::after, .kd-bc-text::after { content: ' /'; color: #D1D5DB; margin-left: 0.25rem; }
+  :global([data-theme='dark']) .kd-bc-link::after, :global([data-theme='dark']) .kd-bc-text::after { color: #4B5563; }
 
   /* Section title with blue dot */
   .kd-st { font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #9CA3AF; padding: 0.5rem 0.75rem; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; }

@@ -135,6 +135,8 @@ starlight-toc a[aria-current="true"] {
   color: var(--kube-blue) !important; border-left-color: var(--kube-blue) !important;
   font-weight: 600 !important;
 }
+/* Hide meta headings from TOC (H2 Complexity/Time format used by ~57 modules) */
+starlight-toc a[href*="complexity"], starlight-toc a[href*="time-to-complete"] { display: none; }
 
 /* ===== PAGINATION — exact POC values ===== */
 .pagination-links { margin-top: 3rem !important; padding-top: 1.5rem !important; border-top: 1px solid var(--g200) !important; }

@@ -27,43 +27,79 @@ function enhanceContent(): void {
  * into colored inline chips matching the POC design.
  * POC shows: ⚠ Medium | ⏱ 45-55 min | 🏆 CKA Exam (as colored pills on one line)
  */
-function enhanceMetaChips(root: Element): void {
-  const firstBq = root.querySelector('blockquote');
-  if (!firstBq || firstBq.closest('.kd-warstory') || firstBq.closest('.kd-dyk')) return;
-
-  const text = firstBq.textContent || '';
-  if (!text.includes('Complexity') && !text.includes('Time to Complete')) return;
-  if (firstBq.classList.contains('kd-meta-enhanced')) return;
-
-  firstBq.classList.add('kd-meta-enhanced');
-
-  // Extract complexity level
-  const complexityMatch = text.match(/\[(QUICK|MEDIUM|ADVANCED|EXPERT)\]/i);
-  const complexity = complexityMatch ? complexityMatch[1].toUpperCase() : null;
-
-  // Extract time
-  const timeMatch = text.match(/Time to Complete:\s*(.+?)(?:\n|$)/);
-  const time = timeMatch ? timeMatch[1].trim() : null;
-
-  // Build chips row
+function buildChips(complexity: string | null, time: string | null): HTMLDivElement | null {
   const chips: string[] = [];
   if (complexity) {
-    const cls = complexity === 'QUICK' ? 'kd-chip-quick' :
-                complexity === 'MEDIUM' ? 'kd-chip-medium' : 'kd-chip-advanced';
-    const icon = complexity === 'QUICK' ? '✓' : complexity === 'MEDIUM' ? '⚠' : '⚡';
-    chips.push(`<span class="kd-chip ${cls}">${icon} ${complexity.charAt(0) + complexity.slice(1).toLowerCase()}</span>`);
+    const upper = complexity.toUpperCase();
+    const cls = upper === 'QUICK' ? 'kd-chip-quick' :
+                (upper === 'MEDIUM' ? 'kd-chip-medium' : 'kd-chip-advanced');
+    const icon = upper === 'QUICK' ? '✓' : upper === 'MEDIUM' ? '⚠' : '⚡';
+    chips.push(`<span class="kd-chip ${cls}">${icon} ${upper.charAt(0) + upper.slice(1).toLowerCase()}</span>`);
   }
   if (time) {
     chips.push(`<span class="kd-chip kd-chip-time">⏱ ${time}</span>`);
   }
+  if (chips.length === 0) return null;
+  const div = document.createElement('div');
+  div.className = 'kd-meta-chips';
+  div.innerHTML = chips.join('');
+  return div;
+}
 
-  if (chips.length > 0) {
-    // Replace blockquote with chips div
-    const chipsDiv = document.createElement('div');
-    chipsDiv.className = 'kd-meta-chips';
-    chipsDiv.innerHTML = chips.join('');
-    firstBq.replaceWith(chipsDiv);
+function enhanceMetaChips(root: Element): void {
+  if (root.querySelector('.kd-meta-chips')) return; // already enhanced
+
+  // Pattern 1: blockquote format (e.g. "> **Toolkit Track** | Complexity: `[COMPLEX]` | Time: 45 min")
+  const firstBq = root.querySelector('blockquote');
+  if (firstBq && !firstBq.closest('.kd-warstory') && !firstBq.closest('.kd-dyk')) {
+    const text = firstBq.textContent || '';
+    if (text.includes('Complexity') || text.includes('Time to Complete') || text.includes('Time:')) {
+      const complexityMatch = text.match(/\[(QUICK|MEDIUM|COMPLEX|ADVANCED|EXPERT)\]/i);
+      const timeMatch = text.match(/Time(?:\s+to\s+Complete)?:\s*(.+?)(?:\n|$|\|)/);
+      const chips = buildChips(
+        complexityMatch ? complexityMatch[1] : null,
+        timeMatch ? timeMatch[1].trim() : null,
+      );
+      if (chips) { firstBq.replaceWith(chips); return; }
+    }
   }
+
+  // Pattern 2: H2 heading format (e.g. "## Complexity: [COMPLEX]" + "## Time to Complete: 55-60 min")
+  const headings = root.querySelectorAll('h2');
+  let complexityH2: Element | null = null;
+  let timeH2: Element | null = null;
+  let complexity: string | null = null;
+  let time: string | null = null;
+
+  for (const h2 of headings) {
+    const text = h2.textContent || '';
+    const cMatch = text.match(/Complexity:\s*\[?(QUICK|MEDIUM|COMPLEX|ADVANCED|EXPERT)\]?/i);
+    if (cMatch) { complexityH2 = h2; complexity = cMatch[1]; continue; }
+    const tMatch = text.match(/Time(?:\s+to\s+Complete)?:\s*(.+)/i);
+    if (tMatch) { timeH2 = h2; time = tMatch[1].trim(); continue; }
+    // Stop scanning after first non-meta heading
+    if (complexityH2 || timeH2) break;
+  }
+
+  if (!complexityH2 && !timeH2) return;
+
+  const chips = buildChips(complexity, time);
+  if (!chips) return;
+
+  // Replace the first meta heading with chips, remove the other
+  const firstEl = complexityH2 || timeH2;
+  const secondEl = complexityH2 && timeH2 ? (complexityH2 === firstEl ? timeH2 : complexityH2) : null;
+  // Remove the HR between them if present
+  if (firstEl && secondEl) {
+    let between = firstEl.nextElementSibling;
+    while (between && between !== secondEl) {
+      const next = between.nextElementSibling;
+      if (between.tagName === 'HR') between.remove();
+      between = next;
+    }
+    secondEl.remove();
+  }
+  firstEl!.replaceWith(chips);
 }
 
 /**

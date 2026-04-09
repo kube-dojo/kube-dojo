@@ -40,7 +40,7 @@ export default defineConfig({
           label: 'Fundamentals',
           collapsed: true,
           items: [
-            { label: 'Overview', link: '/prerequisites/' },
+            { label: 'Fundamentals Hub', link: '/prerequisites/' },
             { label: 'Zero to Terminal', autogenerate: { directory: 'prerequisites/zero-to-terminal' }, collapsed: true },
             { label: 'Everyday Linux', autogenerate: { directory: 'linux/foundations/everyday-use' }, collapsed: true },
             { label: 'Cloud Native 101', autogenerate: { directory: 'prerequisites/cloud-native-101' }, collapsed: true },
@@ -54,13 +54,33 @@ export default defineConfig({
           label: 'Linux',
           collapsed: true,
           items: [
-            { label: 'Overview', link: '/linux/' },
-            { label: 'Everyday Use', autogenerate: { directory: 'linux/foundations/everyday-use' }, collapsed: true },
-            { label: 'System Essentials', autogenerate: { directory: 'linux/foundations/system-essentials' }, collapsed: true },
-            { label: 'Container Primitives', autogenerate: { directory: 'linux/foundations/container-primitives' }, collapsed: true },
-            { label: 'Networking', autogenerate: { directory: 'linux/foundations/networking' }, collapsed: true },
-            { label: 'Security', autogenerate: { directory: 'linux/security' }, collapsed: true },
-            { label: 'Operations', autogenerate: { directory: 'linux/operations' }, collapsed: true },
+            { label: 'Linux Hub', link: '/linux/' },
+            {
+              label: 'Foundations',
+              collapsed: true,
+              items: [
+                { label: 'Everyday Use', autogenerate: { directory: 'linux/foundations/everyday-use' }, collapsed: true },
+                { label: 'System Essentials', autogenerate: { directory: 'linux/foundations/system-essentials' }, collapsed: true },
+                { label: 'Container Primitives', autogenerate: { directory: 'linux/foundations/container-primitives' }, collapsed: true },
+                { label: 'Networking', autogenerate: { directory: 'linux/foundations/networking' }, collapsed: true },
+              ],
+            },
+            {
+              label: 'Operations',
+              collapsed: true,
+              items: [
+                { label: 'Shell Scripting', autogenerate: { directory: 'linux/operations/shell-scripting' }, collapsed: true },
+                { label: 'Performance', autogenerate: { directory: 'linux/operations/performance' }, collapsed: true },
+                { label: 'Troubleshooting', autogenerate: { directory: 'linux/operations/troubleshooting' }, collapsed: true },
+              ],
+            },
+            {
+              label: 'Security',
+              collapsed: true,
+              items: [
+                { label: 'Hardening', autogenerate: { directory: 'linux/security/hardening' }, collapsed: true },
+              ],
+            },
             { label: 'LFCS: Linux SysAdmin', autogenerate: { directory: 'k8s/lfcs' }, collapsed: true },
           ],
         },
@@ -71,12 +91,18 @@ export default defineConfig({
           label: 'Certifications',
           collapsed: true,
           items: [
-            { label: 'Overview', link: '/k8s/' },
-            { label: 'KCNA: Cloud Native Associate', autogenerate: { directory: 'k8s/kcna' }, collapsed: true },
-            { label: 'KCSA: Security Associate', autogenerate: { directory: 'k8s/kcsa' }, collapsed: true },
-            { label: 'CKA: K8s Administrator', autogenerate: { directory: 'k8s/cka' }, collapsed: true },
-            { label: 'CKAD: App Developer', autogenerate: { directory: 'k8s/ckad' }, collapsed: true },
-            { label: 'CKS: Security Specialist', autogenerate: { directory: 'k8s/cks' }, collapsed: true },
+            { label: 'Certifications Hub', link: '/k8s/' },
+            {
+              label: 'Core Kubernetes',
+              collapsed: true,
+              items: [
+                { label: 'KCNA: Cloud Native Associate', autogenerate: { directory: 'k8s/kcna' }, collapsed: true },
+                { label: 'KCSA: Security Associate', autogenerate: { directory: 'k8s/kcsa' }, collapsed: true },
+                { label: 'CKA: K8s Administrator', autogenerate: { directory: 'k8s/cka' }, collapsed: true },
+                { label: 'CKAD: App Developer', autogenerate: { directory: 'k8s/ckad' }, collapsed: true },
+                { label: 'CKS: Security Specialist', autogenerate: { directory: 'k8s/cks' }, collapsed: true },
+              ],
+            },
             { label: 'Extending Kubernetes', autogenerate: { directory: 'k8s/extending' }, collapsed: true },
             {
               label: 'Ecosystem Certifications',
@@ -104,7 +130,7 @@ export default defineConfig({
           label: 'Cloud',
           collapsed: true,
           items: [
-            { label: 'Overview', link: '/cloud/' },
+            { label: 'Cloud Hub', link: '/cloud/' },
             { label: 'Rosetta Stone', link: '/cloud/hyperscaler-rosetta-stone/' },
             {
               label: 'AWS',
@@ -146,7 +172,7 @@ export default defineConfig({
           label: 'On-Premises',
           collapsed: true,
           items: [
-            { label: 'Overview', link: '/on-premises/' },
+            { label: 'On-Premises Hub', link: '/on-premises/' },
             { label: 'Planning & Economics', autogenerate: { directory: 'on-premises/planning' }, collapsed: true },
             { label: 'Bare Metal Provisioning', autogenerate: { directory: 'on-premises/provisioning' }, collapsed: true },
             { label: 'Networking', autogenerate: { directory: 'on-premises/networking' }, collapsed: true },
@@ -164,104 +190,120 @@ export default defineConfig({
           label: 'Platform Engineering',
           collapsed: true,
           items: [
-            { label: 'Overview', link: '/platform/' },
-            { label: 'Foundations', autogenerate: { directory: 'platform/foundations' }, collapsed: true },
+            { label: 'Platform Hub', link: '/platform/' },
+
+            // ── Part 1: Foundations (timeless theory) ──
             {
-              label: 'Core Platform',
+              label: 'Part 1: Foundations',
+              collapsed: true,
+              autogenerate: { directory: 'platform/foundations' },
+            },
+
+            // ── Part 2: Disciplines (applied practices) ──
+            {
+              label: 'Part 2: Disciplines',
               collapsed: true,
               items: [
-                { label: 'SRE', autogenerate: { directory: 'platform/disciplines/core-platform/sre' }, collapsed: true },
-                { label: 'Platform Engineering', autogenerate: { directory: 'platform/disciplines/core-platform/platform-engineering' }, collapsed: true },
-                { label: 'Platform Leadership', autogenerate: { directory: 'platform/disciplines/core-platform/leadership' }, collapsed: true },
+                {
+                  label: 'Core Platform',
+                  collapsed: true,
+                  items: [
+                    { label: 'SRE', autogenerate: { directory: 'platform/disciplines/core-platform/sre' }, collapsed: true },
+                    { label: 'Platform Engineering', autogenerate: { directory: 'platform/disciplines/core-platform/platform-engineering' }, collapsed: true },
+                    { label: 'Platform Leadership', autogenerate: { directory: 'platform/disciplines/core-platform/leadership' }, collapsed: true },
+                  ],
+                },
+                {
+                  label: 'Delivery & Automation',
+                  collapsed: true,
+                  items: [
+                    { label: 'Release Engineering', autogenerate: { directory: 'platform/disciplines/delivery-automation/release-engineering' }, collapsed: true },
+                    { label: 'GitOps', autogenerate: { directory: 'platform/disciplines/delivery-automation/gitops' }, collapsed: true },
+                    { label: 'Infrastructure as Code', autogenerate: { directory: 'platform/disciplines/delivery-automation/iac' }, collapsed: true },
+                  ],
+                },
+                {
+                  label: 'Reliability & Security',
+                  collapsed: true,
+                  items: [
+                    { label: 'Networking', autogenerate: { directory: 'platform/disciplines/reliability-security/networking' }, collapsed: true },
+                    { label: 'Chaos Engineering', autogenerate: { directory: 'platform/disciplines/reliability-security/chaos-engineering' }, collapsed: true },
+                    { label: 'DevSecOps', autogenerate: { directory: 'platform/disciplines/reliability-security/devsecops' }, collapsed: true },
+                  ],
+                },
+                {
+                  label: 'Data & AI',
+                  collapsed: true,
+                  items: [
+                    { label: 'Data Engineering', autogenerate: { directory: 'platform/disciplines/data-ai/data-engineering' }, collapsed: true },
+                    { label: 'MLOps', autogenerate: { directory: 'platform/disciplines/data-ai/mlops' }, collapsed: true },
+                    { label: 'AIOps', autogenerate: { directory: 'platform/disciplines/data-ai/aiops' }, collapsed: true },
+                    { label: 'AI Infrastructure', autogenerate: { directory: 'platform/disciplines/data-ai/ai-infrastructure' }, collapsed: true },
+                  ],
+                },
+                { label: 'FinOps', autogenerate: { directory: 'platform/disciplines/business-value/finops' }, collapsed: true },
               ],
             },
+
+            // ── Part 3: Toolkits (current tools) ──
             {
-              label: 'Delivery & Automation',
+              label: 'Part 3: Toolkits',
               collapsed: true,
               items: [
-                { label: 'Release Engineering', autogenerate: { directory: 'platform/disciplines/delivery-automation/release-engineering' }, collapsed: true },
-                { label: 'GitOps', autogenerate: { directory: 'platform/disciplines/delivery-automation/gitops' }, collapsed: true },
-                { label: 'Infrastructure as Code', autogenerate: { directory: 'platform/disciplines/delivery-automation/iac' }, collapsed: true },
-              ],
-            },
-            {
-              label: 'Reliability & Security',
-              collapsed: true,
-              items: [
-                { label: 'Networking', autogenerate: { directory: 'platform/disciplines/reliability-security/networking' }, collapsed: true },
-                { label: 'Chaos Engineering', autogenerate: { directory: 'platform/disciplines/reliability-security/chaos-engineering' }, collapsed: true },
-                { label: 'DevSecOps', autogenerate: { directory: 'platform/disciplines/reliability-security/devsecops' }, collapsed: true },
-              ],
-            },
-            {
-              label: 'Data & AI',
-              collapsed: true,
-              items: [
-                { label: 'Data Engineering', autogenerate: { directory: 'platform/disciplines/data-ai/data-engineering' }, collapsed: true },
-                { label: 'MLOps', autogenerate: { directory: 'platform/disciplines/data-ai/mlops' }, collapsed: true },
-                { label: 'AIOps', autogenerate: { directory: 'platform/disciplines/data-ai/aiops' }, collapsed: true },
-                { label: 'AI Infrastructure', autogenerate: { directory: 'platform/disciplines/data-ai/ai-infrastructure' }, collapsed: true },
-              ],
-            },
-            { label: 'FinOps', autogenerate: { directory: 'platform/disciplines/business-value/finops' }, collapsed: true },
-          ],
-        },
-        {
-          label: 'Cloud Native Tools',
-          collapsed: true,
-          items: [
-            { label: 'Overview', link: '/platform/toolkits/' },
-            {
-              label: 'CI/CD & Delivery',
-              collapsed: true,
-              items: [
-                { label: 'CI/CD Pipelines', autogenerate: { directory: 'platform/toolkits/cicd-delivery/ci-cd-pipelines' }, collapsed: true },
-                { label: 'GitOps & Deployments', autogenerate: { directory: 'platform/toolkits/cicd-delivery/gitops-deployments' }, collapsed: true },
-                { label: 'Source Control', autogenerate: { directory: 'platform/toolkits/cicd-delivery/source-control' }, collapsed: true },
-                { label: 'Container Registries', autogenerate: { directory: 'platform/toolkits/cicd-delivery/container-registries' }, collapsed: true },
-              ],
-            },
-            {
-              label: 'Observability',
-              collapsed: true,
-              items: [
-                { label: 'Observability Stack', autogenerate: { directory: 'platform/toolkits/observability-intelligence/observability' }, collapsed: true },
-                { label: 'AIOps Tools', autogenerate: { directory: 'platform/toolkits/observability-intelligence/aiops-tools' }, collapsed: true },
-              ],
-            },
-            {
-              label: 'Infrastructure',
-              collapsed: true,
-              items: [
-                { label: 'IaC Tools', autogenerate: { directory: 'platform/toolkits/infrastructure-networking/iac-tools' }, collapsed: true },
-                { label: 'K8s Distributions', autogenerate: { directory: 'platform/toolkits/infrastructure-networking/k8s-distributions' }, collapsed: true },
-                { label: 'Networking Tools', autogenerate: { directory: 'platform/toolkits/infrastructure-networking/networking' }, collapsed: true },
-                { label: 'Platforms', autogenerate: { directory: 'platform/toolkits/infrastructure-networking/platforms' }, collapsed: true },
-                { label: 'Storage', autogenerate: { directory: 'platform/toolkits/infrastructure-networking/storage' }, collapsed: true },
-              ],
-            },
-            {
-              label: 'Security & Quality',
-              collapsed: true,
-              items: [
-                { label: 'Security Tools', autogenerate: { directory: 'platform/toolkits/security-quality/security-tools' }, collapsed: true },
-                { label: 'Code Quality', autogenerate: { directory: 'platform/toolkits/security-quality/code-quality' }, collapsed: true },
-              ],
-            },
-            {
-              label: 'Developer Experience',
-              collapsed: true,
-              items: [
-                { label: 'DevEx Tools', autogenerate: { directory: 'platform/toolkits/developer-experience/devex-tools' }, collapsed: true },
-                { label: 'Scaling & Reliability', autogenerate: { directory: 'platform/toolkits/developer-experience/scaling-reliability' }, collapsed: true },
-              ],
-            },
-            {
-              label: 'Data & AI Platforms',
-              collapsed: true,
-              items: [
-                { label: 'ML Platforms', autogenerate: { directory: 'platform/toolkits/data-ai-platforms/ml-platforms' }, collapsed: true },
-                { label: 'Cloud-Native Databases', autogenerate: { directory: 'platform/toolkits/data-ai-platforms/cloud-native-databases' }, collapsed: true },
+                { label: 'Toolkit Directory', link: '/platform/toolkits/' },
+                {
+                  label: 'CI/CD & Delivery',
+                  collapsed: true,
+                  items: [
+                    { label: 'CI/CD Pipelines', autogenerate: { directory: 'platform/toolkits/cicd-delivery/ci-cd-pipelines' }, collapsed: true },
+                    { label: 'GitOps & Deployments', autogenerate: { directory: 'platform/toolkits/cicd-delivery/gitops-deployments' }, collapsed: true },
+                    { label: 'Source Control', autogenerate: { directory: 'platform/toolkits/cicd-delivery/source-control' }, collapsed: true },
+                    { label: 'Container Registries', autogenerate: { directory: 'platform/toolkits/cicd-delivery/container-registries' }, collapsed: true },
+                  ],
+                },
+                {
+                  label: 'Observability',
+                  collapsed: true,
+                  items: [
+                    { label: 'Observability Stack', autogenerate: { directory: 'platform/toolkits/observability-intelligence/observability' }, collapsed: true },
+                    { label: 'AIOps Tools', autogenerate: { directory: 'platform/toolkits/observability-intelligence/aiops-tools' }, collapsed: true },
+                  ],
+                },
+                {
+                  label: 'Infrastructure',
+                  collapsed: true,
+                  items: [
+                    { label: 'IaC Tools', autogenerate: { directory: 'platform/toolkits/infrastructure-networking/iac-tools' }, collapsed: true },
+                    { label: 'K8s Distributions', autogenerate: { directory: 'platform/toolkits/infrastructure-networking/k8s-distributions' }, collapsed: true },
+                    { label: 'Networking Tools', autogenerate: { directory: 'platform/toolkits/infrastructure-networking/networking' }, collapsed: true },
+                    { label: 'Platforms', autogenerate: { directory: 'platform/toolkits/infrastructure-networking/platforms' }, collapsed: true },
+                    { label: 'Storage', autogenerate: { directory: 'platform/toolkits/infrastructure-networking/storage' }, collapsed: true },
+                  ],
+                },
+                {
+                  label: 'Security & Quality',
+                  collapsed: true,
+                  items: [
+                    { label: 'Security Tools', autogenerate: { directory: 'platform/toolkits/security-quality/security-tools' }, collapsed: true },
+                    { label: 'Code Quality', autogenerate: { directory: 'platform/toolkits/security-quality/code-quality' }, collapsed: true },
+                  ],
+                },
+                {
+                  label: 'Developer Experience',
+                  collapsed: true,
+                  items: [
+                    { label: 'DevEx Tools', autogenerate: { directory: 'platform/toolkits/developer-experience/devex-tools' }, collapsed: true },
+                    { label: 'Scaling & Reliability', autogenerate: { directory: 'platform/toolkits/developer-experience/scaling-reliability' }, collapsed: true },
+                  ],
+                },
+                {
+                  label: 'Data & AI Platforms',
+                  collapsed: true,
+                  items: [
+                    { label: 'ML Platforms', autogenerate: { directory: 'platform/toolkits/data-ai-platforms/ml-platforms' }, collapsed: true },
+                    { label: 'Cloud-Native Databases', autogenerate: { directory: 'platform/toolkits/data-ai-platforms/cloud-native-databases' }, collapsed: true },
+                  ],
+                },
               ],
             },
           ],

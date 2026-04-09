@@ -4,7 +4,7 @@ sidebar:
   order: 0
   label: "K8s Distributions"
 ---
-> **Toolkit Track** | 6 Modules | ~5 hours total
+> **Toolkit Track** | 7 Modules | ~6.5 hours total
 
 ## Overview
 
@@ -30,6 +30,7 @@ Before starting this toolkit:
 | 14.4 | [Talos](module-14.4-talos/) | `[COMPLEX]` | 50-55 min |
 | 14.5 | [OpenShift](module-14.5-openshift/) | `[COMPLEX]` | 50-55 min |
 | 14.6 | [Managed Kubernetes](module-14.6-managed-kubernetes/) | `[COMPLEX]` | 55-60 min |
+| 14.7 | [RKE2](module-14.7-rke2/) | `[COMPLEX]` | 50-55 min |
 
 ## Learning Outcomes
 
@@ -41,7 +42,8 @@ After completing this toolkit, you will be able to:
 4. **Understand Talos** — Immutable OS built specifically for Kubernetes
 5. **Navigate OpenShift** — Enterprise Kubernetes with batteries included
 6. **Compare managed services** — EKS vs GKE vs AKS decision making
-7. **Choose the right distribution** — Match requirements to distribution strengths
+7. **Deploy RKE2** — Enterprise-hardened, FIPS-compliant Kubernetes for high-security environments
+8. **Choose the right distribution** — Match specific infrastructure and compliance requirements to distribution strengths
 
 ## Distribution Selection Guide
 
@@ -56,6 +58,14 @@ WHICH KUBERNETES DISTRIBUTION?
      • Built-in: Traefik, Local Storage, SQLite
      • CNCF Sandbox project
      • Most popular edge K8s
+
+"I need enterprise security, FIPS compliance, and CIS hardening"
+└──▶ RKE2
+     • Hardened by default, passes CIS Benchmark
+     • FIPS 140-2 validated cryptography (via go-fips)
+     • Single binary, optimized for air-gap registries
+     • Default Rancher provisioner
+     • Ideal for defense, gov, and regulated industries
 
 "I want zero dependencies, single binary, works anywhere"
 └──▶ k0s
@@ -82,18 +92,20 @@ WHICH KUBERNETES DISTRIBUTION?
 
 COMPARISON MATRIX:
 ─────────────────────────────────────────────────────────────────────────────
-                    k3s         k0s         MicroK8s    kubeadm
+                    k3s         k0s         MicroK8s    RKE2        kubeadm
 ─────────────────────────────────────────────────────────────────────────────
-Min RAM            512MB       512MB       512MB       2GB
-Binary size        ~60MB       ~180MB      Via snap    ~300MB
-Architecture       ARM/AMD64   ARM/AMD64   ARM/AMD64   ARM/AMD64
-HA built-in        ✓ (embed)   ✓           ✓           Manual
-Datastore          SQLite/etc  SQLite/etc  Dqlite      etcd
-Install method     curl|bash   curl|bash   snap        apt/yum
-CNCF project       Sandbox     No          No          Yes
-Air-gap support    ✓           ✓           ✓           ✓
-Windows nodes      ✓           ✓           Limited     ✓
-Cert rotation      Auto        Auto        Auto        Manual
+Min RAM            512MB       512MB       512MB       4GB         2GB
+Binary size        ~60MB       ~180MB      Via snap    ~200MB+     ~300MB
+Architecture       ARM/AMD64   ARM/AMD64   ARM/AMD64   AMD64/ARM64 ARM/AMD64
+HA built-in        ✓ (embed)   ✓           ✓           ✓ (embed)   Manual
+Datastore          SQLite/etc  SQLite/etc  Dqlite      etcd        etcd
+Install method     curl|bash   curl|bash   snap        curl|bash   apt/yum
+CNCF project       Sandbox     No          No          No          Yes
+Air-gap support    ✓           ✓           ✓           ✓ (native)  ✓
+Windows nodes      ✓           ✓           Limited     ✓           ✓
+Cert rotation      Auto        Auto        Auto        Auto        Manual
+FIPS 140-2         No          No          No          ✓           Manual
+CIS Hardened       Manual      Manual      Manual      ✓ (Default) Manual
 ```
 
 ## The Lightweight Kubernetes Landscape
@@ -128,15 +140,18 @@ Cert rotation      Auto        Auto        Auto        Manual
 │  │                                                                     │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
+│  HARDENED / ENTERPRISE                                                      │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  RKE2                 OpenShift             Talos                  │   │
+│  │  ┌─────────────┐     ┌─────────────┐      ┌─────────────┐         │   │
+│  │  │ Federal/CIS │     │ Enterprise  │      │ Immutable   │         │   │
+│  │  │ FIPS secure │     │ Batteries-in│      │ API-only    │         │   │
+│  │  └─────────────┘     └─────────────┘      └─────────────┘         │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
 │  MANAGED KUBERNETES                                                         │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
 │  │  EKS (AWS)     │  GKE (Google)   │  AKS (Azure)   │  DOKS (DO)     │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                             │
-│  SPECIALIZED                                                                │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  OpenShift      │  Rancher         │  Tanzu          │  K8s@Home   │   │
-│  │  (Enterprise)   │  (Multi-cluster) │  (VMware)       │  (Hobby)    │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -150,16 +165,16 @@ USE CASE DECISION TREE
 
 Start: What's your primary use case?
                     │
-    ┌───────────────┼───────────────┬───────────────┐
-    │               │               │               │
-    ▼               ▼               ▼               ▼
-Edge/IoT?      Development?    Production?    Air-gapped?
-    │               │               │               │
-    │ Yes           │ Yes           │ Yes           │ Yes
-    ▼               ▼               ▼               ▼
-k3s             Kind/k3d       Assess needs    k3s or k0s
-(smallest,      (fastest,      │               (both support
- most proven)    ephemeral)    │               offline install)
+    ┌───────────────┼───────────────┬───────────────┬───────────────┐
+    │               │               │               │               │
+    ▼               ▼               ▼               ▼               ▼
+Edge/IoT?      Development?    Production?    Air-gapped?    Federal/Compliance?
+    │               │               │               │               │
+    │ Yes           │ Yes           │ Yes           │ Yes           │ Yes
+    ▼               ▼               ▼               ▼               ▼
+k3s             Kind/k3d       Assess needs    k3s or k0s      RKE2
+(smallest,      (fastest,      │               (both support   (FIPS 140-2,
+ most proven)    ephemeral)    │               offline install) CIS hardened)
                                │
                     ┌──────────┴──────────┐
                     │                     │
@@ -176,186 +191,9 @@ RESOURCE CONSTRAINTS:
 <1GB RAM available        →  k3s (most optimized for low memory)
 1-2GB RAM available       →  k3s, k0s, or MicroK8s (all work)
 >2GB RAM available        →  Any distribution, consider features
+>4GB RAM available        →  RKE2 (ideal for security over efficiency)
 ARM devices               →  k3s (best ARM support), k0s, MicroK8s
 x86_64 only               →  All options available
-```
-
-## Architecture Comparison
-
-### k3s Architecture
-
-```
-k3s ARCHITECTURE
-─────────────────────────────────────────────────────────────────────────────
-
-                    ┌─────────────────────────────────────────┐
-                    │           k3s Server (Master)           │
-                    │                                         │
-                    │  ┌─────────────────────────────────────┐│
-                    │  │          k3s Binary (~60MB)         ││
-                    │  │                                     ││
-                    │  │  API Server │ Controller │ Scheduler││
-                    │  │  ─────────────────────────────────  ││
-                    │  │  kube-proxy │ kubelet │ containerd  ││
-                    │  │  ─────────────────────────────────  ││
-                    │  │  Traefik │ CoreDNS │ Local Path    ││
-                    │  │  ─────────────────────────────────  ││
-                    │  │       Flannel (default CNI)         ││
-                    │  └─────────────────────────────────────┘│
-                    │                    │                    │
-                    │  ┌─────────────────▼─────────────────┐  │
-                    │  │   SQLite (default) / etcd / MySQL │  │
-                    │  │          PostgreSQL                │  │
-                    │  └───────────────────────────────────┘  │
-                    └────────────────────┬────────────────────┘
-                                         │
-                    ┌────────────────────┼────────────────────┐
-                    │                    │                    │
-                    ▼                    ▼                    ▼
-           ┌───────────────┐    ┌───────────────┐    ┌───────────────┐
-           │   k3s Agent   │    │   k3s Agent   │    │   k3s Agent   │
-           │   (Worker)    │    │   (Worker)    │    │   (Worker)    │
-           │               │    │               │    │               │
-           │  kubelet      │    │  kubelet      │    │  kubelet      │
-           │  kube-proxy   │    │  kube-proxy   │    │  kube-proxy   │
-           │  containerd   │    │  containerd   │    │  containerd   │
-           └───────────────┘    └───────────────┘    └───────────────┘
-
-WHAT'S REMOVED FROM UPSTREAM K8S:
-─────────────────────────────────────────────────────────────────────────────
-✗ etcd (replaced with SQLite for single-node)
-✗ Cloud controller manager
-✗ Legacy/alpha features
-✗ In-tree storage drivers
-✗ In-tree cloud providers
-
-WHAT'S BUNDLED:
-─────────────────────────────────────────────────────────────────────────────
-✓ Traefik Ingress Controller
-✓ CoreDNS
-✓ Flannel CNI
-✓ Local Path Provisioner
-✓ Service Load Balancer
-✓ Network Policy Controller
-```
-
-### k0s Architecture
-
-```
-k0s ARCHITECTURE
-─────────────────────────────────────────────────────────────────────────────
-
-                    ┌─────────────────────────────────────────┐
-                    │          k0s Controller Node            │
-                    │                                         │
-                    │  ┌─────────────────────────────────────┐│
-                    │  │         k0s Binary (~180MB)         ││
-                    │  │                                     ││
-                    │  │  API Server │ Controller │ Scheduler││
-                    │  │  ─────────────────────────────────  ││
-                    │  │  kube-proxy │ konnectivity-server   ││
-                    │  │  ─────────────────────────────────  ││
-                    │  │           kube-router              ││
-                    │  │  (CNI, network policy, service LB) ││
-                    │  └─────────────────────────────────────┘│
-                    │                    │                    │
-                    │  ┌─────────────────▼─────────────────┐  │
-                    │  │     etcd (embedded) / SQLite      │  │
-                    │  │           MySQL / PostgreSQL       │  │
-                    │  └───────────────────────────────────┘  │
-                    └────────────────────┬────────────────────┘
-                                         │
-                    ┌────────────────────┼────────────────────┐
-                    │                    │                    │
-                    ▼                    ▼                    ▼
-           ┌───────────────┐    ┌───────────────┐    ┌───────────────┐
-           │   k0s Worker  │    │   k0s Worker  │    │   k0s Worker  │
-           │               │    │               │    │               │
-           │  kubelet      │    │  kubelet      │    │  kubelet      │
-           │  containerd   │    │  containerd   │    │  containerd   │
-           │  kube-proxy   │    │  kube-proxy   │    │  kube-proxy   │
-           └───────────────┘    └───────────────┘    └───────────────┘
-
-KEY DIFFERENTIATOR: Zero Host Dependencies
-─────────────────────────────────────────────────────────────────────────────
-• All components bundled in single binary
-• No kubelet or containerd required on host
-• k0s brings its own container runtime
-• Clean /var/lib/k0s directory for all state
-```
-
-## Common Architectures
-
-### Single Node (Development/Edge)
-
-```
-SINGLE NODE DEPLOYMENT
-─────────────────────────────────────────────────────────────────────────────
-
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         Single Node                                      │
-│                                                                          │
-│  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │                    k3s/k0s/MicroK8s                              │   │
-│  │                                                                   │   │
-│  │  ┌────────────┐  ┌────────────┐  ┌────────────┐                │   │
-│  │  │ Control    │  │  Worker    │  │  Storage   │                │   │
-│  │  │ Plane      │  │  (kubelet) │  │  (SQLite)  │                │   │
-│  │  └────────────┘  └────────────┘  └────────────┘                │   │
-│  │                                                                   │   │
-│  │  ┌──────────────────────────────────────────────────────────┐   │   │
-│  │  │                     Workloads                             │   │   │
-│  │  │  [App1] [App2] [App3] [DB] [Cache]                       │   │   │
-│  │  └──────────────────────────────────────────────────────────┘   │   │
-│  └─────────────────────────────────────────────────────────────────┘   │
-│                                                                          │
-└─────────────────────────────────────────────────────────────────────────┘
-
-Use cases:
-• Development workstations
-• Edge devices (retail, manufacturing)
-• CI/CD runners
-• Home lab / learning
-```
-
-### High Availability (Production)
-
-```
-HIGH AVAILABILITY DEPLOYMENT
-─────────────────────────────────────────────────────────────────────────────
-
-        ┌───────────────────────────────────────────────────────┐
-        │                   Load Balancer                       │
-        │              (HAProxy / cloud LB)                     │
-        └───────────────────────────┬───────────────────────────┘
-                                    │
-        ┌───────────────────────────┼───────────────────────────┐
-        │                           │                           │
-        ▼                           ▼                           ▼
-┌───────────────┐           ┌───────────────┐           ┌───────────────┐
-│  Server 1     │           │  Server 2     │           │  Server 3     │
-│  (control)    │◄─────────▶│  (control)    │◄─────────▶│  (control)    │
-│               │           │               │           │               │
-│  ┌─────────┐  │           │  ┌─────────┐  │           │  ┌─────────┐  │
-│  │  etcd   │◄─┼───────────┼─▶│  etcd   │◄─┼───────────┼─▶│  etcd   │  │
-│  └─────────┘  │           │  └─────────┘  │           │  └─────────┘  │
-└───────────────┘           └───────────────┘           └───────────────┘
-        │                           │                           │
-        └───────────────────────────┴───────────────────────────┘
-                                    │
-        ┌───────────────────────────┼───────────────────────────┐
-        │                           │                           │
-        ▼                           ▼                           ▼
-┌───────────────┐           ┌───────────────┐           ┌───────────────┐
-│   Agent 1     │           │   Agent 2     │           │   Agent N     │
-│   (worker)    │           │   (worker)    │           │   (worker)    │
-└───────────────┘           └───────────────┘           └───────────────┘
-
-HA OPTIONS BY DISTRIBUTION:
-─────────────────────────────────────────────────────────────────────────────
-k3s:      --cluster-init (embedded etcd) or external DB
-k0s:      k0sctl for automated HA setup
-MicroK8s: microk8s add-node (Dqlite clustering)
 ```
 
 ## Study Path
@@ -397,6 +235,12 @@ Module 14.6: Managed Kubernetes
      │  Provider comparison
      │  Cost optimization
      ▼
+Module 14.7: RKE2
+     │
+     │  Enterprise hardened
+     │  CIS Benchmark compliance
+     │  FIPS 140-2 validated
+     ▼
 [Toolkit Complete] → Next: CI/CD Pipelines Toolkit
 ```
 
@@ -406,21 +250,21 @@ Module 14.6: Managed Kubernetes
 RESOURCE COMPARISON
 ─────────────────────────────────────────────────────────────────────────────
 
-                    k3s         k0s         MicroK8s    kubeadm
+                    k3s         k0s         MicroK8s    RKE2        kubeadm
 ─────────────────────────────────────────────────────────────────────────────
 MINIMUM (Dev/Test):
 ─────────────────────────────────────────────────────────────────────────────
-RAM (server)       512MB       512MB       540MB       2GB
-RAM (agent)        75MB        100MB       100MB       100MB
-Disk               200MB       300MB       2GB         2GB
-CPU                1 core      1 core      1 core      2 cores
+RAM (server)       512MB       512MB       540MB       4GB         2GB
+RAM (agent)        75MB        100MB       100MB       2GB         100MB
+Disk               200MB       300MB       2GB         10GB        2GB
+CPU                1 core      1 core      1 core      2 cores     2 cores
 
 RECOMMENDED (Production):
 ─────────────────────────────────────────────────────────────────────────────
-RAM (server)       2GB         2GB         2GB         4GB
-RAM (agent)        512MB       512MB       512MB       1GB
-Disk               10GB        10GB        20GB        20GB
-CPU                2 cores     2 cores     2 cores     2 cores
+RAM (server)       2GB         2GB         2GB         8GB         4GB
+RAM (agent)        512MB       512MB       512MB       4GB         1GB
+Disk               10GB        10GB        20GB        40GB        20GB
+CPU                2 cores     2 cores     2 cores     4 cores     2 cores
 ```
 
 ## Hands-On Focus
@@ -433,6 +277,7 @@ CPU                2 cores     2 cores     2 cores     2 cores
 | Talos | Deploy cluster, verify security, API management |
 | OpenShift | S2I builds, Routes, BuildConfigs |
 | Managed K8s | Multi-provider comparison, cost analysis |
+| RKE2 | Deploy CIS hardened cluster, verify air-gap registry |
 
 ## Related Tracks
 
