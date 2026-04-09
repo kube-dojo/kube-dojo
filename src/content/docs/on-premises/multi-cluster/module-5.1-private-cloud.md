@@ -49,39 +49,45 @@ This module covers when to virtualize, when to stay on bare metal, and how to ch
 
 > **Pause and predict**: If virtualization adds 5-15% CPU overhead, why do most organizations with more than 10 servers still choose to virtualize their Kubernetes nodes instead of running on bare metal?
 
+```mermaid
+flowchart TD
+    subgraph BareMetal [Bare Metal]
+        direction TB
+        K1[Kubernetes<br/>kubeadm/k3s]
+        O1[Linux OS<br/>Ubuntu/RHEL/Talos]
+        H1[Physical Server Hardware]
+        K1 --- O1
+        O1 --- H1
+    end
+    
+    subgraph Virtualized [Virtualized]
+        direction TB
+        K2[Kubernetes<br/>TKG/Magnum/k3s]
+        O2[Guest OS<br/>Ubuntu/Flatcar]
+        V2[Virtual Machine]
+        Y2[Hypervisor<br/>ESXi/KVM/Harvester]
+        H2[Physical Server Hardware]
+        K2 --- O2
+        O2 --- V2
+        V2 --- Y2
+        Y2 --- H2
+    end
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│          BARE METAL vs VIRTUALIZED KUBERNETES                    │
-│                                                                   │
-│   Bare Metal:                                                    │
-│   ┌──────────────────────────────────┐                          │
-│   │  Kubernetes (kubeadm/k3s)        │                          │
-│   │  Linux OS (Ubuntu/RHEL/Talos)    │                          │
-│   │  Physical Server Hardware        │                          │
-│   └──────────────────────────────────┘                          │
-│   + Maximum performance (no hypervisor tax)                      │
-│   + No licensing costs                                           │
-│   - Hardware lifecycle is manual                                 │
-│   - No live migration (node drain required)                      │
-│                                                                   │
-│   Virtualized:                                                   │
-│   ┌──────────────────────────────────┐                          │
-│   │  Kubernetes (TKG/Magnum/k3s)     │                          │
-│   │  Guest OS (Ubuntu/Flatcar)       │                          │
-│   │  Virtual Machine                 │                          │
-│   │  Hypervisor (ESXi/KVM/Harvester) │                          │
-│   │  Physical Server Hardware        │                          │
-│   └──────────────────────────────────┘                          │
-│   + Live migration for maintenance                               │
-│   + VM snapshots for rollback                                    │
-│   + Multi-tenancy isolation (hardware-level)                     │
-│   - 5-15% CPU overhead from hypervisor                           │
-│   - Licensing cost (VMware) or operational cost (OpenStack)      │
-│                                                                   │
-│   Decision: Virtualize unless you need every last CPU cycle      │
-│   (HPC, ML training, real-time systems) or run < 5 servers.     │
-└─────────────────────────────────────────────────────────────────┘
-```
+
+**Bare Metal:**
+- `+` Maximum performance (no hypervisor tax)
+- `+` No licensing costs
+- `-` Hardware lifecycle is manual
+- `-` No live migration (node drain required)
+
+**Virtualized:**
+- `+` Live migration for maintenance
+- `+` VM snapshots for rollback
+- `+` Multi-tenancy isolation (hardware-level)
+- `-` 5-15% CPU overhead from hypervisor
+- `-` Licensing cost (VMware) or operational cost (OpenStack)
+
+**Decision:** Virtualize unless you need every last CPU cycle (HPC, ML training, real-time systems) or run < 5 servers.
 
 ---
 
@@ -91,39 +97,29 @@ VMware vSphere is the dominant enterprise hypervisor. Tanzu Kubernetes Grid (TKG
 
 ### Architecture
 
+```mermaid
+flowchart TD
+    VC["**vCenter Server** (Management plane)<br/>• Cluster management<br/>• DRS (auto VM placement)<br/>• HA (auto VM restart)<br/>• vMotion (live migration)"]
+    SC["**Supervisor Cluster** (TKG management)<br/>• Runs on vSphere control plane<br/>• Manages TKC lifecycle<br/>• Integrates with vSphere auth"]
+    
+    VC --- SC
+    
+    subgraph Workloads [Workload Clusters]
+        direction LR
+        TKC1["**TKC 1** (dev)<br/>3 VMs"]
+        TKC2["**TKC 2** (staging)<br/>5 VMs"]
+        TKC3["**TKC 3** (prod)<br/>9 VMs"]
+    end
+    
+    SC --- TKC1
+    SC --- TKC2
+    SC --- TKC3
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                vSPHERE + TANZU ARCHITECTURE                   │
-│                                                                │
-│   ┌─────────────────────────────────────┐                    │
-│   │        vCenter Server               │  Management        │
-│   │   - Cluster management              │  plane             │
-│   │   - DRS (auto VM placement)         │                    │
-│   │   - HA (auto VM restart)            │                    │
-│   │   - vMotion (live migration)        │                    │
-│   └─────────────────────────────────────┘                    │
-│                     │                                         │
-│   ┌─────────────────┴───────────────────┐                    │
-│   │        Supervisor Cluster           │  TKG management    │
-│   │   - Runs on vSphere control plane   │                    │
-│   │   - Manages TKC lifecycle           │                    │
-│   │   - Integrates with vSphere auth    │                    │
-│   └─────────────────────────────────────┘                    │
-│         │               │              │                      │
-│   ┌─────┴────┐   ┌─────┴────┐   ┌─────┴────┐               │
-│   │  TKC 1   │   │  TKC 2   │   │  TKC 3   │  Workload     │
-│   │  (dev)   │   │  (staging)│   │  (prod)  │  clusters     │
-│   │  3 VMs   │   │  5 VMs   │   │  9 VMs   │               │
-│   └──────────┘   └──────────┘   └──────────┘               │
-│                                                                │
-│   Each TKC (TanzuKubernetesCluster) is a set of VMs          │
-│   running a full Kubernetes cluster.                           │
-│   vSphere handles: VM placement, storage, networking, HA.     │
-│                                                                │
-│   Storage: vSphere CSI driver provisions VMDKs as PVs        │
-│   Networking: NSX-T or Antrea for pod networking              │
-└──────────────────────────────────────────────────────────────┘
-```
+
+- Each TKC (TanzuKubernetesCluster) is a set of VMs running a full Kubernetes cluster.
+- vSphere handles: VM placement, storage, networking, HA.
+- Storage: vSphere CSI driver provisions VMDKs as PVs.
+- Networking: NSX-T or Antrea for pod networking.
 
 ### vSphere CSI Driver
 
@@ -179,36 +175,33 @@ OpenStack is the open-source alternative to vSphere. It provides compute (Nova),
 
 ### Architecture
 
+```mermaid
+flowchart TD
+    subgraph OpenStack [OpenStack Services]
+        direction LR
+        KS[Keystone<br/>identity]
+        GL[Glance<br/>images]
+        NV[Nova<br/>compute]
+        NT[Neutron<br/>network]
+        CD[Cinder<br/>block storage]
+        HT[Heat<br/>orchestration]
+        MG[Magnum<br/>K8s clusters]
+    end
+    
+    subgraph MagnumCluster [Magnum Cluster]
+        direction LR
+        CP[Control Plane]
+        W1[Worker 1]
+        W2[Worker 2]
+    end
+    
+    MG -->|Orchestrates via Heat| MagnumCluster
 ```
-┌──────────────────────────────────────────────────────────────┐
-│             OPENSTACK + MAGNUM ARCHITECTURE                   │
-│                                                                │
-│   ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐      │
-│   │Keystone  │  │ Glance  │  │  Nova   │  │ Neutron │      │
-│   │(identity)│  │ (images)│  │(compute)│  │ (network│      │
-│   └─────────┘  └─────────┘  └─────────┘  └─────────┘      │
-│   ┌─────────┐  ┌─────────┐  ┌─────────┐                    │
-│   │ Cinder  │  │  Heat   │  │ Magnum  │                    │
-│   │(block   │  │ (orch-  │  │ (K8s    │                    │
-│   │ storage)│  │ estrat.)│  │ clusters│                    │
-│   └─────────┘  └─────────┘  └─────────┘                    │
-│                                  │                           │
-│                    ┌─────────────┴────────────┐             │
-│                    │      Magnum Cluster       │             │
-│                    │                           │             │
-│                    │  ┌────┐ ┌────┐ ┌────┐   │             │
-│                    │  │ CP │ │ W1 │ │ W2 │   │  Nova VMs   │
-│                    │  └────┘ └────┘ └────┘   │             │
-│                    │                           │             │
-│                    │  Cinder volumes as PVs   │             │
-│                    │  Neutron for pod network  │             │
-│                    └───────────────────────────┘             │
-│                                                                │
-│   Magnum uses Heat templates to orchestrate VM creation.      │
-│   Each K8s cluster = Heat stack = set of Nova instances.      │
-│   Cinder CSI provides persistent volumes.                     │
-└──────────────────────────────────────────────────────────────┘
-```
+
+- Magnum uses Heat templates to orchestrate VM creation.
+- Each K8s cluster = Heat stack = set of Nova instances.
+- Cinder CSI provides persistent volumes.
+- Neutron for pod network.
 
 ### Magnum Cluster Creation
 
@@ -271,37 +264,33 @@ Harvester is a purpose-built HCI (Hyper-Converged Infrastructure) platform for r
 
 ### Architecture
 
+```mermaid
+flowchart TD
+    subgraph Harvester [Harvester Cluster (Kubernetes + KubeVirt)]
+        direction LR
+        LH[Longhorn<br/>storage]
+        KV[KubeVirt<br/>VM management]
+        UI[Harvester UI / API]
+        RM[Rancher MCM<br/>optional]
+    end
+    
+    subgraph Workloads [Guest K8s Clusters (VMs)]
+        direction LR
+        GC1[Cluster 1]
+        GC2[Cluster 2]
+        GC3[Cluster 3]
+    end
+    
+    Harvester --> GC1
+    Harvester --> GC2
+    Harvester --> GC3
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                 HARVESTER ARCHITECTURE                        │
-│                                                                │
-│   ┌──────────────────────────────────────┐                   │
-│   │          Harvester Cluster           │  Runs on          │
-│   │       (Kubernetes + KubeVirt)        │  bare metal       │
-│   │                                      │                   │
-│   │  ┌──────────┐  ┌──────────────────┐ │                   │
-│   │  │ Longhorn  │  │ KubeVirt         │ │                   │
-│   │  │ (storage) │  │ (VM management)  │ │                   │
-│   │  └──────────┘  └──────────────────┘ │                   │
-│   │  ┌──────────┐  ┌──────────────────┐ │                   │
-│   │  │ Harvester │  │ Rancher MCM      │ │                   │
-│   │  │ UI / API  │  │ (optional)       │ │                   │
-│   │  └──────────┘  └──────────────────┘ │                   │
-│   └──────────────────────────────────────┘                   │
-│              │              │              │                   │
-│   ┌──────────┴──┐   ┌──────┴───┐   ┌─────┴────┐            │
-│   │  Guest K8s  │   │ Guest K8s│   │ Guest K8s│  Workload   │
-│   │  Cluster 1  │   │ Cluster 2│   │ Cluster 3│  clusters   │
-│   │  (VMs)      │   │ (VMs)    │   │ (VMs)    │  inside VMs │
-│   └─────────────┘   └──────────┘   └──────────┘            │
-│                                                                │
-│   Key difference from vSphere/OpenStack:                      │
-│   - Harvester IS a Kubernetes cluster running VMs via KubeVirt│
-│   - No separate hypervisor layer (KVM is the hypervisor)      │
-│   - Longhorn provides replicated storage automatically        │
-│   - Free and open-source (Apache 2.0 license)                │
-└──────────────────────────────────────────────────────────────┘
-```
+
+- Key difference from vSphere/OpenStack:
+  - Harvester IS a Kubernetes cluster running VMs via KubeVirt.
+  - No separate hypervisor layer (KVM is the hypervisor).
+  - Longhorn provides replicated storage automatically.
+  - Free and open-source (Apache 2.0 license).
 
 ### Harvester VM Creation
 
@@ -375,6 +364,8 @@ spec:
 | Best for | Enterprise, compliance | Large-scale, customization | SMB, edge, new deployments |
 
 ### Total Cost of Ownership (3-Year, 20 Hosts)
+
+> **Stop and think**: Before reviewing the TCO breakdown below, which platform do you expect to have the highest 3-year cost: vSphere (due to licensing) or OpenStack (due to staffing)?
 
 ```
 ┌────────────────────────────────────────────────────────────┐
