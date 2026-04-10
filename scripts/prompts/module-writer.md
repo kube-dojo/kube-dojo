@@ -44,8 +44,13 @@ TASK: Write a complete KubeDojo educational module.
    - Tables for comparisons, decision matrices, or reference data
    - "War Story" or practical example within the section
    - **At least 2 inline active learning prompts** across all sections: "Pause and predict: what do you think happens if...?", "Before running this, what output do you expect?", or "Which approach would you choose here and why?"
-5. **Patterns & Anti-Patterns** — Document proven approaches (patterns) and what fails in production (anti-patterns). Each pattern should include: when to use it, why it works, and scaling considerations. Each anti-pattern should include: what goes wrong, why teams fall into it, and the better alternative. Use a table or structured format. Minimum 3 patterns + 3 anti-patterns.
-6. **Decision Framework** — A flowchart, decision matrix, or structured guide that helps the reader choose between approaches covered in the module. "When should I use X vs Y?" — this is what separates a reference doc from educational content. Include tradeoffs for each option.
+5. **Patterns & Anti-Patterns** — Required for `[MEDIUM]`, `[COMPLEX]`, `[ADVANCED]`, `[EXPERT]` modules. For `[QUICK]` introductory modules, this can be a single "When This Doesn't Apply" subsection instead of full patterns/anti-patterns.
+   - **Patterns**: proven approaches with when to use, why it works, scaling considerations. Minimum 3 for MEDIUM+, 1 for QUICK.
+   - **Anti-patterns**: what goes wrong, why teams fall into it, better alternative. Minimum 3 for MEDIUM+, 1 for QUICK.
+   - Use tables or structured format.
+6. **Decision Framework** — Required for `[MEDIUM]`+ modules. For `[QUICK]` modules, replace with a "When You'd Use This vs Alternatives" comparison.
+   - MEDIUM+: flowchart, decision matrix, or structured guide for choosing between approaches. Include tradeoffs.
+   - QUICK: simple "Use X when... Use Y when..." paragraph or table.
 7. **Did You Know?** — Exactly 4 interesting facts. Include real numbers, dates, or surprising details. Each fact should teach something the reader won't forget.
 8. **Common Mistakes** — Table with 6-8 rows. Columns: Mistake | Why It Happens | How to Fix It. Be specific — not generic advice.
 9. **Quiz** — 6-8 questions using `<details><summary>Question</summary>Answer</details>` format. **At least 4 must be scenario-based** ("Your team just deployed X and Y happens — what do you check?"). Do NOT write recall questions ("What is the command for X?"). Answers should be thorough (3-5 sentences explaining WHY).

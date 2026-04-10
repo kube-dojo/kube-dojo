@@ -76,15 +76,36 @@
 | **4** | Conversational, authoritative tone. Strong opening hook. Good analogies. "Did You Know?" facts are genuinely interesting. Reader feels mentored by a senior engineer. |
 | **5** | Memorable. Reader would recommend this module to a colleague. Stories stick. Analogies are vivid and accurate. Humor used sparingly but effectively. Reader feels they understand the topic at a level they couldn't get from official docs. |
 
-### Dimension 8: Practitioner Depth
+### Dimension 8: Practitioner Depth (complexity-scaled)
 
+This dimension scales with the module's complexity tag. A `[QUICK]` introductory module is not expected to teach decision frameworks; a `[COMPLEX]` advanced module must.
+
+**For `[QUICK]` modules** (introductory, foundational concepts):
+| Score | Description |
+|-------|-------------|
+| **1** | Definition without context. Reader doesn't know why this matters. |
+| **2** | Defines the concept but no tradeoffs or alternatives mentioned. |
+| **3** | Explains why the concept exists and when it applies. Mentions one alternative or limitation. |
+| **4** | Theory before mechanics — explains the WHY before the HOW. Mentions tradeoffs honestly. References when this approach is wrong. Reader understands the *purpose*, not just the *syntax*. |
+| **5** | Concept is anchored to a real problem. Tradeoffs are discussed. Reader leaves with intuition, not just facts. Even a beginner module teaches *thinking*, not just naming. |
+
+**For `[MEDIUM]` modules** (applied techniques, intermediate practitioners):
 | Score | Description |
 |-------|-------------|
 | **1** | Command reference only. "Run X, then Y." No explanation of why, when, or what could go wrong. |
 | **2** | Some context around commands but no decision frameworks. Reader knows HOW but not WHEN or WHY NOT. |
 | **3** | Includes tradeoff mentions and comparison tables. Some "when to use X vs Y" guidance. Patterns mentioned but not explained in depth. |
-| **4** | Dedicated sections for: patterns (proven approaches with rationale), anti-patterns (what fails and why), decision frameworks (flowcharts or matrices for choosing approaches), and architectural reasoning (how components interact, what breaks at scale). Theory explains the WHY before showing the HOW. Prose explains concepts between code blocks — not just "here's the YAML." |
-| **5** | Practitioner-grade throughout: every technique comes with tradeoffs discussed honestly, failure modes documented, scaling considerations addressed. Reader could defend their architecture choices in a design review. Content balances theory and practice — neither a textbook nor a cookbook. Anti-patterns include real consequences. Decision frameworks are actionable, not theoretical. An experienced engineer would learn something new. |
+| **4** | Dedicated sections for: patterns (proven approaches with rationale), anti-patterns (what fails and why), and a comparison table or decision guide. Theory explains the WHY before showing the HOW. Prose explains concepts between code blocks. |
+| **5** | Patterns and anti-patterns are concrete with consequences. Decision guidance is actionable. Theory and practice balanced — neither textbook nor cookbook. Reader can defend their choices in a design review. |
+
+**For `[COMPLEX]` / `[ADVANCED]` / `[EXPERT]` modules** (production engineering, senior practitioners):
+| Score | Description |
+|-------|-------------|
+| **1** | Surface-level coverage of an advanced topic. Misses the actual hard parts. |
+| **2** | Covers basics but no scaling, failure modes, or architectural reasoning. |
+| **3** | Tradeoffs mentioned. Some patterns discussed. Reader gets the gist but couldn't implement at scale. |
+| **4** | Dedicated patterns, anti-patterns, decision framework, and architectural reasoning sections. Failure modes documented. Scaling considerations addressed. Reader could implement this in production. |
+| **5** | Practitioner-grade throughout: every technique comes with tradeoffs discussed honestly, edge cases covered, failure modes documented, scaling considerations addressed. Reader could defend their architecture in a senior design review. An experienced engineer would learn something new. |
 
 ---
 
@@ -154,16 +175,32 @@ Copy this template when auditing a module:
 
 ### Module Scores (1-5)
 
+**Pass threshold**: sum >= 33/40 AND every dimension >= 4
+
 | Dimension | Score | Notes |
 |-----------|-------|-------|
-| Learning Outcomes | /5 | |
-| Scaffolding | /5 | |
-| Active Learning | /5 | |
-| Real-World Connection | /5 | |
-| Assessment Alignment | /5 | |
-| Cognitive Load | /5 | |
-| Engagement | /5 | |
-| **Average** | **/5** | |
+| D1 Learning Outcomes | /5 | |
+| D2 Scaffolding | /5 | |
+| D3 Active Learning | /5 | |
+| D4 Real-World Connection | /5 | |
+| D5 Assessment Alignment | /5 | |
+| D6 Cognitive Load | /5 | |
+| D7 Engagement | /5 | |
+| D8 Practitioner Depth | /5 | (complexity-scaled) |
+| **Sum** | **/40** | |
+
+### Lab Scores (1-5)
+
+**Pass threshold**: sum >= 21/25 AND every dimension >= 4
+
+| Dimension | Score | Notes |
+|-----------|-------|-------|
+| L1 Scenario-Based Design | /5 | |
+| L2 Progressive Difficulty | /5 | |
+| L3 Understanding Over Memorization | /5 | |
+| L4 Hint & Feedback Quality | /5 | |
+| L5 Transfer Potential | /5 | |
+| **Sum** | **/25** | |
 
 ### Key Strengths
 - 

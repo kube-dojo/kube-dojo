@@ -212,7 +212,11 @@ D4 Real-World: 4 = war stories with specific impact, common mistakes table. 5 = 
 D5 Assessment: 4 = tests analysis not recall, explains WHY. 5 = aligned with every outcome, progressive difficulty.
 D6 Cognitive Load: 4 = good chunking, diagrams with text, worked examples. 5 = split-attention eliminated, dual coding.
 D7 Engagement: 4 = conversational, strong hook, good analogies. 5 = memorable, reader would recommend.
-D8 Practitioner Depth: 4 = has patterns/anti-patterns sections, decision frameworks, theory explains WHY before showing HOW, tradeoffs discussed, architectural reasoning present. 5 = practitioner-grade throughout — every technique has tradeoffs, failure modes documented, scaling considerations addressed. An experienced engineer would learn something new.
+D8 Practitioner Depth (COMPLEXITY-SCALED — check the module's complexity tag):
+   - For [QUICK] modules (introductory): 4 = explains WHY before HOW, mentions tradeoffs, references when this approach is wrong. 5 = anchors concept to a real problem, teaches thinking not naming.
+   - For [MEDIUM] modules: 4 = has patterns + anti-patterns + comparison/decision guide, theory before code, prose between code blocks. 5 = patterns concrete with consequences, decision guidance actionable.
+   - For [COMPLEX]/[ADVANCED]/[EXPERT] modules: 4 = dedicated patterns, anti-patterns, decision framework, architectural reasoning, failure modes, scaling considerations. 5 = practitioner-grade throughout, edge cases covered, an experienced engineer would learn something new.
+   IMPORTANT: Score D8 based on what's appropriate for the module's complexity level — do NOT punish a [QUICK] module for lacking advanced architecture sections.
 
 ## Instructions
 1. Read the module carefully.
