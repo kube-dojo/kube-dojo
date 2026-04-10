@@ -119,7 +119,7 @@ Here it is. One command to start a web server:
 docker run -d -p 8080:80 --name my-website nginx
 ```
 
-> **Stop and think**: You're mapping port 8080 to port 80. If another program on your computer is already using port 8080 (like another web server or a local development tool), what do you expect this Docker command to do? Will it override the existing program, or will it fail?
+> **Stop and think**: Consider the concept of network ports from Module 0.6. If a port acts as a dedicated receiving dock for network traffic on your machine, what happens at the operating system level when Docker attempts to bind to port 8080 while another background application is already actively listening on that exact same port?
 
 Let's break down every piece of that command (because understanding matters more than memorizing):
 
@@ -149,7 +149,7 @@ That's a web server running on your machine. You just did that. With one command
 
 ### Step 4: Create your own web page
 
-> **Pause and predict**: What do you think happens if you replace the default nginx page with your own HTML file inside the container? Will it show immediately, or do you need to restart something? Try to guess — then follow along and see if you were right.
+> **Pause and predict**: Think about how a web server interacts with the filesystem. Does nginx load all HTML files into memory when it boots up, or does it fetch the file from the hard drive every single time a new HTTP request arrives? Based on your answer, how will the system react when you overwrite the `index.html` file while the server is still running?
 
 Now let's replace that default page with something you made. Open your terminal and create an HTML file:
 
@@ -289,7 +289,7 @@ sudo systemctl status nginx
 
 You should see `active (running)` in green.
 
-> **Pause and predict**: You just installed nginx, and it started automatically. Before you even open a web browser, what command could you run right here in the terminal to verify that the server is actually responding to requests on your VM?
+> **Pause and predict**: You've verified the nginx process is running, but external network firewalls might be blocking outside traffic. How could you use a terminal tool from inside the VM itself to prove that nginx is actively serving the HTML page, completely isolating your test from any external networking issues?
 
 ### Step 4: Test the default page
 
@@ -303,7 +303,7 @@ You should see the nginx default page. That page is being served from a machine 
 
 ### Step 5: Create your custom page
 
-> **Stop and think**: The default nginx page is located at `/var/www/html/index.html`. If you were to create a second file named `about.html` in that same directory, what exact URL would you type into your browser to view it?
+> **Stop and think**: The web server translates URLs into filesystem paths. If nginx maps the root URL (`/`) directly to the `/var/www/html/` directory, what exact path must a user request in their browser to access an image file you uploaded to `/var/www/html/assets/logo.png`?
 
 Still connected via SSH, edit the default web page:
 
@@ -428,19 +428,19 @@ exit
    When you type the URL, your browser checks if it needs to resolve a domain name via DNS (though here we use a raw IP, skipping DNS resolution). Next, your computer initiates a TCP connection to that IP address specifically on port 80, the default port for HTTP traffic. Once the TCP handshake completes, the browser sends an HTTP GET request asking for the root document (`/`). The nginx web server listening on port 80 receives this request, looks at its configuration to find the corresponding directory on the filesystem (like `/var/www/html/`), and reads the `index.html` file found there. Finally, nginx sends the contents of that file back through the TCP connection as an HTTP response, which your browser renders into the visible web page.
    </details>
 
-5. **Your browser shows "connection refused" when visiting `localhost:8080`. List three possible causes and how you'd diagnose each.**
+5. **You are helping a junior developer who just ran the Docker command, but their browser immediately shows a "connection refused" error on `localhost:8080`. Walk them through the three most likely failure points in the network path, from the container state to the host's port bindings, and explain the specific diagnostic command you would use to isolate each one.**
    <details>
    <summary>Answer</summary>
    "Connection refused" typically means nothing is actively listening on that port, which points to a few common culprits. First, the Docker container might have crashed or stopped; you can diagnose this by running `docker ps` to see if your `my-website` container is still actively running. Second, you might have mapped the wrong ports in your run command, such as `-p 8080:8080` instead of `-p 8080:80`; verify this by checking the port mappings in the `docker ps` output. Third, another application might already be using port 8080 on your host machine, preventing Docker from binding to it; you can check this using a command like `lsof -i :8080` or `netstat` to see what process is holding the port.
    </details>
 
-6. **You can reach your cloud VM via SSH but not via browser on port 80. What's the most likely cause and what command would you run to verify?**
+6. **You provision a new cloud VM, successfully install nginx, and confirm via SSH that the service is running. However, when your coworker tries to visit the public IP in their browser, the connection times out. What is the most likely infrastructure issue, and what specific command would you run locally on the server to definitively prove the backend is working?**
    <details>
    <summary>Answer</summary>
    The most likely cause is a firewall blocking incoming web traffic, as cloud providers usually block port 80 by default while allowing port 22 for SSH. Because SSH works, we know the server is online and reachable, so the issue must be specific to HTTP traffic. To verify if the server itself is working correctly internally, you can connect via SSH and run `curl http://localhost`. If `curl` returns the HTML content locally, it confirms nginx is running perfectly and the problem is definitely the cloud provider's external firewall or security group settings blocking external access to port 80.
    </details>
 
-7. **You deployed your server and want to test if it's returning the correct HTML before opening a browser. How would you use `curl` to verify this, and what exactly are you looking for in the output?**
+7. **You've just finished configuring your cloud server via SSH and want to prove the web server is functioning correctly before dealing with potential DNS or firewall issues. How do you use a terminal-based HTTP client to verify the output locally, and why is this step critical for isolating backend problems from network problems?**
    <details>
    <summary>Answer</summary>
    You can use the command `curl http://localhost:8080` (or `curl http://YOUR_PUBLIC_IP`) directly from your terminal to simulate a basic browser request. This tool sends an HTTP GET request and prints the raw response body directly to your screen, bypassing any graphical rendering. You are looking to see if the terminal outputs the raw HTML code of your custom page, such as your `<h1>Hello, Internet!</h1>` tags. If it returns the expected HTML, you know the server is successfully processing requests and serving the correct file, proving the backend works even before a browser is involved.
@@ -532,25 +532,16 @@ If you want to become a cloud engineer, DevOps engineer, or platform engineer, t
 
 **Most senior engineers know both.** They understand Linux internals *and* cloud-native tooling. Start with whichever excites you more. The other path will still be here when you're ready.
 
-```
-                    YOU ARE HERE
-                         |
-                    Module 0.10
-                    (Capstone)
-                         |
-              +----------+----------+
-              |                     |
-         Path A                Path B
-     Linux Deep Dive        Cloud Native 101
-              |                     |
-     Kernel, processes       Containers, Docker
-     Networking internals    Kubernetes basics
-     Security, hardening     CKA certification
-              |                     |
-              +----------+----------+
-                         |
-                  Platform Engineering
-                  (SRE, GitOps, DevSecOps)
+```mermaid
+graph TD
+    Current(["YOU ARE HERE<br/>Module 0.10 (Capstone)"]) --> PathA["Path A<br/>Linux Deep Dive"]
+    Current --> PathB["Path B<br/>Cloud Native 101"]
+
+    PathA --> L1["Kernel, processes<br/>Networking internals<br/>Security, hardening"]
+    PathB --> C1["Containers, Docker<br/>Kubernetes basics<br/>CKA certification"]
+
+    L1 --> PE["Platform Engineering<br/>(SRE, GitOps, DevSecOps)"]
+    C1 --> PE
 ```
 
 Both paths converge at Platform Engineering. Both are valuable. Neither is "better." Pick the one that makes you want to open a terminal right now.
