@@ -280,8 +280,8 @@ def step_audit(module_path: Path, model: str = MODELS["audit"]) -> dict | None:
         return None
 
     scores = result.get("scores") or []
-    if not isinstance(scores, list) or len(scores) != 7:
-        print(f"  ❌ Expected 7 scores, got {scores!r}")
+    if not isinstance(scores, list) or len(scores) != 8:
+        print(f"  ❌ Expected 8 scores, got {scores!r}")
         return None
 
     try:
@@ -887,7 +887,7 @@ def run_module(module_path: Path, state: dict, max_retries: int = 2,
 
             if review.get("verdict") == "APPROVE":
                 # Save review scores (these reflect the IMPROVED content)
-                if review.get("scores") and len(review["scores"]) == 7:
+                if review.get("scores") and len(review["scores"]) == 8:
                     ms["scores"] = review["scores"]
                     ms["sum"] = sum(review["scores"])
                 ms["phase"] = "check"
