@@ -169,6 +169,26 @@ export default defineConfig({
           ],
         },
         {
+          label: 'AI/ML Engineering',
+          collapsed: true,
+          items: [
+            { label: 'AI/ML Hub', link: '/ai-ml-engineering/' },
+            { label: 'Phase 0: Prerequisites', autogenerate: { directory: 'ai-ml-engineering/prerequisites' }, collapsed: true },
+            { label: 'Phase 1: AI-Native Development', autogenerate: { directory: 'ai-ml-engineering/ai-native-development' }, collapsed: true },
+            { label: 'Phase 2: Generative AI', autogenerate: { directory: 'ai-ml-engineering/generative-ai' }, collapsed: true },
+            { label: 'Phase 3: Vector Search & RAG', autogenerate: { directory: 'ai-ml-engineering/vector-rag' }, collapsed: true },
+            { label: 'Phase 4: Frameworks & Agents', autogenerate: { directory: 'ai-ml-engineering/frameworks-agents' }, collapsed: true },
+            { label: 'Phase 5: Multimodal AI', autogenerate: { directory: 'ai-ml-engineering/multimodal-ai' }, collapsed: true },
+            { label: 'Phase 6: Deep Learning', autogenerate: { directory: 'ai-ml-engineering/deep-learning' }, collapsed: true },
+            { label: 'Phase 7: Advanced GenAI', autogenerate: { directory: 'ai-ml-engineering/advanced-genai' }, collapsed: true },
+            { label: 'Phase 8: Classical ML', autogenerate: { directory: 'ai-ml-engineering/classical-ml' }, collapsed: true },
+            { label: 'Phase 9: AI Safety', autogenerate: { directory: 'ai-ml-engineering/ai-safety' }, collapsed: true },
+            { label: 'Phase 10: MLOps', autogenerate: { directory: 'ai-ml-engineering/mlops' }, collapsed: true },
+            { label: 'Phase 11: AI Infrastructure', autogenerate: { directory: 'ai-ml-engineering/ai-infrastructure' }, collapsed: true },
+            { label: 'Phase 12: History', autogenerate: { directory: 'ai-ml-engineering/history' }, collapsed: true },
+          ],
+        },
+        {
           label: 'On-Premises',
           collapsed: true,
           items: [
