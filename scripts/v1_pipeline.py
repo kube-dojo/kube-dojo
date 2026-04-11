@@ -594,26 +594,29 @@ RULES:
    leave D4 alone if the lab FLOW is otherwise correct). D2 is the single source of truth for
    factual correctness.
 
-CRITICAL — ACTIONABLE FEEDBACK:
-For every dimension scoring below 5, the feedback field MUST contain a CONCRETE
-FIX, not just a complaint. Format each item as:
-  "[D<n>] <what is wrong> → FIX: <exact replacement text / command / YAML / subsection to add>"
-Do not say "the VPA section is inaccurate". Say:
-  "[D2] VPA section claims recs come from Prometheus → FIX: replace with
-  'VPA recommendations are produced by the recommender from Metrics Server and
-  stored in .status.recommendation of the VerticalPodAutoscaler object. Query
-  via: kubectl get vpa <name> -o jsonpath='{{.status.recommendation}}'"
-The writer LLM will use your feedback verbatim to patch the module, so vague
-criticism is useless. Cite commands, YAML keys, version numbers, and doc URLs
-where relevant.
+OUTPUT CONTRACT:
+On REJECT, your output has TWO distinct fields, each with a single purpose:
 
-STRUCTURED EDITS (required on REJECT):
-In addition to the prose feedback, on REJECT you MUST output an `edits` array
-of atomic patch operations. The pipeline applies these deterministically via
-Python string ops — NO LLM writer is involved in the fix path when edits are
-well-formed. This means you must be precise.
+1. `edits` array — the ONLY place where literal replacement text lives. Every
+   concrete fix (a wrong config key, a deprecated API, a missing subsection)
+   is expressed as one atomic `edits` entry with `find` + `new` payloads that
+   the pipeline applies via Python string ops with 100% fidelity, NO LLM
+   involved. You must list every concrete fix here.
 
-Each edit is one of four shapes:
+2. `feedback` string — prose-only. Used for (a) qualitative concerns you
+   cannot express as a structured patch ("the tone is dense", "the narrative
+   loses momentum in Section 3"), and (b) a short human-readable summary of
+   why the module was rejected. Do NOT put literal replacement YAML/commands
+   in `feedback` — those belong in `edits`. Do NOT repeat `edits` content
+   here; the pipeline reads both fields separately.
+
+The two fields do not overlap. If a fix has replacement text, it is an edit.
+If a concern is purely qualitative, it is feedback. Vague criticism in
+`feedback` without a corresponding edit is useless — the pipeline cannot act
+on it mechanically and the LLM fallback has less context than you do.
+
+STRUCTURED EDITS:
+Each entry in the `edits` array is one of four shapes:
 
   {{"type": "replace", "find": "<literal substring in module>", "new": "<replacement text>", "dim": "D2", "why": "<short reason>"}}
   {{"type": "insert_after", "find": "<literal anchor substring>", "new": "<content to insert AFTER the anchor>", "dim": "D2", "why": "..."}}
@@ -623,18 +626,25 @@ Each edit is one of four shapes:
 HARD RULES for edits:
 1. "find" MUST be a literal substring that appears EXACTLY ONCE in the module.
    If the phrase appears multiple times, include surrounding context (e.g. the
-   heading above the paragraph) to make it unique. Ambiguous anchors FAIL.
+   heading above the paragraph) to make it unique. Ambiguous anchors FAIL and
+   the edit is dropped, so disambiguate up front.
 2. "new" is the exact replacement/insertion text — no placeholders, no "...",
    no "TODO", no "rest unchanged". Full verbatim content.
 3. One edit = one atomic change. Do NOT bundle multiple unrelated edits into
    one patch. Multiple small edits > one giant replacement.
 4. Quote Markdown/YAML/code literally. Preserve leading whitespace and newlines
    exactly as they appear in the module. Escape embedded quotes for JSON.
-5. List EVERY issue you want fixed. There is no cap — the pipeline applies
-   all structured edits in one pass, so being exhaustive helps convergence.
-6. If an issue is qualitative and you cannot express it as a structured edit
-   (e.g. "the tone feels dense"), describe it in the prose `feedback` field
-   instead. The pipeline will route qualitative feedback to an LLM fallback.
+5. List EVERY concrete issue as a separate edit. There is no cap — the pipeline
+   applies all structured edits in one pass, so being exhaustive helps
+   convergence. A review that returns 15 clean edits converges faster than one
+   that returns 5 plus a wall of prose.
+6. Example edit for a factual fix:
+
+     {{"type": "replace",
+      "find": "The customPricing.costModel takes cpuHourlyCost and ramHourlyCost keys.",
+      "new": "The customPricing.costModel takes CPU, RAM, GPU, and storage keys (per the opencost-helm-chart values schema).",
+      "dim": "D2",
+      "why": "OpenCost helm chart uses CPU/RAM/GPU/storage keys, not *HourlyCost variants"}}
 
 Output ONLY this JSON (no prose before or after, no markdown fences).
 
@@ -642,7 +652,7 @@ Output ONLY this JSON (no prose before or after, no markdown fences).
   "verdict": "APPROVE" or "REJECT",
   "scores": [D1, D2, D3, D4, D5, D6, D7, D8],
   "edits": [ ... array of edit objects, empty [] if APPROVE ... ],
-  "feedback": "human-readable summary or qualitative notes that can't be expressed as edits"
+  "feedback": "prose summary and qualitative notes only — NO literal replacement text"
 }}
 
 ---
@@ -994,7 +1004,9 @@ def apply_review_edits(content: str, edits: list) -> tuple[str, list, list]:
         resolved.append((edit, loc[0], loc[1]))
 
     # Detect overlapping edits (conflict). Sort by start, mark any edit
-    # whose range overlaps the previous one as failed.
+    # whose range starts before the previous edit's end as failed. Non-
+    # overlapping adjacent edits (edit A ends at X, edit B starts at X)
+    # are allowed since `start < prev_end` is strict.
     resolved.sort(key=lambda t: t[1])
     non_conflicting: list[tuple[dict, int, int]] = []
     prev_end = -1
@@ -1002,7 +1014,8 @@ def apply_review_edits(content: str, edits: list) -> tuple[str, list, list]:
         if start < prev_end:
             failed.append({
                 "edit": edit,
-                "reason": f"overlaps a previous edit at [{prev_end}, {start})",
+                "reason": f"overlaps a previous edit ending at position {prev_end} "
+                          f"(this edit starts at {start})",
             })
             continue
         non_conflicting.append((edit, start, end))
@@ -1285,7 +1298,16 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
             last_good = None
             targeted_fix = False
 
-    if ms["phase"] == "write" and not dry_run and not resume_from_staging:
+    # Knowledge card must be loaded unconditionally before entering the
+    # write→review loop, regardless of what phase the module is in on entry.
+    # Previously we gated this on `phase == "write"` and `not resume_from_staging`,
+    # which meant resumed modules (e.g. entering at phase=review after a
+    # deterministic apply or peak-hours pause) got KNOWLEDGE_CARD_UNAVAILABLE
+    # on their NEXT write — losing the grounding entirely for any retry that
+    # regenerates content. The card is a stable per-topic artifact and cheap
+    # to read from disk (only the first-time generation costs a Codex call),
+    # so loading it every run is correct and safe.
+    if not dry_run:
         try:
             knowledge_card = ensure_knowledge_card(module_path, ms, model=m["knowledge_card"])
         except Exception as e:
@@ -1482,45 +1504,65 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                             print(f"    ... and {len(failed_edits) - 5} more failed")
 
                     if applied_count > 0 and failed_count == 0:
-                        # 100% success — skip Sonnet entirely, re-review the patched content.
-                        # No writer call needed, no retry slot consumed wastefully.
+                        # 100% success — skip the LLM writer entirely and re-review
+                        # the patched content. The retry loop slot IS still consumed
+                        # (attempt increments), but no Gemini/Sonnet call runs; we
+                        # just ask Codex to re-evaluate the patched module.
+                        # Flush the patched content to the staging file so a crash
+                        # between here and the next CHECK doesn't lose the work and
+                        # cause us to re-generate the same Codex edits on resume.
                         improved = patched
                         last_good = improved
+                        staging_path = module_path.with_suffix(".staging.md")
+                        staging_path.write_text(patched)
                         ms["phase"] = "review"
                         save_state(state)
-                        print(f"  ✓ All {applied_count} edits applied cleanly — re-reviewing patched content (no LLM writer call)")
+                        print(f"  ✓ All {applied_count} edits applied cleanly — re-reviewing patched content (no LLM writer call, staged to {staging_path.name})")
                         if attempt < max_retries:
-                            # Don't print "retrying" since no writer call; log as re-review
                             continue
                         else:
                             print(f"  ❌ Max retries reached without APPROVE")
                             ms["errors"].append(f"Review rejected {max_retries+1} times")
                             return False
                     elif applied_count > 0 and failed_count > 0:
-                        # Partial success: apply the clean edits, fall back to Sonnet for
-                        # the remaining ones + any qualitative notes.
+                        # Partial success: apply the clean edits, fall back to Sonnet
+                        # for the remaining ones + any qualitative notes. Include the
+                        # FULL edit payload (find/new) in the fallback plan so Sonnet
+                        # can actually apply each remaining patch — previously we only
+                        # passed dim/why/reason which left Sonnet guessing.
                         improved = patched
                         last_good = improved
+                        # Flush partial progress to staging for crash recovery
+                        staging_path = module_path.with_suffix(".staging.md")
+                        staging_path.write_text(patched)
                         needs_rewrite = False
                         targeted_fix = True
-                        failed_lines = "\n".join(
-                            f"- [{fe.get('edit', {}).get('dim', '?')}] "
-                            f"{fe.get('edit', {}).get('why', fe.get('edit', {}).get('type', '?'))} "
-                            f"(reason: {fe.get('reason', '?')})"
-                            for fe in failed_edits
-                        )
+                        failed_blocks = []
+                        for fe in failed_edits:
+                            edit_payload = fe.get("edit", {})
+                            reason = fe.get("reason", "?")
+                            try:
+                                edit_json = json.dumps(edit_payload, indent=2, ensure_ascii=False)
+                            except (TypeError, ValueError):
+                                edit_json = repr(edit_payload)
+                            failed_blocks.append(
+                                f"Failed edit (reason: {reason}):\n```json\n{edit_json}\n```"
+                            )
+                        failed_text = "\n\n".join(failed_blocks)
                         plan = (
                             f"FALLBACK FIX. The pipeline applied {applied_count} of {total_edits} "
                             f"structured edits deterministically; the remaining {failed_count} "
                             f"could not be applied mechanically (anchor not found, ambiguous, "
                             f"or overlapping). Apply ONLY these remaining edits, preserving "
-                            f"everything else verbatim.\n\n"
-                            f"Failed edits to apply:\n{failed_lines}\n\n"
-                            f"Reviewer's original feedback for context:\n{r_feedback}"
+                            f"everything else verbatim. Each failed edit below includes its "
+                            f"exact find/new payload — apply them literally where the anchors "
+                            f"appear in the current content.\n\n"
+                            f"{failed_text}\n\n"
+                            f"Reviewer's qualitative notes (prose, not covered by structured edits):\n{r_feedback}"
                         )
                         ms["phase"] = "write"
                         save_state(state)
-                        print(f"  → Sonnet fallback for {failed_count} failed edits")
+                        print(f"  → Sonnet fallback for {failed_count} failed edits (staged partial progress)")
                         if attempt < max_retries:
                             continue
                         else:
@@ -1876,13 +1918,19 @@ def cmd_run_section(args):
         all_scores = {k: v.get("scores") for k, v in state.get("modules", {}).items()
                       if v.get("scores") and k.startswith(args.section.replace("/", "/")[:20])}
         if all_scores:
-            weak_counts = [0] * 7
+            # 8-dimension rubric — keep this in sync with REVIEW_PROMPT_TEMPLATE.
+            # Previously this array had 7 entries with stale names ("D2:Scaffold"
+            # instead of "D2:Accuracy"), silently dropping D8 Practitioner Depth
+            # from the weak-dim report.
+            weak_counts = [0] * 8
             for scores in all_scores.values():
-                for i, s in enumerate(scores):
+                for i, s in enumerate(scores[:8]):
                     if s < 4:
                         weak_counts[i] += 1
-            dim_names = ["D1:Outcomes", "D2:Scaffold", "D3:Active", "D4:RealWorld",
-                         "D5:Assess", "D6:CogLoad", "D7:Engage"]
+            dim_names = [
+                "D1:Pedagogy", "D2:Accuracy", "D3:Depth", "D4:Practical",
+                "D5:Assessment", "D6:Coverage", "D7:Production", "D8:Practitioner",
+            ]
             print(f"\n  Weak dimensions across section:")
             for name, count in zip(dim_names, weak_counts):
                 if count > 0:

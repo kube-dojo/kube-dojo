@@ -1501,6 +1501,108 @@ class TestApplyReviewEdits(unittest.TestCase):
         self.assertEqual(len(applied), 0)
         self.assertEqual(len(failed), 1)
 
+    def test_adjacent_non_overlapping_edits_both_apply(self):
+        """Edit ending at position X and another starting at position X are
+        adjacent, not overlapping — both must apply cleanly."""
+        import v1_pipeline as p
+        content = "ABCDEFGH"
+        edits = [
+            {"type": "replace", "find": "AB", "new": "11"},  # [0, 2)
+            {"type": "replace", "find": "CD", "new": "22"},  # [2, 4)
+        ]
+        patched, applied, failed = p.apply_review_edits(content, edits)
+        self.assertEqual(patched, "1122EFGH")
+        self.assertEqual(len(applied), 2, "Both adjacent edits must apply")
+        self.assertEqual(len(failed), 0)
+
+
+class TestDeterministicApplyIntegration(unittest.TestCase):
+    """End-to-end integration: reviewer returns structured edits, pipeline
+    applies them deterministically, re-review approves. Verifies zero LLM
+    writer calls happen in the common case."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.state_file = Path(self.tmpdir) / "state.yaml"
+        self.module_path = Path(self.tmpdir) / "module-0.1-test.md"
+        self.module_path.write_text(GOOD_MODULE)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    @patch("v1_pipeline.STATE_FILE")
+    @patch("v1_pipeline.CONTENT_ROOT")
+    @patch("subprocess.run")
+    def test_reject_with_edits_converges_without_llm_writer(
+        self, mock_subprocess, mock_root, mock_state,
+    ):
+        """Reviewer returns structured edits that apply cleanly → pipeline
+        re-reviews the patched content and approves, with exactly ONE
+        step_write call (the initial draft). Exactly the intended hot path
+        for PR #221's deterministic edit application."""
+        import v1_pipeline as p
+
+        mock_state.__class__ = type(self.state_file)
+        mock_root.resolve.return_value = Path(self.tmpdir).resolve()
+
+        step_write_calls = []
+
+        def fake_step_write(module_path, plan, model=None, rewrite=False,
+                            previous_output=None, knowledge_card=None):
+            step_write_calls.append({"model": model, "plan": plan[:100]})
+            # Return GOOD_MODULE verbatim; the reviewer's edit will patch it.
+            return GOOD_MODULE
+
+        # First review: REJECT with one structured edit that matches a unique
+        # substring of GOOD_MODULE. Second review: APPROVE.
+        review_sequence = [
+            {
+                "verdict": "REJECT",
+                "scores": [4, 3, 4, 4, 4, 4, 4, 4],  # sum=31, D2 weak
+                "edits": [
+                    {
+                        "type": "replace",
+                        "find": "## Learning Outcomes",
+                        "new": "## Learning Outcomes (Revised)",
+                        "dim": "D2",
+                        "why": "revision tag",
+                    },
+                ],
+                "feedback": "Minor accuracy fix.",
+            },
+            {
+                "verdict": "APPROVE",
+                "scores": [4, 4, 4, 4, 4, 4, 4, 5],
+                "edits": [],
+                "feedback": "",
+            },
+        ]
+
+        state = {"modules": {}}
+
+        with patch.object(p, "STATE_FILE", self.state_file), \
+             patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
+             patch.object(p, "save_state"), \
+             patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
+             patch.object(p, "step_write", side_effect=fake_step_write), \
+             patch.object(p, "step_review", side_effect=review_sequence), \
+             patch.object(p, "step_check", return_value=(True, [])), \
+             patch.object(p, "ensure_knowledge_card", return_value="cached card"):
+            p.run_module(self.module_path, state)
+
+        # CRITICAL: exactly ONE step_write call (the initial draft). The
+        # REJECT → deterministic apply → re-review path must NOT invoke
+        # the writer again.
+        self.assertEqual(
+            len(step_write_calls), 1,
+            f"Initial write only; deterministic apply must skip the writer "
+            f"(got {len(step_write_calls)} writes)"
+        )
+        ms = state["modules"]["test/module-0.1-test"]
+        self.assertEqual(ms.get("phase"), "done",
+                         "Module must converge to done after deterministic apply + approve")
+        self.assertTrue(ms.get("passes"))
+
 
 # ---------------------------------------------------------------------------
 # Main
