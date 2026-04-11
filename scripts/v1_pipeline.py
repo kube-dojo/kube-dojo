@@ -1682,6 +1682,22 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                         print(f"  ⚠ Review returned {len(r_scores)} scores (expected 8) — using full rewrite")
                     else:
                         print(f"  → Catch-all rewrite mode (Gemini): sum={r_sum}/40")
+                # Persist the rejection-branch plan + targeted_fix flag so crash
+                # recovery can reconstruct writer routing on resume. Without this,
+                # a crash in any non-deterministic rejection path resumes with
+                # ms.get("plan") == None and falls through to a generic Gemini
+                # rewrite, losing the specific FIX instructions from Codex and
+                # regressing the writer model choice (Sonnet → Gemini).
+                ms["plan"] = plan
+                ms["targeted_fix"] = targeted_fix
+                # Also stage the current `improved` content (the last writer
+                # output that was just rejected) so resume loads it as
+                # previous_output rather than re-reading the unpatched on-disk
+                # module. Deterministic-apply branches already stage above; this
+                # covers the surgical/severe/catch-all rejection paths.
+                if improved is not None:
+                    staging_path = module_path.with_suffix(".staging.md")
+                    _atomic_write_text(staging_path, improved)
                 ms["phase"] = "write"
                 save_state(state)
                 if attempt < max_retries:
@@ -1713,10 +1729,13 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
             print(f"  Staging file kept: {staging}")
             return False
 
-        # Backup original, then write improved file
+        # Backup original, then atomically swap in the improved file. Using
+        # _atomic_write_text guarantees the module file is either the old or
+        # new content — never a half-written truncation — if the process is
+        # killed mid-write.
         backup = module_path.with_suffix(".md.bak")
         shutil.copy2(module_path, backup)
-        module_path.write_text(improved)
+        _atomic_write_text(module_path, improved)
         staging.unlink(missing_ok=True)
         backup.unlink(missing_ok=True)  # remove backup on success
         print(f"  ✓ File written: {module_path}")
