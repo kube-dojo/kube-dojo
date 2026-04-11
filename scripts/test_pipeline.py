@@ -17,8 +17,11 @@ import shutil
 import tempfile
 import textwrap
 import unittest
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
+
+import yaml
 
 # Ensure scripts/ is on the path
 import sys
@@ -865,12 +868,14 @@ class TestPipelineTransitions(unittest.TestCase):
             {"verdict": "APPROVE", "scores": [4, 4, 4, 4, 4, 4, 4, 5], "feedback": ""},
         ]
 
-        def fake_step_write(module_path, plan, model=None, rewrite=False, previous_output=None):
+        def fake_step_write(module_path, plan, model=None, rewrite=False,
+                            previous_output=None, knowledge_card=None):
             write_calls.append({
                 "plan": plan,
                 "model": model,
                 "rewrite": rewrite,
                 "previous_output": previous_output,
+                "knowledge_card": knowledge_card,
             })
             return GOOD_MODULE
 
@@ -950,6 +955,199 @@ class TestTrackAliases(unittest.TestCase):
     def test_track_from_key_specialty(self):
         import v1_pipeline as p
         self.assertEqual(p._track_from_key("k8s/pca/module-1"), "specialty")
+
+
+# ---------------------------------------------------------------------------
+# Test: Knowledge cards
+# ---------------------------------------------------------------------------
+
+class TestKnowledgeCards(unittest.TestCase):
+    """Test knowledge-card generation, caching, and prompt injection."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.repo_root = Path(self.tmpdir)
+        self.content_root = self.repo_root / "src" / "content" / "docs"
+        self.content_root.mkdir(parents=True, exist_ok=True)
+        self.card_dir = self.repo_root / ".pipeline" / "knowledge-cards"
+        self.module_key = "on-premises/planning/module-1.5-onprem-finops-chargeback"
+        self.module_path = self.content_root / "on-premises" / "planning" / "module-1.5-onprem-finops-chargeback.md"
+        self.module_path.parent.mkdir(parents=True, exist_ok=True)
+        self.module_path.write_text(textwrap.dedent("""\
+        ---
+        title: "Module 1.5: On-Prem FinOps & Chargeback"
+        slug: on-premises/planning/module-1.5-onprem-finops-chargeback
+        sidebar:
+          order: 105
+        ---
+
+        > **Topic**: On-prem FinOps and chargeback with OpenCost, Kubecost, and VPA
+
+        ## Learning Outcomes
+
+        By the end of this module, you will be able to:
+        - Explain OpenCost pricing inputs on bare metal
+        - Compare showback and chargeback trade-offs
+        - Validate rightsizing and VPA recommendation sources
+        """))
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def _card_path(self):
+        import v1_pipeline as p
+        return self.card_dir / f"{p.sanitize_module_key(self.module_key)}.md"
+
+    def _build_card(self, *, generated_at: str | None = None,
+                    expires: str | None = None) -> str:
+        today = datetime.now(UTC).date()
+        generated_at = generated_at or today.isoformat()
+        expires = expires or (today + timedelta(days=30)).isoformat()
+        return textwrap.dedent(f"""\
+        ---
+        topic: "On-prem FinOps and chargeback with OpenCost, Kubecost, and VPA"
+        module_key: "{self.module_key}"
+        generated_by: "codex"
+        generated_at: "{generated_at}"
+        expires: "{expires}"
+        ---
+
+        ## Current status (as of generated_at)
+        - OpenCost is a CNCF Incubating project and not a sandbox project.
+        - Current OpenCost custom pricing uses `costModel` keys like `CPU`, `RAM`, `GPU`, and `storage`.
+        - VPA recommendations are surfaced on VerticalPodAutoscaler status.
+
+        ## Authoritative sources
+        - https://www.opencost.io/docs/configuration — current custom pricing schema and examples.
+        - https://kyverno.io/docs/writing-policies/validate/ — current policy authoring guidance and deprecation path.
+        - https://github.com/kubernetes/autoscaler/tree/master/vertical-pod-autoscaler — VPA components and recommendation flow.
+
+        ## Do not
+        - Call OpenCost a CNCF sandbox project.
+        - Invent `cpuHourlyCost` or `ramHourlyCost` fields in OpenCost custom pricing examples.
+        - Say VPA recommendations come from Prometheus instead of the VPA recommender path.
+        """)
+
+    def test_knowledge_card_written_with_correct_schema(self):
+        """Generator writes a schema-valid knowledge card to the cache."""
+        import generate_knowledge_card as g
+        import v1_pipeline as p
+
+        with patch.object(p, "CONTENT_ROOT", self.content_root), \
+             patch.object(p, "KNOWLEDGE_CARD_DIR", self.card_dir), \
+             patch.object(g, "KNOWLEDGE_CARD_DIR", self.card_dir), \
+             patch.object(g, "dispatch_codex", return_value=(True, f"```markdown\n{self._build_card()}\n```")):
+            card = g.generate(self.module_key, force=True)
+
+        self.assertIsNotNone(card)
+        card_path = self._card_path()
+        self.assertTrue(card_path.exists(), "Knowledge card should be written to disk")
+        frontmatter = yaml.safe_load(card_path.read_text().split("---", 2)[1])
+        for key in ("topic", "module_key", "generated_by", "generated_at", "expires"):
+            self.assertIn(key, frontmatter)
+        self.assertEqual(frontmatter["module_key"], self.module_key)
+        self.assertIn("## Do not", card_path.read_text())
+
+    def test_knowledge_card_cached_when_fresh(self):
+        """Fresh cached cards should be reused without calling Codex."""
+        import generate_knowledge_card as g
+        import v1_pipeline as p
+
+        self.card_dir.mkdir(parents=True, exist_ok=True)
+        existing = self._build_card()
+        self._card_path().write_text(existing)
+        ms = {}
+
+        with patch.object(p, "CONTENT_ROOT", self.content_root), \
+             patch.object(p, "KNOWLEDGE_CARD_DIR", self.card_dir), \
+             patch.object(g, "KNOWLEDGE_CARD_DIR", self.card_dir), \
+             patch.object(g, "dispatch_codex") as mock_codex:
+            card = p.ensure_knowledge_card(self.module_path, ms)
+
+        self.assertEqual(card, existing)
+        self.assertEqual(mock_codex.call_count, 0, "Fresh cache should skip Codex")
+        self.assertNotIn("stale_knowledge_card", ms)
+
+    def test_knowledge_card_regenerated_when_expired(self):
+        """Expired cached cards should trigger regeneration."""
+        import generate_knowledge_card as g
+        import v1_pipeline as p
+
+        self.card_dir.mkdir(parents=True, exist_ok=True)
+        expired = self._build_card(
+            generated_at=(datetime.now(UTC).date() - timedelta(days=120)).isoformat(),
+            expires=(datetime.now(UTC).date() - timedelta(days=1)).isoformat(),
+        )
+        fresh = self._build_card()
+        self._card_path().write_text(expired)
+        ms = {}
+
+        with patch.object(p, "CONTENT_ROOT", self.content_root), \
+             patch.object(p, "KNOWLEDGE_CARD_DIR", self.card_dir), \
+             patch.object(g, "KNOWLEDGE_CARD_DIR", self.card_dir), \
+             patch.object(g, "dispatch_codex", return_value=(True, fresh)) as mock_codex:
+            card = p.ensure_knowledge_card(self.module_path, ms)
+
+        self.assertEqual(card.strip(), fresh.strip())
+        self.assertEqual(mock_codex.call_count, 1)
+        self.assertEqual(self._card_path().read_text().strip(), fresh.strip())
+        self.assertNotIn("stale_knowledge_card", ms)
+
+    def test_knowledge_card_codex_rate_limited_uses_stale(self):
+        """Expired stale card should be reused when Codex is rate-limited."""
+        import generate_knowledge_card as g
+        import v1_pipeline as p
+
+        self.card_dir.mkdir(parents=True, exist_ok=True)
+        stale = self._build_card(
+            generated_at=(datetime.now(UTC).date() - timedelta(days=120)).isoformat(),
+            expires=(datetime.now(UTC).date() - timedelta(days=1)).isoformat(),
+        )
+        self._card_path().write_text(stale)
+        ms = {}
+
+        with patch.object(p, "CONTENT_ROOT", self.content_root), \
+             patch.object(p, "KNOWLEDGE_CARD_DIR", self.card_dir), \
+             patch.object(g, "KNOWLEDGE_CARD_DIR", self.card_dir), \
+             patch.object(g, "dispatch_codex", return_value=(False, "429 Too Many Requests")):
+            card = p.ensure_knowledge_card(self.module_path, ms)
+
+        self.assertEqual(card, stale)
+        self.assertTrue(ms.get("stale_knowledge_card"))
+
+    def test_knowledge_card_codex_rate_limited_no_stale_returns_none(self):
+        """If Codex is rate-limited and no stale card exists, return None."""
+        import generate_knowledge_card as g
+        import v1_pipeline as p
+
+        ms = {}
+        with patch.object(p, "CONTENT_ROOT", self.content_root), \
+             patch.object(p, "KNOWLEDGE_CARD_DIR", self.card_dir), \
+             patch.object(g, "KNOWLEDGE_CARD_DIR", self.card_dir), \
+             patch.object(g, "dispatch_codex", return_value=(False, "429 Too Many Requests")):
+            card = p.ensure_knowledge_card(self.module_path, ms)
+
+        self.assertIsNone(card)
+        self.assertNotIn("stale_knowledge_card", ms)
+
+    def test_knowledge_card_injected_into_write_prompt(self):
+        """step_write should inject the card content into the writer prompt."""
+        import v1_pipeline as p
+
+        card = self._build_card()
+        seen = {}
+
+        def fake_dispatch(prompt, model=None, timeout=None):
+            seen["prompt"] = prompt
+            return True, GOOD_MODULE
+
+        with patch.object(p, "dispatch_auto", side_effect=fake_dispatch), \
+             patch.object(p, "module_key_from_path", return_value=self.module_key):
+            result = p.step_write(self.module_path, "Improve factual accuracy", knowledge_card=card)
+
+        self.assertIsNotNone(result)
+        self.assertIn(card, seen["prompt"])
+        self.assertIn("KNOWLEDGE CARD:", seen["prompt"])
 
 
 # ---------------------------------------------------------------------------
