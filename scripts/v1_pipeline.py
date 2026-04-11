@@ -949,39 +949,57 @@ def run_module(module_path: Path, state: dict, max_retries: int = 2,
         ms["passes"] = audit["passes"]
         ms["last_run"] = datetime.now(UTC).isoformat()
 
-        if audit["passes"] and audit["check_errors"] == 0:
-            print(f"\n  ✓ Module already passes! ({audit['sum']}/40)")
-            ms["phase"] = "done"
-            save_state(state)
-            return True
-
         plan = audit.get("plan", "")
         if not plan or plan == "PASS":
             plan = f"Improve weak dimensions. Scores: {audit['scores']}. Notes: {audit.get('notes', {})}"
 
-        if dry_run:
-            print(f"\n  [DRY RUN] Would improve: {[f'D{i+1}={s}' for i, s in enumerate(audit['scores']) if s < 4]}")
-            print(f"  [DRY RUN] Plan: {plan[:300]}")
-            return False
-
-        ms["phase"] = "write"
-        save_state(state)
+        if audit["passes"] and audit["check_errors"] == 0:
+            # Audit says it passes — but we MUST get an independent reviewer
+            # stamp before marking done. Audit uses Gemini, which has self-bias
+            # when reviewing other Gemini-written content (see module-1.5:
+            # Gemini 40/40 vs Codex 24-28/40). Force one review cycle with
+            # the preferred reviewer (Codex by default), skipping write.
+            writer_family = m["write"].split("-")[0]
+            reviewer_family = m["review"].split("-")[0]
+            if reviewer_family == writer_family:
+                # Reviewer and writer same family — no cross-check possible.
+                print(f"\n  ✓ Module already passes ({audit['sum']}/40), reviewer same family — done")
+                ms["phase"] = "done"
+                save_state(state)
+                return True
+            print(f"\n  ✓ Audit says module passes ({audit['sum']}/40) — forcing {m['review']} review before done")
+            ms["phase"] = "review"
+            save_state(state)
+            # Populate `improved` from disk so the review/check/score steps
+            # below operate on the current on-disk content (no rewrite).
+            improved = module_path.read_text()
+            last_good = improved
+        else:
+            if dry_run:
+                print(f"\n  [DRY RUN] Would improve: {[f'D{i+1}={s}' for i, s in enumerate(audit['scores']) if s < 4]}")
+                print(f"  [DRY RUN] Plan: {plan[:300]}")
+                return False
+            ms["phase"] = "write"
+            save_state(state)
+            improved = None
+            last_good = None
     else:
         # Resuming — reconstruct plan from state
         plan = f"Resume improvement. Last scores: {ms.get('scores', 'unknown')}."
+        improved = None
+        last_good = None
 
     # WRITE → REVIEW loop (max retries)
-    # Auto-detect rewrite mode: score < 28 means "improve" won't cut it
+    # Auto-detect rewrite mode: score < 28 means "improve" won't cut it.
+    # `improved` and `last_good` are already initialized above (either to
+    # on-disk content when audit passed, or to None when audit failed or
+    # when resuming). `last_good` holds the most recent successful WRITE
+    # output across retries so a REJECT followed by a rewrite improves the
+    # prior attempt instead of starting from scratch.
     needs_rewrite = (ms.get("sum") or 0) < 28
     if needs_rewrite:
         print(f"  Score {ms.get('sum')}/40 < 28 — using REWRITE mode")
 
-    improved = None
-    # `last_good` holds the most recent successful WRITE output across retries.
-    # step_write uses it as the base to improve on, since the module file on
-    # disk is only updated during CHECK (after the loop). Without this, every
-    # retry would re-read the original stub and lose the previous progress.
-    last_good: str | None = None
     for attempt in range(max_retries + 1):
         if ms["phase"] in ("write",):
             improved = step_write(module_path, plan, model=m["write"],

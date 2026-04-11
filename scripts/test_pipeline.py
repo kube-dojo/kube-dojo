@@ -662,11 +662,22 @@ class TestPipelineTransitions(unittest.TestCase):
     @patch("subprocess.run")
     def test_already_passing_module_goes_to_done(self, mock_subprocess, mock_root,
                                                   mock_dispatch, mock_state):
-        """A module that already passes audit should go straight to done."""
+        """An audit-passing module must still get one forced Codex review before done.
+
+        Enforces the "no Gemini-only modules ship" policy: when AUDIT (Gemini)
+        says the module already passes, run_module MUST still send it through
+        one review with the independent reviewer (Codex by default), then land
+        at phase=done with reviewer=codex and needs_independent_review=False.
+        """
         import v1_pipeline as p
 
         mock_state.__class__ = type(self.state_file)
-        mock_dispatch.side_effect = self._mock_audit_pass
+        # First dispatch call = audit (Gemini, passing). Second = forced review
+        # (Codex, approving). mock.side_effect as a list consumes in order.
+        mock_dispatch.side_effect = [
+            self._mock_audit_pass(),
+            self._mock_review_approve(),
+        ]
 
         # Patch CONTENT_ROOT so module_key_from_path works
         mock_root.resolve.return_value = Path(self.tmpdir).resolve()
@@ -676,13 +687,17 @@ class TestPipelineTransitions(unittest.TestCase):
         with patch.object(p, "STATE_FILE", self.state_file), \
              patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
              patch.object(p, "save_state"):
-            # Override module_key_from_path for our temp path
             with patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"):
-                result = p.run_module(self.module_path, state)
+                p.run_module(self.module_path, state)
 
         ms = state["modules"].get("test/module-0.1-test", {})
         self.assertEqual(ms.get("phase"), "done")
         self.assertTrue(ms.get("passes"))
+        # Must have been reviewed by an independent reviewer
+        self.assertEqual(ms.get("reviewer"), "codex")
+        self.assertFalse(ms.get("needs_independent_review", True))
+        # Both audit and review dispatches should have fired
+        self.assertEqual(mock_dispatch.call_count, 2)
 
     def test_dry_run_does_not_modify_files(self):
         """Dry run should audit but not write any files."""
