@@ -1287,11 +1287,20 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
             mode = "targeted fix" if targeted_fix else "improve"
             print(f"  Loaded staged content ({len(improved)} chars) and saved {mode} plan")
         elif ms["phase"] == "review":
+            # On a fresh resume at phase=review, prefer the staging file if
+            # present — it holds the most recent patched content from either
+            # a deterministic edit apply or an in-memory LLM write that
+            # hadn't reached CHECK yet. Only fall back to on-disk module
+            # content if no staging file exists (first-time entry at review).
             plan = initial_write_plan(key)
-            improved = module_path.read_text()
+            if staging_path.exists():
+                improved = staging_path.read_text()
+                print(f"  Loaded staged content ({len(improved)} chars) for review (resume after deterministic apply or pre-CHECK crash)")
+            else:
+                improved = module_path.read_text()
+                print(f"  Loaded on-disk content ({len(improved)} chars) for review")
             last_good = improved
             targeted_fix = False
-            print(f"  Loaded on-disk content ({len(improved)} chars) for review")
         else:
             plan = f"Resume improvement. Last scores: {ms.get('scores', 'unknown')}."
             improved = None
