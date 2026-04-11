@@ -848,9 +848,25 @@ def step_review(module_path: Path, improved: str, model: str = MODELS["review"])
 
     print(f"  Verdict: {verdict}")
     if scores:
-        print(f"  Scores: {scores} (sum: {sum(scores)})")
+        dim_labels = [
+            "Pedagogy", "Accuracy", "Depth", "Practical",
+            "Assessment", "Coverage", "Production", "Practitioner",
+        ]
+        per_dim = "  ".join(
+            f"D{i+1}({dim_labels[i][:4]})={s}" for i, s in enumerate(scores)
+        )
+        print(f"  Scores: {scores} (sum: {sum(scores)}/40)")
+        print(f"          {per_dim}")
     if feedback:
-        print(f"  Feedback: {feedback[:200]}")
+        # Print the full feedback verbatim — operators need to read it to
+        # understand why the reviewer rejected and what the FIX blocks say.
+        # The dispatch log also stores it, but surfacing in the run log keeps
+        # the debugging loop tight.
+        print(f"  Feedback:")
+        print(f"  {'─' * 70}")
+        for line in feedback.splitlines() or [feedback]:
+            print(f"  {line}")
+        print(f"  {'─' * 70}")
 
     return result
 
