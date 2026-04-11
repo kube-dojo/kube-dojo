@@ -143,8 +143,13 @@ MODELS = {
 # fallback to keep the pipeline moving but flags the module for re-review.
 INDEPENDENT_REVIEWER_FAMILIES = {"codex", "claude"}
 
-# Pipeline phases in order
-PHASES = ["pending", "audit", "write", "review", "check", "score", "done"]
+# Pipeline phases in order.
+# "needs_targeted_fix" is a pause state entered when Claude is unavailable
+# (peak hours / rate limit / budget) mid retry-loop. On resume, it loads the
+# staged content + saved plan and transitions back to "write" to re-enter
+# the targeted-fix retry path without re-running audit or initial write.
+PHASES = ["pending", "audit", "write", "review", "needs_targeted_fix",
+          "check", "score", "done"]
 
 # ---------------------------------------------------------------------------
 # State management
@@ -976,6 +981,24 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
             print(f"  ✓ Already done: {total}/40 reviewer={reviewer} — skipping")
             return True
 
+    # Peak-hours pause resume. A module paused mid-targeted-fix has its
+    # staged Gemini draft on disk and its plan saved in state. Transition
+    # back to phase=write so the resume branch below loads them correctly
+    # and re-enters the write→review loop at the targeted-fix step (no
+    # re-audit, no re-initial-write, no re-review).
+    if ms["phase"] == "needs_targeted_fix":
+        staging_path = module_path.with_suffix(".staging.md")
+        if staging_path.exists() and ms.get("plan"):
+            print(f"  ↻ Resuming targeted fix from peak-hours pause")
+            ms["phase"] = "write"
+            save_state(state)
+        else:
+            print(f"  ⚠ needs_targeted_fix phase but staging/plan missing — restarting from audit")
+            ms["phase"] = "audit"
+            ms.pop("plan", None)
+            ms.pop("targeted_fix", None)
+            save_state(state)
+
     # AUDIT+PLAN
     if ms["phase"] in ("pending", "audit"):
         audit = step_audit(module_path, model=m["audit"])
@@ -1024,28 +1047,39 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
             save_state(state)
             improved = None
             last_good = None
+        # Fresh audit path never starts in targeted_fix mode.
+        targeted_fix = False
     else:
-        # Resuming — reconstruct plan from state
-        plan = f"Resume improvement. Last scores: {ms.get('scores', 'unknown')}."
-        improved = None
-        last_good = None
+        # Resuming. Two flavors:
+        # 1. Peak-hours pause resume: state has `plan` + staging file from
+        #    the previous run's Gemini draft. Load them and jump straight
+        #    back into the retry loop at the targeted-fix step (no re-audit,
+        #    no re-initial-write, no re-review — we already have the plan).
+        # 2. Generic resume (interrupted mid-loop in a non-Claude run):
+        #    fall back to a generic "Resume improvement" plan and re-run
+        #    from disk content.
+        staging_path = module_path.with_suffix(".staging.md")
+        if ms.get("plan") and staging_path.exists():
+            plan = ms["plan"]
+            improved = staging_path.read_text()
+            last_good = improved
+            targeted_fix = ms.get("targeted_fix", False)
+            mode = "targeted fix" if targeted_fix else "improve"
+            print(f"  Loaded staged content ({len(improved)} chars) and saved {mode} plan")
+        else:
+            plan = f"Resume improvement. Last scores: {ms.get('scores', 'unknown')}."
+            improved = None
+            last_good = None
+            targeted_fix = False
 
     # WRITE → REVIEW loop (max retries)
     # Auto-detect rewrite mode: score < 28 means "improve" won't cut it.
-    # `improved` and `last_good` are already initialized above (either to
-    # on-disk content when audit passed, or to None when audit failed or
-    # when resuming). `last_good` holds the most recent successful WRITE
-    # output across retries so a REJECT followed by a rewrite improves the
-    # prior attempt instead of starting from scratch.
+    # `improved`, `last_good`, and `targeted_fix` are initialized above by
+    # the fresh-audit or resume branches; DO NOT re-initialize here or
+    # targeted-fix resume state will be lost.
     needs_rewrite = (ms.get("sum") or 0) < 28
     if needs_rewrite:
         print(f"  Score {ms.get('sum')}/40 < 28 — using REWRITE mode")
-
-    # targeted_fix starts False; flips True when the REVIEW branch below
-    # routes a reject through the "TARGETED FIX" path. When True, the writer
-    # switches from Gemini (primary) to Claude Sonnet (precision editor) to
-    # reduce dim regression on surgical patches.
-    targeted_fix = False
 
     for attempt in range(max_retries + 1):
         if ms["phase"] in ("write",):
@@ -1055,13 +1089,29 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                                       rewrite=needs_rewrite,
                                       previous_output=last_good)
             except ClaudeUnavailableError as e:
-                # Peak hours or rate limit on Claude. Pause this module cleanly:
-                # reset to audit so the next run re-derives the targeted-fix plan
-                # from fresh state, and return True so the batch runner moves on
-                # without treating this as a pipeline failure.
+                # Peak hours / rate limit / budget exhausted on Claude. Pause
+                # this module cleanly so it resumes at the targeted-fix step
+                # on the next run outside peak hours, WITHOUT re-running
+                # audit, initial write, or initial review:
+                #
+                # - Stage `last_good` (the latest Gemini draft from the
+                #   initial write or prior retry) to <module>.staging.md
+                # - Save the targeted-fix `plan` to ms["plan"]
+                # - Save the `targeted_fix` flag so the resume path routes
+                #   the writer to Claude
+                # - Set phase=needs_targeted_fix as a pause marker
+                # - Return True so the batch runner moves on cleanly
                 print(f"\n  ⏸ PAUSED (Claude unavailable): {e}")
-                print(f"  Module state preserved. Will resume on next run outside peak hours.")
-                ms["phase"] = "audit"  # forces full re-derivation on next run
+                print(f"  Progress preserved — will resume at targeted-fix step on next run.")
+                staging_path = module_path.with_suffix(".staging.md")
+                if last_good:
+                    staging_path.write_text(last_good)
+                    print(f"  Staged {len(last_good)} chars to {staging_path.name}")
+                else:
+                    print(f"  ⚠ No last_good content to stage — resume will restart from audit")
+                ms["phase"] = "needs_targeted_fix"
+                ms["plan"] = plan
+                ms["targeted_fix"] = targeted_fix
                 ms["paused_reason"] = str(e)
                 ms["last_run"] = datetime.now(UTC).isoformat()
                 save_state(state)
