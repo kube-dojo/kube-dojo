@@ -507,7 +507,13 @@ def step_write(module_path: Path, plan: str, model: str = MODELS["write"],
     else:
         prompt = WRITE_PROMPT_TEMPLATE.format(plan=plan, content=content)
 
-    ok, output = dispatch_gemini_with_retry(prompt, model=model, timeout=900)
+    # Must use dispatch_auto (not dispatch_gemini_with_retry directly) so that
+    # Claude Sonnet is actually called for targeted-fix mode. Previously this
+    # was hardcoded to Gemini, which caused `model="claude-sonnet-4-6"` to be
+    # passed to the Gemini CLI, fail with ModelNotFoundError, and silently
+    # fall back to Gemini's "auto" model — completely defeating the point of
+    # routing precision edits to Claude (PR #212).
+    ok, output = dispatch_auto(prompt, model=model, timeout=900)
 
     if not ok or not output.strip():
         print(f"  ❌ WRITE failed")
@@ -668,7 +674,7 @@ def step_update_index(section_path: Path, model: str = MODELS["write"]) -> bool:
     )
 
     print(f"\n  INDEX: {rel_section} (using {model})")
-    ok, output = dispatch_gemini_with_retry(prompt, model=model, timeout=600)
+    ok, output = dispatch_auto(prompt, model=model, timeout=600)
 
     if not ok or not output.strip():
         print(f"  ❌ INDEX rewrite failed")
