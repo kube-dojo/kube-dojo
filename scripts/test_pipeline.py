@@ -523,8 +523,8 @@ class TestStateManagement(unittest.TestCase):
             state = {"modules": {
                 "test/module-1": {
                     "phase": "done",
-                    "scores": [5, 5, 5, 5, 5, 5, 5],
-                    "sum": 35,
+                    "scores": [5, 5, 5, 5, 5, 5, 5, 5],
+                    "sum": 40,
                     "passes": True,
                     "last_run": "2026-04-06T00:00:00",
                     "errors": [],
@@ -532,7 +532,7 @@ class TestStateManagement(unittest.TestCase):
             }}
             p.save_state(state)
             loaded = p.load_state()
-            self.assertEqual(loaded["modules"]["test/module-1"]["sum"], 35)
+            self.assertEqual(loaded["modules"]["test/module-1"]["sum"], 40)
             self.assertTrue(loaded["modules"]["test/module-1"]["passes"])
 
     def test_get_module_state_initializes(self):
@@ -623,7 +623,7 @@ class TestPipelineTransitions(unittest.TestCase):
     def _mock_audit_pass(self, *args, **kwargs):
         """Mock dispatch that returns a passing audit score."""
         return True, json.dumps({
-            "scores": [5, 5, 5, 5, 5, 5, 5],
+            "scores": [5, 5, 5, 5, 5, 5, 5, 5],
             "notes": {},
             "plan": "PASS",
         })
@@ -631,9 +631,9 @@ class TestPipelineTransitions(unittest.TestCase):
     def _mock_audit_needs_work(self, *args, **kwargs):
         """Mock dispatch that returns scores needing improvement."""
         return True, json.dumps({
-            "scores": [3, 4, 3, 4, 3, 4, 3],
-            "notes": {"D1": "Weak outcomes", "D3": "No inline prompts"},
-            "plan": "Improve D1, D3, D5, D7",
+            "scores": [3, 4, 3, 4, 3, 4, 3, 4],
+            "notes": {"D1": "Weak outcomes", "D3": "No inline prompts", "D8": "No practitioner depth"},
+            "plan": "Improve D1, D3, D5, D7, D8",
         })
 
     def _mock_write_success(self, *args, **kwargs):
@@ -644,7 +644,7 @@ class TestPipelineTransitions(unittest.TestCase):
         """Mock review that approves."""
         return True, json.dumps({
             "verdict": "APPROVE",
-            "scores": [5, 5, 5, 5, 5, 5, 5],
+            "scores": [5, 5, 5, 5, 5, 5, 5, 5],
             "feedback": "",
         })
 
@@ -652,7 +652,7 @@ class TestPipelineTransitions(unittest.TestCase):
         """Mock review that rejects."""
         return True, json.dumps({
             "verdict": "REJECT",
-            "scores": [3, 4, 3, 4, 3, 4, 3],
+            "scores": [3, 4, 3, 4, 3, 4, 3, 4],
             "feedback": "Quiz questions are recall-based, not scenario-based",
         })
 
@@ -747,33 +747,33 @@ class TestTrackAliases(unittest.TestCase):
 class TestScoreLogic(unittest.TestCase):
     """Test passing threshold logic."""
 
-    def test_passes_at_29_min_4(self):
-        """29/35 with min 4 should pass."""
-        scores = [4, 4, 4, 4, 4, 4, 5]
+    def test_passes_at_33_min_4(self):
+        """33/40 with min 4 should pass (8-dim rubric)."""
+        scores = [4, 4, 4, 4, 4, 4, 4, 5]
         total = sum(scores)
         minimum = min(scores)
-        self.assertEqual(total, 29)
-        self.assertTrue(minimum >= 4 and total >= 29)
+        self.assertEqual(total, 33)
+        self.assertTrue(minimum >= 4 and total >= 33)
 
-    def test_fails_at_28(self):
-        """28/35 should fail even if min >= 4."""
-        scores = [4, 4, 4, 4, 4, 4, 4]
+    def test_fails_at_32(self):
+        """32/40 should fail even if min >= 4."""
+        scores = [4, 4, 4, 4, 4, 4, 4, 4]
         total = sum(scores)
-        self.assertEqual(total, 28)
-        self.assertFalse(total >= 29)
+        self.assertEqual(total, 32)
+        self.assertFalse(total >= 33)
 
     def test_fails_with_dimension_at_3(self):
-        """Even 30/35 fails if any dimension is 3."""
-        scores = [5, 5, 5, 5, 5, 3, 5]  # sum=33, min=3
+        """Even a high sum fails if any dimension is 3."""
+        scores = [5, 5, 5, 5, 5, 5, 3, 5]  # sum=38, min=3
         minimum = min(scores)
         self.assertFalse(minimum >= 4)
 
     def test_rewrite_threshold(self):
-        """Modules scoring < 25 should trigger rewrite mode."""
+        """Modules scoring < 28 should trigger rewrite mode (8-dim rubric)."""
         import v1_pipeline as p
-        # This is checked in run_module via: (ms.get("sum") or 0) < 25
-        self.assertTrue(24 < 25)  # rewrite
-        self.assertFalse(25 < 25)  # improve
+        # This is checked in run_module via: (ms.get("sum") or 0) < 28
+        self.assertTrue(27 < 28)  # rewrite
+        self.assertFalse(28 < 28)  # improve
 
 
 # ---------------------------------------------------------------------------
