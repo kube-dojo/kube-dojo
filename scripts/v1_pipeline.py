@@ -49,7 +49,7 @@ import subprocess
 import sys
 import yaml
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, UTC
+from datetime import date, datetime, UTC
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
@@ -57,6 +57,7 @@ CONTENT_ROOT = REPO_ROOT / "src" / "content" / "docs"
 STATE_FILE = REPO_ROOT / ".pipeline" / "state.yaml"
 REPORT_FILE = REPO_ROOT / ".pipeline" / "audit-report.json"
 SCORE_SCRIPT = REPO_ROOT / "scripts" / "score_module.py"
+KNOWLEDGE_CARD_DIR = REPO_ROOT / ".pipeline" / "knowledge-cards"
 
 # ---------------------------------------------------------------------------
 # Timestamped logging — tee all print() to a log file
@@ -134,6 +135,7 @@ MODELS = {
     "write_targeted": "claude-sonnet-4-6", # TARGETED FIX: surgical patches (instruction-following)
     "review": "codex",                     # REVIEW: preferred independent reviewer
     "review_fallback": "claude-sonnet-4-6",  # independent REVIEW fallback when Codex is unavailable
+    "knowledge_card": "codex",             # WRITE grounding: current authoritative facts for the topic
     # "translate" removed — uk_sync.CHUNKED_MODEL owns translation model config
 }
 
@@ -220,9 +222,93 @@ def initial_write_plan(key: str) -> str:
     )
 
 
+def sanitize_module_key(module_key: str) -> str:
+    """Convert a module key into a stable knowledge-card filename."""
+    return module_key.replace("/", "__")
+
+
+def knowledge_card_path_for_key(module_key: str) -> Path:
+    """Return the cached knowledge-card path for a module key."""
+    return KNOWLEDGE_CARD_DIR / f"{sanitize_module_key(module_key)}.md"
+
+
+def _extract_frontmatter_data(content: str) -> dict:
+    """Parse YAML frontmatter from markdown content."""
+    if not content.startswith("---\n"):
+        return {}
+    parts = content.split("---", 2)
+    if len(parts) < 3:
+        return {}
+    try:
+        data = yaml.safe_load(parts[1]) or {}
+    except yaml.YAMLError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _knowledge_card_is_expired(card_content: str) -> bool:
+    """Return True if a knowledge card is expired or malformed."""
+    data = _extract_frontmatter_data(card_content)
+    expires = data.get("expires")
+    if isinstance(expires, datetime):
+        expires_at = expires.date()
+    elif isinstance(expires, date):
+        expires_at = expires
+    elif isinstance(expires, str):
+        try:
+            expires_at = datetime.fromisoformat(expires).date()
+        except ValueError:
+            return True
+    else:
+        return True
+    if not isinstance(expires_at, date):
+        return True
+    return expires_at < datetime.now(UTC).date()
+
+
+def ensure_knowledge_card(module_path: Path, ms: dict,
+                          model: str = MODELS["knowledge_card"]) -> str | None:
+    """Ensure a fresh knowledge card exists for this module. Returns the card
+    content for injection into WRITE prompts, or None if unavailable.
+
+    Behavior:
+    - If .pipeline/knowledge-cards/<key>.md exists and has not expired → read and return
+    - If missing or expired → call generate_knowledge_card.generate()
+    - On Codex rate limit: return existing stale card if any (with stale flag),
+      else None. Set ms["stale_knowledge_card"] = True when using stale.
+    - On success, clear ms["stale_knowledge_card"] if previously set.
+    """
+    key = module_key_from_path(module_path)
+    card_path = knowledge_card_path_for_key(key)
+    existing = card_path.read_text() if card_path.exists() else None
+
+    if existing and not _knowledge_card_is_expired(existing):
+        ms.pop("stale_knowledge_card", None)
+        return existing
+
+    import generate_knowledge_card
+
+    generated = generate_knowledge_card.generate(key, force=True, model=model)
+    if generated is not None:
+        ms.pop("stale_knowledge_card", None)
+        return generated
+
+    if existing:
+        ms["stale_knowledge_card"] = True
+        return existing
+
+    ms.pop("stale_knowledge_card", None)
+    return None
+
+
 # ---------------------------------------------------------------------------
 # WRITE step — Gemini drafts improvements
 # ---------------------------------------------------------------------------
+
+KNOWLEDGE_CARD_UNAVAILABLE = (
+    "(No knowledge card available — use general K8s 1.30+ knowledge but flag any "
+    "uncertain facts for reviewer verification.)"
+)
 
 WRITE_PROMPT_TEMPLATE = """CRITICAL INSTRUCTION: Your response must be ONLY the raw markdown content of the improved module. Start your response with the --- frontmatter delimiter. No preamble, no explanation, no summary, no "I have improved..." — ONLY the markdown file content from first line to last.
 
@@ -241,6 +327,9 @@ RULES:
 - Keep the module's existing voice and style
 - CONVERT any ASCII art diagrams to Mermaid (```mermaid blocks) — Mermaid renders natively in our site
 
+KNOWLEDGE CARD:
+{knowledge_card}
+
 IMPROVEMENT PLAN:
 {plan}
 
@@ -257,6 +346,9 @@ TASK: Rewrite a KubeDojo educational module. The existing module scored too low 
 
 The file path is: {file_path}
 Keep the EXACT same frontmatter (title, slug, sidebar order).
+
+KNOWLEDGE CARD:
+{knowledge_card}
 
 KNOWLEDGE PACKET — MUST PRESERVE:
 The following technical assets are extracted from the original module. You MUST include ALL of them in your rewrite, placed in the appropriate sections. Do NOT omit, summarize, or simplify any of these.
@@ -382,7 +474,8 @@ def count_assets(content: str) -> dict:
 
 def step_write(module_path: Path, plan: str, model: str = MODELS["write"],
                rewrite: bool = False,
-               previous_output: str | None = None) -> str | None:
+               previous_output: str | None = None,
+               knowledge_card: str | None = None) -> str | None:
     """Gemini drafts improvements or full rewrite based on the plan.
 
     If previous_output is provided (e.g. from an earlier attempt in the
@@ -395,13 +488,16 @@ def step_write(module_path: Path, plan: str, model: str = MODELS["write"],
     key = module_key_from_path(module_path)
     mode = "REWRITE" if rewrite else "WRITE"
     print(f"\n  {mode}: {key} (using {model})")
+    knowledge_card_text = knowledge_card or KNOWLEDGE_CARD_UNAVAILABLE
 
     if rewrite:
         packet = extract_knowledge_packet(content)
         prompt = REWRITE_PROMPT_TEMPLATE.format(
-            file_path=key, plan=plan, content=content, knowledge_packet=packet)
+            file_path=key, plan=plan, content=content, knowledge_packet=packet,
+            knowledge_card=knowledge_card_text)
     else:
-        prompt = WRITE_PROMPT_TEMPLATE.format(plan=plan, content=content)
+        prompt = WRITE_PROMPT_TEMPLATE.format(
+            plan=plan, content=content, knowledge_card=knowledge_card_text)
 
     # Must use dispatch_auto (not dispatch_gemini_with_retry directly) so that
     # Claude Sonnet is actually called for targeted-fix mode. Previously this
@@ -889,6 +985,9 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
             ms.pop("targeted_fix", None)
             save_state(state)
 
+    knowledge_card = None
+    resume_from_staging = False
+
     # Initial write plan. Legacy `phase="audit"` states from older runs are
     # treated the same as fresh `pending` modules: start a normal first-pass
     # write with the generic plan and let REVIEW produce the real follow-up
@@ -922,6 +1021,7 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
             improved = staging_path.read_text()
             last_good = improved
             targeted_fix = ms.get("targeted_fix", False)
+            resume_from_staging = True
             mode = "targeted fix" if targeted_fix else "improve"
             print(f"  Loaded staged content ({len(improved)} chars) and saved {mode} plan")
         elif ms["phase"] == "review":
@@ -935,6 +1035,14 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
             improved = None
             last_good = None
             targeted_fix = False
+
+    if ms["phase"] == "write" and not dry_run and not resume_from_staging:
+        try:
+            knowledge_card = ensure_knowledge_card(module_path, ms, model=m["knowledge_card"])
+        except Exception as e:
+            print(f"  ⚠ Knowledge card unavailable — proceeding without grounding: {e}")
+            knowledge_card = None
+        save_state(state)
 
     # WRITE → REVIEW loop (max retries)
     # Auto-detect rewrite mode: score < 28 means "improve" won't cut it.
@@ -952,7 +1060,8 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
             try:
                 improved = step_write(module_path, plan, model=writer_model,
                                       rewrite=needs_rewrite,
-                                      previous_output=last_good)
+                                      previous_output=last_good,
+                                      knowledge_card=knowledge_card)
             except ClaudeUnavailableError as e:
                 # Peak hours / rate limit / budget exhausted on Claude. Pause
                 # this module cleanly so it resumes at the targeted-fix step
@@ -1239,9 +1348,14 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
             pending = ms.get("needs_independent_review", False)
             pending_tag = " needs-independent-review" if pending else ""
             print(f"\n  ✓ PASS: {total}/40 (min: {minimum}) reviewer={reviewer}{pending_tag}")
-            # Auto-commit
+            # Auto-commit the passed module plus the knowledge card it was
+            # grounded against, when available, for full write-time traceability.
+            add_paths = [str(module_path)]
+            card_path = knowledge_card_path_for_key(key)
+            if card_path.exists():
+                add_paths.append(str(card_path))
             add_result = subprocess.run(
-                ["git", "add", str(module_path)],
+                ["git", "add", *add_paths],
                 cwd=str(REPO_ROOT), capture_output=True, text=True,
             )
             if add_result.returncode != 0:
