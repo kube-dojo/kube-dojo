@@ -894,6 +894,59 @@ class TestPipelineTransitions(unittest.TestCase):
         self.assertIn("SEVERE REWRITE REQUIRED", write_calls[1]["plan"])
         self.assertEqual(write_calls[1]["model"], p.MODELS["write"])
 
+    @patch("v1_pipeline.STATE_FILE")
+    @patch("v1_pipeline.CONTENT_ROOT")
+    @patch("subprocess.run")
+    def test_severity_routing_27_goes_to_sonnet_targeted(
+        self, mock_subprocess, mock_root, mock_state,
+    ):
+        """Review sum=27 (previously full-rewrite territory) should now route to
+        Sonnet targeted fix. The `< 28` rewrite branch was removed because a
+        module with one weak dim and many passing dims is surgical-fix territory,
+        not 'severely broken'. The `< 25` branch remains for truly broken content.
+        """
+        import v1_pipeline as p
+
+        mock_state.__class__ = type(self.state_file)
+        mock_root.resolve.return_value = Path(self.tmpdir).resolve()
+
+        state = {"modules": {}}
+        write_calls = []
+        # 4+2+4+3+4+4+3+3 = 27; one dim at 2 (D2), others 3-4. NOT severely broken.
+        review_sequence = [
+            {"verdict": "REJECT", "scores": [4, 2, 4, 3, 4, 4, 3, 3],
+             "feedback": "[D2] bad fact → FIX: correct it"},
+            {"verdict": "APPROVE", "scores": [4, 4, 4, 4, 4, 4, 4, 5], "feedback": ""},
+        ]
+
+        def fake_step_write(module_path, plan, model=None, rewrite=False,
+                            previous_output=None, knowledge_card=None):
+            write_calls.append({
+                "plan": plan,
+                "model": model,
+                "rewrite": rewrite,
+            })
+            return GOOD_MODULE
+
+        with patch.object(p, "STATE_FILE", self.state_file), \
+             patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
+             patch.object(p, "save_state"), \
+             patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
+             patch.object(p, "step_write", side_effect=fake_step_write), \
+             patch.object(p, "step_review", side_effect=review_sequence), \
+             patch.object(p, "step_check", return_value=(True, [])):
+            p.run_module(self.module_path, state)
+
+        self.assertEqual(len(write_calls), 2, "Initial write + one retry")
+        # First pass: normal Gemini write (initial draft)
+        self.assertFalse(write_calls[0]["rewrite"])
+        # Retry must be Sonnet targeted fix, NOT Gemini rewrite
+        self.assertFalse(write_calls[1]["rewrite"],
+                         "sum=27 with weak dims must NOT trigger rewrite mode")
+        self.assertEqual(write_calls[1]["model"], p.MODELS["write_targeted"],
+                         "sum=27 retry must route to the targeted-fix writer (Claude Sonnet)")
+        self.assertIn("TARGETED FIX", write_calls[1]["plan"])
+
     def test_dry_run_does_not_modify_files(self):
         """Dry run should show the initial plan but not write any files."""
         import v1_pipeline as p
