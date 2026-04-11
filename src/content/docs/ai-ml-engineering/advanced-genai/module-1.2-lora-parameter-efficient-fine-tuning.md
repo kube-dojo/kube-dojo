@@ -5,8 +5,6 @@ sidebar:
   order: 803
 ---
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6
-> **Migrated from neural-dojo** — pending pipeline polish
-
 # Or: How AI Learned to Dream in Pixels
 
 **Reading Time**: 7-8 hours

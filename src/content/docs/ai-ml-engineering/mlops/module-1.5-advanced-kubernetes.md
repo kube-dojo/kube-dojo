@@ -5,8 +5,6 @@ sidebar:
   order: 606
 ---
 > **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 6-8
-> **Migrated from neural-dojo** — pending pipeline polish
-
 ## The Night Spotify's Recommendations Went Silent
 
 **Stockholm, Sweden. December 2019. 2:37 AM.**

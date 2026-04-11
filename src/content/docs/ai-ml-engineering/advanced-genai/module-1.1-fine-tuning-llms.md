@@ -5,8 +5,6 @@ sidebar:
   order: 802
 ---
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 6-8
-> **Migrated from neural-dojo** — pending pipeline polish
-
 # Or: Teaching Old Models New Tricks (Without Breaking the Bank)
 
 **Reading Time**: 7-8 hours

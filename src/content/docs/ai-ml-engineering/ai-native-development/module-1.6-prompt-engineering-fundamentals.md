@@ -5,8 +5,6 @@ sidebar:
   order: 207
 ---
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6
-> **Migrated from neural-dojo** — pending pipeline polish
-
 # Or: How to Talk to Robots Without Feeling Stupid
 
 **Reading Time**: 5-6 hours

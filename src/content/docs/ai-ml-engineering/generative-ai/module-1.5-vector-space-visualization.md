@@ -5,8 +5,6 @@ sidebar:
   order: 306
 ---
 > **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 4-5
-> **Migrated from neural-dojo** — pending pipeline polish
-
 # Or: Where Math Meets Meaning
 
 **Reading Time**: 2-3 hours

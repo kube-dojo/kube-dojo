@@ -5,8 +5,6 @@ sidebar:
   order: 703
 ---
 > **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 6-8
-> **Migrated from neural-dojo** — pending pipeline polish
-
 **Prerequisites**: Module 53 (AI for Proactive Cloud Management)
 
 ## The Incident That Changed Everything: When Logs Became Too Big to Read

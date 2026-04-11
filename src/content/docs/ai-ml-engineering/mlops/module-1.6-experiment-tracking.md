@@ -5,8 +5,6 @@ sidebar:
   order: 607
 ---
 > **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 5-6
-> **Migrated from neural-dojo** — pending pipeline polish
-
 ## The Model That Vanished: A Cautionary Tale
 
 **San Francisco. March 2021. 9:47 PM.**

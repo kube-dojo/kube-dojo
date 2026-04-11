@@ -5,8 +5,6 @@ sidebar:
   order: 807
 ---
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6
-> **Migrated from neural-dojo** — pending pipeline polish
-
 ---
 **Prerequisites**: Phase 8 complete, Module 35 (RLHF), Module 36 (Constitutional AI)
 ---

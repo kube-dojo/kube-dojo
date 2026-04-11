@@ -5,8 +5,6 @@ sidebar:
   order: 508
 ---
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 6-8
-> **Migrated from neural-dojo** — pending pipeline polish
-
 # Or: How to Ship AI Without Getting Fired
 
 **Reading Time**: 6-7 hours

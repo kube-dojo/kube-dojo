@@ -5,8 +5,6 @@ sidebar:
   order: 203
 ---
 > **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 3-4
-> **Migrated from neural-dojo** — pending pipeline polish
-
 # Or: How to Stop Paying OpenAI and Start Loving Your GPU
 
 **Reading Time**: 3-4 hours
@@ -1294,83 +1292,6 @@ python savings_calculator.py
 
 Note: Actual savings depend on usage. Heavy users save $200-500/year!
 </details>
-
----
-
-## Real Project Tie-Ins
-
-How Module 1.2 skills apply to your actual projects:
-
-### For kaizen (Lean DevOps Platform)
-
-**What you just learned applies to**:
-- Using local models for RAG pipeline development (privacy!)
-- Cost optimization (iterate locally, deploy with API)
-- Offline development of LangChain code
-
-**Specific example**:
-```bash
-# Develop RAG pipeline locally with DeepSeek
-aider --model ollama/deepseek-coder-v2:16b
-
-> "Create a RAG pipeline using LangChain that:
-  - Loads documents from /docs
-  - Splits into chunks
-  - Generates embeddings
-  - Stores in Qdrant
-  - Retrieves with similarity search"
-
-# Model generates entire pipeline
-# Test locally before deploying
-# Deploy to production with Claude API for quality
-```
-
-**Savings**: $50-100/month during development!
-
----
-
-### For vibe (Teaching Platform)
-
-**What you just learned applies to**:
-- Generating course content locally (cost-effective)
-- Testing content generation prompts
-- Privacy for unpublished content
-
-**Specific example**:
-```bash
-# Generate programming exercises locally
-aider --model ollama/qwen2.5-coder:7b
-
-> "Generate 10 Python exercises for beginners:
-  - Topic: Functions and loops
-  - Difficulty: Easy to medium
-  - Include solutions and test cases"
-
-# Free, instant, iterate unlimited times
-```
-
----
-
-### For contrarian (Stock Analysis)
-
-**What you just learned applies to**:
-- Developing ML pipelines locally
-- Code generation for data analysis
-- Exploratory data analysis scripts
-
-**Specific example**:
-```bash
-# Create sentiment analysis pipeline locally
-aider --model ollama/deepseek-coder-v2:16b
-
-> "Build sentiment analyzer for stock news:
-  - Fetch from RSS feeds
-  - Analyze sentiment with transformers
-  - Store results with timestamps
-  - Generate buy/sell signals"
-
-# Iterate on strategy, all local, private
-```
 
 ---
 

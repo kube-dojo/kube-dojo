@@ -5,8 +5,6 @@ sidebar:
   order: 302
 ---
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6
-> **Migrated from neural-dojo** — pending pipeline polish
-
 **Reading Time**: 5-6 hours
 **Prerequisites**: Phase 1 complete
 

@@ -5,8 +5,6 @@ sidebar:
   order: 1003
 ---
 > **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 6-8
-> **Migrated from neural-dojo** — pending pipeline polish
-
 # Or: Building a Brain with Nothing but Math
 
 **Reading Time**: 7-8 hours

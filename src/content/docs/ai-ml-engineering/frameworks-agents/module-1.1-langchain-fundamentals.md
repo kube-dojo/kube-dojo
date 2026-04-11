@@ -5,8 +5,6 @@ sidebar:
   order: 502
 ---
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6
-> **Migrated from neural-dojo** — pending pipeline polish
-
 # Or: The Framework That Took Over AI Development
 
 **Reading Time**: 6-7 hours

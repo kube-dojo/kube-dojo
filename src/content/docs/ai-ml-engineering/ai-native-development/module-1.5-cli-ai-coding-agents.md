@@ -5,8 +5,6 @@ sidebar:
   order: 206
 ---
 > **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 4-6
-> **Migrated from neural-dojo** — pending pipeline polish
-
 **Prerequisites**: Module 01 (AI-Driven Development), Module 1.4 (Agent-First IDEs)
 
 ---

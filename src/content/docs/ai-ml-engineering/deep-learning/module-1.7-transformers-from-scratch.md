@@ -5,8 +5,6 @@ sidebar:
   order: 1008
 ---
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 8-10
-> **Migrated from neural-dojo** — pending pipeline polish
-
 # Or: The Algorithm That Taught Machines to Learn (And How to Build It Yourself)
 
 **Reading Time**: 6-7 hours

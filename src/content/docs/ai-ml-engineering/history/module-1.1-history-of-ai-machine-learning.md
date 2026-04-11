@@ -5,8 +5,6 @@ sidebar:
   order: 1202
 ---
 > **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 4-5
-> **Migrated from neural-dojo** — pending pipeline polish
-
 ## The Night Everything Changed
 
 It was December 2012, a chilly night at Stanford University at precisely 11:47 PM, when Geoffrey Hinton realized everything he'd fought for over forty years was finally vindicated. The researcher hadn't slept in three days. His team—two graduate students working from a tiny Toronto apartment—had just crushed the ImageNet competition. Their neural network, AlexNet, didn't just win. It demolished the competition by 10 percentage points—the largest margin in the competition's history.

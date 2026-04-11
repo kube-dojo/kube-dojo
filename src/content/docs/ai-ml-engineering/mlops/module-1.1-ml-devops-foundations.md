@@ -5,8 +5,6 @@ sidebar:
   order: 602
 ---
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6
-> **Migrated from neural-dojo** — pending pipeline polish
-
 **Prerequisites**: Phase 9 complete
 
 ---

@@ -5,8 +5,6 @@ sidebar:
   order: 1102
 ---
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6
-> **Migrated from neural-dojo** — pending pipeline polish
-
 **Prerequisites**: Module 25 (Python for ML), Module 26 (Neural Networks basics)
 
 ---

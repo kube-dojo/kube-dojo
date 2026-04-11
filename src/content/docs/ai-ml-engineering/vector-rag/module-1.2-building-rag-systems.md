@@ -5,8 +5,6 @@ sidebar:
   order: 403
 ---
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 6-8
-> **Migrated from neural-dojo** — pending pipeline polish
-
 # Or: Teaching AI to Look Things Up Before Making Stuff Up
 
 ---

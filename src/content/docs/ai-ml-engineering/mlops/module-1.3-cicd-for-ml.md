@@ -5,8 +5,6 @@ sidebar:
   order: 604
 ---
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6
-> **Migrated from neural-dojo** — pending pipeline polish
-
 ---
 
 Seattle. December 24, 2023. 4:17 PM. Sarah Park was already late to her family's holiday dinner when her phone buzzed with a PagerDuty alert. The e-commerce recommendation system she'd built had just crashed—on the busiest shopping day of the year.

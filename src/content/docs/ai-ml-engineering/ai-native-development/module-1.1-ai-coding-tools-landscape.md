@@ -5,8 +5,6 @@ sidebar:
   order: 202
 ---
 > **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 4-5
-> **Migrated from neural-dojo** — pending pipeline polish
-
 # Or: How I Learned to Stop Typing and Let the AI Do It
 
 **Reading Time**: 4-5 hours
@@ -530,13 +528,13 @@ The landscape has exploded with options. Here's your decision matrix:
 
 ### MCP-Enabled Tools Comparison Matrix
 
-| Tool | Interface | MCP Support | Local LLM | Best For | Kaizen Fit |
-|------|-----------|-------------|-----------|----------|------------|
-| **Cline** | VS Code + CLI |  Native |  Ollama | Agentic workflows | ⭐⭐⭐⭐⭐ |
-| **Continue.dev** | IDE + CLI |  Native |  Ollama | Customizable, enterprise | ⭐⭐⭐⭐⭐ |
-| **Goose** | Desktop + CLI |  Native |  Ollama | Full automation | ⭐⭐⭐⭐ |
-| **Aider** | CLI only | ️ Via server |  Ollama | Terminal-first, Git focus | ⭐⭐⭐ |
-| **Open Interpreter** | CLI only |  Limited |  Basic | Code execution | ⭐⭐ |
+| Tool | Interface | MCP Support | Local LLM | Best For |
+|------|-----------|-------------|-----------|----------|
+| **Cline** | VS Code + CLI |  Native |  Ollama | Agentic workflows |
+| **Continue.dev** | IDE + CLI |  Native |  Ollama | Customizable, enterprise |
+| **Goose** | Desktop + CLI |  Native |  Ollama | Full automation |
+| **Aider** | CLI only | ️ Via server |  Ollama | Terminal-first, Git focus |
+| **Open Interpreter** | CLI only |  Limited |  Basic | Code execution |
 
 ### Deep Dive: Each Tool's MCP Integration
 
@@ -570,7 +568,6 @@ MCP Capabilities:
 }
 ```
 
-**Why 5-star Kaizen fit**: Perfect for iterative DevOps workflows, can manage entire project lifecycles, excellent Claude integration.
 
 ---
 
@@ -600,7 +597,6 @@ MCP Capabilities:
 }
 ```
 
-**Why 5-star Kaizen fit**: Open-source, fully customizable, can integrate with proprietary internal systems without sending code to cloud.
 
 ---
 
@@ -625,7 +621,6 @@ mcp_servers:
       GITHUB_TOKEN: ${GITHUB_TOKEN}
 ```
 
-**Why 4-star Kaizen fit**: Excellent for full automation, but newer/less tested than Cline/Continue.
 
 ---
 
@@ -640,7 +635,6 @@ Aider focuses on **Git integration** rather than MCP. However, you can add MCP-l
 aider --model anthropic/claude-4.6-sonnet
 ```
 
-**Why 3-star Kaizen fit**: Excellent Git integration, but limited extensibility compared to Cline/Continue.
 
 ---
 
@@ -655,7 +649,6 @@ interpreter.chat("Create a bar chart of monthly sales")
 # → Actually runs Python, creates the chart!
 ```
 
-**Why 2-star Kaizen fit**: Great for data tasks, but not designed for structured DevOps workflows like Kaizen needs.
 
 ---
 
@@ -2253,81 +2246,6 @@ AI coding assistants in 2025 still can't:
 7. **Rubber duck debugging** (explaining to AI helps you find bugs!)
 
 **The rise of "AI pair programming"** as default workflow
-
----
-
-## Real Project Tie-Ins
-
-How Module 1 skills apply to your actual projects:
-
-### For kaizen (Lean DevOps Platform)
-
-**What you just learned applies to**:
-- Using Claude Code to refactor kaizen's RAG backend
-- AI-generating test suites for RAG pipelines
-- Debugging LangChain integration issues with AI assistance
-- AI documenting your RAG evaluation methodology
-
-**Specific example**:
-```python
-You: "Refactor my RAG pipeline to use LangGraph instead of plain LangChain
-- Migrate 5 existing chains
-- Preserve all functionality
-- Add tests
-- Show me the differences"
-
-AI: [Refactors entire pipeline, explains migration, generates tests]
-```
-
-**Time saved**: 8-12 hours → 2-3 hours
-
----
-
-### For vibe (Teaching Platform)
-
-**What you just learned applies to**:
-- AI-generating content creation backend
-- Using AI to build API endpoints for course management
-- Debugging React components with AI assistance
-- AI creating comprehensive API documentation
-
-**Specific example**:
-```python
-You: "Create FastAPI endpoint for generating course content
-- Input: topic, difficulty level, learning objectives
-- Call Claude API to generate content
-- Validate and store in database
-- Return structured response
-- Add tests"
-
-AI: [Generates complete endpoint with validation, tests, docs]
-```
-
-**Time saved**: 4-6 hours → 1 hour
-
----
-
-### For contrarian (Stock Analysis)
-
-**What you just learned applies to**:
-- AI debugging your sentiment analysis pipeline
-- Generating data preprocessing functions
-- Creating visualization code for stock trends
-- AI explaining complex financial ML models
-
-**Specific example**:
-```python
-You: "Debug this sentiment analyzer - getting weird scores:
-[paste 100 lines of BERT fine-tuning code]
-
-AI should detect that you're applying sentiment to price data instead of text"
-
-AI: "Found the bug! Line 45: You're passing stock prices (floats)
-to the sentiment tokenizer (expects text strings)...
-[detailed fix]"
-```
-
-**Time saved**: 2-4 hours debugging → 5 minutes
 
 ---
 

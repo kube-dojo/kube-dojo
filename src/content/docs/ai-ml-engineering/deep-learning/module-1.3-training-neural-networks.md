@@ -5,8 +5,6 @@ sidebar:
   order: 1004
 ---
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 6-8
-> **Migrated from neural-dojo** — pending pipeline polish
-
 # Or: The Framework That Made Deep Learning Accessible
 
 **Reading Time**: 6-7 hours

@@ -5,8 +5,6 @@ sidebar:
   order: 904
 ---
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6
-> **Migrated from neural-dojo** — pending pipeline polish
-
 # Or: When Images Just Aren't Enough
 
 ---

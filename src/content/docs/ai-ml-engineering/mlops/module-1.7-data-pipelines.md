@@ -5,8 +5,6 @@ sidebar:
   order: 608
 ---
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6
-> **Migrated from neural-dojo** — pending pipeline polish
-
 ## The $50 Million Bug: When "train_FINAL_v2.csv" Destroyed a Product Launch
 
 **Seattle. March 12, 2021. 9:47 AM.**

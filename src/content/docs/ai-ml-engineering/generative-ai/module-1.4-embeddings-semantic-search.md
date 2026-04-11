@@ -5,8 +5,6 @@ sidebar:
   order: 305
 ---
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6
-> **Migrated from neural-dojo** — pending pipeline polish
-
 # Or: Teaching Computers That 'Cat' and 'Kitten' Are Related
 
 **Reading Time**: Approximately 2-3 hours

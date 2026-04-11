@@ -51,10 +51,5 @@ This track is for engineers who need to understand AI/ML deeply enough to build,
 - **[CKA / CKAD](../k8s/)** — Kubernetes fundamentals for the MLOps phases
 - **[On-Premises](../on-premises/)** — running ML infrastructure on bare metal
 
-## Status
-
-This track was migrated from the [neural-dojo](https://github.com/krisztiankoos/neural-dojo) project. Modules are pending pipeline polish to align with KubeDojo's 8-dimension quality rubric. Modernization for 2026 developments (Claude 4.6, GPT-5, computer use, reasoning models, latest agent frameworks) is in progress.
-
----
 
 *"The best AI engineers understand both the model and the infrastructure it runs on."*

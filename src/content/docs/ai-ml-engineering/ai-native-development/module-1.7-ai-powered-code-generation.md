@@ -5,8 +5,6 @@ sidebar:
   order: 208
 ---
 > **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 4-5
-> **Migrated from neural-dojo** — pending pipeline polish
-
 # Or: Teaching AI to Write Your Boilerplate So You Don't Have To
 
 **Reading Time**: 4-5 hours
