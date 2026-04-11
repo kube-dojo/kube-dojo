@@ -1353,6 +1353,156 @@ class TestKnowledgePacket(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# Test: Deterministic review-edit application
+# ---------------------------------------------------------------------------
+
+class TestApplyReviewEdits(unittest.TestCase):
+    """Test the deterministic edit applier — applies reviewer-structured edits
+    to module content via Python string ops, without any LLM writer call."""
+
+    def test_replace_exact_anchor(self):
+        import v1_pipeline as p
+        content = "Some text\nwrong config: cpuHourlyCost\nmore text"
+        edits = [
+            {"type": "replace", "find": "wrong config: cpuHourlyCost",
+             "new": "correct config: CPU", "dim": "D2", "why": "key rename"},
+        ]
+        patched, applied, failed = p.apply_review_edits(content, edits)
+        self.assertEqual(patched, "Some text\ncorrect config: CPU\nmore text")
+        self.assertEqual(len(applied), 1)
+        self.assertEqual(len(failed), 0)
+
+    def test_insert_after_anchor(self):
+        import v1_pipeline as p
+        content = "## Learning Outcomes\n\nYou will learn X.\n\n## Section 2"
+        edits = [
+            {"type": "insert_after", "find": "## Learning Outcomes",
+             "new": "\n\n## Module Map\n1. Step one\n2. Step two",
+             "dim": "D1", "why": "add module map"},
+        ]
+        patched, applied, failed = p.apply_review_edits(content, edits)
+        self.assertIn("## Module Map", patched)
+        self.assertTrue(patched.startswith("## Learning Outcomes\n\n## Module Map"),
+                        f"unexpected prefix: {patched[:80]!r}")
+        self.assertEqual(len(applied), 1)
+        self.assertEqual(len(failed), 0)
+
+    def test_insert_before_anchor(self):
+        import v1_pipeline as p
+        content = "Intro\n\n## Section 2\n\nBody"
+        edits = [
+            {"type": "insert_before", "find": "## Section 2",
+             "new": "## Section 1.5\n\nExtra content\n\n",
+             "dim": "D6", "why": "fill gap"},
+        ]
+        patched, applied, failed = p.apply_review_edits(content, edits)
+        self.assertIn("## Section 1.5", patched)
+        self.assertTrue("## Section 1.5\n\nExtra content\n\n## Section 2" in patched)
+        self.assertEqual(len(failed), 0)
+
+    def test_delete(self):
+        import v1_pipeline as p
+        content = "Keep this.\nDELETE ME\nKeep this too."
+        edits = [{"type": "delete", "find": "DELETE ME\n", "dim": "D3", "why": "stale"}]
+        patched, applied, failed = p.apply_review_edits(content, edits)
+        self.assertEqual(patched, "Keep this.\nKeep this too.")
+        self.assertEqual(len(failed), 0)
+
+    def test_ambiguous_anchor_fails_gracefully(self):
+        import v1_pipeline as p
+        content = "foo bar baz\nfoo bar qux"
+        edits = [{"type": "replace", "find": "foo bar", "new": "BAZ",
+                  "dim": "D2", "why": "rename"}]
+        patched, applied, failed = p.apply_review_edits(content, edits)
+        self.assertEqual(patched, content, "Ambiguous anchor must not mutate content")
+        self.assertEqual(len(applied), 0)
+        self.assertEqual(len(failed), 1)
+        self.assertIn("ambiguous", failed[0]["reason"].lower())
+
+    def test_anchor_not_found_fails_gracefully(self):
+        import v1_pipeline as p
+        content = "Some content here."
+        edits = [{"type": "replace", "find": "nonexistent text",
+                  "new": "X", "dim": "D2", "why": "x"}]
+        patched, applied, failed = p.apply_review_edits(content, edits)
+        self.assertEqual(patched, content)
+        self.assertEqual(len(applied), 0)
+        self.assertEqual(len(failed), 1)
+        self.assertIn("not found", failed[0]["reason"].lower())
+
+    def test_whitespace_normalized_match(self):
+        """Anchor with slightly different whitespace (e.g. extra newline) should
+        still match via the whitespace-normalized fallback."""
+        import v1_pipeline as p
+        content = "The  quick brown   fox jumps  over the lazy dog for sure this time."
+        # Anchor uses single spaces; content has irregular whitespace
+        edits = [
+            {"type": "replace",
+             "find": "The quick brown fox jumps over the lazy dog for sure this time.",
+             "new": "REPLACED",
+             "dim": "D2", "why": "ws normalize test"},
+        ]
+        patched, applied, failed = p.apply_review_edits(content, edits)
+        self.assertIn("REPLACED", patched)
+        self.assertEqual(len(applied), 1)
+        self.assertEqual(len(failed), 0)
+
+    def test_multiple_edits_reverse_order_application(self):
+        """Multiple non-overlapping edits must land correctly — reverse-order
+        application keeps earlier offsets valid."""
+        import v1_pipeline as p
+        content = "alpha beta gamma delta epsilon"
+        edits = [
+            {"type": "replace", "find": "alpha", "new": "AAA", "dim": "D1"},
+            {"type": "replace", "find": "delta", "new": "DDD", "dim": "D2"},
+            {"type": "insert_after", "find": "gamma", "new": " INSERTED", "dim": "D3"},
+        ]
+        patched, applied, failed = p.apply_review_edits(content, edits)
+        self.assertEqual(patched, "AAA beta gamma INSERTED DDD epsilon")
+        self.assertEqual(len(applied), 3)
+        self.assertEqual(len(failed), 0)
+
+    def test_overlapping_edits_detected(self):
+        """Two edits that touch overlapping regions — the second is flagged
+        as a conflict and falls back for LLM handling."""
+        import v1_pipeline as p
+        content = "the quick brown fox"
+        edits = [
+            {"type": "replace", "find": "quick brown", "new": "QB", "dim": "D1"},
+            {"type": "replace", "find": "brown fox", "new": "BF", "dim": "D2"},
+        ]
+        patched, applied, failed = p.apply_review_edits(content, edits)
+        # Both edits resolve to overlapping ranges — second one conflicts
+        self.assertEqual(len(applied), 1, "One edit should apply cleanly")
+        self.assertEqual(len(failed), 1, "Overlapping edit should fail")
+        self.assertIn("overlap", failed[0]["reason"].lower())
+
+    def test_invalid_edit_type_fails(self):
+        import v1_pipeline as p
+        content = "x"
+        edits = [{"type": "bogus", "find": "x", "new": "y"}]
+        _, applied, failed = p.apply_review_edits(content, edits)
+        self.assertEqual(len(applied), 0)
+        self.assertEqual(len(failed), 1)
+        self.assertIn("unknown edit type", failed[0]["reason"].lower())
+
+    def test_empty_edit_list_is_noop(self):
+        import v1_pipeline as p
+        content = "unchanged"
+        patched, applied, failed = p.apply_review_edits(content, [])
+        self.assertEqual(patched, content)
+        self.assertEqual(applied, [])
+        self.assertEqual(failed, [])
+
+    def test_missing_find_field_fails(self):
+        import v1_pipeline as p
+        edits = [{"type": "replace", "new": "y"}]
+        _, applied, failed = p.apply_review_edits("content", edits)
+        self.assertEqual(len(applied), 0)
+        self.assertEqual(len(failed), 1)
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 

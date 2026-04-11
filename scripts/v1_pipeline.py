@@ -607,12 +607,43 @@ The writer LLM will use your feedback verbatim to patch the module, so vague
 criticism is useless. Cite commands, YAML keys, version numbers, and doc URLs
 where relevant.
 
-Output ONLY this JSON (no prose before or after, no markdown fences).
-The scores array MUST have EXACTLY 8 integers (D1-D8; D8 is Practitioner Depth,
-do not omit). feedback is a single string containing all dimension fixes joined
-with newlines.
+STRUCTURED EDITS (required on REJECT):
+In addition to the prose feedback, on REJECT you MUST output an `edits` array
+of atomic patch operations. The pipeline applies these deterministically via
+Python string ops — NO LLM writer is involved in the fix path when edits are
+well-formed. This means you must be precise.
 
-{{"verdict": "APPROVE" or "REJECT", "scores": [D1, D2, D3, D4, D5, D6, D7, D8], "feedback": "actionable fixes here"}}
+Each edit is one of four shapes:
+
+  {{"type": "replace", "find": "<literal substring in module>", "new": "<replacement text>", "dim": "D2", "why": "<short reason>"}}
+  {{"type": "insert_after", "find": "<literal anchor substring>", "new": "<content to insert AFTER the anchor>", "dim": "D2", "why": "..."}}
+  {{"type": "insert_before", "find": "<literal anchor substring>", "new": "<content to insert BEFORE the anchor>", "dim": "D2", "why": "..."}}
+  {{"type": "delete", "find": "<literal substring to remove>", "dim": "D2", "why": "..."}}
+
+HARD RULES for edits:
+1. "find" MUST be a literal substring that appears EXACTLY ONCE in the module.
+   If the phrase appears multiple times, include surrounding context (e.g. the
+   heading above the paragraph) to make it unique. Ambiguous anchors FAIL.
+2. "new" is the exact replacement/insertion text — no placeholders, no "...",
+   no "TODO", no "rest unchanged". Full verbatim content.
+3. One edit = one atomic change. Do NOT bundle multiple unrelated edits into
+   one patch. Multiple small edits > one giant replacement.
+4. Quote Markdown/YAML/code literally. Preserve leading whitespace and newlines
+   exactly as they appear in the module. Escape embedded quotes for JSON.
+5. List EVERY issue you want fixed. There is no cap — the pipeline applies
+   all structured edits in one pass, so being exhaustive helps convergence.
+6. If an issue is qualitative and you cannot express it as a structured edit
+   (e.g. "the tone feels dense"), describe it in the prose `feedback` field
+   instead. The pipeline will route qualitative feedback to an LLM fallback.
+
+Output ONLY this JSON (no prose before or after, no markdown fences).
+
+{{
+  "verdict": "APPROVE" or "REJECT",
+  "scores": [D1, D2, D3, D4, D5, D6, D7, D8],
+  "edits": [ ... array of edit objects, empty [] if APPROVE ... ],
+  "feedback": "human-readable summary or qualitative notes that can't be expressed as edits"
+}}
 
 ---
 
@@ -811,6 +842,195 @@ def _extract_review_json(output: str) -> dict | None:
     return None
 
 
+# ---------------------------------------------------------------------------
+# Structured edit application — deterministic patches from reviewer output
+# ---------------------------------------------------------------------------
+#
+# When the reviewer returns an `edits` array (structured patches with literal
+# find/replace/insert/delete anchors), the pipeline can apply them directly
+# via Python string operations without involving a writer LLM. This is:
+#
+#   - Free  (no Claude/Gemini call)
+#   - Instant (milliseconds vs seconds of LLM write)
+#   - 100% fidelity (no "LLM interpreted the fix" translation loss)
+#   - Deterministic (a successful apply always lands the exact content)
+#
+# The writer LLM (Sonnet) is only invoked for edits whose anchors don't
+# match exactly, or for qualitative feedback that can't be expressed as a
+# structured patch.
+
+def _collapse_whitespace(s: str) -> str:
+    """Collapse runs of whitespace (including newlines) to a single space."""
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def _find_anchor(content: str, anchor: str) -> tuple[int, int] | None:
+    """Locate `anchor` in `content`. Returns (start, end) indices of the
+    exact substring if a unique match is found, or None otherwise.
+
+    Matching strategy:
+    1. Literal exact match — fast path, handles most well-formed anchors
+    2. Whitespace-normalized match — handles minor whitespace drift between
+       the reviewer's quoted anchor and the actual module content
+
+    If the anchor appears multiple times, returns None (ambiguous — the
+    caller should fall back to an LLM writer rather than guess which
+    instance to patch).
+    """
+    if not anchor:
+        return None
+
+    # 1. Exact literal match
+    count = content.count(anchor)
+    if count == 1:
+        start = content.index(anchor)
+        return start, start + len(anchor)
+    if count > 1:
+        return None  # ambiguous
+
+    # 2. Whitespace-normalized match: build a normalized copy of content
+    # and find the normalized anchor in it. Then map back to the original
+    # indices by re-scanning the content.
+    norm_anchor = _collapse_whitespace(anchor)
+    if len(norm_anchor) < 20:
+        return None  # too short to safely fuzzy-match
+
+    # Build a map from normalized index -> original index
+    orig_positions: list[int] = []
+    norm_chars: list[str] = []
+    i = 0
+    prev_ws = False
+    while i < len(content):
+        ch = content[i]
+        if ch.isspace():
+            if not prev_ws and norm_chars:
+                norm_chars.append(" ")
+                orig_positions.append(i)
+            prev_ws = True
+        else:
+            norm_chars.append(ch)
+            orig_positions.append(i)
+            prev_ws = False
+        i += 1
+    normalized = "".join(norm_chars).strip()
+
+    if normalized.count(norm_anchor) != 1:
+        return None
+
+    norm_start = normalized.index(norm_anchor)
+    if norm_start >= len(orig_positions):
+        return None
+    orig_start = orig_positions[norm_start]
+
+    # Find the end: walk forward from orig_start until we've consumed
+    # len(norm_anchor) normalized characters
+    consumed = 0
+    orig_end = orig_start
+    in_whitespace_run = False
+    while orig_end < len(content) and consumed < len(norm_anchor):
+        ch = content[orig_end]
+        if ch.isspace():
+            if not in_whitespace_run:
+                consumed += 1  # one normalized space
+                in_whitespace_run = True
+        else:
+            consumed += 1
+            in_whitespace_run = False
+        orig_end += 1
+    return orig_start, orig_end
+
+
+def apply_review_edits(content: str, edits: list) -> tuple[str, list, list]:
+    """Apply structured review edits to content via deterministic string ops.
+
+    Returns:
+        (patched_content, applied_edits, failed_edits)
+
+    - applied_edits: list of edit dicts that landed successfully
+    - failed_edits:  list of {"edit": <original>, "reason": <str>} entries
+                     for edits that couldn't be applied mechanically. Caller
+                     should route these to an LLM fallback.
+
+    Application strategy: sort edits by anchor position in reverse order,
+    apply each in place. Reverse-order application means earlier indices
+    aren't invalidated by later inserts/replaces. If two edits touch
+    overlapping regions, the later one wins; the conflicting earlier edit
+    is reported as failed so the LLM fallback can resolve it.
+    """
+    if not isinstance(edits, list) or not edits:
+        return content, [], []
+
+    # Resolve anchor positions against the CURRENT content for every edit.
+    # We do this up-front so we can detect ambiguity and conflict.
+    resolved: list[tuple[dict, int, int]] = []  # (edit, start, end)
+    failed: list = []
+
+    for edit in edits:
+        if not isinstance(edit, dict):
+            failed.append({"edit": edit, "reason": "edit is not a JSON object"})
+            continue
+        etype = edit.get("type")
+        if etype not in ("replace", "insert_after", "insert_before", "delete"):
+            failed.append({"edit": edit, "reason": f"unknown edit type: {etype!r}"})
+            continue
+        find = edit.get("find", "")
+        if not isinstance(find, str) or not find:
+            failed.append({"edit": edit, "reason": "missing or empty 'find' field"})
+            continue
+        loc = _find_anchor(content, find)
+        if loc is None:
+            # Distinguish "not found" from "ambiguous" for clearer logs
+            count = content.count(find)
+            reason = (
+                f"anchor appears {count} times (ambiguous)"
+                if count > 1
+                else "anchor not found in module"
+            )
+            failed.append({
+                "edit": edit,
+                "reason": f"{reason}: {find[:100]!r}",
+            })
+            continue
+        resolved.append((edit, loc[0], loc[1]))
+
+    # Detect overlapping edits (conflict). Sort by start, mark any edit
+    # whose range overlaps the previous one as failed.
+    resolved.sort(key=lambda t: t[1])
+    non_conflicting: list[tuple[dict, int, int]] = []
+    prev_end = -1
+    for edit, start, end in resolved:
+        if start < prev_end:
+            failed.append({
+                "edit": edit,
+                "reason": f"overlaps a previous edit at [{prev_end}, {start})",
+            })
+            continue
+        non_conflicting.append((edit, start, end))
+        prev_end = end
+
+    # Apply in REVERSE document order so earlier indices aren't shifted
+    # by later inserts/replaces.
+    patched = content
+    applied: list = []
+    for edit, start, end in reversed(non_conflicting):
+        etype = edit["type"]
+        new = edit.get("new", "")
+        if not isinstance(new, str):
+            failed.append({"edit": edit, "reason": "'new' field is not a string"})
+            continue
+        if etype == "replace":
+            patched = patched[:start] + new + patched[end:]
+        elif etype == "insert_after":
+            patched = patched[:end] + new + patched[end:]
+        elif etype == "insert_before":
+            patched = patched[:start] + new + patched[start:]
+        elif etype == "delete":
+            patched = patched[:start] + patched[end:]
+        applied.append(edit)
+
+    return patched, applied, failed
+
+
 def step_review(module_path: Path, improved: str, model: str = MODELS["review"]) -> dict | None:
     """Reviewer (Codex by default) evaluates the module strictly.
 
@@ -866,6 +1086,18 @@ def step_review(module_path: Path, improved: str, model: str = MODELS["review"])
         )
         print(f"  Scores: {scores} (sum: {sum(scores)}/40)")
         print(f"          {per_dim}")
+    edits = result.get("edits") or []
+    if isinstance(edits, list) and edits:
+        by_type: dict[str, int] = {}
+        by_dim: dict[str, int] = {}
+        for e in edits:
+            if not isinstance(e, dict):
+                continue
+            by_type[e.get("type", "?")] = by_type.get(e.get("type", "?"), 0) + 1
+            by_dim[e.get("dim", "?")] = by_dim.get(e.get("dim", "?"), 0) + 1
+        type_summary = ", ".join(f"{k}={v}" for k, v in sorted(by_type.items()))
+        dim_summary = ", ".join(f"{k}={v}" for k, v in sorted(by_dim.items()))
+        print(f"  Structured edits: {len(edits)} ({type_summary}; by dim: {dim_summary})")
     if feedback:
         # Print the full feedback verbatim — operators need to read it to
         # understand why the reviewer rejected and what the FIX blocks say.
@@ -1219,12 +1451,89 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                 save_state(state)
                 break
             else:
-                # Rejected — feed back to WRITE
+                # Rejected — feed back to WRITE (or deterministic apply)
                 r_scores = review.get("scores") or []
                 r_feedback = review.get("feedback", "")
+                r_edits = review.get("edits") or []
                 r_valid = len(r_scores) == 8
                 r_sum = sum(r_scores) if r_valid else 0
-                r_has_weak = r_valid and any(s < 4 for s in r_scores)
+
+                # Deterministic edit application — if the reviewer returned a
+                # structured `edits` array AND the module isn't severely broken,
+                # try applying the edits via Python string ops. This skips the
+                # LLM writer entirely when the reviewer's anchors match cleanly:
+                #   - zero Sonnet calls
+                #   - milliseconds instead of seconds
+                #   - 100% fidelity (no interpretation loss)
+                # Any edits that fail (anchor not found or ambiguous) are routed
+                # to the Sonnet targeted-fix fallback along with qualitative
+                # feedback that can't be expressed as a patch.
+                content_before = improved if improved is not None else module_path.read_text()
+                if r_valid and r_sum >= 25 and isinstance(r_edits, list) and r_edits:
+                    patched, applied, failed_edits = apply_review_edits(content_before, r_edits)
+                    total_edits = len(r_edits)
+                    applied_count = len(applied)
+                    failed_count = len(failed_edits)
+                    print(f"  → Deterministic apply: {applied_count}/{total_edits} edits landed, {failed_count} failed")
+                    if failed_edits:
+                        for fe in failed_edits[:5]:
+                            print(f"    ✗ {fe.get('reason', '?')}")
+                        if len(failed_edits) > 5:
+                            print(f"    ... and {len(failed_edits) - 5} more failed")
+
+                    if applied_count > 0 and failed_count == 0:
+                        # 100% success — skip Sonnet entirely, re-review the patched content.
+                        # No writer call needed, no retry slot consumed wastefully.
+                        improved = patched
+                        last_good = improved
+                        ms["phase"] = "review"
+                        save_state(state)
+                        print(f"  ✓ All {applied_count} edits applied cleanly — re-reviewing patched content (no LLM writer call)")
+                        if attempt < max_retries:
+                            # Don't print "retrying" since no writer call; log as re-review
+                            continue
+                        else:
+                            print(f"  ❌ Max retries reached without APPROVE")
+                            ms["errors"].append(f"Review rejected {max_retries+1} times")
+                            return False
+                    elif applied_count > 0 and failed_count > 0:
+                        # Partial success: apply the clean edits, fall back to Sonnet for
+                        # the remaining ones + any qualitative notes.
+                        improved = patched
+                        last_good = improved
+                        needs_rewrite = False
+                        targeted_fix = True
+                        failed_lines = "\n".join(
+                            f"- [{fe.get('edit', {}).get('dim', '?')}] "
+                            f"{fe.get('edit', {}).get('why', fe.get('edit', {}).get('type', '?'))} "
+                            f"(reason: {fe.get('reason', '?')})"
+                            for fe in failed_edits
+                        )
+                        plan = (
+                            f"FALLBACK FIX. The pipeline applied {applied_count} of {total_edits} "
+                            f"structured edits deterministically; the remaining {failed_count} "
+                            f"could not be applied mechanically (anchor not found, ambiguous, "
+                            f"or overlapping). Apply ONLY these remaining edits, preserving "
+                            f"everything else verbatim.\n\n"
+                            f"Failed edits to apply:\n{failed_lines}\n\n"
+                            f"Reviewer's original feedback for context:\n{r_feedback}"
+                        )
+                        ms["phase"] = "write"
+                        save_state(state)
+                        print(f"  → Sonnet fallback for {failed_count} failed edits")
+                        if attempt < max_retries:
+                            continue
+                        else:
+                            print(f"  ❌ Max retries reached after partial deterministic apply")
+                            ms["errors"].append(f"Review rejected {max_retries+1} times")
+                            return False
+                    else:
+                        # applied_count == 0 — all edits failed to match. This usually
+                        # means the reviewer's anchors don't match the module (maybe
+                        # the content drifted, maybe the reviewer quoted inaccurately).
+                        # Fall through to the normal Sonnet/Gemini routing below, using
+                        # the prose feedback.
+                        print(f"  ⚠ Zero edits applied deterministically — falling back to LLM writer")
 
                 if r_valid and r_sum < 25:
                     needs_rewrite = True
