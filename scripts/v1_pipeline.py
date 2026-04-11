@@ -935,6 +935,23 @@ def run_module(module_path: Path, state: dict, max_retries: int = 2,
     print(f"  Current phase: {ms['phase']}")
     print(f"{'='*60}")
 
+    # Already-done resumption. If the module is flagged for independent
+    # re-review (typically Gemini-approved during a Codex rate-limit window),
+    # reset to audit so the full pipeline can run it through Codex. Otherwise
+    # this is a genuine already-done module and we return True so batch runners
+    # don't treat it as a failure.
+    if ms["phase"] == "done":
+        if ms.get("needs_independent_review"):
+            print(f"  ↻ Flagged needs_independent_review — resetting to audit for re-review")
+            ms["phase"] = "audit"
+            save_state(state)
+            # fall through to AUDIT block below
+        else:
+            reviewer = ms.get("reviewer", "unknown")
+            total = ms.get("sum", "?")
+            print(f"  ✓ Already done: {total}/40 reviewer={reviewer} — skipping")
+            return True
+
     # AUDIT+PLAN
     if ms["phase"] in ("pending", "audit"):
         audit = step_audit(module_path, model=m["audit"])
