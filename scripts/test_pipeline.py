@@ -780,6 +780,65 @@ class TestPipelineTransitions(unittest.TestCase):
         # audit + review dispatches both fired
         self.assertEqual(mock_dispatch.call_count, 2)
 
+    @patch("v1_pipeline.STATE_FILE")
+    @patch("v1_pipeline.dispatch_auto")
+    @patch("v1_pipeline.CONTENT_ROOT")
+    @patch("subprocess.run")
+    def test_needs_targeted_fix_resumes_from_staging(
+        self, mock_subprocess, mock_root, mock_dispatch, mock_state,
+    ):
+        """phase=needs_targeted_fix resumes at write step with staged content.
+
+        Verifies the peak-hours pause/resume flow (Flavor B): when a module
+        was paused mid-targeted-fix because Claude was unavailable, the next
+        run should load the staged Gemini draft + saved plan, skip audit +
+        initial write + initial review, and jump straight into the
+        targeted-fix retry loop.
+        """
+        import v1_pipeline as p
+
+        mock_state.__class__ = type(self.state_file)
+        mock_root.resolve.return_value = Path(self.tmpdir).resolve()
+
+        # Only the targeted-fix write + its re-review should fire on resume.
+        # No audit, no initial write, no initial review.
+        mock_dispatch.side_effect = [
+            # Claude Sonnet write (targeted fix applied)
+            (True, GOOD_MODULE),
+            # Codex re-review (approve)
+            self._mock_review_approve(),
+        ]
+
+        # Pre-stage a Gemini draft where the pause happened.
+        staging = self.module_path.with_suffix(".staging.md")
+        staging.write_text(GOOD_MODULE)
+
+        state = {
+            "modules": {
+                "test/module-0.1-test": {
+                    "phase": "needs_targeted_fix",
+                    "plan": "TARGETED FIX. D2=3 weak — fix per reviewer feedback.",
+                    "targeted_fix": True,
+                    "paused_reason": "Claude peak hours",
+                    "scores": [4, 3, 4, 4, 4, 4, 4, 4],
+                    "sum": 31,
+                    "errors": [],
+                },
+            },
+        }
+
+        with patch.object(p, "STATE_FILE", self.state_file), \
+             patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
+             patch.object(p, "save_state"):
+            with patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"):
+                p.run_module(self.module_path, state)
+
+        ms = state["modules"]["test/module-0.1-test"]
+        self.assertEqual(ms.get("phase"), "done", "Should converge after targeted fix + re-review")
+        # Exactly 2 dispatch calls: targeted-fix write + re-review. NO audit, NO initial write.
+        self.assertEqual(mock_dispatch.call_count, 2,
+                         "Should skip audit + initial write + initial review; only write + review fire")
+
     def test_dry_run_does_not_modify_files(self):
         """Dry run should audit but not write any files."""
         import v1_pipeline as p
