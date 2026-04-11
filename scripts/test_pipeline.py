@@ -1681,6 +1681,102 @@ class TestDeterministicApplyIntegration(unittest.TestCase):
         ms = state["modules"]["test/module-0.1-test"]
         self.assertEqual(ms.get("phase"), "done")
 
+    @patch("v1_pipeline.STATE_FILE")
+    @patch("v1_pipeline.CONTENT_ROOT")
+    @patch("subprocess.run")
+    def test_crash_after_partial_apply_resumes_with_fallback_plan(
+        self, mock_subprocess, mock_root, mock_state,
+    ):
+        """Proves Issue B crash recovery: partial-success deterministic apply
+        persisted the fallback plan and targeted_fix flag to state, so a
+        crash here and subsequent restart must:
+
+          1. Load the staged partial-apply content as `improved`
+          2. Reconstruct the FALLBACK FIX plan from ms["plan"]
+          3. Route the writer to claude-sonnet-4-6 (targeted_fix=True)
+          4. NOT re-run audit / initial write / initial review
+        """
+        import v1_pipeline as p
+
+        mock_state.__class__ = type(self.state_file)
+        mock_root.resolve.return_value = Path(self.tmpdir).resolve()
+
+        # Pre-seed staging with the partially-patched content
+        staging_path = self.module_path.with_suffix(".staging.md")
+        partial_patched = GOOD_MODULE.replace("## Learning Outcomes", "## Learning Outcomes (PARTIALLY-PATCHED)")
+        staging_path.write_text(partial_patched)
+
+        # Pre-seed state as the partial-apply fallback branch would have saved it
+        fallback_plan = (
+            "FALLBACK FIX. The pipeline applied 3 of 5 structured edits deterministically; "
+            "the remaining 2 could not be applied mechanically. Apply ONLY these remaining "
+            'edits.\n\nFailed edit (reason: anchor not found): ```json\n{"type": "replace", '
+            '"find": "nonexistent", "new": "replacement"}\n```'
+        )
+        state = {
+            "modules": {
+                "test/module-0.1-test": {
+                    "phase": "write",
+                    "plan": fallback_plan,
+                    "targeted_fix": True,
+                    "scores": [4, 3, 4, 3, 4, 4, 3, 4],
+                    "sum": 29,
+                    "passes": False,
+                    "errors": [],
+                }
+            }
+        }
+
+        write_calls_observed = []
+
+        def fake_step_write(module_path, plan, model=None, rewrite=False,
+                            previous_output=None, knowledge_card=None):
+            write_calls_observed.append({
+                "model": model,
+                "plan": plan,
+                "previous_output": previous_output or "",
+            })
+            # Mock: return a fully-patched version that will then approve
+            return GOOD_MODULE.replace("## Learning Outcomes", "## Learning Outcomes (FULLY-FIXED)")
+
+        def fake_step_review(module_path, improved, model=None):
+            return {
+                "verdict": "APPROVE",
+                "scores": [4, 4, 4, 4, 4, 4, 4, 5],
+                "edits": [],
+                "feedback": "",
+            }
+
+        with patch.object(p, "STATE_FILE", self.state_file), \
+             patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
+             patch.object(p, "save_state"), \
+             patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
+             patch.object(p, "step_write", side_effect=fake_step_write), \
+             patch.object(p, "step_review", side_effect=fake_step_review), \
+             patch.object(p, "step_check", return_value=(True, [])), \
+             patch.object(p, "ensure_knowledge_card", return_value="cached card"):
+            p.run_module(self.module_path, state)
+
+        self.assertEqual(len(write_calls_observed), 1,
+                         "Exactly one write should fire: the fallback Sonnet write")
+        call = write_calls_observed[0]
+        # Writer MUST be Sonnet (the targeted-fix model) because ms["targeted_fix"]
+        # was restored from state on resume
+        self.assertEqual(call["model"], p.MODELS["write_targeted"],
+                         f"Fallback write must route to {p.MODELS['write_targeted']} "
+                         f"(Sonnet), not Gemini — targeted_fix flag must survive resume")
+        # Plan MUST be the restored FALLBACK FIX plan, not a generic one
+        self.assertIn("FALLBACK FIX", call["plan"],
+                      "Plan must be restored from ms['plan'], not regenerated as generic")
+        # previous_output MUST be the staged partial-patched content — Sonnet
+        # must operate on the progress we already made, not start over from
+        # the un-patched on-disk module
+        self.assertIn("(PARTIALLY-PATCHED)", call["previous_output"],
+                      "Writer must operate on the staged partial-patched content, "
+                      "not re-read the unpatched on-disk module")
+        ms = state["modules"]["test/module-0.1-test"]
+        self.assertEqual(ms.get("phase"), "done")
+
 
 # ---------------------------------------------------------------------------
 # Main
