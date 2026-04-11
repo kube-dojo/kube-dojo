@@ -5,8 +5,6 @@ sidebar:
   order: 402
 ---
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6
-> **Migrated from neural-dojo** — pending pipeline polish
-
 # Or: Why Regular Databases Just Don't Cut It for AI
 
 **Reading Time**: 5-6 hours

@@ -5,8 +5,6 @@ sidebar:
   order: 702
 ---
 > **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 5-6
-> **Migrated from neural-dojo** — pending pipeline polish
-
 **Prerequisites**: Phase 10 complete (DevOps & MLOps)
 
 ## The 3 AM Page That Changed Cloud Operations Forever

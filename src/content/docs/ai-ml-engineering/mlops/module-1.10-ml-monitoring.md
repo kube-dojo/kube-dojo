@@ -5,8 +5,6 @@ sidebar:
   order: 611
 ---
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6
-> **Migrated from neural-dojo** — pending pipeline polish
-
 ---
 **Prerequisites**: Module 51 (Model Deployment Patterns)
 

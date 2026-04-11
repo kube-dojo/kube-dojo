@@ -5,8 +5,6 @@ sidebar:
   order: 101
 ---
 > **AI/ML Engineering Track** | Complexity: `[QUICK]` | Time: 2-3
-> **Migrated from neural-dojo** — pending pipeline polish
-
 ---
 **Reading Time**: 2-3 hours
 **Prerequisites**: A computer, internet access, and the willingness to type commands into a terminal

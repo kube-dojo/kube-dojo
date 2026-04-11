@@ -5,8 +5,6 @@ sidebar:
   order: 1103
 ---
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6
-> **Migrated from neural-dojo** — pending pipeline polish
-
 ## What You'll Be Able to Do
 
 By the end of this module, you will:

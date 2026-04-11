@@ -5,8 +5,6 @@ sidebar:
   order: 203
 ---
 > **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 3-4
-> **Migrated from neural-dojo** — pending pipeline polish
-
 # Or: How to Stop Paying OpenAI and Start Loving Your GPU
 
 **Reading Time**: 3-4 hours

@@ -5,8 +5,6 @@ sidebar:
   order: 202
 ---
 > **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 4-5
-> **Migrated from neural-dojo** — pending pipeline polish
-
 # Or: How I Learned to Stop Typing and Let the AI Do It
 
 **Reading Time**: 4-5 hours

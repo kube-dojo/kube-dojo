@@ -5,8 +5,6 @@ sidebar:
   order: 805
 ---
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 6-8
-> **Migrated from neural-dojo** — pending pipeline polish
-
 **Prerequisites**: Module 34 (Code Generation Models)
 
 ---

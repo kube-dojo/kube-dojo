@@ -5,8 +5,6 @@ sidebar:
   order: 1104
 ---
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 6-8
-> **Migrated from neural-dojo** — pending pipeline polish
-
 ## The Intern Who Beat the Team
 
 **Seattle. August 12, 2020. 10:15 AM.**

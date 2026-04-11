@@ -5,8 +5,6 @@ sidebar:
   order: 1006
 ---
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6
-> **Migrated from neural-dojo** — pending pipeline polish
-
 # Or: How AI Learned to See (And Why It Still Can't Find Waldo)
 
 **Reading Time**: 6-8 hours

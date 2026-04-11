@@ -5,8 +5,6 @@ sidebar:
   order: 603
 ---
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6
-> **Migrated from neural-dojo** — pending pipeline polish
-
 ## The $165 Million Bug That Containers Could Have Prevented
 
 **NASA's Jet Propulsion Laboratory. September 23, 1999.**

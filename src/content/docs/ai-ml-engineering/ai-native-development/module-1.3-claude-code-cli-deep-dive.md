@@ -5,8 +5,6 @@ sidebar:
   order: 204
 ---
 > **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 4-5
-> **Migrated from neural-dojo** — pending pipeline polish
-
 # Or: The 90% of Claude Code You've Been Missing
 
 **Reading Time**: 4-5 hours

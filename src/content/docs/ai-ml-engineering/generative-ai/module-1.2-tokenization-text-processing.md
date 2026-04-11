@@ -5,8 +5,6 @@ sidebar:
   order: 303
 ---
 > **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 4-5
-> **Migrated from neural-dojo** — pending pipeline polish
-
 # Or: Why 'tokenization' Has Nothing to Do With Cryptocurrency
 
 **Reading Time**: 4-5 hours
