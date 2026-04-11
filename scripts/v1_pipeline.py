@@ -562,12 +562,23 @@ tool/API state (2025-2026).
 
 8-dimension rubric (score each 1-5, default to 4 unless genuinely outstanding):
 - D1 Pedagogical Clarity: outcomes, structure, progression, signposting
-- D2 Technical Accuracy: correct tools, versions, commands, YAML, concepts
+- D2 Technical Accuracy: correct tools, versions, commands, YAML, concepts, config keys,
+                         API names, deprecation status, project status (CNCF sandbox/incubating/graduated),
+                         metric names, doc URLs. D2 is the single source of truth for factual correctness
+                         of ALL technical content in the module, regardless of which section the error
+                         appears in. A factual error in the practical lab deducts from D2, not from D4.
+                         A wrong config key in the production section deducts from D2, not from D7.
+                         D2 >= 4 means you have VERIFIED every technical claim in the module against
+                         authoritative sources. D2 = 5 means there are no factual errors anywhere.
 - D3 Depth & Rigor: beyond surface; tradeoffs, edge cases, failure modes
-- D4 Practical Utility: runnable labs, copy-pasteable configs, verification commands
+- D4 Practical Utility: runnable labs, copy-pasteable configs, verification commands (judged on whether
+                        the lab FLOW works end-to-end — not on whether individual commands are factually
+                        correct; factual correctness is D2's job)
 - D5 Assessment Quality: scenario-based quizzes (not recall), non-trivial inline prompts
 - D6 Coverage Breadth: no glaring gaps for the stated scope
-- D7 Production Readiness: monitoring, security, HA, scale, SLOs, failure modes
+- D7 Production Readiness: monitoring, security, HA, scale, SLOs, failure modes (judged on whether
+                           production concerns are COVERED — not on whether individual claims are
+                           factually correct; factual correctness is D2's job)
 - D8 Practitioner Depth: gotchas, decision frameworks, war stories, real ops
 
 RULES:
@@ -576,6 +587,12 @@ RULES:
 3. If content, diagrams, or code were removed vs the original → REJECT.
 4. Trivial quizzes / obvious inline prompts → REJECT.
 5. Default to 4. A 5 means "I cannot find anything to improve in this dimension".
+6. Any factual error — wrong config key, deprecated API, undocumented metric, misidentified CNCF
+   status, fabricated command, wrong doc URL — ALWAYS deducts from D2, regardless of which section
+   contains the error. Do NOT split factual-error deductions between D2 and the section's primary
+   dim (e.g. do not deduct 1 from D2 and 1 from D4 for a wrong lab command — deduct 2 from D2 and
+   leave D4 alone if the lab FLOW is otherwise correct). D2 is the single source of truth for
+   factual correctness.
 
 CRITICAL — ACTIONABLE FEEDBACK:
 For every dimension scoring below 5, the feedback field MUST contain a CONCRETE
@@ -1214,70 +1231,66 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                     targeted_fix = False
                     plan = (
                         f"SEVERE REWRITE REQUIRED. Content scored {r_sum}/40 and is "
-                        f"severely broken. Rewrite the module from scratch while "
-                        f"preserving the extracted technical assets and fixing every "
-                        f"review issue.\n\nReviewer feedback:\n{r_feedback}"
+                        f"severely broken (below the 25 cutoff). Rewrite the module "
+                        f"from scratch while preserving the extracted technical assets "
+                        f"and fixing every review issue.\n\nReviewer feedback:\n{r_feedback}"
                     )
                     print(f"  → Severe rewrite mode (Gemini): sum={r_sum}/40 < 25")
-                elif r_valid and r_sum < 28:
-                    needs_rewrite = True
-                    targeted_fix = False
-                    plan = (
-                        f"REWRITE REQUIRED. Content scored {r_sum}/40, below the "
-                        f"improve-mode threshold. Rewrite the module from scratch "
-                        f"while preserving the extracted technical assets and fixing "
-                        f"every review issue.\n\nReviewer feedback:\n{r_feedback}"
-                    )
-                    print(f"  → Rewrite mode (Gemini): sum={r_sum}/40 < 28")
-                elif r_valid and r_sum >= 28 and r_has_weak:
-                    # Surgical fix — enough passing content to preserve; fix only
-                    # the weak dims. Threshold was 33 (passing floor) but lowered
-                    # to 28 (IMPROVE mode boundary) because full rewrites were
-                    # regressing already-passing dims (whack-a-mole): module-1.5
-                    # went 28 → 29 → 30 with D5 dropping 4→3 on one retry. As
-                    # long as the module isn't in full REWRITE mode, we should
-                    # be surgically patching weak dims, not regenerating.
-                    # Also flip the writer to Claude Sonnet: precision editing is
-                    # what Claude is built for, and Gemini kept regenerating the
-                    # "preserve verbatim" sections despite explicit instructions.
+                elif r_valid:
+                    # Surgical fix — the module is not severely broken (sum >= 25).
+                    # Route to Claude Sonnet for precision editing regardless of
+                    # whether there are weak dims. Three cases land here:
+                    #   - Weak dims present (common case: apply FIX blocks)
+                    #   - No weak dims but sum < 33 (unusual: should approve but
+                    #     reviewer rejected on qualitative grounds)
+                    #   - All dims >= 4 and sum >= 33 but REJECT (nitpick: apply
+                    #     the specific concern the reviewer raised)
+                    #
+                    # IMPORTANT: edit decisions are driven by reviewer feedback
+                    # (which sections were flagged with a [Dn] → FIX: block),
+                    # NOT by dim scores. A "passing" dim can still contain a
+                    # factual error Codex flagged with a FIX block — those must
+                    # be applied. Conversely, sections the reviewer did NOT
+                    # mention should be preserved verbatim regardless of which
+                    # dim they primarily support.
+                    #
+                    # This replaces the old "preserve passing dims verbatim"
+                    # rule which missed factual-error fixes that Codex flagged
+                    # in sections under nominally-passing dims.
                     needs_rewrite = False
                     targeted_fix = True
                     weak = [(i + 1, s) for i, s in enumerate(r_scores) if s < 4]
                     passing = [(i + 1, s) for i, s in enumerate(r_scores) if s >= 4]
-                    weak_desc = ", ".join(f"D{i}={s}" for i, s in weak)
-                    passing_desc = ", ".join(f"D{i}={s}" for i, s in passing)
+                    weak_desc = ", ".join(f"D{i}={s}" for i, s in weak) if weak else "(none — nitpick mode)"
+                    passing_desc = ", ".join(f"D{i}={s}" for i, s in passing) if passing else "(none)"
                     plan = (
-                        f"TARGETED FIX. Content currently scores {r_sum}/40.\n\n"
-                        f"WEAK dimensions to fix: {weak_desc}.\n"
-                        f"PASSING dimensions — DO NOT TOUCH, leave content exactly verbatim: {passing_desc}.\n\n"
-                        f"The reviewer has specifically approved the passing dimensions — if your "
-                        f"edit changes sections that support those dims, you WILL regress scores "
-                        f"and the module will be rejected again. Do not regenerate code blocks, "
-                        f"diagrams, tables, quiz questions, or inline prompts that were not flagged "
-                        f"in the reviewer's feedback. Apply only the surgical patches the reviewer "
-                        f"points to, using their exact FIX suggestions verbatim where possible.\n\n"
-                        f"Reviewer feedback (apply the [Dn] → FIX: blocks literally):\n{r_feedback}"
+                        f"TARGETED FIX. Content currently scores {r_sum}/40 "
+                        f"(weak dims: {weak_desc}; passing dims: {passing_desc}).\n\n"
+                        f"HOW TO EDIT:\n"
+                        f"1. Apply EVERY [Dn] → FIX: block from the reviewer feedback below, "
+                        f"regardless of which dim it tags. Some FIX blocks may target sections "
+                        f"that support a 'passing' dim — those factual errors still need to be "
+                        f"fixed. Use the reviewer's exact replacement text/YAML/commands verbatim "
+                        f"wherever the FIX block provides literal content.\n"
+                        f"2. Preserve VERBATIM any section, code block, diagram, table, quiz "
+                        f"question, or inline prompt that the reviewer did NOT mention in any "
+                        f"[Dn] → FIX: block. Do not regenerate untouched content.\n"
+                        f"3. The edit target is the reviewer's FIX blocks, not the dim scores. "
+                        f"Dim scores tell you WHY the module was rejected; FIX blocks tell you "
+                        f"WHAT to change. Follow the FIX blocks.\n\n"
+                        f"If you touch a section the reviewer did not flag, you risk regressing "
+                        f"a passing dim (classic whack-a-mole). When in doubt, do less, not more.\n\n"
+                        f"Reviewer feedback (apply every [Dn] → FIX: block literally):\n{r_feedback}"
                     )
-                    print(f"  → Targeted fix mode (Claude Sonnet): fixing {weak_desc}, preserving {passing_desc}, sum={r_sum}/40")
-                elif r_valid and r_sum >= 36 and not r_has_weak:
-                    # All dims ≥ 4 but verdict REJECT — qualitative nitpick.
-                    # Numeric ground truth says this passes. Use improve mode
-                    # with the feedback as a focused plan. Precision editing →
-                    # Claude Sonnet, same reasoning as targeted fix above.
-                    needs_rewrite = False
-                    targeted_fix = True
-                    plan = (
-                        f"NITPICK FIX. Content scored {r_sum}/40, all dimensions pass "
-                        f"(every score ≥ 4), but the reviewer raised a concern. "
-                        f"Address ONLY this specific concern; preserve EVERYTHING else "
-                        f"verbatim (sections, code, diagrams, tables, quiz questions). "
-                        f"Reviewer feedback: {r_feedback}"
-                    )
-                    print(f"  → Nitpick fix mode (Claude Sonnet): sum={r_sum}/40, no weak dims")
+                    mode = "Targeted fix" if weak else "Nitpick fix"
+                    print(f"  → {mode} mode (Claude Sonnet): fixing per reviewer FIX blocks, "
+                          f"weak={weak_desc}, preserving untouched sections, sum={r_sum}/40")
                 else:
-                    # Catch-all: malformed scores or an unexpected reject shape.
-                    # Recompute to a full rewrite on Gemini rather than trying
-                    # to surgically patch from incomplete review metadata.
+                    # Catch-all: malformed scores, or a REJECT with no weak dims
+                    # and sum below 36 (unusual — all dims passing but rejected
+                    # with no specific dimension weakness). Fall back to full
+                    # rewrite on Gemini rather than try to surgically patch from
+                    # incomplete review metadata.
                     needs_rewrite = True
                     targeted_fix = False
                     plan = (
