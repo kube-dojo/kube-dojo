@@ -950,6 +950,18 @@ def _find_anchor(content: str, anchor: str) -> tuple[int, int] | None:
     return orig_start, orig_end
 
 
+def _atomic_write_text(path: Path, content: str) -> None:
+    """Write `content` to `path` atomically — stages to a sibling tempfile
+    and then `os.replace()` swaps it into place. Survives SIGKILL mid-write:
+    either the old file is intact, or the new file is complete. No partial
+    writes visible to a future reader.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(content)
+    os.replace(tmp, path)
+
+
 def apply_review_edits(content: str, edits: list) -> tuple[str, list, list]:
     """Apply structured review edits to content via deterministic string ops.
 
@@ -1359,7 +1371,7 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                 print(f"  Progress preserved — will resume at targeted-fix step on next run.")
                 staging_path = module_path.with_suffix(".staging.md")
                 if last_good:
-                    staging_path.write_text(last_good)
+                    _atomic_write_text(staging_path, last_good)
                     print(f"  Staged {len(last_good)} chars to {staging_path.name}")
                 else:
                     print(f"  ⚠ No last_good content to stage — resume will restart from the initial write")
@@ -1517,13 +1529,14 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                         # the patched content. The retry loop slot IS still consumed
                         # (attempt increments), but no Gemini/Sonnet call runs; we
                         # just ask Codex to re-evaluate the patched module.
-                        # Flush the patched content to the staging file so a crash
-                        # between here and the next CHECK doesn't lose the work and
-                        # cause us to re-generate the same Codex edits on resume.
+                        # Atomic staging write: survives SIGKILL mid-write so a
+                        # crash between here and the next CHECK doesn't lose the
+                        # patched content and force re-generation of the same
+                        # Codex edits on resume.
                         improved = patched
                         last_good = improved
                         staging_path = module_path.with_suffix(".staging.md")
-                        staging_path.write_text(patched)
+                        _atomic_write_text(staging_path, patched)
                         ms["phase"] = "review"
                         save_state(state)
                         print(f"  ✓ All {applied_count} edits applied cleanly — re-reviewing patched content (no LLM writer call, staged to {staging_path.name})")
@@ -1541,9 +1554,9 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                         # passed dim/why/reason which left Sonnet guessing.
                         improved = patched
                         last_good = improved
-                        # Flush partial progress to staging for crash recovery
+                        # Atomic staging write for crash recovery
                         staging_path = module_path.with_suffix(".staging.md")
-                        staging_path.write_text(patched)
+                        _atomic_write_text(staging_path, patched)
                         needs_rewrite = False
                         targeted_fix = True
                         failed_blocks = []
@@ -1569,9 +1582,17 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                             f"{failed_text}\n\n"
                             f"Reviewer's qualitative notes (prose, not covered by structured edits):\n{r_feedback}"
                         )
+                        # Persist the fallback plan + targeted_fix flag into ms so
+                        # the peak-pause-style resume branch (lines ~1278-1284) can
+                        # reconstruct the targeted-fix state on crash. Without this,
+                        # on crash restart the resume code sees ms.get("plan") == None
+                        # and falls through to a generic rewrite, wasting a full
+                        # writer cycle.
+                        ms["plan"] = plan
+                        ms["targeted_fix"] = True
                         ms["phase"] = "write"
                         save_state(state)
-                        print(f"  → Sonnet fallback for {failed_count} failed edits (staged partial progress)")
+                        print(f"  → Sonnet fallback for {failed_count} failed edits (partial progress staged + plan persisted)")
                         if attempt < max_retries:
                             continue
                         else:
@@ -1676,7 +1697,7 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
         # Load improved content from staging file if resuming
         staging = module_path.with_suffix(".staging.md")
         if improved:
-            staging.write_text(improved)
+            _atomic_write_text(staging, improved)
         elif staging.exists():
             improved = staging.read_text()
             print(f"  Resuming CHECK from staging file")

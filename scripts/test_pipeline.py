@@ -1603,6 +1603,84 @@ class TestDeterministicApplyIntegration(unittest.TestCase):
                          "Module must converge to done after deterministic apply + approve")
         self.assertTrue(ms.get("passes"))
 
+    @patch("v1_pipeline.STATE_FILE")
+    @patch("v1_pipeline.CONTENT_ROOT")
+    @patch("subprocess.run")
+    def test_crash_after_deterministic_apply_recovers_from_staging(
+        self, mock_subprocess, mock_root, mock_state,
+    ):
+        """Proves crash recovery: simulates a process crash AFTER deterministic
+        apply succeeds but BEFORE CHECK runs, then restarts run_module on the
+        same state + staging file and asserts the patched content (not the
+        un-patched on-disk content) is what gets re-reviewed.
+
+        This test enforces Gemini's review finding: the staging write was
+        landing, but without this test we couldn't prove the resume path
+        actually reads it."""
+        import v1_pipeline as p
+
+        mock_state.__class__ = type(self.state_file)
+        mock_root.resolve.return_value = Path(self.tmpdir).resolve()
+
+        # Pre-seed the staging file with "patched" content different from
+        # the on-disk module — simulating a crash after apply but before CHECK
+        staging_path = self.module_path.with_suffix(".staging.md")
+        patched_content = GOOD_MODULE.replace("## Learning Outcomes", "## Learning Outcomes (PATCHED)")
+        staging_path.write_text(patched_content)
+
+        # Pre-seed state as if the pipeline was mid-run and crashed at
+        # phase=review (the state deterministic apply leaves behind)
+        state = {
+            "modules": {
+                "test/module-0.1-test": {
+                    "phase": "review",
+                    "scores": [4, 3, 4, 4, 4, 4, 4, 4],
+                    "sum": 31,
+                    "passes": False,
+                    "errors": [],
+                }
+            }
+        }
+
+        reviews_seen = []
+
+        def fake_step_review(module_path, improved, model=None):
+            reviews_seen.append(improved)
+            return {
+                "verdict": "APPROVE",
+                "scores": [4, 4, 4, 4, 4, 4, 4, 5],
+                "edits": [],
+                "feedback": "",
+            }
+
+        step_write_calls = []
+
+        def fake_step_write(module_path, plan, model=None, rewrite=False,
+                            previous_output=None, knowledge_card=None):
+            step_write_calls.append(plan[:80])
+            return GOOD_MODULE
+
+        with patch.object(p, "STATE_FILE", self.state_file), \
+             patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
+             patch.object(p, "save_state"), \
+             patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
+             patch.object(p, "step_write", side_effect=fake_step_write), \
+             patch.object(p, "step_review", side_effect=fake_step_review), \
+             patch.object(p, "step_check", return_value=(True, [])), \
+             patch.object(p, "ensure_knowledge_card", return_value="cached card"):
+            p.run_module(self.module_path, state)
+
+        # Recovery must read from staging (patched), not from on-disk (original)
+        self.assertEqual(len(reviews_seen), 1, "One review should fire on recovery")
+        self.assertIn("(PATCHED)", reviews_seen[0],
+                      "Resume at phase=review must load patched content from staging, "
+                      "not the un-patched on-disk module")
+        # No writer calls — the patched content was already staged
+        self.assertEqual(len(step_write_calls), 0,
+                         "Crash recovery at phase=review should NOT re-invoke the writer")
+        ms = state["modules"]["test/module-0.1-test"]
+        self.assertEqual(ms.get("phase"), "done")
+
 
 # ---------------------------------------------------------------------------
 # Main
