@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
-"""Mark every passed module in .pipeline/state.yaml as needing Codex re-review.
+"""Mark every passed module as needing an independent reviewer stamp.
 
-Run this after switching the official reviewer from Gemini to Codex. All modules
-previously passed by Gemini get a `needs_codex_review=True` flag and their
-`reviewer` field is set to their original reviewer (inferred as "gemini" if
-absent, since the historical MODELS["review"] was gemini-3.1-pro-preview).
+Independent reviewer = codex or claude. Gemini does NOT count as independent
+because it is the same family as the writer and has known self-bias.
 
-The modules are NOT reset to an earlier phase — the content on disk is still
-considered usable. Only the official reviewer stamp is flagged as missing, so
-operators can prioritize re-reviewing with Codex when quota is available.
+Run this after switching the official reviewer to Codex. All modules previously
+passed by Gemini (or with no recorded reviewer) get `needs_independent_review=True`.
+Their `reviewer` field is preserved if set, else assumed "gemini".
+
+The modules are NOT reset to an earlier phase — the content on disk remains
+usable. Only the independent reviewer stamp is flagged as missing, so operators
+can prioritize re-reviewing with Codex when quota is available.
 
 Usage:
-    python scripts/mark-needs-codex-review.py --dry-run    # show what would change
-    python scripts/mark-needs-codex-review.py --apply      # persist changes
+    python scripts/mark-needs-independent-review.py --dry-run
+    python scripts/mark-needs-independent-review.py --apply
 
 The script is idempotent: running it twice is a no-op on already-marked modules.
 """
@@ -27,6 +29,10 @@ import yaml
 
 REPO_ROOT = Path(__file__).parent.parent
 STATE_FILE = REPO_ROOT / ".pipeline" / "state.yaml"
+
+# Mirror of v1_pipeline.INDEPENDENT_REVIEWER_FAMILIES — duplicated here so this
+# script has no import-time dependency on the full pipeline module.
+INDEPENDENT_REVIEWER_FAMILIES = {"codex", "claude"}
 
 
 def main() -> int:
@@ -45,7 +51,7 @@ def main() -> int:
 
     total = 0
     would_mark = 0
-    already_marked = 0
+    already_independent = 0
     not_done = 0
 
     for ms in modules.values():
@@ -54,22 +60,19 @@ def main() -> int:
         if phase != "done":
             not_done += 1
             continue
-        reviewer = ms.get("reviewer")
-        if reviewer == "codex" and not ms.get("needs_codex_review", False):
-            already_marked += 1
+        reviewer = ms.get("reviewer") or "gemini"
+        if reviewer in INDEPENDENT_REVIEWER_FAMILIES and not ms.get("needs_independent_review", False):
+            already_independent += 1
             continue
-        # Flag for re-review. Preserve original reviewer if known; else assume
-        # gemini (historical default).
-        if not reviewer:
-            ms["reviewer"] = "gemini"
-        ms["needs_codex_review"] = True
+        ms["reviewer"] = reviewer
+        ms["needs_independent_review"] = True
         would_mark += 1
 
     print(f"Total modules in state: {total}")
     print(f"  phase=done: {total - not_done}")
     print(f"  phase!=done (skipped): {not_done}")
-    print(f"  already codex-reviewed: {already_marked}")
-    print(f"  to flag needs_codex_review=True: {would_mark}")
+    print(f"  already independently reviewed: {already_independent}")
+    print(f"  to flag needs_independent_review=True: {would_mark}")
 
     if args.apply and would_mark > 0:
         STATE_FILE.write_text(yaml.safe_dump(state, sort_keys=False))

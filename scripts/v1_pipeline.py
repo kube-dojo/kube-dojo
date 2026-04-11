@@ -131,9 +131,15 @@ def dispatch_auto(prompt: str, model: str, timeout: int = 900) -> tuple[bool, st
 MODELS = {
     "audit": "gemini-3.1-pro-preview",     # AUDIT+PLAN: rubric evaluation + plan
     "write": "gemini-3.1-pro-preview",     # WRITE: draft improvements
-    "review": "codex",                     # REVIEW: Codex (independent, stricter)
+    "review": "codex",                     # REVIEW: preferred independent reviewer
+    "review_fallback": "gemini-3.1-pro-preview",  # used only when "review" is unavailable
     # "translate" removed — uk_sync.CHUNKED_MODEL owns translation model config
 }
+
+# Reviewer families considered "independent" of the writer (currently Gemini).
+# Only these count as production-ready reviewers. Gemini reviewing Gemini is a
+# fallback to keep the pipeline moving but flags the module for re-review.
+INDEPENDENT_REVIEWER_FAMILIES = {"codex", "claude"}
 
 # Pipeline phases in order
 PHASES = ["pending", "audit", "write", "review", "check", "score", "done"]
@@ -993,32 +999,43 @@ def run_module(module_path: Path, state: dict, max_retries: int = 2,
             save_state(state)
 
         if ms["phase"] == "review":
-            review = step_review(module_path, improved or module_path.read_text(), model=m["review"])
+            reviewer_model = m["review"]
+            review = step_review(module_path, improved or module_path.read_text(), model=reviewer_model)
 
-            # Rate-limit degradation: keep the written content, flag the module
-            # as needing Codex review later, and continue the pipeline. The
-            # content is still written; only the official reviewer stamp is
-            # deferred. Pipeline does not fail, does not loop.
+            # Rate-limit degradation: fall back to the Gemini reviewer so we
+            # get REAL scores and can make a real APPROVE/REJECT decision.
+            # The module still commits if it passes, but we flag
+            # needs_independent_review=True so operators know to re-review
+            # with Codex (or Claude) when quota returns. Pipeline never halts.
             if isinstance(review, dict) and review.get("rate_limited"):
-                ms["codex_status"] = "rate_limited"
-                ms["reviewer"] = "pending"  # not yet reviewed by official reviewer
-                ms["needs_codex_review"] = True
-                ms["last_run"] = datetime.now(UTC).isoformat()
-                # Stage the written content so a later re-review can use it.
-                if improved:
-                    staging = module_path.with_suffix(".staging.md")
-                    staging.write_text(improved)
-                    print(f"  ⚠ Content staged at {staging} — will pass CHECK but keep codex_pending flag")
-                # Still advance past review so CHECK+SCORE can run on the written
-                # content (graceful degradation: the module is usable, just not
-                # Codex-blessed). The SCORE step will write a provisional pass
-                # with a "pending" flag so users can see which modules need
-                # re-review when Codex quota returns.
-                ms["phase"] = "check"
-                ms["scores"] = [4, 4, 4, 4, 4, 4, 4, 5]  # provisional, will be overwritten on re-review
-                ms["sum"] = 33
-                save_state(state)
-                break
+                fallback_model = MODELS.get("review_fallback", "gemini-3.1-pro-preview")
+                # Only fall back if the fallback is from a different family
+                # (otherwise we'd just retry the same rate-limited reviewer).
+                primary_family = reviewer_model.split("-")[0]
+                fallback_family = fallback_model.split("-")[0]
+                if fallback_family == primary_family:
+                    print(f"  ⚠ Primary reviewer rate-limited and fallback is same family — aborting review")
+                    ms["errors"].append("Primary reviewer rate-limited, no alternative fallback")
+                    save_state(state)
+                    return False
+
+                print(f"  ⚠ {reviewer_model} rate-limited — falling back to {fallback_model}")
+                review = step_review(
+                    module_path, improved or module_path.read_text(), model=fallback_model,
+                )
+                if review is None:
+                    ms["errors"].append("Fallback reviewer failed")
+                    save_state(state)
+                    return False
+                if isinstance(review, dict) and review.get("rate_limited"):
+                    ms["errors"].append("Both primary and fallback reviewers rate-limited")
+                    save_state(state)
+                    return False
+                # Mark that this module used a fallback reviewer — the APPROVE
+                # branch below will see reviewer_family != INDEPENDENT_REVIEWER_FAMILIES
+                # and correctly set needs_independent_review=True.
+                reviewer_model = fallback_model
+                ms["used_fallback_reviewer"] = True
 
             if review is None:
                 ms["errors"].append(f"Review failed attempt {attempt+1}")
@@ -1051,13 +1068,15 @@ def run_module(module_path: Path, state: dict, max_retries: int = 2,
                     floor = [4, 4, 4, 4, 4, 4, 4, 5]  # sum=33, min=4, passes SCORE
                     ms["scores"] = floor
                     ms["sum"] = sum(floor)
-                # Tag the official reviewer. Any module with reviewer != "codex"
-                # is considered "unreviewed by the official reviewer" and can be
-                # re-reviewed via mark-needs-codex-review.py.
-                reviewer_family = m["review"].split("-")[0]  # "codex", "gemini", "claude"
+                # Tag the reviewer that actually produced this verdict (may be
+                # the primary or the fallback). needs_independent_review is
+                # True for any reviewer not in INDEPENDENT_REVIEWER_FAMILIES
+                # (currently: anything other than codex/claude).
+                reviewer_family = reviewer_model.split("-")[0]
                 ms["reviewer"] = reviewer_family
-                ms["needs_codex_review"] = (reviewer_family != "codex")
-                ms.pop("codex_status", None)  # clear any stale rate-limit flag
+                ms["needs_independent_review"] = (
+                    reviewer_family not in INDEPENDENT_REVIEWER_FAMILIES
+                )
                 ms["phase"] = "check"
                 save_state(state)
                 break
@@ -1160,8 +1179,8 @@ def run_module(module_path: Path, state: dict, max_retries: int = 2,
 
         if passes:
             reviewer = ms.get("reviewer", "unknown")
-            pending = ms.get("needs_codex_review", False)
-            pending_tag = " codex-pending" if pending else ""
+            pending = ms.get("needs_independent_review", False)
+            pending_tag = " needs-independent-review" if pending else ""
             print(f"\n  ✓ PASS: {total}/40 (min: {minimum}) reviewer={reviewer}{pending_tag}")
             # Auto-commit
             add_result = subprocess.run(
