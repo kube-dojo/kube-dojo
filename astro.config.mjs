@@ -200,6 +200,7 @@ export default defineConfig({
             { label: 'Security & Compliance', autogenerate: { directory: 'on-premises/security' }, collapsed: true },
             { label: 'Day-2 Operations', autogenerate: { directory: 'on-premises/operations' }, collapsed: true },
             { label: 'Resilience & Migration', autogenerate: { directory: 'on-premises/resilience' }, collapsed: true },
+            { label: 'AI/ML Infrastructure', autogenerate: { directory: 'on-premises/ai-ml-infrastructure' }, collapsed: true },
           ],
         },
 

@@ -13,39 +13,43 @@ Not every workload belongs in the cloud. Data sovereignty, latency requirements,
 ## Learning Path
 
 ```
-Planning & Economics (4 modules)
+Planning & Economics (5 modules)
         │
         ▼
 Bare Metal Provisioning (4 modules)
         │
-        ├── Networking (4 modules)
-        ├── Storage (3 modules)
-        └── Multi-Cluster & Platform (3 modules)
+        ├── Networking (6 modules)
+        ├── Storage (5 modules)
+        └── Multi-Cluster & Platform (5 modules)
                 │
                 ▼
-        Security & Compliance (4 modules)
+        Security & Compliance (8 modules)
                 │
                 ▼
-        Day-2 Operations (5 modules)
+        Day-2 Operations (9 modules)
                 │
                 ▼
         Resilience & Migration (3 modules)
+                │
+                ▼
+        AI/ML Infrastructure (6 modules)
 ```
 
 ## Sections
 
 | Section | Modules | Focus |
 |---------|---------|-------|
-| [Planning & Economics](planning/) | 4 | Server sizing, cluster topology, TCO, cloud vs on-prem |
+| [Planning & Economics](planning/) | 5 | Server sizing, cluster topology, TCO, cloud vs on-prem, FinOps & chargeback |
 | [Bare Metal Provisioning](provisioning/) | 4 | PXE, MAAS, Talos, Sidero/Metal3 |
-| [Networking](networking/) | 4 | Spine-leaf, BGP, MetalLB, internal DNS/certs |
-| [Storage](storage/) | 3 | Ceph/Rook, local storage, architecture decisions |
-| [Multi-Cluster & Platform](multi-cluster/) | 3 | vSphere/OpenStack, vCluster/Kamaji, Cluster API |
-| [Security & Compliance](security/) | 4 | Air-gapped, HSM/TPM, AD/LDAP, regulated industries |
-| [Day-2 Operations](operations/) | 5 | Upgrades, firmware, node failure, observability, capacity |
+| [Networking](networking/) | 6 | Spine-leaf, BGP, MetalLB, DNS/certs, cross-cluster, service mesh |
+| [Storage](storage/) | 5 | Ceph/Rook, local storage, object storage (MinIO), database operators |
+| [Multi-Cluster & Platform](multi-cluster/) | 5 | vSphere/OpenStack, vCluster/Kamaji, Cluster API, fleet management, active-active |
+| [Security & Compliance](security/) | 8 | Air-gapped, HSM/TPM, AD/LDAP, SPIFFE, Vault, policy-as-code, zero-trust |
+| [Day-2 Operations](operations/) | 9 | Upgrades, firmware, observability, capacity, self-hosted CI/CD & registry, serverless |
 | [Resilience & Migration](resilience/) | 3 | Multi-site DR, hybrid connectivity, cloud repatriation |
+| [AI/ML Infrastructure](ai-ml-infrastructure/) | 6 | GPU nodes, private training, LLM serving, MLOps, AIOps, HPC storage |
 
-**30 modules total.** From "should we go on-prem?" to "how do we run it at scale across two datacenters."
+**51 modules total** (30 existing + 21 new from [#197](https://github.com/kube-dojo/kube-dojo.github.io/issues/197)). From "should we go on-prem?" to "how do we train LLMs on our own GPUs."
 
 ---
 
