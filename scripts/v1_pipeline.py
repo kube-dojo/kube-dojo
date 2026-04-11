@@ -103,6 +103,7 @@ from dispatch import (
     dispatch_claude,
     dispatch_codex,
     _is_rate_limited,
+    ClaudeUnavailableError,
 )
 from uk_sync import (
     translate_new_module as uk_translate,
@@ -130,7 +131,8 @@ def dispatch_auto(prompt: str, model: str, timeout: int = 900) -> tuple[bool, st
 
 MODELS = {
     "audit": "gemini-3.1-pro-preview",     # AUDIT+PLAN: rubric evaluation + plan
-    "write": "gemini-3.1-pro-preview",     # WRITE: draft improvements
+    "write": "gemini-3.1-pro-preview",     # WRITE: initial drafts + full REWRITE mode
+    "write_targeted": "claude-sonnet-4-6", # TARGETED FIX: surgical patches (instruction-following)
     "review": "codex",                     # REVIEW: preferred independent reviewer
     "review_fallback": "gemini-3.1-pro-preview",  # used only when "review" is unavailable
     # "translate" removed — uk_sync.CHUNKED_MODEL owns translation model config
@@ -1017,11 +1019,31 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
     if needs_rewrite:
         print(f"  Score {ms.get('sum')}/40 < 28 — using REWRITE mode")
 
+    # targeted_fix starts False; flips True when the REVIEW branch below
+    # routes a reject through the "TARGETED FIX" path. When True, the writer
+    # switches from Gemini (primary) to Claude Sonnet (precision editor) to
+    # reduce dim regression on surgical patches.
+    targeted_fix = False
+
     for attempt in range(max_retries + 1):
         if ms["phase"] in ("write",):
-            improved = step_write(module_path, plan, model=m["write"],
-                                  rewrite=needs_rewrite,
-                                  previous_output=last_good)
+            writer_model = m["write_targeted"] if targeted_fix else m["write"]
+            try:
+                improved = step_write(module_path, plan, model=writer_model,
+                                      rewrite=needs_rewrite,
+                                      previous_output=last_good)
+            except ClaudeUnavailableError as e:
+                # Peak hours or rate limit on Claude. Pause this module cleanly:
+                # reset to audit so the next run re-derives the targeted-fix plan
+                # from fresh state, and return True so the batch runner moves on
+                # without treating this as a pipeline failure.
+                print(f"\n  ⏸ PAUSED (Claude unavailable): {e}")
+                print(f"  Module state preserved. Will resume on next run outside peak hours.")
+                ms["phase"] = "audit"  # forces full re-derivation on next run
+                ms["paused_reason"] = str(e)
+                ms["last_run"] = datetime.now(UTC).isoformat()
+                save_state(state)
+                return True
             if improved is None:
                 ms["errors"].append(f"Write failed attempt {attempt+1}")
                 save_state(state)
@@ -1131,7 +1153,11 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                     # went 28 → 29 → 30 with D5 dropping 4→3 on one retry. As
                     # long as the module isn't in full REWRITE mode, we should
                     # be surgically patching weak dims, not regenerating.
+                    # Also flip the writer to Claude Sonnet: precision editing is
+                    # what Claude is built for, and Gemini kept regenerating the
+                    # "preserve verbatim" sections despite explicit instructions.
                     needs_rewrite = False
+                    targeted_fix = True
                     weak = [(i + 1, s) for i, s in enumerate(r_scores) if s < 4]
                     passing = [(i + 1, s) for i, s in enumerate(r_scores) if s >= 4]
                     weak_desc = ", ".join(f"D{i}={s}" for i, s in weak)
@@ -1148,12 +1174,14 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                         f"points to, using their exact FIX suggestions verbatim where possible.\n\n"
                         f"Reviewer feedback (apply the [Dn] → FIX: blocks literally):\n{r_feedback}"
                     )
-                    print(f"  → Targeted fix mode: fixing {weak_desc}, preserving {passing_desc}, sum={r_sum}/40")
+                    print(f"  → Targeted fix mode (Claude Sonnet): fixing {weak_desc}, preserving {passing_desc}, sum={r_sum}/40")
                 elif r_valid and r_sum >= 36 and not r_has_weak:
                     # All dims ≥ 4 but verdict REJECT — qualitative nitpick.
                     # Numeric ground truth says this passes. Use improve mode
-                    # with the feedback as a focused plan.
+                    # with the feedback as a focused plan. Precision editing →
+                    # Claude Sonnet, same reasoning as targeted fix above.
                     needs_rewrite = False
+                    targeted_fix = True
                     plan = (
                         f"NITPICK FIX. Content scored {r_sum}/40, all dimensions pass "
                         f"(every score ≥ 4), but the reviewer raised a concern. "
@@ -1161,11 +1189,13 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                         f"verbatim (sections, code, diagrams, tables, quiz questions). "
                         f"Reviewer feedback: {r_feedback}"
                     )
-                    print(f"  → Nitpick fix mode: sum={r_sum}/40, no weak dims")
+                    print(f"  → Nitpick fix mode (Claude Sonnet): sum={r_sum}/40, no weak dims")
                 else:
                     # Real quality issues — recompute needs_rewrite from latest score.
-                    # Do NOT leave it pinned from a previous iteration.
+                    # Do NOT leave it pinned from a previous iteration. Full
+                    # rewrites stay on Gemini (long-form generation strength).
                     needs_rewrite = (r_sum < 28) if r_valid else True
+                    targeted_fix = False
                     plan = f"PREVIOUS REVIEW REJECTED. Feedback: {r_feedback}. Fix these issues."
                     if not r_valid:
                         print(f"  ⚠ Review returned {len(r_scores)} scores (expected 8) — using full rewrite")
