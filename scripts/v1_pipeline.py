@@ -4,7 +4,7 @@
 Processes each module through 8 quality dimensions to reach 33/40.
 Uses Gemini for writing/translating, deterministic Python checks as gates.
 
-Pipeline per module: AUDIT → WRITE/REWRITE → REVIEW → CHECK → SCORE → COMMIT
+Pipeline per module: WRITE/REWRITE → REVIEW → CHECK → SCORE → COMMIT
 Pipeline per section: modules + INDEX rewrite (EN) + INDEX translate (UK)
 
 Features:
@@ -27,7 +27,7 @@ Usage:
     python scripts/v1_pipeline.py run <module-path>      # single module
     python scripts/v1_pipeline.py run-section <path>     # section without index
     python scripts/v1_pipeline.py resume                 # retry stuck modules
-    python scripts/v1_pipeline.py audit <module-path>    # score only
+    python scripts/v1_pipeline.py audit <module-path>    # deprecated no-op
     python scripts/v1_pipeline.py audit-all              # deterministic checks only
 
 Section aliases: ztt, git, cn101, k8sbasics, philosophy, devops,
@@ -130,11 +130,10 @@ def dispatch_auto(prompt: str, model: str, timeout: int = 900) -> tuple[bool, st
 # ---------------------------------------------------------------------------
 
 MODELS = {
-    "audit": "gemini-3.1-pro-preview",     # AUDIT+PLAN: rubric evaluation + plan
-    "write": "gemini-3.1-pro-preview",     # WRITE: initial drafts + full REWRITE mode
+    "write": "gemini-3.1-pro-preview",     # Preview model — review in monthly evals, re-pin when GA available. See issue #217.
     "write_targeted": "claude-sonnet-4-6", # TARGETED FIX: surgical patches (instruction-following)
     "review": "codex",                     # REVIEW: preferred independent reviewer
-    "review_fallback": "gemini-3.1-pro-preview",  # used only when "review" is unavailable
+    "review_fallback": "claude-sonnet-4-6",  # independent REVIEW fallback when Codex is unavailable
     # "translate" removed — uk_sync.CHUNKED_MODEL owns translation model config
 }
 
@@ -147,8 +146,8 @@ INDEPENDENT_REVIEWER_FAMILIES = {"codex", "claude"}
 # "needs_targeted_fix" is a pause state entered when Claude is unavailable
 # (peak hours / rate limit / budget) mid retry-loop. On resume, it loads the
 # staged content + saved plan and transitions back to "write" to re-enter
-# the targeted-fix retry path without re-running audit or initial write.
-PHASES = ["pending", "audit", "write", "review", "needs_targeted_fix",
+# the targeted-fix retry path without re-running the initial write.
+PHASES = ["pending", "write", "review", "needs_targeted_fix",
           "check", "score", "done"]
 
 # ---------------------------------------------------------------------------
@@ -213,120 +212,12 @@ def find_module_path(key: str) -> Path | None:
     return matches[0] if matches else None
 
 
-# ---------------------------------------------------------------------------
-# AUDIT step — deterministic checks + LLM scoring
-# ---------------------------------------------------------------------------
-
-RUBRIC_PROMPT = """You are scoring a KubeDojo module against 8 quality dimensions.
-
-Score each dimension 1-5 using the rubric below. Be STRICT — a 4 means genuinely good, not just "present."
-
-## Dimensions
-D1 Learning Outcomes: 4 = clear, measurable, Bloom's L3+. 5 = testable, every outcome delivered.
-D2 Scaffolding: 4 = clear progression, explicit bridges. 5 = worked examples before practice, complexity gradient.
-D3 Active Learning: 4 = multiple inline prompts, scenario quizzes. 5 = woven throughout, learner constructs knowledge.
-D4 Real-World: 4 = war stories with specific impact, common mistakes table. 5 = integrated throughout, honest trade-offs.
-D5 Assessment: 4 = tests analysis not recall, explains WHY. 5 = aligned with every outcome, progressive difficulty.
-D6 Cognitive Load: 4 = good chunking, diagrams with text, worked examples. 5 = split-attention eliminated, dual coding.
-D7 Engagement: 4 = conversational, strong hook, good analogies. 5 = memorable, reader would recommend.
-D8 Practitioner Depth (COMPLEXITY-SCALED — check the module's complexity tag):
-   - For [QUICK] modules (introductory): 4 = explains WHY before HOW, mentions tradeoffs, references when this approach is wrong. 5 = anchors concept to a real problem, teaches thinking not naming.
-   - For [MEDIUM] modules: 4 = has patterns + anti-patterns + comparison/decision guide, theory before code, prose between code blocks. 5 = patterns concrete with consequences, decision guidance actionable.
-   - For [COMPLEX]/[ADVANCED]/[EXPERT] modules: 4 = dedicated patterns, anti-patterns, decision framework, architectural reasoning, failure modes, scaling considerations. 5 = practitioner-grade throughout, edge cases covered, an experienced engineer would learn something new.
-   IMPORTANT: Score D8 based on what's appropriate for the module's complexity level — do NOT punish a [QUICK] module for lacking advanced architecture sections.
-
-## Instructions
-1. Read the module carefully.
-2. Score each dimension 1-5.
-3. For any dimension below 4, explain SPECIFICALLY what's missing.
-4. Output ONLY this JSON (no markdown, no explanation outside JSON):
-
-{"scores": [D1, D2, D3, D4, D5, D6, D7, D8], "notes": {"D1": "...", "D2": "...", ...}, "plan": "If any dimension < 4, write a specific improvement plan. If all >= 4, write 'PASS'."}
-"""
-
-
-def step_audit(module_path: Path, model: str = MODELS["audit"]) -> dict | None:
-    """Audit a module: run deterministic checks + LLM scoring."""
-    content = module_path.read_text()
-    key = module_key_from_path(module_path)
-    print(f"\n{'='*60}")
-    print(f"  AUDIT: {key}")
-    print(f"{'='*60}")
-
-    # 1. Deterministic checks
-    is_uk = "/uk/" in str(module_path)
-    results = structural.run_all(content, module_path)
-    if is_uk:
-        results.extend(ukrainian.run_all(content, module_path))
-
-    errors = [r for r in results if not r.passed and r.severity == "ERROR"]
-    warnings = [r for r in results if not r.passed and r.severity == "WARNING"]
-
-    for r in results:
-        print(r)
-
-    if errors:
-        print(f"\n  ❌ {len(errors)} error(s) found in deterministic checks")
-
-    # 2. LLM scoring
-    prompt = f"{RUBRIC_PROMPT}\n\n---\n\nMODULE PATH: {key}\n\n{content}"
-
-    print(f"\n  Scoring with {model}...")
-    ok, output = dispatch_auto(prompt, model=model, timeout=300)
-
-    if not ok:
-        print(f"  ❌ LLM scoring failed")
-        return None
-
-    # Parse JSON from response
-    try:
-        # Extract JSON from possible markdown wrapper
-        json_match = output.strip()
-        if json_match.startswith("```"):
-            json_match = json_match.split("```")[1]
-            if json_match.startswith("json"):
-                json_match = json_match[4:]
-        result = json.loads(json_match)
-    except (json.JSONDecodeError, IndexError):
-        print(f"  ❌ Failed to parse LLM scoring output")
-        print(f"  Raw: {output[:500]}")
-        return None
-
-    if not isinstance(result, dict):
-        print(f"  ❌ Expected JSON object, got {type(result).__name__}")
-        return None
-
-    scores = result.get("scores") or []
-    if not isinstance(scores, list) or len(scores) != 8:
-        print(f"  ❌ Expected 8 scores, got {scores!r}")
-        return None
-
-    try:
-        scores = [int(s) for s in scores]
-    except (ValueError, TypeError):
-        print(f"  ❌ Non-numeric scores: {scores}")
-        return None
-
-    total = sum(scores)
-    minimum = min(scores)
-    passes = minimum >= 4 and total >= 33
-
-    print(f"\n  Scores: {scores}")
-    print(f"  Sum: {total}/40 | Min: {minimum} | {'PASS' if passes else 'FAIL'}")
-
-    if result.get("plan") and result["plan"] != "PASS":
-        print(f"\n  Plan: {result['plan'][:200]}...")
-
-    return {
-        "scores": scores,
-        "sum": total,
-        "min": minimum,
-        "passes": passes,
-        "notes": result.get("notes", {}),
-        "plan": result.get("plan", ""),
-        "check_errors": len(errors),
-        "check_warnings": len(warnings),
-    }
+def initial_write_plan(key: str) -> str:
+    """Generic first-pass plan for new or legacy pre-write states."""
+    return (
+        f"Draft or improve the module at {key} per the topic spec in the "
+        f"module frontmatter and any TODO comments in the existing stub."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -372,7 +263,7 @@ The following technical assets are extracted from the original module. You MUST 
 
 {knowledge_packet}
 
-TOPICS TO COVER (from audit):
+TOPICS TO COVER (from plan):
 {plan}
 
 QUALITY REQUIREMENTS:
@@ -965,16 +856,15 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
     print(f"{'='*60}")
 
     # Already-done resumption. If the module is flagged for independent
-    # re-review (typically Gemini-approved during a Codex rate-limit window),
-    # reset to audit so the full pipeline can run it through Codex. Otherwise
-    # this is a genuine already-done module and we return True so batch runners
-    # don't treat it as a failure.
+    # re-review (typically a same-family fallback approve when both Codex and
+    # Claude were unavailable), reset to review so the current on-disk content
+    # gets an independent pass without forcing a rewrite.
     if ms["phase"] == "done":
         if ms.get("needs_independent_review"):
-            print(f"  ↻ Flagged needs_independent_review — resetting to audit for re-review")
-            ms["phase"] = "audit"
+            print(f"  ↻ Flagged needs_independent_review — resetting to review for independent re-review")
+            ms["phase"] = "review"
             save_state(state)
-            # fall through to AUDIT block below
+            # fall through to resume block below
         else:
             reviewer = ms.get("reviewer", "unknown")
             total = ms.get("sum", "?")
@@ -982,10 +872,10 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
             return True
 
     # Peak-hours pause resume. A module paused mid-targeted-fix has its
-    # staged Gemini draft on disk and its plan saved in state. Transition
+    # staged draft on disk and its plan saved in state. Transition
     # back to phase=write so the resume branch below loads them correctly
     # and re-enters the write→review loop at the targeted-fix step (no
-    # re-audit, no re-initial-write, no re-review).
+    # re-initial-write, no re-review).
     if ms["phase"] == "needs_targeted_fix":
         staging_path = module_path.with_suffix(".staging.md")
         if staging_path.exists() and ms.get("plan"):
@@ -993,71 +883,39 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
             ms["phase"] = "write"
             save_state(state)
         else:
-            print(f"  ⚠ needs_targeted_fix phase but staging/plan missing — restarting from audit")
-            ms["phase"] = "audit"
+            print(f"  ⚠ needs_targeted_fix phase but staging/plan missing — restarting from initial write")
+            ms["phase"] = "pending"
             ms.pop("plan", None)
             ms.pop("targeted_fix", None)
             save_state(state)
 
-    # AUDIT+PLAN
+    # Initial write plan. Legacy `phase="audit"` states from older runs are
+    # treated the same as fresh `pending` modules: start a normal first-pass
+    # write with the generic plan and let REVIEW produce the real follow-up
+    # plan if the draft is rejected.
     if ms["phase"] in ("pending", "audit"):
-        audit = step_audit(module_path, model=m["audit"])
-        if audit is None:
-            ms["phase"] = "audit"
-            ms["errors"].append(f"Audit failed at {datetime.now(UTC).isoformat()}")
-            save_state(state)
+        plan = initial_write_plan(key)
+        if dry_run:
+            print(f"\n  [DRY RUN] Initial write plan: {plan}")
             return False
-
-        ms["scores"] = audit["scores"]
-        ms["sum"] = audit["sum"]
-        ms["passes"] = audit["passes"]
+        ms["scores"] = None
+        ms["sum"] = None
+        ms["passes"] = False
+        ms["phase"] = "write"
         ms["last_run"] = datetime.now(UTC).isoformat()
-
-        plan = audit.get("plan", "")
-        if not plan or plan == "PASS":
-            plan = f"Improve weak dimensions. Scores: {audit['scores']}. Notes: {audit.get('notes', {})}"
-
-        if audit["passes"] and audit["check_errors"] == 0:
-            # Audit says it passes — but we MUST get an independent reviewer
-            # stamp before marking done. Audit uses Gemini, which has self-bias
-            # when reviewing other Gemini-written content (see module-1.5:
-            # Gemini 40/40 vs Codex 24-28/40). Force one review cycle with
-            # the preferred reviewer (Codex by default), skipping write.
-            writer_family = m["write"].split("-")[0]
-            reviewer_family = m["review"].split("-")[0]
-            if reviewer_family == writer_family:
-                # Reviewer and writer same family — no cross-check possible.
-                print(f"\n  ✓ Module already passes ({audit['sum']}/40), reviewer same family — done")
-                ms["phase"] = "done"
-                save_state(state)
-                return True
-            print(f"\n  ✓ Audit says module passes ({audit['sum']}/40) — forcing {m['review']} review before done")
-            ms["phase"] = "review"
-            save_state(state)
-            # Populate `improved` from disk so the review/check/score steps
-            # below operate on the current on-disk content (no rewrite).
-            improved = module_path.read_text()
-            last_good = improved
-        else:
-            if dry_run:
-                print(f"\n  [DRY RUN] Would improve: {[f'D{i+1}={s}' for i, s in enumerate(audit['scores']) if s < 4]}")
-                print(f"  [DRY RUN] Plan: {plan[:300]}")
-                return False
-            ms["phase"] = "write"
-            save_state(state)
-            improved = None
-            last_good = None
-        # Fresh audit path never starts in targeted_fix mode.
+        save_state(state)
+        improved = None
+        last_good = None
         targeted_fix = False
     else:
         # Resuming. Two flavors:
         # 1. Peak-hours pause resume: state has `plan` + staging file from
         #    the previous run's Gemini draft. Load them and jump straight
-        #    back into the retry loop at the targeted-fix step (no re-audit,
-        #    no re-initial-write, no re-review — we already have the plan).
-        # 2. Generic resume (interrupted mid-loop in a non-Claude run):
-        #    fall back to a generic "Resume improvement" plan and re-run
-        #    from disk content.
+        #    back into the retry loop at the targeted-fix step (no re-initial-
+        #    write, no re-review — we already have the plan).
+        # 2. Direct-review resume: review the current on-disk content.
+        # 3. Generic resume (interrupted mid-loop in a non-Claude run):
+        #    fall back to a generic "Resume improvement" plan.
         staging_path = module_path.with_suffix(".staging.md")
         if ms.get("plan") and staging_path.exists():
             plan = ms["plan"]
@@ -1066,6 +924,12 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
             targeted_fix = ms.get("targeted_fix", False)
             mode = "targeted fix" if targeted_fix else "improve"
             print(f"  Loaded staged content ({len(improved)} chars) and saved {mode} plan")
+        elif ms["phase"] == "review":
+            plan = initial_write_plan(key)
+            improved = module_path.read_text()
+            last_good = improved
+            targeted_fix = False
+            print(f"  Loaded on-disk content ({len(improved)} chars) for review")
         else:
             plan = f"Resume improvement. Last scores: {ms.get('scores', 'unknown')}."
             improved = None
@@ -1075,11 +939,12 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
     # WRITE → REVIEW loop (max retries)
     # Auto-detect rewrite mode: score < 28 means "improve" won't cut it.
     # `improved`, `last_good`, and `targeted_fix` are initialized above by
-    # the fresh-audit or resume branches; DO NOT re-initialize here or
+    # the initial-write or resume branches; DO NOT re-initialize here or
     # targeted-fix resume state will be lost.
-    needs_rewrite = (ms.get("sum") or 0) < 28
+    current_sum = ms.get("sum")
+    needs_rewrite = current_sum is not None and current_sum < 28
     if needs_rewrite:
-        print(f"  Score {ms.get('sum')}/40 < 28 — using REWRITE mode")
+        print(f"  Score {current_sum}/40 < 28 — using REWRITE mode")
 
     for attempt in range(max_retries + 1):
         if ms["phase"] in ("write",):
@@ -1108,7 +973,7 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                     staging_path.write_text(last_good)
                     print(f"  Staged {len(last_good)} chars to {staging_path.name}")
                 else:
-                    print(f"  ⚠ No last_good content to stage — resume will restart from audit")
+                    print(f"  ⚠ No last_good content to stage — resume will restart from the initial write")
                 ms["phase"] = "needs_targeted_fix"
                 ms["plan"] = plan
                 ms["targeted_fix"] = targeted_fix
@@ -1131,20 +996,25 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
             reviewer_model = m["review"]
             review = step_review(module_path, improved or module_path.read_text(), model=reviewer_model)
 
-            # Rate-limit degradation: fall back to the Gemini reviewer so we
-            # get REAL scores and can make a real APPROVE/REJECT decision.
-            # The module still commits if it passes, but we flag
-            # needs_independent_review=True so operators know to re-review
-            # with Codex (or Claude) when quota returns. Pipeline never halts.
+            # Rate-limit degradation:
+            # 1. Try Codex.
+            # 2. If unavailable, try Claude Sonnet (still independent).
+            # 3. If both independent reviewers are unavailable, do a same-
+            #    family last-resort review so the pipeline can still make a
+            #    decision, but mark the module for later independent re-review.
             if isinstance(review, dict) and review.get("rate_limited"):
-                fallback_model = MODELS.get("review_fallback", "gemini-3.1-pro-preview")
-                # Only fall back if the fallback is from a different family
-                # (otherwise we'd just retry the same rate-limited reviewer).
+                fallback_model = m.get("review_fallback", MODELS["review_fallback"])
                 primary_family = reviewer_model.split("-")[0]
                 fallback_family = fallback_model.split("-")[0]
+                writer_family = m["write"].split("-")[0]
                 if fallback_family == primary_family:
                     print(f"  ⚠ Primary reviewer rate-limited and fallback is same family — aborting review")
                     ms["errors"].append("Primary reviewer rate-limited, no alternative fallback")
+                    save_state(state)
+                    return False
+                if fallback_family == writer_family or fallback_family not in INDEPENDENT_REVIEWER_FAMILIES:
+                    print(f"  ⚠ Review fallback {fallback_model} is not independent from writer {m['write']} — aborting review")
+                    ms["errors"].append("Configured review fallback is not independent from writer")
                     save_state(state)
                     return False
 
@@ -1157,13 +1027,26 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                     save_state(state)
                     return False
                 if isinstance(review, dict) and review.get("rate_limited"):
-                    ms["errors"].append("Both primary and fallback reviewers rate-limited")
-                    save_state(state)
-                    return False
-                # Mark that this module used a fallback reviewer — the APPROVE
-                # branch below will see reviewer_family != INDEPENDENT_REVIEWER_FAMILIES
-                # and correctly set needs_independent_review=True.
-                reviewer_model = fallback_model
+                    last_resort_model = m["write"]
+                    print(
+                        f"  ⚠ {reviewer_model} and {fallback_model} unavailable — "
+                        f"last-resort review with {last_resort_model}; module will "
+                        f"require later independent re-review if approved"
+                    )
+                    review = step_review(
+                        module_path, improved or module_path.read_text(), model=last_resort_model,
+                    )
+                    if review is None:
+                        ms["errors"].append("Last-resort reviewer failed")
+                        save_state(state)
+                        return False
+                    if isinstance(review, dict) and review.get("rate_limited"):
+                        ms["errors"].append("Primary, fallback, and last-resort reviewers all unavailable")
+                        save_state(state)
+                        return False
+                    reviewer_model = last_resort_model
+                else:
+                    reviewer_model = fallback_model
                 ms["used_fallback_reviewer"] = True
 
             if review is None:
@@ -1217,7 +1100,27 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                 r_sum = sum(r_scores) if r_valid else 0
                 r_has_weak = r_valid and any(s < 4 for s in r_scores)
 
-                if r_valid and r_sum >= 28 and r_has_weak:
+                if r_valid and r_sum < 25:
+                    needs_rewrite = True
+                    targeted_fix = False
+                    plan = (
+                        f"SEVERE REWRITE REQUIRED. Content scored {r_sum}/40 and is "
+                        f"severely broken. Rewrite the module from scratch while "
+                        f"preserving the extracted technical assets and fixing every "
+                        f"review issue.\n\nReviewer feedback:\n{r_feedback}"
+                    )
+                    print(f"  → Severe rewrite mode (Gemini): sum={r_sum}/40 < 25")
+                elif r_valid and r_sum < 28:
+                    needs_rewrite = True
+                    targeted_fix = False
+                    plan = (
+                        f"REWRITE REQUIRED. Content scored {r_sum}/40, below the "
+                        f"improve-mode threshold. Rewrite the module from scratch "
+                        f"while preserving the extracted technical assets and fixing "
+                        f"every review issue.\n\nReviewer feedback:\n{r_feedback}"
+                    )
+                    print(f"  → Rewrite mode (Gemini): sum={r_sum}/40 < 28")
+                elif r_valid and r_sum >= 28 and r_has_weak:
                     # Surgical fix — enough passing content to preserve; fix only
                     # the weak dims. Threshold was 33 (passing floor) but lowered
                     # to 28 (IMPROVE mode boundary) because full rewrites were
@@ -1263,14 +1166,19 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                     )
                     print(f"  → Nitpick fix mode (Claude Sonnet): sum={r_sum}/40, no weak dims")
                 else:
-                    # Real quality issues — recompute needs_rewrite from latest score.
-                    # Do NOT leave it pinned from a previous iteration. Full
-                    # rewrites stay on Gemini (long-form generation strength).
-                    needs_rewrite = (r_sum < 28) if r_valid else True
+                    # Catch-all: malformed scores or an unexpected reject shape.
+                    # Recompute to a full rewrite on Gemini rather than trying
+                    # to surgically patch from incomplete review metadata.
+                    needs_rewrite = True
                     targeted_fix = False
-                    plan = f"PREVIOUS REVIEW REJECTED. Feedback: {r_feedback}. Fix these issues."
+                    plan = (
+                        "REVIEW OUTPUT INVALID OR INCONCLUSIVE. Rewrite the module "
+                        f"from scratch and resolve these issues.\n\nReviewer feedback:\n{r_feedback}"
+                    )
                     if not r_valid:
                         print(f"  ⚠ Review returned {len(r_scores)} scores (expected 8) — using full rewrite")
+                    else:
+                        print(f"  → Catch-all rewrite mode (Gemini): sum={r_sum}/40")
                 ms["phase"] = "write"
                 save_state(state)
                 if attempt < max_retries:
@@ -1364,19 +1272,13 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
 # ---------------------------------------------------------------------------
 
 def cmd_audit(args):
-    """Audit a single module."""
-    path = Path(args.module)
-    if not path.exists():
-        path = CONTENT_ROOT / f"{args.module}.md"
-    if not path.exists():
-        print(f"Module not found: {args.module}")
-        sys.exit(1)
-
-    model = args.audit_model or MODELS["audit"]
-    result = step_audit(path, model=model)
-    if result:
-        sys.exit(0 if result["passes"] else 1)
-    sys.exit(1)
+    """Deprecated no-op kept for one release to avoid breaking workflows."""
+    print(
+        "The `audit` command is deprecated and now a no-op. "
+        "Issue #217 removed the audit phase; use `run --dry-run` for the "
+        "initial plan or `run` to execute the pipeline."
+    )
+    sys.exit(0)
 
 
 def cmd_audit_all(args):
@@ -1393,8 +1295,6 @@ def cmd_audit_all(args):
     print(f"Found {len(modules)} modules to audit")
 
     report = {"timestamp": datetime.now(UTC).isoformat(), "modules": {}}
-    model = args.audit_model or MODELS["audit"]
-
     for i, path in enumerate(modules, 1):
         key = module_key_from_path(path)
         print(f"\n[{i}/{len(modules)}] {key}")
@@ -1433,8 +1333,6 @@ def cmd_run(args):
         sys.exit(1)
 
     models = dict(MODELS)
-    if args.audit_model:
-        models["audit"] = args.audit_model
     if args.write_model:
         models["write"] = args.write_model
     if args.review_model:
@@ -1496,8 +1394,6 @@ def cmd_run_section(args):
         sys.exit(1)
 
     models = dict(MODELS)
-    if args.audit_model:
-        models["audit"] = args.audit_model
     if args.write_model:
         models["write"] = args.write_model
     if args.review_model:
@@ -1752,8 +1648,6 @@ def cmd_status(args):
 def _apply_model_overrides(args) -> dict:
     """Build models dict from defaults + CLI overrides."""
     models = dict(MODELS)
-    if getattr(args, "audit_model", None):
-        models["audit"] = args.audit_model
     if getattr(args, "write_model", None):
         models["write"] = args.write_model
     if getattr(args, "review_model", None):
@@ -2101,20 +1995,20 @@ def main():
   e2e                              run everything (overnight batch)
   resume                           retry stuck modules only
 
-models (default: gemini-3.1-pro-preview for all steps):
-  --audit-model claude-opus-4-6    use Claude for scoring
-  --review-model claude-opus-4-6   use Claude for review
+models:
+  --write-model gemini-3.1-pro-preview     override the main writer
+  --review-model claude-sonnet-4-6         override the primary reviewer
 """, formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     # Global model overrides
-    parser.add_argument("--audit-model", help="Model for AUDIT+PLAN step (default: gemini-3.1-pro-preview)")
+    parser.add_argument("--audit-model", help=argparse.SUPPRESS)
     parser.add_argument("--write-model", help="Model for WRITE step (default: gemini-3.1-pro-preview)")
-    parser.add_argument("--review-model", help="Model for REVIEW step (default: gemini-3.1-pro-preview)")
+    parser.add_argument("--review-model", help="Model for REVIEW step (default: codex)")
 
     subparsers = parser.add_subparsers(dest="command", help="Pipeline command")
 
     # audit
-    ap = subparsers.add_parser("audit", help="Audit a single module")
+    ap = subparsers.add_parser("audit", help="Deprecated no-op (audit phase removed)")
     ap.add_argument("module", help="Module path or key")
 
     # audit-all
@@ -2124,7 +2018,7 @@ models (default: gemini-3.1-pro-preview for all steps):
     # run
     rp = subparsers.add_parser("run", help="Run a module through the full pipeline")
     rp.add_argument("module", help="Module path or key")
-    rp.add_argument("--dry-run", action="store_true", help="Audit only — show plan without making changes")
+    rp.add_argument("--dry-run", action="store_true", help="Plan only — show the initial write plan without making changes")
 
     # run-section
     rsp = subparsers.add_parser("run-section", help="Run all modules in a section")
@@ -2133,7 +2027,7 @@ models (default: gemini-3.1-pro-preview for all steps):
     rsp.add_argument("--track", help="Track type for gap check (auto-detected if omitted)",
                      choices=["prerequisites", "linux", "cloud", "k8s"])
     rsp.add_argument("--skip-gaps", action="store_true", help="Skip gap check even if errors found")
-    rsp.add_argument("--dry-run", action="store_true", help="Audit only — show plan without making changes")
+    rsp.add_argument("--dry-run", action="store_true", help="Plan only — show the initial write plan without making changes")
 
     # gap-check
     gcp = subparsers.add_parser("gap-check", help="Detect scaffolding gaps in a track/section")

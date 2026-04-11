@@ -620,22 +620,6 @@ class TestPipelineTransitions(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
-    def _mock_audit_pass(self, *args, **kwargs):
-        """Mock dispatch that returns a passing audit score."""
-        return True, json.dumps({
-            "scores": [5, 5, 5, 5, 5, 5, 5, 5],
-            "notes": {},
-            "plan": "PASS",
-        })
-
-    def _mock_audit_needs_work(self, *args, **kwargs):
-        """Mock dispatch that returns scores needing improvement."""
-        return True, json.dumps({
-            "scores": [3, 4, 3, 4, 3, 4, 3, 4],
-            "notes": {"D1": "Weak outcomes", "D3": "No inline prompts", "D8": "No practitioner depth"},
-            "plan": "Improve D1, D3, D5, D7, D8",
-        })
-
     def _mock_write_success(self, *args, **kwargs):
         """Mock Gemini write that returns valid improved content."""
         return True, GOOD_MODULE
@@ -660,28 +644,19 @@ class TestPipelineTransitions(unittest.TestCase):
     @patch("v1_pipeline.dispatch_auto")
     @patch("v1_pipeline.CONTENT_ROOT")
     @patch("subprocess.run")
-    def test_already_passing_module_goes_to_done(self, mock_subprocess, mock_root,
-                                                  mock_dispatch, mock_state):
-        """An audit-passing module must still get one forced Codex review before done.
-
-        Enforces the "no Gemini-only modules ship" policy: when AUDIT (Gemini)
-        says the module already passes, run_module MUST still send it through
-        one review with the independent reviewer (Codex by default), then land
-        at phase=done with reviewer=codex and needs_independent_review=False.
-        """
+    def test_pending_module_writes_then_reviews_to_done(
+        self, mock_subprocess, mock_root, mock_dispatch, mock_state,
+    ):
+        """Fresh modules now go straight to write, then independent review."""
         import v1_pipeline as p
 
         mock_state.__class__ = type(self.state_file)
-        # First dispatch call = audit (Gemini, passing). Second = forced review
-        # (Codex, approving). mock.side_effect as a list consumes in order.
         mock_dispatch.side_effect = [
-            self._mock_audit_pass(),
+            self._mock_write_success(),
             self._mock_review_approve(),
         ]
 
-        # Patch CONTENT_ROOT so module_key_from_path works
         mock_root.resolve.return_value = Path(self.tmpdir).resolve()
-
         state = {"modules": {}}
 
         with patch.object(p, "STATE_FILE", self.state_file), \
@@ -696,7 +671,7 @@ class TestPipelineTransitions(unittest.TestCase):
         # Must have been reviewed by an independent reviewer
         self.assertEqual(ms.get("reviewer"), "codex")
         self.assertFalse(ms.get("needs_independent_review", True))
-        # Both audit and review dispatches should have fired
+        # Write + review dispatches should have fired
         self.assertEqual(mock_dispatch.call_count, 2)
 
     @patch("v1_pipeline.STATE_FILE")
@@ -740,16 +715,15 @@ class TestPipelineTransitions(unittest.TestCase):
     @patch("v1_pipeline.dispatch_auto")
     @patch("v1_pipeline.CONTENT_ROOT")
     @patch("subprocess.run")
-    def test_done_module_with_pending_flag_reruns(
+    def test_done_module_with_pending_flag_reruns_review_only(
         self, mock_subprocess, mock_root, mock_dispatch, mock_state,
     ):
-        """phase=done with needs_independent_review flag re-runs the pipeline."""
+        """phase=done with needs_independent_review flag re-runs review only."""
         import v1_pipeline as p
 
         mock_state.__class__ = type(self.state_file)
         mock_root.resolve.return_value = Path(self.tmpdir).resolve()
         mock_dispatch.side_effect = [
-            self._mock_audit_pass(),
             self._mock_review_approve(),
         ]
 
@@ -777,8 +751,41 @@ class TestPipelineTransitions(unittest.TestCase):
         self.assertEqual(ms.get("phase"), "done")
         self.assertEqual(ms.get("reviewer"), "codex")
         self.assertFalse(ms.get("needs_independent_review", True))
-        # audit + review dispatches both fired
-        self.assertEqual(mock_dispatch.call_count, 2)
+        # Only re-review should fire
+        self.assertEqual(mock_dispatch.call_count, 1)
+
+    @patch("v1_pipeline.STATE_FILE")
+    @patch("v1_pipeline.CONTENT_ROOT")
+    @patch("subprocess.run")
+    def test_review_falls_back_to_sonnet_without_pending_flag(
+        self, mock_subprocess, mock_root, mock_state,
+    ):
+        """Codex rate limiting should fall back to Sonnet and still count as independent review."""
+        import v1_pipeline as p
+
+        mock_state.__class__ = type(self.state_file)
+        mock_root.resolve.return_value = Path(self.tmpdir).resolve()
+
+        state = {"modules": {}}
+        review_sequence = [
+            {"rate_limited": True},
+            {"verdict": "APPROVE", "scores": [4, 4, 4, 4, 4, 4, 4, 5], "feedback": ""},
+        ]
+
+        with patch.object(p, "STATE_FILE", self.state_file), \
+             patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
+             patch.object(p, "save_state"), \
+             patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
+             patch.object(p, "step_write", return_value=GOOD_MODULE), \
+             patch.object(p, "step_review", side_effect=review_sequence) as mock_review, \
+             patch.object(p, "step_check", return_value=(True, [])):
+            p.run_module(self.module_path, state)
+
+        ms = state["modules"]["test/module-0.1-test"]
+        self.assertEqual(ms.get("phase"), "done")
+        self.assertEqual(ms.get("reviewer"), "claude")
+        self.assertFalse(ms.get("needs_independent_review", True))
+        self.assertEqual(mock_review.call_count, 2)
 
     @patch("v1_pipeline.STATE_FILE")
     @patch("v1_pipeline.dispatch_auto")
@@ -791,9 +798,9 @@ class TestPipelineTransitions(unittest.TestCase):
 
         Verifies the peak-hours pause/resume flow (Flavor B): when a module
         was paused mid-targeted-fix because Claude was unavailable, the next
-        run should load the staged Gemini draft + saved plan, skip audit +
-        initial write + initial review, and jump straight into the
-        targeted-fix retry loop.
+        run should load the staged draft + saved plan, skip the initial
+        write + initial review, and jump straight into the targeted-fix
+        retry loop.
         """
         import v1_pipeline as p
 
@@ -801,7 +808,7 @@ class TestPipelineTransitions(unittest.TestCase):
         mock_root.resolve.return_value = Path(self.tmpdir).resolve()
 
         # Only the targeted-fix write + its re-review should fire on resume.
-        # No audit, no initial write, no initial review.
+        # No initial write, no initial review.
         mock_dispatch.side_effect = [
             # Claude Sonnet write (targeted fix applied)
             (True, GOOD_MODULE),
@@ -835,12 +842,55 @@ class TestPipelineTransitions(unittest.TestCase):
 
         ms = state["modules"]["test/module-0.1-test"]
         self.assertEqual(ms.get("phase"), "done", "Should converge after targeted fix + re-review")
-        # Exactly 2 dispatch calls: targeted-fix write + re-review. NO audit, NO initial write.
+        # Exactly 2 dispatch calls: targeted-fix write + re-review. No initial write.
         self.assertEqual(mock_dispatch.call_count, 2,
-                         "Should skip audit + initial write + initial review; only write + review fire")
+                         "Should skip the initial write + initial review; only write + review fire")
+
+    @patch("v1_pipeline.STATE_FILE")
+    @patch("v1_pipeline.CONTENT_ROOT")
+    @patch("subprocess.run")
+    def test_severity_routing_under_25_triggers_full_rewrite(
+        self, mock_subprocess, mock_root, mock_state,
+    ):
+        """Review scores below 25 should trigger a full rewrite branch."""
+        import v1_pipeline as p
+
+        mock_state.__class__ = type(self.state_file)
+        mock_root.resolve.return_value = Path(self.tmpdir).resolve()
+
+        state = {"modules": {}}
+        write_calls = []
+        review_sequence = [
+            {"verdict": "REJECT", "scores": [2, 3, 3, 3, 3, 3, 3, 3], "feedback": "Severely broken module."},
+            {"verdict": "APPROVE", "scores": [4, 4, 4, 4, 4, 4, 4, 5], "feedback": ""},
+        ]
+
+        def fake_step_write(module_path, plan, model=None, rewrite=False, previous_output=None):
+            write_calls.append({
+                "plan": plan,
+                "model": model,
+                "rewrite": rewrite,
+                "previous_output": previous_output,
+            })
+            return GOOD_MODULE
+
+        with patch.object(p, "STATE_FILE", self.state_file), \
+             patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
+             patch.object(p, "save_state"), \
+             patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
+             patch.object(p, "step_write", side_effect=fake_step_write), \
+             patch.object(p, "step_review", side_effect=review_sequence), \
+             patch.object(p, "step_check", return_value=(True, [])):
+            p.run_module(self.module_path, state)
+
+        self.assertEqual(len(write_calls), 2, "Expected initial write plus rewrite retry")
+        self.assertFalse(write_calls[0]["rewrite"], "First pass should be normal write mode")
+        self.assertTrue(write_calls[1]["rewrite"], "Scores under 25 must trigger full rewrite mode")
+        self.assertIn("SEVERE REWRITE REQUIRED", write_calls[1]["plan"])
+        self.assertEqual(write_calls[1]["model"], p.MODELS["write"])
 
     def test_dry_run_does_not_modify_files(self):
-        """Dry run should audit but not write any files."""
+        """Dry run should show the initial plan but not write any files."""
         import v1_pipeline as p
 
         original_content = self.module_path.read_text()
@@ -850,11 +900,12 @@ class TestPipelineTransitions(unittest.TestCase):
              patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
              patch.object(p, "save_state"), \
              patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
-             patch.object(p, "dispatch_auto", side_effect=self._mock_audit_needs_work):
+             patch.object(p, "dispatch_auto") as mock_dispatch:
             result = p.run_module(self.module_path, state, dry_run=True)
 
         # File should be unchanged
         self.assertEqual(self.module_path.read_text(), original_content)
+        self.assertEqual(mock_dispatch.call_count, 0, "Dry run should not dispatch any model calls")
         # Should not pass (needs improvement)
         self.assertFalse(result)
 
@@ -961,7 +1012,7 @@ class TestSafetyGuards(unittest.TestCase):
 
         leaked_output = "CRITICAL INSTRUCTION: I'll write the markdown...\n---\ntitle: Test\n---\nContent"
 
-        with patch.object(p, "dispatch_gemini_with_retry", return_value=(True, leaked_output)), \
+        with patch.object(p, "dispatch_auto", return_value=(True, leaked_output)), \
              self._patch_key(p):
             result = p.step_write(self.module_path, "improve D1")
         self.assertIsNone(result, "Should reject output with thinking leaks")
@@ -972,7 +1023,7 @@ class TestSafetyGuards(unittest.TestCase):
 
         no_fm = "# Just a heading\n\nNo frontmatter here."
 
-        with patch.object(p, "dispatch_gemini_with_retry", return_value=(True, no_fm)), \
+        with patch.object(p, "dispatch_auto", return_value=(True, no_fm)), \
              self._patch_key(p):
             result = p.step_write(self.module_path, "improve D1")
         self.assertIsNone(result, "Should reject output without frontmatter")
@@ -983,7 +1034,7 @@ class TestSafetyGuards(unittest.TestCase):
 
         wrapped = f"```markdown\n{GOOD_MODULE}\n```"
 
-        with patch.object(p, "dispatch_gemini_with_retry", return_value=(True, wrapped)), \
+        with patch.object(p, "dispatch_auto", return_value=(True, wrapped)), \
              self._patch_key(p):
             result = p.step_write(self.module_path, "improve D1")
         self.assertIsNotNone(result, "Should accept wrapped markdown")
