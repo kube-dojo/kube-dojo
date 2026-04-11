@@ -1522,6 +1522,7 @@ def cmd_e2e(args):
             "on-premises/planning", "on-premises/provisioning", "on-premises/networking",
             "on-premises/storage", "on-premises/multi-cluster", "on-premises/security",
             "on-premises/operations", "on-premises/resilience",
+            "on-premises/ai-ml-infrastructure",
         ],
         "linux": [
             "linux/foundations/container-primitives", "linux/foundations/networking",
@@ -1840,7 +1841,7 @@ models (default: gemini-3.1-pro-preview for all steps):
   specialty  pca, cba, capa, kca, otca, ica, cca, finops
   cloud      aws, gcp, azure, architecture, eks, gke, aks, advanced-ops, managed, enterprise
   platform   foundations, disciplines, toolkits
-  on-prem    planning, provisioning, networking, storage, multi-cluster, security, operations, resilience
+  on-prem    planning, provisioning, networking, storage, multi-cluster, security, operations, resilience, ai-ml-infrastructure
   linux      container-primitives, networking, system-essentials, everyday-use, operations, security
 
 examples:

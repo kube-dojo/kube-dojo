@@ -26,10 +26,6 @@ log() { printf '\n[%(%H:%M:%S)T] %s\n' -1 "$*"; }
 write_stub() {
   local num="$1" sec="$2" stem="$3" title="$4" topic="$5"
   local target="$TRACK_ROOT/$sec/module-${num}-${stem}.md"
-  # sidebar order: major * 100 + minor (e.g. 3.5 -> 305, 9.1 -> 901)
-  local major="${num%.*}"
-  local minor="${num#*.}"
-  local order=$(( major * 100 + minor ))
   local slug="on-premises/${sec}/module-${num}-${stem}"
 
   if [[ -f "$target" ]]; then
@@ -39,6 +35,19 @@ write_stub() {
 
   log "creating stub: $target"
   mkdir -p "$(dirname "$target")"
+
+  # sidebar.order: sequential per-section to match existing on-prem convention.
+  # Existing sections use index.md=0, module-X.1=2, module-X.2=3, ... (they
+  # skip order 1). Count pre-existing module files and assign count+2.
+  # Normalize-sidebar-order.py can re-flow any section if modules are added
+  # out of numerical order.
+  local count=0
+  shopt -s nullglob
+  for f in "$TRACK_ROOT/$sec"/module-*.md; do
+    (( count++ ))
+  done
+  shopt -u nullglob
+  local order=$(( count + 2 ))
   cat > "$target" <<EOF
 ---
 title: "Module ${num}: ${title}"
