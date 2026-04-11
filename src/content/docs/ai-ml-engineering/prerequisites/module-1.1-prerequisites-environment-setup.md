@@ -10,27 +10,6 @@ sidebar:
 **Prerequisites**: A computer, internet access, and the willingness to type commands into a terminal
 ---
 
-San Francisco. January 15, 2024. 11:32 PM. Alex Chen, a developer at a San Francisco startup, stared at his terminal, exhausted and confused. He was supposed to be learning prompt engineering—his company had given him two weeks to prototype an AI feature. Instead, he'd spent the last eight hours debugging why his Python installation couldn't find the `anthropic` module. "Which Python is this even using?" he muttered, watching his third attempt fail with yet another cryptic error message.
-
-## The 8-Hour Nightmare That Inspired This Module
-
-Alex was supposed to be learning prompt engineering. Instead, he'd spent the last eight hours debugging why his Python installation couldn't find the `anthropic` module. He'd installed it. At least, he thought he had.
-
-"Which Python is this even using?" he muttered, staring at three different Python versions installed on his Mac. The terminal showed Python 3.8, his IDE said 3.11, and pip was installing to... somewhere else entirely.
-
-He'd tried everything. Reinstalling pip. Upgrading Python. Reading Stack Overflow threads from 2019 that recommended commands that no longer worked. Each "solution" seemed to create two new problems. His browser had forty-seven tabs open, each promising to fix the issue once and for all.
-
-At 2 AM, he finally gave up and went to bed, having learned zero about AI and everything about dependency hell.
-
-The next morning, his mentor—a senior ML engineer who'd seen this exact scenario play out a hundred times—sent him a single checklist. "Follow this exactly," she wrote. "Don't skip steps. Don't improvise." Thirty minutes later, Alex had a clean virtual environment, properly installed packages, and his first working API call.
-
-> "I wasted an entire night because nobody told me the basics. Now I make every new developer go through this setup guide before they write a single line of AI code. The time spent here saves weeks of frustration later."
-> — Alex Chen, ML Engineer (and co-author of this module)
-
-That eight-hour nightmare? It's now a 30-minute checklist. Every step exists because someone suffered so you don't have to.
-
----
-
 ## What You'll Be Able to Do
 
 By the end of this module, you will:
@@ -167,7 +146,7 @@ Think of your development environment like a kitchen. You can technically cook w
 │           ↓                                          │
 │  Step 2: Choose Editor (VS Code/Cursor/PyCharm)     │
 │           ↓                                          │
-│  Step 3: Clone neural-dojo repo                     │
+│  Step 3: Make project directory                     │
 │           ↓                                          │
 │  Step 4: Create virtual environment (venv)          │
 │           ↓                                          │
@@ -337,12 +316,9 @@ python3.13 --version
 # Navigate to where you keep code projects
 cd ~/projects  # or C:\Users\YourName\projects on Windows
 
-# Clone neural-dojo (if you haven't already)
-git clone https://github.com/krisztiankoos/neural-dojo.git
-cd neural-dojo
-
-# Or if you already have it:
-cd ~/projects/neural-dojo
+# Make your project directory
+mkdir -p ~/projects/ai-ml-lab
+cd ~/projects/ai-ml-lab
 ```
 
 **Pro tip**: Keep all your projects in ONE parent directory (like `~/projects`). Makes them easy to find and back up.
@@ -401,7 +377,7 @@ venv\Scripts\activate
 **Verify activation**:
 ```bash
 which python
-# Should show: /path/to/neural-dojo/venv/bin/python
+# Should show: /path/to/ai-ml-lab/venv/bin/python
 # NOT /usr/bin/python or /usr/local/bin/python3
 
 pip list
@@ -418,7 +394,7 @@ which python
 # Shows: /usr/bin/python (WRONG!)
 
 # Instead of:
-# Shows: /Users/you/projects/neural-dojo/venv/bin/python (RIGHT!)
+# Shows: /Users/you/projects/ai-ml-lab/venv/bin/python (RIGHT!)
 ```
 
 **Fix**: Always run `source venv/bin/activate` when starting work.
@@ -632,7 +608,7 @@ api_key = os.getenv("ANTHROPIC_API_KEY")  # Safe!
 
 **1. Create `.env` file**:
 ```bash
-# In neural-dojo directory
+# In project directory
 touch .env
 
 # Verify it's in .gitignore (should already be there)
@@ -817,7 +793,7 @@ Use this to verify you're 100% ready:
 - [ ] Editor can open and edit Python files
 
 ### Project Setup
-- [ ] neural-dojo repository cloned/accessed
+- [ ] Project directory created (`~/projects/ai-ml-lab`)
 - [ ] Can navigate to project in terminal
 - [ ] `.env` file created
 - [ ] API key(s) added to `.env`
@@ -1246,7 +1222,7 @@ source venv/bin/activate
 
 # Now check again
 which python
-# Output: /path/to/neural-dojo/venv/bin/python (RIGHT!)
+# Output: /path/to/ai-ml-lab/venv/bin/python (RIGHT!)
 ```
 
 **Prevention**: Always activate venv before running Python code!
@@ -1476,43 +1452,6 @@ print(sys.path)
 
 ---
 
-## Real Project Tie-Ins
-
-This setup directly enables your real projects:
-
-### For kaizen (Lean DevOps Platform)
-**What you just learned applies to**:
-- Setting up kaizen's RAG backend environment
-- Managing dependencies for LangChain, Qdrant, FastAPI
-- Securing Anthropic API keys for production
-- Testing RAG pipelines with pytest
-
-**Next steps in kaizen**: Module 11+ (Vector DBs, RAG systems)
-
----
-
-### For vibe (Teaching Platform)
-**What you just learned applies to**:
-- AI content generation backend setup
-- Managing OpenAI/Claude dependencies
-- Environment isolation for dev vs production
-- Handling API costs at scale
-
-**Next steps in vibe**: Module 26-29 (Generative AI, multimodal models)
-
----
-
-### For contrarian (Stock Analysis)
-**What you just learned applies to**:
-- Setting up ML pipeline environment
-- Managing PyTorch, transformers dependencies
-- Isolating analysis environment from other projects
-- Testing sentiment analysis models
-
-**Next steps in contrarian**: Module 19-25 (Deep Learning, time series)
-
----
-
 ## Did You Know? More Fascinating Facts
 
 ### The .env Pattern's Origin
@@ -1586,8 +1525,8 @@ ls -la  # Check if you own the directory
 
 # If not, change to a directory you own
 cd ~/projects
-mkdir neural-dojo-test
-cd neural-dojo-test
+mkdir ai-ml-lab-test
+cd ai-ml-lab-test
 python3 -m venv venv  # Should work now
 ```
 
