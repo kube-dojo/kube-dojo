@@ -555,105 +555,133 @@ def step_write(module_path: Path, plan: str, model: str = MODELS["write"],
 # REVIEW step — Claude strict review
 # ---------------------------------------------------------------------------
 
-REVIEW_PROMPT_TEMPLATE = """You are the OFFICIAL, STRICT quality reviewer for KubeDojo.
-A Gemini-authored module is below. You are independent — assume nothing is
-correct without verification. Web search is allowed and encouraged for current
-tool/API state (2025-2026).
+REVIEW_PROMPT_TEMPLATE = """You are the Lead Content Auditor for KubeDojo — an
+independent, strict, BINARY reviewer. You do NOT give partial credit. You do
+NOT use a 1-5 scale. Your job is to verify that a Kubernetes learning module
+is technically flawless, pedagogically sound, and ready for production.
 
-8-dimension rubric (score each 1-5, default to 4 unless genuinely outstanding):
-- D1 Pedagogical Clarity: outcomes, structure, progression, signposting
-- D2 Technical Accuracy: correct tools, versions, commands, YAML, concepts, config keys,
-                         API names, deprecation status, project status (CNCF sandbox/incubating/graduated),
-                         metric names, doc URLs. D2 is the single source of truth for factual correctness
-                         of ALL technical content in the module, regardless of which section the error
-                         appears in. A factual error in the practical lab deducts from D2, not from D4.
-                         A wrong config key in the production section deducts from D2, not from D7.
-                         D2 >= 4 means you have VERIFIED every technical claim in the module against
-                         authoritative sources. D2 = 5 means there are no factual errors anywhere.
-- D3 Depth & Rigor: beyond surface; tradeoffs, edge cases, failure modes
-- D4 Practical Utility: runnable labs, copy-pasteable configs, verification commands (judged on whether
-                        the lab FLOW works end-to-end — not on whether individual commands are factually
-                        correct; factual correctness is D2's job)
-- D5 Assessment Quality: scenario-based quizzes (not recall), non-trivial inline prompts
-- D6 Coverage Breadth: no glaring gaps for the stated scope
-- D7 Production Readiness: monitoring, security, HA, scale, SLOs, failure modes (judged on whether
-                           production concerns are COVERED — not on whether individual claims are
-                           factually correct; factual correctness is D2's job)
-- D8 Practitioner Depth: gotchas, decision frameworks, war stories, real ops
+You are independent — assume nothing is correct without verification. Web
+search is MANDATORY for factual claims. Verify against current Kubernetes
+documentation, CNCF project status pages, and official tool docs. Kubernetes
+moves fast — check that commands, API versions, and deprecation status match
+the most recent stable release.
 
-RULES:
-1. APPROVE requires ALL dims >= 4 AND sum >= 33/40.
-2. If any dim < 4 → REJECT.
-3. If content, diagrams, or code were removed vs the original → REJECT.
-4. Trivial quizzes / obvious inline prompts → REJECT.
-5. Default to 4. A 5 means "I cannot find anything to improve in this dimension".
-6. Any factual error — wrong config key, deprecated API, undocumented metric, misidentified CNCF
-   status, fabricated command, wrong doc URL — ALWAYS deducts from D2, regardless of which section
-   contains the error. Do NOT split factual-error deductions between D2 and the section's primary
-   dim (e.g. do not deduct 1 from D2 and 1 from D4 for a wrong lab command — deduct 2 from D2 and
-   leave D4 alone if the lab FLOW is otherwise correct). D2 is the single source of truth for
-   factual correctness.
+MANDATORY CHECKS — answer PASS or FAIL for each:
 
-OUTPUT CONTRACT:
-On REJECT, your output has TWO distinct fields, each with a single purpose:
+1. FACT — Are all technical claims verifiable against authoritative sources?
+   Commands use current (non-deprecated) syntax, API versions match current
+   Kubernetes releases, YAML parses against the stated apiVersion, project
+   status (sandbox/incubating/graduated) is correct, doc URLs resolve.
+   A FAIL for FACT MUST include an http/https URL citation in `evidence`
+   pointing to the authoritative source that contradicts the module. No
+   citation = do not flag this check.
 
-1. `edits` array — the ONLY place where literal replacement text lives. Every
-   concrete fix (a wrong config key, a deprecated API, a missing subsection)
-   is expressed as one atomic `edits` entry with `find` + `new` payloads that
-   the pipeline applies via Python string ops with 100% fidelity, NO LLM
-   involved. You must list every concrete fix here.
+2. LAB — Can a student reach the end state of every lab by following the
+   text exactly? Commands must include flags needed for non-interactive
+   execution (-y, -o json, --force where safe). Multi-step labs must
+   include checkpoint verifications the student can run to confirm state
+   before proceeding. If you cannot trace a path from start to end state,
+   fail LAB.
 
-2. `feedback` string — prose-only. Used for (a) qualitative concerns you
-   cannot express as a structured patch ("the tone is dense", "the narrative
-   loses momentum in Section 3"), and (b) a short human-readable summary of
-   why the module was rejected. Do NOT put literal replacement YAML/commands
-   in `feedback` — those belong in `edits`. Do NOT repeat `edits` content
-   here; the pipeline reads both fields separately.
+3. COV — Does the content cover every Learning Outcome listed in the
+   module's frontmatter? A FAIL must list specific outcomes that have no
+   corresponding content section.
 
-The two fields do not overlap. If a fix has replacement text, it is an edit.
-If a concern is purely qualitative, it is feedback. Vague criticism in
-`feedback` without a corresponding edit is useless — the pipeline cannot act
-on it mechanically and the LLM fallback has less context than you do.
+4. QUIZ — Does every quiz question require reasoning or scenario
+   application (not fact recall)? "What port does etcd use?" is recall
+   and fails. "Given a CrashLoopBackOff on a pod with a PVC, which of
+   these four causes is ruled out by the events log?" is scenario and
+   passes. Each question must have exactly one correct answer supported
+   by the module's own text.
 
-STRUCTURED EDITS:
-Each entry in the `edits` array is one of four shapes:
+5. EXAM — If the frontmatter declares a `certification:` target (CKA,
+   CKAD, CKS, KCNA, KCSA), does the module depth match the published
+   CNCF curriculum for that exam? Skip this check entirely if no
+   certification is named in frontmatter. A FAIL must cite the specific
+   curriculum domain the module fails to meet.
 
-  {{"type": "replace", "find": "<literal substring in module>", "new": "<replacement text>", "dim": "D2", "why": "<short reason>"}}
-  {{"type": "insert_after", "find": "<literal anchor substring>", "new": "<content to insert AFTER the anchor>", "dim": "D2", "why": "..."}}
-  {{"type": "insert_before", "find": "<literal anchor substring>", "new": "<content to insert BEFORE the anchor>", "dim": "D2", "why": "..."}}
-  {{"type": "delete", "find": "<literal substring to remove>", "dim": "D2", "why": "..."}}
+6. DEPTH — Does the module include at least one practitioner-grade
+   element: a production gotcha, a decision framework, a war story, or a
+   non-obvious failure mode? This is the anti-"Hello World" guardrail.
+   A FAIL means the module reads like a surface tutorial with no
+   operational nuance.
+
+7. WHY — Does every major design decision (architecture choice, resource
+   selection, flag usage, tradeoff) have at least one sentence of
+   rationale? "Do X then Y" with no motivation is a FAIL. You are NOT
+   looking for rationale on every individual line — major design
+   decisions only.
+
+8. PRES — Every distinct concept, lab, table, diagram, and quiz question
+   from the ORIGINAL is present in the IMPROVED version, unless it
+   contained a factual error or was explicit duplication. Compression
+   and reorganization are ALLOWED. Deletion of unique value is NOT. A
+   FAIL must cite the specific missing item from the original. This
+   check exists to prevent information loss during rewrites — it does
+   NOT forbid tightening prose.
+
+APPROVE REQUIRES every check `passed: true`. If even one check is
+`passed: false`, the verdict is REJECT.
+
+STRUCTURED EDIT FORMAT — for every FAIL, provide an edit OR explain in
+`evidence` why an edit is not possible (e.g. "the Hands-on section needs
+a ground-up rewrite — not fixable with substring replacement"):
+
+  {{"type": "replace", "find": "<literal substring>", "new": "<replacement>", "reason": "<short>"}}
+  {{"type": "insert_after", "find": "<literal anchor>", "new": "<content AFTER>", "reason": "..."}}
+  {{"type": "insert_before", "find": "<literal anchor>", "new": "<content BEFORE>", "reason": "..."}}
+  {{"type": "delete", "find": "<literal substring to remove>", "reason": "..."}}
 
 HARD RULES for edits:
-1. "find" MUST be a literal substring that appears EXACTLY ONCE in the module.
-   If the phrase appears multiple times, include surrounding context (e.g. the
-   heading above the paragraph) to make it unique. Ambiguous anchors FAIL and
-   the edit is dropped, so disambiguate up front.
-2. "new" is the exact replacement/insertion text — no placeholders, no "...",
+1. `find` MUST be a literal substring that appears EXACTLY ONCE in the
+   IMPROVED module. If the phrase appears multiple times, include
+   surrounding context (e.g. the heading above the paragraph) to make
+   it unique. Ambiguous anchors FAIL and the edit is dropped.
+2. `new` is the exact replacement text — no placeholders, no "...",
    no "TODO", no "rest unchanged". Full verbatim content.
-3. One edit = one atomic change. Do NOT bundle multiple unrelated edits into
-   one patch. Multiple small edits > one giant replacement.
-4. Quote Markdown/YAML/code literally. Preserve leading whitespace and newlines
-   exactly as they appear in the module. Escape embedded quotes for JSON.
-5. List EVERY concrete issue as a separate edit. There is no cap — the pipeline
-   applies all structured edits in one pass, so being exhaustive helps
-   convergence. A review that returns 15 clean edits converges faster than one
-   that returns 5 plus a wall of prose.
-6. Example edit for a factual fix:
+3. Quote Markdown/YAML/code literally. Preserve leading whitespace and
+   newlines exactly as they appear in the module. Escape embedded
+   quotes for JSON.
+4. List every concrete issue as a separate edit. There is no cap — the
+   pipeline applies all structured edits in one pass.
+5. One edit = one atomic change. Do NOT bundle multiple unrelated
+   edits into one patch.
 
-     {{"type": "replace",
-      "find": "The customPricing.costModel takes cpuHourlyCost and ramHourlyCost keys.",
-      "new": "The customPricing.costModel takes CPU, RAM, GPU, and storage keys (per the opencost-helm-chart values schema).",
-      "dim": "D2",
-      "why": "OpenCost helm chart uses CPU/RAM/GPU/storage keys, not *HourlyCost variants"}}
+SEVERITY (advisory — code will compute the final value):
+- "clean": verdict APPROVE, no failed checks.
+- "targeted": verdict REJECT, 1-4 failed checks, ALL addressable via
+  structured edits.
+- "severe": verdict REJECT, 5+ failed checks OR any failure that
+  cannot be fixed with structured edits.
 
-Output ONLY this JSON (no prose before or after, no markdown fences).
+Your `severity` field is ADVISORY. Code will override it based on the
+actual number of failed checks and whether each failure has a workable
+edit. Be honest — don't under-report to avoid triggering a rewrite.
+
+OUTPUT JSON ONLY — no preamble, no postamble, no markdown fences:
 
 {{
   "verdict": "APPROVE" or "REJECT",
-  "scores": [D1, D2, D3, D4, D5, D6, D7, D8],
-  "edits": [ ... array of edit objects, empty [] if APPROVE ... ],
-  "feedback": "prose summary and qualitative notes only — NO literal replacement text"
+  "severity": "clean" or "targeted" or "severe",
+  "checks": [
+    {{"id": "FACT", "passed": true}},
+    {{"id": "LAB", "passed": false, "evidence": "...", "edit_refs": [0, 1]}},
+    {{"id": "COV", "passed": true}},
+    {{"id": "QUIZ", "passed": true}},
+    {{"id": "EXAM", "passed": true}},
+    {{"id": "DEPTH", "passed": true}},
+    {{"id": "WHY", "passed": true}},
+    {{"id": "PRES", "passed": true}}
+  ],
+  "edits": [
+    {{"type": "replace", "find": "...", "new": "...", "reason": "..."}}
+  ],
+  "feedback": "optional prose summary of qualitative notes that don't map to an edit"
 }}
+
+Every one of the 8 check IDs MUST appear in `checks`. Skipping EXAM when
+there is no `certification:` target is fine — return it as `passed: true`
+with evidence `"no certification target in frontmatter"`.
 
 ---
 
@@ -665,6 +693,53 @@ ORIGINAL MODULE:
 IMPROVED MODULE:
 {improved}
 """
+
+CHECK_IDS = ["FACT", "LAB", "COV", "QUIZ", "EXAM", "DEPTH", "WHY", "PRES"]
+
+
+def compute_severity(
+    verdict: str,
+    checks: list[dict],
+    edits: list[dict],
+) -> str:
+    """Compute the authoritative severity from reviewer output.
+
+    The reviewer returns an advisory `severity` field but an LLM can
+    under-report to avoid triggering a rewrite, or report "targeted" with
+    zero edits (which is meaningless). Code is the final arbiter:
+
+    - APPROVE → clean (regardless of what the reviewer said)
+    - REJECT with 5+ failed checks → severe
+    - REJECT with any failed check that has no corresponding edit → severe
+    - REJECT with 1-4 failed checks, all backed by edits → targeted
+    - REJECT with no edits at all → severe (nothing to apply)
+
+    Fixes Gemini pair-review critique A from round 2.
+    """
+    if verdict == "APPROVE":
+        return "clean"
+    failed = [c for c in checks if isinstance(c, dict) and not c.get("passed", True)]
+    if not failed:
+        # Contradictory: REJECT with no failed checks. Treat as severe —
+        # the reviewer's structure is inconsistent, fall back to rewrite.
+        return "severe"
+    if len(failed) >= 5:
+        return "severe"
+    if not edits:
+        return "severe"
+    # A failed check is "covered" if it references at least one edit via
+    # edit_refs OR the reviewer provided evidence explaining why no edit
+    # is possible (in which case the pipeline must rewrite).
+    uncovered = []
+    for c in failed:
+        refs = c.get("edit_refs") or []
+        if not refs:
+            uncovered.append(c.get("id", "?"))
+    if uncovered:
+        # At least one failure has no edit attached → can't patch, need
+        # a rewrite for those sections. Escalate to severe.
+        return "severe"
+    return "targeted"
 
 
 INDEX_PROMPT_TEMPLATE = """CRITICAL INSTRUCTION: Your response must be ONLY the raw markdown content. Start with the --- frontmatter delimiter. No preamble, no explanation — ONLY the markdown file.
@@ -1057,10 +1132,12 @@ def apply_review_edits(content: str, edits: list) -> tuple[str, list, list]:
 
 
 def step_review(module_path: Path, improved: str, model: str = MODELS["review"]) -> dict | None:
-    """Reviewer (Codex by default) evaluates the module strictly.
+    """Reviewer (Codex by default) runs the binary quality gate.
 
     Returns:
-        dict with keys {verdict, scores, feedback} on success.
+        dict with keys {verdict, severity, checks, edits, feedback} on
+            success. `severity` is the CODE-COMPUTED value (reviewer's
+            advisory value is overwritten by compute_severity).
         {"rate_limited": True} sentinel dict if the reviewer was rate-limited
             (caller should NOT fail the module — keep content, flag for retry).
         None on any other failure.
@@ -1092,42 +1169,48 @@ def step_review(module_path: Path, improved: str, model: str = MODELS["review"])
         return None
 
     verdict = result.get("verdict", "REJECT")
-    scores = result.get("scores") or []
-    if isinstance(scores, list):
-        try:
-            scores = [int(s) for s in scores]
-        except (ValueError, TypeError):
-            scores = []
+    checks_raw = result.get("checks") or []
+    checks = [c for c in checks_raw if isinstance(c, dict) and "id" in c]
+    edits = result.get("edits") or []
+    if not isinstance(edits, list):
+        edits = []
     feedback = result.get("feedback", "")
 
-    print(f"  Verdict: {verdict}")
-    if scores:
-        dim_labels = [
-            "Pedagogy", "Accuracy", "Depth", "Practical",
-            "Assessment", "Coverage", "Production", "Practitioner",
-        ]
-        per_dim = "  ".join(
-            f"D{i+1}({dim_labels[i][:4]})={s}" for i, s in enumerate(scores)
-        )
-        print(f"  Scores: {scores} (sum: {sum(scores)}/40)")
-        print(f"          {per_dim}")
-    edits = result.get("edits") or []
-    if isinstance(edits, list) and edits:
+    # Code as arbiter: override the reviewer's self-reported severity with
+    # the computed value. Per Gemini pair-review critique A, trusting the
+    # LLM to report severity produces inconsistent routing.
+    severity = compute_severity(verdict, checks, edits)
+    result["severity"] = severity
+    result["checks"] = checks
+    result["edits"] = edits
+
+    # Binary-gate print: check IDs with PASS/FAIL plus the severity badge
+    failed = [c for c in checks if not c.get("passed")]
+    passed = [c for c in checks if c.get("passed")]
+    severity_icon = {"clean": "🟢", "targeted": "🟡", "severe": "🔴"}.get(severity, "?")
+    print(f"  Verdict: {verdict}  Severity: {severity_icon} {severity}")
+    if checks:
+        passed_ids = [c.get("id", "?") for c in passed]
+        failed_ids = [c.get("id", "?") for c in failed]
+        print(f"  Checks: {len(passed)}/{len(checks)} passed")
+        if passed_ids:
+            print(f"    ✓ {' '.join(passed_ids)}")
+        if failed_ids:
+            print(f"    ✗ {' '.join(failed_ids)}")
+        for c in failed:
+            ev = c.get("evidence", "")
+            if ev:
+                for line in ev.splitlines():
+                    print(f"      {c.get('id')}: {line}")
+    if edits:
         by_type: dict[str, int] = {}
-        by_dim: dict[str, int] = {}
         for e in edits:
             if not isinstance(e, dict):
                 continue
             by_type[e.get("type", "?")] = by_type.get(e.get("type", "?"), 0) + 1
-            by_dim[e.get("dim", "?")] = by_dim.get(e.get("dim", "?"), 0) + 1
         type_summary = ", ".join(f"{k}={v}" for k, v in sorted(by_type.items()))
-        dim_summary = ", ".join(f"{k}={v}" for k, v in sorted(by_dim.items()))
-        print(f"  Structured edits: {len(edits)} ({type_summary}; by dim: {dim_summary})")
+        print(f"  Structured edits: {len(edits)} ({type_summary})")
     if feedback:
-        # Print the full feedback verbatim — operators need to read it to
-        # understand why the reviewer rejected and what the FIX blocks say.
-        # The dispatch log also stores it, but surfacing in the run log keeps
-        # the debugging loop tight.
         print(f"  Feedback:")
         print(f"  {'─' * 70}")
         for line in feedback.splitlines() or [feedback]:
@@ -1271,8 +1354,9 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
         if dry_run:
             print(f"\n  [DRY RUN] Initial write plan: {plan}")
             return False
-        ms["scores"] = None
-        ms["sum"] = None
+        ms["severity"] = None
+        ms["checks_failed"] = []
+        ms["reviewer_schema_version"] = 2
         ms["passes"] = False
         ms["phase"] = "write"
         ms["last_run"] = datetime.now(UTC).isoformat()
@@ -1314,7 +1398,9 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
             last_good = improved
             targeted_fix = False
         else:
-            plan = f"Resume improvement. Last scores: {ms.get('scores', 'unknown')}."
+            failed = ms.get("checks_failed") or []
+            failed_ids = ", ".join(c.get("id", "?") for c in failed) if failed else "unknown"
+            plan = f"Resume improvement. Last failed checks: {failed_ids}."
             improved = None
             last_good = None
             targeted_fix = False
@@ -1337,14 +1423,17 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
         save_state(state)
 
     # WRITE → REVIEW loop (max retries)
-    # Auto-detect rewrite mode: score < 28 means "improve" won't cut it.
-    # `improved`, `last_good`, and `targeted_fix` are initialized above by
-    # the initial-write or resume branches; DO NOT re-initialize here or
-    # targeted-fix resume state will be lost.
-    current_sum = ms.get("sum")
-    needs_rewrite = current_sum is not None and current_sum < 28
+    # Auto-detect rewrite mode from the binary gate's severity signal on
+    # the previous review. severe → full rewrite; anything else → normal
+    # improve/targeted-fix path. `improved`, `last_good`, and
+    # `targeted_fix` are initialized above by the initial-write or resume
+    # branches; DO NOT re-initialize here or targeted-fix resume state
+    # will be lost.
+    prior_severity = ms.get("severity")
+    needs_rewrite = prior_severity == "severe"
     if needs_rewrite:
-        print(f"  Score {current_sum}/40 < 28 — using REWRITE mode")
+        failed_ids = [c.get("id", "?") for c in (ms.get("checks_failed") or [])]
+        print(f"  Prior severity=severe (failed: {failed_ids}) — using REWRITE mode")
 
     for attempt in range(max_retries + 1):
         if ms["phase"] in ("write",):
@@ -1459,32 +1548,18 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                 return False
 
             if review.get("verdict") == "APPROVE":
-                # Save review scores (these reflect the IMPROVED content).
-                # If Gemini returns a malformed array, trust the APPROVE verdict
-                # and write a passing score vector. This covers the historical
-                # [D1-D7] prompt bug and any future output-format drift.
-                # Floor must be >= SCORE thresholds (min >= 4 AND sum >= 33) so
-                # trusting the verdict actually lets the module pass SCORE;
-                # otherwise the module would loop forever in improve mode.
-                r_scores_raw = review.get("scores") or []
-                well_formed = (
-                    isinstance(r_scores_raw, list)
-                    and len(r_scores_raw) == 8
-                    and all(isinstance(x, int) for x in r_scores_raw)
-                )
-                if well_formed:
-                    ms["scores"] = r_scores_raw
-                    ms["sum"] = sum(r_scores_raw)
-                else:
-                    raw_len = len(r_scores_raw) if isinstance(r_scores_raw, list) else "n/a"
-                    print(f"  ⚠ APPROVE with malformed scores (len={raw_len}); trusting verdict and using passing-floor scores")
-                    floor = [4, 4, 4, 4, 4, 4, 4, 5]  # sum=33, min=4, passes SCORE
-                    ms["scores"] = floor
-                    ms["sum"] = sum(floor)
-                # Tag the reviewer that actually produced this verdict (may be
-                # the primary or the fallback). needs_independent_review is
-                # True for any reviewer not in INDEPENDENT_REVIEWER_FAMILIES
-                # (currently: anything other than codex/claude).
+                # Binary gate: on APPROVE, the module's state records that
+                # every check passed. Per Gemini pair-review critique B, we
+                # ignore any `edits` returned alongside an APPROVE — an
+                # approval is an immutable snapshot. If the reviewer wants
+                # changes, it must REJECT with severity=targeted.
+                ms["severity"] = "clean"
+                ms["checks_failed"] = []
+                ms["reviewer_schema_version"] = 2
+                # Drop any legacy score fields so cmd_status renders the new
+                # binary-gate view, not the old [D1..D8] vector.
+                ms.pop("scores", None)
+                ms.pop("sum", None)
                 reviewer_family = reviewer_model.split("-")[0]
                 ms["reviewer"] = reviewer_family
                 ms["needs_independent_review"] = (
@@ -1494,25 +1569,27 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                 save_state(state)
                 break
             else:
-                # Rejected — feed back to WRITE (or deterministic apply)
-                r_scores = review.get("scores") or []
+                # REJECT — binary-gate routing based on code-computed severity.
+                # Per Gemini pair-review critique A ("code as arbiter"), we
+                # ALWAYS recompute severity from the actual checks + edits,
+                # even if the reviewer self-reported one. step_review also
+                # sets this field, but computing again here makes run_module
+                # robust to mocks and alternative reviewer code paths.
                 r_feedback = review.get("feedback", "")
+                r_checks = review.get("checks") or []
                 r_edits = review.get("edits") or []
-                r_valid = len(r_scores) == 8
-                r_sum = sum(r_scores) if r_valid else 0
+                failed_checks = [c for c in r_checks if isinstance(c, dict) and not c.get("passed")]
+                failed_ids = [c.get("id", "?") for c in failed_checks]
+                r_valid = bool(r_checks)
+                r_severity = compute_severity(
+                    review.get("verdict", "REJECT"), r_checks, r_edits
+                )
 
-                # Deterministic edit application — if the reviewer returned a
-                # structured `edits` array AND the module isn't severely broken,
-                # try applying the edits via Python string ops. This skips the
-                # LLM writer entirely when the reviewer's anchors match cleanly:
-                #   - zero Sonnet calls
-                #   - milliseconds instead of seconds
-                #   - 100% fidelity (no interpretation loss)
-                # Any edits that fail (anchor not found or ambiguous) are routed
-                # to the Sonnet targeted-fix fallback along with qualitative
-                # feedback that can't be expressed as a patch.
+                # Deterministic edit application — identical machinery as
+                # before (PR #221/222), but gated on severity instead of
+                # numeric sum. Applies for targeted severity with edits.
                 content_before = improved if improved is not None else module_path.read_text()
-                if r_valid and r_sum >= 25 and isinstance(r_edits, list) and r_edits:
+                if r_valid and r_severity == "targeted" and r_edits:
                     patched, applied, failed_edits = apply_review_edits(content_before, r_edits)
                     total_edits = len(r_edits)
                     applied_count = len(applied)
@@ -1525,21 +1602,22 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                             print(f"    ... and {len(failed_edits) - 5} more failed")
 
                     if applied_count > 0 and failed_count == 0:
-                        # 100% success — skip the LLM writer entirely and re-review
-                        # the patched content. The retry loop slot IS still consumed
-                        # (attempt increments), but no Gemini/Sonnet call runs; we
-                        # just ask Codex to re-evaluate the patched module.
-                        # Atomic staging write: survives SIGKILL mid-write so a
-                        # crash between here and the next CHECK doesn't lose the
-                        # patched content and force re-generation of the same
-                        # Codex edits on resume.
+                        # 100% success — re-review the patched content with
+                        # no LLM writer call. Atomic staging write survives
+                        # SIGKILL so a crash between here and CHECK doesn't
+                        # lose the patch.
                         improved = patched
                         last_good = improved
                         staging_path = module_path.with_suffix(".staging.md")
                         _atomic_write_text(staging_path, patched)
+                        ms["severity"] = "targeted"
+                        ms["checks_failed"] = [{"id": c.get("id"), "evidence": c.get("evidence", "")} for c in failed_checks]
+                        ms["reviewer_schema_version"] = 2
+                        ms.pop("scores", None)
+                        ms.pop("sum", None)
                         ms["phase"] = "review"
                         save_state(state)
-                        print(f"  ✓ All {applied_count} edits applied cleanly — re-reviewing patched content (no LLM writer call, staged to {staging_path.name})")
+                        print(f"  ✓ All {applied_count} edits applied cleanly — re-reviewing (no LLM writer call, staged to {staging_path.name})")
                         if attempt < max_retries:
                             continue
                         else:
@@ -1547,14 +1625,10 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                             ms["errors"].append(f"Review rejected {max_retries+1} times")
                             return False
                     elif applied_count > 0 and failed_count > 0:
-                        # Partial success: apply the clean edits, fall back to Sonnet
-                        # for the remaining ones + any qualitative notes. Include the
-                        # FULL edit payload (find/new) in the fallback plan so Sonnet
-                        # can actually apply each remaining patch — previously we only
-                        # passed dim/why/reason which left Sonnet guessing.
+                        # Partial — apply what worked, fall back to Sonnet
+                        # for the remaining edits.
                         improved = patched
                         last_good = improved
-                        # Atomic staging write for crash recovery
                         staging_path = module_path.with_suffix(".staging.md")
                         _atomic_write_text(staging_path, patched)
                         needs_rewrite = False
@@ -1579,122 +1653,98 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                             f"everything else verbatim. Each failed edit below includes its "
                             f"exact find/new payload — apply them literally where the anchors "
                             f"appear in the current content.\n\n"
+                            f"Failed binary checks: {', '.join(failed_ids)}\n\n"
                             f"{failed_text}\n\n"
                             f"Reviewer's qualitative notes (prose, not covered by structured edits):\n{r_feedback}"
                         )
-                        # Persist the fallback plan + targeted_fix flag into ms so
-                        # the peak-pause-style resume branch (lines ~1278-1284) can
-                        # reconstruct the targeted-fix state on crash. Without this,
-                        # on crash restart the resume code sees ms.get("plan") == None
-                        # and falls through to a generic rewrite, wasting a full
-                        # writer cycle.
                         ms["plan"] = plan
                         ms["targeted_fix"] = True
+                        ms["severity"] = "targeted"
+                        ms["checks_failed"] = [{"id": c.get("id"), "evidence": c.get("evidence", "")} for c in failed_checks]
+                        ms["reviewer_schema_version"] = 2
+                        ms.pop("scores", None)
+                        ms.pop("sum", None)
                         ms["phase"] = "write"
                         save_state(state)
                         print(f"  → Sonnet fallback for {failed_count} failed edits (partial progress staged + plan persisted)")
-                        if attempt < max_retries:
-                            continue
+                        # Circuit breaker (Gemini pair-review critique D):
+                        # count consecutive Sonnet anchor-failure rounds and
+                        # escalate to severe rewrite if Sonnet also can't
+                        # land the patch on the same check IDs.
+                        ms["sonnet_anchor_failures"] = ms.get("sonnet_anchor_failures", 0) + 1
+                        if ms["sonnet_anchor_failures"] >= 2:
+                            print(f"  ⚠ Circuit breaker: {ms['sonnet_anchor_failures']} consecutive anchor failures — escalating to severe rewrite")
+                            r_severity = "severe"
+                            ms["severity"] = "severe"
+                            # Fall through to the severe rewrite block below
+                            # instead of looping the partial-apply path.
                         else:
-                            print(f"  ❌ Max retries reached after partial deterministic apply")
-                            ms["errors"].append(f"Review rejected {max_retries+1} times")
-                            return False
+                            if attempt < max_retries:
+                                continue
+                            else:
+                                print(f"  ❌ Max retries reached after partial deterministic apply")
+                                ms["errors"].append(f"Review rejected {max_retries+1} times")
+                                return False
                     else:
-                        # applied_count == 0 — all edits failed to match. This usually
-                        # means the reviewer's anchors don't match the module (maybe
-                        # the content drifted, maybe the reviewer quoted inaccurately).
-                        # Fall through to the normal Sonnet/Gemini routing below, using
-                        # the prose feedback.
-                        print(f"  ⚠ Zero edits applied deterministically — falling back to LLM writer")
+                        # 0/N — reviewer anchors don't match. Escalate to
+                        # severe rewrite (a fresh reviewer pass should
+                        # produce fresh anchors against the same content).
+                        print(f"  ⚠ Zero edits applied deterministically — escalating to severe rewrite")
+                        r_severity = "severe"
 
-                if r_valid and r_sum < 25:
+                # Non-deterministic paths below: severe rewrite, or invalid
+                # review output.
+                if not r_valid:
                     needs_rewrite = True
                     targeted_fix = False
                     plan = (
-                        f"SEVERE REWRITE REQUIRED. Content scored {r_sum}/40 and is "
-                        f"severely broken (below the 25 cutoff). Rewrite the module "
-                        f"from scratch while preserving the extracted technical assets "
-                        f"and fixing every review issue.\n\nReviewer feedback:\n{r_feedback}"
+                        "REVIEW OUTPUT INVALID. Rewrite the module from "
+                        f"scratch and resolve these issues.\n\nReviewer feedback:\n{r_feedback}"
                     )
-                    print(f"  → Severe rewrite mode (Gemini): sum={r_sum}/40 < 25")
-                elif r_valid:
-                    # Surgical fix — the module is not severely broken (sum >= 25).
-                    # Route to Claude Sonnet for precision editing regardless of
-                    # whether there are weak dims. Three cases land here:
-                    #   - Weak dims present (common case: apply FIX blocks)
-                    #   - No weak dims but sum < 33 (unusual: should approve but
-                    #     reviewer rejected on qualitative grounds)
-                    #   - All dims >= 4 and sum >= 33 but REJECT (nitpick: apply
-                    #     the specific concern the reviewer raised)
-                    #
-                    # IMPORTANT: edit decisions are driven by reviewer feedback
-                    # (which sections were flagged with a [Dn] → FIX: block),
-                    # NOT by dim scores. A "passing" dim can still contain a
-                    # factual error Codex flagged with a FIX block — those must
-                    # be applied. Conversely, sections the reviewer did NOT
-                    # mention should be preserved verbatim regardless of which
-                    # dim they primarily support.
-                    #
-                    # This replaces the old "preserve passing dims verbatim"
-                    # rule which missed factual-error fixes that Codex flagged
-                    # in sections under nominally-passing dims.
-                    needs_rewrite = False
-                    targeted_fix = True
-                    weak = [(i + 1, s) for i, s in enumerate(r_scores) if s < 4]
-                    passing = [(i + 1, s) for i, s in enumerate(r_scores) if s >= 4]
-                    weak_desc = ", ".join(f"D{i}={s}" for i, s in weak) if weak else "(none — nitpick mode)"
-                    passing_desc = ", ".join(f"D{i}={s}" for i, s in passing) if passing else "(none)"
+                    print(f"  ⚠ Review returned no valid checks — using full rewrite")
+                elif r_severity == "severe":
+                    needs_rewrite = True
+                    targeted_fix = False
                     plan = (
-                        f"TARGETED FIX. Content currently scores {r_sum}/40 "
-                        f"(weak dims: {weak_desc}; passing dims: {passing_desc}).\n\n"
-                        f"HOW TO EDIT:\n"
-                        f"1. Apply EVERY [Dn] → FIX: block from the reviewer feedback below, "
-                        f"regardless of which dim it tags. Some FIX blocks may target sections "
-                        f"that support a 'passing' dim — those factual errors still need to be "
-                        f"fixed. Use the reviewer's exact replacement text/YAML/commands verbatim "
-                        f"wherever the FIX block provides literal content.\n"
-                        f"2. Preserve VERBATIM any section, code block, diagram, table, quiz "
-                        f"question, or inline prompt that the reviewer did NOT mention in any "
-                        f"[Dn] → FIX: block. Do not regenerate untouched content.\n"
-                        f"3. The edit target is the reviewer's FIX blocks, not the dim scores. "
-                        f"Dim scores tell you WHY the module was rejected; FIX blocks tell you "
-                        f"WHAT to change. Follow the FIX blocks.\n\n"
-                        f"If you touch a section the reviewer did not flag, you risk regressing "
-                        f"a passing dim (classic whack-a-mole). When in doubt, do less, not more.\n\n"
-                        f"Reviewer feedback (apply every [Dn] → FIX: block literally):\n{r_feedback}"
+                        f"SEVERE REWRITE REQUIRED. The binary quality gate flagged "
+                        f"{len(failed_checks)} failed checks ({', '.join(failed_ids)}) and "
+                        f"the pipeline could not repair them via structured edits. "
+                        f"Rewrite the module from scratch, addressing EVERY failed check "
+                        f"explicitly while preserving all preserved content, labs, quizzes, "
+                        f"and diagrams from the original.\n\n"
+                        f"Failed checks and evidence:\n"
                     )
-                    mode = "Targeted fix" if weak else "Nitpick fix"
-                    print(f"  → {mode} mode (Claude Sonnet): fixing per reviewer FIX blocks, "
-                          f"weak={weak_desc}, preserving untouched sections, sum={r_sum}/40")
+                    for c in failed_checks:
+                        ev = c.get("evidence", "(no evidence)")
+                        plan += f"\n- {c.get('id')}: {ev}"
+                    plan += f"\n\nReviewer's full feedback:\n{r_feedback}"
+                    print(f"  → Severe rewrite mode (Gemini): {len(failed_checks)} failed checks: {failed_ids}")
                 else:
-                    # Catch-all: malformed scores, or a REJECT with no weak dims
-                    # and sum below 36 (unusual — all dims passing but rejected
-                    # with no specific dimension weakness). Fall back to full
-                    # rewrite on Gemini rather than try to surgically patch from
-                    # incomplete review metadata.
+                    # Reached only via severity=targeted but no edits at all
+                    # (compute_severity would have returned severe, so this
+                    # is belt-and-suspenders). Fall back to severe.
                     needs_rewrite = True
                     targeted_fix = False
                     plan = (
-                        "REVIEW OUTPUT INVALID OR INCONCLUSIVE. Rewrite the module "
-                        f"from scratch and resolve these issues.\n\nReviewer feedback:\n{r_feedback}"
+                        f"INCONCLUSIVE REVIEW. Binary gate failed {len(failed_checks)} checks "
+                        f"({', '.join(failed_ids)}) but no actionable edits were provided. "
+                        f"Rewrite the module from scratch.\n\nReviewer feedback:\n{r_feedback}"
                     )
-                    if not r_valid:
-                        print(f"  ⚠ Review returned {len(r_scores)} scores (expected 8) — using full rewrite")
-                    else:
-                        print(f"  → Catch-all rewrite mode (Gemini): sum={r_sum}/40")
-                # Persist the rejection-branch plan + targeted_fix flag so crash
-                # recovery can reconstruct writer routing on resume. Without this,
-                # a crash in any non-deterministic rejection path resumes with
-                # ms.get("plan") == None and falls through to a generic Gemini
-                # rewrite, losing the specific FIX instructions from Codex and
-                # regressing the writer model choice (Sonnet → Gemini).
+                    print(f"  → Catch-all rewrite mode (Gemini): {len(failed_checks)} failed checks, no edits")
+
+                # Persist state for crash recovery: the rejection branch's
+                # plan + targeted_fix + severity + failed checks must all
+                # land in state so resume can reconstruct writer routing.
                 ms["plan"] = plan
                 ms["targeted_fix"] = targeted_fix
-                # Also stage the current `improved` content (the last writer
-                # output that was just rejected) so resume loads it as
-                # previous_output rather than re-reading the unpatched on-disk
-                # module. Deterministic-apply branches already stage above; this
-                # covers the surgical/severe/catch-all rejection paths.
+                ms["severity"] = r_severity
+                ms["checks_failed"] = [{"id": c.get("id"), "evidence": c.get("evidence", "")} for c in failed_checks]
+                ms["reviewer_schema_version"] = 2
+                ms.pop("scores", None)
+                ms.pop("sum", None)
+                # Stage the current improved content so resume loads it as
+                # previous_output rather than re-reading the unpatched
+                # on-disk module. Deterministic branches already stage above.
                 if improved is not None:
                     staging_path = module_path.with_suffix(".staging.md")
                     _atomic_write_text(staging_path, improved)
@@ -1745,13 +1795,37 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
 
     # SCORE
     if ms["phase"] == "score":
-        scores = ms.get("scores", [4, 4, 4, 4, 4, 4, 4, 4])
-        total = sum(scores)
-        minimum = min(scores)
-        passes = minimum >= 4 and total >= 33
+        # Binary gate: the SCORE phase is only entered after review APPROVE
+        # and successful CHECK. In the old rubric this phase re-validated
+        # the score sum — that check is redundant under the binary gate
+        # (APPROVE means every check passed), so SCORE is now just the
+        # commit step. A module landing here with severity != "clean" is
+        # a state inconsistency; fail explicitly rather than silently
+        # passing.
+        severity = ms.get("severity")
+        legacy_mode = severity is None and ms.get("scores")
+        if legacy_mode:
+            # Backwards compat: modules approved under the v1 rubric
+            # still have ms["scores"] and no severity field. Trust the
+            # legacy approval (they were already validated by the old
+            # gate and reached this phase).
+            scores = ms.get("scores", [4, 4, 4, 4, 4, 4, 4, 4])
+            legacy_sum = sum(scores)
+            legacy_min = min(scores)
+            passes = legacy_min >= 4 and legacy_sum >= 33
+            ms["passes"] = passes
+            ms["sum"] = legacy_sum
+            result_label = f"{legacy_sum}/40 (legacy rubric)"
+        elif severity == "clean":
+            passes = True
+            ms["passes"] = True
+            result_label = "all binary checks passed"
+        else:
+            print(f"\n  ✗ SCORE reached with severity={severity} — state inconsistency, manual review required")
+            ms["errors"].append(f"SCORE phase entered with non-clean severity: {severity}")
+            save_state(state)
+            return False
 
-        ms["passes"] = passes
-        ms["sum"] = total
         ms["phase"] = "done" if passes else "score"
         ms["last_run"] = datetime.now(UTC).isoformat()
         save_state(state)
@@ -1760,9 +1834,7 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
             reviewer = ms.get("reviewer", "unknown")
             pending = ms.get("needs_independent_review", False)
             pending_tag = " needs-independent-review" if pending else ""
-            print(f"\n  ✓ PASS: {total}/40 (min: {minimum}) reviewer={reviewer}{pending_tag}")
-            # Auto-commit the passed module plus the knowledge card it was
-            # grounded against, when available, for full write-time traceability.
+            print(f"\n  ✓ PASS: {result_label} reviewer={reviewer}{pending_tag}")
             add_paths = [str(module_path)]
             card_path = knowledge_card_path_for_key(key)
             if card_path.exists():
@@ -1776,7 +1848,7 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
 
             commit_msg = (
                 f"chore(quality): v1 pipeline pass [{key}] "
-                f"({total}/40 reviewer={reviewer}{pending_tag})"
+                f"({result_label} reviewer={reviewer}{pending_tag})"
             )
             commit_result = subprocess.run(
                 ["git", "commit", "-m", commit_msg],
@@ -1788,7 +1860,7 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                 print(f"  ✓ Committed")
             return True
         else:
-            print(f"\n  ✗ FAIL: {total}/40 (min: {minimum}) — needs manual intervention")
+            print(f"\n  ✗ FAIL: {result_label} — needs manual intervention")
             return False
 
     return False
@@ -2087,63 +2159,67 @@ def cmd_status(args):
     all_uk = sorted((CONTENT_ROOT / "uk").glob("**/module-*.md")) if (CONTENT_ROOT / "uk").exists() else []
     uk_keys = set()
     for m in all_uk:
-        # uk/k8s/cka/... -> k8s/cka/...
         rel = str(m.relative_to(CONTENT_ROOT / "uk")).replace(".md", "")
         uk_keys.add(rel)
 
     # Build track data from disk + state
     tracks: dict[str, dict] = {}
+    legacy_count = 0
+    new_gate_count = 0
     for key in disk_keys:
         track = _track_from_key(key)
         t = tracks.setdefault(track, {
             "total": 0, "pass": 0, "fail": 0, "wip": 0, "todo": 0,
-            "scores": [], "uk": 0,
+            "legacy_sums": [], "uk": 0,
         })
         t["total"] += 1
         if key in uk_keys:
             t["uk"] += 1
         ms = modules.get(key, {})
         phase = ms.get("phase")
-        s = ms.get("sum")
-        if s is not None:
-            t["scores"].append(s)
+        schema_version = ms.get("reviewer_schema_version", 1 if ms.get("scores") else None)
+        if schema_version == 2:
+            new_gate_count += 1
+        elif schema_version == 1:
+            legacy_count += 1
+            # Keep legacy sums available for a faded column — modules
+            # approved under v1 still have their 8-dim score vector.
+            legacy_sum = ms.get("sum")
+            if legacy_sum is not None:
+                t["legacy_sums"].append(legacy_sum)
         if phase == "done":
             t["pass"] += 1
         elif phase in ("write",):
-            # stuck at write = rejected, effectively failing
             t["fail"] += 1
         elif phase and phase not in ("pending",):
             t["wip"] += 1
         else:
             t["todo"] += 1
 
-    # Totals
     g_total = sum(t["total"] for t in tracks.values())
     g_pass = sum(t["pass"] for t in tracks.values())
     g_fail = sum(t["fail"] for t in tracks.values())
     g_wip = sum(t["wip"] for t in tracks.values())
     g_todo = sum(t["total"] - t["pass"] - t["fail"] - t["wip"] for t in tracks.values())
     g_uk = sum(t["uk"] for t in tracks.values())
-    all_scores = [s for t in tracks.values() for s in t["scores"]]
+    all_legacy = [s for t in tracks.values() for s in t["legacy_sums"]]
 
-    print(f"\n  Modules: {g_total} total | {g_pass} pass (33+) | {g_fail} fail | {g_wip} in progress | {g_todo} not started")
+    print(f"\n  Modules: {g_total} total | {g_pass} pass | {g_fail} fail | {g_wip} in progress | {g_todo} not started")
     print(f"  Translations: {g_uk}/{g_total} UK")
-    if all_scores:
-        print(f"  Scores: avg {sum(all_scores)/len(all_scores):.1f} | lo {min(all_scores)} | hi {max(all_scores)} ({len(all_scores)} scored)")
+    print(f"  Gate version: {new_gate_count} binary-gate | {legacy_count} legacy rubric")
+    if all_legacy:
+        print(f"  Legacy score distribution: avg {sum(all_legacy)/len(all_legacy):.1f} | lo {min(all_legacy)} | hi {max(all_legacy)} ({len(all_legacy)} modules)")
     print()
-    hdr = f"  {'track':30s} {'pass':>6s} {'fail':>5s} {'wip':>5s} {'todo':>5s} {'total':>5s}  {'avg':>4s} {'lo':>3s}  {'uk':>3s}"
+    hdr = f"  {'track':30s} {'pass':>6s} {'fail':>5s} {'wip':>5s} {'todo':>5s} {'total':>5s}  {'uk':>3s}"
     print(hdr)
     print(f"  {'-'*85}")
 
     for track in sorted(tracks):
         t = tracks[track]
         todo = t["total"] - t["pass"] - t["fail"] - t["wip"]
-        avg = f'{sum(t["scores"])/len(t["scores"]):.0f}' if t["scores"] else "--"
-        lo = f'{min(t["scores"])}' if t["scores"] else "--"
         uk = str(t["uk"]) if t["uk"] else "--"
-        # Color hint: checkmark if all pass
         mark = " ok" if t["pass"] == t["total"] else ""
-        print(f"  {track:30s} {t['pass']:>6d} {t['fail']:>5d} {t['wip']:>5d} {todo:>5d} {t['total']:>5d}  {avg:>4s} {lo:>3s}  {uk:>3s}{mark}")
+        print(f"  {track:30s} {t['pass']:>6d} {t['fail']:>5d} {t['wip']:>5d} {todo:>5d} {t['total']:>5d}  {uk:>3s}{mark}")
 
     # Index pages summary
     all_idx = sorted(CONTENT_ROOT.glob("**/index.md"))
