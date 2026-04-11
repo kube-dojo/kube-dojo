@@ -111,7 +111,7 @@ from uk_sync import (
 )
 
 
-def dispatch_auto(prompt: str, model: str, timeout: int = 300) -> tuple[bool, str]:
+def dispatch_auto(prompt: str, model: str, timeout: int = 900) -> tuple[bool, str]:
     """Route to Gemini or Claude based on model name."""
     if model.startswith("gemini"):
         return dispatch_gemini_with_retry(prompt, model=model, timeout=timeout)
@@ -473,9 +473,17 @@ def count_assets(content: str) -> dict:
 
 
 def step_write(module_path: Path, plan: str, model: str = MODELS["write"],
-               rewrite: bool = False) -> str | None:
-    """Gemini drafts improvements or full rewrite based on the plan."""
-    content = module_path.read_text()
+               rewrite: bool = False,
+               previous_output: str | None = None) -> str | None:
+    """Gemini drafts improvements or full rewrite based on the plan.
+
+    If previous_output is provided (e.g. from an earlier attempt in the
+    write→review loop), it is used as the content to improve instead of
+    re-reading the file from disk. The file on disk is only updated during
+    the CHECK phase, so without this the loop would keep operating on stale
+    (original) content.
+    """
+    content = previous_output if previous_output is not None else module_path.read_text()
     key = module_key_from_path(module_path)
     mode = "REWRITE" if rewrite else "WRITE"
     print(f"\n  {mode}: {key} (using {model})")
@@ -487,7 +495,7 @@ def step_write(module_path: Path, plan: str, model: str = MODELS["write"],
     else:
         prompt = WRITE_PROMPT_TEMPLATE.format(plan=plan, content=content)
 
-    ok, output = dispatch_gemini_with_retry(prompt, model=model, timeout=300)
+    ok, output = dispatch_gemini_with_retry(prompt, model=model, timeout=900)
 
     if not ok or not output.strip():
         print(f"  ❌ WRITE failed")
@@ -520,6 +528,14 @@ def step_write(module_path: Path, plan: str, model: str = MODELS["write"],
         else:
             print(f"  ❌ WRITE failed — output has no frontmatter")
             return None
+
+    # Reject degenerate output — a real module rewrite is thousands of chars.
+    # 3000 is well below the expected 15k–40k range but above plausible stubs.
+    MIN_WRITE_CHARS = 3000
+    if len(output.strip()) < MIN_WRITE_CHARS:
+        print(f"  ❌ WRITE failed — output is suspiciously short "
+              f"({len(output.strip())} chars, expected ≥ {MIN_WRITE_CHARS})")
+        return None
 
     print(f"  ✓ WRITE produced {len(output)} chars")
     return output
@@ -612,7 +628,7 @@ def step_update_index(section_path: Path, model: str = MODELS["write"]) -> bool:
     )
 
     print(f"\n  INDEX: {rel_section} (using {model})")
-    ok, output = dispatch_gemini_with_retry(prompt, model=model, timeout=300)
+    ok, output = dispatch_gemini_with_retry(prompt, model=model, timeout=600)
 
     if not ok or not output.strip():
         print(f"  ❌ INDEX rewrite failed")
@@ -691,7 +707,7 @@ def step_review(module_path: Path, improved: str, model: str = MODELS["review"])
 
     prompt = REVIEW_PROMPT_TEMPLATE.format(original=original, improved=improved)
 
-    ok, output = dispatch_auto(prompt, model=model, timeout=300)
+    ok, output = dispatch_auto(prompt, model=model, timeout=900)
 
     if not ok:
         print(f"  ❌ REVIEW failed")
@@ -861,16 +877,23 @@ def run_module(module_path: Path, state: dict, max_retries: int = 2,
         print(f"  Score {ms.get('sum')}/40 < 28 — using REWRITE mode")
 
     improved = None
+    # `last_good` holds the most recent successful WRITE output across retries.
+    # step_write uses it as the base to improve on, since the module file on
+    # disk is only updated during CHECK (after the loop). Without this, every
+    # retry would re-read the original stub and lose the previous progress.
+    last_good: str | None = None
     for attempt in range(max_retries + 1):
         if ms["phase"] in ("write",):
             improved = step_write(module_path, plan, model=m["write"],
-                                  rewrite=needs_rewrite)
+                                  rewrite=needs_rewrite,
+                                  previous_output=last_good)
             if improved is None:
                 ms["errors"].append(f"Write failed attempt {attempt+1}")
                 save_state(state)
                 if attempt < max_retries:
                     continue
                 return False
+            last_good = improved
 
             ms["phase"] = "review"
             save_state(state)
@@ -895,7 +918,46 @@ def run_module(module_path: Path, state: dict, max_retries: int = 2,
                 break
             else:
                 # Rejected — feed back to WRITE
-                plan = f"PREVIOUS REVIEW REJECTED. Feedback: {review.get('feedback', '')}. Fix these issues."
+                r_scores = review.get("scores") or []
+                r_feedback = review.get("feedback", "")
+                r_valid = len(r_scores) == 8
+                r_sum = sum(r_scores) if r_valid else 0
+                r_has_weak = r_valid and any(s < 4 for s in r_scores)
+
+                if r_valid and r_sum >= 33 and r_has_weak:
+                    # Surgical fix — mostly passing, specific weak dims to target
+                    needs_rewrite = False
+                    weak = [(i + 1, s) for i, s in enumerate(r_scores) if s < 4]
+                    weak_desc = ", ".join(f"D{i}={s}" for i, s in weak)
+                    plan = (
+                        f"TARGETED FIX. Content already scored {r_sum}/40 — "
+                        f"ONLY weak dimension(s): {weak_desc}. "
+                        f"Edit ONLY what the reviewer feedback points to; "
+                        f"preserve EVERYTHING else verbatim (do not touch other sections, "
+                        f"code blocks, diagrams, tables, or quiz questions that were not flagged). "
+                        f"Reviewer feedback: {r_feedback}"
+                    )
+                    print(f"  → Targeted fix mode: {weak_desc}, sum={r_sum}/40")
+                elif r_valid and r_sum >= 36 and not r_has_weak:
+                    # All dims ≥ 4 but verdict REJECT — qualitative nitpick.
+                    # Numeric ground truth says this passes. Use improve mode
+                    # with the feedback as a focused plan.
+                    needs_rewrite = False
+                    plan = (
+                        f"NITPICK FIX. Content scored {r_sum}/40, all dimensions pass "
+                        f"(every score ≥ 4), but the reviewer raised a concern. "
+                        f"Address ONLY this specific concern; preserve EVERYTHING else "
+                        f"verbatim (sections, code, diagrams, tables, quiz questions). "
+                        f"Reviewer feedback: {r_feedback}"
+                    )
+                    print(f"  → Nitpick fix mode: sum={r_sum}/40, no weak dims")
+                else:
+                    # Real quality issues — recompute needs_rewrite from latest score.
+                    # Do NOT leave it pinned from a previous iteration.
+                    needs_rewrite = (r_sum < 28) if r_valid else True
+                    plan = f"PREVIOUS REVIEW REJECTED. Feedback: {r_feedback}. Fix these issues."
+                    if not r_valid:
+                        print(f"  ⚠ Review returned {len(r_scores)} scores (expected 8) — using full rewrite")
                 ms["phase"] = "write"
                 save_state(state)
                 if attempt < max_retries:

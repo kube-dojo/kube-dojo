@@ -4,11 +4,11 @@
 
 ## Current State
 
-**568 modules** across 6 tracks. **115 Ukrainian translations** (~40% of certs + prereqs).
+**636 modules** across 7 tracks. **115 Ukrainian translations** (~18% — certs + prereqs; AI/ML not yet translated).
 
 **Website:** https://kube-dojo.github.io/ (Starlight/Astro, ~1,350 pages, ~30-40s build)
 
-**Site tabs:** Home | Fundamentals | Linux | Cloud | Certifications | Platform | On-Premises
+**Site tabs:** Home | Fundamentals | Linux | Cloud | Certifications | Platform | On-Premises | AI/ML Engineering
 
 ## Curriculum Summary
 
@@ -20,7 +20,8 @@
 | Certifications (CKA/CKAD/CKS/KCNA/KCSA/Extending + 12 learning paths) | 175 | Complete |
 | Platform Engineering | 209 | Complete |
 | On-Premises Kubernetes | 30 | Complete (needs Gemini review) |
-| **Total** | **568** | **Complete** |
+| AI/ML Engineering | 68 | Complete (Phase 4b — 8 new modules via v1 pipeline, #199) |
+| **Total** | **636** | **Complete** |
 
 ### Certifications Breakdown
 | Cert | Modules |
@@ -68,6 +69,24 @@
 | Supply Chain Defense Guide | 1 |
 | CNPE Learning Path | 1 |
 
+### AI/ML Engineering Breakdown
+Migrated from neural-dojo + modernized with 8 new 2026 modules (#199, Phase 4b). All modules passed the v1 quality pipeline at 38–40/40.
+
+| Section | Modules |
+|---------|---------|
+| Prerequisites | 1 |
+| AI-Native Development | 9 |
+| Generative AI | 6 |
+| Vector DBs & RAG | 5 |
+| Frameworks & Agents | 10 |
+| AI Infrastructure | 3 |
+| Advanced GenAI | 9 |
+| Multimodal AI | 4 |
+| Deep Learning | 7 |
+| MLOps | 10 |
+| Classical ML | 3 |
+| History | 1 |
+
 ### Ukrainian Translations
 | Track | Translated | Total |
 |-------|-----------|-------|
@@ -77,7 +96,8 @@
 | CKS | 0 | 30 |
 | KCNA | 0 | 28 |
 | KCSA | 0 | 26 |
-| **Total** | **115** | **558** |
+| AI/ML Engineering | 0 | 68 |
+| **Total** | **115** | **626** |
 
 ## Quality Standard
 
@@ -107,6 +127,8 @@
 | #180 | Elevate All Modules to 4/5 | Open (CKA/CKAD/On-Prem done; CKS/KCNA/KCSA/Cloud/Platform pending) |
 | #177 | Improve Lowest-Quality Modules | Open (8 critical/high done, ~19 remaining) |
 | #179 | Improve Lowest-Quality Labs | Open (blocked on Phase 3 lab audit) |
+| #199 | AI/ML Engineering track migration + modernization | Open (Phase 4b done; Phase 7 cross-link + Phase 8 UK translate remain) |
+| #200 | AI/ML local per-section module numbering (filename rename) | Open (delegated to Codex in worktree) |
 
 ## Recently Closed (Session 3)
 | # | Issue | Status |
@@ -150,6 +172,10 @@
 - [x] K8S_API check: demoted to WARNING, strips code blocks + inline code (false positives)
 - [x] .staging file glob bug fixed (was creating bogus state entries)
 - [x] Token analysis: subagents are 74% of volume but mostly cheap cache reads. Not the cost monster claimed.
+- [x] AI/ML Engineering track migrated from neural-dojo (60 existing + 8 new 2026 modules, #199 Phase 4b). All 8 new pass v1 pipeline at 40/40.
+- [x] v1 pipeline fixes: 300s→900s timeouts, targeted-fix / nitpick / previous_output scaffolding, short-output guard (enables quality-rubric retries to converge)
+- [ ] AI/ML Engineering #199 remaining: Phase 7 cross-link (run), Phase 8 UK translate (skipped for now)
+- [ ] AI/ML Engineering #200: local per-section module numbering (delegated to Codex)
 - [ ] Remaining pipeline: On-Premises (30), Platform (209), Specialty (18) — #180
 - [ ] Stuck modules: ~11 at WRITE (Gemini rejection loop), need knowledge packet retry
 - [ ] ASCII→Mermaid conversion pass for all 587 modules — #193 (after #180)
