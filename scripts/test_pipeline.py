@@ -699,6 +699,87 @@ class TestPipelineTransitions(unittest.TestCase):
         # Both audit and review dispatches should have fired
         self.assertEqual(mock_dispatch.call_count, 2)
 
+    @patch("v1_pipeline.STATE_FILE")
+    @patch("v1_pipeline.dispatch_auto")
+    @patch("v1_pipeline.CONTENT_ROOT")
+    @patch("subprocess.run")
+    def test_done_module_without_pending_flag_returns_true(
+        self, mock_subprocess, mock_root, mock_dispatch, mock_state,
+    ):
+        """phase=done without needs_independent_review returns True (skip, not fail)."""
+        import v1_pipeline as p
+
+        mock_state.__class__ = type(self.state_file)
+        mock_root.resolve.return_value = Path(self.tmpdir).resolve()
+
+        state = {
+            "modules": {
+                "test/module-0.1-test": {
+                    "phase": "done",
+                    "reviewer": "codex",
+                    "scores": [5] * 8,
+                    "sum": 40,
+                    "passes": True,
+                    "needs_independent_review": False,
+                    "errors": [],
+                },
+            },
+        }
+
+        with patch.object(p, "STATE_FILE", self.state_file), \
+             patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
+             patch.object(p, "save_state"):
+            with patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"):
+                result = p.run_module(self.module_path, state)
+
+        self.assertTrue(result, "Already-done module should return True, not False")
+        # No dispatch calls — nothing should have been re-run
+        self.assertEqual(mock_dispatch.call_count, 0)
+
+    @patch("v1_pipeline.STATE_FILE")
+    @patch("v1_pipeline.dispatch_auto")
+    @patch("v1_pipeline.CONTENT_ROOT")
+    @patch("subprocess.run")
+    def test_done_module_with_pending_flag_reruns(
+        self, mock_subprocess, mock_root, mock_dispatch, mock_state,
+    ):
+        """phase=done with needs_independent_review flag re-runs the pipeline."""
+        import v1_pipeline as p
+
+        mock_state.__class__ = type(self.state_file)
+        mock_root.resolve.return_value = Path(self.tmpdir).resolve()
+        mock_dispatch.side_effect = [
+            self._mock_audit_pass(),
+            self._mock_review_approve(),
+        ]
+
+        state = {
+            "modules": {
+                "test/module-0.1-test": {
+                    "phase": "done",
+                    "reviewer": "gemini",
+                    "scores": [5] * 8,
+                    "sum": 40,
+                    "passes": True,
+                    "needs_independent_review": True,
+                    "errors": [],
+                },
+            },
+        }
+
+        with patch.object(p, "STATE_FILE", self.state_file), \
+             patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
+             patch.object(p, "save_state"):
+            with patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"):
+                p.run_module(self.module_path, state)
+
+        ms = state["modules"]["test/module-0.1-test"]
+        self.assertEqual(ms.get("phase"), "done")
+        self.assertEqual(ms.get("reviewer"), "codex")
+        self.assertFalse(ms.get("needs_independent_review", True))
+        # audit + review dispatches both fired
+        self.assertEqual(mock_dispatch.call_count, 2)
+
     def test_dry_run_does_not_modify_files(self):
         """Dry run should audit but not write any files."""
         import v1_pipeline as p
@@ -743,8 +824,14 @@ class TestTrackAliases(unittest.TestCase):
         self.assertEqual(p._track_from_key("cloud/aws-essentials/module-1.1"), "cloud")
 
     def test_track_from_key_platform(self):
+        """Platform sub-sections resolve to their full sub-group for status display."""
         import v1_pipeline as p
-        self.assertEqual(p._track_from_key("platform/foundations/module-1.1"), "platform")
+        # Sub-sections are grouped distinctly (supports per-subsection progress)
+        self.assertEqual(p._track_from_key("platform/foundations/module-1.1"), "platform/foundations")
+        self.assertEqual(p._track_from_key("platform/disciplines/sre/module-1"), "platform/disciplines")
+        self.assertEqual(p._track_from_key("platform/toolkits/gitops/module-1"), "platform/toolkits")
+        # Top-level platform path with no recognized sub-section → "platform"
+        self.assertEqual(p._track_from_key("platform/misc/module-1"), "platform")
 
     def test_track_from_key_linux(self):
         import v1_pipeline as p
