@@ -29,6 +29,7 @@ MCP_CONFIG = REPO_ROOT / ".mcp.json"
 
 # Resolve CLI paths at import time
 GEMINI_CLI = shutil.which("gemini") or "gemini"
+CODEX_CLI = shutil.which("codex") or "codex"
 
 # Environment for subprocesses
 _ENV = os.environ.copy()
@@ -45,6 +46,7 @@ GH_CHAR_LIMIT = 64000
 GEMINI_DEFAULT_MODEL = "gemini-3-flash-preview"
 GEMINI_FALLBACK_MODEL = "auto"
 CLAUDE_DEFAULT_MODEL = "claude-sonnet-4-6"
+CODEX_DEFAULT_MODEL = "codex"  # lets codex CLI pick the default model
 
 # ---------------------------------------------------------------------------
 # Rate limit detection + pacing
@@ -291,6 +293,50 @@ def dispatch_claude(prompt: str, model: str = CLAUDE_DEFAULT_MODEL,
         _log("claude", model, prompt, "", False, time.time() - t0, "TIMEOUT")
         print(f"Claude timed out after {timeout}s", file=sys.stderr)
         return False, ""
+
+
+def dispatch_codex(prompt: str, model: str = CODEX_DEFAULT_MODEL,
+                   timeout: int = 900) -> tuple[bool, str]:
+    """Call Codex CLI directly via `codex exec`. Returns (success, output).
+
+    Reads prompt from stdin, runs in read-only sandbox, skips git repo check.
+    On rate-limit or quota errors, returns (False, stderr) so the caller can
+    react (see run_module review branch, which degrades gracefully).
+    """
+    cmd = [CODEX_CLI, "exec", "--skip-git-repo-check", "--sandbox", "read-only"]
+    # Allow caller to pin a model (e.g. "codex-gpt-5"); "codex" alone means default.
+    if model and model != "codex":
+        cmd.extend(["-m", model])
+
+    t0 = time.time()
+    try:
+        result = subprocess.run(
+            cmd, input=prompt, capture_output=True, text=True,
+            timeout=timeout, cwd=str(REPO_ROOT), env=_ENV,
+        )
+        elapsed = time.time() - t0
+        output = result.stdout.strip()
+        stderr = result.stderr or ""
+
+        if result.returncode != 0:
+            # Check if it was a rate limit / quota issue so caller can degrade
+            rate_limited = _is_rate_limited(output + "\n" + stderr)
+            tag = "RATE_LIMIT" if rate_limited else stderr[:500]
+            print(f"Codex error (exit {result.returncode}): {tag}", file=sys.stderr)
+            _log("codex", model, prompt, output, False, elapsed, tag)
+            return False, output if output else stderr
+
+        _log("codex", model, prompt, output, True, elapsed)
+        return True, output
+
+    except FileNotFoundError:
+        _log("codex", model, prompt, "", False, time.time() - t0, "CLI not found")
+        print("codex CLI not found. Install: https://github.com/openai/codex", file=sys.stderr)
+        return False, ""
+    except subprocess.TimeoutExpired:
+        _log("codex", model, prompt, "", False, time.time() - t0, "TIMEOUT")
+        print(f"Codex timed out after {timeout}s", file=sys.stderr)
+        return False, "TIMEOUT"
 
 
 def post_to_github(issue_num: int, content: str, model: str) -> bool:
