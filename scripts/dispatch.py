@@ -74,6 +74,34 @@ def _is_rate_limited(text: str) -> bool:
     return any(pat.lower() in text_lower for pat in _RATE_LIMIT_PATTERNS)
 
 
+# ---------------------------------------------------------------------------
+# Claude peak-hours pricing guard
+# ---------------------------------------------------------------------------
+#
+# Anthropic charges 2x for Claude API calls during peak hours (14:00-20:00
+# local time). To avoid accidental spend, the pipeline refuses to invoke
+# Claude during those hours and leaves any pending work for the next run.
+# Override with KUBEDOJO_IGNORE_PEAK_HOURS=1 if you need to force through.
+
+_CLAUDE_PEAK_START_HOUR = 14  # 14:00 local time
+_CLAUDE_PEAK_END_HOUR = 20    # 20:00 local time
+
+
+class ClaudeUnavailableError(Exception):
+    """Raised when a Claude call is blocked (peak hours) or fails terminally
+    (rate limit / quota). The pipeline catches this and pauses the affected
+    module so it can resume on the next run without losing state."""
+
+
+def _is_claude_peak_hours() -> bool:
+    """Return True if current local time falls inside the 14:00-20:00 peak
+    window. KUBEDOJO_IGNORE_PEAK_HOURS=1 disables the check."""
+    if os.environ.get("KUBEDOJO_IGNORE_PEAK_HOURS", "") == "1":
+        return False
+    hour = datetime.now().hour
+    return _CLAUDE_PEAK_START_HOUR <= hour < _CLAUDE_PEAK_END_HOUR
+
+
 def _pace_gemini_calls() -> None:
     """Enforce minimum delay between Gemini CLI calls to avoid bursts."""
     global _last_gemini_call_time
@@ -257,7 +285,24 @@ def dispatch_gemini_with_retry(prompt: str, model: str = GEMINI_DEFAULT_MODEL,
 
 def dispatch_claude(prompt: str, model: str = CLAUDE_DEFAULT_MODEL,
                     timeout: int = 600, mcp: bool = False) -> tuple[bool, str]:
-    """Call Claude CLI directly. Returns (success, output)."""
+    """Call Claude CLI directly. Returns (success, output).
+
+    Raises:
+        ClaudeUnavailableError: during 14:00-20:00 local peak-hours (2x pricing)
+            or on terminal rate-limit / quota errors. The pipeline catches this
+            and pauses the affected module so it can resume on the next run.
+    """
+    if _is_claude_peak_hours():
+        hour = datetime.now().hour
+        msg = (
+            f"Claude peak hours in effect ({_CLAUDE_PEAK_START_HOUR}:00-"
+            f"{_CLAUDE_PEAK_END_HOUR}:00 local, currently {hour:02d}:xx). "
+            f"Refusing to dispatch to avoid 2x pricing. "
+            f"Set KUBEDOJO_IGNORE_PEAK_HOURS=1 to override."
+        )
+        print(f"⏸ {msg}", file=sys.stderr)
+        raise ClaudeUnavailableError(msg)
+
     cmd = [
         "npx", "@anthropic-ai/claude-code@latest", "-p",
         "--model", model,
@@ -280,6 +325,12 @@ def dispatch_claude(prompt: str, model: str = CLAUDE_DEFAULT_MODEL,
         if result.returncode != 0:
             print(f"Claude error (exit {result.returncode}): {result.stderr[:500]}", file=sys.stderr)
             _log("claude", model, prompt, "", False, elapsed, result.stderr)
+            # Escalate rate-limit / quota failures so the pipeline can pause
+            # the module instead of treating it as a generic write failure.
+            if _is_rate_limited(result.stderr) or _is_rate_limited(result.stdout):
+                raise ClaudeUnavailableError(
+                    f"Claude rate-limited or quota exhausted: {result.stderr[:200]}"
+                )
             return False, result.stderr
         output = result.stdout.strip()
         _log("claude", model, prompt, output, True, elapsed)
