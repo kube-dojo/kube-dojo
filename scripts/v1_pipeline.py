@@ -725,19 +725,31 @@ def compute_severity(
         return "severe"
     if len(failed) >= 5:
         return "severe"
-    if not edits:
+    if not edits or not isinstance(edits, list):
         return "severe"
-    # A failed check is "covered" if it references at least one edit via
-    # edit_refs OR the reviewer provided evidence explaining why no edit
-    # is possible (in which case the pipeline must rewrite).
+    edits_len = len(edits)
+    # A failed check is "covered" iff edit_refs is a list of valid integer
+    # indices into the edits array. Anything else — bool, str, out-of-bounds
+    # int, non-list — is treated as uncovered and forces severe escalation.
+    # Codex PR review flagged this as an arbiter-contract violation: the
+    # previous implementation accepted any truthy edit_refs as coverage,
+    # which let a malformed review (edit_refs=True, edit_refs="0", or
+    # edit_refs=[999]) misroute to targeted.
     uncovered = []
     for c in failed:
-        refs = c.get("edit_refs") or []
-        if not refs:
+        refs = c.get("edit_refs")
+        if not isinstance(refs, list) or not refs:
             uncovered.append(c.get("id", "?"))
+            continue
+        if not all(isinstance(r, int) and not isinstance(r, bool) for r in refs):
+            uncovered.append(c.get("id", "?"))
+            continue
+        if any(r < 0 or r >= edits_len for r in refs):
+            uncovered.append(c.get("id", "?"))
+            continue
     if uncovered:
-        # At least one failure has no edit attached → can't patch, need
-        # a rewrite for those sections. Escalate to severe.
+        # At least one failure has no valid edit attached → can't patch,
+        # need a rewrite for those sections. Escalate to severe.
         return "severe"
     return "targeted"
 
@@ -920,7 +932,13 @@ def _extract_review_json(output: str) -> dict | None:
     for cand in candidates:
         try:
             obj = json.loads(cand)
-            if isinstance(obj, dict) and "verdict" in obj and "scores" in obj:
+            # Binary gate (#223): a valid review has `verdict` + `checks`.
+            # The old rubric used `scores` — we accept either field for
+            # backwards compat with any in-flight legacy reviewer output
+            # during the migration, but new reviewers MUST return `checks`.
+            if isinstance(obj, dict) and "verdict" in obj and (
+                "checks" in obj or "scores" in obj
+            ):
                 return obj
         except json.JSONDecodeError:
             continue
@@ -1026,15 +1044,32 @@ def _find_anchor(content: str, anchor: str) -> tuple[int, int] | None:
 
 
 def _atomic_write_text(path: Path, content: str) -> None:
-    """Write `content` to `path` atomically — stages to a sibling tempfile
-    and then `os.replace()` swaps it into place. Survives SIGKILL mid-write:
-    either the old file is intact, or the new file is complete. No partial
-    writes visible to a future reader.
+    """Write `content` to `path` atomically — stages to a per-process,
+    per-call unique tempfile in the same directory and then `os.replace()`
+    swaps it into place. Survives SIGKILL mid-write: either the old file
+    is intact, or the new file is complete. No partial writes visible to
+    a future reader.
+
+    The temp suffix includes PID and a monotonic nanosecond counter so two
+    workers (or two serial calls in the same process) never contend on the
+    same temp path — Codex PR #224 review flagged the fixed `.tmp` sibling
+    as a concurrency race.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(content)
-    os.replace(tmp, path)
+    unique = f".{os.getpid()}.{datetime.now(UTC).strftime('%H%M%S%f')}.tmp"
+    tmp = path.with_suffix(path.suffix + unique)
+    try:
+        tmp.write_text(content)
+        os.replace(tmp, path)
+    except Exception:
+        # Best-effort cleanup so a crash between write and replace
+        # doesn't leave a stray temp file behind.
+        if tmp.exists():
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+        raise
 
 
 def apply_review_edits(content: str, edits: list) -> tuple[str, list, list]:
@@ -1560,6 +1595,13 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                 # binary-gate view, not the old [D1..D8] vector.
                 ms.pop("scores", None)
                 ms.pop("sum", None)
+                # Circuit breaker is a CONSECUTIVE counter — reset it on
+                # any path that re-establishes a good state (APPROVE or
+                # 100% deterministic apply). Without this reset, one past
+                # partial-apply event poisons every future retry until
+                # the module exits the pipeline (Gemini + Codex PR review
+                # both flagged this as a hot-path routing bug).
+                ms.pop("sonnet_anchor_failures", None)
                 reviewer_family = reviewer_model.split("-")[0]
                 ms["reviewer"] = reviewer_family
                 ms["needs_independent_review"] = (
@@ -1615,6 +1657,9 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                         ms["reviewer_schema_version"] = 2
                         ms.pop("scores", None)
                         ms.pop("sum", None)
+                        # Circuit breaker reset on 100% apply — see comment
+                        # on the APPROVE branch for the rationale.
+                        ms.pop("sonnet_anchor_failures", None)
                         ms["phase"] = "review"
                         save_state(state)
                         print(f"  ✓ All {applied_count} edits applied cleanly — re-reviewing (no LLM writer call, staged to {staging_path.name})")

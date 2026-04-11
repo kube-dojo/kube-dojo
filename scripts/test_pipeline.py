@@ -628,18 +628,29 @@ class TestPipelineTransitions(unittest.TestCase):
         return True, GOOD_MODULE
 
     def _mock_review_approve(self, *args, **kwargs):
-        """Mock review that approves."""
+        """Mock review that approves (binary gate #223)."""
+        check_ids = ["FACT", "LAB", "COV", "QUIZ", "EXAM", "DEPTH", "WHY", "PRES"]
         return True, json.dumps({
             "verdict": "APPROVE",
-            "scores": [5, 5, 5, 5, 5, 5, 5, 5],
+            "severity": "clean",
+            "checks": [{"id": cid, "passed": True} for cid in check_ids],
+            "edits": [],
             "feedback": "",
         })
 
     def _mock_review_reject(self, *args, **kwargs):
-        """Mock review that rejects."""
+        """Mock review that rejects with 1 fixable quiz issue."""
+        check_ids = ["FACT", "LAB", "COV", "QUIZ", "EXAM", "DEPTH", "WHY", "PRES"]
+        checks = [{"id": cid, "passed": True} for cid in check_ids]
+        checks[3] = {"id": "QUIZ", "passed": False,
+                     "evidence": "Recall-based not scenario-based",
+                     "edit_refs": [0]}
         return True, json.dumps({
             "verdict": "REJECT",
-            "scores": [3, 4, 3, 4, 3, 4, 3, 4],
+            "severity": "targeted",
+            "checks": checks,
+            "edits": [{"type": "replace", "find": "What port",
+                       "new": "In a scenario where", "reason": "Scenario framing"}],
             "feedback": "Quiz questions are recall-based, not scenario-based",
         })
 
@@ -770,9 +781,11 @@ class TestPipelineTransitions(unittest.TestCase):
         mock_root.resolve.return_value = Path(self.tmpdir).resolve()
 
         state = {"modules": {}}
+        all_pass_checks = [{"id": cid, "passed": True} for cid in p.CHECK_IDS]
         review_sequence = [
             {"rate_limited": True},
-            {"verdict": "APPROVE", "scores": [4, 4, 4, 4, 4, 4, 4, 5], "feedback": ""},
+            {"verdict": "APPROVE", "severity": "clean",
+             "checks": all_pass_checks, "edits": [], "feedback": ""},
         ]
 
         with patch.object(p, "STATE_FILE", self.state_file), \
@@ -827,11 +840,12 @@ class TestPipelineTransitions(unittest.TestCase):
             "modules": {
                 "test/module-0.1-test": {
                     "phase": "needs_targeted_fix",
-                    "plan": "TARGETED FIX. D2=3 weak — fix per reviewer feedback.",
+                    "plan": "TARGETED FIX. FACT check failed — fix per reviewer feedback.",
                     "targeted_fix": True,
                     "paused_reason": "Claude peak hours",
-                    "scores": [4, 3, 4, 4, 4, 4, 4, 4],
-                    "sum": 31,
+                    "severity": "targeted",
+                    "checks_failed": [{"id": "FACT", "evidence": "example"}],
+                    "reviewer_schema_version": 2,
                     "errors": [],
                 },
             },
@@ -1090,6 +1104,54 @@ class TestComputeSeverity(unittest.TestCase):
         edits = [{"type": "replace", "find": f"x{i}", "new": "y"} for i in range(4)]
         sev = self.p.compute_severity("REJECT", checks, edits)
         self.assertEqual(sev, "targeted")
+
+    def test_edit_refs_bool_is_uncovered(self):
+        """edit_refs=True looks truthy but is not a valid list → severe.
+
+        Codex PR review: compute_severity previously treated any truthy
+        edit_refs as coverage, so a reviewer producing a bool would
+        misroute to targeted. Validate the shape strictly.
+        """
+        checks = [
+            {"id": "FACT", "passed": False, "evidence": "x", "edit_refs": True},
+        ] + [{"id": cid, "passed": True} for cid in self.p.CHECK_IDS[1:]]
+        edits = [{"type": "replace", "find": "a", "new": "b"}]
+        self.assertEqual(self.p.compute_severity("REJECT", checks, edits), "severe")
+
+    def test_edit_refs_string_is_uncovered(self):
+        """edit_refs="0" (string) is not a list of ints → severe."""
+        checks = [
+            {"id": "FACT", "passed": False, "evidence": "x", "edit_refs": "0"},
+        ] + [{"id": cid, "passed": True} for cid in self.p.CHECK_IDS[1:]]
+        edits = [{"type": "replace", "find": "a", "new": "b"}]
+        self.assertEqual(self.p.compute_severity("REJECT", checks, edits), "severe")
+
+    def test_edit_refs_out_of_bounds_is_uncovered(self):
+        """edit_refs=[999] points at no real edit → severe."""
+        checks = [
+            {"id": "FACT", "passed": False, "evidence": "x", "edit_refs": [999]},
+        ] + [{"id": cid, "passed": True} for cid in self.p.CHECK_IDS[1:]]
+        edits = [{"type": "replace", "find": "a", "new": "b"}]
+        self.assertEqual(self.p.compute_severity("REJECT", checks, edits), "severe")
+
+    def test_edit_refs_mixed_valid_invalid_is_uncovered(self):
+        """If any ref is invalid, the whole check is uncovered → severe."""
+        checks = [
+            {"id": "FACT", "passed": False, "evidence": "x", "edit_refs": [0, 999]},
+        ] + [{"id": cid, "passed": True} for cid in self.p.CHECK_IDS[1:]]
+        edits = [{"type": "replace", "find": "a", "new": "b"}]
+        self.assertEqual(self.p.compute_severity("REJECT", checks, edits), "severe")
+
+    def test_edits_not_a_list_is_severe(self):
+        """edits=None or edits=dict → severe (can't patch)."""
+        checks = [
+            {"id": "FACT", "passed": False, "evidence": "x", "edit_refs": [0]},
+        ] + [{"id": cid, "passed": True} for cid in self.p.CHECK_IDS[1:]]
+        self.assertEqual(self.p.compute_severity("REJECT", checks, None), "severe")
+        self.assertEqual(
+            self.p.compute_severity("REJECT", checks, {"bad": "shape"}),
+            "severe"
+        )
 
 
 class TestBinaryGateIntegration(unittest.TestCase):
@@ -1500,36 +1562,41 @@ class TestKnowledgeCards(unittest.TestCase):
 # Test: Score calculations
 # ---------------------------------------------------------------------------
 
-class TestScoreLogic(unittest.TestCase):
-    """Test passing threshold logic."""
+class TestBinaryGatePassingLogic(unittest.TestCase):
+    """Binary-gate passing logic (#223).
 
-    def test_passes_at_33_min_4(self):
-        """33/40 with min 4 should pass (8-dim rubric)."""
-        scores = [4, 4, 4, 4, 4, 4, 4, 5]
-        total = sum(scores)
-        minimum = min(scores)
-        self.assertEqual(total, 33)
-        self.assertTrue(minimum >= 4 and total >= 33)
+    The old 8-dim 1-5 rubric with sum≥33 thresholds was removed (issue
+    #223 — mathematically unreachable). Passing is now: verdict == APPROVE
+    AND every check passed. This class pins the new behavior."""
 
-    def test_fails_at_32(self):
-        """32/40 should fail even if min >= 4."""
-        scores = [4, 4, 4, 4, 4, 4, 4, 4]
-        total = sum(scores)
-        self.assertEqual(total, 32)
-        self.assertFalse(total >= 33)
-
-    def test_fails_with_dimension_at_3(self):
-        """Even a high sum fails if any dimension is 3."""
-        scores = [5, 5, 5, 5, 5, 5, 3, 5]  # sum=38, min=3
-        minimum = min(scores)
-        self.assertFalse(minimum >= 4)
-
-    def test_rewrite_threshold(self):
-        """Modules scoring < 28 should trigger rewrite mode (8-dim rubric)."""
+    def setUp(self):
         import v1_pipeline as p
-        # This is checked in run_module via: (ms.get("sum") or 0) < 28
-        self.assertTrue(27 < 28)  # rewrite
-        self.assertFalse(28 < 28)  # improve
+        self.p = p
+
+    def test_all_checks_pass_is_approve(self):
+        """Every check passed → compute_severity returns clean."""
+        checks = [{"id": cid, "passed": True} for cid in self.p.CHECK_IDS]
+        self.assertEqual(self.p.compute_severity("APPROVE", checks, []), "clean")
+
+    def test_one_check_fails_routes_via_severity(self):
+        """One failing check with a clean edit → targeted, not a numeric threshold."""
+        checks = [{"id": cid, "passed": True} for cid in self.p.CHECK_IDS]
+        checks[0] = {"id": "FACT", "passed": False, "evidence": "bad",
+                     "edit_refs": [0]}
+        edits = [{"type": "replace", "find": "a", "new": "b"}]
+        self.assertEqual(self.p.compute_severity("REJECT", checks, edits), "targeted")
+
+    def test_severity_is_routing_primitive_not_score(self):
+        """There is no passing number — severity is the only ship/no-ship signal."""
+        # A module with every check passing is clean regardless of how
+        # many edits the reviewer returned (APPROVE ignores edits, per
+        # Gemini critique B).
+        checks = [{"id": cid, "passed": True} for cid in self.p.CHECK_IDS]
+        extra_edits = [{"type": "replace", "find": "x", "new": "y"}] * 10
+        self.assertEqual(
+            self.p.compute_severity("APPROVE", checks, extra_edits),
+            "clean"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1934,12 +2001,14 @@ class TestDeterministicApplyIntegration(unittest.TestCase):
 
         # Pre-seed state as if the pipeline was mid-run and crashed at
         # phase=review (the state deterministic apply leaves behind)
+        import v1_pipeline as pp
         state = {
             "modules": {
                 "test/module-0.1-test": {
                     "phase": "review",
-                    "scores": [4, 3, 4, 4, 4, 4, 4, 4],
-                    "sum": 31,
+                    "severity": "targeted",
+                    "checks_failed": [{"id": "FACT", "evidence": "example"}],
+                    "reviewer_schema_version": 2,
                     "passes": False,
                     "errors": [],
                 }
@@ -1952,7 +2021,8 @@ class TestDeterministicApplyIntegration(unittest.TestCase):
             reviews_seen.append(improved)
             return {
                 "verdict": "APPROVE",
-                "scores": [4, 4, 4, 4, 4, 4, 4, 5],
+                "severity": "clean",
+                "checks": [{"id": cid, "passed": True} for cid in pp.CHECK_IDS],
                 "edits": [],
                 "feedback": "",
             }
@@ -2017,14 +2087,19 @@ class TestDeterministicApplyIntegration(unittest.TestCase):
             'edits.\n\nFailed edit (reason: anchor not found): ```json\n{"type": "replace", '
             '"find": "nonexistent", "new": "replacement"}\n```'
         )
+        import v1_pipeline as pp
         state = {
             "modules": {
                 "test/module-0.1-test": {
                     "phase": "write",
                     "plan": fallback_plan,
                     "targeted_fix": True,
-                    "scores": [4, 3, 4, 3, 4, 4, 3, 4],
-                    "sum": 29,
+                    "severity": "targeted",
+                    "checks_failed": [
+                        {"id": "FACT", "evidence": "example1"},
+                        {"id": "LAB", "evidence": "example2"},
+                    ],
+                    "reviewer_schema_version": 2,
                     "passes": False,
                     "errors": [],
                 }
@@ -2040,13 +2115,13 @@ class TestDeterministicApplyIntegration(unittest.TestCase):
                 "plan": plan,
                 "previous_output": previous_output or "",
             })
-            # Mock: return a fully-patched version that will then approve
             return GOOD_MODULE.replace("## Learning Outcomes", "## Learning Outcomes (FULLY-FIXED)")
 
         def fake_step_review(module_path, improved, model=None):
             return {
                 "verdict": "APPROVE",
-                "scores": [4, 4, 4, 4, 4, 4, 4, 5],
+                "severity": "clean",
+                "checks": [{"id": cid, "passed": True} for cid in pp.CHECK_IDS],
                 "edits": [],
                 "feedback": "",
             }
