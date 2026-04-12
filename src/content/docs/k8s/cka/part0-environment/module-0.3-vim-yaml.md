@@ -502,7 +502,7 @@ spec:
 Save and validate:
 ```bash
 kubectl apply -f speed-test.yaml --dry-run=client
-rm speed-test.yaml
+rm -f speed-test.yaml
 ```
 
 ### Drill 2: Fix Broken YAML - Indentation (Target: 3 minutes)
@@ -529,7 +529,7 @@ vim broken-indent.yaml
 
 # Validate your fix
 kubectl apply -f broken-indent.yaml --dry-run=client
-rm broken-indent.yaml
+rm -f broken-indent.yaml
 ```
 
 <details>
@@ -569,7 +569,7 @@ vim broken-tabs.yaml
 # Hint: In vim, use :%s/\t/  /g to replace tabs with spaces
 
 kubectl apply -f broken-tabs.yaml --dry-run=client
-rm broken-tabs.yaml
+rm -f broken-tabs.yaml
 ```
 
 ### Drill 4: Copy and Modify Blocks (Target: 2 minutes)
@@ -598,7 +598,7 @@ vim multi-container.yaml
 
 # Validate
 kubectl apply -f multi-container.yaml --dry-run=client
-rm multi-container.yaml
+rm -f multi-container.yaml
 ```
 
 <details>
@@ -656,7 +656,7 @@ vim version-fix.yaml
 
 # Verify all changed
 grep "1.25" version-fix.yaml  # Should show 3 lines
-rm version-fix.yaml
+rm -f version-fix.yaml
 ```
 
 ### Drill 6: Fix Broken YAML - Syntax Errors (Target: 5 minutes)
@@ -693,7 +693,7 @@ vim broken-syntax.yaml
 
 # Test
 kubectl apply -f broken-syntax.yaml --dry-run=client
-rm broken-syntax.yaml
+rm -f broken-syntax.yaml
 ```
 
 <details>
@@ -734,7 +734,7 @@ If you prefer nano, do Drill 1 using nano instead:
 nano speed-test.yaml
 # Ctrl+O to save, Ctrl+X to exit
 kubectl apply -f speed-test.yaml --dry-run=client
-rm speed-test.yaml
+rm -f speed-test.yaml
 ```
 
 Compare your time with vim. Use whichever is faster for you.
