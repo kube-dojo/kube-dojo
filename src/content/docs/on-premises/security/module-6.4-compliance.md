@@ -211,6 +211,14 @@ The Kubernetes audit policy controls what the API server logs. A well-designed p
 
 > **Pause and predict**: The audit policy below uses `Metadata` level for Secrets instead of `RequestResponse`. Why would logging Secret access at `RequestResponse` level actually make your cluster LESS secure, even though it captures more information?
 
+### Understanding Audit Levels
+
+The Kubernetes API server supports four audit levels:
+- **`None`**: No event is logged. Use for high-volume, low-value endpoints (e.g., health checks).
+- **`Metadata`**: Logs request metadata (who, what, when) but not the body. Use for most operations, including Secrets.
+- **`Request`**: Logs metadata plus the request body. Use when you need to know what was submitted (e.g., RBAC role creation) without needing the response.
+- **`RequestResponse`**: Logs metadata, request body, and response body. Use for operations requiring full forensic capability like `pods/exec`.
+
 ### Compliance-Grade Audit Policy
 
 ```yaml
@@ -398,6 +406,49 @@ Use a ValidatingWebhookConfiguration or OPA/Gatekeeper policy to reject pods wit
 
 ---
 
+## Implementing Policy-as-Code for Compliance
+
+To enforce regulatory controls continuously, Kubernetes clusters rely on Policy-as-Code engines like **Kyverno** or **OPA Gatekeeper**. These tools prevent non-compliant resources from being deployed and can generate compliance reports.
+
+### Kyverno for Compliance Reporting
+
+Kyverno (a CNCF graduated project) uses Kubernetes-native YAML for policy definitions. It can validate, mutate, and generate resources. Crucially for compliance, Kyverno generates PolicyReports that map policy violations to specific resources.
+
+```yaml
+# Enforce that all pods drop ALL capabilities (SOC 2 CC6.1 / PCI DSS Req 11)
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-drop-all-capabilities
+  annotations:
+    policies.kyverno.io/category: Pod Security Standards (Restricted)
+    policies.kyverno.io/description: Proves capabilities are dropped.
+spec:
+  validationFailureAction: Enforce
+  rules:
+  - name: drop-all-capabilities
+    match:
+      any:
+      - resources:
+          kinds: ["Pod"]
+    validate:
+      message: "Containers must drop 'ALL' capabilities."
+      pattern:
+        spec:
+          containers:
+          - securityContext:
+              capabilities:
+                drop:
+                - ALL
+```
+
+By deploying a suite of compliance policies, you can query violations across the cluster to provide evidence of control enforcement:
+```bash
+kubectl get policyreports -A
+```
+
+---
+
 ## Evidence Collection for Auditors
 
 Auditors need evidence organized by control, not by technology. Here is a mapping of what they ask for and where to find it in Kubernetes.
@@ -481,27 +532,18 @@ This creates a defense-in-depth approach: taints prevent general workloads from 
 </details>
 
 ### Question 2
-What is the difference between Kubernetes audit levels `None`, `Metadata`, `Request`, and `RequestResponse`, and when should you use each?
+A developer complains that setting the audit policy level to `RequestResponse` for the entire cluster is the safest choice for passing a SOC 2 audit because "we log absolutely everything." Why is this approach fundamentally flawed for a compliant environment?
 
 <details>
 <summary>Answer</summary>
 
-**The four audit levels control how much detail is logged:**
+**This approach is flawed for two major reasons:**
 
-- **`None`**: No event is logged. Use for high-volume, low-value endpoints: health checks (`/healthz`), metrics (`/metrics`), and system service account operations that would generate thousands of entries per minute with no compliance value.
+1. **Security Vulnerability (Secret Exposure)**: Logging everything at `RequestResponse` level will log the request and response bodies of all API calls. For Kubernetes Secrets, this means the actual plaintext secret values (API keys, passwords, TLS certificates) will be written to the audit log. The audit log itself becomes a massive security breach. Secrets should be logged at the `Metadata` level to record *who* accessed them without exposing the data.
 
-- **`Metadata`**: Logs the request metadata (who, what resource, when, from where) but not the request or response body. Use for most operations: deployments, services, configmaps. Captures who created or deleted a resource without logging the full YAML.
+2. **Noise and Performance Degradation**: Logging every health check (`/healthz`), metrics scraping (`/metrics`), and internal controller loop at `RequestResponse` will generate an unmanageable volume of logs. This not only impacts API server performance and consumes vast storage resources, but it also creates "audit noise." In a compliance audit, generating so much noise that you cannot find the actual unauthorized access events is treated as an operational failure.
 
-- **`Request`**: Logs metadata plus the request body (but not the response body). Use when you need to know what was submitted: RBAC changes (what role was created), admission webhook configurations. Not commonly needed.
-
-- **`RequestResponse`**: Logs metadata, request body, and response body. Use for operations where you need full forensic capability: `pods/exec` (what command was executed), RBAC changes. **Do NOT use for Secrets** -- `RequestResponse` on secrets logs the actual secret data (values) into the audit log, creating a severe security vulnerability. Use `Metadata` for secrets instead, which captures who accessed which secret and when without exposing contents.
-
-**Compliance mapping:**
-- HIPAA/PCI DSS audit requirements for sensitive data access: `Metadata` for secrets (captures access without exposing values), `RequestResponse` for exec and RBAC
-- SOC 2 change management evidence: `Metadata` for most write operations
-- General operational awareness: `Metadata` catch-all rule
-
-**Warning:** Setting `RequestResponse` for all resources will generate enormous log volumes and may impact API server performance. Be surgical -- only use it for sensitive resources.
+A compliant policy is surgical: `None` for health checks, `Metadata` for most operations (including Secrets), and `RequestResponse` only for specific interactive or high-risk actions like `pods/exec`.
 </details>
 
 ### Question 3
@@ -575,16 +617,68 @@ Your company processes payments (PCI DSS) and healthcare data (HIPAA) on the sam
 
 ### Steps
 
-1. **Create an audit policy** with rules: `None` for health checks, `Metadata` for secrets (never `RequestResponse` which would log secret values), `RequestResponse` for `pods/exec`, `Metadata` for all write operations, and a `Metadata` catch-all.
+1. **Create an audit policy** (`audit-policy.yaml`):
+   ```bash
+   cat <<EOF > audit-policy.yaml
+   apiVersion: audit.k8s.io/v1
+   kind: Policy
+   rules:
+     - level: None
+       nonResourceURLs: ["/healthz*", "/readyz*", "/livez*", "/metrics", "/openapi/*"]
+     - level: Metadata
+       resources: [{group: "", resources: ["secrets"]}]
+     - level: RequestResponse
+       resources: [{group: "", resources: ["pods/exec"]}]
+     - level: Metadata
+       verbs: ["create", "update", "patch", "delete"]
+     - level: Metadata
+   EOF
+   ```
 
-2. **Create a kind cluster with audit logging** -- mount the audit policy into the control plane container and configure `kube-apiserver` with `--audit-policy-file` and `--audit-log-path`. Mount a host directory for log output.
+2. **Create a kind cluster** with audit logging (`kind-audit.yaml`):
+   ```bash
+   cat <<EOF > kind-audit.yaml
+   kind: Cluster
+   apiVersion: kind.x-k8s.io/v1alpha4
+   nodes:
+   - role: control-plane
+     kubeadmConfigPatches:
+     - |
+       kind: ClusterConfiguration
+       apiServer:
+         extraArgs:
+           audit-policy-file: /etc/kubernetes/audit-policy.yaml
+           audit-log-path: /var/log/kubernetes/audit/audit.log
+         extraVolumes:
+         - name: audit-policy
+           hostPath: /etc/kubernetes/audit-policy.yaml
+           mountPath: /etc/kubernetes/audit-policy.yaml
+           readOnly: true
+           pathType: File
+         - name: audit-log
+           hostPath: /var/log/kubernetes/audit
+           mountPath: /var/log/kubernetes/audit
+           readOnly: false
+           pathType: DirectoryOrCreate
+     extraMounts:
+     - hostPath: ./audit-policy.yaml
+       containerPath: /etc/kubernetes/audit-policy.yaml
+       readOnly: true
+     - hostPath: /tmp/audit/logs
+       containerPath: /var/log/kubernetes/audit
+   EOF
 
-3. **Generate audit events**:
+   mkdir -p /tmp/audit/logs
+   kind create cluster --config kind-audit.yaml
+   ```
+
+3. **Generate audit events** (wait for pod readiness):
    ```bash
    kubectl create secret generic test-secret --from-literal=password=s3cret
    kubectl get secret test-secret -o yaml
    kubectl delete secret test-secret
    kubectl run test-pod --image=nginx --restart=Never
+   kubectl wait --for=condition=ready pod/test-pod --timeout=60s
    kubectl exec test-pod -- whoami
    ```
 
