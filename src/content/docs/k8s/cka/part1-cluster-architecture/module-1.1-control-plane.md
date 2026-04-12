@@ -614,6 +614,10 @@ kubectl logs -n kube-system -l component=kube-controller-manager -f
 
 # Terminal 2: Create and delete a deployment
 kubectl create deployment test --image=nginx --replicas=2
+
+# Verify the deployment was created successfully before deleting
+kubectl rollout status deployment test
+
 kubectl delete deployment test
 ```
 
@@ -710,7 +714,7 @@ kubectl delete pod drill-pod
 
 ### Drill 3: Troubleshooting - Controller Manager Down (Target: 5 minutes)
 
-**Scenario**: Deployments create ReplicaSets but pods never appear.
+**Scenario**: Deployments are accepted by the API server but ReplicaSets and pods are never created.
 
 ```bash
 # Setup
@@ -721,7 +725,7 @@ kubectl create deployment drill-deploy --image=nginx --replicas=3
 
 # Observe
 kubectl get deploy  # Shows 0/3 ready
-kubectl get rs      # ReplicaSet exists but...
+kubectl get rs      # No ReplicaSet created!
 kubectl get pods    # No pods!
 
 # YOUR TASK: Diagnose and fix
@@ -779,9 +783,11 @@ kubectl logs -n kube-system -l component=kube-controller-manager -f | grep -i "r
 
 # Terminal 2: Create, scale, delete deployment
 kubectl create deployment watch-me --image=nginx --replicas=2
-sleep 5
+kubectl rollout status deployment watch-me
+
 kubectl scale deployment watch-me --replicas=5
-sleep 5
+kubectl rollout status deployment watch-me
+
 kubectl delete deployment watch-me
 
 # Observe logs in Terminal 1 - see the controller react to each change
@@ -831,7 +837,8 @@ kubectl get pods -n kube-system  # All Running?
 
 # 4. Test workload scheduling
 kubectl run recovery-test --image=nginx
-kubectl get pods  # Running?
+kubectl wait --for=condition=Ready pod/recovery-test --timeout=60s
+kubectl get pods
 kubectl delete pod recovery-test
 ```
 
