@@ -66,7 +66,7 @@ graph TD
 
 **Namespaces DO isolate:**
 1.  **Naming:** Resource names must be unique within a namespace, but not across namespaces.
-2.  **DNS Records:** Kubernetes assigns DNS names to Services in the format `<service-name>.<namespace>.svc.cluster.local`. This means a Pod in namespace `prod-frontend` can talk to a Service in namespace `dev-backend` by querying its fully qualified domain name (FQDN).
+2.  **DNS Records:** Kubernetes assigns DNS names to Services in the format `<service-name>.<namespace>.svc.cluster.local`. This means a Pod in namespace `prod-frontend` can talk to a Service in namespace `dev-backend` by querying its fully qualified domain name (FQDN). DNS queries from a Pod are namespace-scoped by default; an unqualified lookup targets the Pod's own namespace first (e.g., a query for `data` in the `test` namespace will not resolve a service in the `prod` namespace, while `data.prod` will, thanks to `/etc/resolv.conf` search list expansions).
 3.  **Role-Based Access Control (RBAC):** You can grant a user full admin rights in the `dev` namespace while giving them zero access to the `prod` namespace using RoleBindings.
 4.  **Resource Quotas:** You can restrict the total amount of CPU, Memory, or Storage that can be consumed by all resources combined within a single namespace.
 
@@ -83,6 +83,10 @@ When you spin up a fresh cluster, Kubernetes pre-populates it with four standard
 *   `kube-system`: The engine room. This is where the Kubernetes control plane components run. If you inspect this namespace, you will see critical Pods like CoreDNS (for service discovery), kube-proxy (for network routing), and your CNI plugin (like Calico or Cilium). You should rarely modify resources here unless you are operating the cluster infrastructure itself.
 *   `kube-public`: An automatically created namespace intended for resources that should be readable by all users (including unauthenticated ones). It was historically used to bootstrap clusters, but is rarely used in modern setups.
 *   `kube-node-lease`: Contains Lease objects associated with each node. These leases act as heartbeats. Instead of the control plane constantly pinging massive Node status objects, each node simply updates a tiny Lease object in this namespace every few seconds. If a lease expires, the node is considered dead.
+
+### Namespace Naming and Best Practices
+
+When creating custom namespaces, the name must be a valid RFC 1123 DNS label. The Kubernetes documentation explicitly warns against creating namespaces with the `kube-` prefix, as this is conventionally reserved for system namespaces. Furthermore, you should avoid naming a namespace exactly like a public top-level domain (such as `com` or `org`), because it can create DNS short-name overlap risks. Finally, note that the Kubernetes control plane automatically attaches an immutable `kubernetes.io/metadata.name` label to every namespace upon creation, which is highly useful when writing policies or selectors that target specific namespaces.
 
 ### Interacting with Namespaces
 
@@ -143,9 +147,9 @@ Kubernetes is a highly decoupled system. Deployments do not "own" Pods through a
 ### Label Naming Conventions
 
 A label key consists of an optional prefix and a name, separated by a slash (`/`).
-*   **Prefix:** Must be a valid DNS subdomain (e.g., `company.com/`). The `kubernetes.io/` and `k8s.io/` prefixes are reserved for core Kubernetes components. Using a prefix is best practice for custom labels to avoid collisions with other tools.
+*   **Prefix:** Must be a valid DNS subdomain (e.g., `company.com/`). The `kubernetes.io/` and `k8s.io/` prefixes are reserved for core Kubernetes components. Using a prefix is best practice for custom labels to avoid collisions with other tools. Automated system components adding labels to end-user objects should always use label key prefixes.
 *   **Name:** Must be 63 characters or less, beginning and ending with an alphanumeric character.
-*   **Value:** Must be 63 characters or less (can be empty).
+*   **Value:** Must be 63 characters or less (can be empty, but must be alphanumeric at the ends when non-empty).
 
 **Real-World Labeling Strategy:**
 Do not randomly label resources. Adopt a standardized taxonomy across your organization. The Kubernetes documentation recommends a set of standard labels, but you can define your own. A mature labeling strategy enables granular cost allocation, security auditing, and operational triage.
@@ -194,7 +198,7 @@ kubectl get pods -l environment=production
 kubectl get pods -l tier!=frontend
 ```
 
-In YAML, Services currently *only* support equality-based selectors:
+In YAML, Services and ReplicationControllers currently *only* support equality-based selectors:
 ```yaml
 apiVersion: v1
 kind: Service
@@ -209,7 +213,7 @@ spec:
 > **Stop and think**: You need to find all pods in the `production` or `staging` environment that are NOT part of the `cache` tier. Write the `kubectl` selector expression to achieve this before reading the next section.
 
 **2. Set-Based Selectors**
-These allow filtering according to a set of values, enabling much more expressive queries. Operators are `in`, `notin`, and `exists` (checking if the key exists, regardless of value).
+These allow filtering according to a set of values, enabling much more expressive queries. Operators are `in`, `notin`, `exists` (checking if the key exists, regardless of value), and `doesnotexist`. Note that `in` and `notin` require non-empty value lists. Selector expressions do not support a top-level logical OR operator (`||`), so set-based mechanisms are essential for matching multiple values.
 
 ```bash
 # Select pods where environment is either 'production' OR 'staging'
@@ -219,7 +223,7 @@ kubectl get pods -l 'environment in (production, staging)'
 kubectl get pods -l release
 ```
 
-In YAML, newer controllers like Deployments and Jobs use set-based selectors via `matchExpressions`, while still supporting equality via `matchLabels`:
+In YAML, newer controllers like Deployments, Jobs, ReplicaSets, and DaemonSets use set-based selectors via `matchExpressions`, while still supporting equality via `matchLabels` (which internally translates to an `In` operator for a single value):
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -335,7 +339,7 @@ By default, a Pod in any namespace can consume as much CPU and memory as the und
 
 ### ResourceQuotas: The Namespace Budget
 
-A `ResourceQuota` limits the **total aggregate consumption** of resources across an entire namespace. It acts as a strict budget.
+A `ResourceQuota` limits the **total aggregate consumption** and object count across an entire namespace. It acts as a strict budget. Quota enforcement is namespace-scoped and is active only where at least one quota object exists.
 
 ```yaml
 apiVersion: v1
@@ -359,7 +363,7 @@ If the `team-frontend` namespace currently uses 3.5 CPU cores, and a developer t
 
 ResourceQuotas have a severe catch: Once you apply a quota for CPU or Memory to a namespace, **every single Pod created in that namespace MUST specify CPU and Memory requests/limits**. If a Pod omits them, it will be instantly rejected by the admission controller.
 
-Developers often forget to add these blocks to their YAML. To prevent frustration, you use a `LimitRange`. A LimitRange automatically injects default CPU/Memory requests and limits into any Pod that forgets to declare them. It also sets minimum and maximum boundaries for a single Pod to prevent someone from deploying a Pod that takes up the entire namespace quota.
+Developers often forget to add these blocks to their YAML. To prevent frustration, you use a `LimitRange`. A LimitRange is a namespace-scoped policy constraining resource allocations for applicable resources like Pods and PersistentVolumeClaims. It automatically injects default CPU/Memory requests and limits into any Pod that forgets to declare them. It also sets minimum and maximum boundaries for a single Pod to prevent someone from deploying a Pod that takes up the entire namespace quota.
 
 ```yaml
 apiVersion: v1
@@ -393,7 +397,7 @@ spec:
 ## Did You Know?
 
 *   **Labels are strictly strings:** Even if you type `version: 1.0` in your YAML, Kubernetes will treat it as a string. However, unquoted numbers can cause parsing errors in some YAML parsers (e.g. interpreting `1.0` as a float), which is why it is best practice to always quote label values: `version: "1.0"`.
-*   **A Namespace cannot be deleted quickly:** When you run `kubectl delete namespace <name>`, the namespace enters a `Terminating` state. It will hang in this state until every single object inside it is successfully garbage collected. If a resource has a broken finalizer that hangs, the namespace deletion will block indefinitely until the finalizer is manually patched.
+*   **A Namespace cannot be deleted quickly:** When you run `kubectl delete namespace <name>`, it deletes all resources within that namespace and the namespace itself enters a `Terminating` state. It will hang in this asynchronous state until every single object inside it is successfully garbage collected. If a resource has a broken finalizer that hangs, the namespace deletion will block indefinitely until the finalizer is manually patched.
 *   **The 63-character limit is historical:** The 63-character limit for label keys and values originates from the DNS standard RFC 1123, which restricts DNS labels to 63 characters. Kubernetes adopted this to ensure labels could safely map to DNS structures and internal naming conventions.
 *   **Annotations can hold 256KB:** While label values are severely restricted, a single annotation value can hold up to 256 kilobytes of data. This makes it large enough to store entire configuration files, small shell scripts, or massive JSON policy documents.
 
@@ -416,32 +420,32 @@ spec:
 
 <details>
 <summary><strong>Question 1:</strong> You have a namespace called <code>analytics</code>. You deploy a Service named <code>data-sink</code> in this namespace. What is the fully qualified DNS name (FQDN) that a Pod in the <code>default</code> namespace should use to connect to it?</summary>
-<p><strong>Answer:</strong> <code>data-sink.analytics.svc.cluster.local</code>. By default, Kubernetes DNS searches for services within the same namespace as the querying Pod. Because the querying Pod is in the <code>default</code> namespace and the target Service is in the <code>analytics</code> namespace, a short name like <code>data-sink</code> will fail to resolve. To cross the logical namespace boundary, the Pod must provide the fully qualified domain name (FQDN), which explicitly includes the target namespace, the <code>svc</code> subdomain, and the cluster's base domain.</p>
+<p><strong>Answer:</strong> <code>data-sink.analytics.svc.cluster.local</code>. By default, Kubernetes DNS searches for services within the same namespace as the querying Pod. Because the querying Pod is in the <code>default</code> namespace and the target Service is in the <code>analytics</code> namespace, a short name like <code>data-sink</code> will fail to resolve. To cross the logical namespace boundary, the Pod must provide the fully qualified domain name (FQDN), which explicitly includes the target namespace, the <code>svc</code> subdomain, and the cluster's base domain. This robust DNS implementation guarantees that name collisions are avoided while still permitting explicit cross-namespace communication.</p>
 </details>
 
 <details>
 <summary><strong>Question 2:</strong> A severe latency issue is affecting your user-facing applications. You need to immediately restart all Pods that belong to either the <code>frontend</code> or the <code>cache</code> tier to clear their memory, but you must leave the <code>database</code> and <code>backend</code> tiers alone. What <code>kubectl</code> selector command would you run to target exactly these two tiers?</summary>
-<p><strong>Answer:</strong> You would use the set-based selector command: <code>kubectl delete pods -l 'tier in (frontend, cache)'</code>. Equality-based selectors (like <code>tier=frontend</code>) only support exact matches and logical AND operations, meaning they cannot express an "OR" condition. Set-based selectors introduce operators like <code>in</code>, <code>notin</code>, and <code>exists</code>, allowing you to evaluate multiple potential values for a single label key in a single query.</p>
+<p><strong>Answer:</strong> You would use the set-based selector command: <code>kubectl delete pods -l 'tier in (frontend, cache)'</code>. Equality-based selectors (like <code>tier=frontend</code>) only support exact matches and logical AND operations, meaning they cannot express an "OR" condition. Set-based selectors introduce operators like <code>in</code>, <code>notin</code>, and <code>exists</code>, allowing you to evaluate multiple potential values for a single label key in a single query. By using the <code>in</code> operator, you effectively target multiple tiers simultaneously. This ensures the command selectively restarts only the problematic pods while preserving the stability of the remaining backend infrastructure.</p>
 </details>
 
 <details>
 <summary><strong>Question 3:</strong> A developer complains that their Pod is stuck in a <code>Pending</code> state, and the event log says <code>forbidden: exceeded quota: pod-quota, requested: pods=1, used: 10, limited: 10</code>. What is the root cause?</summary>
-<p><strong>Answer:</strong> The namespace has a <code>ResourceQuota</code> named <code>pod-quota</code> that enforces a hard limit of exactly 10 Pods for the entire namespace. The developer is attempting to deploy an 11th Pod, but the admission controller intercepts the request and calculates that it would violate the quota. Consequently, the API server rejects the creation of the Pod outright, leaving the deployment controller unable to fulfill the requested state until an existing Pod is deleted or the quota is increased.</p>
+<p><strong>Answer:</strong> The namespace has a <code>ResourceQuota</code> named <code>pod-quota</code> that enforces a hard limit of exactly 10 Pods for the entire namespace. The developer is attempting to deploy an 11th Pod, but the admission controller intercepts the request and calculates that it would violate the quota. Consequently, the API server rejects the creation of the Pod outright, leaving the deployment controller unable to fulfill the requested state. Resource quotas act as strict budgets to prevent any single team from starving the cluster of resources. Without deleting an active pod or negotiating a higher quota limit with the cluster administrator, this pending pod will never be scheduled.</p>
 </details>
 
 <details>
 <summary><strong>Question 4:</strong> You need to store the email address of the team responsible for a Deployment so that a custom alerting script can notify them if the Deployment fails. Should you use a Label or an Annotation?</summary>
-<p><strong>Answer:</strong> You should use an Annotation. Labels are designed strictly for identifying and grouping objects within Kubernetes, and they are indexed by the API server to facilitate fast querying (like matching a Service to Pods). An email address is non-identifying metadata intended for external tools or human operators, and you will never natively ask Kubernetes to "select all pods by this email address." Using an Annotation prevents cluttering the API server's index while providing ample space (up to 256KB) for the data.</p>
+<p><strong>Answer:</strong> You should use an Annotation. Labels are designed strictly for identifying and grouping objects within Kubernetes, and they are indexed by the API server to facilitate fast querying (like matching a Service to Pods). An email address is non-identifying metadata intended for external tools or human operators, and you will never natively ask Kubernetes to "select all pods by this email address." Using an Annotation prevents cluttering the API server's index while providing ample space (up to 256KB) for the data. This ensures the control plane remains highly performant while still making critical operational metadata accessible to your external scripts.</p>
 </details>
 
 <details>
 <summary><strong>Question 5:</strong> You apply a new <code>LimitRange</code> with a default CPU limit of <code>200m</code> to a namespace that already has 10 running Pods. These existing Pods were deployed without any resource limits. A developer panics, arguing that their currently running CPU-heavy batch jobs will immediately be throttled and fail. Are they correct?</summary>
-<p><strong>Answer:</strong> No, the developer is incorrect. Kubernetes evaluates <code>LimitRange</code> (and <code>ResourceQuota</code>) policies strictly via Admission Controllers at the exact moment an object is created or updated. Existing Pods that are already running are completely ignored by these new rules and will not be retroactively modified, throttled, or evicted. The new <code>200m</code> CPU limit will only apply to new Pods deployed after the <code>LimitRange</code> was created, or if the existing Pods are restarted.</p>
+<p><strong>Answer:</strong> No, the developer is incorrect. Kubernetes evaluates <code>LimitRange</code> (and <code>ResourceQuota</code>) policies strictly via Admission Controllers at the exact moment an object is created or updated. Existing Pods that are already running are completely ignored by these new rules and will not be retroactively modified, throttled, or evicted. The new <code>200m</code> CPU limit will only apply to new Pods deployed after the <code>LimitRange</code> was created, or if the existing Pods are restarted. This design ensures that introducing new governance policies does not inadvertently cause destructive outages to running production workloads.</p>
 </details>
 
 <details>
 <summary><strong>Question 6:</strong> A junior developer needs to be able to delete and restart Pods to troubleshoot their application. However, security policies dictate they must not have this permission anywhere except within the <code>sandbox</code> namespace. Can namespaces provide this level of security isolation?</summary>
-<p><strong>Answer:</strong> Yes, namespaces excel at this specific type of logical security isolation. Namespaces natively integrate with Kubernetes Role-Based Access Control (RBAC). By creating a <code>Role</code> that permits Pod deletion, and a <code>RoleBinding</code> that assigns this Role to the developer specifically within the <code>sandbox</code> namespace, you restrict their permissions entirely to that boundary. They will have no access to view or delete Pods in <code>default</code>, <code>production</code>, or any other namespace.</p>
+<p><strong>Answer:</strong> Yes, namespaces excel at this specific type of logical security isolation. Namespaces natively integrate with Kubernetes Role-Based Access Control (RBAC). By creating a <code>Role</code> that permits Pod deletion, and a <code>RoleBinding</code> that assigns this Role to the developer specifically within the <code>sandbox</code> namespace, you restrict their permissions entirely to that boundary. They will have no access to view or delete Pods in <code>default</code>, <code>production</code>, or any other namespace. This creates a secure boundary that empowers developers to manage their own environments without risking the integrity of critical cluster resources.</p>
 </details>
 
 ---
