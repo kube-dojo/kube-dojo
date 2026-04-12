@@ -70,9 +70,6 @@ A blob object stores the content of a file. It doesn't store the filename, path,
 Let's create a file and see its blob:
 
 ```bash
-# Ensure we are in my-git-repo
-cd my-git-repo
-
 # Create a sample Kubernetes ConfigMap
 cat <<EOF > configmap.yaml
 apiVersion: v1
@@ -148,7 +145,7 @@ The output of `git cat-file -p "$COMMIT_HASH"` will show something like `tree <t
 
 ```bash
 # Read the content of the root tree object
-TREE_HASH=<the_tree_hash_from_above> # Replace with your actual tree hash
+TREE_HASH=$(git cat-file -p "$COMMIT_HASH" | grep tree | awk '{print $2}')
 git cat-file -p "$TREE_HASH"
 ```
 
@@ -193,7 +190,9 @@ Here, `tree 1a2b3c4d...` points to the root tree object for this commit. If this
 ### 3. The Staging Area (Index)
 The staging area, also known as the index, is a crucial intermediate step between your working directory and your repository's history. It's a binary file (`.git/index`) that stores information about the files Git will include in the *next* commit. It's not your working directory, nor is it your last commit. It's a proposed next commit.
 
-When you run `git add <file>`, Git doesn't immediately put the file into the `objects/` database as a blob (though it *does* create the blob). Instead, it updates the index with information about the file's path, permissions, and a pointer to the blob object.
+When you run `git add <file>`, Git computes the SHA-1 hash of the file's content and immediately stores it as a zlib-compressed blob object in the `objects/` database. It then updates the index with information about the file's path, permissions, and a pointer to that new blob object.
+
+> **Stop and think**: If the index is just a binary file storing proposed changes, what happens to the blob objects created by `git add` if you decide to unstage the file using `git restore --staged`? Do the blob objects get immediately deleted?
 
 Let's modify our `configmap.yaml`, stage it, and see the index:
 
@@ -327,9 +326,10 @@ The incident was eventually resolved by a senior engineer who used `git reflog` 
 
 ## Did You Know?
 1.  **Git was initially developed by Linus Torvalds** in 2005 for Linux kernel development. He was dissatisfied with existing SCMs, especially proprietary ones. The first release candidate was announced on April 7, 2005.
-2.  **The SHA-1 collision vulnerability** was famously demonstrated by Google in 2017 with a "shattered" PDF. While theoretical for Git due to its specific use of SHA-1 (prefixing object types), the Git project migrated to SHA-256 for commit hashes in version 2.29 to prepare for future cryptographic concerns. However, the core object model still relies heavily on SHA-1 for blobs and trees.
+2.  **The SHA-1 collision vulnerability** was famously demonstrated by CWI and Google in 2017 with a "shattered" PDF (the SHAttered attack). In response, Git didn't abandon SHA-1 immediately; instead, version 2.13 made a collision-detecting implementation (SHA-1DC) the default. While experimental support for full SHA-256 repositories (`git init --object-format=sha256`) was introduced in Git 2.29 and declared no longer a mere curiosity in Git 2.42, SHA-1 remains the default object hash even in the latest Git 2.53.0 releases. You might see third-party blogs claiming that Git 3.0 will default to SHA-256 and the new `reftable` reference format, but be aware that this is currently unverified—no official Git maintainer announcement or release plan document confirms Git 3.0 feature defaults or timelines. In fact, official documentation still strongly discourages using SHA-256 on public-facing servers until the Git protocol gains wider support.
 3.  **Git's `.git/objects` directory uses a "packfile" format** for efficiency. While individual objects are initially stored as loose objects (one file per object), Git periodically "packs" them into single files (with a `.pack` extension) to save disk space and improve performance. This compression technique means that often, only differences between versions are stored inside these packfiles.
-4.  **The original design goal for Git** was to support distributed non-linear development, handle large projects (like the Linux kernel), and be extremely fast. It achieves this speed partly by being almost entirely disk I/O bound rather than network I/O bound during typical operations, as most history and objects are stored locally.
+4.  **The original design goal for Git** was to support distributed non-linear development, handle large projects (like the Linux kernel), and be extremely fast. Its content-addressable storage model allows operations like branching and committing to be nearly instantaneous, as they primarily involve writing small files (trees, commits) and moving pointers, rather than copying entire project directories.
+5.  **Git objects have a specific header.** Before Git compresses an object and stores it, it prepends a header in the format `[type] [size-in-bytes]\0`. The SHA-1 hash is computed over this combined header and content.
 
 ## Common Mistakes
 
@@ -369,14 +369,53 @@ The incident was eventually resolved by a senior engineer who used `git reflog` 
     You would implement this as a `pre-commit` hook. The `hooks/` directory in `.git/` contains scripts that Git can execute at various points in the workflow. A `pre-commit` hook runs before the commit is finalized, meaning it can intercept the process. This allows the hook to inspect the staged changes (which represent the content of the next commit) and, if validation fails (e.g., `kubeval` or `yamllint` finds issues), abort the commit entirely. A `post-commit` hook runs after the commit is successfully created, which would be too late to prevent the invalid YAML from being recorded into the repository history.
     </details>
 
+## Knowledge Check
+
+**Question 1**
+Your CI/CD pipeline fails during a build, reporting that a shell script `deploy.sh` is missing executable permissions. You remember running `chmod +x deploy.sh` locally and committing, but the issue persists on the build server. How can you use Git's internal objects to verify if the correct file permissions were actually recorded in the commit?
+
+- A) Run `git cat-file -p HEAD` to view the commit object, then run `git cat-file -p <tree_hash>` to inspect the root tree and check if the mode for `deploy.sh` is `100755`.
+- B) Run `git hash-object deploy.sh` and check if the resulting blob hash includes the executable flag in its metadata.
+- C) Inspect the `.git/config` file to ensure `core.filemode` is set to true for the repository.
+- D) Run `git reflog` to trace the history of the `deploy.sh` file and look for a `chmod` operation.
+
+> [!details] Answer
+> **Correct Answer: A**
+> **Why:** File permissions (modes) and filenames are not stored in **blob** objects; blobs only store raw file content. Instead, directory structures and metadata like file modes are stored in **tree** objects. Git supports specific modes, such as `100644` for a regular file and `100755` for an executable. By inspecting the commit object to find its root tree, and then inspecting that tree object (`git cat-file -p <tree_hash>`), you can verify the exact file mode Git recorded for `deploy.sh`. If it says `100644`, the executable bit was not committed.
+
+**Question 2**
+A new engineer on your team is trying to clean up a repository that has grown massive due to large binary assets being committed and then deleted. They run `git rm --cached large-asset.bin` and make a new commit, but notice the `.git` directory size hasn't decreased at all. They are confused because the file is no longer in the working directory or the latest commit. Why is the repository size unchanged, and what internal mechanism explains this?
+
+- A) The `git rm --cached` command only removes the file from the index, so the file remains in the working directory, taking up space.
+- B) Git retains the blob object for `large-asset.bin` in the `.git/objects/` directory because previous commits in the repository's history (the DAG) still point to the tree objects that reference this blob.
+- C) Git automatically converts the large binary file into a highly compressed delta inside a packfile, but packfiles never shrink in size once created.
+- D) The `.git/index` file permanently caches all binary files ever added to the repository to speed up future checkouts.
+
+> [!details] Answer
+> **Correct Answer: B**
+> **Why:** Git's **content-addressable storage** is designed to be immutable. Once a file is staged or committed, a blob object is created in `.git/objects/`. Deleting a file in a new commit merely creates a new tree object that no longer references that blob. However, the older commit objects and their associated trees still exist in the repository's history (the DAG) and still point to that original blob object. Because Git must be able to check out any previous state of the repository, those blob objects cannot be deleted as long as they are reachable from any commit in the history. To actually shrink the repository, the object must become unreachable (e.g., rewriting history with tools like `git filter-repo`) and then garbage collected.
+
+**Question 3**
+You accidentally ran `git add secret-key.pem` on a highly sensitive file. Realizing your mistake before committing, you run `git restore --staged secret-key.pem`. A colleague panics and says, "But Git already saved it! The content is in the `.git` folder now and someone might find it!" Are they correct, and how does Git's internal architecture handle this?
+
+- A) They are incorrect. `git add` only updates the `.git/index` file with the file path; the content isn't saved to the object database until you run `git commit`.
+- B) They are correct. Running `git add` immediately creates a permanent commit object that cannot be erased, even if the file is unstaged.
+- C) They are correct that the content is saved. `git add` zlib-compresses the file and creates a permanent **blob** object in `.git/objects/`. Unstaging the file removes the reference from the index, but the unreferenced blob remains in the object database until it is eventually garbage collected.
+- D) They are incorrect. `git restore --staged` actively searches the `.git/objects/` directory and securely deletes the blob object associated with the unstaged file.
+
+> [!details] Answer
+> **Correct Answer: C**
+> **Why:** This is a crucial security detail of Git's architecture. When you run `git add`, Git immediately computes the SHA-1 hash of the file's content and creates a **blob object** in the `.git/objects/` directory. The `.git/index` is simply updated to point to this new blob. When you unstage the file, Git removes the pointer from the index, making the blob a "dangling" or unreferenced object. Git does not immediately delete these dangling objects for performance and safety reasons. The sensitive data *is* physically present in the `.git/objects/` directory until a `git gc` (garbage collection) operation eventually purges unreferenced objects. In an emergency, this means the file could technically be recovered from the local disk using plumbing commands before garbage collection runs.
+
 ## Hands-On Exercise: Building a Commit from Scratch
 
 In this exercise, you'll delve into the Git internals by manually creating Git objects (blobs, trees, and a commit) using "plumbing" commands. This will illuminate how Git fundamentally stores your project's history. We'll then verify our manually constructed commit against a porcelain command.
 
 **Setup:**
 
-1.  Make sure you're in the `my-git-repo` directory from the core content, or create a fresh one:
+1.  Make sure you're in the `my-git-repo` directory from the core content, or create a fresh one (move to a neutral directory first):
     ```bash
+    cd ..
     rm -rf my-git-repo
     mkdir my-git-repo
     cd my-git-repo
@@ -406,7 +445,6 @@ In this exercise, you'll delve into the Git internals by manually creating Git o
 
     # Manually create a blob object from service.yaml content
     # The -w flag writes the object to the database
-    # The --stdin flag reads content from standard input
     SERVICE_BLOB_HASH=$(git hash-object -w service.yaml)
     echo "Service Blob Hash: $SERVICE_BLOB_HASH"
 
@@ -454,8 +492,8 @@ In this exercise, you'll delve into the Git internals by manually creating Git o
     export GIT_COMMITTER_EMAIL="learner@kubedojo.io"
 
     # Manually create a commit object
+    # The tree hash is provided as a positional argument
     # The -m flag provides the commit message
-    # The --tree flag specifies the root tree for this commit
     COMMIT_MESSAGE="Initial commit for service.yaml via plumbing commands"
     INITIAL_COMMIT_HASH=$(git commit-tree "$ROOT_TREE_HASH" -m "$COMMIT_MESSAGE")
     echo "Initial Commit Hash: $INITIAL_COMMIT_HASH"
@@ -470,12 +508,14 @@ In this exercise, you'll delve into the Git internals by manually creating Git o
         -   `git cat-file -p` outputs the commit details, including the tree hash and commit message.
 
 4.  **Point HEAD to Your New Commit:**
-    For Git to recognize this commit as the "latest," you need to update `HEAD` and a branch ref to point to it.
+    For Git to recognize this commit as the "latest," you need to update a branch ref to point to it, and then update `HEAD` to point to that branch.
 
     ```bash
-    # Update the main branch to point to our new commit
-    git update-ref HEAD "$INITIAL_COMMIT_HASH" # This sets HEAD to point directly to the commit (detached HEAD)
-    git update-ref refs/heads/main "$INITIAL_COMMIT_HASH" # This creates/updates the 'main' branch ref
+    # Create or update the 'main' branch ref to point to our new commit
+    git update-ref refs/heads/main "$INITIAL_COMMIT_HASH"
+    
+    # Point HEAD symbolically to the 'main' branch
+    git symbolic-ref HEAD refs/heads/main
     
     # Verify the state
     git log --oneline
@@ -483,7 +523,7 @@ In this exercise, you'll delve into the Git internals by manually creating Git o
     ```
     *   **Success Criteria:**
         -   `git log --oneline` shows your "Initial commit for service.yaml via plumbing commands".
-        -   `git status` indicates `On branch main` and no commits yet (because we didn't add the `service.yaml` to the index using `git add` for this commit flow).
+        -   `git status` indicates `On branch main` and shows `service.yaml` as deleted in the staging area but untracked in the working directory (because we bypassed the index completely to create our commit!).
 
 5.  **Verify with Porcelain:**
     Now that your repository is pointing to the manually created commit, use regular "porcelain" commands to verify.
@@ -564,8 +604,8 @@ git cat-file -p "$INITIAL_COMMIT_HASH"
 <summary>Task 4 Solution: Point HEAD to Your New Commit</summary>
 
 ```bash
-git update-ref HEAD "$INITIAL_COMMIT_HASH"
 git update-ref refs/heads/main "$INITIAL_COMMIT_HASH"
+git symbolic-ref HEAD refs/heads/main
 
 git log --oneline
 git status
