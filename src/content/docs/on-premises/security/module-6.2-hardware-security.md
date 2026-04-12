@@ -15,8 +15,8 @@ sidebar:
 
 After completing this module, you will be able to:
 
-1. **Implement** HSM-backed encryption for etcd secrets and Kubernetes signing keys using PKCS#11 integration
-2. **Configure** TPM-based measured boot and node attestation to verify bare-metal server integrity before cluster admission
+1. **Implement** HSM-backed encryption for etcd secrets using PKCS#11 integration
+2. **Configure** TPM-based measured boot with LUKS auto-unlock, and **design** remote node attestation to verify bare-metal server integrity
 3. **Design** a key management architecture where master encryption keys never exist outside hardware security boundaries
 4. **Evaluate** HSM deployment models (network HSM, PCIe HSM, cloud HSM) based on performance, compliance, and cost requirements
 
@@ -305,18 +305,26 @@ Every Kubernetes node should have encrypted disks. LUKS (Linux Unified Key Setup
 The `systemd-cryptenroll` command seals the LUKS decryption key to specific TPM PCR values. The key is only released when the boot chain matches the expected measurements -- a modified kernel or bootloader will cause the unlock to fail.
 
 ```bash
+# Create a temporary keyfile for non-interactive execution
+echo "TempSecurePass123" > /tmp/luks-key
+
 # Encrypt a data partition with LUKS2
-cryptsetup luksFormat --type luks2 /dev/sdb
+cryptsetup luksFormat --batch-mode --type luks2 /dev/sdb /tmp/luks-key
 
 # Add a TPM-sealed key (systemd-cryptenroll)
 systemd-cryptenroll /dev/sdb \
+  --unlock-key-file=/tmp/luks-key \
   --tpm2-device=auto \
   --tpm2-pcrs=0+1+4+7+8    # Seal to firmware + bootloader + Secure Boot + kernel
+
+# Clean up
+rm -f /tmp/luks-key
 
 # Configure auto-unlock at boot via /etc/crypttab
 echo "k8s-data /dev/sdb - tpm2-device=auto" >> /etc/crypttab
 
 # Test: reboot and verify automatic unlock
+systemctl daemon-reload
 systemctl restart systemd-cryptsetup@k8s-data
 
 # Verify the volume is unlocked
@@ -338,6 +346,13 @@ TAMPERED BOOT (e.g., modified kernel):
     The TPM will not release the key. The disk stays encrypted.
     The node fails to boot. An alert is generated.
 ```
+
+### Remote Node Attestation
+
+While LUKS auto-unlock protects data at rest, it does not prevent a booted (but later compromised) node from joining the Kubernetes cluster. To verify bare-metal server integrity before or during cluster admission, you must implement remote node attestation using the TPM:
+
+- **Keylime**: A CNCF project providing remote boot attestation and runtime integrity measurement. A Keylime verifier queries the node's TPM, validates the PCR measurements against an expected payload, and can integrate with admission controllers to block tampered nodes.
+- **SPIRE (SPIFFE)**: The SPIRE `tpm_devid` plugin performs proof-of-possession challenges against the node's TPM 2.0 using a DevID certificate. The node is only issued a SPIFFE identity (and thereby cluster API access) if the hardware is verified.
 
 ---
 
@@ -418,7 +433,7 @@ An attacker steals the entire server -- disk, motherboard, and TPM chip together
 </details>
 
 ### Question 3
-You need to replace AWS KMS for encrypting Kubernetes Secrets at rest in an on-premises cluster. What is the architecture?
+Your organization is migrating from AWS to on-premises. The security team mandates that the etcd master encryption key must be protected by hardware and must never be exposed directly to the Kubernetes control plane. How do you configure Kubernetes to satisfy this requirement while maintaining automatic encryption of Secrets?
 
 <details>
 <summary>Answer</summary>
@@ -451,7 +466,7 @@ Secret data --> DEK encrypts data --> KEK encrypts DEK --> HSM protects KEK
 </details>
 
 ### Question 4
-Why is SoftHSM acceptable for development but not for production?
+A junior engineer proposes deploying SoftHSM to production to save the $50,000 cost of a hardware appliance, arguing that it implements the identical PKCS#11 API and passes all functional tests. Based on physical security and compliance guarantees, what are the primary reasons to reject this proposal?
 
 <details>
 <summary>Answer</summary>
@@ -486,7 +501,7 @@ Why is SoftHSM acceptable for development but not for production?
 
 ### Prerequisites
 - A Linux machine or VM (Ubuntu 22.04 recommended)
-- Docker installed
+- Vault binary installed
 
 ### Steps
 
@@ -525,6 +540,10 @@ Why is SoftHSM acceptable for development but not for production?
 
    mkdir -p /tmp/vault-data
    vault server -config=/tmp/vault-config.hcl &
+
+   # Verify Vault started (checkpoint)
+   sleep 2
+   VAULT_ADDR="http://127.0.0.1:8200" vault status || true
    ```
 
 3. **Initialize and verify auto-unseal**:
