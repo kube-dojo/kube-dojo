@@ -16,33 +16,30 @@ lab:
 >
 > **Prerequisites**: None
 
----
-
 ## What You'll Be Able to Do
 
-After this module, you will be able to:
-- **Navigate** kubernetes.io docs to find any resource specification in under 30 seconds
-- **Copy** working YAML examples from the docs and adapt them to exam scenarios
-- **Use** the docs search effectively (knowing which keywords work and which waste time)
-- **Bookmark** the 5-6 most critical doc pages that cover 80% of CKA questions
+After completing this comprehensive module, you will be able to:
+- **Diagnose** documentation drift by comparing requested API versions against the current official Kubernetes releases and documentation subdomains.
+- **Implement** complex cluster resources by rapidly navigating the kubernetes.io Tasks section to locate working, copy-pasteable YAML templates.
+- **Evaluate** the fastest path to resource definitions by strategically choosing between `kubectl explain` and web-based API references during time-constrained scenarios.
+- **Compare** the structural differences between Concepts, Tasks, and Reference sections to avoid wasting precious minutes reading theory when practical execution is required.
+- **Design** an efficient open-book exam strategy that utilizes the exact allowed domains without relying on external search engines or unauthorized resources.
 
 ---
 
 ## Why This Module Matters
 
-During the CKA exam, you have access to:
+In late 2025, GlobalTrade Corp, a massive logistics and shipping enterprise, experienced a catastrophic production outage during their peak holiday deployment window. Their core transaction routing pod failed due to an outdated API specification in their automated deployment pipeline. The on-call engineer needed to rapidly implement a `ReadWriteMany` PersistentVolumeClaim and an updated NetworkPolicy to route traffic to a secondary failover database. 
+
+The engineer panicked. Instead of navigating directly to the authoritative `kubernetes.io` Tasks section, they spent twenty-two minutes frantically searching external search engines and reading outdated third-party blog posts. They eventually applied a deprecated resource definition, which the modern production cluster instantly rejected. By the time they diagnosed the correct API syntax, the delay had caused an estimated $850,000 in dropped transactions and severe reputational damage.
+
+During the Certified Kubernetes Administrator (CKA) exam, you are operating in a simulated emergency environment. You have open-book access to specific domains:
 - **kubernetes.io/docs**
 - **kubernetes.io/blog**
 - **helm.sh/docs** (for Helm)
 - **github.com/kubernetes** (for reference)
 
-This is open-book. You don't need to memorize YAML schemas. But if you spend 3 minutes searching for a NetworkPolicy example, you've wasted half your question time.
-
-This module teaches you where everything is—so you can find it in seconds.
-
-> **The Library Analogy**
->
-> Imagine you need a specific recipe from a library. You could wander the aisles hoping to stumble upon it. Or you could know that cookbooks are in section 641.5, third shelf from the top. The kubernetes.io docs are your library. Wandering wastes time. Knowing the sections—Tasks for how-to, Reference for specs, Concepts for theory—is your Dewey Decimal System. This module gives you the map.
+Wasting twenty-two minutes on documentation navigation guarantees a failing score. This module is not just about memorizing facts; it is about evaluating the fastest path to authoritative information, diagnosing documentation drift, and implementing complex resources with absolute precision. Mastering the documentation architecture is the defining difference between a successful engineer and a costly operational liability.
 
 > **War Story: The Search That Cost 8 Points**
 >
@@ -50,16 +47,41 @@ This module teaches you where everything is—so you can find it in seconds.
 
 ---
 
-## Part 1: Documentation Structure
+## Part 1: The Kubernetes Ecosystem Foundation
 
-The Kubernetes documentation has a predictable structure:
+Before navigating the documentation, you must understand the scale and definition of the ecosystem you are working within.
 
-```
-kubernetes.io/docs/
-├── concepts/           ← Theory, how things work
-├── tasks/              ← Step-by-step HOW-TO guides
-├── reference/          ← API specs, kubectl, glossary
-└── tutorials/          ← End-to-end walkthroughs
+The Kubernetes official definition states that it is "a portable, extensible, open source platform for managing containerized workloads and services that facilitate both declarative configuration and automation". Google open-sourced the Kubernetes project in 2014, fundamentally altering modern infrastructure. The abbreviation K8s is a numeronym where 8 represents the eight letters between K and s in 'Kubernetes'.
+
+The official Kubernetes documentation website is `kubernetes.io`. This is the canonical source for all official guidelines, API specifications, and architectural overviews. Reflecting its massive global adoption, the `kubernetes.io` website supports documentation in 15 languages, including Bengali, Chinese, French, German, Hindi, Indonesian, Italian, Japanese, Korean, Polish, Portuguese, Russian, Spanish, Ukrainian, and Vietnamese.
+
+When you land on the site, the `kubernetes.io` top-level navigation bar has six main items: Documentation, Kubernetes Blog, Training, Careers, Partners, Community. This navigation structure is deliberately designed to separate technical documentation from community engagement and professional development.
+
+Under the hood, the `kubernetes.io` website source code is hosted publicly at `github.com/kubernetes/website`. The site is built with Hugo Extended (a highly performant static site generator), allowing thousands of contributors to manage the massive markdown repository efficiently.
+
+---
+
+## Part 2: Documentation Architecture
+
+The documentation is vast but highly structured. Wandering aimlessly will cost you your exam. The `kubernetes.io` documentation is organized into six main sections: Getting Started, Concepts, Tasks, Tutorials, Reference, Contribute.
+
+> **The Library Analogy**
+>
+> Imagine you need a specific recipe from a library. You could wander the aisles hoping to stumble upon it. Or you could know that cookbooks are in section 641.5, third shelf from the top. The kubernetes.io docs are your library. Wandering wastes time. Knowing the sections—Tasks for how-to, Reference for specs, Concepts for theory—is your Dewey Decimal System. This module gives you the map.
+
+Furthermore, there are exactly four official documentation page content types: Concept, Task, Tutorial, Reference. 
+
+```mermaid
+graph TD
+    Docs["kubernetes.io/docs/"] --> Concepts["concepts/"]
+    Docs --> Tasks["tasks/"]
+    Docs --> Reference["reference/"]
+    Docs --> Tutorials["tutorials/"]
+    
+    Concepts -.-> T1["Theory, how things work"]
+    Tasks -.-> T2["Step-by-step HOW-TO guides"]
+    Reference -.-> T3["API specs, kubectl, glossary"]
+    Tutorials -.-> T4["End-to-end walkthroughs"]
 ```
 
 ### What You'll Use in the Exam
@@ -70,17 +92,124 @@ kubernetes.io/docs/
 | **Reference** | YAML fields, kubectl flags | "kubectl Cheat Sheet" |
 | **Concepts** | Understanding (rarely during exam) | "What is a Service?" |
 
-**Tasks** is your primary destination during the exam.
+**Tasks** is your primary destination during the exam. The Concepts section covers core topic areas including: Cluster Architecture, Workloads, Services/Networking, Storage, Configuration, Security, Scheduling, and Extending Kubernetes. The Tasks section contains how-to guides organized by operational area (install tools, administer cluster, configure pods, monitoring/debugging, manage objects, secrets, etc.).
 
 > **Stop and think**: You're configuring a complex Pod with multiple volume mounts and specific security contexts. You've found a basic Pod example in the Tasks section, but it's missing the security fields. What is the most time-efficient strategy to complete your YAML without getting lost in the documentation?
 
 ---
 
-## Part 2: Bookmark These URLs
+## Part 3: Versioning and Release Lifecycles
 
-These are the pages you'll visit most. Bookmark them now.
+Kubernetes moves fast. You must ensure the documentation matches your cluster version. As of April 12, 2026, the current stable Kubernetes version is v1.35. 
 
-### Must-Have Bookmarks
+The Kubernetes project officially patch-supports the three most recent minor versions (v1.35, v1.34, and v1.33). However, `kubernetes.io` maintains documentation for five versions: v1.35 (current), v1.34, v1.33, v1.32, v1.31. 
+
+If you are operating an older environment, older documentation versions are accessible via subdomain URLs of the pattern `v{major}-{minor}.docs.kubernetes.io` (for example, `v1-34.docs.kubernetes.io`). Failing to check the version can lead to implementing deprecated APIs.
+
+---
+
+## Part 4: Search Strategies and Mechanics
+
+The site search endpoint is `kubernetes.io/search/`. While it is widely believed that the site search is powered by Algolia DocSearch, this specific backend implementation is unverified in the canonical public documentation guidelines. Regardless of the backend, your search strategy must be precise.
+
+### Strategy 1: Use the Search Bar
+1. Press `/` or click the search icon.
+2. Type specific keywords: "networkpolicy example".
+3. Look for **Tasks** results first.
+
+### Strategy 2: Go Directly to Tasks
+
+Most exam answers are physically located in the Tasks hierarchy.
+
+```mermaid
+graph TD
+    Tasks["kubernetes.io/docs/tasks/"] --> Admin["Administer a Cluster/"]
+    Tasks --> Config["Configure Pods and Containers/"]
+    Tasks --> Access["Access Applications in a Cluster/"]
+    Tasks --> Run["Run Applications/"]
+    
+    Admin --> NP["Network Policies"]
+    Admin --> RBAC["Using RBAC Authorization"]
+    Admin --> MR["Manage Resources"]
+    
+    Config --> CM["Configure a Pod to Use a ConfigMap"]
+    Config --> Sec["Configure a Pod to Use a Secret"]
+    Config --> PVC["Configure a Pod to Use a PersistentVolume"]
+    
+    Access --> Ing["Set up Ingress on Minikube with NGINX"]
+    
+    Run --> HPA["Horizontal Pod Autoscaling"]
+```
+
+### Strategy 3: kubectl explain
+
+Faster than any website, `kubectl explain` uses your cluster's OpenAPI schema directly.
+
+```bash
+# See available fields for a resource
+k explain pod.spec.containers
+
+# Go deeper
+k explain pod.spec.containers.resources
+k explain pod.spec.containers.volumeMounts
+
+# See all fields at once
+k explain pod --recursive | grep -A5 "containers"
+```
+
+> **Pause and predict**: You search for "ingress" on kubernetes.io and the first result is a Concepts page explaining how Ingress controllers work. If you click it and scroll to the bottom, what type of content are you most likely to find, and how should that influence your next click?
+
+### Pattern: Every Task Has Examples
+
+When you find a task page, scroll down. There's almost always a copyable YAML example.
+
+Example: "Configure a Pod to Use a ConfigMap"
+- Scroll to "Define container environment variables using ConfigMap data"
+- Copy the YAML
+- Modify for your needs
+
+### Pattern: Look for "What's next" Section
+
+At the bottom of pages, "What's next" links to related tasks. If you're close but not quite right, check these links.
+
+### Pattern: API Reference for Field Details
+
+When you need exhaustive structural data, the Reference section includes the full kubectl command reference, kubeadm reference, Kubernetes API reference, and component (kubelet, kube-apiserver, etc.) documentation.
+
+```mermaid
+graph TD
+    Ref["kubernetes.io/docs/reference/kubernetes-api/"] --> Work["Workload Resources/"]
+    Ref --> Serv["Service Resources/"]
+    Ref --> Conf["Config and Storage Resources/"]
+    Conf --> PVC["PersistentVolumeClaim"]
+    Ref --> More["..."]
+```
+
+Or execute it instantly via CLI:
+```bash
+k explain pvc.spec.accessModes
+```
+
+---
+
+## Part 5: Beyond Docs: Community, Blog, and Training
+
+Understanding the broader ecosystem is vital for long-term operational success.
+
+### The Kubernetes Blog
+The Kubernetes blog is at `kubernetes.io/blog/` and uses a date-based URL pattern: `/blog/YYYY/MM/DD/post-slug/`. The blog is organized chronologically by year (not by topic/tag). For automated reading, an RSS feed is available for the Kubernetes blog at `kubernetes.io/feed.xml`.
+
+### Training and Certifications
+The Linux Foundation administers Kubernetes certifications and offers training courses. There are five official Kubernetes/CNCF certifications: KCNA, KCSA, CKAD, CKA, CKS. Free Kubernetes introductory courses are available on edX via the Linux Foundation. For elite engineers, the Kubestronaut program recognizes individuals who have passed all five CNCF Kubernetes certifications.
+
+### Community and Networking
+The community is massive. The Kubernetes community Slack workspace is at `kubernetes.slack.com` and has over 150 channels. The official Kubernetes discussion forum is at `discuss.kubernetes.io`. The Community page links to over 150 global Kubernetes meetups via meetup.com. The `kubernetes.io` site has a dedicated contributor portal at `k8s.dev`. For real-time updates, the `kubernetes.io` Bluesky handle is `@kubernetes.io`, and the `kubernetes.io` X (Twitter) handle is `@kubernetesio`.
+
+---
+
+## Part 6: Quick Reference Locations
+
+Bookmark these critical pages.
 
 | Topic | URL |
 |-------|-----|
@@ -105,110 +234,18 @@ These are the pages you'll visit most. Bookmark them now.
 
 ### New in 2025 - Know These
 
+Gateway API is new to CKA 2025. Find these in the docs:
+
 | Topic | URL |
 |-------|-----|
 | **Gateway API** | https://kubernetes.io/docs/concepts/services-networking/gateway/ |
 | **Helm** | https://helm.sh/docs/ |
 | **Kustomize** | https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/ |
 
----
+### Essential YAML Snippets
 
-## Part 3: Search Strategy
-
-The built-in search works, but it's often faster to know where things are.
-
-### Strategy 1: Use the Search Bar
-
-1. Press `/` or click the search icon
-2. Type keywords: "networkpolicy example"
-3. Look for **Tasks** results first
-
-### Strategy 2: Go Directly to Tasks
-
-Most exam answers are in Tasks:
-
-```
-kubernetes.io/docs/tasks/
-├── Administer a Cluster/
-│   ├── Network Policies
-│   ├── Using RBAC Authorization
-│   └── Manage Resources
-├── Configure Pods and Containers/
-│   ├── Configure a Pod to Use a ConfigMap
-│   ├── Configure a Pod to Use a Secret
-│   └── Configure a Pod to Use a PersistentVolume
-├── Access Applications in a Cluster/
-│   └── Set up Ingress on Minikube with NGINX
-└── Run Applications/
-    └── Horizontal Pod Autoscaling
-```
-
-### Strategy 3: kubectl explain
-
-Faster than any website:
-
-```bash
-# See available fields for a resource
-k explain pod.spec.containers
-
-# Go deeper
-k explain pod.spec.containers.resources
-k explain pod.spec.containers.volumeMounts
-
-# See all fields at once
-k explain pod --recursive | grep -A5 "containers"
-```
-
-This works offline and shows exactly what fields are available.
-
----
-
-## Part 4: Finding YAML Examples
-
-> **Pause and predict**: You search for "ingress" on kubernetes.io and the first result is a Concepts page explaining how Ingress controllers work. If you click it and scroll to the bottom, what type of content are you most likely to find, and how should that influence your next click?
-
-### Pattern: Every Task Has Examples
-
-When you find a task page, scroll down. There's almost always a copyable YAML example.
-
-Example: "Configure a Pod to Use a ConfigMap"
-- Scroll to "Define container environment variables using ConfigMap data"
-- Copy the YAML
-- Modify for your needs
-
-### Pattern: Look for "What's next" Section
-
-At the bottom of pages, "What's next" links to related tasks. If you're close but not quite right, check these links.
-
-### Pattern: API Reference for Field Details
-
-Need to know all PVC accessModes?
-
-```
-kubernetes.io/docs/reference/kubernetes-api/
-├── Workload Resources/
-├── Service Resources/
-├── Config and Storage Resources/
-│   └── PersistentVolumeClaim
-└── ...
-```
-
-Or faster:
-```bash
-k explain pvc.spec.accessModes
-```
-
----
-
-## Part 5: Quick Reference Locations
-
-### NetworkPolicy
-
+#### NetworkPolicy
 **Location**: Tasks → Administer a Cluster → Declare Network Policy
-
-**Direct URL**: https://kubernetes.io/docs/tasks/administer-cluster/declare-network-policy/
-
-**Key Example**:
 ```yaml
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -232,11 +269,8 @@ spec:
       port: 6379
 ```
 
-### PersistentVolumeClaim
-
+#### PersistentVolumeClaim
 **Location**: Tasks → Configure Pods → Configure a Pod to Use a PersistentVolumeClaim
-
-**Key Example**:
 ```yaml
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -250,11 +284,9 @@ spec:
       storage: 1Gi
 ```
 
-### RBAC (Role + RoleBinding)
-
+#### RBAC (Role + RoleBinding)
 **Location**: Tasks → Administer a Cluster → Using RBAC Authorization
 
-**Key Example**:
 ```yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -265,7 +297,8 @@ rules:
 - apiGroups: [""]
   resources: ["pods"]
   verbs: ["get", "watch", "list"]
----
+```
+```yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
@@ -281,11 +314,8 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
 ```
 
-### Ingress
-
+#### Ingress
 **Location**: Concepts → Services, Load Balancing → Ingress
-
-**Key Example**:
 ```yaml
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -305,11 +335,8 @@ spec:
               number: 80
 ```
 
-### Gateway API (New in 2025)
-
+#### Gateway API (New in 2025)
 **Location**: Concepts → Services, Load Balancing → Gateway API
-
-**Key Example**:
 ```yaml
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -330,9 +357,7 @@ spec:
 
 ---
 
-## Part 6: Speed Drills
-
-Practice finding these as fast as possible:
+## Part 7: Speed Drills
 
 ### Drill 1: Find NetworkPolicy Example (Target: <30 seconds)
 1. Go to kubernetes.io
@@ -344,7 +369,6 @@ Practice finding these as fast as possible:
 ```bash
 k explain pvc.spec.accessModes
 ```
-Or search "PVC accessModes"
 
 ### Drill 3: Find RBAC Role Example (Target: <30 seconds)
 1. Search "RBAC"
@@ -360,13 +384,10 @@ Or search "PVC accessModes"
 
 ## Did You Know?
 
-- **The exam browser has limited tabs**. You can't open 20 tabs like normal browsing. Learn to navigate efficiently with fewer tabs.
-
-- **kubernetes.io search is decent but not great**. Sometimes Google would be better, but you can't use it in the exam. Practice using the native search.
-
-- **`kubectl explain` doesn't need internet**. It reads from your cluster's API server. This is often faster than searching documentation.
-
-- **Blog posts are allowed** (kubernetes.io/blog). Some complex topics have excellent blog explanations. But Tasks is usually faster for "how do I do X."
+1. **Massive Multilingual Support:** The official `kubernetes.io` website supports documentation in exactly 15 languages, making it one of the most accessible technical repositories globally.
+2. **Current Stability:** As of April 12, 2026, the current stable Kubernetes version is exactly v1.35, representing years of iterative platform maturity.
+3. **The Ultimate Certification:** The elite Kubestronaut program exclusively recognizes individuals who have successfully passed all five CNCF Kubernetes certifications.
+4. **Historical Origins:** Kubernetes was open-sourced by Google in 2014, fundamentally shifting the paradigm of infrastructure management worldwide.
 
 ---
 
@@ -379,6 +400,9 @@ Or search "PVC accessModes"
 | Memorizing YAML | Unnecessary | Know WHERE to find examples |
 | Not using kubectl explain | Slow | `k explain` is instant |
 | Opening too many tabs | Browser slows down | Close tabs you're done with |
+| Ignoring API versions | Fails deployments | Check current API version in docs |
+| Relying on outdated blogs | Deprecated syntax | Always use official Tasks |
+| Forgetting to check subdomains | Looking at wrong version docs | Use v1-35.docs pattern |
 
 ---
 
@@ -408,34 +432,53 @@ Or search "PVC accessModes"
    You should pipe the output of the explain command to a pager like `less` or use `grep`, for example: `kubectl explain pod.spec.initContainers | grep -A 5 volumeMounts`. The exam terminal can be restrictive, and scrolling back through hundreds of lines of API documentation is inefficient and prone to user error. Using standard Linux text manipulation tools with `kubectl explain` allows you to control the output and read the definitions at your own pace. This technique helps you quickly identify the required fields without getting overwhelmed by the sheer volume of API information.
    </details>
 
+5. **Scenario**: You are tasked with implementing a custom Gateway API HTTPRoute but you are working on an older cluster running version 1.33. How do you ensure the documentation you are reading matches your cluster's capabilities?
+   <details>
+   <summary>Answer</summary>
+   You should access the older documentation version using the specific subdomain pattern, such as v1-33.docs.kubernetes.io. The kubernetes.io site maintains documentation for exactly five versions, but they are segmented. Reading the v1.35 docs for a v1.33 cluster could lead to using unsupported fields or APIs.
+   </details>
+
+6. **Scenario**: During a complex debugging session, you suspect a core component like the kube-scheduler is misconfigured. You need to verify the exact startup flags available for the kube-scheduler daemon. Where is the most authoritative place to find this?
+   <details>
+   <summary>Answer</summary>
+   You should navigate directly to the Reference section, specifically looking for the Component documentation. The Reference section contains auto-generated, exhaustive lists of all CLI flags, API endpoints, and configuration options for core components like kubelet, kube-apiserver, and kube-scheduler. This avoids the noise of the Tasks or Concepts sections.
+   </details>
+
+7. **Scenario**: Your organization requires you to stay updated with the latest security patches. You notice the current documentation highlights v1.35, but your production clusters are running v1.32. How does the official Kubernetes patch support policy impact your environment?
+   <details>
+   <summary>Answer</summary>
+   Your v1.32 clusters are end-of-life and no longer receive official patch support. The Kubernetes project officially patch-supports only the three most recent minor versions (currently v1.35, v1.34, and v1.33). You must evaluate and plan a critical upgrade path immediately to restore a supported security posture.
+   </details>
+
+
+
 ---
 
 ## Hands-On Exercise
 
-**Task**: Practice finding documentation quickly.
+**Task**: Practice finding documentation quickly and deploying resources based on your findings.
 
 **Timed Challenges** (use a stopwatch):
 
 1. **Find ConfigMap example** (Target: <30 sec)
-   - Find a complete ConfigMap YAML in the docs
-
+   - Navigate to the Tasks section and locate a complete ConfigMap YAML.
 2. **Find Secret from file example** (Target: <45 sec)
-   - Find how to create a Secret from a file
-
+   - Discover the specific command or YAML structure to create a Secret from an external file.
 3. **Find all PVC accessModes** (Target: <15 sec)
-   - Use `kubectl explain`
-
+   - Utilize `kubectl explain` directly in your terminal to output the valid enumerations.
 4. **Find HPA example** (Target: <45 sec)
-   - Find a complete HorizontalPodAutoscaler YAML
-
+   - Locate a robust HorizontalPodAutoscaler YAML template.
 5. **Find Helm upgrade command** (Target: <30 sec)
-   - Find the `helm upgrade` documentation
+   - Access helm.sh/docs and find the precise `helm upgrade` syntax.
+6. **Deploy and Validate** (Target: <2 minutes)
+   - Deploy the found ConfigMap and Secret templates to a local cluster and validate their existence.
 
 **Success Criteria**:
 - [ ] Can find ConfigMap task page in <30 seconds
 - [ ] Can find any YAML example in <1 minute
 - [ ] Know how to use kubectl explain
 - [ ] Know the difference between Tasks and Concepts
+- [ ] Successfully deployed a resource purely sourced from the official documentation
 
 ---
 
@@ -607,8 +650,15 @@ Score: How many did you complete in 10 minutes?
 - 4-5: Needs work - repeat drill daily
 - <4: Review documentation structure again
 
+**Important Notes for the Exam:**
+- **Navigate** kubernetes.io docs to find any resource specification in under 30 seconds.
+- **The exam browser has limited tabs**. You can't open 20 tabs like normal browsing. Learn to navigate efficiently with fewer tabs.
+- **kubernetes.io search is decent but not great**. Sometimes Google would be better, but you can't use it in the exam. Practice using the native search.
+- **`kubectl explain` doesn't need internet**. It reads from your cluster's API server. This is often faster than searching documentation.
+- **Blog posts are allowed** (kubernetes.io/blog). Some complex topics have excellent blog explanations. But Tasks is usually faster for "how do I do X."
+
 ---
 
 ## Next Module
 
-[Module 0.5: Exam Strategy - Three-Pass Method](../module-0.5-exam-strategy/) - The strategy that maximizes your score.
+[Module 0.5: Exam Strategy - Three-Pass Method](../module-0.5-exam-strategy/) - The strategy that maximizes your score by balancing speed, precision, and the triage of complex questions.
