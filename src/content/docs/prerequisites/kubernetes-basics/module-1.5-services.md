@@ -38,33 +38,26 @@ Pods are ephemeral—they come and go, each with a different IP address. Service
 
 ## The Problem Services Solve
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              WITHOUT SERVICES                               │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  Pod IPs change constantly:                                │
-│                                                             │
-│  Time 0:  [Pod: 10.1.0.5]                                  │
-│  Time 1:  Pod crashes, recreated                           │
-│  Time 2:  [Pod: 10.1.0.9]   ← Different IP!               │
-│                                                             │
-│  Problem: How do other apps find your Pod?                 │
-│                                                             │
-├─────────────────────────────────────────────────────────────┤
-│              WITH SERVICES                                  │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  Service: my-app.default.svc.cluster.local                 │
-│           ClusterIP: 10.96.0.100 (stable!)                 │
-│                    │                                        │
-│           ┌────────┴────────┐                              │
-│           ▼                 ▼                               │
-│  [Pod: 10.1.0.5]   [Pod: 10.1.0.9]                        │
-│                                                             │
-│  Service routes to healthy pods, IPs don't matter          │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Without_Services [WITHOUT SERVICES]
+        direction TB
+        A[Time 0: Pod 10.1.0.5] -->|Crashes| B[Time 1: Recreated]
+        B --> C[Time 2: Pod 10.1.0.9<br/>Different IP!]
+        D[Problem: How do other apps find your Pod?]
+        style D fill:#f9f,stroke:#333,stroke-width:2px,color:#000
+    end
+
+    subgraph With_Services [WITH SERVICES]
+        direction TB
+        Svc[Service: my-app.default.svc.cluster.local<br/>ClusterIP: 10.96.0.100 stable!]
+        Pod1[Pod: 10.1.0.5]
+        Pod2[Pod: 10.1.0.9]
+        Svc -->|Routes to healthy| Pod1
+        Svc -->|Routes to healthy| Pod2
+        N[Service routes to healthy pods, IPs don't matter]
+        style N fill:#bbf,stroke:#333,stroke-width:2px,color:#000
+    end
 ```
 
 > **Stop and think**: If a Deployment scales up to 10 Pods, how many IP addresses does the associated Service have? 
@@ -77,11 +70,14 @@ Pods are ephemeral—they come and go, each with a different IP address. Service
 ### Try It Yourself: Imperative (Quick)
 
 ```bash
-# Expose a deployment
+# Create a deployment first
+kubectl create deployment nginx --image=nginx
+
+# Expose the deployment (defaults to ClusterIP)
 kubectl expose deployment nginx --port=80
 
-# With specific type
-kubectl expose deployment nginx --port=80 --type=NodePort
+# Expose with specific type (using a different name to avoid conflict)
+kubectl expose deployment nginx --port=80 --type=NodePort --name=nginx-np
 
 # Check the service
 kubectl get services
@@ -90,12 +86,12 @@ kubectl get svc              # Short form
 
 ### Try It Yourself: Declarative (Production)
 
-```yaml
-# service.yaml
+```bash
+cat <<EOF > service.yaml
 apiVersion: v1
 kind: Service
 metadata:
-  name: nginx
+  name: nginx-declarative
 spec:
   selector:
     app: nginx               # Match pod labels
@@ -103,9 +99,8 @@ spec:
   - port: 80                 # Service port
     targetPort: 80           # Container port
   type: ClusterIP            # Default type
-```
+EOF
 
-```bash
 kubectl apply -f service.yaml
 ```
 
@@ -160,7 +155,7 @@ spec:
   ports:
   - port: 80
     targetPort: 80
-    nodePort: 30080          # Optional: 30000-32767
+    nodePort: 30080          # Optional: 30000-32767 range
 ```
 
 ```bash
@@ -196,31 +191,26 @@ kubectl get svc web-lb
 
 ## Service Diagram
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              SERVICE TYPES                                  │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  ClusterIP (Internal Only)                                 │
-│  ┌─────────────────────────────────────┐                  │
-│  │  ClusterIP:80 ──► Pod:8080          │                  │
-│  │               ──► Pod:8080          │                  │
-│  │  (Accessible only within cluster)   │                  │
-│  └─────────────────────────────────────┘                  │
-│                                                             │
-│  NodePort (External via Node)                              │
-│  ┌─────────────────────────────────────┐                  │
-│  │  <NodeIP>:30080 ──► ClusterIP:80 ──► Pods             │
-│  │  (Accessible from outside)          │                  │
-│  └─────────────────────────────────────┘                  │
-│                                                             │
-│  LoadBalancer (Cloud External)                             │
-│  ┌─────────────────────────────────────┐                  │
-│  │  <ExternalIP>:80 ──► NodePort ──► ClusterIP ──► Pods  │
-│  │  (Cloud provider manages LB)        │                  │
-│  └─────────────────────────────────────┘                  │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph ClusterIP_Type [ClusterIP - Internal Only]
+        direction LR
+        C1[ClusterIP:80] --> C1_P1[Pod:8080]
+        C1 --> C1_P2[Pod:8080]
+    end
+
+    subgraph NodePort_Type [NodePort - External via Node]
+        direction LR
+        N1["<NodeIP>:30080"] --> N2[ClusterIP:80]
+        N2 --> N3[Pods]
+    end
+
+    subgraph LoadBalancer_Type [LoadBalancer - Cloud External]
+        direction LR
+        L1["<ExternalIP>:80"] --> L2[NodePort]
+        L2 --> L3[ClusterIP]
+        L3 --> L4[Pods]
+    end
 ```
 
 ---
@@ -244,16 +234,18 @@ curl nginx.default.svc.cluster.local # Full FQDN
 ### Example
 
 ```bash
-# Create deployment and service
-kubectl create deployment nginx --image=nginx
-kubectl expose deployment nginx --port=80
+# Create a new deployment and service for DNS testing
+kubectl create deployment nginx-dns --image=nginx
+kubectl expose deployment nginx-dns --port=80
+kubectl rollout status deployment nginx-dns
+kubectl get svc nginx-dns
 
-# Test DNS from another pod
-kubectl run test --image=busybox --rm -it -- wget -qO- nginx
+# Test DNS from another pod (using -i and --restart=Never for non-interactive compatibility)
+kubectl run test --image=busybox --rm -i --restart=Never -- wget -qO- nginx-dns
 # Returns nginx HTML!
 
 # Test with full DNS name
-kubectl run test --image=busybox --rm -it -- nslookup nginx.default.svc.cluster.local
+kubectl run test --image=busybox --rm -i --restart=Never -- nslookup nginx-dns.default.svc.cluster.local
 ```
 
 ---
@@ -289,20 +281,18 @@ kubectl get endpoints nginx
 
 ## Port Mapping
 
+```mermaid
+flowchart LR
+    Client -->|"port"| Svc[Service:80]
+    Svc -->|"targetPort"| Pod[Pod:8080]
+```
+
 ```yaml
 spec:
   ports:
   - port: 80           # Service port (what clients use)
     targetPort: 8080   # Container port (where app listens)
     protocol: TCP      # TCP (default) or UDP
-```
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Client ──► Service:80 ──► Pod:8080                        │
-│                │                 │                          │
-│             "port"         "targetPort"                     │
-└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -343,13 +333,13 @@ They discovered 10 endpoints, but one of the IP addresses belonged to a pod that
 1. **Scenario**: A junior developer hardcodes the IP address of a backend database pod into the frontend configuration. The next day, the frontend cannot reach the database, even though the database pod is running perfectly. Why did this happen, and what is the Kubernetes-native solution?
    <details>
    <summary>Answer</summary>
-   Pods are ephemeral, meaning they are frequently destroyed and recreated by controllers like Deployments. When the database pod was recreated (due to a node update or crash), it received a new IP address, breaking the hardcoded frontend configuration. The solution is to create a Kubernetes Service for the database, which provides a stable, unchanging IP address and DNS name that the frontend can reliably use, regardless of pod churn.
+   Pods are ephemeral, meaning they are frequently destroyed and recreated by controllers like Deployments. When the database pod was recreated (due to a node update or crash), it received a new IP address, breaking the hardcoded frontend configuration. The solution is to create a Kubernetes Service for the database, which provides a stable, unchanging IP address and DNS name that the frontend can reliably use, regardless of pod churn. By using the Service DNS name, the frontend is decoupled from the underlying network reality of the pods.
    </details>
 
 2. **Scenario**: You are deploying a Redis cache that should strictly only be accessed by your backend API pods running in the same cluster. Security mandates that this cache must not be reachable from the public internet. Which Service type should you choose and why?
    <details>
    <summary>Answer</summary>
-   You should choose `ClusterIP`, which is the default Service type in Kubernetes. A ClusterIP service assigns an internal IP address that is only routable from within the cluster itself. This perfectly satisfies the security requirement by preventing any external ingress traffic from reaching the Redis cache, while allowing the backend API pods to communicate with it seamlessly.
+   You should choose `ClusterIP`, which is the default Service type in Kubernetes. A ClusterIP service assigns an internal IP address that is only routable from within the cluster itself. This perfectly satisfies the security requirement by preventing any external ingress traffic from reaching the Redis cache, while allowing the backend API pods to communicate with it seamlessly. External users cannot target this IP because it is restricted entirely to the virtual network managed by the cluster.
    </details>
 
 3. **Scenario**: You've deployed a new web application and created a Service for it. However, when you try to access the Service, you get a "connection refused" error. You run `kubectl get pods --show-labels` and see your pods have `app=frontend,env=prod`. Your Service has a selector of `app=frontend,tier=web`. Why is the traffic failing?
@@ -361,19 +351,19 @@ They discovered 10 endpoints, but one of the IP addresses belonged to a pod that
 4. **Scenario**: A developer is troubleshooting an issue from within a busybox testing pod in the `default` namespace. They need to test connectivity to a payment API Service that resides in the `finance` namespace. What exact DNS name should they use with their `curl` command?
    <details>
    <summary>Answer</summary>
-   The developer should use `payment-api.finance` or the fully qualified domain name (FQDN) `payment-api.finance.svc.cluster.local`. Because the testing pod and the target Service are in different namespaces, simply curling `payment-api` will fail, as Kubernetes DNS resolves bare service names to the pod's *current* namespace by default. Appending the target namespace ensures the DNS resolver finds the correct Service.
+   The developer should use `payment-api.finance` or the fully qualified domain name (FQDN) `payment-api.finance.svc.cluster.local`. Because the testing pod and the target Service are in different namespaces, simply curling `payment-api` will fail, as Kubernetes DNS resolves bare service names to the pod's *current* namespace by default. Appending the target namespace ensures the DNS resolver finds the correct Service. This namespace-scoped resolution design prevents naming collisions between different environments running on the same cluster.
    </details>
 
 5. **Scenario**: Your team is migrating a legacy application to Kubernetes on AWS. The application needs to be accessible to external customers over the internet on standard port 80. You initially tried `NodePort`, but the security team rejected exposing ports in the 30000+ range. Which Service type is the correct architectural choice here?
    <details>
    <summary>Answer</summary>
-   You should use the `LoadBalancer` Service type. When you create a LoadBalancer Service in a supported cloud environment (like AWS, GCP, or Azure), Kubernetes automatically provisions a native cloud load balancer. This external load balancer routes traffic from standard ports (like 80 or 443) on a public IP address directly to your cluster, bypassing the need for clients to use high NodePorts and satisfying the security team's requirements.
+   You should use the `LoadBalancer` Service type. When you create a LoadBalancer Service in a supported cloud environment (like AWS, GCP, or Azure), Kubernetes automatically provisions a native cloud load balancer. This external load balancer routes traffic from standard ports (like 80 or 443) on a public IP address directly to your cluster, bypassing the need for clients to use high NodePorts and satisfying the security team's requirements. It provides a production-ready, highly available entry point that integrates natively with the cloud provider's network infrastructure.
    </details>
 
 6. **Scenario**: You have created a Service named `auth-svc` and a Deployment of auth pods. You want to verify that Kubernetes has successfully linked the Service to the Pods before you test the application from another microservice. What `kubectl` command should you run to prove the Service has discovered the Pod IPs?
    <details>
    <summary>Answer</summary>
-   You should run `kubectl get endpoints auth-svc` (or `kubectl describe svc auth-svc`). The Endpoints object is automatically created and updated by Kubernetes to maintain a list of the actual IP addresses of the Pods that match the Service's label selector. If the endpoints list is empty, it immediately tells you there is a label mismatch or the pods are crashing, saving you time debugging the application code.
+   You should run `kubectl get endpoints auth-svc` (or `kubectl describe svc auth-svc`). The Endpoints object is automatically created and updated by Kubernetes to maintain a list of the actual IP addresses of the Pods that match the Service's label selector. If the endpoints list is empty, it immediately tells you there is a label mismatch or the pods are crashing, saving you time debugging the application code. Modern Kubernetes also uses `EndpointSlice` objects for better scalability, but the basic endpoint command still provides the quickest validation.
    </details>
 
 7. **Scenario**: Your Node.js application listens on port 3000 inside its container. You want other pods in the cluster to reach it by calling `http://node-backend:80`. How do you configure the `port` and `targetPort` in the Service definition to make this happen?
@@ -395,12 +385,13 @@ kubectl create deployment web --image=nginx --replicas=3
 # 2. Expose as ClusterIP
 kubectl expose deployment web --port=80
 
-# 3. Check service
+# 3. Check service and wait for pods to be ready
+kubectl rollout status deployment web
 kubectl get svc web
 kubectl get endpoints web
 
 # 4. Test from within cluster
-kubectl run test --image=busybox --rm -it -- wget -qO- web
+kubectl run test --image=busybox --rm -i --restart=Never -- wget -qO- web
 
 # 5. Create NodePort service
 kubectl expose deployment web --port=80 --type=NodePort --name=web-external
