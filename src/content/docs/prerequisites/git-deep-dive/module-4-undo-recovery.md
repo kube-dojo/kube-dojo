@@ -43,16 +43,14 @@ Imagine you are packing boxes for a move to a new data center.
 - **Staging Area**: The boxes taped up, labeled, and sitting on the loading dock, ready to be loaded.
 - **Working Directory**: The loose servers, cables, and components scattered around your staging room.
 
-```text
-+---------------------+      +---------------------+      +---------------------+
-| Working Directory   | ---> | Staging Area        | ---> | HEAD (History)      |
-| (The Staging Room)  | add  | (The Loading Dock)  |commit| (The Moving Truck)  |
-+---------------------+      +---------------------+      +---------------------+
-          ^                            ^                            ^
-          |                            |                            |
-          |                            |                            |
-   --hard wipes this            --mixed wipes this           --soft moves this
-   (and staging & HEAD)         (and moves HEAD)             (only moves HEAD)
+```mermaid
+graph LR
+    WD["Working Directory<br>(The Staging Room)"] -- "add" --> SA["Staging Area<br>(The Loading Dock)"]
+    SA -- "commit" --> HEAD["HEAD (History)<br>(The Moving Truck)"]
+
+    Hard["--hard wipes this<br>(and staging & HEAD)"] -.-> WD
+    Mixed["--mixed wipes this<br>(and moves HEAD)"] -.-> SA
+    Soft["--soft moves this<br>(only moves HEAD)"] -.-> HEAD
 ```
 
 ### `git reset --soft`
@@ -83,7 +81,7 @@ git status
 ```
 
 > **Pause and predict**: What do you think happens if you run `git commit -m "Same thing"` immediately after a `git reset --soft HEAD~1`?
-*Prediction*: You would recreate the exact same commit you just undid, containing the exact same file states. Because `--soft` leaves the staging area untouched, the snapshot ready for the next commit is identical to the one you just rolled back.
+> *Prediction*: You would recreate the exact same commit you just undid, containing the exact same file states. Because `--soft` leaves the staging area untouched, the snapshot ready for the next commit is identical to the one you just rolled back.
 
 ### `git reset --mixed` (The Default)
 
@@ -143,15 +141,11 @@ Enter the Reference Log, universally known as the `reflog`.
 The reflog is a chronologically ordered, hidden diary of every single time the tip of a branch (`HEAD`) was updated in your local repository. Every commit you make, every branch you check out, every reset you execute, every merge, and every rebase is recorded here, regardless of whether it shows up in `git log`.
 
 ```text
-+-------------------------------------------------------------+
-|                     THE REFLOG DIARY                        |
-+-------------------------------------------------------------+
-| HEAD@{0}: reset: moving to HEAD~2                           |
-| HEAD@{1}: commit: Add horizontal pod autoscaler             |
-| HEAD@{2}: commit: Update readiness probes                   |
-| HEAD@{3}: checkout: moving from feature-auth to main        |
-| HEAD@{4}: pull origin main: Fast-forward                    |
-+-------------------------------------------------------------+
+HEAD@{0}: reset: moving to HEAD~2                           
+HEAD@{1}: commit: Add horizontal pod autoscaler             
+HEAD@{2}: commit: Update readiness probes                   
+HEAD@{3}: checkout: moving from feature-auth to main        
+HEAD@{4}: pull origin main: Fast-forward                    
 ```
 
 ### Recovering a Lost Commit
@@ -194,7 +188,7 @@ git reset --hard 7a8b9c0
 The commit, the `secret-config.yaml` file, and the entire history are fully restored. You have cheated death.
 
 > **Pause and predict**: Before running this, what output do you expect if you run `git reflog` again immediately after the recovery?
-*Prediction*: The reflog will have a brand new entry at the very top (`HEAD@{0}`) recording the recovery action: `reset: moving to 7a8b9c0`. The older entries will be pushed down to `HEAD@{1}`, `HEAD@{2}`, etc. The reflog always appends; it never deletes its own history (until it expires).
+> *Prediction*: The reflog will have a brand new entry at the very top (`HEAD@{0}`) recording the recovery action: `reset: moving to 7a8b9c0`. The older entries will be pushed down to `HEAD@{1}`, `HEAD@{2}`, etc. The reflog always appends; it never deletes its own history (until it expires).
 
 ## 3. `git revert`: Safe Undos for Shared History
 
@@ -206,11 +200,10 @@ When a bad commit has already been pushed to a remote server and shared with oth
 
 Instead of erasing a commit, `git revert` creates a *new* commit that introduces the exact opposite changes of the target commit. It is an "undo" that rolls forward, preserving the immutable audit trail of what happened.
 
-```text
-+-------------------+      +-------------------+      +-------------------+
-| Commit A          | ---> | Commit B (BAD)    | ---> | Commit C          |
-| Add Deployment    |      | Break Ingress     |      | Revert of B       |
-+-------------------+      +-------------------+      +-------------------+
+```mermaid
+graph LR
+    A["Commit A<br>Add Deployment"] --> B["Commit B (BAD)<br>Break Ingress"]
+    B --> C["Commit C<br>Revert of B"]
 ```
 
 ### Reverting a Bad Configuration
@@ -226,7 +219,7 @@ git log --oneline
 ```
 
 > **Pause and predict**: If you run `git revert 9a8b7c6` on the `main` branch, what will `git log --oneline` show immediately afterward?
-*Prediction*: The log will show a new commit at the tip of the branch with a message like "Revert 'Update ingress routing rules'". The original bad commit `9a8b7c6` will remain completely intact in the history directly below it.
+> *Prediction*: The log will show a new commit at the tip of the branch with a message like "Revert 'Update ingress routing rules'". The original bad commit `9a8b7c6` will remain completely intact in the history directly below it.
 
 ```bash
 # Revert the specific bad commit to restore service
@@ -256,7 +249,7 @@ Historically, developers were taught to use `git checkout` for this:
 git checkout -- statefulset.yaml
 ```
 
-While this works, it is semantically confusing because `checkout` is also used for switching branches. To solve this, Git 2.23 introduced a clearer, dedicated command specifically for manipulating files: `git restore`.
+While this works, it is semantically confusing because `checkout` is also used for switching branches. To solve this, Git 2.23 introduced a clearer, dedicated command specifically for manipulating files: `git restore`. While initially labeled experimental in 2.23, `git restore` (along with `git switch`) is now a fully stable, standard command in modern Git.
 
 ```bash
 # Discard all changes in the working directory for a specific file
@@ -264,7 +257,7 @@ git restore statefulset.yaml
 ```
 
 > **Pause and predict**: If `statefulset.yaml` is currently modified and staged, what will `git status` show immediately after you run `git restore --staged statefulset.yaml`?
-*Prediction*: The `git status` output will move `statefulset.yaml` from the "Changes to be committed" section down to the "Changes not staged for commit" section. The actual modifications in the file will remain untouched in your working directory.
+> *Prediction*: The `git status` output will move `statefulset.yaml` from the "Changes to be committed" section down to the "Changes not staged for commit" section. The actual modifications in the file will remain untouched in your working directory.
 
 ```bash
 # What if you already added the file to the staging area?
@@ -297,18 +290,19 @@ Perhaps a colleague fixed a critical, zero-day security vulnerability on a spraw
 
 `git cherry-pick` is the surgeon's scalpel of Git. It takes the exact changeset (the diff) from a specific commit on any branch and applies it as a brand new commit on your current branch.
 
-```text
-Branch: feature-x
-+---+      +---+      +---+
-| A | ---> | B | ---> | C | (Security Fix)
-+---+      +---+      +---+
-                        |
-                        | cherry-pick C
-                        v
-Branch: main          +---+
-+---+      +---+      | C'| (New commit, identical changes, new hash)
-| D | ---> | E | ---> +---+
-+---+      +---+
+```mermaid
+graph LR
+    subgraph feature-x[Branch: feature-x]
+        A["A"] --> B["B"]
+        B --> C["C (Security Fix)"]
+    end
+
+    subgraph main[Branch: main]
+        D["D"] --> E["E"]
+        E --> C_prime["C' (New commit, identical changes, new hash)"]
+    end
+    
+    C -. "cherry-pick C" .-> C_prime
 ```
 
 ### Applying a Fix Across Branches
@@ -328,15 +322,16 @@ If the surrounding file context matches closely enough, Git will seamlessly crea
 However, if the context has diverged too much (for example, if the file was heavily refactored on `main` since `feature-x` diverged), Git will pause the cherry-pick and present you with a merge conflict. You must resolve the conflict manually in your editor, run `git add` to mark it resolved, and then run `git cherry-pick --continue` to finalize the operation.
 
 > **Stop and think**: Which approach would you choose here and why?
-Scenario: You have 10 messy, experimental commits on a feature branch. You only want to keep 3 of them and bring them over to `main` for a clean pull request.
-*Approach*: You should check out `main` and run `git cherry-pick <hash>` three times, sequentially, for each specific commit hash you want to keep. This is vastly cleaner, safer, and easier to comprehend than attempting a complex interactive rebase and dropping 7 commits.
+> Scenario: You have 10 messy, experimental commits on a feature branch. You only want to keep 3 of them and bring them over to `main` for a clean pull request.
+> *Approach*: You should check out `main` and run `git cherry-pick <hash>` three times, sequentially, for each specific commit hash you want to keep. This is vastly cleaner, safer, and easier to comprehend than attempting a complex interactive rebase and dropping 7 commits.
 
 ## Did You Know?
 
-1.  **Reflogs Expire Automatically**: The `git reflog` is a safety net, but it is not permanent. By default, unreachable commits (those not part of any branch history, like the ones you dropped during a reset) expire and are deleted by the garbage collector after 30 days. Reachable commits expire after 90 days. You are not safe forever!
+1.  **Reflogs Expire Automatically**: The `git reflog` is a safety net, but it is not permanent. By default, unreachable commits (those not part of any branch history, like the ones you dropped during a reset) expire and are deleted by the garbage collector after 30 days. Reachable commits expire after 90 days. Furthermore, `git gc` only prunes loose unreachable objects older than 2 weeks by default. You are not safe forever!
 2.  **Branches are Just Tiny Text Files**: In Git, a branch is not a folder or a complex structure. It is literally just a text file containing 40 characters—the SHA-1 hash of the commit it points to. When you delete a branch, you are only deleting that tiny text file, not the commits themselves.
 3.  **The Origin of Cherry-Pick**: The command name comes directly from the English idiom "cherry-picking," which means selecting only the best, most desirable items from a group, much like picking the ripest cherries from a tree while leaving the sour ones behind.
 4.  **Revert Can Target Merges**: `git revert` can undo merge commits, but you must specify the `-m` flag (mainline). A merge commit has two parent commits. You must tell Git which parent branch should be considered the "mainline" to keep (`-m 1`), and which branch's changes should be reversed.
+5.  **Dangling Object Recovery**: If your reflog has already expired, you might still have a chance. You can use the `git fsck --full` utility, which checks your database for integrity and shows all dangling or unreachable commit objects before they are permanently garbage-collected.
 
 ## Common Mistakes
 
@@ -353,7 +348,7 @@ Scenario: You have 10 messy, experimental commits on a feature branch. You only 
 
 <details>
 <summary>Question 1: You just committed three YAML manifests, but realized you forgot to include a crucial ConfigMap in the same commit. You want to undo the commit, but keep all the previously committed changes exactly as they are in the staging area, so you can just add the ConfigMap and re-commit. Which reset flag should you use and why?</summary>
-You should use `git reset --soft`. The crucial difference between the flags lies entirely in how they handle the Staging Area. `git reset --soft` moves the HEAD pointer backward but leaves the Staging Area completely intact, meaning all previously committed changes are now staged and ready to be committed again immediately. Conversely, `git reset --mixed` moves the HEAD pointer AND forcefully clears the Staging Area, placing those changes back into the Working Directory as unstaged modifications that you must manually `git add` again. Understanding this distinction is vital because it determines whether you can instantly re-commit your changes or if you need to meticulously sort through your working directory to restage specific files. Using the correct flag prevents accidental omission of files during a rapid rollback and re-commit cycle.
+You should use `git reset --soft`. The crucial difference between the flags lies entirely in how they handle the Staging Area. `git reset --soft` moves the HEAD pointer backward but leaves the Staging Area completely intact, meaning all previously committed changes are now staged and ready to be committed again immediately. Conversely, `git reset --mixed` moves the HEAD pointer AND forcefully clears the Staging Area, placing those changes back into the Working Directory as unstaged modifications that you must manually `git add` again. Using the correct flag prevents accidental omission of files during a rapid rollback and re-commit cycle.
 </details>
 
 <details>
@@ -363,7 +358,7 @@ You should use `git restore deployment.yaml`. This command specifically targets 
 
 <details>
 <summary>Question 3: Your team just deployed a new release to production. Immediately, Datadog alerts start firing because a database migration script introduced in the last merge commit has a severe syntax error. The branch was heavily shared and other teams have pulled from it. What do you do?</summary>
-You must use `git revert <commit-hash>`. Because the commit has already been pushed to a shared remote (and deployed to production), using `git reset` would rewrite history and cause synchronization chaos for the rest of the engineering team. `git revert` creates a safe, rolling-forward undo commit that counteracts the bug and can be pushed immediately. This approach preserves an immutable audit trail, clearly documenting both the original mistake and its subsequent fix for future debugging. It guarantees that when your colleagues pull the latest `main` branch, Git can seamlessly fast-forward their local histories without triggering complex and error-prone merge conflicts.
+You must use `git revert -m 1 <commit-hash>`. Because the bad changes were introduced in a merge commit, you must specify the mainline parent using the `-m` flag to tell Git which history to preserve. Furthermore, because the commit has already been pushed to a shared remote and deployed to production, using `git reset` would rewrite history and cause synchronization chaos for the rest of the engineering team. `git revert` creates a safe, rolling-forward undo commit that counteracts the bug without rewriting history. This approach preserves an immutable audit trail, ensuring that when your colleagues pull the latest `main` branch, Git can seamlessly fast-forward their local histories without triggering complex merge conflicts.
 </details>
 
 <details>
@@ -373,12 +368,12 @@ You need to use the `git reflog`. First, run `git reflog` to view your local, ch
 
 <details>
 <summary>Question 5: You have a long-running feature branch with 5 commits. You realize that commit number 3 actually contains a critical memory leak fix that needs to go to the `main` branch immediately, ahead of the rest of the unfinished feature. How do you isolate and move it?</summary>
-You should use `git cherry-pick`. First, find the specific hash of commit number 3 using `git log`. Then, checkout the `main` branch. Finally, run `git cherry-pick <hash>`. This will duplicate the exact changes from that specific commit onto `main` as a brand new commit, without bringing along the rest of the unstable feature branch. This technique isolates the emergency fix from unrelated, potentially broken feature code, allowing for a rapid and targeted hotfix deployment. It ensures that the critical code reaches production quickly while the larger feature branch continues its normal development lifecycle independently.
+You should use `git cherry-pick`. First, find the specific hash of commit number 3 using `git log` on the feature branch. Next, check out the `main` branch so it becomes your current active branch. Finally, run `git cherry-pick <hash>` to apply the fix. This command duplicates the exact changes from that specific commit onto `main` as a brand new commit, without bringing along the rest of the unstable feature branch. This technique isolates the emergency fix from unrelated, potentially broken feature code, allowing for a rapid and targeted hotfix deployment while the larger feature branch continues its normal development lifecycle independently.
 </details>
 
 <details>
 <summary>Question 6: You run `git branch -D feature-ingress` and instantly regret it because you had three days of unmerged Kubernetes manifests in there. Can `git reflog` save you? If so, exactly how?</summary>
-Yes, `git reflog` can easily save you. The reflog tracks where HEAD has been over time. Even though the branch label `feature-ingress` is deleted, the actual commits still exist in the database. You run `git reflog` to find the exact hash of the last commit you made while you were on that branch. Once you find the hash, you can recreate the branch pointing to that exact commit using the command `git branch feature-ingress <hash>`. Since a Git branch is fundamentally just a lightweight movable pointer to a specific commit, deleting a branch only destroys the pointer, not the underlying snapshot data. By recreating the branch label and attaching it to the recovered hash, you seamlessly restore your access to all the previously unreachable commits in that history.
+Yes, `git reflog` can easily save you. The reflog tracks where the HEAD pointer has been over time, completely independent of branch labels. Even though the branch label `feature-ingress` is deleted, the actual commits still exist in the Git database. You run `git reflog` to find the exact hash of the last commit you made while you were on that branch. Once you find the hash, you can recreate the branch pointing to that exact commit using the command `git branch feature-ingress <hash>`. Since a Git branch is fundamentally just a lightweight movable pointer to a specific commit, deleting a branch only destroys the pointer, not the underlying snapshot data. By recreating the branch label and attaching it to the recovered hash, you seamlessly restore your access to all the previously unreachable commits in that history.
 </details>
 
 ## Hands-On Exercise
@@ -393,7 +388,7 @@ Let's build our environment, create some infrastructure code, and set up a simul
 # 1. Create a fresh repository
 mkdir k8s-disaster-recovery
 cd k8s-disaster-recovery
-git init
+git init -b main
 
 # 2. Create the initial stable state
 echo "apiVersion: apps/v1" > deployment.yaml
@@ -450,8 +445,9 @@ git reflog
 # 5c4b3a2 HEAD@{2}: commit: Feature: Add HPA manifest
 # ...
 
-# Reset hard to the hash of the "HPA CPU threshold" commit (e.g., 9d8e7f6)
-git reset --hard 9d8e7f6
+# Reset hard to the state right before the disastrous reset (which is at HEAD@{1})
+# Alternatively, you could substitute the actual hash from your reflog output.
+git reset --hard HEAD@{1}
 
 # Verify the files are back in your working directory
 ls -la
@@ -477,15 +473,14 @@ git checkout main
 
 # View the feature branch history to grab the required hashes
 git log --oneline feature-scaling
-# Let's assume the hashes are:
-# 9d8e7f6 Feature: Set HPA CPU threshold
-# 5c4b3a2 Feature: Add HPA manifest
-# 3b2a1c0 Feature: Increase replicas to 3
-# 1a2b3c4 Init: Base deployment manifest
+# In a real scenario, you would substitute the actual hashes you see in your log.
+# Here, we can deterministically use relative references based on their position:
+# feature-scaling~1 = Feature: Add HPA manifest
+# feature-scaling   = Feature: Set HPA CPU threshold
 
 # Cherry-pick the two specific commits (oldest first to prevent structural conflicts!)
-git cherry-pick 5c4b3a2
-git cherry-pick 9d8e7f6
+git cherry-pick feature-scaling~1
+git cherry-pick feature-scaling
 
 # Verify the precise state of the repository
 git log --oneline
