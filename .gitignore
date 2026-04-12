@@ -60,3 +60,7 @@ test_script.sh
 .pipeline/fact-ledgers/
 .pipeline/link-cache.json
 .pipeline/knowledge-cards/
+
+# Agent bridge runtime
+.bridge/
+.agent/

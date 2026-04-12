@@ -43,7 +43,7 @@ if not GEMINI_DEFAULT_MODEL:
 _PARENT_ENV = os.environ.copy()
 _PARENT_ENV["GEMINI_SESSION"] = "1"
 _PIPELINE_ENV_KEY = os.environ.get(
-    "AB_PIPELINE_ENV_KEY", "LEARN_UKRAINIAN_PIPELINE"
+    "AB_PIPELINE_ENV_KEY", "KUBEDOJO_PIPELINE"
 )
 _PARENT_ENV[_PIPELINE_ENV_KEY] = "1"  # Suppress inbox hooks during pipeline runs
 

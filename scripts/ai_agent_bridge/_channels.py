@@ -109,7 +109,7 @@ WAKE_ROOT = Path(
 # 2-second timeout + None return (fetch_monitor_state already handles this).
 # Override with AB_MONITOR_URL="" to disable explicitly.
 MONITOR_API_URL = os.environ.get(
-    "AB_MONITOR_URL", "http://localhost:8765/api/state/summary"
+    "AB_MONITOR_URL", "http://localhost:8767/api/state/summary"
 )
 MONITOR_FETCH_TIMEOUT_S = 2.0
 
