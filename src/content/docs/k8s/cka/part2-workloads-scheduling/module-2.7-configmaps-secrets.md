@@ -19,6 +19,7 @@ Before starting this module, ensure you have:
 - Completed [Module 2.2: Deployments](../module-2.2-deployments/) (Updating configurations)
 - A running Kubernetes cluster (kind or minikube)
 - Basic understanding of environment variables
+- `kubectl` aliased to `k` (`alias k=kubectl`) to execute the commands verbatim
 
 ---
 
@@ -289,7 +290,7 @@ Kubernetes supports several Secret types:
 | `Opaque` | Generic key-value pairs | No (default) |
 | `kubernetes.io/tls` | TLS certificate + key | No |
 | `kubernetes.io/dockerconfigjson` | Docker registry auth | No |
-| `kubernetes.io/service-account-token` | ServiceAccount token | Yes |
+| `kubernetes.io/service-account-token` | ServiceAccount token | Legacy (Use TokenRequest) |
 | `kubernetes.io/basic-auth` | Username + password | No |
 | `kubernetes.io/ssh-auth` | SSH private key | No |
 
@@ -540,6 +541,7 @@ Benefits:
 | Overly permissive RBAC | Anyone can read Secrets | Limit with Role/RoleBinding |
 | Not setting volume readOnly | Container could modify | Always `readOnly: true` |
 | Ignoring subPath limitation | Config doesn't update | Use full volume mount when possible |
+| Using in Static Pods | Pod fails to start | ConfigMaps/Secrets cannot be used in Static Pods |
 
 ---
 
@@ -598,7 +600,7 @@ k get secret db-creds -n config-demo -o yaml
 ### Task 3: Deploy Application
 
 ```bash
-cat <<EOF | k apply -f -
+cat <<EOF > /tmp/webapp.yaml
 apiVersion: v1
 kind: Pod
 metadata:
@@ -645,6 +647,8 @@ spec:
       secretName: db-creds
       defaultMode: 0400
 EOF
+
+k apply -f /tmp/webapp.yaml
 ```
 
 ### Task 4: Verify Configuration
@@ -669,17 +673,22 @@ k exec webapp -n config-demo -- curl -s localhost/health
 ### Task 5: Update ConfigMap
 
 ```bash
-# Update a ConfigMap value
-k edit configmap app-config -n config-demo
-# Change LOG_LEVEL from info to debug
+# Update a ConfigMap value non-interactively
+k patch configmap app-config -n config-demo --type merge -p '{"data":{"LOG_LEVEL":"debug"}}'
 
 # Check if env var updated (it won't - requires restart)
 k exec webapp -n config-demo -- env | grep LOG_LEVEL
 # Still shows: APP_LOG_LEVEL=info
 
 # Restart pod to pick up changes
-k delete pod webapp -n config-demo
-# Re-create the pod (run the apply command again)
+k replace --force -f /tmp/webapp.yaml
+
+# Verify the pod is running again
+k wait --for=condition=ready pod/webapp -n config-demo --timeout=60s
+
+# Check the updated environment variable
+k exec webapp -n config-demo -- env | grep LOG_LEVEL
+# Should now show: APP_LOG_LEVEL=debug
 ```
 
 ### Success Criteria
@@ -694,7 +703,7 @@ k delete pod webapp -n config-demo
 
 ```bash
 k delete ns config-demo
-rm /tmp/nginx.conf
+rm -f /tmp/nginx.conf /tmp/webapp.yaml
 ```
 
 ---
