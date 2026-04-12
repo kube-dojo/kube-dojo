@@ -1511,6 +1511,77 @@ class TestTrackAliases(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# Test: Four-stage status tracking table
+# ---------------------------------------------------------------------------
+
+class TestStatusFourStage(unittest.TestCase):
+    """cmd_status should render four-stage completion ratios per track/section."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.content_root = Path(self.tmpdir) / "src" / "content" / "docs"
+        self.content_root.mkdir(parents=True, exist_ok=True)
+        self.ledger_dir = Path(self.tmpdir) / ".pipeline" / "fact-ledgers"
+        self.ledger_dir.mkdir(parents=True, exist_ok=True)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def _write(self, rel: str, chars: int) -> Path:
+        path = self.content_root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("x" * chars)
+        return path
+
+    def _write_ledger(self, key: str, days_old: int = 0) -> None:
+        path = self.ledger_dir / f"{key.replace('/', '__')}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(sample_fact_ledger()))
+        if days_old:
+            ts = (datetime.now(UTC) - timedelta(days=days_old)).timestamp()
+            os.utime(path, (ts, ts))
+
+    def test_cmd_status_prints_four_stage_completion_table(self):
+        import io
+        from contextlib import redirect_stdout
+        import v1_pipeline as p
+
+        self._write("prerequisites/intro/module-1.1-alpha.md", 2400)          # written + fresh ledger + pass + UK >= 500
+        self._write("prerequisites/intro/module-1.2-beta.md", 2200)           # written + stale ledger + no pass + UK < 500
+        self._write("k8s/cka/part1/module-1.1-gamma.md", 1200)                # not written + fresh ledger + pass + UK >= 500
+        self._write("on-premises/storage/module-9.9-skip.staging.md", 2600)   # excluded
+
+        self._write("uk/prerequisites/intro/module-1.1-alpha.md", 700)
+        self._write("uk/prerequisites/intro/module-1.2-beta.md", 300)
+        self._write("uk/k8s/cka/part1/module-1.1-gamma.md", 700)
+
+        self._write_ledger("prerequisites/intro/module-1.1-alpha")
+        self._write_ledger("prerequisites/intro/module-1.2-beta", days_old=8)
+        self._write_ledger("k8s/cka/part1/module-1.1-gamma")
+
+        state = {
+            "modules": {
+                "prerequisites/intro/module-1.1-alpha": {"passes": True, "phase": "done"},
+                "prerequisites/intro/module-1.2-beta": {"passes": False, "phase": "write"},
+                "k8s/cka/part1/module-1.1-gamma": {"passes": True, "phase": "done"},
+            }
+        }
+
+        buf = io.StringIO()
+        with patch.object(p, "CONTENT_ROOT", self.content_root), \
+             patch.object(p, "FACT_LEDGER_DIR", self.ledger_dir), \
+             patch.object(p, "load_state", return_value=state), \
+             redirect_stdout(buf):
+            p.cmd_status(Namespace(verbose=False))
+
+        out = buf.getvalue()
+        self.assertIn("=== Module Completion ===", out)
+        self.assertRegex(out, r"(?m)^prerequisites\s+2/2\s+1/2\s+1/2\s+1/2\s+1/2$")
+        self.assertRegex(out, r"(?m)^k8s/cka\s+0/1\s+1/1\s+1/1\s+1/1\s+0/1$")
+        self.assertRegex(out, r"(?m)^TOTAL\s+2/3\s+2/3\s+2/3\s+2/3\s+1/3$")
+
+
+# ---------------------------------------------------------------------------
 # Test: Knowledge cards
 # ---------------------------------------------------------------------------
 
