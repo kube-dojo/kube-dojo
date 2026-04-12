@@ -6,6 +6,11 @@
  * then create src/pages/<locale>/index.astro with one line.
  */
 import type { HomepageStrings } from '../i18n/homepage';
+import Header from '../components/Header.astro';
+import ThemeProvider from '@astrojs/starlight/components/ThemeProvider.astro';
+import '../../node_modules/@astrojs/starlight/style/layers.css';
+import '../../node_modules/@astrojs/starlight/style/props.css';
+import '../../node_modules/@astrojs/starlight/style/util.css';
 
 interface Props {
   t: HomepageStrings;
@@ -51,20 +56,6 @@ const p = t.prefix; // URL prefix: '' or '/uk'
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif; color: var(--g900); background: var(--g50); line-height: 1.7; -webkit-font-smoothing: antialiased; }
     a { color: var(--kube-blue); text-decoration: none; } a:hover { text-decoration: underline; }
-
-    /* Topbar */
-    .topbar { background: white; border-bottom: 1px solid var(--g200); padding: 0 2rem; display: flex; align-items: center; height: 3.5rem; position: sticky; top: 0; z-index: 100; }
-    .logo { font-weight: 800; font-size: 1.125rem; letter-spacing: -0.5px; display: flex; align-items: center; gap: 0.5rem; color: var(--g900); text-decoration: none; }
-    .logo-icon { width: 1.75rem; height: 1.75rem; background: var(--kube-blue); border-radius: 0.4rem; display: flex; align-items: center; justify-content: center; color: white; font-size: 0.875rem; font-weight: 900; }
-    .nav { display: flex; gap: 0.25rem; margin-left: 2rem; }
-    .nav a { padding: 0.375rem 0.875rem; font-size: 0.8125rem; font-weight: 500; color: var(--g500); border-radius: 0.375rem; transition: all 0.2s; text-decoration: none; }
-    .nav a:hover { color: var(--g900); background: var(--g100); }
-    .nav a.active { color: var(--kube-blue); background: var(--kube-blue-light); font-weight: 600; }
-    .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 0.75rem; font-size: 0.8125rem; }
-    .topbar-right a { color: var(--g400); } .topbar-right a:hover { color: var(--g900); text-decoration: none; }
-    .search-placeholder { display: flex; align-items: center; gap: 0.5rem; padding: 0.375rem 0.875rem; background: var(--g100); border-radius: 0.5rem; color: var(--g400); cursor: pointer; border: 1px solid transparent; min-width: 13rem; }
-    .search-placeholder:hover { border-color: var(--g300); }
-    .search-placeholder kbd { margin-left: auto; background: white; border: 1px solid var(--g200); padding: 1px 6px; border-radius: 4px; font-size: 0.7rem; font-family: var(--mono); }
 
     /* Hero */
     .hero { background: linear-gradient(135deg, var(--g900) 0%, #1a2744 50%, var(--kube-blue-dark) 100%); color: white; padding: 5rem 2rem 3.75rem; position: relative; overflow: hidden; }
@@ -155,80 +146,26 @@ const p = t.prefix; // URL prefix: '' or '/uk'
     .footer a { color: var(--kube-blue); text-decoration: none; } .footer a:hover { text-decoration: underline; }
 
     /* Dark mode */
-    body.dark { background: var(--g900); color: var(--g200); }
-    body.dark .topbar { background: var(--g800); border-bottom-color: var(--g700); }
-    body.dark .logo { color: white; }
-    body.dark .nav a { color: var(--g400); } body.dark .nav a:hover { color: white; background: var(--g700); }
-    body.dark .nav a.active { background: rgba(50,108,229,0.2); color: #93B4F5; }
-    body.dark .topbar-right a { color: var(--g400); } body.dark .topbar-right a:hover { color: white; }
-    body.dark .search-placeholder { background: var(--g700); color: var(--g400); border-color: transparent; }
-    body.dark .search-placeholder:hover { border-color: var(--g600); }
-    body.dark .search-placeholder kbd { background: var(--g800); border-color: var(--g600); }
-    body.dark .track { background: var(--g800); border-color: var(--g700); }
-    body.dark .track:hover { box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
-    body.dark .track h3 { color: white; }
-    body.dark .track p { color: var(--g400); }
-    body.dark .path { background: var(--g800); border-color: var(--g700); }
-    body.dark .content-section h2 { color: white; border-bottom-color: var(--g700); }
-    body.dark .content-section p { color: var(--g400); }
-    body.dark .content-section th { background: rgba(50,108,229,0.15); color: #93B4F5; }
-    body.dark .content-section td { border-bottom-color: var(--g700); color: var(--g300); }
-    body.dark .content-section tr:hover td { background: rgba(50,108,229,0.08); }
-    body.dark .content-section hr { border-top-color: var(--g700); }
-    body.dark .dedication-inner { background: var(--g900); }
-    body.dark .dedication-inner em { color: var(--g400); }
-    body.dark .dedication-inner blockquote { background: rgba(50,108,229,0.08); color: var(--g300); }
-    body.dark #theme-toggle { color: var(--g400); border-color: var(--g600); }
+    html[data-theme='dark'] body { background: var(--g900); color: var(--g200); }
+    html[data-theme='dark'] .track { background: var(--g800); border-color: var(--g700); }
+    html[data-theme='dark'] .track:hover { box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+    html[data-theme='dark'] .track h3 { color: white; }
+    html[data-theme='dark'] .track p { color: var(--g400); }
+    html[data-theme='dark'] .path { background: var(--g800); border-color: var(--g700); }
+    html[data-theme='dark'] .content-section h2 { color: white; border-bottom-color: var(--g700); }
+    html[data-theme='dark'] .content-section p { color: var(--g400); }
+    html[data-theme='dark'] .content-section th { background: rgba(50,108,229,0.15); color: #93B4F5; }
+    html[data-theme='dark'] .content-section td { border-bottom-color: var(--g700); color: var(--g300); }
+    html[data-theme='dark'] .content-section tr:hover td { background: rgba(50,108,229,0.08); }
+    html[data-theme='dark'] .content-section hr { border-top-color: var(--g700); }
+    html[data-theme='dark'] .dedication-inner { background: var(--g900); }
+    html[data-theme='dark'] .dedication-inner em { color: var(--g400); }
+    html[data-theme='dark'] .dedication-inner blockquote { background: rgba(50,108,229,0.08); color: var(--g300); }
   </style>
-  <script is:inline>
-    function toggleTheme() {
-      const body = document.body;
-      const isDark = body.classList.toggle('dark');
-      localStorage.setItem('starlight-theme', isDark ? 'dark' : 'light');
-      var toggleBtn = document.getElementById('theme-toggle');
-      toggleBtn.textContent = isDark ? '☀ Light' : '☾ Dark';
-      toggleBtn.setAttribute('aria-pressed', String(isDark));
-    }
-  </script>
+  <ThemeProvider />
 </head>
 <body>
-<script is:inline>
-  (function() {
-    var saved = localStorage.getItem('starlight-theme');
-    var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    if (saved === 'dark' || (!saved && prefersDark)) {
-      document.body.classList.add('dark');
-    }
-    document.addEventListener('DOMContentLoaded', function() {
-      var btn = document.getElementById('theme-toggle');
-      if (btn) {
-        var isDark = document.body.classList.contains('dark');
-        btn.textContent = isDark ? '☀ Light' : '☾ Dark';
-        btn.setAttribute('aria-pressed', String(isDark));
-      }
-    });
-  })();
-</script>
-
-<!-- Topbar -->
-<div class="topbar">
-  <a class="logo" href={`${p}/` || '/'}><span class="logo-icon">K</span> KubeDojo</a>
-  <nav class="nav">
-    <a href={`${p}/` || '/'} class="active">{t.navHome}</a>
-    <a href={`${p}/prerequisites/`}>{t.navFundamentals}</a>
-    <a href={`${p}/linux/`}>{t.navLinux}</a>
-    <a href={`${p}/cloud/`}>{t.navCloud}</a>
-    <a href={`${p}/k8s/`}>{t.navCertifications}</a>
-    <a href={`${p}/platform/`}>{t.navPlatform}</a>
-    <a href={`${p}/on-premises/`}>{t.navOnPrem}</a>
-  </nav>
-  <div class="topbar-right">
-    <div class="search-placeholder" role="button" tabindex="0">{t.searchPlaceholder} <kbd>&#8984;K</kbd></div>
-    <button id="theme-toggle" aria-pressed="false" onclick="toggleTheme()" style="background:none;border:1px solid var(--g200);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.75rem;color:var(--g500);">☀ Light</button>
-    <a href="https://github.com/kube-dojo/kube-dojo.github.io">GitHub</a>
-    <a href={t.langSwitchHref}>{t.langFlag}</a>
-  </div>
-</div>
+<Header standalone langSwitchHref={t.langSwitchHref} langFlag={t.langFlag} />
 
 <!-- Hero -->
 <div class="hero">
