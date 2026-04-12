@@ -124,6 +124,7 @@ The following kubelet configuration tells Kubernetes to pin all of a pod's resou
 
 ```bash
 # Check NUMA topology on a node
+apt-get install -y numactl
 numactl --hardware
 
 # Kubernetes Topology Manager policies:
@@ -180,9 +181,10 @@ The fio benchmark below simulates etcd's Write-Ahead Log pattern -- small sequen
 
 ```bash
 # Install fio for storage benchmarking
-apt-get install fio
+apt-get install -y fio
 
 # Test sequential write latency (simulates etcd WAL writes)
+mkdir -p /var/lib/etcd
 fio --name=etcd-wal-test \
     --filename=/var/lib/etcd/fio-test \
     --rw=write \
@@ -418,7 +420,7 @@ This is a well-balanced configuration because the vCPU:RAM ratio of the server (
 </details>
 
 ### Question 2
-Why is NVMe required for etcd and not just "recommended"?
+A cluster admin notices the Kubernetes API server occasionally becomes read-only and unresponsive for brief periods during heavy deployment activity. The control plane nodes are using SATA SSDs, and metrics show `fsync` latency frequently spiking to 80ms. What is the architectural sequence of events causing this API outage?
 
 <details>
 <summary>Answer</summary>
@@ -461,7 +463,7 @@ Instead, use **virtual clusters or hosted control planes**:
 </details>
 
 ### Question 4
-You are told to "just buy the biggest servers available." Why is this a bad strategy?
+Your procurement team suggests buying four massive 256-core/2TB servers instead of twelve 64-core/512GB servers to save on rack space, since both options provide roughly the same total capacity. What operational risk does the 4-server architecture introduce for Kubernetes?
 
 <details>
 <summary>Answer</summary>
