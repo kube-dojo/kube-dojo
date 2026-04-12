@@ -109,7 +109,7 @@ Understanding the exact path a packet takes is the foundation of all network tro
 │           │ different node                                              │
 │           ▼                                                             │
 │  ┌─────────────────┐                       ┌─────────────────┐         │
-│  │ 5a. CNI encap   │ ═══ VXLAN/Geneve ═══►│ 5b. CNI decap   │         │
+│  │ 5a. CNI encap   │ ══ VXLAN/IP-in-IP ══►│ 5b. CNI decap   │         │
 │  │    (if overlay) │      tunnel           │    (on dst node)│         │
 │  └─────────────────┘                       └────────┬────────┘         │
 │       Node 1                                        │  Node 2          │
@@ -123,7 +123,7 @@ Here is what happens at each step:
 2. **iptables DNAT**: kube-proxy has programmed iptables rules. The PREROUTING chain matches the destination `10.96.0.50` (the Service ClusterIP) and rewrites it to a backend pod IP -- say `10.244.2.8`. If multiple backends exist, a random or round-robin selection happens via iptables probability rules.
 3. **conntrack**: The kernel's connection tracking module records this NAT mapping. When Pod B replies, conntrack automatically reverses the translation so Pod A sees the response coming from the Service IP, not the pod IP.
 4. **Routing decision**: The kernel routes the packet based on the rewritten destination. If Pod B is on the same node, it goes directly to Pod B's veth pair. If Pod B is on another node, it goes to the CNI.
-5. **CNI encapsulation**: For overlay networks (VXLAN, Geneve), the CNI wraps the packet in an outer header to tunnel it to the destination node. For routed networks (BGP, host-gw), the kernel forwards it directly.
+5. **CNI encapsulation**: For overlay networks (VXLAN, Geneve, IP-in-IP), the CNI wraps the packet in an outer header to tunnel it to the destination node. IP-in-IP wraps the pod IP packet inside a node-to-node IP packet, while VXLAN encapsulates it within a UDP datagram. For routed networks (BGP, host-gw), the kernel forwards it directly.
 6. **Delivery**: On the destination node, the packet is decapsulated (if needed) and routed to Pod B's veth pair.
 7. **Pod receives**: Pod B sees a packet from Pod A's IP destined for its own IP on port 80.
 
@@ -263,6 +263,13 @@ Different CNI plugins take different approaches. Here is a comparison relevant t
 | **Can replace kube-proxy** | Yes (eBPF mode) | No | Yes (kube-proxy replacement) |
 | **MTU concern** | None (no encap) | Yes (-50 bytes for VXLAN) | Depends on config |
 | **Troubleshooting tool** | `calicoctl node status` | Check VXLAN interface | `cilium status` |
+
+### 2.2.1 Overlay vs Native Routing Trade-offs
+
+When choosing a routing approach, consider these performance trade-offs:
+
+- **Overlay Routing (VXLAN, IP-in-IP):** Easier to deploy because it runs on top of any existing network without hardware changes. However, it incurs a performance penalty due to encapsulation/decapsulation overhead and reduces the effective MTU, which can lead to dropped packets if not configured correctly.
+- **Native Routing (BGP, host-gw):** Offers maximum performance with bare-metal network speeds and no MTU reduction. The trade-off is higher complexity: it requires an underlying network that supports routing pod IPs directly, often involving BGP peering with physical top-of-rack switches.
 
 ### 2.3 kube-proxy Modes
 
@@ -699,10 +706,9 @@ k get svc trace-svc -o wide
 k get endpoints trace-svc
 
 # Look at iptables rules for this service (requires node access)
-# On minikube: minikube ssh
-# On kind: docker exec -it <node-container> bash
-# Then run:
-iptables-save | grep trace-svc
+# If using minikube: minikube ssh "sudo iptables-save | grep trace-svc"
+# If using kind:
+docker exec kind-control-plane iptables-save | grep trace-svc
 # You should see KUBE-SERVICES, KUBE-SVC-*, and KUBE-SEP-* chains
 
 # The KUBE-SVC chain contains probability rules for load balancing
@@ -714,9 +720,10 @@ iptables-save | grep trace-svc
 ### Step 3: Trace the Packet with tcpdump
 
 ```bash
-# In one terminal, start tcpdump on the node (requires node access)
-# On kind: docker exec -it <node-container> bash
-tcpdump -i any -nn port 80 and host $(k get pod trace-client -o jsonpath='{.status.podIP}')
+# In one terminal, start tcpdump on the node
+# Run this from your host machine (assuming kind cluster):
+docker exec kind-control-plane tcpdump -i any -nn port 80 and host $(k get pod trace-client -o jsonpath='{.status.podIP}')
+# For minikube, use: minikube ssh "sudo tcpdump -i any -nn port 80 and host $(k get pod trace-client -o jsonpath='{.status.podIP}')"
 
 # In another terminal, make a request from the client pod
 k exec trace-client -- curl -s http://trace-svc
@@ -731,8 +738,11 @@ k exec trace-client -- curl -s http://trace-svc
 ### Step 4: Inspect conntrack
 
 ```bash
-# On the node, check conntrack entries
-conntrack -L -d $(k get svc trace-svc -o jsonpath='{.spec.clusterIP}') 2>/dev/null
+# On the node, check conntrack entries (run from your host)
+# If using kind:
+docker exec kind-control-plane conntrack -L -d $(k get svc trace-svc -o jsonpath='{.spec.clusterIP}') 2>/dev/null
+# If using minikube:
+# minikube ssh "sudo conntrack -L -d $(k get svc trace-svc -o jsonpath='{.spec.clusterIP}') 2>/dev/null"
 
 # You should see entries showing:
 # src=<client-pod-ip> dst=<clusterIP> dport=80
