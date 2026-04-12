@@ -121,7 +121,7 @@ This means the batch size is dynamically adjusted every single iteration, keepin
 
 ### Implementing vLLM in Production
 
-Deploying vLLM is straightforward due to its OpenAI-compatible server. Here is an example of how a platform engineering team might deploy a Llama model using vLLM in a Kubernetes environment.
+Deploying vLLM is straightforward due to its OpenAI-compatible server. Here is an example of how a platform engineering team might deploy a Llama 4 model using vLLM in a Kubernetes environment.
 
 ```yaml
 apiVersion: apps/v1
@@ -146,7 +146,7 @@ spec:
         command: ["python3", "-m", "vllm.entrypoints.openai.api_server"]
         args:
         - "--model"
-        - "meta-llama/Llama-3-70B-Instruct"
+        - "meta-llama/Llama-4-70B-Instruct"
         - "--tensor-parallel-size"
         - "4" # Running across 4 GPUs
         - "--gpu-memory-utilization"
@@ -160,7 +160,7 @@ spec:
         - containerPort: 8000
 ```
 
-Notice the `--tensor-parallel-size` argument. For large models like a 70B parameter model, a single GPU does not have enough VRAM to hold the weights and the KV cache. vLLM natively supports Megatron-LM style Tensor Parallelism, splitting the model's matrices across multiple GPUs on the same node, allowing them to compute attention and feed-forward layers synchronously.
+Notice the `--tensor-parallel-size` argument. For large models like a 70B parameter model, a single GPU does not have enough VRAM to hold the weights and the KV cache. vLLM natively supports Megatron-LM style Tensor Parallelism, splitting the model's matrices across multiple GPUs on the same node, allowing them to compute attention and feed-forward layers synchronously. The `--max-model-len 8192` flag bounds the maximum context window, limiting the KV cache memory pre-allocated per sequence and preventing out-of-memory errors on massive prompts.
 
 ## Advanced Optimizations: Prefix Caching and Chunked Prefill
 
@@ -199,9 +199,21 @@ graph LR
 
 When an engine mixes continuous batching with new requests, a massive new request (e.g., 32k tokens) can cause a severe latency spike for all other requests currently in the decode phase. The GPU must pause decoding to compute the massive prefill, causing a stutter in the generated output for active users.
 
-Chunked prefill solves this by breaking the prefill phase into smaller chunks. Instead of prefilling 32k tokens at once, the engine might prefill 1,024 tokens alongside the decode operations of the active batch, then prefill the next 1,024 tokens on the next iteration. This smooths out latency and prevents long prompts from starving active decoding sessions.
+Chunked prefill solves this by breaking the prefill phase into smaller chunks. Instead of prefilling 32k tokens at once, the engine might prefill 1,024 tokens alongside the decode operations of the active batch, then prefill the next 1,024 tokens on the next iteration. This smooths out latency and prevents long prompts from starving active decoding sessions. It can typically be enabled in vLLM by passing `--enable-chunked-prefill`.
 
 > **Pause and predict**: Imagine your team just deployed a 100k-context documentation Q&A bot. During peak hours, simple "hello" messages take 5 seconds to generate their first token whenever someone else uploads a massive PDF. Based on the chunked prefill mechanism, how would enabling this feature change the experience for both the PDF uploader and the users saying "hello"?
+
+### Speculative Decoding
+
+Speculative decoding uses a smaller, faster "draft" model to guess the next several tokens, and then uses the larger "target" model to verify those tokens in a single parallel step. If the draft model's guesses are correct, multiple tokens are generated in the time it usually takes to generate one.
+
+To implement speculative decoding in vLLM, you specify the draft model using the `--speculative-model` flag. For example, when serving a large model, you might use a smaller model from the same family as the draft. The `--num-speculative-tokens` flag dictates how many tokens the draft model guesses per step, with a value like 5 balancing the overhead of running the draft model against potential speedups:
+```bash
+python3 -m vllm.entrypoints.openai.api_server \
+  --model meta-llama/Llama-4-70B-Instruct \
+  --speculative-model meta-llama/Llama-4-8B-Instruct \
+  --num-speculative-tokens 5
+```
 
 ## sglang: RadixAttention and Structured Generation
 
@@ -281,6 +293,8 @@ In this exercise, you will deploy a local vLLM instance, send concurrent request
 **Task 1: Launch the vLLM Server**
 Start a vLLM server using Docker, hosting a small instruction-tuned model (e.g., Qwen 2.5 1.5B). Enable prefix caching.
 
+Note: The `--ipc=host` flag is required to give the container access to the host's shared memory, which PyTorch requires for efficient inter-process communication.
+
 <details>
 <summary>Solution</summary>
 
@@ -294,16 +308,20 @@ docker run --gpus all \
   --enable-prefix-caching \
   --gpu-memory-utilization 0.8
 ```
-*Wait for the server to report `Uvicorn running on http://0.0.0.0:8000`.*
+*Wait for the server to report `Uvicorn running on http://0.0.0.0:8000`. In a separate terminal, verify the server is ready by running: `curl -s http://localhost:8000/v1/models | grep Qwen`.*
 </details>
 
 **Task 2: Write a Load Testing Script**
-Write a Python script using `asyncio` and `aiohttp` to send 20 concurrent requests to the server. All requests should use an identical long system prompt (simulate this with a large paragraph of text) and a unique short user query.
+Write a Python script using `asyncio` and `aiohttp` to send 20 concurrent requests to the server. All requests should use an identical long system prompt (simulate this with a large paragraph of text) and a unique short user query. First, ensure you have the required Python HTTP library installed, then create the load testing script.
 
 <details>
 <summary>Solution</summary>
 
-```python
+**Note:** Open a new terminal session to run the client commands, as the vLLM server is running in the foreground in your first terminal.
+
+```bash
+pip install aiohttp
+cat << 'EOF' > load_test.py
 import asyncio
 import aiohttp
 import time
@@ -335,6 +353,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+EOF
 ```
 </details>
 
