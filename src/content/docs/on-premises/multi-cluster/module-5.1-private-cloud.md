@@ -15,33 +15,32 @@ sidebar:
 
 After completing this module, you will be able to:
 
-1. **Evaluate** VMware vSphere/Tanzu, OpenStack, and Harvester as virtualization platforms for on-premises Kubernetes
-2. **Design** a private cloud architecture that balances operational simplicity against licensing costs and staffing requirements
-3. **Implement** VM-based Kubernetes node provisioning with automated live migration and hardware abstraction
-4. **Plan** a bare-metal-to-virtualized migration path with defined criteria for when virtualization overhead is justified
+1. **Evaluate** VMware vSphere/Tanzu, OpenStack, and Harvester as virtualization platforms for on-premises Kubernetes.
+2. **Design a private cloud architecture that balances operational simplicity against licensing costs and staffing requirements.**
+3. **Implement** VM-based Kubernetes node provisioning with automated live migration and hardware abstraction.
+4. **Compare** storage and networking primitives across hypervisors, explicitly contrasting vSAN, Cinder, and Longhorn.
+5. **Diagnose** multi-cluster management failure domains effectively when orchestrating through an overarching management plane.
 
 ---
 
 ## Why This Module Matters
 
-A mid-size bank ran Kubernetes on bare metal for two years. Their platform team of three engineers spent 40% of their time on hardware lifecycle: firmware updates required draining nodes manually, disk replacements meant SSH sessions and fdisk, and provisioning a new cluster took two weeks of BIOS configuration, OS installs, and kubeadm bootstrapping.
+A mid-size bank ran Kubernetes on bare metal for two years. Their platform team of three engineers spent 40% of their time on hardware lifecycle: firmware updates required draining nodes manually, disk replacements meant SSH sessions and partition recreation, and provisioning a new cluster took two weeks of BIOS configuration, OS installs, and kubeadm bootstrapping. When a massive hardware fault struck their core database servers during Black Friday, the lack of hardware abstraction meant an unrecoverable outage spanning fourteen days while replacement parts were physically shipped and installed. 
 
-They migrated to VMware vSphere with Tanzu. Provisioning a new cluster dropped from two weeks to 45 minutes. When a physical host needed firmware updates, vSphere live-migrated the VMs automatically. Disk failures were handled by vSAN without any Kubernetes disruption. The platform team's hardware toil dropped from 40% to 5% of their time.
+They migrated to a private cloud architecture to introduce an abstraction layer. Provisioning a new cluster dropped from two weeks to 45 minutes. When a physical host needed firmware updates, the underlying hypervisor live-migrated the VMs automatically. Disk failures were handled by a distributed storage area network without any Kubernetes disruption. The platform team's hardware toil dropped from 40% to 5% of their time. 
 
-The tradeoff: VMware licensing cost them $180,000/year for 20 hosts. An equivalent OpenStack deployment would cost $0 in licensing but require two additional engineers to operate. A third option, Harvester, offered a middle ground: open-source, simpler than OpenStack, and purpose-built for running Kubernetes VMs on bare metal.
-
-This module covers when to virtualize, when to stay on bare metal, and how to choose between the three dominant private cloud platforms.
+The tradeoff: private clouds introduce complex architectural choices. Adopting an enterprise vendor can cost hundreds of thousands of dollars annually, whereas open-source alternatives require immense internal engineering expertise. This module covers when to virtualize, when to stay on bare metal, and how to choose between the dominant private cloud platforms governing modern on-premises infrastructure.
 
 ---
 
 ## What You'll Learn
 
-- VMware vSphere architecture and Tanzu Kubernetes Grid
+- VMware Cloud Foundation architecture and vSphere integrations
 - OpenStack components relevant to Kubernetes (Nova, Cinder, Neutron, Magnum)
-- Harvester as a cloud-native HCI alternative
-- vSphere CSI and OpenStack Cinder for persistent storage
-- When to virtualize vs run Kubernetes on bare metal
-- Cost comparison framework for platform decisions
+- Harvester as a cloud-native HCI alternative powered by KubeVirt
+- Storage abstractions utilizing vSphere CSI and OpenStack Cinder
+- Emerging bare metal orchestration alternatives like Canonical MAAS and Talos Linux
+- Cost comparison frameworks and TCO models for platform decisions
 
 ---
 
@@ -75,25 +74,33 @@ flowchart TD
 ```
 
 **Bare Metal:**
-- `+` Maximum performance (no hypervisor tax)
-- `+` No licensing costs
-- `-` Hardware lifecycle is manual
-- `-` No live migration (node drain required)
+- `+` Maximum performance (no hypervisor tax).
+- `+` No virtualization licensing costs.
+- `-` Hardware lifecycle is highly manual.
+- `-` No live migration (node drain required).
+
+Organizations that stick to bare metal increasingly rely on declarative operating systems to lower overhead. For example, Talos Linux provides no interactive shell or console; all system management is API-driven with mutual TLS (mTLS) authentication. The latest stable release of this OS, Talos Linux version 1.12.6, was released March 19, 2026. For provisioning, Canonical MAAS (Metal as a Service) version 3.7.1 is the latest stable release, published February 13, 2026, allowing automated node bootstrapping.
+
+To keep the footprint small on bare metal, many opt for lightweight Kubernetes distributions. K3s latest release is version 1.35.3+k3s1, supporting Kubernetes version 1.35, while RKE2 latest release is version 1.34.6+rke2r1 (Kubernetes 1.34.6) as of April 2026.
 
 **Virtualized:**
-- `+` Live migration for maintenance
-- `+` VM snapshots for rollback
-- `+` Multi-tenancy isolation (hardware-level)
-- `-` 5-15% CPU overhead from hypervisor
-- `-` Licensing cost (VMware) or operational cost (OpenStack)
+- `+` Live migration for hardware maintenance.
+- `+` VM snapshots for rapid disaster rollback.
+- `+` Multi-tenancy isolation at the hardware level.
+- `-` Compute overhead from the hypervisor.
+- `-` Licensing cost or extreme operational cost.
 
-**Decision:** Virtualize unless you need every last CPU cycle (HPC, ML training, real-time systems) or run < 5 servers.
+**Decision:** Virtualize unless you need every last CPU cycle (HPC, ML training, real-time systems) or run a very small footprint of physical servers.
 
 ---
 
-## VMware vSphere + Tanzu
+## VMware Cloud Foundation and vSphere
 
-VMware vSphere is the dominant enterprise hypervisor. Tanzu Kubernetes Grid (TKG) is VMware's Kubernetes distribution that runs on top of vSphere, using the vSphere infrastructure for VM lifecycle, storage (vSAN/VMFS), and networking (NSX or standard vSwitch).
+VMware vSphere remains a dominant enterprise hypervisor. Tanzu Kubernetes Grid (TKG) runs on top of vSphere, utilizing the infrastructure for VM lifecycle, storage (vSAN), and networking.
+
+Broadcom completed its acquisition of VMware on November 22, 2023. Following the Broadcom acquisition, VMware perpetual licenses were discontinued in December 2023 and replaced with subscription-only licensing, which prompted many enterprises to re-evaluate their private cloud roadmaps.
+
+VMware Cloud Foundation (VCF) 9.0 was initially released on June 17, 2025, continuing the platform's evolution into a consolidated, subscription-based ecosystem. Note: While VMware Cloud Foundation 9.0 aggregates multiple components, specific ESXi and vCenter version strings in its Bill of Materials remain unverified, as release notes documentation for vCenter 9.0 and ESX 9.0 could not be fully retrieved during recent audits. Starting with VCF 9.0, vSphere Kubernetes Service (VKS) is installed as a Supervisor Service, decoupling it from vCenter/Supervisor release cycles.
 
 ### Architecture
 
@@ -116,14 +123,11 @@ flowchart TD
     SC --- TKC3
 ```
 
-- Each TKC (TanzuKubernetesCluster) is a set of VMs running a full Kubernetes cluster.
-- vSphere handles: VM placement, storage, networking, HA.
-- Storage: vSphere CSI driver provisions VMDKs as PVs.
-- Networking: NSX-T or Antrea for pod networking.
+Each TKC (TanzuKubernetesCluster) is an autonomous set of VMs running a full Kubernetes control plane and worker nodes.
 
 ### vSphere CSI Driver
 
-The vSphere CSI driver creates VMDK (Virtual Machine Disk) files on vSphere datastores and attaches them to Kubernetes nodes as block devices. This StorageClass tells the CSI driver which vSphere storage policy and datastore to use when dynamically provisioning volumes for Kubernetes PVCs.
+The vSphere CSI driver orchestrates VMDK (Virtual Machine Disk) files on vSphere datastores, attaching them dynamically to Kubernetes nodes. 
 
 ```yaml
 # vSphere StorageClass
@@ -140,7 +144,7 @@ allowVolumeExpansion: true
 volumeBindingMode: WaitForFirstConsumer
 ```
 
-Once the StorageClass is defined, verify that the CSI driver pods are running and then create a PVC to confirm that vSphere can provision storage dynamically.
+Verify that the CSI driver is running before creating volume claims.
 
 ```bash
 # Verify vSphere CSI is running
@@ -171,7 +175,9 @@ kubectl get pv -o jsonpath='{.items[0].spec.csi.volumeHandle}'
 
 ## OpenStack + Magnum
 
-OpenStack is the open-source alternative to vSphere. It provides compute (Nova), storage (Cinder), networking (Neutron), identity (Keystone), and image management (Glance). Magnum is the OpenStack project that manages Kubernetes clusters as a service.
+OpenStack is the quintessential open-source alternative. OpenStack is governed by the OpenInfra Foundation, which completed joining the Linux Foundation in 2025. 
+
+The project maintains a rigorous, predictable cadence: OpenStack releases twice per year: a spring release (~April, X.1 designation) and a fall release (~October, X.2 designation). The latest OpenStack release is 2026.1 codename Gazpacho, released April 1, 2026. For those maintaining infrastructure, OpenStack 2026.1 Gazpacho is a SLURP (Skip Level Upgrade Release Process) release, allowing direct upgrade from 2025.1 Epoxy without going through 2025.2 Flamingo.
 
 ### Architecture
 
@@ -198,16 +204,11 @@ flowchart TD
     MG -->|Orchestrates via Heat| MagnumCluster
 ```
 
-- Magnum uses Heat templates to orchestrate VM creation.
-- Each K8s cluster = Heat stack = set of Nova instances.
-- Cinder CSI provides persistent volumes.
-- Neutron for pod network.
-
 ### Magnum Cluster Creation
 
 > **Stop and think**: OpenStack Magnum uses Heat templates under the hood to orchestrate VM creation. How does this compare to Tanzu's approach of using a Supervisor Cluster? What are the implications for debugging when something goes wrong during cluster provisioning?
 
-Magnum provides a two-step workflow: first define a cluster template (the "blueprint" specifying OS image, flavors, networking, and orchestration engine), then create clusters from that template. The template is reusable across environments.
+Magnum operates on cluster templates. You define a blueprint specifying the node flavor, network, and orchestrator.
 
 ```bash
 # Create a cluster template
@@ -240,7 +241,7 @@ kubectl get sc
 
 ### OpenStack Cinder CSI
 
-Magnum automatically configures the Cinder CSI driver when creating Kubernetes clusters. You can define additional StorageClasses that map to specific Cinder volume types (SSD, HDD, or tiered storage) for different performance requirements.
+Magnum automatically provisions the Cinder CSI driver, which can be further customized by mapping to specific volume types in your OpenStack deployment.
 
 ```yaml
 # Cinder StorageClass with SSD backend
@@ -258,9 +259,13 @@ allowVolumeExpansion: true
 
 ---
 
-## Harvester (SUSE)
+## Harvester, KubeVirt, and HCI Alternatives
 
-Harvester is a purpose-built HCI (Hyper-Converged Infrastructure) platform for running VMs on bare metal. It combines KubeVirt (VMs as Kubernetes pods), Longhorn (distributed storage), and a web UI into a single installable ISO. Harvester is designed specifically as an infrastructure layer for running Kubernetes clusters.
+Harvester represents a modern Hyper-Converged Infrastructure (HCI) approach, unifying KubeVirt (VM management) and Longhorn (distributed storage) directly onto bare metal. 
+
+Under the hood, Harvester leverages KubeVirt. KubeVirt version 1.8.0 was released March 25, 2026, targeting Kubernetes version 1.35. Prior to KubeVirt version 1.8, KubeVirt was exclusively coupled to KVM as its hypervisor backend, but this release opened architectural pathways via the new Hypervisor Abstraction Layer (HAL). It is worth noting that KubeVirt is a CNCF Incubating project; it has not achieved CNCF Graduated status as of April 2026.
+
+SUSE Virtualization (Harvester) version 1.7.0 was released January 15, 2026; version 1.7.1 is the current latest stable release. Harvester version 1.7.0 upgrades the OS base from SLE Micro 5.5 to SLE Micro 6.1 and adds support for NVIDIA MIG-based GPU partitioning. Many deployments integrate this with Rancher. Rancher Manager version 2.14.0 is the latest release, released March 26, 2026.
 
 ### Architecture
 
@@ -286,13 +291,9 @@ flowchart TD
     Harvester --> GC3
 ```
 
-- Key difference from vSphere/OpenStack:
-  - Harvester IS a Kubernetes cluster running VMs via KubeVirt.
-  - No separate hypervisor layer (KVM is the hypervisor).
-  - Longhorn provides replicated storage automatically.
-  - Free and open-source (Apache 2.0 license).
-
 ### Harvester VM Creation
+
+Because Harvester runs natively as Kubernetes, you provision virtual machines exactly like you would provision pods—via declarative manifests. 
 
 ```yaml
 # Harvester VirtualMachine CRD (KubeVirt)
@@ -326,7 +327,11 @@ spec:
         - name: datadisk
           dataVolume:
             name: k8s-worker-01-data
----
+```
+
+The DataVolume resource instructs KubeVirt to fetch a cloud image and back it via Longhorn persistent storage.
+
+```yaml
 # Data volume backed by Longhorn
 apiVersion: cdi.kubevirt.io/v1beta1
 kind: DataVolume
@@ -343,6 +348,13 @@ spec:
       requests:
         storage: 50Gi
 ```
+
+### Additional Enterprise Hypervisors
+
+Beyond Harvester, several other virtualization ecosystems compete in this space:
+- **Proxmox:** Proxmox VE 9.1 is the latest stable release, released November 19, 2025; Proxmox VE 9.0 was released August 5, 2025. Proxmox VE is Debian-based and versions receive support for approximately 3 years (aligned with the corresponding Debian release lifecycle).
+- **Nutanix:** Nutanix AOS 7.5 is the current latest stable release (base released December 8, 2025); latest patch is 7.5.1.1 released April 7, 2026. Since Nutanix AOS 7.0, all releases follow the Unified NCI Release Model with 15 months of active maintenance and 9 months of security-only support (~24 months total).
+- **OpenShift:** For those strictly in the Red Hat ecosystem, Red Hat OpenShift 4.20 is the latest stable release as of April 2026, released October 21, 2025.
 
 ---
 
@@ -367,32 +379,34 @@ spec:
 
 > **Stop and think**: Before reviewing the TCO breakdown below, which platform do you expect to have the highest 3-year cost: vSphere (due to licensing) or OpenStack (due to staffing)?
 
-```
-┌────────────────────────────────────────────────────────────┐
-│          3-YEAR TCO COMPARISON (20 HOSTS)                   │
-│                                                              │
-│   VMware vSphere:                                           │
-│   License:        $180K/yr x 3 = $540K                      │
-│   Staff (1.5 FTE): $195K/yr x 3 = $585K                    │
-│   Support:        $36K/yr x 3  = $108K                      │
-│   Total:                         $1,233K                     │
-│                                                              │
-│   OpenStack:                                                 │
-│   License:        $0                                         │
-│   Staff (4 FTE):  $520K/yr x 3 = $1,560K                   │
-│   Training:       $50K                                       │
-│   Total:                         $1,610K                     │
-│                                                              │
-│   Harvester:                                                 │
-│   License:        $0                                         │
-│   Staff (1.5 FTE): $195K/yr x 3 = $585K                    │
-│   SUSE support:   $24K/yr x 3 = $72K (optional)            │
-│   Total:                         $585K-$657K                │
-│                                                              │
-│   Note: Staff costs assume US market rates.                 │
-│   OpenStack requires more engineers due to component        │
-│   complexity (15+ services to operate).                      │
-└────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph TCO ["3-YEAR TCO COMPARISON (20 HOSTS)"]
+        direction LR
+        subgraph VS["VMware vSphere: $1,233K"]
+            direction TB
+            V1["License: $180K/yr x 3 = $540K"]
+            V2["Staff (1.5 FTE): $195K/yr x 3 = $585K"]
+            V3["Support: $36K/yr x 3 = $108K"]
+            V1 ~~~ V2 ~~~ V3
+        end
+        subgraph OS["OpenStack: $1,610K"]
+            direction TB
+            O1["License: $0"]
+            O2["Staff (4 FTE): $520K/yr x 3 = $1,560K"]
+            O3["Training: $50K"]
+            O1 ~~~ O2 ~~~ O3
+        end
+        subgraph HV["Harvester: $585K-$657K"]
+            direction TB
+            H1["License: $0"]
+            H2["Staff (1.5 FTE): $195K/yr x 3 = $585K"]
+            H3["SUSE support: $24K/yr x 3 = $72K (optional)"]
+            H1 ~~~ H2 ~~~ H3
+        end
+    end
+    Note["Note: Staff costs assume US market rates.<br/>OpenStack requires more engineers due to component<br/>complexity (15+ services to operate)."]
+    TCO --- Note
 ```
 
 ---
@@ -427,13 +441,22 @@ spec:
 
 ## Did You Know?
 
-- **VMware was acquired by Broadcom in 2023 for $61 billion**, and subsequent licensing changes drove many organizations to evaluate alternatives. Broadcom eliminated perpetual licenses in favor of subscription-only models and consolidated product bundles, increasing costs for some customers by 2-10x. This accelerated interest in Harvester and OpenStack.
-
+- **VMware was acquired by Broadcom in 2023 for $61 billion**, and subsequent licensing changes drove many organizations to evaluate alternatives. Broadcom eliminated perpetual licensing and shifted entirely to subscription frameworks.
+- **The "hypervisor tax" is real but often overstated.** Modern CPUs with VT-x/VT-d hardware virtualization extensions reduce the overhead to 2-5% for CPU-bound tasks, ensuring the vast majority of performance is preserved.
+- **OpenStack is governed by the OpenInfra Foundation**, which completed joining the Linux Foundation in 2025.
+- **KubeVirt is a CNCF Incubating project**; it has not achieved CNCF Graduated status as of April 2026, though extensive adoption continues across enterprise sectors.
 - **OpenStack runs some of the largest private clouds in the world.** Walmart operates one of the biggest OpenStack deployments: over 200,000 cores across multiple data centers. CERN runs OpenStack for physics research computing alongside their massive Ceph deployment. The scale ceiling is effectively unlimited.
-
 - **Harvester was built specifically because Rancher Labs needed a VM platform for their Kubernetes customers.** Before Harvester, customers had to choose between expensive VMware licenses or complex OpenStack deployments just to run VMs that would host Kubernetes. Harvester runs KubeVirt on bare metal, eliminating the need for a traditional hypervisor.
 
-- **The "hypervisor tax" is real but often overstated.** Modern CPUs with VT-x/VT-d hardware virtualization extensions reduce the overhead to 2-5% for CPU-bound workloads. The real cost of virtualization is memory overhead (each VM needs its own kernel, ~200-500 MB) and I/O overhead for storage and network (mitigated by virtio and SR-IOV).
+---
+
+## Diagnosing Management Plane Failure Domains
+
+When orchestrating multiple Kubernetes clusters through an overarching management plane like vCenter, OpenStack Magnum, or Rancher, the management plane itself becomes a critical failure domain. To effectively diagnose issues:
+
+1. **Verify Management API Health**: If workload clusters cannot scale or provision new storage, first check the management plane APIs. For OpenStack, run `openstack service list` to ensure Nova, Cinder, and Magnum are `up`. For vSphere, verify vCenter services status via VAMI.
+2. **Check Cloud Provider Logs**: In the workload cluster, inspect the cloud-controller-manager logs (`kubectl logs -n kube-system -l component=cloud-controller-manager`). Timeouts or 401 Unauthorized errors here indicate the cluster has lost contact with the overarching management plane.
+3. **Isolate Infrastructure vs. Kubernetes Failures**: If a node goes NotReady, check the underlying hypervisor. If `virsh list` or vCenter shows the VM as powered off, it's an infrastructure failure domain (e.g., host failure). If the VM is running but NotReady in Kubernetes, it's a guest OS or kubelet failure domain.
 
 ---
 
@@ -560,8 +583,8 @@ At 200 servers, OpenStack's advantages outweigh its operational cost:
 # Requirements: Linux host with KVM and 32+ GB RAM
 
 # Step 1: Download Harvester ISO
-HARVESTER_VERSION="v1.3.1"
-wget "https://releases.rancher.com/harvester/${HARVESTER_VERSION}/harvester-${HARVESTER_VERSION}-amd64.iso"
+HARVESTER_VERSION="v1.7.1"
+wget "https://github.com/harvester/harvester/releases/download/v${HARVESTER_VERSION}/harvester-v${HARVESTER_VERSION}-amd64.iso"
 
 # Step 2: Create a virtual network
 sudo virsh net-define /dev/stdin <<EOF
@@ -577,28 +600,31 @@ sudo virsh net-define /dev/stdin <<EOF
 </network>
 EOF
 sudo virsh net-start harvester
+sudo virsh net-list --all  # Checkpoint: Verify 'harvester' network is active
 
 # Step 3: Create the first Harvester node
 sudo virt-install \
   --name harvester-node1 \
   --ram 16384 --vcpus 4 --cpu host-passthrough \
   --disk size=120,bus=virtio --disk size=50,bus=virtio \
-  --cdrom "harvester-${HARVESTER_VERSION}-amd64.iso" \
+  --cdrom "harvester-v${HARVESTER_VERSION}-amd64.iso" \
   --network network=harvester,model=virtio \
   --graphics vnc,listen=0.0.0.0 --os-variant generic --boot uefi
 
-# Step 4: After installation, access UI at https://192.168.200.10
+sudo virsh list --all  # Checkpoint: Verify 'harvester-node1' VM is running
+
+# Step 4: Connect via a VNC client to complete the OS installation, then access UI via IP 192.168.200.10
 # Step 5: Create VMs via KubeVirt CRDs for K8s nodes
 ```
 
 ### Success Criteria
 
-- [ ] Harvester ISO downloaded and virtual network created
-- [ ] First Harvester node created (or understood the process)
-- [ ] Understood the VM creation workflow via KubeVirt CRDs
+- [ ] Harvester ISO downloaded and virtual network created.
+- [ ] First Harvester node created and booted into the management plane.
+- [ ] Understood the VM creation workflow via KubeVirt CRDs.
 
 ---
 
 ## Next Module
 
-Continue to [Module 5.2: Multi-Cluster Control Planes](../module-5.2-multi-cluster-control-planes/) to learn how vCluster and Kamaji let you run dozens of Kubernetes control planes on limited hardware.
+Continue to [Module 5.2: Multi-Cluster Control Planes](../module-5.2-multi-cluster-control-planes/) to learn how vCluster and Kamaji let you run dozens of Kubernetes control planes on limited physical hardware footprint.
