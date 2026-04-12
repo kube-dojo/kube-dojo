@@ -392,6 +392,32 @@ ipmitool -I lanplus -H bmc-addr -U admin -P pass sdr type "Power Supply"
 
 ---
 
+## Blast Radius Containment
+
+To prevent a single hardware failure from taking down an entire application, you must design for failure domain isolation. On bare metal, failure domains are physical: Top-of-Rack (ToR) switches, power circuits, and storage arrays.
+
+### Topology Spread Constraints & Rack-Aware Scheduling
+Use `topologySpreadConstraints` to ensure pods are distributed across physical racks. If a ToR switch fails, only a fraction of the application's pods go down.
+
+```yaml
+# Example: Rack-aware scheduling
+spec:
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubedojo.io/rack
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          app: critical-workload
+```
+
+### Storage Isolation
+Stateful workloads create data gravity. If a node with dense storage fails, rebuilding that data heavily stresses the network.
+- **Dedicated Storage Networks**: Isolate storage replication traffic onto a separate VLAN to prevent it from starving kubelet heartbeats.
+- **Failure Domain Mapping**: Configure your storage system (like Ceph's CRUSH map) to mirror data across racks, ensuring a single rack failure never results in data unavailability.
+
+---
+
 ## Tuning Eviction Timeouts
 
 Default Kubernetes eviction settings are tuned for cloud environments. On bare metal, you may want faster or slower eviction depending on the failure mode.
@@ -423,6 +449,18 @@ Since Kubernetes 1.22, pod eviction on node failure uses taint-based eviction ra
 # Also tune node-monitor-grace-period for faster NotReady detection:
 # Edit kube-controller-manager manifest
 #   --node-monitor-grace-period=30s  (mark NotReady after 30s instead of 40s)
+```
+
+### Tuning Storage Recovery Throttling
+
+When a node fails, distributed storage systems like Ceph will attempt to rebuild missing data replicas on surviving nodes. Unthrottled recovery can saturate the network and cause otherwise healthy nodes to drop kubelet heartbeats, triggering cascade failures.
+
+```bash
+# Throttle Ceph recovery to prevent network saturation during node failure
+# Apply these dynamically to running OSDs
+ceph tell 'osd.*' injectargs '--osd-recovery-max-active 1'
+ceph tell 'osd.*' injectargs '--osd-max-backfills 1'
+ceph tell 'osd.*' injectargs '--osd-recovery-op-priority 1'
 ```
 
 ---
