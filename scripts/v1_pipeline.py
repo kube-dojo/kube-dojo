@@ -104,9 +104,13 @@ def _logged_print(*args, **kwargs):
         "SKIP:", "Resumed:", "passed,", "BREAKER",
         # Pipeline steps — so user sees what's happening
         "PIPELINE:", "AUDIT:", "WRITE:", "REWRITE:", "REVIEW:", "CHECK:", "INDEX:",
+        "FACT LEDGER:", "TRANSLATE:",
         # Key decisions and results
         "Verdict:", "Scores:", "REWRITE mode", "already passes",
         "Rejected", "produced", "file written", "Committed",
+        # Errors and operational issues
+        "❌", "rate-limited", "falling back", "unavailable",
+        "Exception", "DONE:",
     )):
         _original_print(f"[{datetime.now(UTC).strftime('%H:%M:%S')}] {msg}")
 
@@ -472,6 +476,142 @@ def ensure_fact_ledger(module_path: Path, ms: dict,
         ms["fact_ledger"] = ledger
         ms["fact_ledger_generated_at"] = datetime.now(UTC).isoformat()
     return ledger
+
+
+# ---------------------------------------------------------------------------
+# Content-aware fact ledger — regenerated AFTER writing to verify actual claims
+# ---------------------------------------------------------------------------
+
+CONTENT_AWARE_FACT_LEDGER_PROMPT = """You are verifying the factual claims in a KubeDojo curriculum module.
+
+As-of date: {as_of_date}
+
+Below is the full module content that was just written. Extract every externally-versioned
+factual claim (version numbers, release dates, API paths, CLI flags, feature gates,
+CNCF status, default values, compatibility ranges) and verify each against authoritative
+upstream sources.
+
+Rules:
+- Extract claims FROM THE CONTENT BELOW — do not invent claims about the topic.
+- Verify each extracted claim against official vendor/project docs.
+- If two authoritative sources disagree, mark CONFLICTING.
+- If you cannot find an authoritative source, mark UNVERIFIED.
+- Every SUPPORTED claim needs at least 1 resolvable canonical URL.
+- Output strict JSON only, no prose preamble.
+
+Required JSON shape:
+{{
+  "as_of_date": "{as_of_date}",
+  "topic": "{topic}",
+  "content_aware": true,
+  "claims": [
+    {{
+      "id": "C1",
+      "claim": "short factual statement extracted from the content",
+      "status": "SUPPORTED" | "CONFLICTING" | "UNVERIFIED",
+      "current_truth": "what is true now or null",
+      "sources": [
+        {{"url": "...", "source_date": "YYYY-MM-DD or null"}}
+      ],
+      "conflict_summary": "one sentence if status is CONFLICTING, else null",
+      "unverified_reason": "one sentence if status is UNVERIFIED, else null"
+    }}
+  ]
+}}
+
+--- MODULE CONTENT ---
+{content}
+"""
+
+
+def step_content_aware_fact_ledger(
+    module_path: Path,
+    content: str,
+    model: str = MODELS["fact_grounding"],
+) -> dict | None:
+    """Generate a fact ledger from the actual written content.
+
+    Unlike step_fact_ledger (topic-based, pre-write), this extracts and
+    verifies claims the writer actually made. Used between WRITE and REVIEW
+    so the reviewer has precise grounding.
+
+    Cached separately with a '-content' suffix to avoid colliding with
+    the pre-write topic-based ledger.
+    """
+    key = module_key_from_path(module_path)
+    cache_path = FACT_LEDGER_DIR / f"{sanitize_module_key(key)}-content.json"
+
+    topic = _extract_topic_from_module(module_path)
+    as_of_date = datetime.now(UTC).date().isoformat()
+
+    # Truncate content to avoid exceeding context limits
+    max_content_chars = 40_000
+    truncated = content[:max_content_chars]
+    if len(content) > max_content_chars:
+        truncated += f"\n\n[... truncated from {len(content)} chars ...]"
+
+    prompt = CONTENT_AWARE_FACT_LEDGER_PROMPT.format(
+        topic=topic, as_of_date=as_of_date, content=truncated
+    )
+    print(f"\n  FACT LEDGER (content-aware): {key} (using {model})")
+    ok, output = dispatch_auto(prompt, model=model, timeout=900)
+    if not ok:
+        if output and _is_rate_limited(output):
+            print("  ⚠ Content-aware FACT LEDGER rate-limited — using topic-based ledger")
+            return None
+        print("  ⚠ Content-aware FACT LEDGER dispatch failed — using topic-based ledger")
+        return None
+
+    ledger = _extract_review_json(output, required_keys=("claims",))
+    if not isinstance(ledger, dict):
+        print("  ⚠ Content-aware FACT LEDGER parse failed — using topic-based ledger")
+        return None
+    claims = ledger.get("claims")
+    if not isinstance(claims, list) or not claims:
+        print("  ⚠ Content-aware FACT LEDGER empty — using topic-based ledger")
+        return None
+
+    ledger_json = json.dumps(ledger, indent=2, ensure_ascii=False)
+    _atomic_write_text(cache_path, ledger_json)
+    print(f"  ✓ Content-aware FACT LEDGER: {len(claims)} claims verified, cached")
+    return ledger
+
+
+def _merge_fact_ledgers(topic_ledger: dict | None, content_ledger: dict | None) -> dict | None:
+    """Merge topic-based and content-aware fact ledgers.
+
+    Content-aware claims take precedence (more specific). Topic-based claims
+    that don't overlap are kept for broad coverage. Returns a merged ledger
+    or the best available single ledger.
+    """
+    if not isinstance(content_ledger, dict) or not content_ledger.get("claims"):
+        return topic_ledger
+    if not isinstance(topic_ledger, dict) or not topic_ledger.get("claims"):
+        return content_ledger
+
+    # Use content-aware claims as the base
+    merged_claims = list(content_ledger["claims"])
+    content_texts = {c.get("claim", "").lower().strip() for c in merged_claims if isinstance(c, dict)}
+
+    # Add non-overlapping topic claims
+    for claim in topic_ledger.get("claims", []):
+        if not isinstance(claim, dict):
+            continue
+        claim_text = claim.get("claim", "").lower().strip()
+        if claim_text and claim_text not in content_texts:
+            merged_claims.append(claim)
+
+    # Re-number
+    for i, claim in enumerate(merged_claims, 1):
+        if isinstance(claim, dict):
+            claim["id"] = f"C{i}"
+
+    return {
+        "as_of_date": content_ledger.get("as_of_date", topic_ledger.get("as_of_date")),
+        "topic": content_ledger.get("topic", topic_ledger.get("topic")),
+        "content_aware": True,
+        "claims": merged_claims,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -2223,6 +2363,28 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
             ms["phase"] = "review"
             save_state(state)
 
+            # Content-aware fact ledger: verify claims actually made in the
+            # written content. Merges with the pre-write topic-based ledger
+            # so the reviewer has both broad coverage and precise grounding.
+            # Non-blocking: falls back to topic-based ledger on any failure.
+            if improved and not dry_run:
+                fact_model = m.get("fact_grounding", MODELS["fact_grounding"])
+                content_ledger = step_content_aware_fact_ledger(
+                    module_path, improved, model=fact_model
+                )
+                if content_ledger is None:
+                    # Try fallback model
+                    fallback_model = m.get("fact_fallback", MODELS["fact_fallback"])
+                    if fallback_model != fact_model:
+                        content_ledger = step_content_aware_fact_ledger(
+                            module_path, improved, model=fallback_model
+                        )
+                if content_ledger is not None:
+                    merged = _merge_fact_ledgers(ms.get("fact_ledger"), content_ledger)
+                    if merged:
+                        ms["fact_ledger"] = merged
+                        save_state(state)
+
         if ms["phase"] == "review":
             content_for_integrity = improved or module_path.read_text()
             integrity_passed, integrity_messages = step_check_integrity(
@@ -2717,6 +2879,11 @@ def cmd_audit_all(args):
 
 def cmd_run(args):
     """Run a single module through the full pipeline."""
+    global _quiet
+    _quiet = not getattr(args, "verbose", False)
+    if _quiet:
+        _original_print(f"  Logging to: {LOG_FILE}")
+        _original_print(f"  Use --verbose or tail -f {LOG_FILE} for full output\n")
     path = Path(args.module)
     if not path.exists():
         path = CONTENT_ROOT / f"{args.module}.md"
@@ -2743,6 +2910,11 @@ def cmd_run(args):
 
 def cmd_run_section(args):
     """Run all modules in a section through the pipeline."""
+    global _quiet
+    _quiet = not getattr(args, "verbose", False)
+    if _quiet:
+        _original_print(f"  Logging to: {LOG_FILE}")
+        _original_print(f"  Use --verbose or tail -f {LOG_FILE} for full output\n")
     section_path = CONTENT_ROOT / args.section
     if not section_path.exists():
         print(f"Section not found: {args.section}")
@@ -3326,6 +3498,11 @@ def _apply_model_overrides(args) -> dict:
 
 def cmd_resume(args):
     """Resume pipeline from where it stopped."""
+    global _quiet
+    _quiet = not getattr(args, "verbose", False)
+    if _quiet:
+        _original_print(f"  Logging to: {LOG_FILE}")
+        _original_print(f"  Use --verbose or tail -f {LOG_FILE} for full output\n")
     state = load_state()
     modules = state.get("modules", {})
 
@@ -3702,6 +3879,7 @@ models:
     # run
     rp = subparsers.add_parser("run", help="Run a module through the full pipeline")
     rp.add_argument("module", help="Module path or key")
+    rp.add_argument("--verbose", "-v", action="store_true", help="Print full output to stdout (default: quiet, log only)")
     rp.add_argument("--dry-run", action="store_true", help="Plan only — show the initial write plan without making changes")
     rp.add_argument("--refresh-fact-ledger", action="store_true",
                     help="Bypass fact-ledger cache and regenerate from upstream sources")
@@ -3709,6 +3887,7 @@ models:
     # run-section
     rsp = subparsers.add_parser("run-section", help="Run all modules in a section")
     rsp.add_argument("section", help="Section path (e.g., cloud/aws-essentials)")
+    rsp.add_argument("--verbose", "-v", action="store_true", help="Print full output to stdout (default: quiet, log only)")
     rsp.add_argument("--workers", type=int, default=1, help="Parallel workers (default: 1)")
     rsp.add_argument("--track", help="Track type for gap check (auto-detected if omitted)",
                      choices=["prerequisites", "linux", "cloud", "k8s"])
@@ -3734,6 +3913,7 @@ models:
 
     # resume
     resume_parser = subparsers.add_parser("resume", help="Resume incomplete modules")
+    resume_parser.add_argument("--verbose", "-v", action="store_true", help="Print full output to stdout (default: quiet, log only)")
     resume_parser.add_argument("--refresh-fact-ledger", action="store_true",
                                help="Bypass fact-ledger cache and regenerate from upstream sources")
 

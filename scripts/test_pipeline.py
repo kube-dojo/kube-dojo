@@ -697,6 +697,7 @@ class TestPipelineTransitions(unittest.TestCase):
              patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
              patch.object(p, "save_state"), \
              patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_content_aware_fact_ledger", return_value=None), \
              patch.object(p, "step_check_integrity", return_value=(True, [])):
             with patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"):
                 p.run_module(self.module_path, state)
@@ -780,6 +781,7 @@ class TestPipelineTransitions(unittest.TestCase):
              patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
              patch.object(p, "save_state"), \
              patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_content_aware_fact_ledger", return_value=None), \
              patch.object(p, "step_check_integrity", return_value=(True, [])):
             with patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"):
                 p.run_module(self.module_path, state)
@@ -818,6 +820,7 @@ class TestPipelineTransitions(unittest.TestCase):
              patch.object(p, "step_write", return_value=GOOD_MODULE), \
              patch.object(p, "step_review", side_effect=review_sequence) as mock_review, \
              patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_content_aware_fact_ledger", return_value=None), \
              patch.object(p, "step_check_integrity", return_value=(True, [])), \
              patch.object(p, "step_check", return_value=(True, [])):
             p.run_module(self.module_path, state)
@@ -880,6 +883,7 @@ class TestPipelineTransitions(unittest.TestCase):
              patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
              patch.object(p, "save_state"), \
              patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_content_aware_fact_ledger", return_value=None), \
              patch.object(p, "step_check_integrity", return_value=(True, [])):
             with patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"):
                 p.run_module(self.module_path, state)
@@ -947,6 +951,7 @@ class TestPipelineTransitions(unittest.TestCase):
              patch.object(p, "step_write", side_effect=fake_step_write), \
              patch.object(p, "step_review", side_effect=review_sequence), \
              patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_content_aware_fact_ledger", return_value=None), \
              patch.object(p, "step_check_integrity", return_value=(True, [])), \
              patch.object(p, "step_check", return_value=(True, [])):
             p.run_module(self.module_path, state)
@@ -1022,6 +1027,7 @@ class TestPipelineTransitions(unittest.TestCase):
              patch.object(p, "step_write", side_effect=fake_step_write), \
              patch.object(p, "step_review", side_effect=review_sequence), \
              patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_content_aware_fact_ledger", return_value=None), \
              patch.object(p, "step_check_integrity", return_value=(True, [])), \
              patch.object(p, "step_check", return_value=(True, [])):
             p.run_module(self.module_path, state)
@@ -1242,6 +1248,7 @@ class TestBinaryGateIntegration(unittest.TestCase):
              patch.object(p, "step_write", return_value=GOOD_MODULE), \
              patch.object(p, "step_review", side_effect=review_sequence), \
              patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_content_aware_fact_ledger", return_value=None), \
              patch.object(p, "step_check_integrity", return_value=(True, [])), \
              patch.object(p, "step_check", return_value=(True, [])), \
              patch.object(p, "ensure_knowledge_card", return_value="card"):
@@ -1311,6 +1318,7 @@ class TestBinaryGateIntegration(unittest.TestCase):
              patch.object(p, "step_write", side_effect=fake_step_write), \
              patch.object(p, "step_review", side_effect=review_sequence), \
              patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_content_aware_fact_ledger", return_value=None), \
              patch.object(p, "step_check_integrity", return_value=(True, [])), \
              patch.object(p, "step_check", return_value=(True, [])), \
              patch.object(p, "ensure_knowledge_card", return_value="card"):
@@ -1382,6 +1390,7 @@ class TestLegacyStateCompat(unittest.TestCase):
              patch.object(p, "save_state"), \
              patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
              patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_content_aware_fact_ledger", return_value=None), \
              patch.object(p, "step_check_integrity", return_value=(True, [])), \
              patch.object(p, "step_review", return_value=review_ok), \
              patch.object(p, "step_check", return_value=(True, [])):
@@ -1421,6 +1430,7 @@ class TestLegacyStateCompat(unittest.TestCase):
              patch.object(p, "save_state"), \
              patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
              patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_content_aware_fact_ledger", return_value=None), \
              patch.object(p, "step_check_integrity", return_value=(True, [])), \
              patch.object(p, "step_review", return_value=review_ok), \
              patch.object(p, "step_check", return_value=(True, [])):
@@ -2206,6 +2216,85 @@ class TestEnsureFactLedger(unittest.TestCase):
         self.assertEqual(result, refreshed)
 
 
+class TestContentAwareFactLedger(unittest.TestCase):
+    """Test content-aware fact ledger and merge logic."""
+
+    def test_merge_prefers_content_aware_claims(self):
+        """Content-aware claims take precedence, topic claims fill gaps."""
+        import v1_pipeline as p
+
+        topic_ledger = {
+            "as_of_date": "2026-04-12",
+            "topic": "Test",
+            "claims": [
+                {"id": "C1", "claim": "topic claim A", "status": "SUPPORTED"},
+                {"id": "C2", "claim": "topic claim B", "status": "SUPPORTED"},
+            ],
+        }
+        content_ledger = {
+            "as_of_date": "2026-04-12",
+            "topic": "Test",
+            "content_aware": True,
+            "claims": [
+                {"id": "C1", "claim": "topic claim A", "status": "SUPPORTED"},
+                {"id": "C2", "claim": "new content claim", "status": "UNVERIFIED"},
+            ],
+        }
+
+        merged = p._merge_fact_ledgers(topic_ledger, content_ledger)
+        self.assertTrue(merged["content_aware"])
+        # Content ledger's 2 claims + topic's "topic claim B" (non-overlapping)
+        self.assertEqual(len(merged["claims"]), 3)
+        # IDs renumbered
+        self.assertEqual(merged["claims"][0]["id"], "C1")
+        self.assertEqual(merged["claims"][2]["id"], "C3")
+        # topic claim B was added from topic ledger
+        claim_texts = {c["claim"] for c in merged["claims"]}
+        self.assertIn("topic claim B", claim_texts)
+
+    def test_merge_returns_topic_when_content_is_none(self):
+        import v1_pipeline as p
+        topic = {"claims": [{"id": "C1", "claim": "x"}]}
+        self.assertEqual(p._merge_fact_ledgers(topic, None), topic)
+
+    def test_merge_returns_content_when_topic_is_none(self):
+        import v1_pipeline as p
+        content = {"claims": [{"id": "C1", "claim": "x"}], "content_aware": True}
+        self.assertEqual(p._merge_fact_ledgers(None, content), content)
+
+    def test_content_aware_step_caches_with_suffix(self):
+        """Content-aware ledger uses '-content' cache suffix."""
+        import v1_pipeline as p
+
+        tmpdir = tempfile.mkdtemp()
+        try:
+            ledger_dir = Path(tmpdir) / ".pipeline" / "fact-ledgers"
+            content_root = Path(tmpdir) / "src" / "content" / "docs"
+            module_path = content_root / "test" / "module-0.1-test.md"
+            module_path.parent.mkdir(parents=True, exist_ok=True)
+            module_path.write_text("---\ntitle: Test\n---\n\nBody")
+
+            ledger_result = {
+                "as_of_date": "2026-04-12",
+                "topic": "Test",
+                "content_aware": True,
+                "claims": [{"id": "C1", "claim": "tested", "status": "SUPPORTED"}],
+            }
+
+            with patch.object(p, "FACT_LEDGER_DIR", ledger_dir), \
+                 patch.object(p, "CONTENT_ROOT", content_root), \
+                 patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
+                 patch.object(p, "dispatch_auto", return_value=(True, json.dumps(ledger_result))):
+                result = p.step_content_aware_fact_ledger(module_path, "content")
+
+            self.assertIsNotNone(result)
+            self.assertTrue(result["content_aware"])
+            cache_path = ledger_dir / "test__module-0.1-test-content.json"
+            self.assertTrue(cache_path.exists())
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
+
 class TestCliRefreshFactLedgerFlag(unittest.TestCase):
     """CLI commands should propagate --refresh-fact-ledger into run_module."""
 
@@ -2349,6 +2438,7 @@ class TestStepCheckIntegrity(unittest.TestCase):
              patch.object(p, "save_state"), \
              patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
              patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_content_aware_fact_ledger", return_value=None), \
              patch.object(p, "step_write", return_value=GOOD_MODULE), \
              patch.object(p, "step_check_integrity", return_value=(False, ["LINK_DEAD: https://dead.example (404)"])), \
              patch.object(p, "step_review", side_effect=fake_review), \
@@ -2637,6 +2727,7 @@ class TestRunModuleSplitReviewer(unittest.TestCase):
              patch.object(p, "save_state"), \
              patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
              patch.object(p, "ensure_fact_ledger", side_effect=fake_fact), \
+             patch.object(p, "step_content_aware_fact_ledger", return_value=None), \
              patch.object(p, "ensure_knowledge_card", return_value="card"), \
              patch.object(p, "step_write", side_effect=fake_write), \
              patch.object(p, "step_review", side_effect=fake_review), \
@@ -2691,6 +2782,7 @@ class TestRunModuleSplitReviewer(unittest.TestCase):
              patch.object(p, "save_state"), \
              patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
              patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_content_aware_fact_ledger", return_value=None), \
              patch.object(p, "ensure_knowledge_card", return_value="card"), \
              patch.object(p, "step_write", return_value=GOOD_MODULE), \
              patch.object(p, "step_review", side_effect=fake_review), \
@@ -2725,6 +2817,7 @@ class TestRunModuleSplitReviewer(unittest.TestCase):
              patch.object(p, "save_state"), \
              patch.object(p, "module_key_from_path", return_value=key), \
              patch.object(p, "dispatch_auto", side_effect=AssertionError("dispatch_auto should not run")), \
+             patch.object(p, "step_content_aware_fact_ledger", return_value=None), \
              patch.object(p, "ensure_knowledge_card", return_value="card"), \
              patch.object(p, "step_write", return_value=GOOD_MODULE), \
              patch.object(p, "step_review", return_value=review_ok), \
@@ -3142,6 +3235,7 @@ class TestDeterministicApplyIntegration(unittest.TestCase):
              patch.object(p, "step_write", side_effect=fake_step_write), \
              patch.object(p, "step_review", side_effect=review_sequence), \
              patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_content_aware_fact_ledger", return_value=None), \
              patch.object(p, "step_check_integrity", return_value=(True, [])), \
              patch.object(p, "step_check", return_value=(True, [])), \
              patch.object(p, "ensure_knowledge_card", return_value="cached card"):
@@ -3227,6 +3321,7 @@ class TestDeterministicApplyIntegration(unittest.TestCase):
              patch.object(p, "step_write", side_effect=fake_step_write), \
              patch.object(p, "step_review", side_effect=fake_step_review), \
              patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_content_aware_fact_ledger", return_value=None), \
              patch.object(p, "step_check_integrity", return_value=(True, [])), \
              patch.object(p, "step_check", return_value=(True, [])), \
              patch.object(p, "ensure_knowledge_card", return_value="cached card"):
@@ -3321,6 +3416,7 @@ class TestDeterministicApplyIntegration(unittest.TestCase):
              patch.object(p, "step_write", side_effect=fake_step_write), \
              patch.object(p, "step_review", side_effect=fake_step_review), \
              patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_content_aware_fact_ledger", return_value=None), \
              patch.object(p, "step_check_integrity", return_value=(True, [])), \
              patch.object(p, "step_check", return_value=(True, [])), \
              patch.object(p, "ensure_knowledge_card", return_value="cached card"):
