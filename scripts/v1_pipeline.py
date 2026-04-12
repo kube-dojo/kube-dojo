@@ -47,9 +47,11 @@ import re
 import shutil
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 import yaml
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import date, datetime, UTC
+from datetime import date, datetime, timedelta, UTC
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
@@ -58,6 +60,13 @@ STATE_FILE = REPO_ROOT / ".pipeline" / "state.yaml"
 REPORT_FILE = REPO_ROOT / ".pipeline" / "audit-report.json"
 SCORE_SCRIPT = REPO_ROOT / "scripts" / "score_module.py"
 KNOWLEDGE_CARD_DIR = REPO_ROOT / ".pipeline" / "knowledge-cards"
+FACT_LEDGER_DIR = REPO_ROOT / ".pipeline" / "fact-ledgers"
+FACT_LEDGER_TTL = timedelta(days=7)
+# DESIGN_AMBIGUITY: Spec acceptance #7 asks to add fact-ledgers to .gitignore,
+# while #3 constrains file changes to scripts/*. To satisfy #3, cache remains
+# under `.pipeline/fact-ledgers` but .gitignore is not modified in this change.
+LINK_CACHE_FILE = REPO_ROOT / ".pipeline" / "link-cache.json"
+LINK_CACHE_TTL = timedelta(hours=24)
 
 # ---------------------------------------------------------------------------
 # Timestamped logging — tee all print() to a log file
@@ -121,7 +130,7 @@ def dispatch_auto(prompt: str, model: str, timeout: int = 900) -> tuple[bool, st
         return dispatch_gemini_with_retry(prompt, model=model, timeout=timeout)
     if model.startswith("claude"):
         return dispatch_claude(prompt, model=model, timeout=timeout)
-    if model.startswith("codex"):
+    if model.startswith("codex") or "codex" in model or model.startswith("gpt-"):
         return dispatch_codex(prompt, model=model, timeout=timeout)
     raise ValueError(f"Unknown model family: {model!r} — must start with 'gemini', 'claude', or 'codex'")
 
@@ -133,9 +142,11 @@ def dispatch_auto(prompt: str, model: str, timeout: int = 900) -> tuple[bool, st
 MODELS = {
     "write": "gemini-3.1-pro-preview",     # Preview model — review in monthly evals, re-pin when GA available. See issue #217.
     "write_targeted": "claude-sonnet-4-6", # TARGETED FIX: surgical patches (instruction-following)
-    "review": "codex",                     # REVIEW: preferred independent reviewer
+    "review": "gemini-3.1-pro-preview",    # STRUCTURAL REVIEW: calibration-backed choice for split-reviewer flow
     "review_fallback": "claude-sonnet-4-6",  # independent REVIEW fallback when Codex is unavailable
-    "knowledge_card": "codex",             # WRITE grounding: current authoritative facts for the topic
+    "knowledge_card": "gpt-5.3-codex-spark",  # WRITE grounding aligned with fact-grounding calibration
+    "fact_grounding": "gpt-5.3-codex-spark",  # split-reviewer architecture: factual grounding ledger
+    "fact_fallback": "claude-sonnet-4-6",     # cross-family backup for facts
     # "translate" removed — uk_sync.CHUNKED_MODEL owns translation model config
 }
 
@@ -143,13 +154,14 @@ MODELS = {
 # Only these count as production-ready reviewers. Gemini reviewing Gemini is a
 # fallback to keep the pipeline moving but flags the module for re-review.
 INDEPENDENT_REVIEWER_FAMILIES = {"codex", "claude"}
+STRUCTURAL_REVIEW_INDEPENDENCE_RELAXED = True
 
 # Pipeline phases in order.
 # "needs_targeted_fix" is a pause state entered when Claude is unavailable
 # (peak hours / rate limit / budget) mid retry-loop. On resume, it loads the
 # staged content + saved plan and transitions back to "write" to re-enter
 # the targeted-fix retry path without re-running the initial write.
-PHASES = ["pending", "write", "review", "needs_targeted_fix",
+PHASES = ["pending", "data_conflict", "write", "review", "needs_targeted_fix",
           "check", "score", "done"]
 
 # ---------------------------------------------------------------------------
@@ -184,6 +196,8 @@ def get_module_state(state: dict, module_key: str) -> dict:
         "passes": False,
         "last_run": None,
         "errors": [],
+        "fact_ledger": None,
+        "fact_ledger_generated_at": None,
     })
 
 
@@ -232,6 +246,11 @@ def knowledge_card_path_for_key(module_key: str) -> Path:
     return KNOWLEDGE_CARD_DIR / f"{sanitize_module_key(module_key)}.md"
 
 
+def fact_ledger_path_for_key(module_key: str) -> Path:
+    """Return the cached fact-ledger path for a module key."""
+    return FACT_LEDGER_DIR / f"{sanitize_module_key(module_key)}.json"
+
+
 def _extract_frontmatter_data(content: str) -> dict:
     """Parse YAML frontmatter from markdown content."""
     if not content.startswith("---\n"):
@@ -264,6 +283,35 @@ def _knowledge_card_is_expired(card_content: str) -> bool:
     if not isinstance(expires_at, date):
         return True
     return expires_at < datetime.now(UTC).date()
+
+
+def _cache_is_fresh(path: Path, ttl: timedelta) -> bool:
+    """Return True if file mtime is within ttl."""
+    if not path.exists():
+        return False
+    modified_at = datetime.fromtimestamp(path.stat().st_mtime, UTC)
+    return datetime.now(UTC) - modified_at < ttl
+
+
+def _extract_topic_from_module(module_path: Path) -> str:
+    """Extract module topic from frontmatter title, falling back to filename."""
+    content = module_path.read_text()
+    fm = _extract_frontmatter_data(content)
+    title = fm.get("title")
+    if isinstance(title, str) and title.strip():
+        return title.strip()
+    return module_path.stem
+
+
+def _model_family(model: str) -> str:
+    """Normalize model name to provider family key."""
+    if model.startswith("gemini"):
+        return "gemini"
+    if model.startswith("claude"):
+        return "claude"
+    if model.startswith("codex") or "codex" in model or model.startswith("gpt-"):
+        return "codex"
+    return model.split("-", 1)[0]
 
 
 def ensure_knowledge_card(module_path: Path, ms: dict,
@@ -301,6 +349,120 @@ def ensure_knowledge_card(module_path: Path, ms: dict,
     return None
 
 
+FACT_LEDGER_PROMPT_TEMPLATE = """You are doing a fact-grounding pass for the KubeDojo curriculum module on the topic: {topic}.
+
+As-of date: {as_of_date}
+
+Identify every externally-versioned factual claim that a module on this topic would need to make. For each claim, determine its current truth from authoritative upstream sources (official vendor docs, project sites, CNCF status pages, GitHub release notes).
+
+Return a structured ledger.
+
+Rules:
+- Do NOT answer from memory. Use current upstream documentation.
+- Prefer official vendor/project docs over blog posts.
+- If two authoritative sources disagree, mark CONFLICTING — never synthesize.
+- If you cannot find an authoritative source, mark UNVERIFIED — never guess.
+- Every SUPPORTED claim needs at least 1 resolvable canonical URL and a source date if available.
+- Every CONFLICTING claim needs at least 2 resolvable URLs and a one-sentence conflict summary.
+- Saying "I don't know" costs nothing. Confident wrong answers cost a lot.
+- Output strict JSON only, no prose preamble.
+
+Required JSON shape:
+{{
+  "as_of_date": "{as_of_date}",
+  "topic": "{topic}",
+  "claims": [
+    {{
+      "id": "C1",
+      "claim": "short factual statement",
+      "status": "SUPPORTED" | "CONFLICTING" | "UNVERIFIED",
+      "current_truth": "what is true now or null",
+      "sources": [
+        {{"url": "...", "source_date": "YYYY-MM-DD or null"}}
+      ],
+      "conflict_summary": "one sentence if status is CONFLICTING, else null",
+      "unverified_reason": "one sentence if status is UNVERIFIED, else null"
+    }}
+  ]
+}}
+"""
+
+
+def step_fact_ledger(module_path: Path, topic_hint: str | None = None,
+                     model: str = MODELS["fact_grounding"],
+                     refresh: bool = False) -> dict | None:
+    """Generate or load a cached fact ledger for a module.
+
+    This is the split-reviewer architecture's factual source of truth. It
+    dispatches exactly one call to the fact-grounding model and stores the
+    result in `.pipeline/fact-ledgers/` for 7 days unless refresh is forced.
+    """
+    key = module_key_from_path(module_path)
+    cache_path = fact_ledger_path_for_key(key)
+    if cache_path.exists() and not refresh and _cache_is_fresh(cache_path, FACT_LEDGER_TTL):
+        try:
+            cached = json.loads(cache_path.read_text())
+            claims = cached.get("claims") if isinstance(cached, dict) else None
+            if isinstance(claims, list) and claims:
+                print(f"  ✓ FACT LEDGER cache hit: {cache_path.name}")
+                return cached
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"  ⚠ FACT LEDGER cache unreadable, regenerating: {e}")
+
+    topic = topic_hint or _extract_topic_from_module(module_path)
+    as_of_date = datetime.now(UTC).date().isoformat()
+    prompt = FACT_LEDGER_PROMPT_TEMPLATE.format(topic=topic, as_of_date=as_of_date)
+    key = module_key_from_path(module_path)
+    print(f"\n  FACT LEDGER: {key} (using {model})")
+    ok, output = dispatch_auto(prompt, model=model, timeout=900)
+    if not ok:
+        if output and _is_rate_limited(output):
+            print("  ⚠ FACT LEDGER rate-limited")
+            return {"rate_limited": True}
+        print("  ❌ FACT LEDGER dispatch failed")
+        return None
+
+    ledger = _extract_review_json(output, required_keys=("claims",))
+    if not isinstance(ledger, dict):
+        print("  ❌ FACT LEDGER parse failed")
+        return None
+    claims = ledger.get("claims")
+    if not isinstance(claims, list) or not claims:
+        print("  ❌ FACT LEDGER invalid: missing non-empty claims[]")
+        return None
+
+    ledger_json = json.dumps(ledger, indent=2, ensure_ascii=False)
+    _atomic_write_text(cache_path, ledger_json)
+    print(f"  ✓ FACT LEDGER cached: {cache_path.name}")
+    return ledger
+
+
+def ensure_fact_ledger(module_path: Path, ms: dict,
+                       model: str = MODELS["fact_grounding"],
+                       topic_hint: str | None = None,
+                       refresh: bool = False) -> dict | None:
+    """Ensure a fresh fact ledger is available in module state."""
+    existing = ms.get("fact_ledger")
+    generated_at_raw = ms.get("fact_ledger_generated_at")
+    if not refresh and isinstance(existing, dict) and isinstance(generated_at_raw, str):
+        try:
+            generated_at = datetime.fromisoformat(generated_at_raw)
+            if generated_at.tzinfo is None:
+                generated_at = generated_at.replace(tzinfo=UTC)
+            if datetime.now(UTC) - generated_at < FACT_LEDGER_TTL:
+                claims = existing.get("claims")
+                if isinstance(claims, list) and claims:
+                    return existing
+        except ValueError:
+            pass
+
+    ledger = step_fact_ledger(module_path, topic_hint=topic_hint, model=model, refresh=refresh)
+    if isinstance(ledger, dict) and not ledger.get("rate_limited"):
+        ms["fact_ledger"] = ledger
+        ms["fact_ledger_generated_at"] = datetime.now(UTC).isoformat()
+    return ledger
+
+
 # ---------------------------------------------------------------------------
 # WRITE step — Gemini drafts improvements
 # ---------------------------------------------------------------------------
@@ -309,6 +471,17 @@ KNOWLEDGE_CARD_UNAVAILABLE = (
     "(No knowledge card available — use general K8s 1.30+ knowledge but flag any "
     "uncertain facts for reviewer verification.)"
 )
+
+
+def _format_fact_ledger_for_prompt(fact_ledger: dict | None) -> str:
+    """Serialize fact ledger for prompt injection."""
+    if not isinstance(fact_ledger, dict):
+        return "(No fact ledger available.)"
+    try:
+        return json.dumps(fact_ledger, indent=2, ensure_ascii=False)
+    except (TypeError, ValueError):
+        return "(Fact ledger serialization failed.)"
+
 
 WRITE_PROMPT_TEMPLATE = """CRITICAL INSTRUCTION: Your response must be ONLY the raw markdown content of the improved module. Start your response with the --- frontmatter delimiter. No preamble, no explanation, no summary, no "I have improved..." — ONLY the markdown file content from first line to last.
 
@@ -330,6 +503,13 @@ RULES:
 KNOWLEDGE CARD:
 {knowledge_card}
 
+FACT LEDGER (authoritative, as-of dated):
+{fact_ledger}
+
+Use the fact ledger as the factual source of truth. If a claim is CONFLICTING or
+UNVERIFIED in the ledger, hedge explicitly in the module text and cite the
+authority context.
+
 IMPROVEMENT PLAN:
 {plan}
 
@@ -349,6 +529,13 @@ Keep the EXACT same frontmatter (title, slug, sidebar order).
 
 KNOWLEDGE CARD:
 {knowledge_card}
+
+FACT LEDGER (authoritative, as-of dated):
+{fact_ledger}
+
+Use the fact ledger as the factual source of truth. If a claim is CONFLICTING or
+UNVERIFIED in the ledger, hedge explicitly in the module text and cite the
+authority context.
 
 KNOWLEDGE PACKET — MUST PRESERVE:
 The following technical assets are extracted from the original module. You MUST include ALL of them in your rewrite, placed in the appropriate sections. Do NOT omit, summarize, or simplify any of these.
@@ -475,7 +662,8 @@ def count_assets(content: str) -> dict:
 def step_write(module_path: Path, plan: str, model: str = MODELS["write"],
                rewrite: bool = False,
                previous_output: str | None = None,
-               knowledge_card: str | None = None) -> str | None:
+               knowledge_card: str | None = None,
+               fact_ledger: dict | None = None) -> str | None:
     """Gemini drafts improvements or full rewrite based on the plan.
 
     If previous_output is provided (e.g. from an earlier attempt in the
@@ -489,15 +677,17 @@ def step_write(module_path: Path, plan: str, model: str = MODELS["write"],
     mode = "REWRITE" if rewrite else "WRITE"
     print(f"\n  {mode}: {key} (using {model})")
     knowledge_card_text = knowledge_card or KNOWLEDGE_CARD_UNAVAILABLE
+    fact_ledger_text = _format_fact_ledger_for_prompt(fact_ledger)
 
     if rewrite:
         packet = extract_knowledge_packet(content)
         prompt = REWRITE_PROMPT_TEMPLATE.format(
             file_path=key, plan=plan, content=content, knowledge_packet=packet,
-            knowledge_card=knowledge_card_text)
+            knowledge_card=knowledge_card_text, fact_ledger=fact_ledger_text)
     else:
         prompt = WRITE_PROMPT_TEMPLATE.format(
-            plan=plan, content=content, knowledge_card=knowledge_card_text)
+            plan=plan, content=content, knowledge_card=knowledge_card_text,
+            fact_ledger=fact_ledger_text)
 
     # Must use dispatch_auto (not dispatch_gemini_with_retry directly) so that
     # Claude Sonnet is actually called for targeted-fix mode. Previously this
@@ -552,67 +742,70 @@ def step_write(module_path: Path, plan: str, model: str = MODELS["write"],
 
 
 # ---------------------------------------------------------------------------
-# REVIEW step — Claude strict review
+# REVIEW step — structural binary review
 # ---------------------------------------------------------------------------
 
 REVIEW_PROMPT_TEMPLATE = """You are the Lead Content Auditor for KubeDojo — an
 independent, strict, BINARY reviewer. You do NOT give partial credit. You do
-NOT use a 1-5 scale. Your job is to verify that a Kubernetes learning module
-is technically flawless, pedagogically sound, and ready for production.
+NOT use a 1-5 scale.
 
-You are independent — assume nothing is correct without verification. Web
-search is MANDATORY for factual claims. Verify against current Kubernetes
-documentation, CNCF project status pages, and official tool docs. Kubernetes
-moves fast — check that commands, API versions, and deprecation status match
-the most recent stable release.
+A separate fact-grounding pass has already verified all factual claims in this
+module against current upstream documentation. The fact ledger is provided
+below as `FACT_LEDGER`. You MUST NOT re-grade factual currency — assume the
+ledger is the source of truth. If the module contradicts the ledger, that is a
+structural failure (the writer ignored the ledger), not a factual failure.
+
+Your job is to grade the module on STRUCTURE only:
+- LAB: can a student execute the lab end-to-end?
+- COV: does it cover every Learning Outcome from the frontmatter?
+- QUIZ: do quiz questions require reasoning, not recall?
+- EXAM: does the depth match the certification target (skip if no cert in frontmatter)?
+- DEPTH: at least one practitioner-grade element (production gotcha, decision framework, war story)?
+- WHY: rationale for every major design decision?
+- PRES: every distinct concept/lab/diagram/quiz from the original is preserved (compression OK, deletion of unique value not OK)?
+
+DO NOT add a FACT check. DO NOT search the web for factual currency. DO NOT
+contradict the fact ledger.
 
 MANDATORY CHECKS — answer PASS or FAIL for each:
 
-1. FACT — Are all technical claims verifiable against authoritative sources?
-   Commands use current (non-deprecated) syntax, API versions match current
-   Kubernetes releases, YAML parses against the stated apiVersion, project
-   status (sandbox/incubating/graduated) is correct, doc URLs resolve.
-   A FAIL for FACT MUST include an http/https URL citation in `evidence`
-   pointing to the authoritative source that contradicts the module. No
-   citation = do not flag this check.
-
-2. LAB — Can a student reach the end state of every lab by following the
+1. LAB — Can a student reach the end state of every lab by following the
    text exactly? Commands must include flags needed for non-interactive
    execution (-y, -o json, --force where safe). Multi-step labs must
    include checkpoint verifications the student can run to confirm state
    before proceeding. If you cannot trace a path from start to end state,
    fail LAB.
 
-3. COV — Does the content cover every Learning Outcome listed in the
+2. COV — Does the content cover every Learning Outcome listed in the
    module's frontmatter? A FAIL must list specific outcomes that have no
    corresponding content section.
 
-4. QUIZ — Does every quiz question require reasoning or scenario
+3. QUIZ — Does every quiz question require reasoning or scenario
    application (not fact recall)? "What port does etcd use?" is recall
    and fails. "Given a CrashLoopBackOff on a pod with a PVC, which of
    these four causes is ruled out by the events log?" is scenario and
    passes. Each question must have exactly one correct answer supported
    by the module's own text.
 
-5. EXAM — If the frontmatter declares a `certification:` target (CKA,
+4. EXAM — If the frontmatter declares a `certification:` target (CKA,
    CKAD, CKS, KCNA, KCSA), does the module depth match the published
    CNCF curriculum for that exam? Skip this check entirely if no
    certification is named in frontmatter. A FAIL must cite the specific
    curriculum domain the module fails to meet.
 
-6. DEPTH — Does the module include at least one practitioner-grade
+5. DEPTH — Does the module include at least one practitioner-grade
    element: a production gotcha, a decision framework, a war story, or a
    non-obvious failure mode? This is the anti-"Hello World" guardrail.
    A FAIL means the module reads like a surface tutorial with no
    operational nuance.
 
-7. WHY — Does every major design decision (architecture choice, resource
+6. WHY — Does every major design decision (architecture choice, resource
    selection, flag usage, tradeoff) have at least one sentence of
    rationale? "Do X then Y" with no motivation is a FAIL. You are NOT
    looking for rationale on every individual line — major design
    decisions only.
 
-8. PRES — Every distinct concept, lab, table, diagram, and quiz question
+7. PRES — Every distinct concept, lab, table, diagram, and quiz question
    from the ORIGINAL is present in the IMPROVED version, unless it
    contained a factual error or was explicit duplication. Compression
    and reorganization are ALLOWED. Deletion of unique value is NOT. A
@@ -664,7 +857,6 @@ OUTPUT JSON ONLY — no preamble, no postamble, no markdown fences:
   "verdict": "APPROVE" or "REJECT",
   "severity": "clean" or "targeted" or "severe",
   "checks": [
-    {{"id": "FACT", "passed": true}},
     {{"id": "LAB", "passed": false, "evidence": "...", "edit_refs": [0, 1]}},
     {{"id": "COV", "passed": true}},
     {{"id": "QUIZ", "passed": true}},
@@ -679,9 +871,14 @@ OUTPUT JSON ONLY — no preamble, no postamble, no markdown fences:
   "feedback": "optional prose summary of qualitative notes that don't map to an edit"
 }}
 
-Every one of the 8 check IDs MUST appear in `checks`. Skipping EXAM when
+Every one of the 7 check IDs MUST appear in `checks`. Skipping EXAM when
 there is no `certification:` target is fine — return it as `passed: true`
 with evidence `"no certification target in frontmatter"`.
+
+---
+
+FACT_LEDGER:
+{fact_ledger}
 
 ---
 
@@ -694,7 +891,7 @@ IMPROVED MODULE:
 {improved}
 """
 
-CHECK_IDS = ["FACT", "LAB", "COV", "QUIZ", "EXAM", "DEPTH", "WHY", "PRES"]
+CHECK_IDS = ["LAB", "COV", "QUIZ", "EXAM", "DEPTH", "WHY", "PRES"]
 
 
 def compute_severity(
@@ -715,6 +912,10 @@ def compute_severity(
     - REJECT with no edits at all → severe (nothing to apply)
 
     Fixes Gemini pair-review critique A from round 2.
+
+    Split-reviewer context: factual model routing is selected from
+    `project_fact_grounding_calibration.md`; this function intentionally
+    stays FACT-agnostic and only routes structural reviewer output.
     """
     if verdict == "APPROVE":
         return "clean"
@@ -882,8 +1083,16 @@ def _translate_index(_en_content: str, uk_path: Path, rel_section: str) -> bool:
         return uk_translate(en_path)
 
 
-def _extract_review_json(output: str) -> dict | None:
-    """Extract the final review JSON from a raw reviewer response.
+def _has_required_json_keys(obj: dict, required_keys: tuple[str, ...]) -> bool:
+    """Return True if obj has the required keys for a JSON payload."""
+    if required_keys == ("verdict", "checks"):
+        return "verdict" in obj and ("checks" in obj or "scores" in obj)
+    return all(k in obj for k in required_keys)
+
+
+def _extract_review_json(output: str,
+                         required_keys: tuple[str, ...] = ("verdict", "checks")) -> dict | None:
+    """Extract the final JSON payload from a raw model response.
 
     Codex exec output contains tool-use breadcrumbs, search logs, and the final
     answer on a 'codex' banner line followed by the JSON, then 'tokens used N'.
@@ -902,13 +1111,17 @@ def _extract_review_json(output: str) -> dict | None:
             if candidate.startswith("json"):
                 candidate = candidate[4:]
             try:
-                return json.loads(candidate.strip())
+                obj = json.loads(candidate.strip())
+                if isinstance(obj, dict) and _has_required_json_keys(obj, required_keys):
+                    return obj
             except json.JSONDecodeError:
                 pass
 
     # Direct parse
     try:
-        return json.loads(text)
+        obj = json.loads(text)
+        if isinstance(obj, dict) and _has_required_json_keys(obj, required_keys):
+            return obj
     except json.JSONDecodeError:
         pass
 
@@ -932,13 +1145,7 @@ def _extract_review_json(output: str) -> dict | None:
     for cand in candidates:
         try:
             obj = json.loads(cand)
-            # Binary gate (#223): a valid review has `verdict` + `checks`.
-            # The old rubric used `scores` — we accept either field for
-            # backwards compat with any in-flight legacy reviewer output
-            # during the migration, but new reviewers MUST return `checks`.
-            if isinstance(obj, dict) and "verdict" in obj and (
-                "checks" in obj or "scores" in obj
-            ):
+            if isinstance(obj, dict) and _has_required_json_keys(obj, required_keys):
                 return obj
         except json.JSONDecodeError:
             continue
@@ -1166,8 +1373,9 @@ def apply_review_edits(content: str, edits: list) -> tuple[str, list, list]:
     return patched, applied, failed
 
 
-def step_review(module_path: Path, improved: str, model: str = MODELS["review"]) -> dict | None:
-    """Reviewer (Codex by default) runs the binary quality gate.
+def step_review(module_path: Path, improved: str, model: str = MODELS["review"],
+                fact_ledger: dict | None = None) -> dict | None:
+    """Structural reviewer runs the binary quality gate.
 
     Returns:
         dict with keys {verdict, severity, checks, edits, feedback} on
@@ -1181,7 +1389,11 @@ def step_review(module_path: Path, improved: str, model: str = MODELS["review"])
     key = module_key_from_path(module_path)
     print(f"\n  REVIEW: {key} (using {model})")
 
-    prompt = REVIEW_PROMPT_TEMPLATE.format(original=original, improved=improved)
+    prompt = REVIEW_PROMPT_TEMPLATE.format(
+        original=original,
+        improved=improved,
+        fact_ledger=_format_fact_ledger_for_prompt(fact_ledger),
+    )
 
     ok, output = dispatch_auto(prompt, model=model, timeout=900)
 
@@ -1259,6 +1471,176 @@ def step_review(module_path: Path, improved: str, model: str = MODELS["review"])
 # CHECK step — deterministic checks on improved content
 # ---------------------------------------------------------------------------
 
+def _load_link_cache() -> dict:
+    """Load URL health cache from disk."""
+    if not LINK_CACHE_FILE.exists():
+        return {}
+    try:
+        data = json.loads(LINK_CACHE_FILE.read_text())
+        return data if isinstance(data, dict) else {}
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def _save_link_cache(cache: dict) -> None:
+    """Persist URL health cache atomically."""
+    _atomic_write_text(LINK_CACHE_FILE, json.dumps(cache, indent=2, ensure_ascii=False))
+
+
+def _get_url_status(url: str, cache: dict) -> int | None:
+    """Return HTTP status for URL, using 24h cache when available."""
+    cached = cache.get(url) if isinstance(cache, dict) else None
+    if isinstance(cached, dict):
+        checked_at_raw = cached.get("checked_at")
+        status = cached.get("status")
+        if isinstance(checked_at_raw, str):
+            try:
+                checked_at = datetime.fromisoformat(checked_at_raw)
+                if checked_at.tzinfo is None:
+                    checked_at = checked_at.replace(tzinfo=UTC)
+                if datetime.now(UTC) - checked_at < LINK_CACHE_TTL:
+                    return status if isinstance(status, int) else None
+            except ValueError:
+                pass
+
+    req = urllib.request.Request(url, method="HEAD")
+    status_code: int | None = None
+    try:
+        with urllib.request.urlopen(req, timeout=5) as response:
+            status_code = int(response.getcode())
+    except urllib.error.HTTPError as e:
+        status_code = int(e.code)
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        status_code = None
+
+    cache[url] = {
+        "status": status_code,
+        "checked_at": datetime.now(UTC).isoformat(),
+    }
+    return status_code
+
+
+def _contains_with_tolerance(haystack: str, needle: str, tolerance: int = 10) -> bool:
+    """Return True when needle is found exactly or with end trimming tolerance."""
+    if not needle:
+        return False
+    h = re.sub(r"\s+", " ", haystack).lower()
+    n = re.sub(r"\s+", " ", needle).lower().strip()
+    if not n:
+        return False
+    if n in h:
+        return True
+    if len(n) <= tolerance:
+        return False
+    for trim in range(1, tolerance + 1):
+        if n[trim:] in h:
+            return True
+        if n[:-trim] in h:
+            return True
+    return False
+
+
+def _is_unhedged_claim_assertion(content: str, claim_text: str) -> bool:
+    """Heuristic check for claim assertions with no hedge language nearby."""
+    if not claim_text:
+        return False
+    haystack = content.lower()
+    needle = claim_text.lower().strip()
+    if not needle:
+        return False
+
+    hedge_terms = (
+        "according to",
+        "as of",
+        "reportedly",
+        "appears to",
+        "may",
+        "might",
+        "could",
+        "conflicting",
+        "unverified",
+    )
+    start = 0
+    while True:
+        idx = haystack.find(needle, start)
+        if idx == -1:
+            return False
+        window_start = max(0, idx - 120)
+        window_end = min(len(haystack), idx + len(needle) + 120)
+        window = haystack[window_start:window_end]
+        if not any(term in window for term in hedge_terms):
+            return True
+        start = idx + len(needle)
+
+
+def step_check_integrity(content: str, fact_ledger: dict) -> tuple[bool, list[str]]:
+    """Tier-1 deterministic integrity gate before structural checks."""
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    # 1) Link health with 24h cache
+    urls = sorted(set(re.findall(r"https?://[^\s)>\]\"']+", content)))
+    cache = _load_link_cache()
+    for url in urls:
+        status = _get_url_status(url, cache)
+        if status is None or status >= 400:
+            label = status if status is not None else "ERROR"
+            errors.append(f"LINK_DEAD: {url} ({label})")
+    _save_link_cache(cache)
+
+    # 2) K8s version consistency + stale version hard-fail
+    versions = set()
+    for match in re.finditer(r"\b(v?1\.(\d{1,2}))\b", content):
+        raw, minor_raw = match.group(1), match.group(2)
+        try:
+            minor = int(minor_raw)
+        except ValueError:
+            continue
+        if not (20 <= minor <= 40):
+            continue
+        canonical = f"v1.{minor}"
+        versions.add(canonical)
+        if minor <= 20:
+            errors.append(f"STALE_K8S_VERSION: {canonical}")
+    if len(versions) > 1:
+        warnings.append(f"VERSION_MISMATCH_WARNING: {', '.join(sorted(versions))}")
+
+    # 3) YAML lint for fenced ```yaml blocks
+    for match in re.finditer(r"```yaml\s*\n([\s\S]*?)```", content, re.IGNORECASE):
+        yaml_block = match.group(1)
+        try:
+            yaml.safe_load(yaml_block)
+        except yaml.YAMLError as e:
+            line_offset = content[:match.start(1)].count("\n")
+            line_no = line_offset + 1
+            if getattr(e, "problem_mark", None) is not None:
+                line_no = line_offset + int(e.problem_mark.line) + 1
+            errors.append(f"INVALID_YAML: line {line_no}: {e}")
+
+    # 4) Evidence mapping against fact ledger
+    claims = fact_ledger.get("claims", []) if isinstance(fact_ledger, dict) else []
+    for claim in claims:
+        if not isinstance(claim, dict):
+            continue
+        claim_id = claim.get("id", "?")
+        status = claim.get("status")
+        current_truth = claim.get("current_truth")
+        statement = claim.get("claim") or current_truth or ""
+
+        if status == "SUPPORTED" and isinstance(current_truth, str) and current_truth.strip():
+            if not _contains_with_tolerance(content, current_truth, tolerance=10):
+                warnings.append(f"MISSING_SUPPORTED_CLAIM: claim {claim_id}")
+
+        if status == "CONFLICTING" and isinstance(statement, str) and statement.strip():
+            if _is_unhedged_claim_assertion(content, statement):
+                errors.append(f"UNHEDGED_CONFLICT: claim {claim_id}")
+        if status == "UNVERIFIED" and isinstance(statement, str) and statement.strip():
+            if _is_unhedged_claim_assertion(content, statement):
+                errors.append(f"UNHEDGED_UNVERIFIED: claim {claim_id}")
+
+    return len(errors) == 0, errors + warnings
+
+
 def step_check(content: str, path: Path) -> tuple[bool, list]:
     """Run all deterministic checks on the improved content."""
     print(f"\n  CHECK: running deterministic checks")
@@ -1332,7 +1714,8 @@ def step_check(content: str, path: Path) -> tuple[bool, list]:
 # ---------------------------------------------------------------------------
 
 def run_module(module_path: Path, state: dict, max_retries: int = 4,
-               models: dict | None = None, dry_run: bool = False) -> bool:
+               models: dict | None = None, dry_run: bool = False,
+               refresh_fact_ledger: bool = False) -> bool:
     """Run a single module through the full pipeline."""
     m = models or MODELS
     key = module_key_from_path(module_path)
@@ -1359,6 +1742,13 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
             print(f"  ✓ Already done: {total}/40 reviewer={reviewer} — skipping")
             return True
 
+    if ms["phase"] == "data_conflict" and not refresh_fact_ledger:
+        print("  ✋ Module blocked in data_conflict phase — rerun with --refresh-fact-ledger after manual triage")
+        return False
+    if ms["phase"] == "data_conflict" and refresh_fact_ledger:
+        ms["phase"] = "pending"
+        save_state(state)
+
     # Peak-hours pause resume. A module paused mid-targeted-fix has its
     # staged draft on disk and its plan saved in state. Transition
     # back to phase=write so the resume branch below loads them correctly
@@ -1377,6 +1767,70 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
             ms.pop("targeted_fix", None)
             save_state(state)
 
+    # Phase 0: split-reviewer fact ledger (issue #225).
+    # Model selection rationale is pinned by calibration data in:
+    # /Users/krisztiankoos/.claude/projects/-Users-krisztiankoos-projects-kubedojo/memory/project_fact_grounding_calibration.md
+    if not dry_run:
+        fact_model = m.get("fact_grounding", MODELS["fact_grounding"])
+        fact_family = _model_family(fact_model)
+        if fact_family not in INDEPENDENT_REVIEWER_FAMILIES:
+            ms["errors"].append(
+                f"Configured fact grounding model is not independent: {fact_model}"
+            )
+            save_state(state)
+            return False
+
+        ledger_result = ensure_fact_ledger(
+            module_path,
+            ms,
+            model=fact_model,
+            refresh=refresh_fact_ledger,
+        )
+        if ledger_result is None or (
+            isinstance(ledger_result, dict) and ledger_result.get("rate_limited")
+        ):
+            fallback_model = m.get("fact_fallback", MODELS["fact_fallback"])
+            fallback_family = _model_family(fallback_model)
+            if fallback_family not in INDEPENDENT_REVIEWER_FAMILIES:
+                ms["errors"].append(
+                    f"Configured fact fallback model is not independent: {fallback_model}"
+                )
+                save_state(state)
+                return False
+            print(f"  ⚠ {fact_model} unavailable for FACT LEDGER — falling back to {fallback_model}")
+            ledger_result = ensure_fact_ledger(
+                module_path,
+                ms,
+                model=fallback_model,
+                refresh=refresh_fact_ledger,
+            )
+
+        if not isinstance(ledger_result, dict) or ledger_result.get("rate_limited"):
+            ms["errors"].append("FACT LEDGER generation failed")
+            save_state(state)
+            return False
+
+        ms["fact_ledger"] = ledger_result
+        ms["fact_ledger_generated_at"] = datetime.now(UTC).isoformat()
+        save_state(state)
+
+        n_conflict = sum(
+            1 for c in ledger_result.get("claims", [])
+            if isinstance(c, dict) and c.get("status") == "CONFLICTING"
+        )
+        n_unverified = sum(
+            1 for c in ledger_result.get("claims", [])
+            if isinstance(c, dict) and c.get("status") == "UNVERIFIED"
+        )
+        if n_conflict >= 3 or n_unverified >= 5:
+            ms["phase"] = "data_conflict"
+            ms["errors"].append(
+                f"DATA_CONFLICT: {n_conflict} conflicting + {n_unverified} "
+                f"unverified claims — manual triage required"
+            )
+            save_state(state)
+            return False
+
     knowledge_card = None
     resume_from_staging = False
 
@@ -1391,7 +1845,7 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
             return False
         ms["severity"] = None
         ms["checks_failed"] = []
-        ms["reviewer_schema_version"] = 2
+        ms["reviewer_schema_version"] = 3
         ms["passes"] = False
         ms["phase"] = "write"
         ms["last_run"] = datetime.now(UTC).isoformat()
@@ -1477,7 +1931,8 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                 improved = step_write(module_path, plan, model=writer_model,
                                       rewrite=needs_rewrite,
                                       previous_output=last_good,
-                                      knowledge_card=knowledge_card)
+                                      knowledge_card=knowledge_card,
+                                      fact_ledger=ms.get("fact_ledger"))
             except ClaudeUnavailableError as e:
                 # Peak hours / rate limit / budget exhausted on Claude. Pause
                 # this module cleanly so it resumes at the targeted-fix step
@@ -1519,33 +1974,39 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
 
         if ms["phase"] == "review":
             reviewer_model = m["review"]
-            review = step_review(module_path, improved or module_path.read_text(), model=reviewer_model)
+            review = step_review(
+                module_path,
+                improved or module_path.read_text(),
+                model=reviewer_model,
+                fact_ledger=ms.get("fact_ledger"),
+            )
 
-            # Rate-limit degradation:
-            # 1. Try Codex.
-            # 2. If unavailable, try Claude Sonnet (still independent).
-            # 3. If both independent reviewers are unavailable, do a same-
-            #    family last-resort review so the pipeline can still make a
-            #    decision, but mark the module for later independent re-review.
+            # Structural reviewer rate-limit degradation:
+            # 1. Try primary structural reviewer.
+            # 2. If unavailable, try configured fallback.
+            # 3. If both unavailable, use writer model as last resort.
             if isinstance(review, dict) and review.get("rate_limited"):
                 fallback_model = m.get("review_fallback", MODELS["review_fallback"])
-                primary_family = reviewer_model.split("-")[0]
-                fallback_family = fallback_model.split("-")[0]
-                writer_family = m["write"].split("-")[0]
+                primary_family = _model_family(reviewer_model)
+                fallback_family = _model_family(fallback_model)
                 if fallback_family == primary_family:
                     print(f"  ⚠ Primary reviewer rate-limited and fallback is same family — aborting review")
                     ms["errors"].append("Primary reviewer rate-limited, no alternative fallback")
                     save_state(state)
                     return False
-                if fallback_family == writer_family or fallback_family not in INDEPENDENT_REVIEWER_FAMILIES:
-                    print(f"  ⚠ Review fallback {fallback_model} is not independent from writer {m['write']} — aborting review")
-                    ms["errors"].append("Configured review fallback is not independent from writer")
+                if (not STRUCTURAL_REVIEW_INDEPENDENCE_RELAXED and
+                        fallback_family not in INDEPENDENT_REVIEWER_FAMILIES):
+                    print(f"  ⚠ Review fallback {fallback_model} is not in approved independent families — aborting review")
+                    ms["errors"].append("Configured review fallback is not an approved independent family")
                     save_state(state)
                     return False
 
                 print(f"  ⚠ {reviewer_model} rate-limited — falling back to {fallback_model}")
                 review = step_review(
-                    module_path, improved or module_path.read_text(), model=fallback_model,
+                    module_path,
+                    improved or module_path.read_text(),
+                    model=fallback_model,
+                    fact_ledger=ms.get("fact_ledger"),
                 )
                 if review is None:
                     ms["errors"].append("Fallback reviewer failed")
@@ -1559,7 +2020,10 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                         f"require later independent re-review if approved"
                     )
                     review = step_review(
-                        module_path, improved or module_path.read_text(), model=last_resort_model,
+                        module_path,
+                        improved or module_path.read_text(),
+                        model=last_resort_model,
+                        fact_ledger=ms.get("fact_ledger"),
                     )
                     if review is None:
                         ms["errors"].append("Last-resort reviewer failed")
@@ -1583,6 +2047,38 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                 return False
 
             if review.get("verdict") == "APPROVE":
+                content_for_integrity = improved or module_path.read_text()
+                integrity_passed, integrity_messages = step_check_integrity(
+                    content_for_integrity, ms.get("fact_ledger") or {}
+                )
+                if not integrity_passed:
+                    needs_rewrite = True
+                    targeted_fix = False
+                    plan = (
+                        "SEVERE REWRITE REQUIRED. Tier-1 integrity gate failed before "
+                        "structural CHECK. Rewrite the module and resolve every "
+                        "integrity error.\n\nIntegrity errors:\n"
+                    )
+                    for msg in integrity_messages:
+                        plan += f"\n- {msg}"
+                    ms["plan"] = plan
+                    ms["targeted_fix"] = False
+                    ms["severity"] = "severe"
+                    ms["checks_failed"] = [{"id": "INTEGRITY", "evidence": msg} for msg in integrity_messages]
+                    ms["reviewer_schema_version"] = 3
+                    ms.pop("scores", None)
+                    ms.pop("sum", None)
+                    if improved is not None:
+                        staging_path = module_path.with_suffix(".staging.md")
+                        _atomic_write_text(staging_path, improved)
+                    ms["phase"] = "write"
+                    save_state(state)
+                    print("  ⚠ Tier-1 integrity gate failed — routing to severe rewrite")
+                    if attempt < max_retries:
+                        continue
+                    ms["errors"].append("Integrity gate failed after max retries")
+                    return False
+
                 # Binary gate: on APPROVE, the module's state records that
                 # every check passed. Per Gemini pair-review critique B, we
                 # ignore any `edits` returned alongside an APPROVE — an
@@ -1590,7 +2086,7 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                 # changes, it must REJECT with severity=targeted.
                 ms["severity"] = "clean"
                 ms["checks_failed"] = []
-                ms["reviewer_schema_version"] = 2
+                ms["reviewer_schema_version"] = 3
                 # Drop any legacy score fields so cmd_status renders the new
                 # binary-gate view, not the old [D1..D8] vector.
                 ms.pop("scores", None)
@@ -1602,9 +2098,10 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                 # the module exits the pipeline (Gemini + Codex PR review
                 # both flagged this as a hot-path routing bug).
                 ms.pop("sonnet_anchor_failures", None)
-                reviewer_family = reviewer_model.split("-")[0]
+                reviewer_family = _model_family(reviewer_model)
                 ms["reviewer"] = reviewer_family
                 ms["needs_independent_review"] = (
+                    (not STRUCTURAL_REVIEW_INDEPENDENCE_RELAXED) and
                     reviewer_family not in INDEPENDENT_REVIEWER_FAMILIES
                 )
                 ms["phase"] = "check"
@@ -1654,7 +2151,7 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                         _atomic_write_text(staging_path, patched)
                         ms["severity"] = "targeted"
                         ms["checks_failed"] = [{"id": c.get("id"), "evidence": c.get("evidence", "")} for c in failed_checks]
-                        ms["reviewer_schema_version"] = 2
+                        ms["reviewer_schema_version"] = 3
                         ms.pop("scores", None)
                         ms.pop("sum", None)
                         # Circuit breaker reset on 100% apply — see comment
@@ -1706,7 +2203,7 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                         ms["targeted_fix"] = True
                         ms["severity"] = "targeted"
                         ms["checks_failed"] = [{"id": c.get("id"), "evidence": c.get("evidence", "")} for c in failed_checks]
-                        ms["reviewer_schema_version"] = 2
+                        ms["reviewer_schema_version"] = 3
                         ms.pop("scores", None)
                         ms.pop("sum", None)
                         ms["phase"] = "write"
@@ -1784,7 +2281,7 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                 ms["targeted_fix"] = targeted_fix
                 ms["severity"] = r_severity
                 ms["checks_failed"] = [{"id": c.get("id"), "evidence": c.get("evidence", "")} for c in failed_checks]
-                ms["reviewer_schema_version"] = 2
+                ms["reviewer_schema_version"] = 3
                 ms.pop("scores", None)
                 ms.pop("sum", None)
                 # Stage the current improved content so resume loads it as
@@ -1983,7 +2480,13 @@ def cmd_run(args):
         models["review"] = args.review_model
 
     state = load_state()
-    ok = run_module(path, state, models=models, dry_run=getattr(args, "dry_run", False))
+    ok = run_module(
+        path,
+        state,
+        models=models,
+        dry_run=getattr(args, "dry_run", False),
+        refresh_fact_ledger=getattr(args, "refresh_fact_ledger", False),
+    )
     sys.exit(0 if ok else 1)
 
 
@@ -2054,7 +2557,13 @@ def cmd_run_section(args):
         for i, path in enumerate(modules, 1):
             key = module_key_from_path(path)
             print(f"\n[{i}/{len(modules)}] {key}")
-            ok = run_module(path, state, models=models, dry_run=dry_run)
+            ok = run_module(
+                path,
+                state,
+                models=models,
+                dry_run=dry_run,
+                refresh_fact_ledger=getattr(args, "refresh_fact_ledger", False),
+            )
             if ok:
                 passed += 1
             else:
@@ -2062,7 +2571,15 @@ def cmd_run_section(args):
     else:
         with ThreadPoolExecutor(max_workers=workers) as executor:
             futures = {
-                executor.submit(run_module, path, state, 2, models, dry_run): path
+                executor.submit(
+                    run_module,
+                    path,
+                    state,
+                    2,
+                    models,
+                    dry_run,
+                    getattr(args, "refresh_fact_ledger", False),
+                ): path
                 for path in modules
             }
             for future in as_completed(futures):
@@ -2210,7 +2727,8 @@ def cmd_status(args):
     # Build track data from disk + state
     tracks: dict[str, dict] = {}
     legacy_count = 0
-    new_gate_count = 0
+    binary_gate_count = 0
+    split_reviewer_count = 0
     for key in disk_keys:
         track = _track_from_key(key)
         t = tracks.setdefault(track, {
@@ -2223,8 +2741,10 @@ def cmd_status(args):
         ms = modules.get(key, {})
         phase = ms.get("phase")
         schema_version = ms.get("reviewer_schema_version", 1 if ms.get("scores") else None)
-        if schema_version == 2:
-            new_gate_count += 1
+        if schema_version == 3:
+            split_reviewer_count += 1
+        elif schema_version == 2:
+            binary_gate_count += 1
         elif schema_version == 1:
             legacy_count += 1
             # Keep legacy sums available for a faded column — modules
@@ -2251,7 +2771,10 @@ def cmd_status(args):
 
     print(f"\n  Modules: {g_total} total | {g_pass} pass | {g_fail} fail | {g_wip} in progress | {g_todo} not started")
     print(f"  Translations: {g_uk}/{g_total} UK")
-    print(f"  Gate version: {new_gate_count} binary-gate | {legacy_count} legacy rubric")
+    print(
+        f"  Gate version: {split_reviewer_count} split-reviewer | "
+        f"{binary_gate_count} binary-gate | {legacy_count} legacy rubric"
+    )
     if all_legacy:
         print(f"  Legacy score distribution: avg {sum(all_legacy)/len(all_legacy):.1f} | lo {min(all_legacy)} | hi {max(all_legacy)} ({len(all_legacy)} modules)")
     print()
@@ -2329,7 +2852,12 @@ def cmd_resume(args):
     for key, ms in incomplete.items():
         path = find_module_path(key)
         if path and path.exists():
-            run_module(path, state, models=models)
+            run_module(
+                path,
+                state,
+                models=models,
+                refresh_fact_ledger=getattr(args, "refresh_fact_ledger", False),
+            )
 
 
 def cmd_e2e(args):
@@ -2447,7 +2975,12 @@ def cmd_e2e(args):
         for key, ms in incomplete.items():
             path = find_module_path(key)
             if path and path.exists():
-                ok = run_module(path, state, models=models)
+                ok = run_module(
+                    path,
+                    state,
+                    models=models,
+                    refresh_fact_ledger=getattr(args, "refresh_fact_ledger", False),
+                )
                 if ok:
                     resumed += 1
                     consecutive_failures = 0
@@ -2496,7 +3029,12 @@ def cmd_e2e(args):
                 continue
 
             print(f"\n[{i}/{len(modules)}] {key}")
-            ok = run_module(path, state, models=models)
+            ok = run_module(
+                path,
+                state,
+                models=models,
+                refresh_fact_ledger=getattr(args, "refresh_fact_ledger", False),
+            )
             if ok:
                 passed += 1
                 consecutive_failures = 0
@@ -2657,7 +3195,7 @@ models:
     # Global model overrides
     parser.add_argument("--audit-model", help=argparse.SUPPRESS)
     parser.add_argument("--write-model", help="Model for WRITE step (default: gemini-3.1-pro-preview)")
-    parser.add_argument("--review-model", help="Model for REVIEW step (default: codex)")
+    parser.add_argument("--review-model", help="Model for REVIEW step (default: gemini-3.1-pro-preview)")
 
     subparsers = parser.add_subparsers(dest="command", help="Pipeline command")
 
@@ -2673,6 +3211,8 @@ models:
     rp = subparsers.add_parser("run", help="Run a module through the full pipeline")
     rp.add_argument("module", help="Module path or key")
     rp.add_argument("--dry-run", action="store_true", help="Plan only — show the initial write plan without making changes")
+    rp.add_argument("--refresh-fact-ledger", action="store_true",
+                    help="Bypass fact-ledger cache and regenerate from upstream sources")
 
     # run-section
     rsp = subparsers.add_parser("run-section", help="Run all modules in a section")
@@ -2682,6 +3222,8 @@ models:
                      choices=["prerequisites", "linux", "cloud", "k8s"])
     rsp.add_argument("--skip-gaps", action="store_true", help="Skip gap check even if errors found")
     rsp.add_argument("--dry-run", action="store_true", help="Plan only — show the initial write plan without making changes")
+    rsp.add_argument("--refresh-fact-ledger", action="store_true",
+                     help="Bypass fact-ledger cache and regenerate from upstream sources")
 
     # gap-check
     gcp = subparsers.add_parser("gap-check", help="Detect scaffolding gaps in a track/section")
@@ -2698,7 +3240,9 @@ models:
     sp.add_argument("--verbose", "-v", action="store_true", help="Show error details")
 
     # resume
-    subparsers.add_parser("resume", help="Resume incomplete modules")
+    resume_parser = subparsers.add_parser("resume", help="Resume incomplete modules")
+    resume_parser.add_argument("--refresh-fact-ledger", action="store_true",
+                               help="Bypass fact-ledger cache and regenerate from upstream sources")
 
     # e2e
     e2e_parser = subparsers.add_parser("e2e", help="End-to-end: resume stuck + process all sections",
@@ -2720,6 +3264,8 @@ examples:
     e2e_parser.add_argument("sections", nargs="*", help="track aliases or section paths (default: all)")
     e2e_parser.add_argument("--verbose", "-v", action="store_true", help="print full output to stdout (default: quiet, log only)")
     e2e_parser.add_argument("--no-translate", action="store_true", help="skip UK translation step")
+    e2e_parser.add_argument("--refresh-fact-ledger", action="store_true",
+                            help="Bypass fact-ledger cache and regenerate from upstream sources")
 
     args = parser.parse_args()
 

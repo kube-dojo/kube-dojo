@@ -32,6 +32,25 @@ from checks import structural
 from checks.structural import CheckResult
 
 
+def sample_fact_ledger() -> dict:
+    """Reusable schema-valid fact ledger fixture."""
+    return {
+        "as_of_date": "2026-04-12",
+        "topic": "Test Module",
+        "claims": [
+            {
+                "id": "C1",
+                "claim": "Kubernetes current stable is v1.32",
+                "status": "SUPPORTED",
+                "current_truth": "Kubernetes current stable is v1.32",
+                "sources": [{"url": "https://kubernetes.io/releases/", "source_date": "2026-04-12"}],
+                "conflict_summary": None,
+                "unverified_reason": None,
+            }
+        ],
+    }
+
+
 # ---------------------------------------------------------------------------
 # Fixtures: known-good and known-bad module content
 # ---------------------------------------------------------------------------
@@ -629,7 +648,7 @@ class TestPipelineTransitions(unittest.TestCase):
 
     def _mock_review_approve(self, *args, **kwargs):
         """Mock review that approves (binary gate #223)."""
-        check_ids = ["FACT", "LAB", "COV", "QUIZ", "EXAM", "DEPTH", "WHY", "PRES"]
+        check_ids = ["LAB", "COV", "QUIZ", "EXAM", "DEPTH", "WHY", "PRES"]
         return True, json.dumps({
             "verdict": "APPROVE",
             "severity": "clean",
@@ -640,9 +659,9 @@ class TestPipelineTransitions(unittest.TestCase):
 
     def _mock_review_reject(self, *args, **kwargs):
         """Mock review that rejects with 1 fixable quiz issue."""
-        check_ids = ["FACT", "LAB", "COV", "QUIZ", "EXAM", "DEPTH", "WHY", "PRES"]
+        check_ids = ["LAB", "COV", "QUIZ", "EXAM", "DEPTH", "WHY", "PRES"]
         checks = [{"id": cid, "passed": True} for cid in check_ids]
-        checks[3] = {"id": "QUIZ", "passed": False,
+        checks[2] = {"id": "QUIZ", "passed": False,
                      "evidence": "Recall-based not scenario-based",
                      "edit_refs": [0]}
         return True, json.dumps({
@@ -675,15 +694,16 @@ class TestPipelineTransitions(unittest.TestCase):
 
         with patch.object(p, "STATE_FILE", self.state_file), \
              patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
-             patch.object(p, "save_state"):
+             patch.object(p, "save_state"), \
+             patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_check_integrity", return_value=(True, [])):
             with patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"):
                 p.run_module(self.module_path, state)
 
         ms = state["modules"].get("test/module-0.1-test", {})
         self.assertEqual(ms.get("phase"), "done")
         self.assertTrue(ms.get("passes"))
-        # Must have been reviewed by an independent reviewer
-        self.assertEqual(ms.get("reviewer"), "codex")
+        self.assertEqual(ms.get("reviewer"), "gemini")
         self.assertFalse(ms.get("needs_independent_review", True))
         # Write + review dispatches should have fired
         self.assertEqual(mock_dispatch.call_count, 2)
@@ -757,13 +777,15 @@ class TestPipelineTransitions(unittest.TestCase):
 
         with patch.object(p, "STATE_FILE", self.state_file), \
              patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
-             patch.object(p, "save_state"):
+             patch.object(p, "save_state"), \
+             patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_check_integrity", return_value=(True, [])):
             with patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"):
                 p.run_module(self.module_path, state)
 
         ms = state["modules"]["test/module-0.1-test"]
         self.assertEqual(ms.get("phase"), "done")
-        self.assertEqual(ms.get("reviewer"), "codex")
+        self.assertEqual(ms.get("reviewer"), "gemini")
         self.assertFalse(ms.get("needs_independent_review", True))
         # Only re-review should fire
         self.assertEqual(mock_dispatch.call_count, 1)
@@ -794,6 +816,8 @@ class TestPipelineTransitions(unittest.TestCase):
              patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
              patch.object(p, "step_write", return_value=GOOD_MODULE), \
              patch.object(p, "step_review", side_effect=review_sequence) as mock_review, \
+             patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_check_integrity", return_value=(True, [])), \
              patch.object(p, "step_check", return_value=(True, [])):
             p.run_module(self.module_path, state)
 
@@ -840,12 +864,12 @@ class TestPipelineTransitions(unittest.TestCase):
             "modules": {
                 "test/module-0.1-test": {
                     "phase": "needs_targeted_fix",
-                    "plan": "TARGETED FIX. FACT check failed — fix per reviewer feedback.",
+                    "plan": "TARGETED FIX. LAB check failed — fix per reviewer feedback.",
                     "targeted_fix": True,
                     "paused_reason": "Claude peak hours",
                     "severity": "targeted",
-                    "checks_failed": [{"id": "FACT", "evidence": "example"}],
-                    "reviewer_schema_version": 2,
+                    "checks_failed": [{"id": "LAB", "evidence": "example"}],
+                    "reviewer_schema_version": 3,
                     "errors": [],
                 },
             },
@@ -853,7 +877,9 @@ class TestPipelineTransitions(unittest.TestCase):
 
         with patch.object(p, "STATE_FILE", self.state_file), \
              patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
-             patch.object(p, "save_state"):
+             patch.object(p, "save_state"), \
+             patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_check_integrity", return_value=(True, [])):
             with patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"):
                 p.run_module(self.module_path, state)
 
@@ -882,14 +908,13 @@ class TestPipelineTransitions(unittest.TestCase):
             {
                 "verdict": "REJECT",
                 "checks": [
-                    {"id": "FACT", "passed": False, "evidence": "https://kubernetes.io/docs/x"},
                     {"id": "LAB", "passed": False, "evidence": "lab broken"},
                     {"id": "COV", "passed": False, "evidence": "outcome 3 missing"},
                     {"id": "QUIZ", "passed": False, "evidence": "recall-only"},
                     {"id": "EXAM", "passed": True},
                     {"id": "DEPTH", "passed": False, "evidence": "no gotchas"},
                     {"id": "WHY", "passed": False, "evidence": "no rationale"},
-                    {"id": "PRES", "passed": True},
+                    {"id": "PRES", "passed": False, "evidence": "missing unique value"},
                 ],
                 "edits": [],
                 "feedback": "Severely broken module.",
@@ -903,13 +928,14 @@ class TestPipelineTransitions(unittest.TestCase):
         ]
 
         def fake_step_write(module_path, plan, model=None, rewrite=False,
-                            previous_output=None, knowledge_card=None):
+                            previous_output=None, knowledge_card=None, fact_ledger=None):
             write_calls.append({
                 "plan": plan,
                 "model": model,
                 "rewrite": rewrite,
                 "previous_output": previous_output,
                 "knowledge_card": knowledge_card,
+                "fact_ledger": fact_ledger,
             })
             return GOOD_MODULE
 
@@ -919,6 +945,8 @@ class TestPipelineTransitions(unittest.TestCase):
              patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
              patch.object(p, "step_write", side_effect=fake_step_write), \
              patch.object(p, "step_review", side_effect=review_sequence), \
+             patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_check_integrity", return_value=(True, [])), \
              patch.object(p, "step_check", return_value=(True, [])):
             p.run_module(self.module_path, state)
 
@@ -955,7 +983,6 @@ class TestPipelineTransitions(unittest.TestCase):
             {
                 "verdict": "REJECT",
                 "checks": [
-                    {"id": "FACT", "passed": True},
                     {"id": "LAB", "passed": False, "evidence": "wrong flag", "edit_refs": [0]},
                     {"id": "COV", "passed": True},
                     {"id": "QUIZ", "passed": False, "evidence": "recall", "edit_refs": [1]},
@@ -979,7 +1006,7 @@ class TestPipelineTransitions(unittest.TestCase):
         ]
 
         def fake_step_write(module_path, plan, model=None, rewrite=False,
-                            previous_output=None, knowledge_card=None):
+                            previous_output=None, knowledge_card=None, fact_ledger=None):
             write_calls.append({
                 "plan": plan,
                 "model": model,
@@ -993,6 +1020,8 @@ class TestPipelineTransitions(unittest.TestCase):
              patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
              patch.object(p, "step_write", side_effect=fake_step_write), \
              patch.object(p, "step_review", side_effect=review_sequence), \
+             patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_check_integrity", return_value=(True, [])), \
              patch.object(p, "step_check", return_value=(True, [])):
             p.run_module(self.module_path, state)
 
@@ -1051,6 +1080,21 @@ class TestComputeSeverity(unittest.TestCase):
         sev = self.p.compute_severity("APPROVE", self.all_pass, [])
         self.assertEqual(sev, "clean")
 
+    def test_routes_correctly_with_seven_checks(self):
+        """Split-reviewer structural rubric has 7 checks (FACT removed)."""
+        self.assertEqual(len(self.p.CHECK_IDS), 7)
+        checks = [
+            {"id": "LAB", "passed": False, "edit_refs": [0]},
+            {"id": "COV", "passed": True},
+            {"id": "QUIZ", "passed": True},
+            {"id": "EXAM", "passed": True},
+            {"id": "DEPTH", "passed": True},
+            {"id": "WHY", "passed": True},
+            {"id": "PRES", "passed": True},
+        ]
+        edits = [{"type": "replace", "find": "x", "new": "y"}]
+        self.assertEqual(self.p.compute_severity("REJECT", checks, edits), "targeted")
+
     def test_reject_no_failed_checks_is_severe(self):
         """REJECT with zero failed checks is a structural contradiction → severe."""
         sev = self.p.compute_severity("REJECT", self.all_pass, [])
@@ -1066,7 +1110,7 @@ class TestComputeSeverity(unittest.TestCase):
 
     def test_reject_with_zero_edits_is_severe(self):
         """REJECT with failed checks but no edits at all → severe (can't patch)."""
-        checks = [{"id": "FACT", "passed": False, "evidence": "bad"}] + \
+        checks = [{"id": "LAB", "passed": False, "evidence": "bad"}] + \
                  [{"id": cid, "passed": True} for cid in self.p.CHECK_IDS[1:]]
         sev = self.p.compute_severity("REJECT", checks, [])
         self.assertEqual(sev, "severe")
@@ -1074,7 +1118,7 @@ class TestComputeSeverity(unittest.TestCase):
     def test_reject_uncovered_failure_is_severe(self):
         """A failed check with no edit_refs is uncovered → severe."""
         checks = [
-            {"id": "FACT", "passed": False, "evidence": "bad", "edit_refs": [0]},
+            {"id": "LAB", "passed": False, "evidence": "bad", "edit_refs": [0]},
             {"id": "LAB", "passed": False, "evidence": "lab broken"},  # no edit_refs
         ] + [{"id": cid, "passed": True} for cid in self.p.CHECK_IDS[2:]]
         edits = [{"type": "replace", "find": "x", "new": "y"}]
@@ -1085,7 +1129,7 @@ class TestComputeSeverity(unittest.TestCase):
     def test_reject_targeted_one_to_four_covered_failures(self):
         """1-4 failures, all with edit_refs, all with edits → targeted."""
         checks = [
-            {"id": "FACT", "passed": False, "evidence": "minor", "edit_refs": [0]},
+            {"id": "LAB", "passed": False, "evidence": "minor", "edit_refs": [0]},
             {"id": "LAB", "passed": False, "evidence": "fix", "edit_refs": [1]},
         ] + [{"id": cid, "passed": True} for cid in self.p.CHECK_IDS[2:]]
         edits = [
@@ -1113,7 +1157,7 @@ class TestComputeSeverity(unittest.TestCase):
         misroute to targeted. Validate the shape strictly.
         """
         checks = [
-            {"id": "FACT", "passed": False, "evidence": "x", "edit_refs": True},
+            {"id": "LAB", "passed": False, "evidence": "x", "edit_refs": True},
         ] + [{"id": cid, "passed": True} for cid in self.p.CHECK_IDS[1:]]
         edits = [{"type": "replace", "find": "a", "new": "b"}]
         self.assertEqual(self.p.compute_severity("REJECT", checks, edits), "severe")
@@ -1121,7 +1165,7 @@ class TestComputeSeverity(unittest.TestCase):
     def test_edit_refs_string_is_uncovered(self):
         """edit_refs="0" (string) is not a list of ints → severe."""
         checks = [
-            {"id": "FACT", "passed": False, "evidence": "x", "edit_refs": "0"},
+            {"id": "LAB", "passed": False, "evidence": "x", "edit_refs": "0"},
         ] + [{"id": cid, "passed": True} for cid in self.p.CHECK_IDS[1:]]
         edits = [{"type": "replace", "find": "a", "new": "b"}]
         self.assertEqual(self.p.compute_severity("REJECT", checks, edits), "severe")
@@ -1129,7 +1173,7 @@ class TestComputeSeverity(unittest.TestCase):
     def test_edit_refs_out_of_bounds_is_uncovered(self):
         """edit_refs=[999] points at no real edit → severe."""
         checks = [
-            {"id": "FACT", "passed": False, "evidence": "x", "edit_refs": [999]},
+            {"id": "LAB", "passed": False, "evidence": "x", "edit_refs": [999]},
         ] + [{"id": cid, "passed": True} for cid in self.p.CHECK_IDS[1:]]
         edits = [{"type": "replace", "find": "a", "new": "b"}]
         self.assertEqual(self.p.compute_severity("REJECT", checks, edits), "severe")
@@ -1137,7 +1181,7 @@ class TestComputeSeverity(unittest.TestCase):
     def test_edit_refs_mixed_valid_invalid_is_uncovered(self):
         """If any ref is invalid, the whole check is uncovered → severe."""
         checks = [
-            {"id": "FACT", "passed": False, "evidence": "x", "edit_refs": [0, 999]},
+            {"id": "LAB", "passed": False, "evidence": "x", "edit_refs": [0, 999]},
         ] + [{"id": cid, "passed": True} for cid in self.p.CHECK_IDS[1:]]
         edits = [{"type": "replace", "find": "a", "new": "b"}]
         self.assertEqual(self.p.compute_severity("REJECT", checks, edits), "severe")
@@ -1145,7 +1189,7 @@ class TestComputeSeverity(unittest.TestCase):
     def test_edits_not_a_list_is_severe(self):
         """edits=None or edits=dict → severe (can't patch)."""
         checks = [
-            {"id": "FACT", "passed": False, "evidence": "x", "edit_refs": [0]},
+            {"id": "LAB", "passed": False, "evidence": "x", "edit_refs": [0]},
         ] + [{"id": cid, "passed": True} for cid in self.p.CHECK_IDS[1:]]
         self.assertEqual(self.p.compute_severity("REJECT", checks, None), "severe")
         self.assertEqual(
@@ -1196,6 +1240,8 @@ class TestBinaryGateIntegration(unittest.TestCase):
              patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
              patch.object(p, "step_write", return_value=GOOD_MODULE), \
              patch.object(p, "step_review", side_effect=review_sequence), \
+             patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_check_integrity", return_value=(True, [])), \
              patch.object(p, "step_check", return_value=(True, [])), \
              patch.object(p, "ensure_knowledge_card", return_value="card"):
             p.run_module(self.module_path, state)
@@ -1204,7 +1250,7 @@ class TestBinaryGateIntegration(unittest.TestCase):
         self.assertEqual(ms.get("phase"), "done")
         self.assertEqual(ms.get("severity"), "clean")
         self.assertEqual(ms.get("checks_failed"), [])
-        self.assertEqual(ms.get("reviewer_schema_version"), 2)
+        self.assertEqual(ms.get("reviewer_schema_version"), 3)
         self.assertTrue(ms.get("passes"))
         # Old schema fields must be absent on new-gate runs
         self.assertNotIn("scores", ms)
@@ -1226,7 +1272,7 @@ class TestBinaryGateIntegration(unittest.TestCase):
         write_calls = []
 
         def fake_step_write(module_path, plan, model=None, rewrite=False,
-                            previous_output=None, knowledge_card=None):
+                            previous_output=None, knowledge_card=None, fact_ledger=None):
             write_calls.append({"model": model, "rewrite": rewrite})
             return GOOD_MODULE
 
@@ -1234,9 +1280,8 @@ class TestBinaryGateIntegration(unittest.TestCase):
             {
                 "verdict": "REJECT",
                 "checks": [
-                    {"id": "FACT", "passed": False, "evidence": "one anchor",
+                    {"id": "LAB", "passed": False, "evidence": "one anchor",
                      "edit_refs": [0]},
-                    {"id": "LAB", "passed": True},
                     {"id": "COV", "passed": True},
                     {"id": "QUIZ", "passed": True},
                     {"id": "EXAM", "passed": True},
@@ -1264,6 +1309,8 @@ class TestBinaryGateIntegration(unittest.TestCase):
              patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
              patch.object(p, "step_write", side_effect=fake_step_write), \
              patch.object(p, "step_review", side_effect=review_sequence), \
+             patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_check_integrity", return_value=(True, [])), \
              patch.object(p, "step_check", return_value=(True, [])), \
              patch.object(p, "ensure_knowledge_card", return_value="card"):
             p.run_module(self.module_path, state)
@@ -1312,13 +1359,13 @@ class TestLegacyStateCompat(unittest.TestCase):
             "phase": "done",
             "severity": "clean",
             "checks_failed": [],
-            "reviewer_schema_version": 2,
+            "reviewer_schema_version": 3,
             "passes": True,
             "last_run": "2026-04-11T12:00:00+00:00",
             "errors": [],
-            "reviewer": "codex",
+            "reviewer": "gemini",
         }
-        self.assertEqual(new_ms.get("reviewer_schema_version"), 2)
+        self.assertEqual(new_ms.get("reviewer_schema_version"), 3)
         self.assertIsNone(new_ms.get("scores"))
         self.assertIn("severity", new_ms)
 
@@ -1559,6 +1606,425 @@ class TestKnowledgeCards(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# Test: Fact ledger + integrity gate + split-reviewer run flow
+# ---------------------------------------------------------------------------
+
+class TestFactLedger(unittest.TestCase):
+    """Test fact-ledger generation, validation, and cache behavior."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.repo_root = Path(self.tmpdir)
+        self.content_root = self.repo_root / "src" / "content" / "docs"
+        self.content_root.mkdir(parents=True, exist_ok=True)
+        self.module_path = self.content_root / "test" / "module-0.1-test.md"
+        self.module_path.parent.mkdir(parents=True, exist_ok=True)
+        self.module_path.write_text("---\ntitle: Test Module\n---\n\nBody")
+        self.ledger_dir = self.repo_root / ".pipeline" / "fact-ledgers"
+        self.module_key = "test/module-0.1-test"
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def _ledger_payload(self, marker: str = "A") -> dict:
+        return {
+            "as_of_date": "2026-04-12",
+            "topic": f"Test Module {marker}",
+            "claims": [
+                {
+                    "id": "C1",
+                    "claim": "Supported claim",
+                    "status": "SUPPORTED",
+                    "current_truth": f"Supported truth {marker}",
+                    "sources": [{"url": "https://kubernetes.io/releases/", "source_date": "2026-04-12"}],
+                    "conflict_summary": None,
+                    "unverified_reason": None,
+                },
+                {
+                    "id": "C2",
+                    "claim": "Conflicting claim",
+                    "status": "CONFLICTING",
+                    "current_truth": None,
+                    "sources": [
+                        {"url": "https://example.com/a", "source_date": "2026-04-12"},
+                        {"url": "https://example.com/b", "source_date": "2026-04-12"},
+                    ],
+                    "conflict_summary": "Sources disagree.",
+                    "unverified_reason": None,
+                },
+                {
+                    "id": "C3",
+                    "claim": "Unverified claim",
+                    "status": "UNVERIFIED",
+                    "current_truth": None,
+                    "sources": [],
+                    "conflict_summary": None,
+                    "unverified_reason": "No authoritative source found.",
+                },
+            ],
+        }
+
+    def test_fact_ledger_parses_valid_response(self):
+        import v1_pipeline as p
+
+        payload = self._ledger_payload()
+        with patch.object(p, "FACT_LEDGER_DIR", self.ledger_dir), \
+             patch.object(p, "module_key_from_path", return_value=self.module_key), \
+             patch.object(p, "dispatch_auto", return_value=(True, json.dumps(payload))):
+            result = p.step_fact_ledger(self.module_path, topic_hint="Topic", refresh=True)
+
+        self.assertIsNotNone(result)
+        statuses = {c["status"] for c in result["claims"]}
+        self.assertEqual(statuses, {"SUPPORTED", "CONFLICTING", "UNVERIFIED"})
+
+    def test_fact_ledger_validates_required_fields(self):
+        import v1_pipeline as p
+
+        bad_payload = {"as_of_date": "2026-04-12", "topic": "Missing claims"}
+        with patch.object(p, "FACT_LEDGER_DIR", self.ledger_dir), \
+             patch.object(p, "module_key_from_path", return_value=self.module_key), \
+             patch.object(p, "dispatch_auto", return_value=(True, json.dumps(bad_payload))):
+            result = p.step_fact_ledger(self.module_path, topic_hint="Topic", refresh=True)
+
+        self.assertIsNone(result)
+
+    def test_fact_ledger_caches_to_disk(self):
+        import v1_pipeline as p
+
+        payload = self._ledger_payload(marker="A")
+        cache_path = self.ledger_dir / "test__module-0.1-test.json"
+        with patch.object(p, "FACT_LEDGER_DIR", self.ledger_dir), \
+             patch.object(p, "module_key_from_path", return_value=self.module_key), \
+             patch.object(p, "dispatch_auto", return_value=(True, json.dumps(payload))):
+            first = p.step_fact_ledger(self.module_path, topic_hint="Topic")
+
+        self.assertIsNotNone(first)
+        self.assertTrue(cache_path.exists())
+
+        with patch.object(p, "FACT_LEDGER_DIR", self.ledger_dir), \
+             patch.object(p, "module_key_from_path", return_value=self.module_key), \
+             patch.object(p, "dispatch_auto", side_effect=AssertionError("dispatch should not run on cache hit")):
+            second = p.step_fact_ledger(self.module_path, topic_hint="Topic")
+
+        self.assertEqual(first["topic"], second["topic"])
+
+    def test_fact_ledger_cache_expires_after_7_days(self):
+        import v1_pipeline as p
+
+        first_payload = self._ledger_payload(marker="A")
+        second_payload = self._ledger_payload(marker="B")
+        cache_path = self.ledger_dir / "test__module-0.1-test.json"
+
+        with patch.object(p, "FACT_LEDGER_DIR", self.ledger_dir), \
+             patch.object(p, "module_key_from_path", return_value=self.module_key), \
+             patch.object(p, "dispatch_auto", return_value=(True, json.dumps(first_payload))):
+            p.step_fact_ledger(self.module_path, topic_hint="Topic")
+
+        old_ts = (datetime.now(UTC) - timedelta(days=8)).timestamp()
+        os.utime(cache_path, (old_ts, old_ts))
+
+        with patch.object(p, "FACT_LEDGER_DIR", self.ledger_dir), \
+             patch.object(p, "module_key_from_path", return_value=self.module_key), \
+             patch.object(p, "dispatch_auto", return_value=(True, json.dumps(second_payload))) as mock_dispatch:
+            refreshed = p.step_fact_ledger(self.module_path, topic_hint="Topic")
+
+        self.assertEqual(mock_dispatch.call_count, 1)
+        self.assertEqual(refreshed["topic"], "Test Module B")
+
+    def test_fact_ledger_refresh_busts_cache(self):
+        import v1_pipeline as p
+
+        first_payload = self._ledger_payload(marker="A")
+        second_payload = self._ledger_payload(marker="B")
+
+        with patch.object(p, "FACT_LEDGER_DIR", self.ledger_dir), \
+             patch.object(p, "module_key_from_path", return_value=self.module_key), \
+             patch.object(p, "dispatch_auto", return_value=(True, json.dumps(first_payload))):
+            p.step_fact_ledger(self.module_path, topic_hint="Topic")
+
+        with patch.object(p, "FACT_LEDGER_DIR", self.ledger_dir), \
+             patch.object(p, "module_key_from_path", return_value=self.module_key), \
+             patch.object(p, "dispatch_auto", return_value=(True, json.dumps(second_payload))) as mock_dispatch:
+            refreshed = p.step_fact_ledger(self.module_path, topic_hint="Topic", refresh=True)
+
+        self.assertEqual(mock_dispatch.call_count, 1)
+        self.assertEqual(refreshed["topic"], "Test Module B")
+
+
+class TestStepCheckIntegrity(unittest.TestCase):
+    """Test tier-1 deterministic integrity checks."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.link_cache = Path(self.tmpdir) / "link-cache.json"
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_link_health_all_resolve(self):
+        import v1_pipeline as p
+
+        content = "See https://example.com/a and https://example.com/b"
+        with patch.object(p, "LINK_CACHE_FILE", self.link_cache), \
+             patch.object(p, "_get_url_status", return_value=200):
+            passed, messages = p.step_check_integrity(content, sample_fact_ledger())
+
+        self.assertTrue(passed)
+        self.assertFalse(any(m.startswith("LINK_DEAD") for m in messages))
+
+    def test_link_health_dead_url_fails(self):
+        import v1_pipeline as p
+
+        content = "Good https://example.com/ok bad https://example.com/dead"
+
+        def fake_status(url, _cache):
+            return 404 if "dead" in url else 200
+
+        with patch.object(p, "LINK_CACHE_FILE", self.link_cache), \
+             patch.object(p, "_get_url_status", side_effect=fake_status):
+            passed, messages = p.step_check_integrity(content, sample_fact_ledger())
+
+        self.assertFalse(passed)
+        self.assertTrue(any("LINK_DEAD: https://example.com/dead (404)" in m for m in messages))
+
+    def test_yaml_lint_valid_passes(self):
+        import v1_pipeline as p
+
+        content = "```yaml\napiVersion: v1\nkind: Pod\nmetadata:\n  name: demo\n```"
+        with patch.object(p, "LINK_CACHE_FILE", self.link_cache):
+            passed, messages = p.step_check_integrity(content, sample_fact_ledger())
+
+        self.assertTrue(passed)
+        self.assertFalse(any(m.startswith("INVALID_YAML") for m in messages))
+
+    def test_yaml_lint_invalid_fails(self):
+        import v1_pipeline as p
+
+        content = "```yaml\napiVersion: v1\nkind Pod\nmetadata:\n  name: demo\n```"
+        with patch.object(p, "LINK_CACHE_FILE", self.link_cache):
+            passed, messages = p.step_check_integrity(content, sample_fact_ledger())
+
+        self.assertFalse(passed)
+        self.assertTrue(any(m.startswith("INVALID_YAML") for m in messages))
+
+    def test_version_consistency_warns_only(self):
+        import v1_pipeline as p
+
+        content = "This module compares v1.30 and 1.32 behavior."
+        with patch.object(p, "LINK_CACHE_FILE", self.link_cache):
+            passed, messages = p.step_check_integrity(content, sample_fact_ledger())
+
+        self.assertTrue(passed)
+        self.assertTrue(any(m.startswith("VERSION_MISMATCH_WARNING") for m in messages))
+
+    def test_version_stale_fails(self):
+        import v1_pipeline as p
+
+        content = "Old guidance references v1.20 in production."
+        with patch.object(p, "LINK_CACHE_FILE", self.link_cache):
+            passed, messages = p.step_check_integrity(content, sample_fact_ledger())
+
+        self.assertFalse(passed)
+        self.assertTrue(any("STALE_K8S_VERSION: v1.20" in m for m in messages))
+
+    def test_evidence_mapping_unhedged_conflict_fails(self):
+        import v1_pipeline as p
+
+        ledger = {
+            "claims": [
+                {
+                    "id": "C9",
+                    "claim": "Kubernetes current stable is v1.32",
+                    "status": "CONFLICTING",
+                    "current_truth": "Kubernetes current stable is v1.32",
+                    "sources": [],
+                    "conflict_summary": "Disagreement",
+                    "unverified_reason": None,
+                }
+            ]
+        }
+        content = "Kubernetes current stable is v1.32."
+        with patch.object(p, "LINK_CACHE_FILE", self.link_cache):
+            passed, messages = p.step_check_integrity(content, ledger)
+
+        self.assertFalse(passed)
+        self.assertTrue(any("UNHEDGED_CONFLICT: claim C9" in m for m in messages))
+
+    def test_evidence_mapping_hedged_conflict_passes(self):
+        import v1_pipeline as p
+
+        ledger = {
+            "claims": [
+                {
+                    "id": "C10",
+                    "claim": "Kubernetes current stable is v1.32",
+                    "status": "CONFLICTING",
+                    "current_truth": "Kubernetes current stable is v1.32",
+                    "sources": [],
+                    "conflict_summary": "Disagreement",
+                    "unverified_reason": None,
+                }
+            ]
+        }
+        content = (
+            "According to upstream docs as of 2026-04-12, "
+            "Kubernetes current stable is v1.32."
+        )
+        with patch.object(p, "LINK_CACHE_FILE", self.link_cache):
+            passed, messages = p.step_check_integrity(content, ledger)
+
+        self.assertTrue(passed)
+        self.assertFalse(any(m.startswith("UNHEDGED_CONFLICT") for m in messages))
+
+
+class TestRunModuleSplitReviewer(unittest.TestCase):
+    """Integration tests for split-reviewer routing in run_module."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.state_file = Path(self.tmpdir) / "state.yaml"
+        self.module_path = Path(self.tmpdir) / "module-0.1-test.md"
+        self.module_path.write_text(GOOD_MODULE)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_pending_module_runs_fact_ledger_then_writes(self):
+        import v1_pipeline as p
+
+        events: list[str] = []
+        review_ok = {
+            "verdict": "APPROVE",
+            "checks": [{"id": cid, "passed": True} for cid in p.CHECK_IDS],
+            "edits": [],
+            "feedback": "",
+        }
+
+        def fake_fact(*args, **kwargs):
+            events.append("ledger")
+            return sample_fact_ledger()
+
+        def fake_write(*args, **kwargs):
+            events.append("write")
+            return GOOD_MODULE
+
+        def fake_review(*args, **kwargs):
+            events.append("review")
+            return review_ok
+
+        state = {"modules": {}}
+        with patch.object(p, "STATE_FILE", self.state_file), \
+             patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
+             patch.object(p, "save_state"), \
+             patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
+             patch.object(p, "ensure_fact_ledger", side_effect=fake_fact), \
+             patch.object(p, "ensure_knowledge_card", return_value="card"), \
+             patch.object(p, "step_write", side_effect=fake_write), \
+             patch.object(p, "step_review", side_effect=fake_review), \
+             patch.object(p, "step_check_integrity", return_value=(True, [])), \
+             patch.object(p, "step_check", return_value=(True, [])), \
+             patch("subprocess.run"):
+            p.run_module(self.module_path, state)
+
+        self.assertEqual(events[:3], ["ledger", "write", "review"])
+
+    def test_data_conflict_triage_exit(self):
+        import v1_pipeline as p
+
+        conflict_ledger = {
+            "as_of_date": "2026-04-12",
+            "topic": "Conflict",
+            "claims": [
+                {"id": f"C{i}", "status": "CONFLICTING"} for i in range(1, 6)
+            ],
+        }
+        state = {"modules": {}}
+        with patch.object(p, "STATE_FILE", self.state_file), \
+             patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
+             patch.object(p, "save_state"), \
+             patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
+             patch.object(p, "ensure_fact_ledger", return_value=conflict_ledger):
+            ok = p.run_module(self.module_path, state)
+
+        self.assertFalse(ok)
+        ms = state["modules"]["test/module-0.1-test"]
+        self.assertEqual(ms.get("phase"), "data_conflict")
+        self.assertTrue(any("DATA_CONFLICT" in e for e in ms.get("errors", [])))
+
+    def test_review_uses_gemini_not_codex(self):
+        import v1_pipeline as p
+
+        review_models = []
+        state = {"modules": {}}
+        review_ok = {
+            "verdict": "APPROVE",
+            "checks": [{"id": cid, "passed": True} for cid in p.CHECK_IDS],
+            "edits": [],
+            "feedback": "",
+        }
+
+        def fake_review(_module_path, _improved, model=None, fact_ledger=None):
+            review_models.append(model)
+            return review_ok
+
+        with patch.object(p, "STATE_FILE", self.state_file), \
+             patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
+             patch.object(p, "save_state"), \
+             patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
+             patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "ensure_knowledge_card", return_value="card"), \
+             patch.object(p, "step_write", return_value=GOOD_MODULE), \
+             patch.object(p, "step_review", side_effect=fake_review), \
+             patch.object(p, "step_check_integrity", return_value=(True, [])), \
+             patch.object(p, "step_check", return_value=(True, [])), \
+             patch("subprocess.run"):
+            p.run_module(self.module_path, state)
+
+        self.assertTrue(review_models)
+        self.assertEqual(review_models[0], p.MODELS["review"])
+        self.assertTrue(review_models[0].startswith("gemini"))
+
+    def test_fact_ledger_cache_hit_skips_dispatch(self):
+        import v1_pipeline as p
+
+        key = "test/module-0.1-test"
+        ledger_dir = Path(self.tmpdir) / ".pipeline" / "fact-ledgers"
+        ledger_dir.mkdir(parents=True, exist_ok=True)
+        cache_path = ledger_dir / "test__module-0.1-test.json"
+        cache_path.write_text(json.dumps(sample_fact_ledger(), indent=2))
+
+        state = {"modules": {}}
+        review_ok = {
+            "verdict": "APPROVE",
+            "checks": [{"id": cid, "passed": True} for cid in p.CHECK_IDS],
+            "edits": [],
+            "feedback": "",
+        }
+        with patch.object(p, "STATE_FILE", self.state_file), \
+             patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
+             patch.object(p, "FACT_LEDGER_DIR", ledger_dir), \
+             patch.object(p, "save_state"), \
+             patch.object(p, "module_key_from_path", return_value=key), \
+             patch.object(p, "dispatch_auto", side_effect=AssertionError("dispatch_auto should not run")), \
+             patch.object(p, "ensure_knowledge_card", return_value="card"), \
+             patch.object(p, "step_write", return_value=GOOD_MODULE), \
+             patch.object(p, "step_review", return_value=review_ok), \
+             patch.object(p, "step_check_integrity", return_value=(True, [])), \
+             patch.object(p, "step_check", return_value=(True, [])), \
+             patch("subprocess.run"):
+            ok = p.run_module(self.module_path, state)
+
+        self.assertTrue(ok)
+
+    def test_existing_binary_gate_tests_still_pass(self):
+        suite = unittest.defaultTestLoader.loadTestsFromTestCase(TestBinaryGateIntegration)
+        result = unittest.TestResult()
+        suite.run(result)
+        self.assertEqual(result.errors, [])
+        self.assertEqual(result.failures, [])
+
+
+# ---------------------------------------------------------------------------
 # Test: Score calculations
 # ---------------------------------------------------------------------------
 
@@ -1581,7 +2047,7 @@ class TestBinaryGatePassingLogic(unittest.TestCase):
     def test_one_check_fails_routes_via_severity(self):
         """One failing check with a clean edit → targeted, not a numeric threshold."""
         checks = [{"id": cid, "passed": True} for cid in self.p.CHECK_IDS]
-        checks[0] = {"id": "FACT", "passed": False, "evidence": "bad",
+        checks[0] = {"id": "LAB", "passed": False, "evidence": "bad",
                      "edit_refs": [0]}
         edits = [{"type": "replace", "find": "a", "new": "b"}]
         self.assertEqual(self.p.compute_severity("REJECT", checks, edits), "targeted")
@@ -1908,7 +2374,7 @@ class TestDeterministicApplyIntegration(unittest.TestCase):
         step_write_calls = []
 
         def fake_step_write(module_path, plan, model=None, rewrite=False,
-                            previous_output=None, knowledge_card=None):
+                            previous_output=None, knowledge_card=None, fact_ledger=None):
             step_write_calls.append({"model": model, "plan": plan[:100]})
             # Return GOOD_MODULE verbatim; the reviewer's edit will patch it.
             return GOOD_MODULE
@@ -1921,9 +2387,8 @@ class TestDeterministicApplyIntegration(unittest.TestCase):
             {
                 "verdict": "REJECT",
                 "checks": [
-                    {"id": "FACT", "passed": False, "evidence": "minor accuracy",
+                    {"id": "LAB", "passed": False, "evidence": "minor accuracy",
                      "edit_refs": [0]},
-                    {"id": "LAB", "passed": True},
                     {"id": "COV", "passed": True},
                     {"id": "QUIZ", "passed": True},
                     {"id": "EXAM", "passed": True},
@@ -1957,6 +2422,8 @@ class TestDeterministicApplyIntegration(unittest.TestCase):
              patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
              patch.object(p, "step_write", side_effect=fake_step_write), \
              patch.object(p, "step_review", side_effect=review_sequence), \
+             patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_check_integrity", return_value=(True, [])), \
              patch.object(p, "step_check", return_value=(True, [])), \
              patch.object(p, "ensure_knowledge_card", return_value="cached card"):
             p.run_module(self.module_path, state)
@@ -2007,8 +2474,8 @@ class TestDeterministicApplyIntegration(unittest.TestCase):
                 "test/module-0.1-test": {
                     "phase": "review",
                     "severity": "targeted",
-                    "checks_failed": [{"id": "FACT", "evidence": "example"}],
-                    "reviewer_schema_version": 2,
+                    "checks_failed": [{"id": "LAB", "evidence": "example"}],
+                    "reviewer_schema_version": 3,
                     "passes": False,
                     "errors": [],
                 }
@@ -2017,7 +2484,7 @@ class TestDeterministicApplyIntegration(unittest.TestCase):
 
         reviews_seen = []
 
-        def fake_step_review(module_path, improved, model=None):
+        def fake_step_review(module_path, improved, model=None, fact_ledger=None):
             reviews_seen.append(improved)
             return {
                 "verdict": "APPROVE",
@@ -2030,7 +2497,7 @@ class TestDeterministicApplyIntegration(unittest.TestCase):
         step_write_calls = []
 
         def fake_step_write(module_path, plan, model=None, rewrite=False,
-                            previous_output=None, knowledge_card=None):
+                            previous_output=None, knowledge_card=None, fact_ledger=None):
             step_write_calls.append(plan[:80])
             return GOOD_MODULE
 
@@ -2040,6 +2507,8 @@ class TestDeterministicApplyIntegration(unittest.TestCase):
              patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
              patch.object(p, "step_write", side_effect=fake_step_write), \
              patch.object(p, "step_review", side_effect=fake_step_review), \
+             patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_check_integrity", return_value=(True, [])), \
              patch.object(p, "step_check", return_value=(True, [])), \
              patch.object(p, "ensure_knowledge_card", return_value="cached card"):
             p.run_module(self.module_path, state)
@@ -2096,10 +2565,10 @@ class TestDeterministicApplyIntegration(unittest.TestCase):
                     "targeted_fix": True,
                     "severity": "targeted",
                     "checks_failed": [
-                        {"id": "FACT", "evidence": "example1"},
-                        {"id": "LAB", "evidence": "example2"},
+                        {"id": "LAB", "evidence": "example1"},
+                        {"id": "QUIZ", "evidence": "example2"},
                     ],
-                    "reviewer_schema_version": 2,
+                    "reviewer_schema_version": 3,
                     "passes": False,
                     "errors": [],
                 }
@@ -2109,7 +2578,7 @@ class TestDeterministicApplyIntegration(unittest.TestCase):
         write_calls_observed = []
 
         def fake_step_write(module_path, plan, model=None, rewrite=False,
-                            previous_output=None, knowledge_card=None):
+                            previous_output=None, knowledge_card=None, fact_ledger=None):
             write_calls_observed.append({
                 "model": model,
                 "plan": plan,
@@ -2117,7 +2586,7 @@ class TestDeterministicApplyIntegration(unittest.TestCase):
             })
             return GOOD_MODULE.replace("## Learning Outcomes", "## Learning Outcomes (FULLY-FIXED)")
 
-        def fake_step_review(module_path, improved, model=None):
+        def fake_step_review(module_path, improved, model=None, fact_ledger=None):
             return {
                 "verdict": "APPROVE",
                 "severity": "clean",
@@ -2132,6 +2601,8 @@ class TestDeterministicApplyIntegration(unittest.TestCase):
              patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
              patch.object(p, "step_write", side_effect=fake_step_write), \
              patch.object(p, "step_review", side_effect=fake_step_review), \
+             patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_check_integrity", return_value=(True, [])), \
              patch.object(p, "step_check", return_value=(True, [])), \
              patch.object(p, "ensure_knowledge_card", return_value="cached card"):
             p.run_module(self.module_path, state)
