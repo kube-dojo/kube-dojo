@@ -202,7 +202,7 @@ Always verify snapshot integrity immediately after creation. A corrupt snapshot 
 
 ```bash
 # Take a snapshot on a control plane node
-ETCDCTL_API=3 etcdctl snapshot save /var/lib/etcd-backup/snapshot-$(date +%Y%m%d-%H%M%S).db \
+ETCDCTL_API=3 etcdctl snapshot save /var/lib/etcd-backup/snapshot-latest.db \
   --endpoints=https://127.0.0.1:2379 \
   --cacert=/etc/kubernetes/pki/etcd/ca.crt \
   --cert=/etc/kubernetes/pki/etcd/server.crt \
@@ -273,7 +273,7 @@ spec:
 # CRITICAL: Stop API server and etcd on ALL control plane nodes first
 sudo mv /var/lib/etcd /var/lib/etcd.bak
 
-ETCDCTL_API=3 etcdctl snapshot restore /var/lib/etcd-backup/snapshot-latest.db \
+etcdutl snapshot restore /var/lib/etcd-backup/snapshot-latest.db \
   --name=cp-1 \
   --initial-cluster=cp-1=https://10.0.1.10:2380,cp-2=https://10.0.1.11:2380,cp-3=https://10.0.1.12:2380 \
   --initial-cluster-token=etcd-cluster-1 \
@@ -311,6 +311,27 @@ sudo systemctl restart kubelet
 > **Warning**: DNS TTL is a suggestion, not a command. Budget for 2-5 minutes of stale DNS in your RTO, even with a 30-second TTL.
 
 ---
+
+## DR Testing Runbooks and Failover Drills
+
+A disaster recovery plan is only theoretical until it is tested. Regular DR drills validate both the technical recovery procedures and the human runbooks.
+
+### Building the Runbook
+
+Your DR runbook should be a step-by-step document that assumes the reader is sleep-deprived and stressed. It must include:
+
+1. **Declaration Criteria**: Who can declare a disaster? What are the criteria (e.g., site down for >15 minutes)?
+2. **Communication Plan**: Which Slack/Teams channels, phone bridges, and status pages to use.
+3. **Technical Steps**: Exact commands (like the `etcdutl snapshot restore` and `velero restore` commands) with expected output.
+4. **Validation Checklist**: How to verify that the restored applications are actually functioning.
+
+### Drill Cadence
+
+- **Monthly Tabletop**: The team talks through a disaster scenario and the runbook steps without touching keyboards.
+- **Quarterly Component Drill**: Fail over a single component to validate the pipeline.
+- **Annual Full-Scale Drill**: Fail over the entire primary site to the DR site, run production from DR for a set period, and fail back.
+
+Always document lessons learned from drills and update the runbook immediately.
 
 ## Did You Know?
 
@@ -412,10 +433,13 @@ Tiered strategy. **Payments**: stretched etcd (3ms is safe), pods in both sites 
 # 1. Create two clusters and run MinIO
 kind create cluster --name site-a
 kind create cluster --name site-b
-docker run -d --name minio -p 9000:9000 -p 9001:9001 \
+docker run -d --name minio --network kind -p 9000:9000 -p 9001:9001 \
   -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
   quay.io/minio/minio server /data --console-address ":9001"
 docker exec minio mkdir -p /data/velero-backups
+
+# Ensure the Velero CLI is installed on your local machine before proceeding.
+# See: https://velero.io/docs/main/basic-install/
 
 # 2. Install Velero on site-a and deploy a sample app
 kubectl config use-context kind-site-a
@@ -426,19 +450,34 @@ aws_secret_access_key = minioadmin
 EOF
 velero install --provider aws --plugins velero/velero-plugin-for-aws:v1.10.0 \
   --bucket velero-backups --secret-file /tmp/credentials-velero \
-  --backup-location-config region=us-east-1,s3ForcePathStyle=true,s3Url=http://host.docker.internal:9000 \
+  --backup-location-config region=us-east-1,s3ForcePathStyle=true,s3Url=http://minio:9000 \
   --use-node-agent
 kubectl create namespace demo-app
 kubectl create deployment nginx --image=nginx:1.27 -n demo-app --replicas=3
+
+# Wait for Velero to be ready before backing up
+kubectl wait --for=condition=available deployment/velero -n velero --timeout=300s
+kubectl wait --for=condition=available deployment/nginx -n demo-app --timeout=120s
+
 velero backup create site-a-full --include-namespaces demo-app --wait
 
 # 3. Install Velero on site-b and restore
 kubectl config use-context kind-site-b
 velero install --provider aws --plugins velero/velero-plugin-for-aws:v1.10.0 \
   --bucket velero-backups --secret-file /tmp/credentials-velero \
-  --backup-location-config region=us-east-1,s3ForcePathStyle=true,s3Url=http://host.docker.internal:9000 \
+  --backup-location-config region=us-east-1,s3ForcePathStyle=true,s3Url=http://minio:9000 \
   --use-node-agent
+
+# Wait for Velero to be ready before restoring
+kubectl wait --for=condition=available deployment/velero -n velero --timeout=300s
+
+# Wait for the backup to sync from MinIO before restoring
+while ! velero backup get site-a-full &>/dev/null; do sleep 5; done
+
 velero restore create --from-backup site-a-full --wait
+
+# Verify restored application is ready
+kubectl wait --for=condition=available deployment/nginx -n demo-app --timeout=120s
 kubectl get pods -n demo-app
 ```
 
