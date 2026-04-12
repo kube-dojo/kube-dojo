@@ -89,7 +89,7 @@ nano hello.txt
 Your screen will change completely. You'll see something like this:
 
 ```
-  GNU nano 6.2                    hello.txt
+  GNU nano 9.0                    hello.txt
 
 
 
@@ -145,7 +145,7 @@ Chef says: You're doing great.
 Your screen should now show:
 
 ```
-  GNU nano 6.2                    hello.txt                    Modified
+  GNU nano 9.0                    hello.txt                    Modified
 
 Welcome to the Kitchen!
 Today's special: Learning to edit files.
@@ -343,7 +343,7 @@ You just wrote and executed your first program. That's not nothing -- that's eve
 
 ## A Note on vim
 
-You'll encounter vim eventually. It's incredibly powerful, used by many senior engineers, and is installed on virtually every Linux system. But vim has a famously steep learning curve because it works in "modes" -- you can't just open it and start typing.
+You'll encounter vim eventually. It's incredibly powerful and used by many senior engineers, though it is not installed by default on all minimal Linux distributions. But vim has a famously steep learning curve because it works in "modes" -- you can't just open it and start typing.
 
 We're not ignoring vim. We're saving it for when you have more context. Right now, nano gets the job done, and learning to walk before you run is how chefs train too.
 
@@ -353,7 +353,7 @@ When you're ready, vim will be there. For now, nano is your friend.
 
 ## Did You Know?
 
-- **nano is a clone of a clone.** It was created as a free replacement for an editor called `pstrict` which was a replacement for `pstrict` ... actually, nano is a free replacement for `pico`, which was the editor built into the Pine email client from the 1990s. `nano` stands for "nano's ANOther editor" -- a recursive acronym, which is a nerdy tradition in programming.
+- **nano is a clone of a clone.** It was created as a free replacement for an editor called `pstrict` which was a replacement for `pstrict` ... actually, nano is a free replacement for `pico`, which was the editor built into the Pine email client from 1989. The name `nano` derives from the SI prefix system, reflecting its role as a successor to pico (nano is 1,000 times larger than pico).
 
 - **The oldest surviving text editor still in use is `ed`, created in 1969.** It was written by Ken Thompson, one of the creators of Unix. `ed` is a "line editor" -- you can't see the whole file at once. You edit one line at a time. Engineers in the 1970s wrote entire operating systems using `ed`. Your experience with nano is luxurious by comparison.
 
