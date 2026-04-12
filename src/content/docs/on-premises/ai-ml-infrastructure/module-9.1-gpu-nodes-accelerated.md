@@ -203,6 +203,29 @@ NVIDIA MIG support in the latest GPU Operator docs is for NVIDIA Ampere and newe
 **War Story: The Mixed MIG Deadlock**
 When operating advanced MIG partitions, infrastructure engineers must rigorously and continuously audit kernel driver stability and known release issues. A prime example of this risk in production environments is that NVIDIA GPU Operator v26.3 has a known MIG scheduling issue with mixed MIG+full-GPU workloads on specific 570-series driver builds, and recommends upgrading to 580.65.06+. Without applying this critical, documented driver patch, the kubelet will repeatedly fail to bind devices. Pods will become permanently stuck in `ContainerCreating`, leading to widespread scheduling deadlocks that require forceful node reboots and deep manual intervention to resolve.
 
+### GPU Telemetry with DCGM Exporter
+
+To effectively extract and scrape GPU telemetry, the NVIDIA GPU Operator automatically deploys the Data Center GPU Manager (DCGM) Exporter. The DCGM Exporter reads deep hardware telemetry—such as temperature, power draw, tensor core utilization, and memory bandwidth—directly from the management libraries and exposes them as Prometheus metrics.
+
+By default, Prometheus can scrape these metrics using a `ServiceMonitor` or `PodMonitor` resource if the Prometheus Operator is installed in the cluster. Administrators can configure Prometheus to target the DCGM exporter service:
+
+```yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: dcgm-exporter
+  namespace: gpu-operator
+spec:
+  selector:
+    matchLabels:
+      app: nvidia-dcgm-exporter
+  endpoints:
+  - port: metrics
+    interval: 15s
+```
+
+*Architectural Rationale*: Direct hardware scraping ensures that infrastructure teams can correlate pod-level performance with physical silicon utilization, enabling precise chargeback models and identifying stranded capacity before it causes scheduling deadlocks.
+
 ## Alternative Ecosystems: AMD ROCm and Intel Gaudi
 
 While NVIDIA dominates the ecosystem, supply chain constraints and pricing have driven adoption of alternatives.
