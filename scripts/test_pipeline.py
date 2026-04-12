@@ -2145,7 +2145,7 @@ class TestStepCheckIntegrity(unittest.TestCase):
             "See https://example.com/a and https://example.com/b"
         )
         with patch.object(p, "LINK_CACHE_FILE", self.link_cache), \
-             patch.object(p, "_get_url_status", return_value=200):
+             patch.object(p, "_probe_url", return_value=200):
             passed, messages = p.step_check_integrity(content, sample_fact_ledger())
 
         self.assertTrue(passed)
@@ -2159,11 +2159,11 @@ class TestStepCheckIntegrity(unittest.TestCase):
             "Good https://example.com/ok bad https://example.com/dead"
         )
 
-        def fake_status(url, _cache):
+        def fake_status(url):
             return 404 if "dead" in url else 200
 
         with patch.object(p, "LINK_CACHE_FILE", self.link_cache), \
-             patch.object(p, "_get_url_status", side_effect=fake_status):
+             patch.object(p, "_probe_url", side_effect=fake_status):
             passed, messages = p.step_check_integrity(content, sample_fact_ledger())
 
         self.assertFalse(passed)
@@ -2329,6 +2329,50 @@ class TestStepCheckIntegrity(unittest.TestCase):
 
         self.assertFalse(passed)
         self.assertTrue(any(m.startswith("UNMAPPED_CLAIM: Helm v3.17.0") for m in messages))
+
+    def test_reverse_evidence_mapping_ignores_fenced_yaml_examples(self):
+        """Regression for round-2 gpt-5.4 finding: standard K8s YAML examples
+        inside ```yaml fences contain API tokens like `apps/v1` that are
+        syntax, not claims. They must not be forced to appear in the fact
+        ledger, or every module with a code example fails tier-1.
+        """
+        import v1_pipeline as p
+
+        ledger = self._supported_ledger("C1", "Kubernetes current stable is v1.35.")
+        content = (
+            "Kubernetes current stable is v1.35.\n"
+            "\n"
+            "```yaml\n"
+            "apiVersion: apps/v1\n"
+            "kind: Deployment\n"
+            "metadata:\n"
+            "  name: demo\n"
+            "spec:\n"
+            "  selector:\n"
+            "    matchLabels:\n"
+            "      app: demo\n"
+            "  template:\n"
+            "    metadata:\n"
+            "      labels:\n"
+            "        app: demo\n"
+            "    spec:\n"
+            "      containers:\n"
+            "      - name: app\n"
+            "        image: busybox:1.36\n"
+            "```\n"
+            "\n"
+            "```bash\n"
+            "kubectl apply -f deploy.yaml\n"
+            "```\n"
+        )
+        with patch.object(p, "LINK_CACHE_FILE", self.link_cache):
+            passed, messages = p.step_check_integrity(content, ledger)
+
+        self.assertTrue(passed, f"integrity should pass; got messages: {messages}")
+        self.assertFalse(
+            any(m.startswith("UNMAPPED_CLAIM: apps/v1") for m in messages),
+            "apps/v1 inside a ```yaml fence is syntax, not a claim",
+        )
 
 
 class TestRunModuleSplitReviewer(unittest.TestCase):

@@ -1522,23 +1522,39 @@ def _save_link_cache(cache: dict) -> None:
     _atomic_write_text(LINK_CACHE_FILE, json.dumps(cache, indent=2, ensure_ascii=False))
 
 
-def _get_url_status(url: str, cache: dict) -> int | None:
-    """Return HTTP status for URL, using 24h cache when available."""
-    cached = cache.get(url) if isinstance(cache, dict) else None
-    if isinstance(cached, dict):
-        checked_at_raw = cached.get("checked_at")
-        status = cached.get("status")
-        if isinstance(checked_at_raw, str):
-            try:
-                checked_at = datetime.fromisoformat(checked_at_raw)
-                if checked_at.tzinfo is None:
-                    checked_at = checked_at.replace(tzinfo=UTC)
-                if datetime.now(UTC) - checked_at < LINK_CACHE_TTL:
-                    return status if isinstance(status, int) else None
-            except ValueError:
-                pass
+def _read_cached_url_status(cache: dict, url: str) -> tuple[bool, int | None]:
+    """Look up a cached URL status. Returns (hit, status): hit is True when the
+    cache entry is present AND within TTL. Pure read, no mutation, no network.
+    """
+    if not isinstance(cache, dict):
+        return False, None
+    cached = cache.get(url)
+    if not isinstance(cached, dict):
+        return False, None
+    checked_at_raw = cached.get("checked_at")
+    status = cached.get("status")
+    if not isinstance(checked_at_raw, str):
+        return False, None
+    try:
+        checked_at = datetime.fromisoformat(checked_at_raw)
+    except ValueError:
+        return False, None
+    if checked_at.tzinfo is None:
+        checked_at = checked_at.replace(tzinfo=UTC)
+    if datetime.now(UTC) - checked_at >= LINK_CACHE_TTL:
+        return False, None
+    return True, status if isinstance(status, int) else None
 
-    def _probe(method: str) -> int | None:
+
+def _probe_url(url: str) -> int | None:
+    """Fetch current HTTP status for a URL. Pure network I/O — no cache access.
+
+    Split out of the old `_get_url_status` so the link-cache lock can wrap
+    ONLY the cache read/write, never this function. Wrapping network calls
+    under the lock was the original concurrency bug: it serialized every
+    HTTP probe across the ThreadPoolExecutor and defeated parallelism.
+    """
+    def _call(method: str) -> int | None:
         headers = {"Range": "bytes=0-1023"} if method == "GET" else {}
         req = urllib.request.Request(url, method=method, headers=headers)
         try:
@@ -1554,20 +1570,45 @@ def _get_url_status(url: str, cache: dict) -> int | None:
         except (urllib.error.URLError, TimeoutError, ValueError):
             return None
 
-    head_status = _probe("HEAD")
+    head_status = _call("HEAD")
     status_code = head_status
     if head_status in (403, 405):
-        get_status = _probe("GET")
-        if get_status is not None and get_status < 400:
+        get_status = _call("GET")
+        if get_status is not None:
             status_code = get_status
-        elif get_status is not None:
-            status_code = get_status
-
-    cache[url] = {
-        "status": status_code,
-        "checked_at": datetime.now(UTC).isoformat(),
-    }
     return status_code
+
+
+def _resolve_url_statuses(urls: list[str]) -> dict[str, int | None]:
+    """Resolve URL statuses via the shared link cache with minimal lock scope.
+
+    Phase A (lock): snapshot cache hits, list the URLs that need probing.
+    Phase B (no lock): probe uncached URLs — the slow network calls run
+                       concurrently across threads.
+    Phase C (lock): re-load the cache, merge probed results, persist.
+    """
+    hits: dict[str, int | None] = {}
+    to_probe: list[str] = []
+    with _LINK_CACHE_LOCK:
+        cache = _load_link_cache()
+        for url in urls:
+            hit, status = _read_cached_url_status(cache, url)
+            if hit:
+                hits[url] = status
+            else:
+                to_probe.append(url)
+
+    probed: dict[str, int | None] = {url: _probe_url(url) for url in to_probe}
+
+    if probed:
+        with _LINK_CACHE_LOCK:
+            cache = _load_link_cache()
+            now_iso = datetime.now(UTC).isoformat()
+            for url, status in probed.items():
+                cache[url] = {"status": status, "checked_at": now_iso}
+            _save_link_cache(cache)
+
+    return {**hits, **probed}
 
 
 def _contains_with_tolerance(haystack: str, needle: str,
@@ -1633,35 +1674,53 @@ HELM_KEY_RE = re.compile(r"`([A-Za-z][A-Za-z0-9_.-]*\.[A-Za-z0-9_.-]+)`")
 DEPRECATION_STATUS_TERMS = ("deprecated", "deprecation", "removed", "stable", "ga", "beta", "alpha")
 
 
+_FENCED_CODE_RE = re.compile(r"```[^\n]*\n[\s\S]*?```", re.MULTILINE)
+
+
+def _strip_fenced_code(content: str) -> str:
+    """Remove fenced code blocks. Factual claim extraction runs on prose only:
+    tokens inside code fences are illustrative syntax, not claims the writer
+    is asserting, and separate YAML/lint passes already validate them.
+    """
+    return _FENCED_CODE_RE.sub("", content)
+
+
 def _extract_factual_claim_candidates(content: str) -> list[str]:
-    """Extract likely factual claim fragments that require ledger mapping."""
+    """Extract likely factual claim fragments that require ledger mapping.
+
+    Scans PROSE only (fenced code blocks are stripped first). API tokens and
+    version strings that appear solely inside ```yaml / ```bash examples are
+    treated as syntax, not as claims, and so they are not required to have a
+    corresponding fact-ledger entry.
+    """
+    prose = _strip_fenced_code(content)
     candidates: set[str] = set()
 
-    for match in K8S_VERSION_RE.finditer(content):
+    for match in K8S_VERSION_RE.finditer(prose):
         minor = match.group(1)
-        snippet = content[max(0, match.start() - 40):min(len(content), match.end() + 40)]
+        snippet = prose[max(0, match.start() - 40):min(len(prose), match.end() + 40)]
         compact = " ".join(snippet.split())
         if compact:
             candidates.add(compact)
         candidates.add(f"v1.{minor}")
 
-    for match in PRODUCT_VERSION_RE.finditer(content):
+    for match in PRODUCT_VERSION_RE.finditer(prose):
         candidates.add(" ".join(match.group(0).split()))
 
-    for match in API_NAME_RE.finditer(content):
+    for match in API_NAME_RE.finditer(prose):
         token = match.group(0)
         if token and not token.startswith("http"):
             candidates.add(token)
 
-    for match in HELM_KEY_RE.finditer(content):
+    for match in HELM_KEY_RE.finditer(prose):
         token = match.group(1).strip()
         if token:
             candidates.add(token)
 
-    for line in content.splitlines():
+    for line in prose.splitlines():
         compact = " ".join(line.split())
         lowered = compact.lower()
-        if not compact or compact.startswith("```"):
+        if not compact:
             continue
         if any(term in lowered for term in DEPRECATION_STATUS_TERMS):
             candidates.add(compact[:160])
@@ -1693,16 +1752,17 @@ def step_check_integrity(content: str, fact_ledger: dict) -> tuple[bool, list[st
     errors: list[str] = []
     warnings: list[str] = []
 
-    # 1) Link health with 24h cache
+    # 1) Link health with 24h cache. Cache dict access is protected by
+    # `_LINK_CACHE_LOCK` inside `_resolve_url_statuses`; the actual HTTP
+    # probes run OUTSIDE the lock so parallel section workers don't
+    # serialize on network I/O.
     urls = sorted(set(re.findall(r"https?://[^\s)>\]\"']+", content)))
-    with _LINK_CACHE_LOCK:
-        cache = _load_link_cache()
-        for url in urls:
-            status = _get_url_status(url, cache)
-            if status is None or status >= 400:
-                label = status if status is not None else "ERROR"
-                errors.append(f"LINK_DEAD: {url} ({label})")
-        _save_link_cache(cache)
+    statuses = _resolve_url_statuses(urls)
+    for url in urls:
+        status = statuses.get(url)
+        if status is None or status >= 400:
+            label = status if status is not None else "ERROR"
+            errors.append(f"LINK_DEAD: {url} ({label})")
 
     # 2) K8s version consistency + minimum supported version hard-fail
     versions = set()
