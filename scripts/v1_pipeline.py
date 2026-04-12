@@ -3084,18 +3084,29 @@ def cmd_status(args):
     modules = state.get("modules", {})
     verbose = getattr(args, "verbose", False)
 
-    # Discover ALL EN modules on disk
-    all_en = sorted(CONTENT_ROOT.glob("**/module-*.md"))
-    all_en = [
-        m for m in all_en
+    # Discover ALL EN modules + index pages on disk
+    all_en_modules = sorted(CONTENT_ROOT.glob("**/module-*.md"))
+    all_en_modules = [
+        m for m in all_en_modules
         if "uk" not in m.relative_to(CONTENT_ROOT).parts[:1]
         and not m.name.endswith(".staging.md")
     ]
+    all_en_indexes = sorted(CONTENT_ROOT.glob("**/index.md"))
+    all_en_indexes = [
+        f for f in all_en_indexes
+        if "uk" not in f.relative_to(CONTENT_ROOT).parts[:1]
+        and f != CONTENT_ROOT / "index.md"
+    ]
+    all_en = all_en_modules + all_en_indexes
     disk_keys = {module_key_from_path(m) for m in all_en}
 
-    # Discover UK translations
-    all_uk = sorted((CONTENT_ROOT / "uk").glob("**/module-*.md")) if (CONTENT_ROOT / "uk").exists() else []
-    all_uk = [m for m in all_uk if not m.name.endswith(".staging.md")]
+    # Discover UK translations (modules + index pages)
+    all_uk = []
+    if (CONTENT_ROOT / "uk").exists():
+        all_uk = sorted((CONTENT_ROOT / "uk").glob("**/module-*.md"))
+        all_uk += sorted((CONTENT_ROOT / "uk").glob("**/index.md"))
+    all_uk = [m for m in all_uk if not m.name.endswith(".staging.md")
+              and m != CONTENT_ROOT / "uk" / "index.md"]
     uk_keys = set()
     for m in all_uk:
         rel = str(m.relative_to(CONTENT_ROOT / "uk")).replace(".md", "")
@@ -3286,23 +3297,7 @@ def cmd_status(args):
         except OSError as exc:
             print(f"  WARN: unable to open dashboard automatically: {exc}")
 
-    # Index pages summary
-    all_idx = sorted(CONTENT_ROOT.glob("**/index.md"))
-    all_idx = [f for f in all_idx if "/uk/" not in str(f) and f != CONTENT_ROOT / "index.md"]
-    idx_by_track: dict[str, dict] = {}
-    for f in all_idx:
-        rel = str(f.relative_to(CONTENT_ROOT))
-        track = _track_from_key(rel.replace("/index.md", "/dummy"))
-        t = idx_by_track.setdefault(track, {"total": 0, "stub": 0})
-        t["total"] += 1
-        if len(f.read_text().splitlines()) < 30:
-            t["stub"] += 1
-    idx_total = sum(t["total"] for t in idx_by_track.values())
-    idx_stubs = sum(t["stub"] for t in idx_by_track.values())
-    print(f"\n  Index pages: {idx_total} total | {idx_total - idx_stubs} with content | {idx_stubs} stubs (<30 lines)")
-    stub_tracks = [(track, t["stub"]) for track, t in sorted(idx_by_track.items()) if t["stub"] > 0]
-    if stub_tracks:
-        print(f"    Stubs: {', '.join(f'{track} ({n})' for track, n in stub_tracks)}")
+    # Index pages are now included in the main completion table above.
 
     # Errors (only with --verbose)
     failed = [k for k, m in modules.items() if m.get("errors")]
