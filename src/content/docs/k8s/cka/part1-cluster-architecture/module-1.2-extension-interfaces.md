@@ -356,6 +356,9 @@ CSI handles persistent storage:
 | **rook-ceph.rbd.csi.ceph.com** | Ceph RBD | On-premises |
 | **hostpath.csi.k8s.io** | Local path | Development |
 
+> **Trade-off: Local Storage vs. Remote CSI**
+> Local storage (like `hostpath` or local volumes) provides high performance and low latency because data is on the node's physical disk. However, it tightly couples the Pod to that specific node—if the node fails, the data is inaccessible. Remote CSI drivers (like EBS or Ceph) add network latency but allow Pods to float between nodes because the volume can be detached and reattached elsewhere, providing higher availability.
+
 ### 4.4 Checking CSI Status
 
 ```bash
@@ -519,11 +522,15 @@ cat /etc/cni/net.d/*.conflist | head -30
 kubectl run test1 --image=nginx
 kubectl run test2 --image=nginx
 
+# Wait for pods to be ready
+kubectl wait --for=condition=Ready pod/test1 pod/test2 --timeout=60s
+
 # Get their IPs
 kubectl get pods -o wide
 
 # Test connectivity
-kubectl exec test1 -- curl -s <test2-ip>:80
+TEST2_IP=$(kubectl get pod test2 -o jsonpath='{.status.podIP}')
+kubectl exec test1 -- curl -s $TEST2_IP:80
 ```
 
 6. **Check CSI drivers** (if available):
@@ -582,7 +589,8 @@ sudo systemctl stop containerd
 
 # Observe the damage
 kubectl get nodes  # Node becomes NotReady
-kubectl describe node <your-node> | grep -A5 Conditions
+NODE_NAME=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
+kubectl describe node $NODE_NAME | grep -A5 Conditions
 
 # YOUR TASK: Restore containerd and verify recovery
 ```
@@ -595,7 +603,7 @@ sudo systemctl start containerd
 sudo systemctl status containerd
 
 # Wait for node to recover
-kubectl get nodes -w  # Watch until Ready
+kubectl wait --for=condition=Ready node --all --timeout=120s
 
 # Verify containers running
 sudo crictl ps
@@ -607,7 +615,8 @@ sudo crictl ps
 
 ```bash
 # Setup: Temporarily break CNI config
-sudo mv /etc/cni/net.d/10-calico.conflist /tmp/
+sudo mkdir -p /tmp/cni-backup
+sudo mv /etc/cni/net.d/* /tmp/cni-backup/
 
 # Create a test pod
 kubectl run cni-broken --image=nginx
@@ -627,7 +636,7 @@ kubectl describe pod cni-broken | grep -A10 Events
 ls /etc/cni/net.d/  # Empty!
 
 # Restore CNI config
-sudo mv /tmp/10-calico.conflist /etc/cni/net.d/
+sudo mv /tmp/cni-backup/* /etc/cni/net.d/
 
 # Delete stuck pod and recreate
 kubectl delete pod cni-broken --force --grace-period=0
@@ -652,10 +661,11 @@ sudo crictl ps
 sudo crictl pods
 
 # 3. Get container logs
-sudo crictl logs <container-id>
+CONT_ID=$(sudo crictl ps -q | head -n 1)
+sudo crictl logs $CONT_ID
 
 # 4. Inspect a container
-sudo crictl inspect <container-id> | head -50
+sudo crictl inspect $CONT_ID | head -50
 
 # 5. List images
 sudo crictl images
@@ -673,11 +683,13 @@ Explore CSI drivers in your cluster:
 kubectl get csidrivers
 
 # Get details on a driver
-kubectl describe csidriver <driver-name>
+DRIVER_NAME=$(kubectl get csidrivers -o jsonpath='{.items[0].metadata.name}')
+kubectl describe csidriver $DRIVER_NAME
 
 # Check CSI nodes
 kubectl get csinodes
-kubectl describe csinode <node-name>
+NODE_NAME=$(kubectl get csinodes -o jsonpath='{.items[0].metadata.name}')
+kubectl describe csinode $NODE_NAME
 
 # View StorageClasses using CSI
 kubectl get sc -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.provisioner}{"\n"}{end}'
@@ -707,7 +719,7 @@ spec:
 EOF
 
 # Watch the PVC get bound (CSI provisioner creates PV)
-kubectl get pvc csi-test-pvc -w
+kubectl wait --for=jsonpath='{.status.phase}'=Bound pvc/csi-test-pvc --timeout=60s
 
 # Check the dynamically provisioned PV
 kubectl get pv
@@ -732,7 +744,7 @@ spec:
 EOF
 
 # Wait for pod to be ready
-kubectl wait --for=condition=ready pod/csi-test-pod --timeout=60s
+kubectl wait --for=condition=Ready pod/csi-test-pod --timeout=60s
 
 # Verify the volume is mounted
 kubectl exec csi-test-pod -- df -h /data
@@ -752,11 +764,14 @@ Verify CNI is working correctly:
 
 ```bash
 # Create pods on different nodes
-kubectl run net-test-1 --image=nginx --overrides='{"spec":{"nodeName":"worker-01"}}'
-kubectl run net-test-2 --image=nginx --overrides='{"spec":{"nodeName":"worker-02"}}'
+NODE1=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
+NODE2=$(kubectl get nodes -o jsonpath='{.items[1].metadata.name}')
+NODE2=${NODE2:-$NODE1}
+kubectl run net-test-1 --image=nginx --overrides='{"spec":{"nodeName":"'"$NODE1"'"}}'
+kubectl run net-test-2 --image=nginx --overrides='{"spec":{"nodeName":"'"$NODE2"'"}}'
 
 # Wait for running
-kubectl wait --for=condition=ready pod/net-test-1 pod/net-test-2 --timeout=60s
+kubectl wait --for=condition=Ready pod/net-test-1 pod/net-test-2 --timeout=60s
 
 # Get IPs
 POD1_IP=$(kubectl get pod net-test-1 -o jsonpath='{.status.podIP}')
