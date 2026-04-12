@@ -464,6 +464,8 @@ When ConfigMap content changes, the hash changes, which changes the name. This t
 
 ### 6.4 Disabling Hash Suffixes
 
+If you need legacy applications to reference a static ConfigMap name and accept that they won't automatically restart on changes, you can disable the hash suffix:
+
 ```yaml
 # kustomization.yaml
 configMapGenerator:
@@ -472,7 +474,7 @@ configMapGenerator:
       - KEY=value
 
 generatorOptions:
-  disableNameSuffixHash: true
+  disableNameSuffix: true
 ```
 
 ---
@@ -620,7 +622,7 @@ kubectl kustomize overlays/production/ | kubectl apply --dry-run=client -f -
 | Forgetting kustomization.yaml | kubectl errors | Every directory needs one |
 | Patch name mismatch | Patch not applied | Patch metadata.name must match base |
 | Missing namespace | Resources in wrong ns | Add `namespace:` to overlay |
-| commonLabels breaking selectors | Selector mismatch | Test carefully, labels affect selectors |
+| commonLabels breaking selectors | Selector mismatch | Use the newer `labels` field with `includeSelectors: false` instead |
 
 ---
 
@@ -641,7 +643,7 @@ kubectl kustomize overlays/production/ | kubectl apply --dry-run=client -f -
 3. **You update an application's config file and re-apply your Kustomize overlay. The ConfigMap is updated, but existing pods are still using the old configuration. However, your colleague's team using the same setup gets automatic pod restarts. What's different about their Kustomize configuration?**
    <details>
    <summary>Answer</summary>
-   Your colleague is using `configMapGenerator` in their `kustomization.yaml`, which appends a content-based hash suffix to the ConfigMap name (e.g., `app-config-8h2k9d`). When the config content changes, the hash changes, the ConfigMap name changes, and the Deployment's reference to it changes — triggering a rolling update. You're probably using a static ConfigMap listed under `resources`, which keeps the same name even when content changes. Kubernetes doesn't automatically restart pods when a mounted ConfigMap's content changes in-place. To get automatic restarts, switch to `configMapGenerator`. If you need to keep the static name for other reasons, you can use `generatorOptions: disableNameSuffixHash: true`, but then you lose the auto-restart behavior.
+   Your colleague is using `configMapGenerator` in their `kustomization.yaml`, which appends a content-based hash suffix to the ConfigMap name (e.g., `app-config-8h2k9d`). When the config content changes, the hash changes, the ConfigMap name changes, and the Deployment's reference to it changes — triggering a rolling update. You're probably using a static ConfigMap listed under `resources`, which keeps the same name even when content changes. Kubernetes doesn't automatically restart pods when a mounted ConfigMap's content changes in-place. To get automatic restarts, switch to `configMapGenerator`. If you need to keep the static name for other reasons, you can use `generatorOptions: disableNameSuffix: true`, but then you lose the auto-restart behavior.
    </details>
 
 4. **A production incident requires you to urgently change the image tag from `v2.1` to `v2.0` across all environments. With Helm, you'd run `helm rollback`. What's the equivalent approach with Kustomize, and what limitation does this reveal?**
