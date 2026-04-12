@@ -47,6 +47,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import urllib.error
 import urllib.request
 import yaml
@@ -62,11 +63,16 @@ SCORE_SCRIPT = REPO_ROOT / "scripts" / "score_module.py"
 KNOWLEDGE_CARD_DIR = REPO_ROOT / ".pipeline" / "knowledge-cards"
 FACT_LEDGER_DIR = REPO_ROOT / ".pipeline" / "fact-ledgers"
 FACT_LEDGER_TTL = timedelta(days=7)
-# DESIGN_AMBIGUITY: Spec acceptance #7 asks to add fact-ledgers to .gitignore,
-# while #3 constrains file changes to scripts/*. To satisfy #3, cache remains
-# under `.pipeline/fact-ledgers` but .gitignore is not modified in this change.
 LINK_CACHE_FILE = REPO_ROOT / ".pipeline" / "link-cache.json"
 LINK_CACHE_TTL = timedelta(hours=24)
+LINK_HEALTH_TIMEOUT_SEC = 5
+K8S_MIN_SUPPORTED_MINOR = 35
+K8S_VERSION_RE = re.compile(r"\bv?1\.(\d{1,2})\b")
+CLAIM_MATCH_TOLERANCE_CHARS = 10
+DATA_CONFLICT_CONFLICT_THRESHOLD = 3
+DATA_CONFLICT_UNVERIFIED_THRESHOLD = 5
+LEGACY_SCORE_PASS_THRESHOLD = 4
+_LINK_CACHE_LOCK = threading.Lock()
 
 # ---------------------------------------------------------------------------
 # Timestamped logging — tee all print() to a log file
@@ -441,19 +447,21 @@ def ensure_fact_ledger(module_path: Path, ms: dict,
                        model: str = MODELS["fact_grounding"],
                        topic_hint: str | None = None,
                        refresh: bool = False) -> dict | None:
-    """Ensure a fresh fact ledger is available in module state."""
-    existing = ms.get("fact_ledger")
-    generated_at_raw = ms.get("fact_ledger_generated_at")
-    if not refresh and isinstance(existing, dict) and isinstance(generated_at_raw, str):
+    """Ensure a fresh fact ledger is available in module state.
+
+    The on-disk cache is authoritative; state metadata is only a mirror.
+    """
+    key = module_key_from_path(module_path)
+    cache_path = fact_ledger_path_for_key(key)
+
+    if not refresh and cache_path.exists() and _cache_is_fresh(cache_path, FACT_LEDGER_TTL):
         try:
-            generated_at = datetime.fromisoformat(generated_at_raw)
-            if generated_at.tzinfo is None:
-                generated_at = generated_at.replace(tzinfo=UTC)
-            if datetime.now(UTC) - generated_at < FACT_LEDGER_TTL:
-                claims = existing.get("claims")
-                if isinstance(claims, list) and claims:
-                    return existing
-        except ValueError:
+            cached = json.loads(cache_path.read_text())
+            claims = cached.get("claims") if isinstance(cached, dict) else None
+            if isinstance(claims, list) and claims:
+                ms["fact_ledger"] = cached
+                return cached
+        except (json.JSONDecodeError, OSError):
             pass
 
     ledger = step_fact_ledger(module_path, topic_hint=topic_hint, model=model, refresh=refresh)
@@ -1086,6 +1094,8 @@ def _translate_index(_en_content: str, uk_path: Path, rel_section: str) -> bool:
 def _has_required_json_keys(obj: dict, required_keys: tuple[str, ...]) -> bool:
     """Return True if obj has the required keys for a JSON payload."""
     if required_keys == ("verdict", "checks"):
+        # Keep legacy `scores` acceptance so step_review can normalize v1/v2
+        # reviewer payloads to v3 `checks`.
         return "verdict" in obj and ("checks" in obj or "scores" in obj)
     return all(k in obj for k in required_keys)
 
@@ -1416,7 +1426,32 @@ def step_review(module_path: Path, improved: str, model: str = MODELS["review"],
         return None
 
     verdict = result.get("verdict", "REJECT")
-    checks_raw = result.get("checks") or []
+    checks_raw = result.get("checks")
+    if (not isinstance(checks_raw, list) or not checks_raw) and "scores" in result:
+        legacy_scores = result.get("scores")
+        checks_raw = []
+        if isinstance(legacy_scores, dict):
+            score_items = list(legacy_scores.items())
+        elif isinstance(legacy_scores, list):
+            score_items = [(f"d{i+1}", score) for i, score in enumerate(legacy_scores)]
+        else:
+            score_items = []
+        for i, (dim, score) in enumerate(score_items):
+            check_id = re.sub(r"[^A-Za-z0-9]+", "_", str(dim).strip()).strip("_").upper()
+            if not check_id:
+                check_id = f"D{i+1}"
+            score_value = score if isinstance(score, (int, float)) else None
+            passed = bool(score_value is not None and score_value >= LEGACY_SCORE_PASS_THRESHOLD)
+            checks_raw.append({
+                "id": check_id,
+                "passed": passed,
+                "evidence": (
+                    f"legacy score={score!r} "
+                    f"(pass threshold {LEGACY_SCORE_PASS_THRESHOLD})"
+                ),
+            })
+    if not isinstance(checks_raw, list):
+        checks_raw = []
     checks = [c for c in checks_raw if isinstance(c, dict) and "id" in c]
     edits = result.get("edits") or []
     if not isinstance(edits, list):
@@ -1503,15 +1538,30 @@ def _get_url_status(url: str, cache: dict) -> int | None:
             except ValueError:
                 pass
 
-    req = urllib.request.Request(url, method="HEAD")
-    status_code: int | None = None
-    try:
-        with urllib.request.urlopen(req, timeout=5) as response:
-            status_code = int(response.getcode())
-    except urllib.error.HTTPError as e:
-        status_code = int(e.code)
-    except (urllib.error.URLError, TimeoutError, ValueError):
-        status_code = None
+    def _probe(method: str) -> int | None:
+        headers = {"Range": "bytes=0-1023"} if method == "GET" else {}
+        req = urllib.request.Request(url, method=method, headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=LINK_HEALTH_TIMEOUT_SEC) as response:
+                if method == "GET":
+                    try:
+                        response.read(1024)
+                    except Exception:
+                        pass
+                return int(response.getcode())
+        except urllib.error.HTTPError as e:
+            return int(e.code)
+        except (urllib.error.URLError, TimeoutError, ValueError):
+            return None
+
+    head_status = _probe("HEAD")
+    status_code = head_status
+    if head_status in (403, 405):
+        get_status = _probe("GET")
+        if get_status is not None and get_status < 400:
+            status_code = get_status
+        elif get_status is not None:
+            status_code = get_status
 
     cache[url] = {
         "status": status_code,
@@ -1520,7 +1570,8 @@ def _get_url_status(url: str, cache: dict) -> int | None:
     return status_code
 
 
-def _contains_with_tolerance(haystack: str, needle: str, tolerance: int = 10) -> bool:
+def _contains_with_tolerance(haystack: str, needle: str,
+                             tolerance: int = CLAIM_MATCH_TOLERANCE_CHARS) -> bool:
     """Return True when needle is found exactly or with end trimming tolerance."""
     if not needle:
         return False
@@ -1573,6 +1624,70 @@ def _is_unhedged_claim_assertion(content: str, claim_text: str) -> bool:
         start = idx + len(needle)
 
 
+PRODUCT_VERSION_RE = re.compile(
+    r"\b(?:kubernetes|k8s|helm|docker|containerd|etcd|cilium|calico|flannel|coredns|istio|argo(?:\s+cd|cd)?)\s+v?\d+\.\d+(?:\.\d+)?\b",
+    re.IGNORECASE,
+)
+API_NAME_RE = re.compile(r"\b[a-z0-9][a-z0-9.-]*/v\d(?:alpha\d+|beta\d+)?\b", re.IGNORECASE)
+HELM_KEY_RE = re.compile(r"`([A-Za-z][A-Za-z0-9_.-]*\.[A-Za-z0-9_.-]+)`")
+DEPRECATION_STATUS_TERMS = ("deprecated", "deprecation", "removed", "stable", "ga", "beta", "alpha")
+
+
+def _extract_factual_claim_candidates(content: str) -> list[str]:
+    """Extract likely factual claim fragments that require ledger mapping."""
+    candidates: set[str] = set()
+
+    for match in K8S_VERSION_RE.finditer(content):
+        minor = match.group(1)
+        snippet = content[max(0, match.start() - 40):min(len(content), match.end() + 40)]
+        compact = " ".join(snippet.split())
+        if compact:
+            candidates.add(compact)
+        candidates.add(f"v1.{minor}")
+
+    for match in PRODUCT_VERSION_RE.finditer(content):
+        candidates.add(" ".join(match.group(0).split()))
+
+    for match in API_NAME_RE.finditer(content):
+        token = match.group(0)
+        if token and not token.startswith("http"):
+            candidates.add(token)
+
+    for match in HELM_KEY_RE.finditer(content):
+        token = match.group(1).strip()
+        if token:
+            candidates.add(token)
+
+    for line in content.splitlines():
+        compact = " ".join(line.split())
+        lowered = compact.lower()
+        if not compact or compact.startswith("```"):
+            continue
+        if any(term in lowered for term in DEPRECATION_STATUS_TERMS):
+            candidates.add(compact[:160])
+
+    return sorted(candidates)
+
+
+def _claim_maps_to_supported_ledger(claim_text: str, supported_ledger_texts: list[str]) -> bool:
+    """Return True when the extracted content claim maps to a supported ledger claim."""
+    if not claim_text:
+        return False
+    for ledger_text in supported_ledger_texts:
+        if not ledger_text:
+            continue
+        if _contains_with_tolerance(ledger_text, claim_text):
+            return True
+        if _contains_with_tolerance(claim_text, ledger_text):
+            return True
+
+        claim_versions = {f"v1.{m.group(1)}" for m in K8S_VERSION_RE.finditer(claim_text)}
+        ledger_versions = {f"v1.{m.group(1)}" for m in K8S_VERSION_RE.finditer(ledger_text)}
+        if claim_versions and claim_versions.intersection(ledger_versions):
+            return True
+    return False
+
+
 def step_check_integrity(content: str, fact_ledger: dict) -> tuple[bool, list[str]]:
     """Tier-1 deterministic integrity gate before structural checks."""
     errors: list[str] = []
@@ -1580,27 +1695,28 @@ def step_check_integrity(content: str, fact_ledger: dict) -> tuple[bool, list[st
 
     # 1) Link health with 24h cache
     urls = sorted(set(re.findall(r"https?://[^\s)>\]\"']+", content)))
-    cache = _load_link_cache()
-    for url in urls:
-        status = _get_url_status(url, cache)
-        if status is None or status >= 400:
-            label = status if status is not None else "ERROR"
-            errors.append(f"LINK_DEAD: {url} ({label})")
-    _save_link_cache(cache)
+    with _LINK_CACHE_LOCK:
+        cache = _load_link_cache()
+        for url in urls:
+            status = _get_url_status(url, cache)
+            if status is None or status >= 400:
+                label = status if status is not None else "ERROR"
+                errors.append(f"LINK_DEAD: {url} ({label})")
+        _save_link_cache(cache)
 
-    # 2) K8s version consistency + stale version hard-fail
+    # 2) K8s version consistency + minimum supported version hard-fail
     versions = set()
-    for match in re.finditer(r"\b(v?1\.(\d{1,2}))\b", content):
-        raw, minor_raw = match.group(1), match.group(2)
+    for match in K8S_VERSION_RE.finditer(content):
+        minor_raw = match.group(1)
         try:
             minor = int(minor_raw)
         except ValueError:
             continue
-        if not (20 <= minor <= 40):
+        if not (0 <= minor <= 99):
             continue
         canonical = f"v1.{minor}"
         versions.add(canonical)
-        if minor <= 20:
+        if minor < K8S_MIN_SUPPORTED_MINOR:
             errors.append(f"STALE_K8S_VERSION: {canonical}")
     if len(versions) > 1:
         warnings.append(f"VERSION_MISMATCH_WARNING: {', '.join(sorted(versions))}")
@@ -1619,17 +1735,23 @@ def step_check_integrity(content: str, fact_ledger: dict) -> tuple[bool, list[st
 
     # 4) Evidence mapping against fact ledger
     claims = fact_ledger.get("claims", []) if isinstance(fact_ledger, dict) else []
+    supported_ledger_texts: list[str] = []
     for claim in claims:
         if not isinstance(claim, dict):
             continue
         claim_id = claim.get("id", "?")
-        status = claim.get("status")
+        status = str(claim.get("status", "")).upper()
         current_truth = claim.get("current_truth")
         statement = claim.get("claim") or current_truth or ""
 
-        if status == "SUPPORTED" and isinstance(current_truth, str) and current_truth.strip():
-            if not _contains_with_tolerance(content, current_truth, tolerance=10):
-                warnings.append(f"MISSING_SUPPORTED_CLAIM: claim {claim_id}")
+        if status in {"SUPPORTED", "VERIFIED"}:
+            if isinstance(current_truth, str) and current_truth.strip():
+                supported_ledger_texts.append(current_truth.strip())
+            if isinstance(claim.get("claim"), str) and claim.get("claim", "").strip():
+                supported_ledger_texts.append(claim.get("claim", "").strip())
+            if isinstance(statement, str) and statement.strip():
+                if not _contains_with_tolerance(content, statement):
+                    errors.append(f"MISSING_SUPPORTED_CLAIM: claim {claim_id}")
 
         if status == "CONFLICTING" and isinstance(statement, str) and statement.strip():
             if _is_unhedged_claim_assertion(content, statement):
@@ -1637,6 +1759,11 @@ def step_check_integrity(content: str, fact_ledger: dict) -> tuple[bool, list[st
         if status == "UNVERIFIED" and isinstance(statement, str) and statement.strip():
             if _is_unhedged_claim_assertion(content, statement):
                 errors.append(f"UNHEDGED_UNVERIFIED: claim {claim_id}")
+
+    # 5) Reverse evidence mapping: content claims must map to supported ledger facts.
+    for extracted in _extract_factual_claim_candidates(content):
+        if not _claim_maps_to_supported_ledger(extracted, supported_ledger_texts):
+            errors.append(f"UNMAPPED_CLAIM: {extracted}")
 
     return len(errors) == 0, errors + warnings
 
@@ -1769,7 +1896,7 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
 
     # Phase 0: split-reviewer fact ledger (issue #225).
     # Model selection rationale is pinned by calibration data in:
-    # /Users/krisztiankoos/.claude/projects/-Users-krisztiankoos-projects-kubedojo/memory/project_fact_grounding_calibration.md
+    # docs/research/fact-grounding-calibration-2026-04-12.md
     if not dry_run:
         fact_model = m.get("fact_grounding", MODELS["fact_grounding"])
         fact_family = _model_family(fact_model)
@@ -1811,7 +1938,6 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
             return False
 
         ms["fact_ledger"] = ledger_result
-        ms["fact_ledger_generated_at"] = datetime.now(UTC).isoformat()
         save_state(state)
 
         n_conflict = sum(
@@ -1822,7 +1948,8 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
             1 for c in ledger_result.get("claims", [])
             if isinstance(c, dict) and c.get("status") == "UNVERIFIED"
         )
-        if n_conflict >= 3 or n_unverified >= 5:
+        if (n_conflict >= DATA_CONFLICT_CONFLICT_THRESHOLD or
+                n_unverified >= DATA_CONFLICT_UNVERIFIED_THRESHOLD):
             ms["phase"] = "data_conflict"
             ms["errors"].append(
                 f"DATA_CONFLICT: {n_conflict} conflicting + {n_unverified} "
@@ -1830,9 +1957,6 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
             )
             save_state(state)
             return False
-
-    knowledge_card = None
-    resume_from_staging = False
 
     # Initial write plan. Legacy `phase="audit"` states from older runs are
     # treated the same as fresh `pending` modules: start a normal first-pass
@@ -1868,7 +1992,6 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
             improved = staging_path.read_text()
             last_good = improved
             targeted_fix = ms.get("targeted_fix", False)
-            resume_from_staging = True
             mode = "targeted fix" if targeted_fix else "improve"
             print(f"  Loaded staged content ({len(improved)} chars) and saved {mode} plan")
         elif ms["phase"] == "review":
@@ -1894,23 +2017,6 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
             last_good = None
             targeted_fix = False
 
-    # Knowledge card must be loaded unconditionally before entering the
-    # write→review loop, regardless of what phase the module is in on entry.
-    # Previously we gated this on `phase == "write"` and `not resume_from_staging`,
-    # which meant resumed modules (e.g. entering at phase=review after a
-    # deterministic apply or peak-hours pause) got KNOWLEDGE_CARD_UNAVAILABLE
-    # on their NEXT write — losing the grounding entirely for any retry that
-    # regenerates content. The card is a stable per-topic artifact and cheap
-    # to read from disk (only the first-time generation costs a Codex call),
-    # so loading it every run is correct and safe.
-    if not dry_run:
-        try:
-            knowledge_card = ensure_knowledge_card(module_path, ms, model=m["knowledge_card"])
-        except Exception as e:
-            print(f"  ⚠ Knowledge card unavailable — proceeding without grounding: {e}")
-            knowledge_card = None
-        save_state(state)
-
     # WRITE → REVIEW loop (max retries)
     # Auto-detect rewrite mode from the binary gate's severity signal on
     # the previous review. severe → full rewrite; anything else → normal
@@ -1928,10 +2034,12 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
         if ms["phase"] in ("write",):
             writer_model = m["write_targeted"] if targeted_fix else m["write"]
             try:
+                # knowledge_card is intentionally not passed to the writer:
+                # fact_ledger is the sole authoritative grounding source.
                 improved = step_write(module_path, plan, model=writer_model,
                                       rewrite=needs_rewrite,
                                       previous_output=last_good,
-                                      knowledge_card=knowledge_card,
+                                      knowledge_card=None,
                                       fact_ledger=ms.get("fact_ledger"))
             except ClaudeUnavailableError as e:
                 # Peak hours / rate limit / budget exhausted on Claude. Pause
@@ -1973,6 +2081,38 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
             save_state(state)
 
         if ms["phase"] == "review":
+            content_for_integrity = improved or module_path.read_text()
+            integrity_passed, integrity_messages = step_check_integrity(
+                content_for_integrity, ms.get("fact_ledger") or {}
+            )
+            if not integrity_passed:
+                needs_rewrite = True
+                targeted_fix = False
+                plan = (
+                    "SEVERE REWRITE REQUIRED. Tier-1 integrity gate failed before "
+                    "structural review. Rewrite the module and resolve every "
+                    "integrity error.\n\nIntegrity errors:\n"
+                )
+                for msg in integrity_messages:
+                    plan += f"\n- {msg}"
+                ms["plan"] = plan
+                ms["targeted_fix"] = False
+                ms["severity"] = "severe"
+                ms["checks_failed"] = [{"id": "INTEGRITY", "evidence": msg} for msg in integrity_messages]
+                ms["reviewer_schema_version"] = 3
+                ms.pop("scores", None)
+                ms.pop("sum", None)
+                if improved is not None:
+                    staging_path = module_path.with_suffix(".staging.md")
+                    _atomic_write_text(staging_path, improved)
+                ms["phase"] = "write"
+                save_state(state)
+                print("  ⚠ Tier-1 integrity gate failed — routing to severe rewrite")
+                if attempt < max_retries:
+                    continue
+                ms["errors"].append("Integrity gate failed after max retries")
+                return False
+
             reviewer_model = m["review"]
             review = step_review(
                 module_path,
@@ -2047,38 +2187,6 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                 return False
 
             if review.get("verdict") == "APPROVE":
-                content_for_integrity = improved or module_path.read_text()
-                integrity_passed, integrity_messages = step_check_integrity(
-                    content_for_integrity, ms.get("fact_ledger") or {}
-                )
-                if not integrity_passed:
-                    needs_rewrite = True
-                    targeted_fix = False
-                    plan = (
-                        "SEVERE REWRITE REQUIRED. Tier-1 integrity gate failed before "
-                        "structural CHECK. Rewrite the module and resolve every "
-                        "integrity error.\n\nIntegrity errors:\n"
-                    )
-                    for msg in integrity_messages:
-                        plan += f"\n- {msg}"
-                    ms["plan"] = plan
-                    ms["targeted_fix"] = False
-                    ms["severity"] = "severe"
-                    ms["checks_failed"] = [{"id": "INTEGRITY", "evidence": msg} for msg in integrity_messages]
-                    ms["reviewer_schema_version"] = 3
-                    ms.pop("scores", None)
-                    ms.pop("sum", None)
-                    if improved is not None:
-                        staging_path = module_path.with_suffix(".staging.md")
-                        _atomic_write_text(staging_path, improved)
-                    ms["phase"] = "write"
-                    save_state(state)
-                    print("  ⚠ Tier-1 integrity gate failed — routing to severe rewrite")
-                    if attempt < max_retries:
-                        continue
-                    ms["errors"].append("Integrity gate failed after max retries")
-                    return False
-
                 # Binary gate: on APPROVE, the module's state records that
                 # every check passed. Per Gemini pair-review critique B, we
                 # ignore any `edits` returned alongside an APPROVE — an

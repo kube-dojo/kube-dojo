@@ -57,3 +57,5 @@ test_script.sh
 *.bak
 .pipeline/rewrite-output/
 *.staging.md
+.pipeline/fact-ledgers/
+.pipeline/link-cache.json

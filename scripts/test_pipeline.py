@@ -17,6 +17,7 @@ import shutil
 import tempfile
 import textwrap
 import unittest
+from argparse import Namespace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
@@ -40,9 +41,9 @@ def sample_fact_ledger() -> dict:
         "claims": [
             {
                 "id": "C1",
-                "claim": "Kubernetes current stable is v1.32",
+                "claim": "Kubernetes current stable is v1.35",
                 "status": "SUPPORTED",
-                "current_truth": "Kubernetes current stable is v1.32",
+                "current_truth": "Kubernetes current stable is v1.35",
                 "sources": [{"url": "https://kubernetes.io/releases/", "source_date": "2026-04-12"}],
                 "conflict_summary": None,
                 "unverified_reason": None,
@@ -1325,20 +1326,19 @@ class TestBinaryGateIntegration(unittest.TestCase):
 
 
 class TestLegacyStateCompat(unittest.TestCase):
-    """Modules approved under the v1 (sum/scores) rubric must still load,
-    display, and commit correctly under the new binary gate.
-
-    Per Gemini pair-review critique C, cmd_status must fall back to a
-    [LEGACY] display rather than trying to map D1-D8 to the new check IDs.
-    """
+    """Legacy state fixtures must continue to load and upgrade cleanly."""
 
     def setUp(self):
-        import v1_pipeline as p
-        self.p = p
+        self.tmpdir = tempfile.mkdtemp()
+        self.state_file = Path(self.tmpdir) / "state.yaml"
+        self.module_path = Path(self.tmpdir) / "module-0.1-test.md"
+        self.module_path.write_text(GOOD_MODULE)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def test_legacy_state_has_scores_and_no_severity(self):
-        """A legacy state entry has scores + sum but no severity field.
-        The status loader must recognize it and count it under legacy."""
+        """v1 legacy fixture shape is still represented correctly."""
         legacy_ms = {
             "phase": "done",
             "scores": [4, 4, 4, 4, 4, 4, 4, 5],
@@ -1353,21 +1353,119 @@ class TestLegacyStateCompat(unittest.TestCase):
         self.assertIsNone(legacy_ms.get("reviewer_schema_version"))
         self.assertIsNotNone(legacy_ms.get("scores"))
 
-    def test_binary_state_has_severity_and_no_scores(self):
-        """A new-gate state entry has severity + checks_failed, no scores."""
-        new_ms = {
-            "phase": "done",
-            "severity": "clean",
-            "checks_failed": [],
-            "reviewer_schema_version": 3,
-            "passes": True,
-            "last_run": "2026-04-11T12:00:00+00:00",
-            "errors": [],
-            "reviewer": "gemini",
+    @patch("subprocess.run")
+    def test_v2_state_fixture_upgrades_to_v3_shape(self, _mock_subprocess):
+        """A v2 fixture (reviewer_schema_version=2) upgrades after one run."""
+        import v1_pipeline as p
+
+        state = {
+            "modules": {
+                "test/module-0.1-test": {
+                    "phase": "review",
+                    "reviewer_schema_version": 2,
+                    "scores": [4, 4, 4, 4, 4, 4, 4, 5],
+                    "sum": 33,
+                    "passes": False,
+                    "errors": [],
+                }
+            }
         }
-        self.assertEqual(new_ms.get("reviewer_schema_version"), 3)
-        self.assertIsNone(new_ms.get("scores"))
-        self.assertIn("severity", new_ms)
+        review_ok = {
+            "verdict": "APPROVE",
+            "checks": [{"id": cid, "passed": True} for cid in p.CHECK_IDS],
+            "edits": [],
+            "feedback": "",
+        }
+
+        with patch.object(p, "STATE_FILE", self.state_file), \
+             patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
+             patch.object(p, "save_state"), \
+             patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
+             patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_check_integrity", return_value=(True, [])), \
+             patch.object(p, "step_review", return_value=review_ok), \
+             patch.object(p, "step_check", return_value=(True, [])):
+            p.run_module(self.module_path, state, max_retries=0)
+
+        ms = state["modules"]["test/module-0.1-test"]
+        self.assertEqual(ms.get("reviewer_schema_version"), 3)
+        self.assertIn("checks_failed", ms)
+        self.assertNotIn("scores", ms)
+        self.assertNotIn("sum", ms)
+
+    @patch("subprocess.run")
+    def test_v1_state_fixture_upgrades_to_v3_shape(self, _mock_subprocess):
+        """A v1 fixture (no reviewer_schema_version) upgrades after one run."""
+        import v1_pipeline as p
+
+        state = {
+            "modules": {
+                "test/module-0.1-test": {
+                    "phase": "review",
+                    "scores": [4, 4, 4, 4, 4, 4, 4, 5],
+                    "sum": 33,
+                    "passes": False,
+                    "errors": [],
+                }
+            }
+        }
+        review_ok = {
+            "verdict": "APPROVE",
+            "checks": [{"id": cid, "passed": True} for cid in p.CHECK_IDS],
+            "edits": [],
+            "feedback": "",
+        }
+
+        with patch.object(p, "STATE_FILE", self.state_file), \
+             patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
+             patch.object(p, "save_state"), \
+             patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
+             patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_check_integrity", return_value=(True, [])), \
+             patch.object(p, "step_review", return_value=review_ok), \
+             patch.object(p, "step_check", return_value=(True, [])):
+            p.run_module(self.module_path, state, max_retries=0)
+
+        ms = state["modules"]["test/module-0.1-test"]
+        self.assertEqual(ms.get("reviewer_schema_version"), 3)
+        self.assertIn("checks_failed", ms)
+        self.assertNotIn("scores", ms)
+        self.assertNotIn("sum", ms)
+
+
+class TestLegacyReviewerCompat(unittest.TestCase):
+    """Legacy reviewer payloads with `scores` should normalize to v3 checks."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.module_path = Path(self.tmpdir) / "module-0.1-test.md"
+        self.module_path.write_text(GOOD_MODULE)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_legacy_scores_normalized_to_checks(self):
+        import v1_pipeline as p
+
+        payload = {
+            "verdict": "APPROVE",
+            "scores": {
+                "lab": 5,
+                "coverage": 4,
+                "quiz": 2,
+            },
+            "feedback": "Legacy schema output",
+        }
+        with patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
+             patch.object(p, "dispatch_auto", return_value=(True, json.dumps(payload))):
+            review = p.step_review(self.module_path, GOOD_MODULE)
+
+        self.assertIsNotNone(review)
+        checks = review.get("checks", [])
+        self.assertGreaterEqual(len(checks), 3)
+        self.assertTrue(any(c.get("id") == "LAB" and c.get("passed") for c in checks))
+        self.assertTrue(any(c.get("id") == "QUIZ" and not c.get("passed") for c in checks))
+        self.assertTrue(all("evidence" in c for c in checks))
 
 
 # ---------------------------------------------------------------------------
@@ -1751,20 +1849,301 @@ class TestFactLedger(unittest.TestCase):
         self.assertEqual(refreshed["topic"], "Test Module B")
 
 
+class TestEnsureFactLedger(unittest.TestCase):
+    """Test ensure_fact_ledger cache precedence and refresh behavior."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.repo_root = Path(self.tmpdir)
+        self.content_root = self.repo_root / "src" / "content" / "docs"
+        self.content_root.mkdir(parents=True, exist_ok=True)
+        self.module_path = self.content_root / "test" / "module-0.1-test.md"
+        self.module_path.parent.mkdir(parents=True, exist_ok=True)
+        self.module_path.write_text("---\ntitle: Test Module\n---\n\nBody")
+        self.ledger_dir = self.repo_root / ".pipeline" / "fact-ledgers"
+        self.module_key = "test/module-0.1-test"
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def _payload(self, marker: str = "5") -> dict:
+        return {
+            "as_of_date": "2026-04-12",
+            "topic": f"Test {marker}",
+            "claims": [
+                {
+                    "id": "C1",
+                    "claim": f"Kubernetes stable is v1.3{marker}",
+                    "status": "SUPPORTED",
+                    "current_truth": f"Kubernetes stable is v1.3{marker}",
+                    "sources": [{"url": "https://kubernetes.io/releases/", "source_date": "2026-04-12"}],
+                    "conflict_summary": None,
+                    "unverified_reason": None,
+                }
+            ],
+        }
+
+    def _cache_path(self) -> Path:
+        return self.ledger_dir / "test__module-0.1-test.json"
+
+    def test_no_file_runs_generator(self):
+        import v1_pipeline as p
+
+        ms = {}
+        payload = self._payload("5")
+        with patch.object(p, "FACT_LEDGER_DIR", self.ledger_dir), \
+             patch.object(p, "module_key_from_path", return_value=self.module_key), \
+             patch.object(p, "step_fact_ledger", return_value=payload) as mock_step:
+            result = p.ensure_fact_ledger(self.module_path, ms)
+
+        self.assertEqual(mock_step.call_count, 1)
+        self.assertEqual(result, payload)
+        self.assertEqual(ms.get("fact_ledger"), payload)
+        self.assertIn("fact_ledger_generated_at", ms)
+
+    def test_fresh_file_returns_cached(self):
+        import v1_pipeline as p
+
+        payload = self._payload("5")
+        self.ledger_dir.mkdir(parents=True, exist_ok=True)
+        self._cache_path().write_text(json.dumps(payload))
+        ms = {}
+        with patch.object(p, "FACT_LEDGER_DIR", self.ledger_dir), \
+             patch.object(p, "module_key_from_path", return_value=self.module_key), \
+             patch.object(p, "step_fact_ledger", side_effect=AssertionError("should not regenerate")):
+            result = p.ensure_fact_ledger(self.module_path, ms)
+
+        self.assertEqual(result, payload)
+        self.assertEqual(ms.get("fact_ledger"), payload)
+        self.assertNotIn("fact_ledger_generated_at", ms)
+
+    def test_stale_file_regenerates(self):
+        import v1_pipeline as p
+
+        stale_payload = self._payload("5")
+        fresh_payload = self._payload("6")
+        self.ledger_dir.mkdir(parents=True, exist_ok=True)
+        self._cache_path().write_text(json.dumps(stale_payload))
+        old_ts = (datetime.now(UTC) - timedelta(days=8)).timestamp()
+        os.utime(self._cache_path(), (old_ts, old_ts))
+
+        ms = {}
+        with patch.object(p, "FACT_LEDGER_DIR", self.ledger_dir), \
+             patch.object(p, "module_key_from_path", return_value=self.module_key), \
+             patch.object(p, "step_fact_ledger", return_value=fresh_payload) as mock_step:
+            result = p.ensure_fact_ledger(self.module_path, ms)
+
+        self.assertEqual(mock_step.call_count, 1)
+        self.assertEqual(result, fresh_payload)
+
+    def test_corrupt_file_regenerates(self):
+        import v1_pipeline as p
+
+        self.ledger_dir.mkdir(parents=True, exist_ok=True)
+        self._cache_path().write_text("{not-json")
+        payload = self._payload("7")
+        ms = {}
+        with patch.object(p, "FACT_LEDGER_DIR", self.ledger_dir), \
+             patch.object(p, "module_key_from_path", return_value=self.module_key), \
+             patch.object(p, "step_fact_ledger", return_value=payload) as mock_step:
+            result = p.ensure_fact_ledger(self.module_path, ms)
+
+        self.assertEqual(mock_step.call_count, 1)
+        self.assertEqual(result, payload)
+
+    def test_file_cache_authoritative(self):
+        import v1_pipeline as p
+
+        ms = {
+            "fact_ledger": self._payload("5"),
+            "fact_ledger_generated_at": datetime.now(UTC).isoformat(),
+        }
+        regenerated = self._payload("8")
+        with patch.object(p, "FACT_LEDGER_DIR", self.ledger_dir), \
+             patch.object(p, "module_key_from_path", return_value=self.module_key), \
+             patch.object(p, "step_fact_ledger", return_value=regenerated) as mock_step:
+            result = p.ensure_fact_ledger(self.module_path, ms)
+
+        self.assertEqual(mock_step.call_count, 1, "Missing file must force regeneration even with fresh state metadata")
+        self.assertEqual(result, regenerated)
+        self.assertEqual(ms.get("fact_ledger"), regenerated)
+
+    def test_refresh_bypasses_cache(self):
+        import v1_pipeline as p
+
+        cached = self._payload("5")
+        refreshed = self._payload("9")
+        self.ledger_dir.mkdir(parents=True, exist_ok=True)
+        self._cache_path().write_text(json.dumps(cached))
+        ms = {}
+        with patch.object(p, "FACT_LEDGER_DIR", self.ledger_dir), \
+             patch.object(p, "module_key_from_path", return_value=self.module_key), \
+             patch.object(p, "step_fact_ledger", return_value=refreshed) as mock_step:
+            result = p.ensure_fact_ledger(self.module_path, ms, refresh=True)
+
+        self.assertEqual(mock_step.call_count, 1)
+        self.assertEqual(result, refreshed)
+
+
+class TestCliRefreshFactLedgerFlag(unittest.TestCase):
+    """CLI commands should propagate --refresh-fact-ledger into run_module."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.content_root = Path(self.tmpdir) / "src" / "content" / "docs"
+        self.section = "prerequisites/zero-to-terminal"
+        self.section_dir = self.content_root / self.section
+        self.section_dir.mkdir(parents=True, exist_ok=True)
+        self.module_path = self.section_dir / "module-0.1-test.md"
+        self.module_path.write_text(GOOD_MODULE)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    @patch("sys.exit", side_effect=SystemExit)
+    def test_cmd_run_propagates_flag(self, _mock_exit):
+        import v1_pipeline as p
+
+        args = Namespace(
+            module=str(self.module_path),
+            write_model=None,
+            review_model=None,
+            dry_run=False,
+            refresh_fact_ledger=True,
+        )
+        with patch.object(p, "load_state", return_value={"modules": {}}), \
+             patch.object(p, "run_module", return_value=True) as mock_run:
+            with self.assertRaises(SystemExit):
+                p.cmd_run(args)
+
+        self.assertTrue(mock_run.call_args.kwargs.get("refresh_fact_ledger"))
+
+    @patch("sys.exit", side_effect=SystemExit)
+    def test_cmd_run_section_propagates_flag(self, _mock_exit):
+        import v1_pipeline as p
+
+        args = Namespace(
+            section=self.section,
+            workers=1,
+            track=None,
+            skip_gaps=False,
+            dry_run=False,
+            write_model=None,
+            review_model=None,
+            refresh_fact_ledger=True,
+        )
+        with patch.object(p, "CONTENT_ROOT", self.content_root), \
+             patch.object(p.gaps, "run_track_gap_analysis", return_value=[]), \
+             patch.object(p, "load_state", return_value={"modules": {}}), \
+             patch.object(p, "run_module", return_value=True) as mock_run:
+            with self.assertRaises(SystemExit):
+                p.cmd_run_section(args)
+
+        self.assertTrue(mock_run.call_args.kwargs.get("refresh_fact_ledger"))
+
+    def test_cmd_resume_propagates_flag(self):
+        import v1_pipeline as p
+
+        args = Namespace(
+            write_model=None,
+            review_model=None,
+            refresh_fact_ledger=True,
+        )
+        state = {
+            "modules": {
+                "test/module-0.1-test": {"phase": "review"}
+            }
+        }
+        with patch.object(p, "load_state", return_value=state), \
+             patch.object(p, "find_module_path", return_value=self.module_path), \
+             patch.object(p, "run_module", return_value=True) as mock_run:
+            p.cmd_resume(args)
+
+        self.assertTrue(mock_run.call_args.kwargs.get("refresh_fact_ledger"))
+
+    def test_cmd_e2e_propagates_flag(self):
+        import v1_pipeline as p
+
+        args = Namespace(
+            sections=[self.section],
+            verbose=True,
+            no_translate=True,
+            write_model=None,
+            review_model=None,
+            refresh_fact_ledger=True,
+        )
+        with patch.object(p, "CONTENT_ROOT", self.content_root), \
+             patch.object(p, "load_state", return_value={"modules": {}}), \
+             patch.object(p, "run_module", return_value=True) as mock_run:
+            p.cmd_e2e(args)
+
+        self.assertTrue(mock_run.call_args.kwargs.get("refresh_fact_ledger"))
+
+
 class TestStepCheckIntegrity(unittest.TestCase):
     """Test tier-1 deterministic integrity checks."""
 
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
         self.link_cache = Path(self.tmpdir) / "link-cache.json"
+        self.state_file = Path(self.tmpdir) / "state.yaml"
+        self.module_path = Path(self.tmpdir) / "module-0.1-test.md"
+        self.module_path.write_text(GOOD_MODULE)
 
     def tearDown(self):
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
+    def _supported_ledger(self, claim_id: str, statement: str) -> dict:
+        return {
+            "claims": [
+                {
+                    "id": claim_id,
+                    "claim": statement,
+                    "status": "SUPPORTED",
+                    "current_truth": statement,
+                    "sources": [],
+                    "conflict_summary": None,
+                    "unverified_reason": None,
+                }
+            ]
+        }
+
+    def test_runs_before_review_on_fail(self):
+        import v1_pipeline as p
+
+        review_calls = {"count": 0}
+
+        def fake_review(*_args, **_kwargs):
+            review_calls["count"] += 1
+            return {
+                "verdict": "APPROVE",
+                "checks": [{"id": cid, "passed": True} for cid in p.CHECK_IDS],
+                "edits": [],
+                "feedback": "",
+            }
+
+        state = {"modules": {}}
+        with patch.object(p, "STATE_FILE", self.state_file), \
+             patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
+             patch.object(p, "save_state"), \
+             patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
+             patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_write", return_value=GOOD_MODULE), \
+             patch.object(p, "step_check_integrity", return_value=(False, ["LINK_DEAD: https://dead.example (404)"])), \
+             patch.object(p, "step_review", side_effect=fake_review), \
+             patch("subprocess.run"):
+            ok = p.run_module(self.module_path, state, max_retries=0)
+
+        self.assertFalse(ok)
+        self.assertEqual(review_calls["count"], 0, "Integrity failure must short-circuit structural review")
+
     def test_link_health_all_resolve(self):
         import v1_pipeline as p
 
-        content = "See https://example.com/a and https://example.com/b"
+        content = (
+            "Kubernetes current stable is v1.35. "
+            "See https://example.com/a and https://example.com/b"
+        )
         with patch.object(p, "LINK_CACHE_FILE", self.link_cache), \
              patch.object(p, "_get_url_status", return_value=200):
             passed, messages = p.step_check_integrity(content, sample_fact_ledger())
@@ -1775,7 +2154,10 @@ class TestStepCheckIntegrity(unittest.TestCase):
     def test_link_health_dead_url_fails(self):
         import v1_pipeline as p
 
-        content = "Good https://example.com/ok bad https://example.com/dead"
+        content = (
+            "Kubernetes current stable is v1.35. "
+            "Good https://example.com/ok bad https://example.com/dead"
+        )
 
         def fake_status(url, _cache):
             return 404 if "dead" in url else 200
@@ -1790,7 +2172,10 @@ class TestStepCheckIntegrity(unittest.TestCase):
     def test_yaml_lint_valid_passes(self):
         import v1_pipeline as p
 
-        content = "```yaml\napiVersion: v1\nkind: Pod\nmetadata:\n  name: demo\n```"
+        content = (
+            "Kubernetes current stable is v1.35.\n"
+            "```yaml\napiVersion: v1\nkind: Pod\nmetadata:\n  name: demo\n```"
+        )
         with patch.object(p, "LINK_CACHE_FILE", self.link_cache):
             passed, messages = p.step_check_integrity(content, sample_fact_ledger())
 
@@ -1800,7 +2185,10 @@ class TestStepCheckIntegrity(unittest.TestCase):
     def test_yaml_lint_invalid_fails(self):
         import v1_pipeline as p
 
-        content = "```yaml\napiVersion: v1\nkind Pod\nmetadata:\n  name: demo\n```"
+        content = (
+            "Kubernetes current stable is v1.35.\n"
+            "```yaml\napiVersion: v1\nkind Pod\nmetadata:\n  name: demo\n```"
+        )
         with patch.object(p, "LINK_CACHE_FILE", self.link_cache):
             passed, messages = p.step_check_integrity(content, sample_fact_ledger())
 
@@ -1810,22 +2198,56 @@ class TestStepCheckIntegrity(unittest.TestCase):
     def test_version_consistency_warns_only(self):
         import v1_pipeline as p
 
-        content = "This module compares v1.30 and 1.32 behavior."
+        ledger = {
+            "claims": [
+                {
+                    "id": "C1",
+                    "claim": "Controller behavior changed in v1.35.",
+                    "status": "SUPPORTED",
+                    "current_truth": "Controller behavior changed in v1.35.",
+                    "sources": [],
+                    "conflict_summary": None,
+                    "unverified_reason": None,
+                },
+                {
+                    "id": "C2",
+                    "claim": "Scheduler behavior changed in v1.36.",
+                    "status": "SUPPORTED",
+                    "current_truth": "Scheduler behavior changed in v1.36.",
+                    "sources": [],
+                    "conflict_summary": None,
+                    "unverified_reason": None,
+                },
+            ]
+        }
+        content = "Controller behavior changed in v1.35. Scheduler behavior changed in v1.36."
         with patch.object(p, "LINK_CACHE_FILE", self.link_cache):
-            passed, messages = p.step_check_integrity(content, sample_fact_ledger())
+            passed, messages = p.step_check_integrity(content, ledger)
 
         self.assertTrue(passed)
         self.assertTrue(any(m.startswith("VERSION_MISMATCH_WARNING") for m in messages))
 
-    def test_version_stale_fails(self):
+    def test_version_floor_1_35(self):
         import v1_pipeline as p
 
-        content = "Old guidance references v1.20 in production."
         with patch.object(p, "LINK_CACHE_FILE", self.link_cache):
-            passed, messages = p.step_check_integrity(content, sample_fact_ledger())
+            passed_134, messages_134 = p.step_check_integrity(
+                "Kubernetes current stable is v1.34.",
+                self._supported_ledger("C34", "Kubernetes current stable is v1.34."),
+            )
+            passed_135, _ = p.step_check_integrity(
+                "Kubernetes current stable is v1.35.",
+                self._supported_ledger("C35", "Kubernetes current stable is v1.35."),
+            )
+            passed_136, _ = p.step_check_integrity(
+                "Kubernetes current stable is v1.36.",
+                self._supported_ledger("C36", "Kubernetes current stable is v1.36."),
+            )
 
-        self.assertFalse(passed)
-        self.assertTrue(any("STALE_K8S_VERSION: v1.20" in m for m in messages))
+        self.assertFalse(passed_134)
+        self.assertTrue(any("STALE_K8S_VERSION: v1.34" in m for m in messages_134))
+        self.assertTrue(passed_135)
+        self.assertTrue(passed_136)
 
     def test_evidence_mapping_unhedged_conflict_fails(self):
         import v1_pipeline as p
@@ -1833,17 +2255,26 @@ class TestStepCheckIntegrity(unittest.TestCase):
         ledger = {
             "claims": [
                 {
+                    "id": "C8",
+                    "claim": "Kubernetes current stable is v1.35",
+                    "status": "SUPPORTED",
+                    "current_truth": "Kubernetes current stable is v1.35",
+                    "sources": [],
+                    "conflict_summary": None,
+                    "unverified_reason": None,
+                },
+                {
                     "id": "C9",
-                    "claim": "Kubernetes current stable is v1.32",
+                    "claim": "Kubernetes current stable is v1.35",
                     "status": "CONFLICTING",
-                    "current_truth": "Kubernetes current stable is v1.32",
+                    "current_truth": "Kubernetes current stable is v1.35",
                     "sources": [],
                     "conflict_summary": "Disagreement",
                     "unverified_reason": None,
                 }
             ]
         }
-        content = "Kubernetes current stable is v1.32."
+        content = "Kubernetes current stable is v1.35."
         with patch.object(p, "LINK_CACHE_FILE", self.link_cache):
             passed, messages = p.step_check_integrity(content, ledger)
 
@@ -1856,10 +2287,19 @@ class TestStepCheckIntegrity(unittest.TestCase):
         ledger = {
             "claims": [
                 {
+                    "id": "C11",
+                    "claim": "Kubernetes current stable is v1.35",
+                    "status": "SUPPORTED",
+                    "current_truth": "Kubernetes current stable is v1.35",
+                    "sources": [],
+                    "conflict_summary": None,
+                    "unverified_reason": None,
+                },
+                {
                     "id": "C10",
-                    "claim": "Kubernetes current stable is v1.32",
+                    "claim": "Kubernetes current stable is v1.35",
                     "status": "CONFLICTING",
-                    "current_truth": "Kubernetes current stable is v1.32",
+                    "current_truth": "Kubernetes current stable is v1.35",
                     "sources": [],
                     "conflict_summary": "Disagreement",
                     "unverified_reason": None,
@@ -1868,13 +2308,27 @@ class TestStepCheckIntegrity(unittest.TestCase):
         }
         content = (
             "According to upstream docs as of 2026-04-12, "
-            "Kubernetes current stable is v1.32."
+            "Kubernetes current stable is v1.35."
         )
         with patch.object(p, "LINK_CACHE_FILE", self.link_cache):
             passed, messages = p.step_check_integrity(content, ledger)
 
         self.assertTrue(passed)
         self.assertFalse(any(m.startswith("UNHEDGED_CONFLICT") for m in messages))
+
+    def test_reverse_evidence_mapping_catches_unmapped_claim(self):
+        import v1_pipeline as p
+
+        ledger = self._supported_ledger("C1", "Kubernetes current stable is v1.35.")
+        content = (
+            "Kubernetes current stable is v1.35. "
+            "Helm v3.17.0 introduces imaginaryKey.priorityClass."
+        )
+        with patch.object(p, "LINK_CACHE_FILE", self.link_cache):
+            passed, messages = p.step_check_integrity(content, ledger)
+
+        self.assertFalse(passed)
+        self.assertTrue(any(m.startswith("UNMAPPED_CLAIM: Helm v3.17.0") for m in messages))
 
 
 class TestRunModuleSplitReviewer(unittest.TestCase):
