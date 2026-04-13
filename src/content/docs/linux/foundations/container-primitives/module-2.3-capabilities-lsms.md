@@ -60,51 +60,34 @@ When your container fails with "operation not permitted" despite running as root
 
 Traditional Unix:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     TRADITIONAL MODEL                            │
-│                                                                  │
-│  Root (UID 0)                    Normal User (UID 1000)         │
-│  ┌──────────────────────┐       ┌──────────────────────┐        │
-│  │ ALL PRIVILEGES       │       │ Limited privileges   │        │
-│  │ - Bind any port      │       │ - Can't bind < 1024  │        │
-│  │ - Read any file      │       │ - Own files only     │        │
-│  │ - Kill any process   │       │ - Own processes only │        │
-│  │ - Load kernel modules│       │ - No kernel access   │        │
-│  │ - Reboot system      │       │ - Can't reboot       │        │
-│  │ - Change any config  │       │ - Limited config     │        │
-│  └──────────────────────┘       └──────────────────────┘        │
-│                                                                  │
-│  ALL or NOTHING - dangerous for services that need only ONE     │
-│  capability from the "ALL" bucket                                │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph "Traditional Model"
+        R["Root (UID 0)<br/>ALL PRIVILEGES<br/>- Bind any port<br/>- Read any file<br/>- Kill any process<br/>- Load kernel modules<br/>- Reboot system<br/>- Change any config"]
+        U["Normal User (UID 1000)<br/>Limited privileges<br/>- Can't bind &lt; 1024<br/>- Own files only<br/>- Own processes only<br/>- No kernel access<br/>- Can't reboot<br/>- Limited config"]
+    end
+    N["ALL or NOTHING - dangerous for services that need only ONE<br/>capability from the 'ALL' bucket"]
 ```
 
 > **Stop and think**: If a web server process is compromised, why might it be significantly worse if it was running as a traditional root user compared to running as a non-root user that has only been granted the `CAP_NET_BIND_SERVICE` capability? What specific actions could an attacker take in the first scenario that are blocked in the second?
 
 ### Capabilities: Granular Privileges
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    CAPABILITIES MODEL                            │
-│                                                                  │
-│  Root's powers split into ~40 capabilities:                     │
-│                                                                  │
-│  ┌───────────────┬───────────────┬───────────────┐              │
-│  │ CAP_NET_BIND_ │ CAP_CHOWN     │ CAP_KILL      │              │
-│  │ SERVICE       │               │               │              │
-│  │ Bind < 1024   │ Change owner  │ Kill any proc │              │
-│  └───────────────┴───────────────┴───────────────┘              │
-│  ┌───────────────┬───────────────┬───────────────┐              │
-│  │ CAP_SYS_ADMIN │ CAP_NET_ADMIN │ CAP_SYS_PTRACE│              │
-│  │ Many things!  │ Network cfg   │ Trace procs   │              │
-│  └───────────────┴───────────────┴───────────────┘              │
-│  ┌───────────────┬───────────────┬───────────────┐              │
-│  │ CAP_NET_RAW   │ CAP_SETUID    │ CAP_SETGID    │              │
-│  │ Raw sockets   │ Set UID       │ Set GID       │              │
-│  └───────────────┴───────────────┴───────────────┘              │
-│                         ...                                      │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph "Capabilities Model"
+        Root["Root's powers split into ~40 capabilities:"]
+        Root --> C1["CAP_NET_BIND_SERVICE<br/>Bind &lt; 1024"]
+        Root --> C2["CAP_CHOWN<br/>Change owner"]
+        Root --> C3["CAP_KILL<br/>Kill any proc"]
+        Root --> C4["CAP_SYS_ADMIN<br/>Many things!"]
+        Root --> C5["CAP_NET_ADMIN<br/>Network cfg"]
+        Root --> C6["CAP_SYS_PTRACE<br/>Trace procs"]
+        Root --> C7["CAP_NET_RAW<br/>Raw sockets"]
+        Root --> C8["CAP_SETUID<br/>Set UID"]
+        Root --> C9["CAP_SETGID<br/>Set GID"]
+        Root --> C10["..."]
+    end
 ```
 
 ### Common Capabilities
@@ -247,34 +230,15 @@ Beyond DAC (discretionary access control) and capabilities, LSMs provide **manda
 
 ### LSM Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        SECURITY STACK                            │
-│                                                                  │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │                    Application                           │    │
-│  └────────────────────────────┬────────────────────────────┘    │
-│                               │                                  │
-│                          System Call                             │
-│                               │                                  │
-│  ┌────────────────────────────▼────────────────────────────┐    │
-│  │           DAC (Discretionary Access Control)             │    │
-│  │                 File permissions (rwx)                   │    │
-│  └────────────────────────────┬────────────────────────────┘    │
-│                               │                                  │
-│  ┌────────────────────────────▼────────────────────────────┐    │
-│  │                      Capabilities                        │    │
-│  │               Does process have CAP_*?                   │    │
-│  └────────────────────────────┬────────────────────────────┘    │
-│                               │                                  │
-│  ┌────────────────────────────▼────────────────────────────┐    │
-│  │                          LSM                             │    │
-│  │        AppArmor / SELinux / Seccomp / SMACK             │    │
-│  │           Mandatory Access Control (MAC)                 │    │
-│  └────────────────────────────┬────────────────────────────┘    │
-│                               │                                  │
-│                          Kernel                                  │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph "Security Stack"
+        App["Application"]
+        App -- "System Call" --> DAC["DAC (Discretionary Access Control)<br/>File permissions (rwx)"]
+        DAC --> Cap["Capabilities<br/>Does process have CAP_*?"]
+        Cap --> LSM["LSM (Linux Security Modules)<br/>AppArmor / SELinux / Seccomp / SMACK<br/>Mandatory Access Control (MAC)"]
+        LSM --> Kernel["Kernel"]
+    end
 ```
 
 ### Available LSMs
@@ -396,26 +360,15 @@ spec:
 
 ### How Seccomp Works
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      SECCOMP FILTER                              │
-│                                                                  │
-│  Application wants to call: open("/etc/passwd", O_RDONLY)       │
-│                               │                                  │
-│                               ▼                                  │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │                    Seccomp BPF Filter                    │    │
-│  │                                                          │    │
-│  │   Is syscall "open" (nr=2) allowed?                     │    │
-│  │     → Check profile rules                                │    │
-│  │     → ALLOW / ERRNO / KILL / LOG                        │    │
-│  └─────────────────────────────────────────────────────────┘    │
-│                               │                                  │
-│            ┌──────────────────┼──────────────────┐              │
-│            ▼                  ▼                  ▼              │
-│       ALLOW              ERRNO(EPERM)         KILL              │
-│    (proceed)           (return error)     (kill process)        │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph "Seccomp Filter"
+        App["Application wants to call:<br/>open('/etc/passwd', O_RDONLY)"]
+        App --> Filter["Seccomp BPF Filter<br/>Is syscall 'open' (nr=2) allowed?<br/>→ Check profile rules"]
+        Filter -- "ALLOW" --> Allow["ALLOW<br/>(proceed)"]
+        Filter -- "ERRNO" --> Errno["ERRNO(EPERM)<br/>(return error)"]
+        Filter -- "KILL" --> Kill["KILL<br/>(kill process)"]
+    end
 ```
 
 ### Default Docker Seccomp Profile
