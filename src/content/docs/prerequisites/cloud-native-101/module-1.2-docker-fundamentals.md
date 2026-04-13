@@ -494,7 +494,7 @@ CMD npm start
 1. **Scenario: You are building a Node.js application. Every time you change a single line of CSS, Docker takes 3 minutes to rebuild the image because it reinstalls all NPM packages. How can you rewrite your Dockerfile to fix this build time issue?**
    <details>
    <summary>Answer</summary>
-   You should separate the copying of your dependency files from your source code. First, `COPY package.json` and `RUN npm install`. Then, use a separate `COPY . .` command for the rest of your source code. This leverages Docker's layer cache: Docker will only rerun the `npm install` layer if the `package.json` file changes, reducing your CSS code changes to a near-instantaneous build.
+   You should separate the copying of your dependency files from your source code. First, `COPY package.json` and `RUN npm install`. Then, use a separate `COPY . .` command for the rest of your source code. This leverages Docker's layer cache: Docker will only rerun the `npm install` layer if the `package.json` file changes, reducing your CSS code changes to a near-instantaneous build. By isolating the dependency installation step, you ensure that changes to your application code do not invalidate the package cache, which saves significant developer time.
    </details>
 
 2. **Scenario: You have a database container running locally, but when you restart it, all your saved users disappear. Which Docker run flag are you missing, and how does it solve the problem?**
