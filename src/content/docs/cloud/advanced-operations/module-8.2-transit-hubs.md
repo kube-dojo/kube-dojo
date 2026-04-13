@@ -461,6 +461,13 @@ flowchart TD
 
 You CANNOT peer or transit-connect VPCs with overlapping CIDRs. This is a hard constraint in all three clouds.
 
+> **Stop and think**: You are merging with another company, and their production VPC uses `10.0.0.0/16`, the exact same CIDR as your production VPC. How can you establish connectivity between these two environments without changing their IP addresses?
+>
+> <details>
+> <summary>Answer</summary>
+> Direct routing is impossible with overlapping CIDRs. You must use Private NAT (Network Address Translation) gateways or intermediary proxy instances. Traffic from your VPC is translated to a non-overlapping intermediate IP range before it crosses the Transit Gateway, and vice versa. This requires complex DNS configuration and dual NAT setups, highlighting why centralized IPAM is critical from day one to avoid overlapping IPs in the first place.
+> </details>
+
 ### Prevention: IP Address Management (IPAM)
 
 The solution is centralized IP address management. Allocate CIDR blocks from a central authority before creating any VPC.
