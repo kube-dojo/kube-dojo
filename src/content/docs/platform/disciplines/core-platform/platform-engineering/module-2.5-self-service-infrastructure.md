@@ -53,69 +53,44 @@ This module teaches you to build self-service systems that actually work.
 
 **Self-service infrastructure** enables developers to provision, modify, and decommission infrastructure resources through automated systems, without requiring tickets, approvals, or manual intervention from operations teams.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                 SELF-SERVICE EVOLUTION                           │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  Traditional            Partial Self-Service    Full Self-Service│
-│  (Ticket-based)         (Guardrailed)           (Golden Paths)   │
-│                                                                  │
-│  Developer              Developer               Developer        │
-│      │                      │                       │            │
-│      ▼                      ▼                       ▼            │
-│  ┌──────┐              ┌──────────┐            ┌──────────┐     │
-│  │Ticket│              │ Request  │            │ Request  │     │
-│  │System│              │ + Auto-  │            │ Instant  │     │
-│  └──┬───┘              │ approval │            │ Provision│     │
-│     │                  └────┬─────┘            └────┬─────┘     │
-│     ▼                       │                       │            │
-│  ┌──────┐                   │                       │            │
-│  │ Ops  │                   ▼                       ▼            │
-│  │Queue │              Provisioned            Provisioned        │
-│  └──┬───┘              in ~1 hour             in ~5 minutes      │
-│     │                                                            │
-│     ▼                                                            │
-│  Manual                                                          │
-│  Provisioning                                                    │
-│  (~days/weeks)                                                   │
-│                                                                  │
-│  Days-Weeks            Hours                   Minutes           │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Traditional["Traditional (Ticket-based)"]
+        direction TB
+        Dev1["Developer"] --> T1["Ticket System"]
+        T1 --> Ops["Ops Queue"]
+        Ops --> Prov1["Manual Provisioning<br/>(~days/weeks)"]
+    end
+    
+    subgraph Partial["Partial Self-Service (Guardrailed)"]
+        direction TB
+        Dev2["Developer"] --> Req1["Request +<br/>Auto-approval"]
+        Req1 --> Prov2["Provisioned<br/>in ~1 hour"]
+    end
+    
+    subgraph Full["Full Self-Service (Golden Paths)"]
+        direction TB
+        Dev3["Developer"] --> Req2["Request +<br/>Instant Provision"]
+        Req2 --> Prov3["Provisioned<br/>in ~5 minutes"]
+    end
 ```
 
 ### The Self-Service Triangle
 
-```
-                        ┌─────────────┐
-                        │             │
-                        │   SPEED     │
-                        │             │
-                        └──────┬──────┘
-                               │
-                    Faster provisioning
-                    means faster delivery
-                               │
-              ┌────────────────┴────────────────┐
-              │                                  │
-              │        SELF-SERVICE              │
-              │                                  │
-              │     Balance all three            │
-              │                                  │
-              └────────────────┬────────────────┘
-                               │
-          ┌────────────────────┼────────────────────┐
-          │                                         │
-          ▼                                         ▼
-    ┌───────────┐                           ┌───────────┐
-    │           │                           │           │
-    │ CONTROL   │                           │ AUTONOMY  │
-    │           │                           │           │
-    └───────────┘                           └───────────┘
-
-    Governance,                              Developer
-    compliance,                              freedom and
-    cost management                          velocity
+```mermaid
+flowchart TD
+    Speed["SPEED<br/>Faster provisioning means faster delivery"]
+    Control["CONTROL<br/>Governance, compliance, cost management"]
+    Autonomy["AUTONOMY<br/>Developer freedom and velocity"]
+    
+    Speed --- Control
+    Control --- Autonomy
+    Autonomy --- Speed
+    
+    Center(("SELF-SERVICE<br/>Balance all three"))
+    Speed --- Center
+    Control --- Center
+    Autonomy --- Center
 ```
 
 The art of self-service is balancing these three:
@@ -123,52 +98,53 @@ The art of self-service is balancing these three:
 - **Too much autonomy** → Cost explosion, security gaps, chaos
 - **Speed without governance** → Fast path to technical debt
 
+> **Stop and think**: Consider your current organization. Which of the three points on the triangle is currently prioritized the most, and which one is suffering as a result?
+
 ---
 
 ## Self-Service Architecture
 
 ### The Control Plane Pattern
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    SELF-SERVICE ARCHITECTURE                     │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│                      Developer Interface                         │
-│  ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐ │
-│  │ Portal   │    │  CLI     │    │   API    │    │   Git    │ │
-│  │ (UI)     │    │          │    │          │    │  (GitOps)│ │
-│  └────┬─────┘    └────┬─────┘    └────┬─────┘    └────┬─────┘ │
-│       │               │               │               │        │
-│       └───────────────┴───────┬───────┴───────────────┘        │
-│                               │                                  │
-│                               ▼                                  │
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │                    CONTROL PLANE                             ││
-│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         ││
-│  │  │  Request    │  │   Policy    │  │   Cost      │         ││
-│  │  │  Validation │  │   Engine    │  │   Controls  │         ││
-│  │  └─────────────┘  └─────────────┘  └─────────────┘         ││
-│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         ││
-│  │  │  Quota      │  │  Approval   │  │   Audit     │         ││
-│  │  │  Management │  │  Workflows  │  │   Logging   │         ││
-│  │  └─────────────┘  └─────────────┘  └─────────────┘         ││
-│  └─────────────────────────────────────────────────────────────┘│
-│                               │                                  │
-│                               ▼                                  │
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │                  PROVISIONING ENGINE                         ││
-│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   ││
-│  │  │ Terraform│  │ Crossplane│ │ Pulumi   │  │ CloudForm│   ││
-│  │  └──────────┘  └──────────┘  └──────────┘  └──────────┘   ││
-│  └─────────────────────────────────────────────────────────────┘│
-│                               │                                  │
-│                               ▼                                  │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐       │
-│  │   AWS    │  │   GCP    │  │  Azure   │  │ Internal │       │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘       │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph DevInterface["Developer Interface"]
+        direction LR
+        UI["Portal (UI)"]
+        CLI["CLI"]
+        API["API"]
+        Git["Git (GitOps)"]
+    end
+    
+    subgraph ControlPlane["CONTROL PLANE"]
+        direction LR
+        Req["Request Validation"]
+        Pol["Policy Engine"]
+        Cost["Cost Controls"]
+        Quota["Quota Management"]
+        App["Approval Workflows"]
+        Audit["Audit Logging"]
+    end
+    
+    subgraph ProvEngine["PROVISIONING ENGINE"]
+        direction LR
+        TF["Terraform"]
+        CP["Crossplane"]
+        PU["Pulumi"]
+        CF["CloudFormation"]
+    end
+    
+    subgraph Cloud["Cloud Providers"]
+        direction LR
+        AWS["AWS"]
+        GCP["GCP"]
+        Azure["Azure"]
+        Int["Internal"]
+    end
+    
+    DevInterface --> ControlPlane
+    ControlPlane --> ProvEngine
+    ProvEngine --> Cloud
 ```
 
 ### Key Components
@@ -302,53 +278,16 @@ spec:
 
 ### The Abstraction Ladder
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    ABSTRACTION LEVELS                            │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  Level 4: Intent                                                │
-│  ┌───────────────────────────────────────────────────────────┐ │
-│  │ "I need a database for my orders service"                  │ │
-│  │  → Platform chooses type, size, config                     │ │
-│  └───────────────────────────────────────────────────────────┘ │
-│                              │                                  │
-│                              ▼                                  │
-│  Level 3: Simplified Resource                                   │
-│  ┌───────────────────────────────────────────────────────────┐ │
-│  │ apiVersion: platform/v1                                    │ │
-│  │ kind: Database                                             │ │
-│  │ spec:                                                      │ │
-│  │   type: postgresql                                         │ │
-│  │   size: medium                                             │ │
-│  └───────────────────────────────────────────────────────────┘ │
-│                              │                                  │
-│                              ▼                                  │
-│  Level 2: Provider Resource                                     │
-│  ┌───────────────────────────────────────────────────────────┐ │
-│  │ apiVersion: rds.aws.crossplane.io/v1beta1                  │ │
-│  │ kind: Instance                                             │ │
-│  │ spec:                                                      │ │
-│  │   forProvider:                                             │ │
-│  │     engine: postgres                                       │ │
-│  │     instanceClass: db.t3.medium                            │ │
-│  │     allocatedStorage: 50                                   │ │
-│  │     # ... 20+ more fields                                  │ │
-│  └───────────────────────────────────────────────────────────┘ │
-│                              │                                  │
-│                              ▼                                  │
-│  Level 1: Cloud API                                             │
-│  ┌───────────────────────────────────────────────────────────┐ │
-│  │ aws rds create-db-instance \                               │ │
-│  │   --db-instance-identifier orders-db \                     │ │
-│  │   --engine postgres \                                      │ │
-│  │   --db-instance-class db.t3.medium \                       │ │
-│  │   # ... 50+ flags                                          │ │
-│  └───────────────────────────────────────────────────────────┘ │
-│                                                                  │
-│  Higher = Simpler for developers                                │
-│  Lower = More control but more complexity                       │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    L4["Level 4: Intent<br/>'I need a database for my orders service'<br/>→ Platform chooses type, size, config"]
+    L3["Level 3: Simplified Resource<br/>apiVersion: platform/v1<br/>kind: Database<br/>spec: type: postgresql, size: medium"]
+    L2["Level 2: Provider Resource<br/>apiVersion: rds.aws.crossplane.io/v1beta1<br/>kind: Instance<br/>spec: forProvider: engine: postgres..."]
+    L1["Level 1: Cloud API<br/>aws rds create-db-instance --db-instance-identifier orders-db..."]
+    
+    L4 --> L3
+    L3 --> L2
+    L2 --> L1
 ```
 
 ### Designing Good Abstractions
@@ -450,39 +389,38 @@ sizes:
         useCase: "Critical systems, requires approval"
 ```
 
+> **Pause and predict**: If you only offer small, medium, and large T-shirt sizes, what happens when a team genuinely needs an XX-large database for a massive event? A robust abstraction always provides an "escape hatch" or a clearly documented exception process for advanced use cases.
+
 ---
 
 ## Guardrails and Governance
 
 ### Types of Guardrails
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     GUARDRAIL TYPES                              │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  PREVENTIVE                    DETECTIVE                        │
-│  (Stop before it happens)      (Find after the fact)            │
-│                                                                  │
-│  ┌─────────────────────┐      ┌─────────────────────┐          │
-│  │ • Admission control │      │ • Compliance scans  │          │
-│  │ • Policy enforcement│      │ • Drift detection   │          │
-│  │ • Quota limits      │      │ • Cost alerts       │          │
-│  │ • Pre-deployment    │      │ • Security audits   │          │
-│  │   validation        │      │                     │          │
-│  └─────────────────────┘      └─────────────────────┘          │
-│                                                                  │
-│  CORRECTIVE                    ADVISORY                         │
-│  (Fix automatically)           (Warn and suggest)               │
-│                                                                  │
-│  ┌─────────────────────┐      ┌─────────────────────┐          │
-│  │ • Auto-remediation  │      │ • Best practice     │          │
-│  │ • Self-healing      │      │   warnings          │          │
-│  │ • Orphan cleanup    │      │ • Cost optimization │          │
-│  │ • Right-sizing      │      │   suggestions       │          │
-│  └─────────────────────┘      └─────────────────────┘          │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Preventive["PREVENTIVE (Stop before it happens)"]
+        direction TB
+        P1["• Admission control<br/>• Policy enforcement<br/>• Quota limits<br/>• Pre-deployment validation"]
+    end
+    
+    subgraph Detective["DETECTIVE (Find after the fact)"]
+        direction TB
+        D1["• Compliance scans<br/>• Drift detection<br/>• Cost alerts<br/>• Security audits"]
+    end
+    
+    subgraph Corrective["CORRECTIVE (Fix automatically)"]
+        direction TB
+        C1["• Auto-remediation<br/>• Self-healing<br/>• Orphan cleanup<br/>• Right-sizing"]
+    end
+    
+    subgraph Advisory["ADVISORY (Warn and suggest)"]
+        direction TB
+        A1["• Best practice warnings<br/>• Cost optimization suggestions"]
+    end
+    
+    Preventive --- Detective
+    Corrective --- Advisory
 ```
 
 ### Implementing Policy Guardrails
@@ -661,37 +599,22 @@ spec:
 
 ### The Request Lifecycle
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                   INFRASTRUCTURE REQUEST LIFECYCLE               │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│   REQUEST      VALIDATE     APPROVE?      PROVISION    READY    │
-│      │            │            │              │           │      │
-│      ▼            ▼            ▼              ▼           ▼      │
-│   ┌─────┐     ┌─────┐      ┌─────┐       ┌─────┐     ┌─────┐  │
-│   │     │     │     │      │     │       │     │     │     │  │
-│   │ Dev │────►│Check│─────►│Auto/│──────►│ IaC │────►│Done │  │
-│   │     │     │     │      │Human│       │     │     │     │  │
-│   └─────┘     └─────┘      └─────┘       └─────┘     └─────┘  │
-│                  │            │              │                   │
-│                  │            │              │                   │
-│                  ▼            ▼              ▼                   │
-│              ┌───────┐   ┌───────┐      ┌───────┐              │
-│              │Policy │   │Approval│     │Terraform│             │
-│              │Engine │   │ Rules  │     │Crossplane│            │
-│              │       │   │        │     │Pulumi   │             │
-│              └───────┘   └───────┘      └───────┘              │
-│                                                                  │
-│   Timing:                                                        │
-│   ────────────────────────────────────────────────────────────  │
-│   Auto-approved: REQUEST ──────────────────────────► READY      │
-│                           ~5 minutes                             │
-│                                                                  │
-│   Requires approval: REQUEST ─────► WAIT ──────────► READY      │
-│                               ~4 hours (SLA)                     │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    Dev["REQUEST"] --> Valid["VALIDATE"]
+    Valid --> Appr["APPROVE?"]
+    Appr --> Prov["PROVISION"]
+    Prov --> Done["READY"]
+    
+    Valid -.-> PE["Policy Engine"]
+    Appr -.-> AR["Approval Rules"]
+    Prov -.-> TF["Terraform / Crossplane / Pulumi"]
+    
+    subgraph Timing["Timing Expectations"]
+        direction TB
+        T1["Auto-approved: REQUEST ─────► READY (~5 minutes)"]
+        T2["Requires approval: REQUEST ─────► WAIT ─────► READY (~4 hours SLA)"]
+    end
 ```
 
 ### Approval Strategies
@@ -781,58 +704,29 @@ approvalPolicy:
 
 ### Self-Service Portal Flow
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    DEVELOPER PORTAL FLOW                         │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  1. DISCOVER                    2. CONFIGURE                     │
-│  ┌─────────────────────────┐   ┌─────────────────────────────┐ │
-│  │                         │   │                              │ │
-│  │  What do you need?      │   │  Database Details            │ │
-│  │                         │   │                              │ │
-│  │  [Database     ▼]       │   │  Name: [orders-db        ]  │ │
-│  │                         │   │  Type: [PostgreSQL   ▼]     │ │
-│  │  ○ PostgreSQL           │   │  Size: ○ Small ($15/mo)     │ │
-│  │  ○ MongoDB              │   │        ● Medium ($60/mo)    │ │
-│  │  ○ Redis                │   │        ○ Large ($150/mo)    │ │
-│  │                         │   │  Environment: [Staging ▼]   │ │
-│  │  Learn more about       │   │                              │ │
-│  │  database options →     │   │  [Show Advanced Options]    │ │
-│  │                         │   │                              │ │
-│  └─────────────────────────┘   └─────────────────────────────┘ │
-│                                                                  │
-│  3. REVIEW                      4. PROVISION                     │
-│  ┌─────────────────────────┐   ┌─────────────────────────────┐ │
-│  │                         │   │                              │ │
-│  │  Review Your Request    │   │  ✓ Request submitted         │ │
-│  │                         │   │  ✓ Validation passed         │ │
-│  │  Database: orders-db    │   │  ✓ Auto-approved            │ │
-│  │  Type: PostgreSQL 15    │   │  ◐ Provisioning... (2 min)  │ │
-│  │  Size: Medium           │   │  ○ Connection details        │ │
-│  │  Cost: ~$60/month       │   │                              │ │
-│  │                         │   │  Progress: ████████░░ 80%   │ │
-│  │  Approval: Auto         │   │                              │ │
-│  │  (dev environment)      │   │  [View Logs]                │ │
-│  │                         │   │                              │ │
-│  │  [Back] [Create →]      │   │                              │ │
-│  └─────────────────────────┘   └─────────────────────────────┘ │
-│                                                                  │
-│  5. READY                                                        │
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │                                                              ││
-│  │  ✅ Database Ready!                                          ││
-│  │                                                              ││
-│  │  Connection Details:                                         ││
-│  │  Host: orders-db.staging.internal                            ││
-│  │  Port: 5432                                                  ││
-│  │  Secret: platform/orders-db-credentials (Kubernetes Secret)  ││
-│  │                                                              ││
-│  │  [Copy Connection String]  [View in Console]  [Documentation]││
-│  │                                                              ││
-│  └─────────────────────────────────────────────────────────────┘│
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph S1["1. DISCOVER"]
+        D["What do you need?<br/>[Database]<br/>○ PostgreSQL<br/>○ MongoDB<br/>○ Redis"]
+    end
+    
+    subgraph S2["2. CONFIGURE"]
+        C["Database Details<br/>Name: orders-db<br/>Type: PostgreSQL<br/>Size: Medium ($60/mo)<br/>Environment: Staging"]
+    end
+    
+    subgraph S3["3. REVIEW"]
+        R["Review Your Request<br/>Cost: ~$60/month<br/>Approval: Auto (dev environment)<br/>[Create]"]
+    end
+    
+    subgraph S4["4. PROVISION"]
+        P["✓ Request submitted<br/>✓ Auto-approved<br/>◐ Provisioning... (2 min)<br/>Progress: 80%"]
+    end
+    
+    subgraph S5["5. READY"]
+        F["✅ Database Ready!<br/>Host: orders-db.staging.internal<br/>Port: 5432<br/>Secret: platform/orders-db-credentials"]
+    end
+    
+    S1 --> S2 --> S3 --> S4 --> S5
 ```
 
 ---
@@ -843,25 +737,24 @@ approvalPolicy:
 
 Self-service doesn't stop at provisioning:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                  INFRASTRUCTURE LIFECYCLE                        │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  Day 0: Provision    Day 1: Configure    Day 2+: Operate        │
-│  ┌──────────────┐   ┌──────────────┐   ┌──────────────────────┐│
-│  │              │   │              │   │                      ││
-│  │ • Create     │   │ • First use  │   │ • Scale              ││
-│  │ • Initial    │   │ • Connect    │   │ • Backup/Restore     ││
-│  │   config     │   │   apps       │   │ • Version upgrade    ││
-│  │              │   │ • Test       │   │ • Config changes     ││
-│  │              │   │              │   │ • Troubleshoot       ││
-│  │              │   │              │   │ • Decommission       ││
-│  └──────────────┘   └──────────────┘   └──────────────────────┘│
-│                                                                  │
-│  All must be self-service!                                      │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph D0["Day 0: Provision"]
+        direction TB
+        P1["• Create<br/>• Initial config"]
+    end
+    
+    subgraph D1["Day 1: Configure"]
+        direction TB
+        C1["• First use<br/>• Connect apps<br/>• Test"]
+    end
+    
+    subgraph D2["Day 2+: Operate"]
+        direction TB
+        O1["• Scale<br/>• Backup/Restore<br/>• Version upgrade<br/>• Config changes<br/>• Troubleshoot<br/>• Decommission"]
+    end
+    
+    D0 --> D1 --> D2
 ```
 
 **Self-Service Operations:**
@@ -1008,6 +901,8 @@ spec:
 ---
 
 ## Implementation Approaches
+
+> **Stop and think**: Which of the three implementation approaches (Crossplane, Terraform/Atlantis, Internal API) best fits your team's current skill set and existing infrastructure footprint?
 
 ### Approach 1: Crossplane (Kubernetes-Native)
 
@@ -1245,84 +1140,49 @@ async def create_database(
 
 Test your understanding of self-service infrastructure:
 
-**Question 1**: What are the three competing concerns that self-service infrastructure must balance?
+**Question 1**: Your platform team recently launched a self-service portal that gives developers full AWS access. Within weeks, cloud costs tripled due to over-provisioned resources. When you tried to revoke access, developers complained that the old ticket system was too slow. Which fundamental self-service framework is your team failing to balance?
 
 <details>
 <summary>Show Answer</summary>
 
-The **Self-Service Triangle**:
-1. **Speed** - Fast provisioning for developer velocity
-2. **Control** - Governance, compliance, and cost management
-3. **Autonomy** - Developer freedom and independence
-
-Too much of any one creates problems:
-- Speed without control → cost explosion, security gaps
-- Control without autonomy → ticket-based systems return
-- Autonomy without governance → chaos and inconsistency
+The **Self-Service Triangle** (Speed, Control, Autonomy).
+Your team over-indexed on **Autonomy** (giving full AWS access) and **Speed** (removing tickets), but completely neglected **Control** (governance and cost management). This imbalance naturally leads to cost explosions and security risks because developers will optimize for their immediate needs rather than organizational constraints. If you swing too far back to Control by revoking access and bringing back tickets, you sacrifice Speed and Autonomy, leading to frustrated developers. A successful platform balances all three pillars by providing guardrailed abstractions (like predefined instance sizes) that maintain velocity without sacrificing governance.
 </details>
 
-**Question 2**: Why is Day 2 operations critical for self-service systems?
+**Question 2**: You've built an incredible API that provisions an RDS database with complete security compliance in exactly 3 minutes. Developers love it. Six months later, you notice your team's support queue is full of tickets asking to resize databases, restore from backups, and update PostgreSQL versions. What self-service principle did you miss?
 
 <details>
 <summary>Show Answer</summary>
 
-Day 2 operations (scaling, upgrades, troubleshooting, decommissioning) represent where infrastructure spends most of its lifecycle. If only provisioning is self-service:
-- Developers file tickets for routine operations
-- Resources become orphaned (no self-service delete)
-- Version upgrades are delayed or blocked
-- The promised velocity gains disappear
-
-Complete self-service means covering the full lifecycle: provision, configure, operate, and decommission.
+You missed the critical importance of **Day 2 operations** in your self-service platform design.
+Infrastructure spends the vast majority of its lifecycle in the "Operate" phase (Day 2+), far beyond initial provisioning. If you only build self-service capabilities for Day 0 (Provisioning), developers will still be blocked by operations ticket queues whenever they need to scale, troubleshoot, or upgrade their resources. True self-service requires building APIs and UI flows for the entire lifecycle, ensuring that developers can maintain and eventually decommission their own infrastructure.
 </details>
 
-**Question 3**: An organization has $2M monthly cloud spend with significant waste from orphaned and over-provisioned resources. What guardrails would help?
+**Question 3**: After a rapid hiring phase, your company discovers 400 orphaned test environments running in AWS, costing over $50,000 a month. The platform team wants to implement strict approval workflows for every new environment to stop the bleeding, but engineering leadership refuses to slow down deployments. How can you implement guardrails that solve the cost issue without adding manual approvals?
 
 <details>
 <summary>Show Answer</summary>
 
-Recommended guardrails:
-1. **Required tagging** - team, project, environment, cost-center, expiry-date
-2. **Auto-expiry for non-production** - Default TTL with extension limits
-3. **Right-sizing recommendations** - Weekly reports comparing provisioned vs. actual usage
-4. **Budget alerts** - Soft limits warn, hard limits block
-5. **Orphan detection** - Automated scanning for unused resources
-6. **Cost visibility at request time** - Show estimated cost before provisioning
-
-The key is making costs visible and creating accountability without blocking legitimate work.
+You should implement a combination of **automated lifecycle policies and tagging requirements** directly in the provisioning layer.
+Manual approvals are an anti-pattern that slows down velocity and eventually becomes a rubber-stamp process anyway. Instead, enforce mandatory tagging (e.g., `owner`, `environment`, `expiry-date`) at provision time as a preventive guardrail. Combine this with a detective guardrail: an automated script that scans for non-production resources older than 30 days and deletes them automatically after a Slack warning. This approach maintains high speed and autonomy for developers while regaining complete control over cloud costs.
 </details>
 
-**Question 4**: What's the difference between preventive and detective guardrails?
+**Question 4**: Your compliance team requires all databases to have encrypted storage. You could write an OPA Gatekeeper policy to block any unencrypted database request before it reaches Kubernetes, or you could run a nightly script that scans AWS for unencrypted databases and pages the owner. What are these two approaches called, and which should you prefer?
 
 <details>
 <summary>Show Answer</summary>
 
-**Preventive guardrails** stop problems before they happen:
-- Admission control (block non-compliant requests)
-- Policy enforcement at request time
-- Quota limits
-
-**Detective guardrails** find problems after the fact:
-- Compliance scans
-- Drift detection
-- Cost alerts
-- Security audits
-
-Both are needed: preventive for known risks, detective for emerging issues and policy violations that slip through.
+These represent **preventive** (blocking before creation) and **detective** (finding after the fact) guardrails, respectively.
+The Gatekeeper policy is a preventive guardrail because it stops the non-compliant action at the API layer before any resources are actually created. The nightly scan is a detective guardrail because it identifies violations after they exist in the environment. You should strongly prefer preventive guardrails for known compliance requirements, as they stop issues at the source and provide immediate, actionable feedback to developers. Detective guardrails should be retained as a secondary safety net for complex, emerging, or hard-to-prevent issues like configuration drift or manual console changes.
 </details>
 
-**Question 5**: Why use infrastructure abstractions instead of exposing raw cloud APIs?
+**Question 5**: A senior developer argues that your new Internal Developer Platform is useless because they already know how to write Terraform for AWS. They want the platform portal to just accept raw Terraform modules instead of your simplified "Database" YAML resource. Why should you insist on using your simplified abstraction?
 
 <details>
 <summary>Show Answer</summary>
 
-Infrastructure abstractions provide:
-1. **Simplicity** - Hide 50+ cloud API parameters behind a few intent-based options
-2. **Consistency** - Enforce standards (encryption, tagging, networking) automatically
-3. **Safety** - Prevent misconfigurations through validated compositions
-4. **Portability** - Same interface across cloud providers
-5. **Governance** - Central point for policy enforcement
-
-The trade-off is flexibility. Good abstractions provide escape hatches for legitimate edge cases while keeping the common path simple.
+Because abstractions hide complexity, enforce secure defaults, and focus on the developer's underlying **intent**.
+Exposing raw cloud APIs or raw Terraform forces developers to understand dozens of provider-specific configurations, such as VPC subnets, security groups, and storage IOPS. By providing a simplified "Database" resource (Level 3 abstraction), the platform can automatically inject organizational standards like networking routing and encryption without the developer needing to configure them. This reduces cognitive load for developers and ensures consistency and security across the entire organization, even for those who aren't infrastructure experts.
 </details>
 
 ---
@@ -1413,26 +1273,14 @@ Your design should:
 
 Self-service infrastructure transforms how organizations deliver:
 
-```
-KEY PRINCIPLES:
-┌─────────────────────────────────────────────────────────────────┐
-│                                                                  │
-│  1. BALANCE the triangle: Speed, Control, Autonomy              │
-│     None can dominate without consequences                      │
-│                                                                  │
-│  2. ABSTRACT for intent, not implementation                     │
-│     Developers say what they need, not how to build it          │
-│                                                                  │
-│  3. GUARDRAILS enable, not restrict                             │
-│     Make the right thing easy, the wrong thing hard             │
-│                                                                  │
-│  4. FULL LIFECYCLE, not just Day 0                              │
-│     Provisioning is just the beginning                          │
-│                                                                  │
-│  5. VISIBILITY creates accountability                           │
-│     Show costs, usage, and ownership                            │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    P1["1. BALANCE the triangle: Speed, Control, Autonomy"]
+    P2["2. ABSTRACT for intent, not implementation"]
+    P3["3. GUARDRAILS enable, not restrict"]
+    P4["4. FULL LIFECYCLE, not just Day 0"]
+    P5["5. VISIBILITY creates accountability"]
+    P1 --- P2 --- P3 --- P4 --- P5
 ```
 
 The goal isn't to give developers AWS root access—it's to give them what they need to be productive while keeping the organization safe, compliant, and cost-effective.
@@ -1461,5 +1309,3 @@ The goal isn't to give developers AWS root access—it's to give them what they 
 ## Next Module
 
 Continue to [Module 2.6: Platform Maturity](../module-2.6-platform-maturity/) to learn how to assess your platform's maturity level and plan a roadmap for improvement.
-
----
