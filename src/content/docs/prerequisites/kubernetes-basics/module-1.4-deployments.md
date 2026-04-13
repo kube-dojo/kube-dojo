@@ -107,6 +107,9 @@ spec:
 kubectl apply -f deployment.yaml
 ```
 
+> **Stop and think**: If you change the `replicas` field in the `deployment.yaml` file from 3 to 5 and run `kubectl apply -f deployment.yaml` again, what will Kubernetes do?
+> *Explanation*: Kubernetes will compare the desired state in your YAML file (5 replicas) with the current state in the cluster (3 replicas). It will instruct the Deployment controller to scale up by creating 2 additional Pods, leaving the existing 3 Pods untouched.
+
 ---
 
 ## Deployment Architecture
