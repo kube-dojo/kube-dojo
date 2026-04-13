@@ -208,6 +208,10 @@ spec:
   selector:
     app.kubernetes.io/name: payment-processor
     environment: production
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8080
 ```
 
 > **Stop and think**: You need to find all pods in the `production` or `staging` environment that are NOT part of the `cache` tier. Write the `kubectl` selector expression to achieve this before reading the next section.
@@ -230,12 +234,23 @@ kind: Deployment
 metadata:
   name: payment-deploy
 spec:
+  replicas: 2
   selector:
     matchLabels:
       app.kubernetes.io/name: payment-processor
     matchExpressions:
       - {key: environment, operator: In, values: [production, staging]}
       - {key: release, operator: Exists}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: payment-processor
+        environment: production
+        release: "true"
+    spec:
+      containers:
+      - name: payment-processor
+        image: payment-app:2.1.4
 ```
 
 ### The Power of Decoupling: Canary Deployments
@@ -300,6 +315,10 @@ metadata:
     build/commit-sha: "a1b2c3d4e5f6g7h8i9j0"
     prometheus.io/scrape: "true"
     prometheus.io/port: "8080"
+spec:
+  containers:
+  - name: reporting
+    image: reporting-job:latest
 ```
 In the example above, Prometheus (a monitoring tool running in the cluster) will scan the API server, look for the `prometheus.io/scrape` annotation on Pods, and know exactly how to pull metrics from this specific pod, without cluttering the indexed Labels.
 
@@ -429,8 +448,8 @@ spec:
 </details>
 
 <details>
-<summary><strong>Question 3:</strong> A developer complains that their Pod is stuck in a <code>Pending</code> state, and the event log says <code>forbidden: exceeded quota: pod-quota, requested: pods=1, used: 10, limited: 10</code>. What is the root cause?</summary>
-<p><strong>Answer:</strong> The namespace has a <code>ResourceQuota</code> named <code>pod-quota</code> that enforces a hard limit of exactly 10 Pods for the entire namespace. The developer is attempting to deploy an 11th Pod, but the admission controller intercepts the request and calculates that it would violate the quota. Consequently, the API server rejects the creation of the Pod outright, leaving the deployment controller unable to fulfill the requested state. Resource quotas act as strict budgets to prevent any single team from starving the cluster of resources. Without deleting an active pod or negotiating a higher quota limit with the cluster administrator, this pending pod will never be scheduled.</p>
+<summary><strong>Question 3:</strong> A developer complains that their new Deployment is failing to create its Pods, and the ReplicaSet event log says <code>forbidden: exceeded quota: pod-quota, requested: pods=1, used: 10, limited: 10</code>. What is the root cause?</summary>
+<p><strong>Answer:</strong> The namespace has a <code>ResourceQuota</code> named <code>pod-quota</code> that enforces a hard limit of exactly 10 Pods for the entire namespace. The developer is attempting to scale up to an 11th Pod, but the admission controller intercepts the ReplicaSet's creation request and calculates that it would violate the quota. Consequently, the API server rejects the creation of the Pod outright, leaving the controller unable to fulfill the desired state. Resource quotas act as strict budgets to prevent any single team from starving the cluster of resources. Without deleting an active pod or negotiating a higher quota limit with the cluster administrator, these additional pods will never be created.</p>
 </details>
 
 <details>
@@ -538,7 +557,7 @@ spec:
     spec:
       containers:
       - name: nginx
-        image: nginx:1.24-alpine
+        image: nginx:1.26-alpine
 ```
 
 ```bash
@@ -598,7 +617,7 @@ metadata:
 spec:
   containers:
   - name: nginx
-    image: nginx:1.25-alpine
+    image: nginx:1.27-alpine
 ```
 
 ```bash
