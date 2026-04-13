@@ -435,19 +435,19 @@ Immutable ConfigMaps and Secrets were introduced as alpha in v1.18 and promoted 
 1. **A developer updates a ConfigMap that is injected into a running Pod as an environment variable, but the application isn't picking up the new value. Why?**
    <details>
    <summary>Answer</summary>
-   Environment variables are only read when the container starts up initially. Updating a ConfigMap does not automatically signal the kubelet to restart the Pod. To pick up the new environment variable, the Pod must be manually deleted and recreated, or restarted via a Deployment rollout. If the ConfigMap was mounted as a volume instead, the file contents would update dynamically without requiring a Pod restart.
+   Environment variables are only read by the container runtime when the container initially starts up. Updating a ConfigMap in the API server does not automatically signal the kubelet to restart the Pod or inject new variables into the running process. To pick up the new environment variable, the Pod must be manually deleted and recreated, or restarted gracefully via a Deployment rollout. If the ConfigMap was mounted as a volume instead, the file contents would update dynamically on the filesystem without requiring a Pod restart.
    </details>
 
 2. **You are reviewing a colleague's Kubernetes YAML and notice they have stored a production API key in a ConfigMap. Why is this a problem, and how should it be fixed?**
    <details>
    <summary>Answer</summary>
-   ConfigMaps are meant strictly for non-sensitive data and are often broadly accessible within a namespace. Anyone with basic read access to the namespace might have permission to view ConfigMaps, thereby exposing the API key to unauthorized internal users. To resolve this, the configuration should be moved to a Secret, and access to Secrets should be tightly restricted using Role-Based Access Control (RBAC). Additionally, for complete security, the cluster itself should be configured with encryption at rest for Secrets so they are protected in the underlying etcd datastore.
+   ConfigMaps are meant strictly for non-sensitive data and are often broadly accessible to anyone with read access within a namespace. Exposing the API key in a ConfigMap allows unauthorized internal users or compromised workloads to easily view the credential. To resolve this, the configuration should be moved to a Secret, and access to Secrets should be tightly restricted using Role-Based Access Control (RBAC). Additionally, for comprehensive security, the cluster itself should be configured with encryption at rest for Secrets so they are protected in the underlying etcd datastore.
    </details>
 
 3. **Your security team runs a vulnerability scan and finds that if your application crashes, the database password is being printed in the crash logs. How can you change how the Secret is provided to fix this?**
    <details>
    <summary>Answer</summary>
-   The application is likely receiving the Secret as an environment variable, which crash dumpers and application frameworks often log by default during a fatal error. The most effective mitigation strategy is to mount the Secret as a read-only volume (a file) instead of injecting it as an environment variable. The application can then be configured to read the file into memory at startup to retrieve the password. Because crash reporters dump the environment but do not automatically read and log the contents of arbitrary mounted files, this approach prevents the credential from leaking into your observability stack.
+   The application is likely receiving the Secret as an environment variable, which crash dumpers and application frameworks often log by default during a fatal error. The most effective mitigation strategy is to mount the Secret as a read-only volume (a file) instead of injecting it as an environment variable. The application can then be configured to read the file into memory at startup to retrieve the password. Because crash reporters dump the environment state but do not automatically read and log the contents of arbitrary mounted files, this approach prevents the credential from leaking into your observability stack.
    </details>
 
 4. **You are attempting to deploy the following Secret YAML to your cluster to store a database password, but the application is failing to authenticate. What is the major problem with this configuration?**
@@ -461,31 +461,31 @@ Immutable ConfigMaps and Secrets were introduced as alpha in v1.18 and promoted 
    ```
    <details>
    <summary>Answer</summary>
-   The YAML uses the `data` field but provides the plaintext value directly. In Kubernetes, the `data` field strictly expects all values to be base64 encoded byte strings, not raw text. Because it is not encoded, the application will receive a corrupted or improperly decoded value when it attempts to read the Secret. To fix this issue, the developer should either manually base64 encode the password before placing it in the `data` field, or change the key from `data` to `stringData` to allow Kubernetes to handle the encoding automatically.
+   The YAML uses the `data` field but provides the plaintext value directly instead of the required encoding. In Kubernetes, the `data` field strictly expects all values to be base64 encoded byte strings, not raw text. Because it is not encoded, the application will receive a corrupted or improperly decoded value when it attempts to read the Secret from the volume or environment variable. To fix this issue, the developer should either manually base64 encode the password before placing it in the `data` field, or change the key from `data` to `stringData` to allow Kubernetes to handle the encoding automatically upon creation.
    </details>
 
 5. **Your engineering team is deploying a legacy application that requires an incredibly large, 5 MiB configuration file. Can this file be stored in a standard ConfigMap?**
    <details>
    <summary>Answer</summary>
-   No. ConfigMap data size is strictly limited to 1 MiB per object. This constraint exists to prevent massive objects from exhausting the memory of the API server and the kubelet, and to protect the underlying `etcd` datastore from becoming bloated and unresponsive. For a 5 MiB file, you must explore alternative delivery mechanisms, such as baking the file into the container image, downloading it at startup via an init container, or mounting a persistent volume.
+   No, a standard ConfigMap cannot accommodate a 5 MiB file because both ConfigMaps and Secrets have a strict 1 MiB size limit per object. This constraint exists to prevent massive objects from exhausting the memory of the API server and the kubelet, and to protect the underlying `etcd` datastore from becoming bloated and unresponsive. To handle a 5 MiB configuration file, you must explore alternative delivery mechanisms designed for larger payloads. Options include baking the file directly into the container image, downloading it at startup via an init container, or mounting a persistent volume that contains the necessary data.
    </details>
 
 6. **You have successfully configured KMS v2 encryption at rest on your API server. Does this mean your developers can now safely commit plaintext Secret YAML files into the company's public GitHub repository?**
    <details>
    <summary>Answer</summary>
-   Absolutely not. Encryption at rest only protects the data once it is written to the `etcd` database on the cluster's backend. The YAML manifests you construct locally on your workstation and commit to version control remain entirely unencrypted. If you commit plaintext Secrets to GitHub, anyone with repository access can read them. You must still employ tools like Sealed Secrets or external secret managers to keep version control secure.
+   Absolutely not; configuring KMS v2 encryption at rest only protects the data once it is written to the `etcd` database on the cluster's backend. The YAML manifests you construct locally on your workstation and commit to version control remain entirely unencrypted plain text. If you commit these plaintext Secrets to a GitHub repository, anyone with read access to the codebase can immediately view and compromise your credentials. To securely manage Secrets in version control, you must employ GitOps-friendly tools like Sealed Secrets or the External Secrets Operator, which encrypt the manifests before they are committed.
    </details>
 
 7. **A junior developer successfully mounts a Secret using the `subPath` directive to place a specific key into an existing directory. Later, they update the Secret in the API server, but complain that the mounted file in the Pod never updates. What is occurring?**
    <details>
    <summary>Answer</summary>
-   Volumes mounted using `subPath` do not receive automatic updates when the underlying ConfigMap or Secret changes. The `subPath` implementation relies on standard operating system bind mounts, which break the symlink-rotation strategy the kubelet uses to seamlessly refresh mounted data. To force the application to see the new value, the Pod must be manually deleted and recreated.
+   Volumes mounted using `subPath` do not receive automatic updates when the underlying ConfigMap or Secret changes in the API server. The `subPath` implementation relies on standard operating system bind mounts, which fundamentally break the symlink-rotation strategy the kubelet uses to seamlessly refresh mounted data. To force the application to see the new value, the Pod must be manually deleted and recreated. A better approach, if dynamic updates are required, is to mount the entire directory without using `subPath` and have the application watch the directory for changes.
    </details>
 
 8. **You need to optimize your production cluster. A specific ConfigMap containing a list of global constants is read by 5,000 pods across the cluster, causing high kubelet polling load on the API server. How can you mitigate this without removing the ConfigMap?**
    <details>
    <summary>Answer</summary>
-   You should mark the ConfigMap as immutable by setting `immutable: true` in its specification. Marking a ConfigMap or Secret as immutable causes the kubelet to completely stop watching or polling it for updates. This dramatically reduces the burden on the API server, improving overall cluster performance and stability while guaranteeing the configuration cannot be accidentally altered in production.
+   You should mark the ConfigMap as immutable by setting `immutable: true` in its specification. Marking a ConfigMap or Secret as immutable causes the kubelet to completely stop watching or polling it for updates. This dramatically reduces the burden on the API server, improving overall cluster performance and stability while guaranteeing the configuration cannot be accidentally altered in production. If the configuration ever needs to change in the future, you would simply create a new ConfigMap with a different name and update your Deployment to reference the new object.
    </details>
 
 ## Hands-On Exercise
