@@ -47,6 +47,8 @@ Get this right, and your ML team ships models on schedule. Get it wrong, and the
 
 ### Why Distribute?
 
+> **Pause and predict**: If a single GPU takes 67 years to train a model, how many GPUs do you realistically need to train it in one month, assuming perfect scaling?
+
 A single A100 GPU can process roughly 300 TFLOPS of BF16 operations. Training Llama-3-70B requires approximately 6.4 x 10^23 FLOPs. At 300 TFLOPS:
 
 ```
@@ -68,47 +70,57 @@ The math is clear: you either distribute or you don't train.
 
 Distributed training uses three complementary strategies:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Distributed Training                      │
-├──────────────────┬──────────────────┬───────────────────────┤
-│  Data Parallel   │  Model Parallel  │  Pipeline Parallel    │
-│                  │  (Tensor)        │                       │
-│  Same model on   │  Split layers    │  Split layers         │
-│  every GPU.      │  across GPUs.    │  into stages.         │
-│  Different data. │  Each GPU has    │  Micro-batches        │
-│                  │  part of each    │  flow through          │
-│  Sync gradients  │  layer.          │  stages.              │
-│  after each step.│                  │                       │
-│                  │  Forward/backward│  Reduces memory        │
-│  Scales to many  │  require all-    │  per stage.           │
-│  GPUs easily.    │  to-all comms.   │                       │
-└──────────────────┴──────────────────┴───────────────────────┘
+```mermaid
+graph TD
+    subgraph Distributed_Training [Distributed Training]
+        DP[<b>Data Parallel</b><br>Same model on every GPU.<br>Different data.<br>Sync gradients after each step.<br>Scales to many GPUs easily.]
+        MP[<b>Model Parallel (Tensor)</b><br>Split layers across GPUs.<br>Each GPU has part of each layer.<br>Forward/backward require all-to-all comms.]
+        PP[<b>Pipeline Parallel</b><br>Split layers into stages.<br>Micro-batches flow through stages.<br>Reduces memory per stage.]
+    end
 ```
 
 **Data Parallelism** (most common for models that fit in one GPU's memory):
-```
-GPU 0: Full model + Batch shard 0  ─┐
-GPU 1: Full model + Batch shard 1  ─┤─ All-Reduce gradients
-GPU 2: Full model + Batch shard 2  ─┤  after each step
-GPU 3: Full model + Batch shard 3  ─┘
+```mermaid
+graph LR
+    subgraph Data_Parallelism [Data Parallelism]
+        direction LR
+        G0[GPU 0: Full model + Batch shard 0]
+        G1[GPU 1: Full model + Batch shard 1]
+        G2[GPU 2: Full model + Batch shard 2]
+        G3[GPU 3: Full model + Batch shard 3]
+        
+        AR((All-Reduce<br>gradients<br>after each<br>step))
+        
+        G0 --> AR
+        G1 --> AR
+        G2 --> AR
+        G3 --> AR
+    end
 ```
 
 **Tensor Parallelism** (for layers too large for one GPU):
-```
-Layer N:  [GPU 0: columns 0-2047] [GPU 1: columns 2048-4095]
-          ────── All-Reduce activations between layers ──────
+```mermaid
+graph LR
+    subgraph Tensor_Parallelism [Tensor Parallelism]
+        G0[GPU 0: columns 0-2047] <-->|All-Reduce activations between layers| G1[GPU 1: columns 2048-4095]
+    end
 ```
 
 **Pipeline Parallelism** (for models with many layers):
-```
-GPU 0: Layers 0-9    → micro-batch → GPU 1: Layers 10-19
-GPU 2: Layers 20-29  → micro-batch → GPU 3: Layers 30-39
+```mermaid
+graph LR
+    subgraph Pipeline_Parallelism [Pipeline Parallelism]
+        G0[GPU 0: Layers 0-9] -->|micro-batch| G1[GPU 1: Layers 10-19]
+        G1 -->|micro-batch| G2[GPU 2: Layers 20-29]
+        G2 -->|micro-batch| G3[GPU 3: Layers 30-39]
+    end
 ```
 
 In practice, large training runs use **3D parallelism**: data parallel across nodes, tensor parallel within a node (NVLink), and pipeline parallel across node groups.
 
 ### The Communication Bottleneck
+
+> **Stop and think**: How much bandwidth is required to synchronize 140 GB of gradients across a cluster every second?
 
 Here is the key insight: **distributed training is a networking problem disguised as a compute problem**.
 
@@ -142,45 +154,57 @@ InfiniBand (IB) is a specialized network fabric designed for high-performance co
 
 InfiniBand's killer feature is **RDMA (Remote Direct Memory Access)**: one machine can read from or write to another machine's memory without involving either machine's CPU or operating system. The network card (HCA) handles the entire transfer in hardware.
 
-```
-Traditional TCP:                    RDMA:
-App → Kernel → TCP → NIC           App → NIC ──────→ Remote NIC → Remote Memory
-      ↑ CPU copies data                  ↑ Zero CPU involvement
-      ↑ Context switches                 ↑ Zero-copy
-      ↑ Interrupt handling               ↑ Kernel bypass
+```mermaid
+graph TD
+    subgraph Traditional_TCP [Traditional TCP]
+        App1[App] -->|CPU copies data| Kernel1[Kernel]
+        Kernel1 -->|Context switches| TCP1[TCP]
+        TCP1 -->|Interrupt handling| NIC1[NIC]
+        NIC1 -.-> NIC2[Remote NIC]
+        NIC2 --> TCP2[TCP]
+        TCP2 --> Kernel2[Kernel]
+        Kernel2 --> App2[App]
+    end
+    subgraph RDMA [RDMA]
+        RApp[RDMA App] -->|Zero CPU involvement<br>Kernel bypass| RNIC[NIC]
+        RNIC -.->|Network: Zero-copy| RRNIC[Remote NIC]
+        RRNIC --> RMem[Remote Memory]
+    end
 ```
 
 ### RoCE (RDMA over Converged Ethernet)
 
 RoCE brings RDMA to standard Ethernet networks. It is cheaper than InfiniBand but requires lossless Ethernet (PFC/ECN configuration):
 
-```
-RoCEv2 stack:
-┌────────────┐
-│  RDMA App  │
-├────────────┤
-│  IB Verbs  │  (same API as InfiniBand)
-├────────────┤
-│  RoCE      │  (encapsulates IB over UDP)
-├────────────┤
-│  UDP/IP    │
-├────────────┤
-│  Ethernet  │  (requires lossless config: PFC + ECN)
-└────────────┘
+```mermaid
+graph TD
+    subgraph RoCEv2_Stack [RoCEv2 Stack]
+        App[RDMA App] --> IB[IB Verbs - same API as InfiniBand]
+        IB --> RoCE[RoCE - encapsulates IB over UDP]
+        RoCE --> UDP[UDP/IP]
+        UDP --> Eth[Ethernet - requires lossless config: PFC + ECN]
+    end
 ```
 
 ### GPUDirect RDMA
 
 The ultimate optimization: GPUDirect RDMA allows a network card to read/write directly to GPU memory, bypassing both system memory and the CPU entirely:
 
-```
-Without GPUDirect:
-GPU Memory → PCIe → System RAM → PCIe → NIC → Network → NIC → PCIe → System RAM → PCIe → GPU Memory
-  4 PCIe hops, 2 memory copies, CPU involvement
-
-With GPUDirect RDMA:
-GPU Memory → PCIe → NIC → Network → NIC → PCIe → GPU Memory
-  2 PCIe hops, 0 memory copies, 0 CPU involvement
+```mermaid
+graph TD
+    subgraph Without_GPUDirect [Without GPUDirect: 4 PCIe hops, 2 memory copies, CPU involvement]
+        W_GPU[GPU Memory] -->|PCIe| W_RAM1[System RAM]
+        W_RAM1 -->|PCIe| W_NIC1[NIC]
+        W_NIC1 -.->|Network| W_NIC2[NIC]
+        W_NIC2 -->|PCIe| W_RAM2[System RAM]
+        W_RAM2 -->|PCIe| W_GPU2[GPU Memory]
+    end
+    
+    subgraph With_GPUDirect_RDMA [With GPUDirect RDMA: 2 PCIe hops, 0 memory copies, 0 CPU involvement]
+        D_GPU[GPU Memory] -->|PCIe| D_NIC1[NIC]
+        D_NIC1 -.->|Network| D_NIC2[NIC]
+        D_NIC2 -->|PCIe| D_GPU2[GPU Memory]
+    end
 ```
 
 GPUDirect RDMA requires:
@@ -214,19 +238,20 @@ NCCL (NVIDIA Collective Communications Library, pronounced "nickel") is the libr
 
 NCCL automatically selects the best communication path:
 
-```
-┌─────────────────────────────────────────────────┐
-│                    NCCL                           │
-│                                                   │
-│  ┌─────────────┐  ┌──────────┐  ┌────────────┐  │
-│  │   NVLink    │  │   PCIe   │  │  Network   │  │
-│  │  (intra-    │  │ (intra-  │  │  (inter-   │  │
-│  │   node,     │  │  node,   │  │   node,    │  │
-│  │   fastest)  │  │  slower) │  │   IB/RoCE) │  │
-│  └─────────────┘  └──────────┘  └────────────┘  │
-│                                                   │
-│  Automatically selects best path per GPU pair    │
-└─────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph NCCL [NCCL]
+        direction TB
+        AutoSelect[Automatically selects best path per GPU pair]
+        
+        NVLink[NVLink: intra-node, fastest]
+        PCIe[PCIe: intra-node, slower]
+        Network[Network: inter-node, IB/RoCE]
+        
+        AutoSelect --> NVLink
+        AutoSelect --> PCIe
+        AutoSelect --> Network
+    end
 ```
 
 ### Critical NCCL Environment Variables
@@ -277,6 +302,8 @@ If you see `NET/Socket` instead, NCCL has fallen back to TCP, and your training 
 
 ### The Problem
 
+> **Pause and predict**: If your Pod has both `eth0` and `net1` interfaces, how does NCCL know which one to use for distributed training traffic?
+
 Kubernetes gives each Pod a single network interface (typically `eth0`) on the cluster's primary CNI network. This network is designed for general traffic — Service discovery, API calls, metrics scraping — not for 400 Gbps GPU-to-GPU data transfers.
 
 For distributed training, Pods need a **second network interface** connected to the high-speed InfiniBand or RoCE fabric.
@@ -285,24 +312,19 @@ For distributed training, Pods need a **second network interface** connected to 
 
 Multus CNI is a "meta-plugin" that chains multiple CNI plugins, giving Pods multiple network interfaces:
 
-```
-┌─────────────────────────────────────────────────┐
-│                    Pod                            │
-│                                                   │
-│  ┌─────────────┐         ┌──────────────────┐   │
-│  │    eth0     │         │    net1           │   │
-│  │  (primary)  │         │  (secondary)      │   │
-│  │  Calico/    │         │  SRIOV/macvlan/   │   │
-│  │  Cilium     │         │  host-device      │   │
-│  │  10.0.1.5   │         │  192.168.1.5      │   │
-│  └──────┬──────┘         └────────┬─────────┘   │
-└─────────┼────────────────────────┼───────────────┘
-          │                        │
-    ┌─────┴──────┐          ┌──────┴──────┐
-    │  Cluster   │          │ InfiniBand  │
-    │  Network   │          │   /RoCE     │
-    │  (10GbE)   │          │  (200 Gbps) │
-    └────────────┘          └─────────────┘
+```mermaid
+graph TD
+    subgraph Pod [Pod]
+        direction LR
+        eth0[eth0<br>primary<br>Calico/Cilium<br>10.0.1.5]
+        net1[net1<br>secondary<br>SRIOV/macvlan/host-device<br>192.168.1.5]
+    end
+    
+    ClusterNet[Cluster Network<br>10GbE]
+    HighSpeedNet[InfiniBand / RoCE<br>200 Gbps]
+    
+    eth0 --> ClusterNet
+    net1 --> HighSpeedNet
 ```
 
 ### Installing Multus
@@ -827,102 +849,48 @@ Result: throughput jumped from 50% to 93% of linear scaling.
 ## Quiz: Check Your Understanding
 
 ### Question 1
-Why is distributed training fundamentally a networking problem, not a compute problem?
+Your team is training a 70B parameter model on a cluster with 10Gbps Ethernet. The GPU utilization is hovering around 2%. Why is this happening, and why is distributed training fundamentally a networking problem in this scenario?
 
 <details>
 <summary>Show Answer</summary>
 
-In data-parallel training, every GPU computes gradients independently (the compute part), but then **all GPUs must synchronize gradients** before the next training step via an all-reduce operation. For a 70B parameter model in BF16, this means exchanging ~280GB of data every training step.
-
-If the network is slow, GPUs spend most of their time waiting for gradient synchronization instead of computing. With 10 Gbps Ethernet, transferring 280GB takes ~224 seconds. With 400 Gbps InfiniBand, it takes ~5.6 seconds. The compute (forward + backward pass) typically takes 1-3 seconds.
-
-With Ethernet: GPU utilization = 3/(3+224) = 1.3%
-With InfiniBand: GPU utilization = 3/(3+5.6) = 35%
-
-The network determines whether your expensive GPUs are computing or waiting.
+In data-parallel training, every GPU computes gradients independently, but then all GPUs must synchronize gradients before the next training step via an all-reduce operation. For a 70B parameter model in BF16, this means exchanging ~280GB of data every single training step across the cluster. If the network is slow, such as a 10Gbps Ethernet link, GPUs spend the vast majority of their time waiting for this gradient synchronization instead of actually computing. With 10 Gbps Ethernet, transferring 280GB takes roughly 224 seconds, whereas the actual compute phase might only take 3 seconds, leading to a dismal 1.3% GPU utilization. The network ultimately determines whether your expensive GPUs are actively computing or sitting idle waiting for data, making distributed training fundamentally a networking challenge.
 </details>
 
 ### Question 2
-What is GPUDirect RDMA and why does it matter for distributed training?
+You are setting up a new training cluster with InfiniBand networking. A colleague suggests skipping the GPUDirect RDMA configuration to save setup time, arguing that regular RDMA is fast enough. How do you explain the impact of this decision on the data path and training latency?
 
 <details>
 <summary>Show Answer</summary>
 
-GPUDirect RDMA allows a network card (NIC/HCA) to read from and write to GPU memory **directly**, without copying data through system RAM or involving the CPU.
-
-Without GPUDirect: GPU → PCIe → RAM → PCIe → NIC (4 PCIe hops, 2 memory copies, CPU involvement)
-With GPUDirect: GPU → PCIe → NIC (2 PCIe hops, zero copies, zero CPU)
-
-This reduces gradient synchronization latency by 30-50% and eliminates CPU bottlenecks. It requires the GPU and NIC to be on the same PCIe root complex, the `nvidia-peermem` kernel module, and a supported NIC (ConnectX-6+).
+GPUDirect RDMA is a technology that allows a network card (NIC or HCA) to read from and write to GPU memory directly, bypassing system RAM and the CPU entirely. If you skip GPUDirect RDMA, the data path becomes significantly longer: data must travel from the GPU over PCIe to system RAM, then from system RAM over PCIe to the NIC, involving multiple memory copies and CPU overhead. By using GPUDirect RDMA, the data travels directly from the GPU over PCIe to the NIC, eliminating two PCIe hops, zeroing out memory copies, and removing CPU involvement. This direct path reduces gradient synchronization latency by 30-50%, which is critical for maintaining high GPU utilization and minimizing the communication bottleneck during distributed training.
 </details>
 
 ### Question 3
-Why do distributed training Pods need a large `/dev/shm` mount, and what happens without it?
+A new engineer deploys a 4-node PyTorch training job. The job starts successfully but is running 4x slower than expected. You notice they omitted the `/dev/shm` volume mount in the Pod specification. What is happening under the hood to cause this silent performance degradation?
 
 <details>
 <summary>Show Answer</summary>
 
-`/dev/shm` is shared memory backed by RAM. NCCL uses it for intra-node GPU-to-GPU communication buffers, and PyTorch DataLoader uses it for `num_workers > 0` to share data between loader processes and the training process.
-
-Docker/containerd defaults `/dev/shm` to 64MB. A 4-GPU training job with NCCL can easily need 8-16GB of shared memory, and DataLoader with 8 workers loading images can need another 8-16GB.
-
-Without adequate `/dev/shm`:
-- NCCL falls back to slower communication paths (socket instead of shared memory)
-- DataLoader workers get killed by OOM or fail to allocate shared tensors
-- Training silently runs 2-5x slower without any obvious error message
-
-Fix: mount `emptyDir: {medium: Memory, sizeLimit: 64Gi}` at `/dev/shm`.
+The `/dev/shm` directory provides shared memory backed by the host's RAM, which is heavily utilized by NCCL for intra-node GPU-to-GPU communication buffers and by the PyTorch DataLoader to share data between worker processes. By default, container runtimes like Docker and containerd limit `/dev/shm` to a mere 64MB, which is vastly insufficient for the 16-64GB typically required by multi-GPU training jobs. When this shared memory is exhausted, NCCL silently falls back to much slower communication paths like standard TCP sockets instead of high-speed shared memory. Simultaneously, DataLoader workers may fail to allocate shared tensors, causing the entire training job to run 2-5x slower without throwing obvious errors, making it a notoriously difficult performance degradation to diagnose.
 </details>
 
 ### Question 4
-Explain the difference between a `PyTorchJob` and an `MPIJob` in the Kubeflow Training Operator.
+Your platform team is migrating a legacy Horovod-based computer vision workload to Kubernetes. A developer asks if they should use the `PyTorchJob` CRD since the underlying code uses PyTorch, or stick to `MPIJob`. How do you guide them based on how these two CRDs manage distributed workers?
 
 <details>
 <summary>Show Answer</summary>
 
-**PyTorchJob**:
-- Uses PyTorch's native distributed launching (`torchrun`)
-- Workers discover each other via a rendezvous mechanism (c10d, etcd)
-- Master sets `MASTER_ADDR` and `MASTER_PORT` environment variables
-- Supports elastic training (workers can join/leave)
-- Best for: PyTorch DDP and FSDP workloads
-
-**MPIJob**:
-- Uses MPI (OpenMPI/MPICH) to launch processes
-- A separate Launcher pod runs `mpirun` to start workers via SSH
-- Workers must have SSH access configured (the operator handles this)
-- Better for legacy HPC workloads, Horovod, and DeepSpeed with MPI launcher
-- Does not natively support elasticity
-
-Key architectural difference: PyTorchJob workers self-organize via rendezvous, while MPIJob workers are orchestrated by a central launcher via MPI's process management.
+You should guide the developer to use the `MPIJob` CRD because their legacy computer vision workload is based on Horovod, which relies on MPI for distributed execution. The `PyTorchJob` CRD is designed for workloads using PyTorch's native distributed launching mechanism (`torchrun`), where workers self-organize and discover each other via a rendezvous backend like c10d. In contrast, an `MPIJob` uses a centralized Launcher pod running `mpirun` to start and orchestrate workers via SSH, which is exactly how Horovod and some legacy DeepSpeed setups expect to operate. Attempting to use `PyTorchJob` for a Horovod workload would fail because it lacks the centralized MPI process management and SSH setup required to bootstrap the job.
 </details>
 
 ### Question 5
-A 4-node distributed training job reports NCCL timeout errors after 5 minutes. Node 3 is the last to report the timeout. What is your investigation workflow?
+A 4-node distributed training job reports NCCL timeout errors after 5 minutes. Node 3 is the last to report the timeout. What is your investigation workflow and why do you follow these specific steps?
 
 <details>
 <summary>Show Answer</summary>
 
-Investigation workflow:
-
-1. **Check NCCL debug logs** (`NCCL_DEBUG=INFO`): Is it using IB/RDMA or Socket/TCP? If TCP fallback, that is likely the cause.
-
-2. **Check node 3 specifically**: Since it is the last to timeout, it is likely the source:
-   - `kubectl describe pod` — is the pod on the right node? Does it have GPU and network resources?
-   - `kubectl exec` into the pod — can it ping other workers on the secondary network (`net1`)?
-   - Check `nvidia-smi` — are GPUs healthy?
-   - Check `ibstat` — is the InfiniBand/RoCE link up?
-
-3. **Check network connectivity**: From node 3's pod, verify RDMA connectivity:
-   - `ib_write_bw` / `ib_read_bw` to other nodes
-   - Check for packet drops on the switch port connected to node 3
-
-4. **Check for asymmetric issues**:
-   - Different NCCL versions across nodes
-   - One node missing the `nvidia-peermem` module
-   - One node's NIC on a different VLAN
-
-5. **Check resource limits**: Is the pod hitting CPU/memory limits that cause NCCL thread starvation?
+First, you must check the NCCL debug logs (`NCCL_DEBUG=INFO`) to determine if the job is actually utilizing the InfiniBand/RDMA transport or if it has silently fallen back to TCP sockets, which often causes timeouts due to sheer latency. Since Node 3 is the last to report the timeout, it is highly likely the source of the bottleneck or failure; you should use `kubectl describe pod` and `kubectl exec` to verify its resource allocation and network connectivity on the secondary high-speed interface (`net1`). From within Node 3's pod, use tools like `ib_write_bw` to verify RDMA connectivity to other nodes, and check for asymmetric issues such as a missing `nvidia-peermem` kernel module or a downed InfiniBand link. Finally, verify that the pod is not hitting CPU or memory limits, which can lead to NCCL thread starvation and subsequent synchronization timeouts across the entire cluster.
 </details>
 
 ---
