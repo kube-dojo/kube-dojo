@@ -19,9 +19,9 @@ This is NOT generic management advice. Every module is written specifically for 
 | 1.1 | [Incident Command & Crisis Management](module-1.1-incident-command/) | 2.5h | ICS roles, severity triage, communication during outages |
 | 1.2 | [Blameless Postmortems & Root Cause Analysis](module-1.2-postmortems/) | 2h | 5 Whys, Ishikawa diagrams, writing effective action items |
 | 1.3 | [Effective On-Call & Burnout Prevention](module-1.3-oncall/) | 2h | Rotation design, alert fatigue, runbooks, recognizing burnout |
-| 1.4 | [Architecture Decision Records](module-1.4-adrs/) | 2h | ADR structure, RFC process, writing for different audiences |
-| 1.5 | [Stakeholder Communication](module-1.5-stakeholders/) | 2.5h | Translating tech to business, scope negotiation, managing up |
-| 1.6 | [Mentorship & Multiplying Impact](module-1.6-mentorship/) | 2h | Code review as teaching, psychological safety, IC → tech lead |
+| 1.4 | [Architecture Decision Records & Technical Writing](module-1.4-adrs/) | 2h | ADR structure, RFC process, writing for different audiences |
+| 1.5 | [Stakeholder Communication & Managing Expectations](module-1.5-stakeholders/) | 2.5h | Translating tech to business, scope negotiation, managing up |
+| 1.6 | [Mentorship & Multiplying Impact](module-1.6-mentorship/) | 2h | Code review as teaching, psychological safety, IC -> tech lead |
 
 **Total time**: ~13 hours
 

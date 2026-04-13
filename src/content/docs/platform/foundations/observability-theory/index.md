@@ -28,10 +28,10 @@ This isn't about installing tools. It's about building the mental models that ma
 
 | # | Module | Time | Description |
 |---|--------|------|-------------|
-| 3.1 | [What is Observability?](module-3.1-what-is-observability/) | 25-30 min | Control theory origins, monitoring vs observability |
-| 3.2 | [The Three Pillars](module-3.2-the-three-pillars/) | 30-35 min | Logs, metrics, traces, and correlation |
-| 3.3 | [Instrumentation Principles](module-3.3-instrumentation-principles/) | 30-35 min | What to instrument, patterns, context propagation |
-| 3.4 | [From Data to Insight](module-3.4-from-data-to-insight/) | 35-40 min | Alerting, debugging workflows, mental models |
+| 3.1 | [Module 3.1: What is Observability?](module-3.1-what-is-observability/) | 25-30 min | Control theory origins, monitoring vs observability |
+| 3.2 | [Module 3.2: The Three Pillars of Observability](module-3.2-the-three-pillars/) | 30-35 min | Logs, metrics, traces, and correlation |
+| 3.3 | [Module 3.3: Instrumentation Principles](module-3.3-instrumentation-principles/) | 30-35 min | What to instrument, patterns, context propagation |
+| 3.4 | [Module 3.4: From Data to Insight](module-3.4-from-data-to-insight/) | 35-40 min | Alerting, debugging workflows, mental models |
 
 ---
 
@@ -52,7 +52,7 @@ START HERE
                    ▼
 ┌─────────────────────────────────────┐
 │  Module 3.2                         │
-│  The Three Pillars                  │
+│  The Three Pillars of Observability │
 │  └── Logs: Events over time         │
 │  └── Metrics: Aggregated numbers    │
 │  └── Traces: Request journeys       │

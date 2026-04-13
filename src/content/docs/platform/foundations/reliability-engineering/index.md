@@ -4,7 +4,7 @@ sidebar:
   order: 0
   label: "Reliability Engineering"
 ---
-> **Foundation Track** | 4 Modules | ~2 hours total
+> **Foundation Track** | 5 Modules | ~2.5 hours total
 
 The engineering discipline of building systems that work when users need them. Theory and principles that apply regardless of your tech stack.
 
@@ -31,8 +31,8 @@ This isn't about hoping things don't break. It's about engineering systems that 
 | 2.1 | [What is Reliability?](module-2.1-what-is-reliability/) | 25-30 min | Definitions, nines, MTBF/MTTR, error budgets |
 | 2.2 | [Failure Modes and Effects](module-2.2-failure-modes-and-effects/) | 30-35 min | FMEA, graceful degradation, blast radius |
 | 2.3 | [Redundancy and Fault Tolerance](module-2.3-redundancy-and-fault-tolerance/) | 30-35 min | HA vs FT, active-active, redundancy patterns |
-| 2.4 | [Measuring and Improving Reliability](module-2.4-measuring-and-improving-reliability/) | 35-40 min | SLIs, SLOs, error budgets, continuous improvement |
-| 2.5 | [SLOs, SLIs, and Error Budgets](module-2.5-slos-slis-error-budgets/) | 20-30 min | Deep dive into the SRE mental model for reliability targets |
+| 2.4 | [Measuring and Improving Reliability](module-2.4-measuring-and-improving-reliability/) | 35-40 min | Metrics, postmortems, and continuous improvement |
+| 2.5 | [SLIs, SLOs, and Error Budgets — The Theory](module-2.5-slos-slis-error-budgets/) | 20-30 min | Deep dive into the SRE mental model for reliability targets |
 
 ---
 
@@ -74,10 +74,18 @@ START HERE
 ┌─────────────────────────────────────┐
 │  Module 2.4                         │
 │  Measuring and Improving            │
-│  └── SLIs, SLOs, SLAs               │
-│  └── Error budgets in practice      │
+│  └── Reliability metrics            │
 │  └── Postmortems                    │
 │  └── Continuous improvement         │
+└──────────────────┬──────────────────┘
+                   │
+                   ▼
+┌─────────────────────────────────────┐
+│  Module 2.5                         │
+│  SLIs, SLOs, and Error Budgets      │
+│  └── SLIs vs SLOs vs SLAs           │
+│  └── Error budgets in practice      │
+│  └── The SRE mental model           │
 └──────────────────┬──────────────────┘
                    │
                    ▼
@@ -98,14 +106,14 @@ Observability   Security        SRE
 |---------|--------|---------------|
 | The Nines | 2.1 | 99.9% vs 99.99% = 10x difference in allowed downtime |
 | MTBF/MTTR | 2.1 | Mean time between failures / to recovery |
-| Error Budget | 2.1, 2.4 | Acceptable unreliability as a resource to spend |
+| Error Budget | 2.1, 2.5 | Acceptable unreliability as a resource to spend |
 | FMEA | 2.2 | Systematic technique for predicting failures |
 | Graceful Degradation | 2.2 | Partial functionality better than total failure |
 | Blast Radius | 2.2 | Scope of impact when something fails |
 | Bulkhead Pattern | 2.2, 2.3 | Isolation to prevent cascading failures |
 | High Availability | 2.3 | System stays operational with minimal downtime |
 | Fault Tolerance | 2.3 | System continues without any interruption |
-| SLI/SLO/SLA | 2.4 | Indicator/Objective/Agreement framework |
+| SLI/SLO/SLA | 2.5 | Indicator/Objective/Agreement framework |
 
 ---
 
