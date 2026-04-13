@@ -483,11 +483,25 @@ parameters:
 
 ---
 
+## Part 7: Troubleshooting Provisioning Failures
+
+When dynamic provisioning fails, the PVC remains in `Pending` state. To find the root cause:
+
+1. **Check PVC Events**: `kubectl describe pvc <pvc-name>`. Look for `FailedProvisioning` events from the volume controller.
+2. **Check Provisioner Pod Logs**: If the PVC event lacks detail (e.g., a cloud provider API error like IAM denied or quota exceeded), check the logs of the provisioner pod itself (often running in `kube-system` for CSI drivers).
+   ```bash
+   # Example for AWS EBS CSI driver
+   kubectl logs -n kube-system deploy/ebs-csi-controller -c csi-provisioner
+   ```
+3. **Verify StorageClass**: Ensure the `provisioner` string matches exactly and all `parameters` are valid for the backend.
+
+---
+
 ## Common Mistakes
 
 | Mistake | Problem | Solution |
 |---------|---------|----------|
-| Multiple default StorageClasses | Unpredictable behavior | Only one should be default |
+| Multiple default StorageClasses | Uses most recently created default (causes confusion) | Only one should be default |
 | Wrong provisioner for platform | PVC stays Pending forever | Use correct provisioner for your cloud |
 | Immediate mode with zonal storage | Pods can't mount volumes | Use WaitForFirstConsumer |
 | Forgetting allowVolumeExpansion | Can't resize PVCs later | Always set true unless intentional |
@@ -536,7 +550,7 @@ An admin accidentally marks two StorageClasses as default: `gp3-fast` and `stand
 <details>
 <summary>Answer</summary>
 
-With **multiple default StorageClasses**, the behavior is unpredictable -- the admission controller may select either one, or in some Kubernetes versions, the PVC creation may fail or a warning is emitted. The Kubernetes documentation explicitly states only one StorageClass should be marked as default. The admin should fix this by removing the default annotation from one of the StorageClasses: `kubectl patch sc standard-hdd -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'`. Best practice is to verify with `kubectl get sc` that exactly one StorageClass shows `(default)`.
+With **multiple default StorageClasses**, Kubernetes uses the **most recently created** default StorageClass. While this resolves the tie, it often causes confusion because developers might expect the older default to be used. The Kubernetes documentation explicitly states only one StorageClass should be marked as default. The admin should fix this by removing the default annotation from one of the StorageClasses: `kubectl patch sc standard-hdd -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'`. Best practice is to verify with `kubectl get sc` that exactly one StorageClass shows `(default)`.
 
 </details>
 
@@ -642,6 +656,9 @@ EOF
 ### Task 5: Verify Dynamic Provisioning
 
 ```bash
+# Wait for pod to trigger provisioning and become ready
+k wait --for=condition=Ready pod/dynamic-pod --timeout=60s
+
 # PVC should now be Bound
 k get pvc dynamic-pvc
 # STATUS: Bound
@@ -650,11 +667,12 @@ k get pvc dynamic-pvc
 k get pv
 # Should see a dynamically named PV like pvc-xxxxx
 
-# Check the PV details
-k get pv -o jsonpath='{.items[0].spec.storageClassName}'
+# Check the PV details accurately
+PV_NAME=$(k get pvc dynamic-pvc -o jsonpath='{.spec.volumeName}')
+k get pv $PV_NAME -o jsonpath='{.spec.storageClassName}'
 # Should show: fast
 
-# Verify pod is running
+# Verify pod can read the dynamically provisioned storage
 k exec dynamic-pod -- cat /data/message
 ```
 
