@@ -139,7 +139,7 @@ AWS Systems Manager Parameter Store is the workhorse for configuration managemen
 | `StringList` | None | 4 KB | 8 KB | Free (Standard) |
 | `SecureString` | KMS | 4 KB | 8 KB | Free (Standard) |
 
-**Standard parameters** are free for up to 10,000 per account per region. **Advanced parameters** cost $0.05 per parameter per month, support up to 8 KB values, parameter policies (TTL, expiration notifications), and parameter policies (TTL, expiration). Higher throughput (up to 10,000 TPS) is an account-level setting available for both Standard and Advanced parameters.
+**Standard parameters** are free for up to 10,000 per account per region. **Advanced parameters** cost $0.05 per parameter per month, support up to 8 KB values, and parameter policies (TTL, expiration notifications). Higher throughput (up to 10,000 TPS) is an account-level setting available for both Standard and Advanced parameters.
 
 ### Hierarchical Naming
 
