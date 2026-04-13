@@ -29,62 +29,44 @@ After completing this module, you will be able to:
 
 The incident begins with a single overheating server in a Virginia data center. Temperature sensors trigger automatic failover—exactly as designed. The affected workloads shift to other servers. So far, everything is working perfectly.
 
+> **Pause and predict**: If you were the engineer on call during this AWS incident, what would be the first metric you'd look at, and would it have helped you diagnose the root cause?
+
 But here's where it gets interesting.
 
 The failover causes a spike in network traffic. The spike triggers rate limiters on internal services—a safety mechanism. But those rate limiters are a bit too aggressive. They start throttling legitimate traffic. Services that depend on those throttled services start timing out. Those timeouts trigger retries. The retries create more traffic. More rate limiting. More timeouts. More retries.
 
 Within minutes, a single overheating server has cascaded into a multi-hour outage affecting AWS S3, EC2, and Lambda in the US-East-1 region. Thousands of companies are down. Reddit. Slack. Twitch. iRobot's Roomba vacuums won't start. Dog doors won't open. Smart toilets won't flush.
 
-```
-THE ANATOMY OF A CASCADE
-═══════════════════════════════════════════════════════════════════════════════
+```mermaid
+flowchart TD
+    subgraph Initial["INITIAL TRIGGER (11:42 AM)"]
+        direction TB
+        A["Single server overheats"] --> B["Automatic failover (WORKS CORRECTLY)"]
+        B --> C["Traffic spike to other servers"]
+    end
 
-INITIAL TRIGGER (11:42 AM)
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                                                                             │
-│   Single server overheats                                                   │
-│           │                                                                 │
-│           ▼                                                                 │
-│   Automatic failover (WORKS CORRECTLY)                                      │
-│           │                                                                 │
-│           ▼                                                                 │
-│   Traffic spike to other servers                                            │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+    subgraph Amplification["AMPLIFICATION PHASE (11:42 - 11:50 AM)"]
+        direction TB
+        D["Traffic spike"] -->|"Rate limiters activate"| E["Legitimate traffic throttled"]
+        E -->|"Service timeouts"| F["Timeouts trigger retries"]
+        F -->|"MORE traffic"| G["More rate limiting"]
+        G -->|"More timeouts"| F
+    end
 
-AMPLIFICATION PHASE (11:42 - 11:50 AM)
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                                                                             │
-│   Traffic spike → Rate limiters activate                                    │
-│           │                                                                 │
-│           ▼                                                                 │
-│   Legitimate traffic throttled → Service timeouts                           │
-│           │                                                                 │
-│           ▼                                                                 │
-│   Timeouts trigger retries → MORE traffic                                   │
-│           │                                                                 │
-│           ▼                                                                 │
-│   More rate limiting → More timeouts → MORE retries                         │
-│           │                                                                 │
-│           └──────────────── FEEDBACK LOOP ────────────────┘                 │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-TOTAL COLLAPSE (11:50 AM onwards)
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                                                                             │
-│   S3: DEGRADED  →  EC2: DEGRADED  →  Lambda: DOWN                          │
-│       │                 │                 │                                 │
-│       ▼                 ▼                 ▼                                 │
-│   Websites    │    Applications    │    Serverless                         │
-│   won't load  │    can't start     │    functions fail                     │
-│               │                    │                                        │
-│   Impact: Thousands of companies, millions of users, $100M+ in losses      │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-Root cause: One hot server
-Actual cause: Failure modes that amplified instead of contained
+    subgraph Collapse["TOTAL COLLAPSE (11:50 AM onwards)"]
+        direction TB
+        H["S3: DEGRADED"]
+        I["EC2: DEGRADED"]
+        J["Lambda: DOWN"]
+        H --> K["Websites won't load"]
+        I --> L["Applications can't start"]
+        J --> M["Serverless functions fail"]
+    end
+    
+    C --> D
+    G -.-> H
+    G -.-> I
+    G -.-> J
 ```
 
 Every individual component worked exactly as designed. The failover worked. The rate limiters worked. The retry logic worked. But together, they created a catastrophe.
@@ -130,64 +112,64 @@ Same trigger. 400x difference in business impact. The only difference is how fai
 
 Not all failures are equal. A crash is different from corruption. A timeout is different from an error. Understanding the type of failure guides your response.
 
+```mermaid
+flowchart TD
+    subgraph Visibility["BY VISIBILITY: Can You Tell It Failed?"]
+        direction TB
+        subgraph Obvious["OBVIOUS"]
+            direction TB
+            O1["• Process crash<br>• 500 error response<br>• Connection refused<br>• Timeout<br>• Error in logs"]
+        end
+        subgraph Silent["SILENT"]
+            direction TB
+            S1["• Wrong calculations<br>• Missing data<br>• Incorrect results<br>• Data corruption<br>• Security breach"]
+        end
+        Obvious -->|"Easy to DETECT<br>monitoring catches it"| OD["Example: API returns 503<br>→ Alert fires immediately"]
+        Silent -->|"Hard to DETECT<br>users discover it later"| SD["Example: Tax calculation is off by 0.1%<br>→ Discovered during audit"]
+    end
 ```
-FAILURE TAXONOMY: THE COMPLETE PICTURE
-═══════════════════════════════════════════════════════════════════════════════
 
-BY VISIBILITY: Can You Tell It Failed?
-─────────────────────────────────────────────────────────────────────────────
-OBVIOUS                                    SILENT
-┌─────────────────────────┐              ┌─────────────────────────┐
-│ • Process crash         │              │ • Wrong calculations    │
-│ • 500 error response    │              │ • Missing data          │
-│ • Connection refused    │              │ • Incorrect results     │
-│ • Timeout               │              │ • Data corruption       │
-│ • Error in logs         │              │ • Security breach       │
-└─────────────────────────┘              └─────────────────────────┘
-        │                                          │
-        ▼                                          ▼
-   Easy to DETECT                           Hard to DETECT
-   (monitoring catches it)                  (users discover it later)
+```mermaid
+flowchart TD
+    subgraph Scope["BY SCOPE: How Much Is Affected?"]
+        direction TB
+        subgraph Partial["PARTIAL"]
+            direction TB
+            P1["Some requests work<br>Working / Failing"]
+            P2["Usually caused by:<br>• One bad server<br>• Specific input<br>• Resource exhaustion<br>• Race condition"]
+        end
+        subgraph Complete["COMPLETE"]
+            direction TB
+            C1["Nothing works<br>All failing"]
+            C2["Usually caused by:<br>• Database down<br>• DNS failure<br>• Config error<br>• Certificate expired"]
+        end
+        P1 --- P2
+        C1 --- C2
+    end
+```
 
-   Example: API returns 503               Example: Tax calculation
-   → Alert fires immediately              is off by 0.1%
-                                          → Discovered during audit
-
-
-BY SCOPE: How Much Is Affected?
-─────────────────────────────────────────────────────────────────────────────
-PARTIAL                                    COMPLETE
-┌─────────────────────────┐              ┌─────────────────────────┐
-│ Some requests work      │              │ Nothing works           │
-│                         │              │                         │
-│ ████████████░░░░░░░░░░ │              │ ░░░░░░░░░░░░░░░░░░░░░░ │
-│  Working    │ Failing  │              │    All failing          │
-│            │          │              │                         │
-│ Usually caused by:      │              │ Usually caused by:      │
-│ • One bad server        │              │ • Database down         │
-│ • Specific input        │              │ • DNS failure           │
-│ • Resource exhaustion   │              │ • Config error          │
-│ • Race condition        │              │ • Certificate expired   │
-└─────────────────────────┘              └─────────────────────────┘
-
-
-BY DURATION: How Long Does It Last?
-─────────────────────────────────────────────────────────────────────────────
-TRANSIENT                  INTERMITTENT                PERMANENT
-┌────────────────┐       ┌────────────────┐       ┌────────────────┐
-│ ✓✓✓✓✗✓✓✓✓✓✓✓✓ │       │ ✓✓✗✓✓✓✗✓✗✓✓✗✓ │       │ ✗✗✗✗✗✗✗✗✗✗✗✗✗ │
-│ One-time fail  │       │ Random pattern  │       │ Stays broken   │
-└────────────────┘       └────────────────┘       └────────────────┘
-        │                         │                       │
-        ▼                         ▼                       ▼
- • Network hiccup         • Resource leak         • Misconfiguration
- • Packet loss            • Race condition        • Hardware failure
- • GC pause               • Load-dependent bug    • Certificate expired
-                          • Memory fragmentation   • Disk full
-        │                         │                       │
-        ▼                         ▼                       ▼
-   Retry WORKS             Retry SOMETIMES          Retry NEVER
-                           works (misleading)       works
+```mermaid
+flowchart TD
+    subgraph Duration["BY DURATION: How Long Does It Last?"]
+        direction TB
+        subgraph Transient["TRANSIENT"]
+            T1["✓✓✓✓✗✓✓✓✓✓✓✓✓<br>One-time fail"]
+        end
+        subgraph Intermittent["INTERMITTENT"]
+            I1["✓✓✗✓✓✓✗✓✗✓✓✗✓<br>Random pattern"]
+        end
+        subgraph Permanent["PERMANENT"]
+            P1["✗✗✗✗✗✗✗✗✗✗✗✗✗<br>Stays broken"]
+        end
+        
+        T1 --> T2["• Network hiccup<br>• Packet loss<br>• GC pause"]
+        I1 --> I2["• Resource leak<br>• Race condition<br>• Load-dependent bug<br>• Memory fragmentation"]
+        P1 --> P2["• Misconfiguration<br>• Hardware failure<br>• Certificate expired<br>• Disk full"]
+        
+        T2 --> T3["Retry WORKS"]
+        I2 --> I3["Retry SOMETIMES works (misleading)"]
+        P2 --> P3["Retry NEVER works"]
+    end
 ```
 
 Why this taxonomy matters: **Your response should match the failure type.**
@@ -203,7 +185,7 @@ Why this taxonomy matters: **Your response should match the failure type.**
 
 Here's a field guide to the failures you'll encounter:
 
-```
+```text
 THE EIGHT DEADLY FAILURE MODES
 ═══════════════════════════════════════════════════════════════════════════════
 
@@ -317,52 +299,28 @@ THE EIGHT DEADLY FAILURE MODES
 
 Every failure has four characteristics that affect how you handle it:
 
-```
-FAILURE CHARACTERISTICS FRAMEWORK
-═══════════════════════════════════════════════════════════════════════════════
+```mermaid
+flowchart TD
+    F["YOUR FAILURE"]
+    F --> D["DETECTABILITY<br>How quickly do you know?"]
+    F --> R["RECOVERABILITY<br>Can system self-heal?"]
+    F --> I["IMPACT<br>What's broken? Who is affected?"]
+    F --> FR["FREQUENCY<br>How often?"]
 
-                    ┌─────────────────────────────────────────────────────────┐
-                    │                    YOUR FAILURE                          │
-                    └─────────────────────────────────────────────────────────┘
-                                            │
-         ┌──────────────────────────────────┼──────────────────────────────────┐
-         │                                  │                                   │
-         ▼                                  ▼                                   ▼
-┌─────────────────┐               ┌─────────────────┐               ┌─────────────────┐
-│  DETECTABILITY  │               │  RECOVERABILITY │               │     IMPACT      │
-│                 │               │                 │               │                 │
-│ How quickly do  │               │ Can system      │               │ What's broken?  │
-│ you know?       │               │ self-heal?      │               │                 │
-│                 │               │                 │               │ • Single request│
-│ ├── Immediate   │               │ ├── Automatic   │               │ • Single user   │
-│ │   (crash)     │               │ │   (restart)   │               │ • Feature       │
-│ │               │               │ │               │               │ • Entire system │
-│ ├── Delayed     │               │ ├── Manual      │               │                 │
-│ │   (health     │               │ │   (needs      │               │ Who is affected?│
-│ │   check)      │               │ │   human)      │               │ • 1 user        │
-│ │               │               │ │               │               │ • 100 users     │
-│ └── Unknown     │               │ └── Permanent   │               │ • 1M users      │
-│     (silent     │               │     (data lost) │               │ • All users     │
-│     corruption) │               │                 │               │                 │
-└─────────────────┘               └─────────────────┘               └─────────────────┘
+    D --> D1["Immediate (crash)"]
+    D --> D2["Delayed (health check)"]
+    D --> D3["Unknown (silent corruption)"]
 
-                                           │
-                                           ▼
-                              ┌─────────────────────┐
-                              │     FREQUENCY       │
-                              │                     │
-                              │ How often?          │
-                              │                     │
-                              │ ├── Rare            │
-                              │ │   (once a year)   │
-                              │ │                   │
-                              │ ├── Occasional      │
-                              │ │   (monthly)       │
-                              │ │                   │
-                              │ └── Common          │
-                              │     (daily/weekly)  │
-                              │                     │
-                              └─────────────────────┘
+    R --> R1["Automatic (restart)"]
+    R --> R2["Manual (needs human)"]
+    R --> R3["Permanent (data lost)"]
+
+    I --> I1["Scope: Single request / Single user / Feature / Entire system"]
+    I --> I2["Affected: 1 user / 100 users / 1M users / All users"]
+
+    FR --> FR1["Rare (once a year)"]
+    FR --> FR2["Occasional (monthly)"]
+    FR --> FR3["Common (daily/weekly)"]
 ```
 
 **Priority Matrix:**
@@ -390,6 +348,8 @@ The combination of these characteristics determines priority:
 
 ## Part 2: Failure Mode and Effects Analysis (FMEA)
 
+> **Stop and think**: How often does your current team formally brainstorm what could go wrong before deploying a new feature? Is it documented, or just discussed casually?
+
 ### 2.1 What is FMEA?
 
 **FMEA** (Failure Mode and Effects Analysis) is a systematic technique for identifying potential failures and their effects before they happen.
@@ -399,27 +359,16 @@ Originally from aerospace engineering, FMEA asks three questions:
 2. **What happens when it fails?** (Effect)
 3. **How bad is it?** (Severity, likelihood, detectability)
 
-```
-FMEA PROCESS
-═══════════════════════════════════════════════════════════════
-
-Step 1: List components
-        └── Service A, Database, Cache, Queue, External API
-
-Step 2: For each component, list failure modes
-        └── Database: slow queries, connection refused, corrupted data
-
-Step 3: For each failure mode, determine effects
-        └── Slow queries → User latency → Timeouts → Error page
-
-Step 4: Score severity, likelihood, detectability
-        └── Severity: 8/10, Likelihood: 4/10, Detection: 7/10
-
-Step 5: Calculate Risk Priority Number (RPN)
-        └── RPN = 8 × 4 × (10-7) = 96
-
-Step 6: Prioritize mitigations by RPN
-        └── Address highest RPN first
+```mermaid
+flowchart TD
+    S1["Step 1: List components<br>└── Service A, Database, Cache, Queue, External API"]
+    S2["Step 2: For each component, list failure modes<br>└── Database: slow queries, connection refused, corrupted data"]
+    S3["Step 3: For each failure mode, determine effects<br>└── Slow queries → User latency → Timeouts → Error page"]
+    S4["Step 4: Score severity, likelihood, detectability<br>└── Severity: 8/10, Likelihood: 4/10, Detection: 7/10"]
+    S5["Step 5: Calculate Risk Priority Number (RPN)<br>└── RPN = 8 × 4 × (10-7) = 96"]
+    S6["Step 6: Prioritize mitigations by RPN<br>└── Address highest RPN first"]
+    
+    S1 --> S2 --> S3 --> S4 --> S5 --> S6
 ```
 
 ### 2.2 FMEA in Practice
@@ -461,31 +410,28 @@ Step 6: Prioritize mitigations by RPN
 
 ## Part 3: Graceful Degradation
 
+> **Stop and think**: Think about your favorite streaming app. What happens when your internet connection drops to 1 bar? Does it show an error, or does it lower the video quality to 480p? That is graceful degradation in action.
+
 ### 3.1 What is Graceful Degradation?
 
 **Graceful degradation** means a system continues to provide some functionality even when parts fail, rather than failing completely.
 
-```
-GRACEFUL DEGRADATION
-═══════════════════════════════════════════════════════════════
-
-WITHOUT GRACEFUL DEGRADATION
-─────────────────────────────────────────────────────────────
-User → App → Recommendation Service (DOWN!)
-                    ↓
-              500 ERROR
-              "Something went wrong"
-
-WITH GRACEFUL DEGRADATION
-─────────────────────────────────────────────────────────────
-User → App → Recommendation Service (DOWN!)
-                    ↓
-              Fallback: Show popular items
-                    ↓
-              User sees products, can still shop
-
-The shopping experience is degraded (no personalization)
-but functional (user can buy things).
+```mermaid
+flowchart TD
+    subgraph Without["WITHOUT GRACEFUL DEGRADATION"]
+        direction TB
+        W1[User] --> W2[App]
+        W2 --> W3["Recommendation Service (DOWN!)"]
+        W3 -.-> W4["500 ERROR<br>Something went wrong"]
+    end
+    
+    subgraph With["WITH GRACEFUL DEGRADATION"]
+        direction TB
+        G1[User] --> G2[App]
+        G2 --> G3["Recommendation Service (DOWN!)"]
+        G3 -.-> G4["Fallback: Show popular items"]
+        G4 -.-> G5["User sees products, can still shop"]
+    end
 ```
 
 ### 3.2 Degradation Strategies
@@ -503,23 +449,18 @@ but functional (user can buy things).
 
 For each feature, define:
 
-```
-DEGRADATION PATH DESIGN
-═══════════════════════════════════════════════════════════════
-
-Feature: Product Recommendations
-
-Level 0 (Full):     Personalized recommendations from ML service
-        ↓ (ML service timeout)
-Level 1 (Degraded): User's previously viewed items from cache
-        ↓ (Cache miss)
-Level 2 (Fallback): Popular items in this category
-        ↓ (Category service down)
-Level 3 (Minimal):  Site-wide best sellers (static list)
-        ↓ (Complete failure)
-Level 4 (Off):      Hide recommendation panel entirely
-
-Each level is worse but still functional.
+```mermaid
+flowchart TD
+    L0["Level 0 (Full): Personalized recommendations from ML service"]
+    L1["Level 1 (Degraded): User's previously viewed items from cache"]
+    L2["Level 2 (Fallback): Popular items in this category"]
+    L3["Level 3 (Minimal): Site-wide best sellers (static list)"]
+    L4["Level 4 (Off): Hide recommendation panel entirely"]
+    
+    L0 -->|"ML service timeout"| L1
+    L1 -->|"Cache miss"| L2
+    L2 -->|"Category service down"| L3
+    L3 -->|"Complete failure"| L4
 ```
 
 > **Try This (3 minutes)**
@@ -537,38 +478,36 @@ Each level is worse but still functional.
 
 ## Part 4: Blast Radius and Isolation
 
+> **Pause and predict**: If the primary database in your system crashed right now, which services would survive? Would your users still be able to perform read-only tasks?
+
 ### 4.1 What is Blast Radius?
 
 **Blast radius** is the scope of impact when a failure occurs. Smaller blast radius = fewer users/features affected.
 
-```
-BLAST RADIUS
-═══════════════════════════════════════════════════════════════
+```mermaid
+flowchart TD
+    subgraph Large["LARGE BLAST RADIUS (dangerous)"]
+        direction TB
+        DB1[("Shared Database (Crash)")]
+        A1[A] --> DB1
+        B1[B] --> DB1
+        C1[C] --> DB1
+        D1[D] --> DB1
+        E1[E] --> DB1
+        F1[F] --> DB1
+        DB1 -.->|"FAIL"| F_ALL["FAIL (All services fail)"]
+    end
 
-LARGE BLAST RADIUS (dangerous)
-┌─────────────────────────────────────────────────────────────┐
-│                    Shared Database                          │
-│                         💥                                   │
-│  ┌─────┐  ┌─────┐  ┌─────┐  ┌─────┐  ┌─────┐  ┌─────┐     │
-│  │  A  │  │  B  │  │  C  │  │  D  │  │  E  │  │  F  │     │
-│  └─────┘  └─────┘  └─────┘  └─────┘  └─────┘  └─────┘     │
-│     ↓        ↓        ↓        ↓        ↓        ↓        │
-│   FAIL     FAIL     FAIL     FAIL     FAIL     FAIL       │
-└─────────────────────────────────────────────────────────────┘
-
-SMALL BLAST RADIUS (isolated)
-┌─────────────────────────────────────────────────────────────┐
-│  ┌─────┐  ┌─────┐  ┌─────┐  ┌─────┐  ┌─────┐  ┌─────┐     │
-│  │  A  │  │  B  │  │  C  │  │  D  │  │  E  │  │  F  │     │
-│  └──┬──┘  └──┬──┘  └──┬──┘  └──┬──┘  └──┬──┘  └──┬──┘     │
-│     │        │        │        │        │        │         │
-│  ┌──▼──┐  ┌──▼──┐  ┌──▼──┐  ┌──▼──┐  ┌──▼──┐  ┌──▼──┐     │
-│  │ DB  │  │ DB  │  │ DB  │  │ DB  │  │ DB  │  │ DB  │     │
-│  │  A  │  │  B  │  │ 💥 │  │  D  │  │  E  │  │  F  │     │
-│  └─────┘  └─────┘  └─────┘  └─────┘  └─────┘  └─────┘     │
-│                       ↓                                    │
-│                     FAIL (only C affected)                │
-└─────────────────────────────────────────────────────────────┘
+    subgraph Small["SMALL BLAST RADIUS (isolated)"]
+        direction TB
+        A2[A] --> DBA[("DB A")]
+        B2[B] --> DBB[("DB B")]
+        C2[C] --> DBC[("DB C (Crash)")]
+        D2[D] --> DBD[("DB D")]
+        E2[E] --> DBE[("DB E")]
+        F2[F] --> DBF[("DB F")]
+        DBC -.->|"FAIL"| FC["FAIL (only C affected)"]
+    end
 ```
 
 ### 4.2 Isolation Patterns
@@ -577,29 +516,25 @@ SMALL BLAST RADIUS (isolated)
 
 Named after ship compartments, bulkheads isolate failures to prevent them from spreading.
 
-```
-BULKHEAD PATTERN
-═══════════════════════════════════════════════════════════════
+```mermaid
+flowchart TD
+    subgraph Without["Without bulkheads"]
+        direction TB
+        Pool["Connection Pool (100)"]
+        FA["Feature A (slow, uses 95)"] --> Pool
+        FB["Feature B (blocked, gets 5)"] --> Pool
+        FC["Feature C (blocked, gets 0)"] --> Pool
+    end
 
-Without bulkheads:
-┌────────────────────────────────────────┐
-│          Connection Pool (100)         │
-│   ┌───────────────────────────────┐   │
-│   │ Feature A (slow, uses 95)      │   │
-│   │ Feature B (blocked, gets 5)    │   │ ← Both features
-│   │ Feature C (blocked, gets 0)    │   │   share pool
-│   └───────────────────────────────┘   │
-└────────────────────────────────────────┘
-
-With bulkheads:
-┌─────────────────────────────────────────────────────────────┐
-│  ┌────────────────┐ ┌────────────────┐ ┌────────────────┐  │
-│  │ Pool A (50)    │ │ Pool B (30)    │ │ Pool C (20)    │  │
-│  │ Feature A      │ │ Feature B      │ │ Feature C      │  │
-│  │ (slow, uses 50)│ │ (works fine)   │ │ (works fine)   │  │
-│  └────────────────┘ └────────────────┘ └────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
-Feature A's slowness doesn't affect B or C.
+    subgraph With["With bulkheads"]
+        direction TB
+        PA["Pool A (50)"]
+        PB["Pool B (30)"]
+        PC["Pool C (20)"]
+        F_A["Feature A (slow, uses 50)"] --> PA
+        F_B["Feature B (works fine)"] --> PB
+        F_C["Feature C (works fine)"] --> PC
+    end
 ```
 
 **Other Isolation Patterns:**
@@ -629,7 +564,7 @@ Strategies to minimize impact:
 >
 > Then, on a random Tuesday, a developer added a new analytics query to the reporting service. The query was correct, but it ran a full table scan on a 50-million-row table. Without an index. Under normal load.
 >
-> ```
+> ```text
 > THE BLAST RADIUS OF ONE BAD QUERY
 > ═════════════════════════════════════════════════════════════════════════════
 >
@@ -668,98 +603,71 @@ Strategies to minimize impact:
 
 ## Part 5: Common Failure Patterns
 
+> **Stop and think**: Have you ever written a simple `while(retries < 3)` loop in your code without adding a delay? You might have accidentally built a thundering herd trigger.
+
 ### 5.1 The Retry Storm
 
 When a service is struggling, retries can make it worse:
 
+```mermaid
+flowchart TD
+    S1["100 req/sec"] -->|"Service (handles fine)"| S2[Service]
+    
+    S3["100 req/sec"] -->|"Service (slow, some timeout)"| S4[Service]
+    S4 -->|"Client retries (×3)"| S5["300 req/sec"]
+    S5 -->|"Service (overwhelmed)"| S6[Service]
+    S6 -->|"More timeouts, more retries"| S7["1000 req/sec"]
+    S7 -->|"Service (dead)"| S8[Service]
 ```
-RETRY STORM
-═══════════════════════════════════════════════════════════════
 
-Normal:         100 requests/sec → Service (handles fine)
-
-Service slows:  100 req/sec → Service (slow, some timeout)
-                    ↓
-                Client retries (×3)
-                    ↓
-                300 req/sec → Service (overwhelmed)
-                    ↓
-                More timeouts, more retries
-                    ↓
-                1000 req/sec → Service (dead)
-
-Mitigation:
+**Mitigation:**
 - Exponential backoff (wait longer between retries)
 - Jitter (randomize retry timing)
 - Retry budgets (limit total retries)
 - Circuit breakers (stop retrying entirely)
-```
 
 ### 5.2 The Cascading Failure
 
 One service fails, causing dependent services to fail:
 
+```mermaid
+flowchart TD
+    A["Service A"] -->|"calls"| B["Service B"]
+    A -->|"calls"| C["Service C"]
+    A -->|"calls"| D["Service D"]
+    C -->|"calls"| E["Service E"]
+    C -->|"calls"| F["Service F (Fails)"]
+    
+    F -.->|"C waits for F"| C
+    C -.->|"A waits for C"| A
+    A -.->|"All threads blocked"| Total["TOTAL OUTAGE"]
 ```
-CASCADING FAILURE
-═══════════════════════════════════════════════════════════════
 
-                    ┌─────────────┐
-                    │   Service   │
-                    │      A      │
-                    └──────┬──────┘
-                           │ calls
-              ┌────────────┼────────────┐
-              │            │            │
-        ┌─────▼───┐  ┌─────▼───┐  ┌─────▼───┐
-        │ Service │  │ Service │  │ Service │
-        │    B    │  │    C    │  │    D    │
-        └────┬────┘  └────┬────┘  └─────────┘
-             │            │
-        ┌────▼────┐  ┌────▼────┐
-        │ Service │  │ Service │
-        │    E    │  │    F    │ ← F fails
-        └─────────┘  └─────────┘
-                          │
-                     C waits for F
-                          │
-                     A waits for C
-                          │
-                     All threads blocked
-                          │
-                     TOTAL OUTAGE
-
-Mitigation: Timeouts, circuit breakers, async calls
-```
+**Mitigation:** Timeouts, circuit breakers, async calls
 
 ### 5.3 The Thundering Herd
 
 Many clients simultaneously hit a resource after an event:
 
+```mermaid
+flowchart TD
+    A["Cache expires (TTL = 60 seconds)"] --> B["10,000 requests arrive simultaneously"]
+    B --> C1["Request 1 → Cache miss"]
+    B --> C2["Request 2 → Cache miss"]
+    B --> C3["Request 3 → Cache miss"]
+    B --> C4["... Request 10,000 → Cache miss"]
+    
+    C1 --> DB[("Database overwhelmed")]
+    C2 --> DB
+    C3 --> DB
+    C4 --> DB
 ```
-THUNDERING HERD
-═══════════════════════════════════════════════════════════════
 
-Cache expires (TTL = 60 seconds)
-            │
-            ▼
-┌─────────────────────────────────────────────────────────────┐
-│  10,000 requests arrive simultaneously                      │
-│                                                             │
-│  Request 1 → Cache miss → Query database                   │
-│  Request 2 → Cache miss → Query database                   │
-│  Request 3 → Cache miss → Query database                   │
-│  ...                                                        │
-│  Request 10,000 → Cache miss → Query database              │
-│                                                             │
-│              Database overwhelmed                           │
-└─────────────────────────────────────────────────────────────┘
-
-Mitigation:
+**Mitigation:**
 - Staggered TTLs (add random jitter to expiration)
 - Request coalescing (one request populates, others wait)
 - Warm cache before traffic arrives
 - Rate limit cache refresh
-```
 
 ### 5.4 Pattern Summary
 
@@ -799,7 +707,7 @@ Mitigation:
 >
 > One day, a database query started taking 25 seconds instead of the usual 200ms. A missing WHERE clause caused a sequential scan. Not a bug—it still returned correct data. Just slowly.
 >
-> ```
+> ```text
 > THE 30-SECOND TIMEOUT DEATH SPIRAL
 > ═════════════════════════════════════════════════════════════════════════════
 >
@@ -857,54 +765,48 @@ Mitigation:
 
 ## Quiz
 
-1. **What's the difference between a transient and an intermittent failure?**
+1. **You are investigating two different alerts. The first is a database timeout that occurred at 2:14 AM and hasn't repeated since. The second is an image processing service that throws a "file corrupted" error on roughly 2% of user uploads, but works perfectly if the user immediately uploads the same file again. How would you categorize these two failures, and how should your response differ?**
    <details>
    <summary>Answer</summary>
 
-   **Transient failures** occur once and then resolve—a network hiccup, a brief timeout. Retrying typically succeeds.
+   The first alert is a **transient failure**, while the second is an **intermittent failure**.
 
-   **Intermittent failures** occur unpredictably—sometimes the system works, sometimes it doesn't, with no clear pattern. These are harder to debug because you can't reliably reproduce them.
+   Transient failures occur once and then resolve on their own, like a momentary network hiccup or a brief routing delay. Because they don't persist, the system can usually recover simply by retrying the operation with exponential backoff.
 
-   The distinction matters for mitigation: transient failures benefit from simple retries; intermittent failures require deeper investigation into patterns and conditions.
+   Intermittent failures, on the other hand, occur unpredictably—sometimes the system works, sometimes it doesn't, with no clear pattern. These are much harder to debug because you can't reliably reproduce them. In this scenario, retrying might occasionally succeed (masking the problem), but the correct response is to add detailed logging to capture the exact state when the error occurs, as it often points to an underlying issue like a race condition or resource exhaustion on a specific node.
    </details>
 
-2. **Why is a high Severity but low Detection score particularly dangerous in FMEA?**
+2. **During an FMEA session for a new financial reporting microservice, your team evaluates a failure mode where floating-point rounding errors could alter daily revenue totals. The team gives this a Severity of 9, but a Detection score of 2. Why is this specific combination of scores considered a "critical" risk that requires immediate architectural changes?**
    <details>
    <summary>Answer</summary>
 
-   High severity + low detection means the failure has major impact AND you won't know it's happening until significant damage is done.
+   A high severity combined with low detection means the failure has a major impact AND you won't know it's happening until significant damage has already been done.
 
-   Example: Silent data corruption (severity 10, detection 2). Users are getting wrong results, decisions are being made on bad data, but no alarms are firing. By the time you notice, the corruption has spread.
+   In this financial reporting scenario, the failure is "silent." The system continues to operate and return 200 OK responses, but it is generating corrupted data. Because the detection score is so low, no automated alarms are firing, meaning the business will continue making decisions based on incorrect revenue numbers until someone notices during an audit months later.
 
-   These failure modes often have high RPN and should be prioritized for better detection (monitoring, checksums, validation) even if you can't reduce the severity.
+   By the time you notice, the corruption has spread and fixing it requires massive manual reconciliation. These silent failure modes often yield a very high Risk Priority Number (RPN) and should be prioritized for immediate mitigation—such as adding robust reconciliation checks, strict data validation, or double-entry verification—even if you cannot eliminate the underlying likelihood of the error entirely.
    </details>
 
-3. **How does the bulkhead pattern reduce blast radius?**
+3. **Your e-commerce platform's "Recommended Products" service suddenly experiences a 30-second delay due to a bad machine learning model deployment. Within minutes, users can't even log in or view their shopping carts, and the entire site goes down. How could implementing the bulkhead pattern have prevented this total outage?**
    <details>
    <summary>Answer</summary>
 
-   The bulkhead pattern isolates resources (connection pools, thread pools, memory) so that one component's failure can't consume resources needed by others.
+   Implementing the bulkhead pattern would have isolated the resources used by the "Recommended Products" service from the rest of the application, dramatically reducing the blast radius of the failure.
 
-   Without bulkheads: A slow dependency uses all connections, blocking unrelated features.
-   With bulkheads: Each feature has its own pool. A slow dependency exhausts its own pool but others continue working.
+   Without bulkheads, all services likely share the same global connection or thread pool. When the recommendations service slowed down, incoming requests piled up and consumed all available threads waiting for a response, starving critical services like login and cart management.
 
-   It's like watertight compartments in a ship—a breach in one compartment doesn't sink the whole ship.
+   By using bulkheads, you divide those resources into separate, isolated pools—just like watertight compartments in a ship. The recommendation service would have exhausted its dedicated thread pool and failed, but the login and cart services would still have access to their own dedicated resources. This ensures that a non-critical feature failure doesn't sink the entire platform, turning a total outage into a graceful degradation scenario.
    </details>
 
-4. **What makes retry storms particularly dangerous?**
+4. **An internal authentication service usually handles 500 requests per second. During a minor network blip, the service briefly slows down, causing some client requests to time out. Suddenly, traffic spikes to 2,500 requests per second, CPU usage hits 100%, and the service crashes completely. What failure pattern just occurred, and what specific client-side changes are needed to prevent it?**
    <details>
    <summary>Answer</summary>
 
-   Retry storms create a positive feedback loop:
-   1. Service slows down → requests timeout
-   2. Clients retry → 2-3x more requests
-   3. More requests → service slower → more timeouts
-   4. More timeouts → more retries → even more requests
-   5. System overwhelmed → complete failure
+   The service just experienced a **retry storm**, which occurs when a system slowdown triggers a destructive positive feedback loop.
 
-   What started as a small slowdown becomes a total outage. The "helpful" retry behavior actually kills the service faster than if clients had just failed.
+   When the service initially slowed down and requests timed out, the clients aggressively retried their failed requests. This injected 2-3x more traffic into a service that was already struggling, which slowed it down even further, leading to more timeouts, more retries, and an overwhelming load that eventually killed the service. What started as a minor, recoverable slowdown was amplified into a total outage by the clients' "helpful" retry behavior.
 
-   Mitigations: exponential backoff (wait longer between retries), jitter (don't retry at the same time), retry budgets (limit total retries), circuit breakers (stop retrying entirely).
+   To prevent this, clients must implement **exponential backoff** (waiting progressively longer between retries) and **jitter** (adding randomness to the retry delay so clients don't all retry at the exact same millisecond). Additionally, implementing a circuit breaker or strict retry budgets will ensure clients stop hammering a service that is clearly unresponsive.
    </details>
 
 ---
@@ -917,17 +819,13 @@ Mitigation:
 
 Draw a simple diagram of a system you operate (or use the example checkout flow):
 
-```
-Example: Checkout Flow
-┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
-│   API    │───▶│  Order   │───▶│ Payment  │───▶│ Inventory│
-│ Gateway  │    │ Service  │    │ Service  │    │ Service  │
-└──────────┘    └────┬─────┘    └────┬─────┘    └──────────┘
-                     │               │
-                ┌────▼─────┐    ┌────▼─────┐
-                │ Database │    │ Payment  │
-                │          │    │ Provider │
-                └──────────┘    └──────────┘
+```mermaid
+flowchart LR
+    A["API Gateway"] --> B["Order Service"]
+    B --> C["Payment Service"]
+    C --> D["Inventory Service"]
+    B --> DB[("Database")]
+    C --> PP["Payment Provider"]
 ```
 
 **Part 2: FMEA Table (15 minutes)**
@@ -972,7 +870,7 @@ Answer:
 
 Before moving on, make sure you understand these core concepts:
 
-```
+```text
 FAILURE MODES CHECKLIST
 ═══════════════════════════════════════════════════════════════════════════════
 
