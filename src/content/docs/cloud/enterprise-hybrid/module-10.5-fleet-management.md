@@ -162,6 +162,8 @@ az k8s-configuration flux create \
   --kustomization name=policies path=./policies/production prune=true
 ```
 
+> **Pause and predict**: If your Git repository becomes temporarily unavailable, will your Arc-connected clusters stop functioning, or will they continue running their current state? How does this affect your disaster recovery strategy?
+
 ---
 
 ## Google Fleet (GKE Enterprise)
@@ -258,6 +260,8 @@ gcloud beta container fleet config-management apply \
 gcloud beta container fleet config-management status \
   --format="table(Name, Status, Last_Synced_Token, Sync_Errors)"
 ```
+
+> **Stop and think**: If you apply a Config Sync configuration that accidentally deletes a critical namespace across your entire fleet, how quickly will that change propagate, and what guardrails should you have in place to prevent it?
 
 ### Fleet-Wide Policy with Policy Controller
 
@@ -561,7 +565,7 @@ patches:
 
 ## Did You Know?
 
-1. Azure Arc has connected over 26,000 Kubernetes clusters as of early 2025, including clusters running on AWS, GCP, and edge devices. Microsoft does not charge for the basic Arc connection -- the revenue comes from extensions (Azure Policy, Monitoring, Defender) that cost $6-15 per vCPU/month. A 100-node cluster with 4 vCPUs per node running all extensions can cost $2,400-6,000/month in Arc extension fees alone.
+1. Azure Arc has connected over 26,000 Kubernetes clusters as of early 2026, including clusters running on AWS, GCP, and edge devices. Microsoft does not charge for the basic Arc connection -- the revenue comes from extensions (Azure Policy, Monitoring, Defender) that cost $6-15 per vCPU/month. A 100-node cluster with 4 vCPUs per node running all extensions can cost $2,400-6,000/month in Arc extension fees alone.
 
 2. Google renamed "Anthos" to "GKE Enterprise" in 2023 partly because customers could not pronounce it consistently. The name "Anthos" came from the Greek word for "flower," symbolizing growth and adaptation. Despite the rebrand, the underlying technology has been remarkably stable -- Config Sync, Policy Controller, and Service Mesh (based on Istio) have remained the core pillars since the original Anthos launch in 2019.
 
@@ -605,9 +609,9 @@ You should implement the base/overlay pattern using a tool like Kustomize to sep
 </details>
 
 <details>
-<summary>Question 4: A fleet-wide policy update is pushed via GitOps. It works on 39 out of 40 clusters. The 40th cluster (an on-premises kubeadm cluster running Kubernetes 1.28) rejects the policy. What happened and how do you handle it?</summary>
+<summary>Question 4: A fleet-wide policy update is pushed via GitOps. It works on 39 out of 40 clusters. The 40th cluster (an on-premises kubeadm cluster running Kubernetes 1.32) rejects the policy. What happened and how do you handle it?</summary>
 
-The most likely cause is a Kubernetes version incompatibility between the policy manifest and the older API server. If the policy uses an API version or feature only available in Kubernetes 1.30+ (such as a newer Gatekeeper constraint template format), the 1.28 cluster's API server will reject the resource during the apply phase. This highlights a common fleet management challenge where version skew across clusters breaks unified deployments. To handle this, you should include version gates in your GitOps configuration, such as using ArgoCD ApplicationSets to filter which policies sync based on cluster version labels. Alternatively, you can use conditional patches in Kustomize overlays to adjust policies for older clusters, or implement automated pre-flight checks in your pipeline to validate manifests against target cluster versions before attempting to sync.
+The most likely cause is a Kubernetes version incompatibility between the policy manifest and the older API server. If the policy uses an API version or feature only available in Kubernetes 1.35+ (such as a newer Gatekeeper constraint template format), the 1.32 cluster's API server will reject the resource during the apply phase. This highlights a common fleet management challenge where version skew across clusters breaks unified deployments. To handle this, you should include version gates in your GitOps configuration, such as using ArgoCD ApplicationSets to filter which policies sync based on cluster version labels. Alternatively, you can use conditional patches in Kustomize overlays to adjust policies for older clusters, or implement automated pre-flight checks in your pipeline to validate manifests against target cluster versions before attempting to sync.
 </details>
 
 <details>
@@ -709,14 +713,28 @@ for CLUSTER_INFO in "fleet-aws-prod:aws:production:kind-fleet-aws-prod" "fleet-a
 
   SERVER=$(kubectl --context $CTX config view --minify -o jsonpath='{.clusters[0].cluster.server}')
   CA_DATA=$(kubectl --context $CTX config view --minify --raw -o jsonpath='{.clusters[0].cluster.certificate-authority-data}')
-  TOKEN=$(kubectl --context $CTX -n kube-system get secret \
-    $(kubectl --context $CTX -n kube-system get sa default -o jsonpath='{.secrets[0].name}' 2>/dev/null || echo "none") \
-    -o jsonpath='{.data.token}' 2>/dev/null | base64 -d || echo "")
 
   # Create a ServiceAccount for ArgoCD in the target cluster
   kubectl --context $CTX create serviceaccount argocd-manager -n kube-system 2>/dev/null || true
   kubectl --context $CTX create clusterrolebinding argocd-manager \
     --clusterrole=cluster-admin --serviceaccount=kube-system:argocd-manager 2>/dev/null || true
+
+  # Create a long-lived token secret for the service account (Required in K8s 1.24+)
+  cat <<EOF | kubectl --context $CTX apply -f -
+apiVersion: v1
+kind: Secret
+metadata:
+  name: argocd-manager-token
+  namespace: kube-system
+  annotations:
+    kubernetes.io/service-account.name: argocd-manager
+type: kubernetes.io/service-account-token
+EOF
+
+  # Wait for token controller to populate the secret
+  sleep 2
+
+  TOKEN=$(kubectl --context $CTX -n kube-system get secret argocd-manager-token -o jsonpath='{.data.token}' | base64 -d)
 
   cat <<EOF | kubectl --context kind-fleet-mgmt apply -f -
 apiVersion: v1
@@ -734,6 +752,7 @@ stringData:
   server: $SERVER
   config: |
     {
+      "bearerToken": "$TOKEN",
       "tlsClientConfig": {
         "insecure": true
       }
@@ -863,7 +882,7 @@ for CTX in kind-fleet-aws-prod kind-fleet-azure-staging; do
   TOTAL_PODS=$((TOTAL_PODS + PODS))
 
   # K8s version
-  VERSION=$(kubectl --context $CTX version --short 2>/dev/null | grep Server | awk '{print $3}' || kubectl --context $CTX get nodes -o jsonpath='{.items[0].status.nodeInfo.kubeletVersion}' 2>/dev/null)
+  VERSION=$(kubectl --context $CTX get nodes -o jsonpath='{.items[0].status.nodeInfo.kubeletVersion}' 2>/dev/null)
   echo "  Kubernetes Version: $VERSION"
 
   # Fleet services check
