@@ -40,35 +40,38 @@ Companies like Uber, Airbnb, and Stripe invest heavily in model monitoring becau
 
 ## What to Monitor
 
+```mermaid
+flowchart TD
+    subgraph L1 [LAYER 1: INFRASTRUCTURE]
+        direction TB
+        l1a(Latency, throughput, error rates)
+        l1b(CPU, memory, GPU utilization)
+        l1c(Service availability)
+    end
+    subgraph L2 [LAYER 2: DATA QUALITY]
+        direction TB
+        l2a(Schema validation)
+        l2b(Missing value rates)
+        l2c(Value range violations)
+        l2d(Feature distributions)
+    end
+    subgraph L3 [LAYER 3: MODEL PERFORMANCE]
+        direction TB
+        l3a(Prediction distribution)
+        l3b(Model metrics - if labels available)
+        l3c(Feature importance stability)
+        l3d(Calibration)
+    end
+    subgraph L4 [LAYER 4: BUSINESS IMPACT]
+        direction TB
+        l4a(Conversion rates)
+        l4b(Revenue attribution)
+        l4c(User satisfaction)
+    end
+    L1 --> L2 --> L3 --> L4
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                 ML MONITORING LAYERS                             │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  LAYER 1: INFRASTRUCTURE (Traditional)                          │
-│  ├── Latency, throughput, error rates                           │
-│  ├── CPU, memory, GPU utilization                               │
-│  └── Service availability                                       │
-│                                                                  │
-│  LAYER 2: DATA QUALITY                                          │
-│  ├── Schema validation                                          │
-│  ├── Missing value rates                                        │
-│  ├── Value range violations                                     │
-│  └── Feature distributions                                      │
-│                                                                  │
-│  LAYER 3: MODEL PERFORMANCE                                     │
-│  ├── Prediction distribution                                    │
-│  ├── Model metrics (if labels available)                        │
-│  ├── Feature importance stability                               │
-│  └── Calibration                                                │
-│                                                                  │
-│  LAYER 4: BUSINESS IMPACT                                       │
-│  ├── Conversion rates                                           │
-│  ├── Revenue attribution                                        │
-│  └── User satisfaction                                          │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
-```
+
+> **Stop and think**: If your model prediction endpoint returns an HTTP 200 within 50ms, but its predictions are entirely inverted due to a shifted feature, which monitoring layer would catch this first?
 
 ### The Four Questions
 
@@ -85,40 +88,27 @@ Most teams only answer question 1. You need all four.
 
 ### Types of Drift
 
-```
-TYPES OF DRIFT
-─────────────────────────────────────────────────────────────────
+```mermaid
+flowchart TD
+    subgraph DD [DATA DRIFT: Feature distribution changes]
+        direction TB
+        DD1[Training: High-income users] -->|Distribution shifted| DD2[Production: Low-income users]
+    end
 
-DATA DRIFT (Feature distribution changes)
-Training:   ████████████████████░░░░░░░░░░░░
-Production: ░░░░░░░████████████████████░░░░░
-            ↑
-            Distribution shifted right
+    subgraph CD [CONCEPT DRIFT: Relationship changes]
+        direction TB
+        CD1[Training: Feature X → Strong outcome Y] -->|Relationship changed| CD2[Production: Feature X → Weak outcome Y]
+    end
 
-Example: Income feature trained on pre-pandemic data,
-         now serving post-pandemic data with higher unemployment
+    subgraph PD [PREDICTION DRIFT: Output distribution changes]
+        direction TB
+        PD1[Training: 2% Positive Predictions] -->|Output distribution changed| PD2[Production: 15% Positive Predictions]
+    end
 
-
-CONCEPT DRIFT (Relationship changes)
-Training:   Feature X → Outcome Y (strong relationship)
-Production: Feature X → Outcome Y (weak/different relationship)
-
-Example: Fraud patterns change. Same features,
-         different fraud behaviors.
-
-
-PREDICTION DRIFT (Output distribution changes)
-Training:   Fraud predictions: 2% positive
-Production: Fraud predictions: 15% positive
-            ↑
-            Something changed (data or concept drift upstream)
-
-
-LABEL DRIFT (Target distribution changes)
-Training:   Class balance: 50/50
-Production: Class balance: 80/20
-
-Example: Seasonal change in purchase behavior
+    subgraph LD [LABEL DRIFT: Target distribution changes]
+        direction TB
+        LD1[Training: 50/50 Class Balance] -->|Target distribution changed| LD2[Production: 80/20 Class Balance]
+    end
 ```
 
 ### War Story: The Slow Decline
@@ -133,34 +123,25 @@ A drift detector would have flagged the issue within weeks, not months.
 
 ### Statistical Tests
 
-```
-DRIFT DETECTION METHODS
-─────────────────────────────────────────────────────────────────
-
-KOLMOGOROV-SMIRNOV TEST (Numerical features)
-├── Compares cumulative distributions
-├── H0: Distributions are the same
-├── p < 0.05 → Drift detected
-└── Works well for continuous features
-
-CHI-SQUARE TEST (Categorical features)
-├── Compares frequency distributions
-├── H0: Distributions are the same
-├── p < 0.05 → Drift detected
-└── Works for discrete/categorical
-
-POPULATION STABILITY INDEX (PSI)
-├── Measures distribution shift
-├── PSI < 0.1 → No significant change
-├── 0.1 ≤ PSI < 0.25 → Moderate shift
-├── PSI ≥ 0.25 → Significant shift
-└── Industry standard for credit scoring
-
-JENSEN-SHANNON DIVERGENCE
-├── Symmetric version of KL divergence
-├── Bounded [0, 1]
-├── Compares probability distributions
-└── Works for both numerical and categorical
+```mermaid
+mindmap
+  root((Drift Detection Methods))
+    Kolmogorov-Smirnov Test
+      Numerical features
+      Compares cumulative distributions
+      H0: Distributions are same
+    Chi-Square Test
+      Categorical features
+      Compares frequency distributions
+      H0: Distributions are same
+    Population Stability Index
+      Industry standard for credit
+      Measures distribution shift
+      PSI under 0.1: No shift
+    Jensen-Shannon Divergence
+      Symmetric KL divergence
+      Bounded 0 to 1
+      Numerical and categorical
 ```
 
 ### PSI Calculation
@@ -184,25 +165,24 @@ PSI = 0.032 → No significant drift
 
 Evidently is the leading open-source tool for ML monitoring:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        EVIDENTLY                                 │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  CAPABILITIES                                                    │
-│  ├── Data drift detection                                       │
-│  ├── Target drift detection                                     │
-│  ├── Model performance reports                                  │
-│  ├── Data quality monitoring                                    │
-│  └── Regression/classification metrics                          │
-│                                                                  │
-│  OUTPUT FORMATS                                                  │
-│  ├── Interactive HTML reports                                   │
-│  ├── JSON for dashboards                                        │
-│  ├── Prometheus metrics                                         │
-│  └── Python objects for automation                              │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph Capabilities[CAPABILITIES]
+        direction TB
+        C1[Data drift detection]
+        C2[Target drift detection]
+        C3[Model performance reports]
+        C4[Data quality monitoring]
+        C5[Regression/classification metrics]
+    end
+    subgraph Outputs[OUTPUT FORMATS]
+        direction TB
+        O1[Interactive HTML reports]
+        O2[JSON for dashboards]
+        O3[Prometheus metrics]
+        O4[Python objects for automation]
+    end
+    Capabilities -.-> Outputs
 ```
 
 ### Evidently Reports
@@ -278,40 +258,23 @@ if not test_suite.as_dict()['summary']['all_passed']:
 
 ### Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│               ML MONITORING PIPELINE                             │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  INFERENCE SERVICE                                               │
-│  ┌────────────────┐                                             │
-│  │ Request ──▶    │     ┌─────────────────┐                     │
-│  │     Model      │────▶│   Log Store     │                     │
-│  │ ──▶ Prediction │     │ (inputs,outputs)│                     │
-│  └────────────────┘     └────────┬────────┘                     │
-│                                  │                               │
-│                                  ▼                               │
-│                         ┌─────────────────┐                     │
-│                         │  Drift Detector │                     │
-│                         │   (Evidently)   │                     │
-│                         └────────┬────────┘                     │
-│                                  │                               │
-│           ┌──────────────────────┼──────────────────────┐       │
-│           │                      │                      │        │
-│           ▼                      ▼                      ▼        │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
-│  │   Prometheus    │  │     Grafana     │  │    Alerting     │  │
-│  │   (metrics)     │  │  (dashboards)   │  │  (PagerDuty)    │  │
-│  └─────────────────┘  └─────────────────┘  └─────────────────┘  │
-│                                                                  │
-│                              │                                   │
-│                              ▼                                   │
-│                    ┌─────────────────┐                          │
-│                    │    Retrain      │                          │
-│                    │   Trigger       │                          │
-│                    └─────────────────┘                          │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Inference_Service[INFERENCE SERVICE]
+        Req([Request]) --> Model[Model]
+        Model --> Pred([Prediction])
+    end
+
+    Model --> LogStore[(Log Store<br/>inputs, outputs)]
+    LogStore --> DriftDet[Drift Detector<br/>Evidently]
+
+    DriftDet --> Prom[(Prometheus<br/>metrics)]
+    DriftDet --> Graf[Grafana<br/>dashboards]
+    DriftDet --> Alert[Alerting<br/>PagerDuty]
+
+    Prom --> Retrain[Retrain Trigger]
+    Graf --> Retrain
+    Alert --> Retrain
 ```
 
 ### Prometheus Metrics
@@ -417,6 +380,8 @@ start_http_server(8000)
 }
 ```
 
+> **Pause and predict**: If you trigger a PagerDuty alert on every single minor feature that experiences data drift, what will happen to your on-call team after a week? How would you design a smarter, composite alerting strategy?
+
 ## Alerting Strategy
 
 ### What to Alert On
@@ -475,24 +440,14 @@ groups:
 
 ### The Delayed Label Problem
 
-```
-DELAYED LABEL PROBLEM
-─────────────────────────────────────────────────────────────────
+```mermaid
+sequenceDiagram
+    participant P as Prediction Time (Day 0)
+    participant L as Label Available (Day 30)
 
-Prediction Time                           Label Available
-      │                                        │
-      ▼                                        ▼
-Day 0: Predict fraud                    Day 30: Know if actually fraud
-      │◀─────────── 30 day delay ──────────▶│
-
-Problem: By the time you know accuracy dropped,
-         you've served bad predictions for 30 days!
-
-Solution: Monitor proxies for performance
-├── Prediction distribution (drift)
-├── Feature distributions
-├── Confidence scores
-└── Business metrics (immediate feedback)
+    P->>L: 30 day delay
+    Note over P, L: Problem: By the time you know accuracy dropped, you've served bad predictions for 30 days!
+    Note over P: Solution: Monitor proxies for performance<br/>- Prediction distribution (drift)<br/>- Feature distributions<br/>- Confidence scores<br/>- Business metrics
 ```
 
 ### Proxy Metrics
@@ -547,52 +502,35 @@ figure = estimates.plot()
 Test your understanding:
 
 <details>
-<summary>1. What's the difference between data drift and concept drift?</summary>
+<summary>1. Your e-commerce fraud detection model suddenly starts seeing a massive influx of users with IPs from a region it rarely saw during training. At the same time, the relationship between "time on site" and "fraud likelihood" has completely inverted due to a new scam tactic. Which types of drift are you experiencing?</summary>
 
 **Answer**:
-- **Data drift**: Input feature distributions change (e.g., more high-income users)
-- **Concept drift**: Relationship between features and target changes (e.g., what predicts fraud changes)
-
-Data drift can often be detected without labels. Concept drift usually requires labels to detect because you need to compare predictions against actual outcomes.
+You are experiencing both data drift and concept drift simultaneously.
+The massive influx of users from a new IP region represents data drift, because the input feature distribution has shifted away from the training baseline. The inversion of the relationship between "time on site" and "fraud likelihood" represents concept drift, because the underlying pattern mapping the features to the target outcome has fundamentally changed. Distinguishing between the two is critical because data drift might only require gathering new representative data, whereas concept drift often necessitates entirely new feature engineering to capture the new scam tactics.
 </details>
 
 <details>
-<summary>2. Why is PSI commonly used in financial services?</summary>
+<summary>2. You are building a credit scoring model for a highly regulated bank. The compliance team demands a drift detection metric that is easily interpretable, works without immediate true labels, and has widely accepted industry thresholds. Which method should you choose and why?</summary>
 
-**Answer**: PSI (Population Stability Index) is:
-- Industry standard with regulatory acceptance
-- Simple to explain to non-technical stakeholders
-- Provides clear thresholds (< 0.1, 0.1-0.25, > 0.25)
-- Works for both numerical and categorical features
-- Can be calculated without labels
-
-Financial regulators often require documented drift monitoring, and PSI provides auditable, interpretable results.
+**Answer**:
+You should choose the Population Stability Index (PSI) for this scenario.
+PSI is the established industry standard in financial services and is readily accepted by regulators for credit scoring models. It provides a simple, interpretable number with clear, standardized thresholds (e.g., < 0.1 means no significant shift, > 0.25 means significant shift), making it easy to explain to non-technical stakeholders and compliance officers. Furthermore, PSI only requires comparing the distribution of current model predictions (or features) against the baseline distribution from training, meaning it can be calculated immediately without waiting for delayed true labels (loan defaults).
 </details>
 
 <details>
-<summary>3. How do you monitor model performance when labels are delayed?</summary>
+<summary>3. Your ride-sharing company deploys a model to predict rider churn (whether a user will delete the app in the next 30 days). You won't know if a prediction is correct until 30 days have passed, but you need to know today if the new model version is misbehaving. How can you effectively monitor this model right now?</summary>
 
-**Answer**: Use proxy metrics:
-1. **Prediction distribution**: Shifts indicate something changed
-2. **Confidence scores**: Low confidence may indicate out-of-distribution data
-3. **Feature drift**: Data drift often precedes concept drift
-4. **Business metrics**: Immediate feedback (conversions, clicks)
-5. **Performance estimation**: Tools like NannyML estimate accuracy without labels
-
-These proxies don't replace actual accuracy measurement but provide early warnings.
+**Answer**:
+You must rely on proxy metrics to monitor the model's performance while waiting for the true labels to mature.
+First, you should monitor prediction drift by comparing the overall distribution of churn predictions today against the expected distribution from validation; a sudden spike from 5% to 40% predicted churn indicates a severe issue. Second, you can track feature drift on critical inputs (like recent ride frequency) to ensure the data feeding the model hasn't changed drastically. Finally, you can employ performance estimation techniques (using tools like NannyML) which use the current feature distributions and the model's confidence scores to mathematically estimate what the ROC AUC will likely be once the labels finally arrive.
 </details>
 
 <details>
-<summary>4. What should trigger a model retrain?</summary>
+<summary>4. Your on-call engineer gets paged at 2 AM because a single minor feature in your model ("user_browser_version") triggered a data drift alert. The overall model accuracy proxy remains perfectly stable. What is wrong with your alerting strategy, and how should you fix it?</summary>
 
-**Answer**: Retrain triggers:
-- **Accuracy drop**: Below acceptable threshold
-- **Significant drift**: Multiple features or high PSI
-- **Business metric decline**: Revenue, conversion drops
-- **Scheduled interval**: Regular retraining (weekly, monthly)
-- **New data available**: Significant volume of new labeled data
-
-Automated retraining should include validation gates—don't deploy a worse model.
+**Answer**:
+Your alerting strategy is overly sensitive and is causing alert fatigue by paging on non-critical, isolated data drift.
+Models often contain dozens or hundreds of features, and minor features will naturally drift over time without significantly impacting the final prediction accuracy. Alerts that wake up engineers should be reserved for critical business impact or severe model degradation, not routine statistical shifts in low-importance features. To fix this, you should adjust the alert to only trigger if the drift occurs across multiple features simultaneously, if the drifted feature has high importance (such as a high SHAP value), or if the drift is accompanied by a significant change in the overall prediction distribution.
 </details>
 
 ## Hands-On Exercise: Build a Monitoring Pipeline
