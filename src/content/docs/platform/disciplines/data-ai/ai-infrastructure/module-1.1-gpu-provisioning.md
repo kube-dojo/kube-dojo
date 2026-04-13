@@ -57,24 +57,15 @@ A GPU is a **specialized** processor. It has its own memory (VRAM), its own driv
 
 From bottom to top, here is every layer involved in running a GPU workload on Kubernetes:
 
-```
-┌────────────────────────────────────────────────┐
-│           User Pod (PyTorch, TensorFlow)        │
-├────────────────────────────────────────────────┤
-│         CUDA Libraries (libcuda, cuDNN)         │
-├────────────────────────────────────────────────┤
-│       nvidia-container-toolkit (libnvidia)       │
-├────────────────────────────────────────────────┤
-│             Container Runtime (containerd)       │
-├────────────────────────────────────────────────┤
-│          NVIDIA Device Plugin (DaemonSet)        │
-├────────────────────────────────────────────────┤
-│        NVIDIA Driver (kernel module)             │
-├────────────────────────────────────────────────┤
-│              Linux Kernel                        │
-├────────────────────────────────────────────────┤
-│          Physical GPU (PCIe / NVLink)            │
-└────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A[User Pod <br/> PyTorch, TensorFlow] --> B[CUDA Libraries <br/> libcuda, cuDNN]
+    B --> C[nvidia-container-toolkit <br/> libnvidia]
+    C --> D[Container Runtime <br/> containerd]
+    D --> E[NVIDIA Device Plugin <br/> DaemonSet]
+    E --> F[NVIDIA Driver <br/> kernel module]
+    F --> G[Linux Kernel]
+    G --> H[Physical GPU <br/> PCIe / NVLink]
 ```
 
 Every layer matters. A mismatch between the CUDA version in your container and the driver on the host will give you cryptic errors that waste hours.
@@ -82,6 +73,8 @@ Every layer matters. A mismatch between the CUDA version in your container and t
 ---
 
 ## The Kubernetes Device Plugin API
+
+> **Stop and think**: How does the kubelet, which natively only knows about CPU and memory, become aware of proprietary hardware like GPUs without requiring recompilation of the Kubernetes source code?
 
 ### How It Works
 
@@ -94,16 +87,15 @@ The flow:
 3. **Allocation**: When a Pod requests a device (e.g., `nvidia.com/gpu: 1`), the kubelet calls the plugin's `Allocate` RPC
 4. **Injection**: The plugin returns device paths, environment variables, and mounts that the kubelet injects into the container
 
-```
-┌──────────┐     Register      ┌──────────┐
-│  Device   │ ───────────────→ │  Kubelet  │
-│  Plugin   │                  │           │
-│           │ ◄─ ListAndWatch  │           │
-│  (gRPC    │ ──→ DeviceList   │           │
-│   server) │                  │           │
-│           │ ◄─ Allocate()    │           │
-│           │ ──→ Devices,Envs │           │
-└──────────┘                   └──────────┘
+```mermaid
+sequenceDiagram
+    participant Plugin as Device Plugin (gRPC server)
+    participant Kubelet as Kubelet
+    Plugin->>Kubelet: Register
+    Kubelet->>Plugin: ListAndWatch
+    Plugin-->>Kubelet: DeviceList
+    Kubelet->>Plugin: Allocate()
+    Plugin-->>Kubelet: Devices, Envs
 ```
 
 ### What the Plugin Advertises
@@ -153,6 +145,8 @@ Three critical rules to remember:
 ---
 
 ## Node Feature Discovery (NFD)
+
+> **Pause and predict**: If you manage a fleet of 500 nodes and add 50 new GPU nodes, how would you ensure workloads only schedule on the nodes with the right GPU architecture without doing manual work?
 
 ### The Problem
 
@@ -215,27 +209,13 @@ It works by hooking into the container runtime (containerd or CRI-O) and:
 
 ### The Container Runtime Flow
 
-```
-Pod created
-    │
-    ▼
-kubelet calls containerd
-    │
-    ▼
-containerd invokes nvidia-container-runtime-hook
-    │
-    ▼
-Hook calls libnvidia-container
-    │
-    ▼
-libnvidia-container:
-  - Discovers host GPU driver
-  - Mounts /usr/lib/x86_64-linux-gnu/libnvidia-*.so
-  - Creates /dev/nvidia* device nodes
-  - Sets CUDA_VISIBLE_DEVICES
-    │
-    ▼
-Container starts with GPU access
+```mermaid
+flowchart TD
+    A[Pod created] --> B[kubelet calls containerd]
+    B --> C[containerd invokes nvidia-container-runtime-hook]
+    C --> D[Hook calls libnvidia-container]
+    D --> E["libnvidia-container: <br/> - Discovers host GPU driver <br/> - Mounts /usr/lib/x86_64-linux-gnu/libnvidia-*.so <br/> - Creates /dev/nvidia* device nodes <br/> - Sets CUDA_VISIBLE_DEVICES"]
+    E --> F[Container starts with GPU access]
 ```
 
 ### Configuration
@@ -262,6 +242,8 @@ Modern setups (Kubernetes 1.28+) prefer **CDI mode** (Container Device Interface
 
 ## The NVIDIA GPU Operator
 
+> **Pause and predict**: If you have to install drivers, container runtimes, and device plugins across 100 nodes, how do you handle rolling updates of the NVIDIA driver without bringing down the whole cluster?
+
 ### Why It Exists
 
 Installing GPUs on Kubernetes requires managing at least 6 separate components:
@@ -277,25 +259,15 @@ Managing these independently — especially driver upgrades across a fleet — i
 
 ### Architecture
 
-```
-┌──────────────────────────────────────────────────────┐
-│                  GPU Operator Controller               │
-│            (watches ClusterPolicy CRD)                │
-└───────────────────┬──────────────────────────────────┘
-                    │ Creates and manages
-        ┌───────────┼───────────────────────┐
-        ▼           ▼                       ▼
-┌──────────┐  ┌──────────────┐  ┌────────────────────┐
-│   NFD     │  │ Driver       │  │ Container Toolkit  │
-│ DaemonSet │  │ DaemonSet    │  │ DaemonSet          │
-└──────────┘  └──────────────┘  └────────────────────┘
-        ┌───────────┼───────────────────────┐
-        ▼           ▼                       ▼
-┌──────────┐  ┌──────────────┐  ┌────────────────────┐
-│  Device   │  │ DCGM         │  │ GPU Feature        │
-│  Plugin   │  │ Exporter     │  │ Discovery          │
-│ DaemonSet │  │ DaemonSet    │  │ DaemonSet          │
-└──────────┘  └──────────────┘  └────────────────────┘
+```mermaid
+flowchart TD
+    Controller["GPU Operator Controller <br/> (watches ClusterPolicy CRD)"]
+    Controller --> NFD["NFD DaemonSet"]
+    Controller --> Driver["Driver DaemonSet"]
+    Controller --> Toolkit["Container Toolkit DaemonSet"]
+    Controller --> Plugin["Device Plugin DaemonSet"]
+    Controller --> DCGM["DCGM Exporter DaemonSet"]
+    Controller --> GFD["GPU Feature Discovery DaemonSet"]
 ```
 
 ### Installation
@@ -449,24 +421,22 @@ data:
 
 Once DCGM-Exporter feeds Prometheus, you can import the official NVIDIA dashboard (Grafana ID: **12239**) or build your own. Essential panels:
 
+**GPU Cluster Overview**:
+- **GPU Util**: 67%
+- **Memory Used**: 72GB
+- **Temperature**: 62°C
+- **Xid Errors (last 24h)**: 0
+- **Power Draw**: 1,247W
+
+```mermaid
+xychart-beta
+    title "Per-GPU Utilization Timeline (%)"
+    x-axis ["GPU0", "GPU1", "GPU2", "GPU3"]
+    y-axis "Utilization (%)" 0 --> 100
+    bar [78, 94, 12, 100]
 ```
-┌──────────────────────────────────────────────────────┐
-│  GPU Cluster Overview                                 │
-├──────────────┬───────────────┬───────────────────────┤
-│ GPU Util %   │ Memory Used   │ Temperature           │
-│   ▓▓▓▓░░ 67%│  ▓▓▓▓▓░ 72GB │  ▓▓▓░░ 62°C          │
-├──────────────┴───────────────┴───────────────────────┤
-│ Per-GPU Utilization Timeline                         │
-│ ┌──────────────────────────────────────────────────┐ │
-│ │ GPU0 ████████████░░░░  78%                       │ │
-│ │ GPU1 ████████████████░ 94%                       │ │
-│ │ GPU2 ██░░░░░░░░░░░░░░ 12%  ← investigate this   │ │
-│ │ GPU3 ████████████████  100%                      │ │
-│ └──────────────────────────────────────────────────┘ │
-├──────────────────────────────────────────────────────┤
-│ Xid Errors (last 24h): 0    Power Draw: 1,247W     │
-└──────────────────────────────────────────────────────┘
-```
+
+*(Notice the anomaly on GPU2 — a utilization of 12% during a training run warrants immediate investigation.)*
 
 ### Alerting on GPU Metrics
 
@@ -589,76 +559,48 @@ The monitoring paid for itself on the first prevented incident.
 ## Quiz: Check Your Understanding
 
 ### Question 1
-What gRPC methods does a Kubernetes Device Plugin implement, and what is the lifecycle of GPU allocation?
+A developer complains that their Pod is stuck in `Pending` state, and the events show `0/10 nodes are available: 10 Insufficient nvidia.com/gpu`. You verify the nodes physically have GPUs and the drivers are loaded. You suspect the Device Plugin. In a scenario where the plugin is failing, which specific gRPC communication step between the plugin and the kubelet is likely broken to cause this exact error?
 
 <details>
 <summary>Show Answer</summary>
 
-A Device Plugin implements three key gRPC methods:
-
-1. **`Register`**: The plugin registers itself with the kubelet, advertising its resource name (e.g., `nvidia.com/gpu`)
-2. **`ListAndWatch`**: The plugin continuously reports the list of available devices and their health status to the kubelet
-3. **`Allocate`**: When a Pod requests a GPU, the kubelet calls `Allocate`, and the plugin returns the device paths (`/dev/nvidia0`), environment variables (`CUDA_VISIBLE_DEVICES`), and mount points to inject into the container
-
-The lifecycle: Registration -> continuous health reporting -> allocation on Pod scheduling -> deallocation on Pod termination.
+The `ListAndWatch` gRPC method is likely failing. The kubelet relies on the Device Plugin to continuously report the inventory of available devices via the `ListAndWatch` stream. If this stream is broken or the plugin fails to register properly, the kubelet will assume there are zero `nvidia.com/gpu` resources available on the node, leading to the `Insufficient` scheduling error. To resolve this, you would check the logs of the device plugin DaemonSet to see why it cannot discover or report the hardware to the kubelet.
 </details>
 
 ### Question 2
-Why can't you request 0.5 GPUs in a standard Kubernetes Pod spec?
+A data scientist submits a YAML manifest requesting `nvidia.com/gpu: 0.5` because their inference workload only needs a fraction of a T4 GPU's memory. The Kubernetes API server immediately rejects the manifest. Why does Kubernetes strictly forbid fractional requests for this specific resource, even though it allows `cpu: 0.5`?
 
 <details>
 <summary>Show Answer</summary>
 
-Extended resources (like `nvidia.com/gpu`) only support **integer quantities** in Kubernetes. The Device Plugin API allocates whole devices. This is by design — the API was created for discrete hardware devices where fractional allocation requires hardware-level support (like MIG) or software-level sharing (like time-slicing).
-
-To share GPUs, you need additional mechanisms covered in Module 1.2: MIG partitioning, time-slicing, MPS, or Dynamic Resource Allocation (DRA).
+Extended resources like `nvidia.com/gpu` are fundamentally different from native resources like CPU and memory. The Device Plugin API was designed to allocate whole, discrete hardware devices rather than time-sliced virtual resources. Consequently, Kubernetes only supports integer quantities for extended resources because it simply passes the device ID to the container runtime to mount. Sharing a GPU at the hardware or driver level requires specialized technologies like Multi-Instance GPU (MIG) or NVIDIA Time-Slicing, which are configured outside the standard Kubernetes resource request mechanism.
 </details>
 
 ### Question 3
-What is the role of NFD in a GPU cluster, and why shouldn't you manually label GPU nodes?
+You are managing a cluster that just received a hardware upgrade: 10 older nodes with T4 GPUs were physically replaced with new nodes containing A100 GPUs. The deployment pipelines for your training jobs use `nodeSelector` for `nvidia.com/gpu.product: NVIDIA-A100-SXM4-80GB`. If your team relies on manual node labeling, what specific failures will occur in this scenario, and how does Node Feature Discovery (NFD) prevent them?
 
 <details>
 <summary>Show Answer</summary>
 
-Node Feature Discovery (NFD) automatically detects hardware features (GPU model, count, memory, CUDA version, MIG capability) and applies labels to nodes. Combined with GPU Feature Discovery, it provides labels like `nvidia.com/gpu.product=NVIDIA-A100-SXM4-80GB`.
-
-Manual labeling should be avoided because:
-- It doesn't scale — new nodes need manual intervention
-- Labels drift when hardware changes (e.g., failed GPU replaced with different model)
-- Human error leads to misscheduled workloads
-- NFD re-detects on every node restart, keeping labels accurate
+If relying on manual labeling, the new A100 nodes would likely lack the required labels until an administrator remembers to apply them, causing training jobs to remain stuck in a `Pending` state. Even worse, if the old T4 nodes were reprovisioned but kept their old labels, workloads might schedule onto them and fail due to Out-Of-Memory errors or incompatible CUDA architectures. Node Feature Discovery (NFD) eliminates this risk by dynamically interrogating the hardware via PCI and kernel data on every boot. It automatically applies accurate labels reflecting the true state of the hardware, ensuring scheduling decisions are always based on reality rather than stale administrative records.
 </details>
 
 ### Question 4
-A Pod using `nvidia.com/gpu: 1` starts successfully but the training job reports "CUDA out of memory" after 2 minutes. The GPU has 80GB VRAM. What could cause this?
+A data science team deploys a PyTorch training Pod using `nvidia.com/gpu: 1` on an 80GB A100 node. The Pod starts successfully, but exactly two minutes into the training loop, the application crashes with a "CUDA out of memory" error. You confirm their model mathematically requires only 45GB of VRAM. What architectural or environmental factors could cause this OOM on a supposedly dedicated 80GB GPU?
 
 <details>
 <summary>Show Answer</summary>
 
-Several possible causes:
-
-1. **Another process on the same GPU**: If time-slicing is enabled, multiple containers share the same GPU memory. The Pod may have the GPU but shares VRAM with other workloads.
-2. **VRAM fragmentation**: The model fits in 80GB total, but memory fragmentation prevents allocating a contiguous block. Setting `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` can help.
-3. **The model is larger than expected**: Mixed precision was not enabled, so the model uses FP32 instead of FP16/BF16, doubling memory usage.
-4. **Driver memory overhead**: The NVIDIA driver and CUDA context consume 500MB-2GB of VRAM before your code runs.
-
-Check with `nvidia-smi` inside the container to see actual memory allocation at the time of the OOM.
+Even when requesting a full GPU, several factors can lead to unexpected VRAM exhaustion. First, if NVIDIA Time-Slicing is enabled on the node, the GPU memory is actually shared with other containers, meaning the 80GB is not exclusively available to this Pod. Second, PyTorch's memory allocator can suffer from severe fragmentation, where 35GB of memory might be technically "free" but fragmented into blocks too small for the next tensor allocation. Finally, the NVIDIA driver and CUDA context themselves consume between 500MB and 2GB of VRAM just to initialize, which must be factored into the total memory budget. The team should verify actual usage using `nvidia-smi` and consider tuning PyTorch's allocation configuration.
 </details>
 
 ### Question 5
-What is Xid error 79 and how should a platform team handle it?
+It's 3:00 AM, and PagerDuty wakes you up. A critical training job has stalled. You check the logs and see `DCGM_FI_DEV_XID_ERRORS == 79` firing on node `gpu-worker-14`. The Pods on that node are completely unresponsive. What is the physical reality of this error, and what automated remediation workflow should you implement to prevent this from waking you up again?
 
 <details>
 <summary>Show Answer</summary>
 
-Xid 79 means **"GPU has fallen off the bus"** — the GPU is no longer reachable via PCIe. This is a hardware-level failure that typically requires a node reboot.
-
-A platform team should:
-1. **Alert** on `DCGM_FI_DEV_XID_ERRORS == 79` immediately (severity: critical)
-2. **Automatically drain** the node (`kubectl drain --ignore-daemonsets --delete-emptydir-data`)
-3. **Reboot** the node (via IPMI/BMC or cloud API)
-4. **Verify** GPU health after reboot with `nvidia-smi` and a CUDA validation test
-5. **Track frequency** — if a node hits Xid 79 more than 3 times in a month, escalate to hardware replacement
+Xid 79 translates to "GPU has fallen off the bus," meaning the operating system has completely lost PCIe communication with the physical GPU hardware. This is a severe, hardware-level fault that cannot be fixed by simply restarting the container or the kubelet. The correct automated remediation is to immediately cordon and drain the affected node to reschedule the workloads elsewhere, followed by a hard power cycle or reboot of the physical server via its BMC/IPMI interface. If the error persists after a reboot, the node must be marked for hardware replacement, as the GPU or motherboard is likely failing.
 </details>
 
 ---
@@ -850,7 +792,3 @@ GPU provisioning on Kubernetes is a multi-layered problem: drivers, container in
 ## Next Module
 
 Continue to [Module 1.2: Advanced GPU Scheduling & Sharing](../module-1.2-gpu-scheduling/) to learn how to share GPUs across workloads using MIG, time-slicing, MPS, and Dynamic Resource Allocation.
-
----
-
-*"The most expensive GPU is the one doing nothing."* — Every platform engineer who has seen the cloud bill
