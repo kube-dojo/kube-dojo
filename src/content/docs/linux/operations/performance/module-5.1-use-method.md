@@ -72,23 +72,23 @@ For every **resource**, check:
 
 ### Why This Works
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    PERFORMANCE ANALYSIS                          │
-│                                                                  │
-│  Without Method:                 With USE Method:                │
-│  ┌───────────────────────┐      ┌───────────────────────────┐   │
-│  │ "It's slow"           │      │ Check CPU: U, S, E        │   │
-│  │ "Maybe it's the DB?"  │      │ Check Memory: U, S, E     │   │
-│  │ "Let's try rebooting" │      │ Check Disk: U, S, E       │   │
-│  │ "Who changed what?"   │      │ Check Network: U, S, E    │   │
-│  └───────────────────────┘      │                           │   │
-│                                 │ → Found: Disk saturation  │   │
-│  Time: Hours                    └───────────────────────────┘   │
-│  Result: Maybe fixed                                            │
-│                                 Time: 5 minutes                 │
-│                                 Result: Root cause found        │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph Without Method
+        direction TB
+        A["It's slow"] --> B["Maybe it's the DB?"]
+        B --> C["Let's try rebooting"]
+        C --> D["Who changed what?"]
+        D -.-> E["Time: Hours<br/>Result: Maybe fixed"]
+    end
+
+    subgraph With USE Method
+        direction TB
+        F["Check CPU: U, S, E"] --> G["Check Memory: U, S, E"]
+        G --> H["Check Disk: U, S, E"]
+        H --> I["Check Network: U, S, E"]
+        I -.-> J["Time: 5 minutes<br/>Result: Root cause found<br/>(e.g., Disk saturation)"]
+    end
 ```
 
 ### Resource Checklist
