@@ -133,9 +133,12 @@ resources:
 - deployment.yaml
 - service.yaml
 
-commonLabels:
-  app: my-app
-  environment: production
+labels:
+- pairs:
+    app: my-app
+    environment: production
+  includeSelectors: true
+  includeTemplates: true
 ```
 
 ### Add Annotations
@@ -221,7 +224,7 @@ By default, Kustomize adds a hash suffix to generated ConfigMaps/Secrets:
 - `app-config` becomes `app-config-abc123`
 - References are automatically updated
 
-Disable with:
+Disable with (useful if legacy systems require fixed names, though it prevents automatic rolling updates):
 ```yaml
 generatorOptions:
   disableNameSuffixHash: true
@@ -472,8 +475,11 @@ resources:
 namespace: my-namespace
 namePrefix: prod-
 
-commonLabels:
-  app: my-app
+labels:
+- pairs:
+    app: my-app
+  includeSelectors: true
+  includeTemplates: true
 
 images:
 - name: nginx
@@ -733,8 +739,11 @@ kind: Kustomization
 resources:
 - deployment.yaml
 namespace: default
-commonLabels:
-  environment: test
+labels:
+- pairs:
+    environment: test
+  includeSelectors: true
+  includeTemplates: true
 EOF
 
 # Preview
@@ -742,6 +751,9 @@ kubectl kustomize ./
 
 # Apply
 kubectl apply -k ./
+
+# Verify
+kubectl get deployments,pods -l environment=test
 
 # Cleanup
 kubectl delete -k ./
@@ -920,8 +932,11 @@ resources:
 - deployment.yaml
 namePrefix: staging-
 namespace: staging
-commonLabels:
-  env: staging
+labels:
+- pairs:
+    env: staging
+  includeSelectors: true
+  includeTemplates: true
 EOF
 
 # Verify transformations
