@@ -163,6 +163,23 @@ If you have a kubeadm cluster from CKA practice, add security configurations:
 # --audit-log-maxbackup=3
 # --audit-log-maxsize=100
 
+# You must also add these volumeMounts inside the container spec:
+# - mountPath: /etc/kubernetes/audit-policy.yaml
+#   name: audit-policy
+#   readOnly: true
+# - mountPath: /var/log/kubernetes
+#   name: audit-logs
+
+# And these volumes at the bottom of the pod spec:
+# - hostPath:
+#     path: /etc/kubernetes/audit-policy.yaml
+#     type: File
+#   name: audit-policy
+# - hostPath:
+#     path: /var/log/kubernetes
+#     type: DirectoryOrCreate
+#   name: audit-logs
+
 # Create the audit policy file
 sudo mkdir -p /etc/kubernetes
 sudo tee /etc/kubernetes/audit-policy.yaml <<EOF
