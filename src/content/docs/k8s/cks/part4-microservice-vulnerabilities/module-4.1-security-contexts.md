@@ -168,6 +168,26 @@ spec:
 # - ONLY use for system-level daemons (CNI, CSI drivers)
 ```
 
+### hostPID, hostNetwork, and hostIPC (AVOID!)
+
+While not strictly inside the `securityContext` block, these pod-level fields are equally dangerous:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: host-namespaces
+spec:
+  hostPID: true      # Can see all processes on the node
+  hostNetwork: true  # Uses node's network namespace
+  hostIPC: true      # Can access node's IPC mechanisms
+  containers:
+  - name: app
+    image: nginx
+```
+
+> **Warning**: A container with `hostPID: true` can inspect host processes and, if combined with `ptrace` capability or host mounts, inject code into host processes like the kubelet.
+
 ---
 
 ## Linux Capabilities
@@ -236,7 +256,7 @@ spec:
     runAsGroup: 1000
     fsGroup: 1000
     seccompProfile:
-      type: RuntimeDefault
+      type: RuntimeDefault  # Block dangerous kernel syscalls
   containers:
   - name: app
     image: myapp:1.0
@@ -246,7 +266,7 @@ spec:
       capabilities:
         drop:
           - ALL
-    resources:
+    resources:  # Prevent resource exhaustion (DoS)
       limits:
         memory: "128Mi"
         cpu: "500m"
@@ -494,10 +514,11 @@ spec:
     runAsGroup: 1000
     fsGroup: 1000
     seccompProfile:
-      type: RuntimeDefault
+      type: RuntimeDefault  # Block dangerous kernel syscalls
   containers:
   - name: app
     image: nginx
+    command: ["sleep", "3600"]  # Override entrypoint so pod stays running for exec tests without crashing
     securityContext:
       allowPrivilegeEscalation: false
       readOnlyRootFilesystem: true
@@ -536,7 +557,7 @@ kubectl exec hardened -- touch /etc/test 2>&1 || echo "Write blocked (expected)"
 kubectl exec hardened -- touch /tmp/test && echo "Write to /tmp succeeded"
 
 # Cleanup
-kubectl delete pod insecure hardened
+kubectl delete pod insecure hardened --force
 ```
 
 **Success criteria**: Hardened pod runs with all security settings applied.
