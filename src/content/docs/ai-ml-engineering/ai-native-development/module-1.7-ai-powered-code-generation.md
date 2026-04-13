@@ -719,6 +719,11 @@ class URLValidator:
 ```
 </details>
 
+**The Action:** Copy the solution above into `url_validator/validator.py`. Verify the module loads before proceeding:
+```bash
+python -c "from url_validator.validator import URLValidator; print('validator OK')"
+```
+
 ### Task 4: Implement the Test Suite
 **The Prompt Used:**
 ```
@@ -768,6 +773,11 @@ def test_parse_raises_error(validator):
 ```
 </details>
 
+**The Action:** Copy the solution above into `tests/test_validator.py`. Verify test discovery before proceeding:
+```bash
+python -m pytest tests/test_validator.py --collect-only -q
+```
+
 ### Task 5: Command Line Interface
 **The Prompt Used:**
 ```
@@ -792,7 +802,7 @@ from url_validator.validator import URLValidator, URLValidationError
 
 def main():
     parser = argparse.ArgumentParser(description="URL Validator CLI")
-    parser.add_argument("command", choices=["validate", "parse", "normalize"])
+    parser.add_argument("command", choices=["validate", "parse", "normalize", "batch"])
     parser.add_argument("url", help="URL to process")
     args = parser.parse_args()
 
@@ -813,6 +823,17 @@ def main():
         elif args.command == "normalize":
             print(validator.normalize(args.url))
             sys.exit(0)
+        elif args.command == "batch":
+            try:
+                with open(args.url) as f:
+                    urls = [line.strip() for line in f if line.strip()]
+            except FileNotFoundError:
+                print(f"Error: File not found: {args.url}")
+                sys.exit(2)
+            for url in urls:
+                status = "valid" if validator.is_valid(url) else "invalid"
+                print(f"{status}: {url}")
+            sys.exit(0)
     except URLValidationError as e:
         print(f"Error: {e}")
         sys.exit(2)
@@ -821,6 +842,12 @@ if __name__ == "__main__":
     main()
 ```
 </details>
+
+**The Action:** Copy the solution above into `url_validator/cli.py`. Verify the CLI entry point runs:
+```bash
+python -m url_validator.cli validate https://example.com
+```
+Expected output: `Valid URL: https://example.com` with exit code 0.
 
 ### Task 6: Documentation
 **The Prompt Used:**
@@ -838,6 +865,11 @@ Sections:
 - License
 
 Make it engaging and clear.
+```
+
+**The Action:** Use the above prompt with your preferred AI assistant. Review the output for completeness, then save it as `README.md` in the `url_validator_lab/` root directory. Confirm the file exists before running the final verification:
+```bash
+test -f README.md && echo 'README.md present' || echo 'ERROR: README.md missing'
 ```
 
 ### Task 7: Verification Checklist
