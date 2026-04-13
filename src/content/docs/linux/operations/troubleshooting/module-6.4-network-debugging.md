@@ -58,28 +58,21 @@ Systematic network debugging empowers you to verify whether the network is actua
 
 When confronted with a network failure, haphazardly running commands rarely yields a quick resolution. Senior engineers use the OSI (Open Systems Interconnection) model to strictly isolate problems layer by layer. If Layer 3 (routing) is fundamentally broken, it is impossible for Layer 7 (application APIs) to function. By testing sequentially from the bottom up, you eliminate false positives and drastically reduce your debugging time.
 
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│                    NETWORK DEBUGGING                             │
-│                                                                  │
-│  Start at layer 1, work up:                                     │
-│                                                                  │
-│  ┌──────────────────────────────────────────────────────┐       │
-│  │ Layer 7: Application   curl, wget, app-specific      │       │
-│  ├──────────────────────────────────────────────────────┤       │
-│  │ Layer 4: Transport     ss, netstat, tcpdump (ports)  │       │
-│  ├──────────────────────────────────────────────────────┤       │
-│  │ Layer 3: Network       ping, traceroute, ip route    │       │
-│  ├──────────────────────────────────────────────────────┤       │
-│  │ Layer 2: Data Link     ip link, arp                  │       │
-│  ├──────────────────────────────────────────────────────┤       │
-│  │ Layer 1: Physical      ethtool, cable, switch        │       │
-│  └──────────────────────────────────────────────────────┘       │
-│                                                                  │
-│  Each layer depends on layers below                             │
-│  If layer 3 fails, layer 7 can't work                          │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+graph BT
+    L1["Layer 1: Physical (ethtool, cable, switch)"]
+    L2["Layer 2: Data Link (ip link, arp)"]
+    L3["Layer 3: Network (ping, traceroute, ip route)"]
+    L4["Layer 4: Transport (ss, netstat, tcpdump (ports))"]
+    L7["Layer 7: Application (curl, wget, app-specific)"]
+
+    L1 --> L2
+    L2 --> L3
+    L3 --> L4
+    L4 --> L7
 ```
+
+> **Note**: Start at layer 1 and work up. Each layer depends on the layers below it. If layer 3 fails, layer 7 cannot work.
 
 In a modern context, visualizing this dependency chain helps clarify why specific tools map to specific layers. Here is the logical progression of troubleshooting:
 
@@ -586,7 +579,7 @@ You must utilize BPF bitwise operators to isolate packets where only the SYN fla
 sudo tcpdump -i eth0 'tcp[tcpflags] & tcp-syn != 0'
 ```
 
-This filter effectively isolates the beginning of the TCP three-way handshake, capturing both the initial SYN from the client and the returning SYN-ACK from the server. If your goal is to exclusively capture the inbound SYN (and explicitly ignore the SYN-ACK response), you can implement a strict equivalence check:
+This filter effectively isolates the beginning of the TCP three-way handshake, capturing both the initial SYN from the client and the returning SYN-ACK from the server. By zeroing in on connection initiation, you avoid analyzing established payload packets. If your goal is to exclusively capture the inbound SYN (and explicitly ignore the SYN-ACK response), you can implement a strict equivalence check:
 
 ```bash
 sudo tcpdump -i eth0 'tcp[tcpflags] == tcp-syn'
