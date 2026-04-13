@@ -49,30 +49,37 @@ The lesson: adding hardware to a Kubernetes cluster is not just racking and stac
 
 ### Physical and Network Prerequisites
 
+```mermaid
+flowchart TD
+    subgraph Before ["Before Racking Servers"]
+        direction TB
+        B1["Network: leaf switch installed, cabled to spines"]
+        B2["Power: PDUs installed, circuits provisioned"]
+        B3["VLANs: management, production, storage trunked on leaf"]
+        B4["BGP: leaf peering with spines (new AS number for rack)"]
+        B5["PXE: DHCP relay configured for new subnet"]
+        B6["DNS: reverse DNS entries for new BMC/management IPs"]
+        B7["IPAM: IP ranges allocated for nodes, pods, services"]
+        B1 --> B2 --> B3 --> B4 --> B5 --> B6 --> B7
+    end
+
+    subgraph After ["After Racking Servers"]
+        direction TB
+        A1["BMC configured (IP, credentials, NTP)"]
+        A2["PXE boot OS image"]
+        A3["Configure networking (bonds, VLANs, routes)"]
+        A4["Install kubelet, kubeadm, container runtime (cgroup v2)"]
+        A5["Join cluster with kubeadm join"]
+        A6["Label nodes (rack, generation, hardware model)"]
+        A7["Verify CNI connectivity to existing nodes"]
+        A8["Verify CSI storage access"]
+        A1 --> A2 --> A3 --> A4 --> A5 --> A6 --> A7 --> A8
+    end
+
+    Before --> After
 ```
-+---------------------------------------------------------------+
-|        ADDING A NEW RACK TO AN EXISTING CLUSTER                |
-|                                                                |
-|  Before racking servers:                                       |
-|  1. Network: leaf switch installed, cabled to spines           |
-|  2. Power: PDUs installed, circuits provisioned                |
-|  3. VLANs: management, production, storage trunked on leaf    |
-|  4. BGP: leaf peering with spines (new AS number for rack)     |
-|  5. PXE: DHCP relay configured for new subnet                 |
-|  6. DNS: reverse DNS entries for new BMC/management IPs        |
-|  7. IPAM: IP ranges allocated for nodes, pods, services        |
-|                                                                |
-|  After racking servers:                                        |
-|  1. BMC configured (IP, credentials, NTP)                      |
-|  2. PXE boot OS image                                          |
-|  3. Configure networking (bonds, VLANs, routes)                |
-|  4. Install kubelet, kubeadm, container runtime                |
-|  5. Join cluster with kubeadm join                             |
-|  6. Label nodes (rack, generation, hardware model)             |
-|  7. Verify CNI connectivity to existing nodes                  |
-|  8. Verify CSI storage access                                  |
-+---------------------------------------------------------------+
-```
+
+> **Stop and think**: If you provision a new rack of older OS images (which default to cgroup v1) and try to join them to a Kubernetes 1.35+ cluster, what will happen? By default, the kubelet will refuse to start because cgroup v1 is officially deprecated. Both the kubelet and your container runtime must strictly use cgroup v2 with the systemd cgroup driver to successfully register the node.
 
 > **Pause and predict**: You are adding 40 new AMD EPYC servers to a cluster running Intel Xeon nodes. The Kubernetes scheduler sees "32 cores available" on both, but the AMD cores are 44% faster per-core. How would you prevent latency-sensitive pods from being scheduled on slower Intel nodes without hardcoding node names?
 
@@ -139,24 +146,18 @@ echo "Run: kubectl get nodes -l kubedojo.io/rack=${RACK_ID}"
 
 ### The Problem with Heterogeneous Performance
 
-```
-+---------------------------------------------------------------+
-|        CPU PERFORMANCE ACROSS GENERATIONS                      |
-|                                                                |
-|  Model              Year  Cores  Single-Thread  Passmark       |
-|  ───────────────────────────────────────────────────           |
-|  Xeon Silver 4214   2019  12     1,800          15,200         |
-|  Xeon Gold 6330     2021  28     2,100          35,000         |
-|  EPYC 9354          2023  32     2,600          53,000         |
-|                                                                |
-|  The EPYC 9354 delivers ~44% more single-thread and           |
-|  ~3.5x more multi-thread performance than the 4214.           |
-|                                                                |
-|  Kubernetes sees: "32 cores available" on both.               |
-|  Reality: 32 EPYC cores >> 32 Xeon Silver cores.              |
-|                                                                |
-+---------------------------------------------------------------+
-```
+When mixing CPU generations, you must account for varying hardware capabilities. In Kubernetes 1.35, advanced features like the Topology Manager's `max-allowable-numa-nodes` reached General Availability (GA), giving you granular control over workload placement on modern multi-socket AMD and Intel systems. However, even with advanced topology management, the primary challenge remains: raw performance differences across generations.
+
+| Model | Year | Cores | Single-Thread | Passmark |
+|-------|------|-------|---------------|----------|
+| Xeon Silver 4214 | 2019 | 12 | 1,800 | 15,200 |
+| Xeon Gold 6330 | 2021 | 28 | 2,100 | 35,000 |
+| EPYC 9354 | 2023 | 32 | 2,600 | 53,000 |
+
+The EPYC 9354 delivers ~44% more single-thread and ~3.5x more multi-thread performance than the 4214.
+
+Kubernetes natively sees: "32 cores available" on both.
+Reality dictates: 32 EPYC cores >> 32 Xeon Silver cores.
 
 ### Labeling Hardware Generations
 
@@ -283,31 +284,34 @@ spec:
 
 ### Visualizing Topology Distribution
 
+```mermaid
+flowchart TD
+    subgraph RackA ["Rack A (Gen 1 + Gen 3)"]
+        direction TB
+        A1["[worker-01 gen1] pod-1"]
+        A2["[worker-02 gen1] (empty)"]
+        A3["[worker-21 gen3] pod-2"]
+    end
+    subgraph RackB ["Rack B (Gen 1 + Gen 2)"]
+        direction TB
+        B1["[worker-05 gen1] pod-3"]
+        B2["[worker-11 gen2] pod-4"]
+        B3["[worker-12 gen2] (empty)"]
+    end
+    subgraph RackC ["Rack C (Gen 2 + Gen 3)"]
+        direction TB
+        C1["[worker-15 gen2] pod-5"]
+        C2["[worker-25 gen3] pod-6"]
+        C3["[worker-26 gen3] (empty)"]
+    end
+    
+    RackA ~~~ RackB ~~~ RackC
 ```
-+---------------------------------------------------------------+
-|     TOPOLOGY SPREAD: 6 REPLICAS ACROSS 3 RACKS, 2 GENS        |
-|                                                                |
-|  Rack A (Gen 1 + Gen 3):                                      |
-|    [worker-01 gen1] pod-1                                      |
-|    [worker-02 gen1]                                            |
-|    [worker-21 gen3] pod-2                                      |
-|                                                                |
-|  Rack B (Gen 1 + Gen 2):                                      |
-|    [worker-05 gen1] pod-3                                      |
-|    [worker-11 gen2] pod-4                                      |
-|    [worker-12 gen2]                                            |
-|                                                                |
-|  Rack C (Gen 2 + Gen 3):                                      |
-|    [worker-15 gen2] pod-5                                      |
-|    [worker-25 gen3] pod-6                                      |
-|    [worker-26 gen3]                                            |
-|                                                                |
-|  Result: 2 pods per rack (maxSkew=1 satisfied)                 |
-|  Gen distribution: gen1=2, gen2=2, gen3=2 (maxSkew=2 OK)      |
-|  Rack failure: lose 2/6 pods = service continues               |
-|  Gen-specific bug: affects 2/6 pods = service continues        |
-+---------------------------------------------------------------+
-```
+
+**Result:** 2 pods per rack (maxSkew=1 satisfied)
+**Gen distribution:** gen1=2, gen2=2, gen3=2 (maxSkew=2 OK)
+**Rack failure:** lose 2/6 pods = service continues
+**Gen-specific bug:** affects 2/6 pods = service continues
 
 ---
 
@@ -424,32 +428,26 @@ Choose 3-year cycles for performance-sensitive workloads, rapid growth, or when 
 
 ### Staggered Refresh Strategy
 
+```mermaid
+timeline
+    title Staggered Refresh (33 nodes/year rolling)
+    Year 1 : Buy 33 new nodes (Gen N+3) : Decommission 33 oldest
+    Year 2 : Buy 33 new nodes (Gen N+4) : Decommission 33 oldest
+    Year 3 : Buy 34 new nodes (Gen N+5) : Decommission 34 oldest
+    Year 4 : Buy 33 new nodes (Gen N+6) : Decommission 33 oldest
 ```
-+---------------------------------------------------------------+
-|        STAGGERED REFRESH (recommended for large clusters)      |
-|                                                                |
-|  Instead of replacing all 100 nodes every 3 years:             |
-|  Replace ~33 nodes every year                                  |
-|                                                                |
-|  Year 1: Buy 33 new nodes (Gen N+3), decommission 33 oldest   |
-|  Year 2: Buy 33 new nodes (Gen N+4), decommission 33 oldest   |
-|  Year 3: Buy 34 new nodes (Gen N+5), decommission 34 oldest   |
-|  Year 4: Buy 33 new nodes (Gen N+6), decommission 33 oldest   |
-|  ...                                                           |
-|                                                                |
-|  Benefits:                                                     |
-|  - Smooth CapEx ($333k/year instead of $1M every 3 years)     |
-|  - Always have recent hardware in the fleet                    |
-|  - Never need to decommission more than 33% at once            |
-|  - Team practices add/remove procedure regularly               |
-|  - Each year you learn what works for the new hardware gen     |
-|                                                                |
-|  Challenge:                                                    |
-|  - 3 hardware generations in the cluster simultaneously        |
-|  - Must handle CPU/memory heterogeneity in scheduling          |
-|  - Firmware update process covers multiple vendor models       |
-+---------------------------------------------------------------+
-```
+
+**Benefits:**
+- Smooth CapEx ($333k/year instead of $1M every 3 years)
+- Always have recent hardware in the fleet
+- Never need to decommission more than 33% at once
+- Team practices add/remove procedure regularly
+- Each year you learn what works for the new hardware gen
+
+**Challenges:**
+- 3 hardware generations in the cluster simultaneously
+- Must handle CPU/memory heterogeneity in scheduling
+- Firmware update process covers multiple vendor models
 
 ---
 
@@ -466,6 +464,8 @@ Create Prometheus recording rules that track CPU capacity and utilization broken
 - **Intel and AMD use different socket standards, so you cannot swap CPUs between vendors in the same server chassis.** A hardware refresh that switches from Intel to AMD (or vice versa) requires entirely new servers, not just new CPUs. This is why vendor choice in the initial purchase has long-term implications.
 
 - **The US Department of Energy's supercomputing centers use a 5-year refresh cycle** because their systems cost hundreds of millions of dollars. They plan each refresh 3 years in advance, with a 2-year overlap period where old and new systems run simultaneously. This staggered approach is now being adopted by large Kubernetes operators.
+
+- **Kubernetes 1.35 graduated In-place Pod Resize to General Availability (GA).** This means you can resize the CPU and memory requests of running containers without restarting them. This is incredibly useful when migrating long-running workloads between hardware generations that possess different baseline performance characteristics, as you can dynamically adjust resources as the pod lands on a faster or slower node.
 
 - **Kubernetes 1.24 added the `MinDomainsInPodTopologySpread` feature** (stable in 1.30) that lets you specify the minimum number of topology domains a workload should span. This is particularly useful during hardware refresh: you can require pods to be spread across at least 2 hardware generations, ensuring a generation-specific bug does not take down all replicas.
 
@@ -495,6 +495,8 @@ You have a 100-node cluster: 60 nodes with Intel Xeon Silver 4214 (12 cores, 201
 
 <details>
 <summary>Answer</summary>
+
+You must normalize the CPU capacity using performance benchmarks because Kubernetes scheduling is naive and treats all CPU millicores as identical. By calculating the weighted capacity, you reveal that removing 20 older nodes only impacts overall performance by 9.3%, rather than the 12% that raw core counts suggest. This prevents you from over-provisioning replacement hardware or accidentally starving workloads during the decommission phase. Validating the cluster can handle it involves checking the actual allocated resources against this newly calculated baseline, ensuring you stay below the 80% safety threshold.
 
 **Capacity impact analysis:**
 
@@ -536,7 +538,7 @@ Your cluster runs on 3 racks with 20 nodes each. You are adding a 4th rack with 
 <details>
 <summary>Answer</summary>
 
-**The topology spread constraint is preventing scheduling on the new rack.**
+This scheduling failure happens because the topology spread constraint evaluates where scheduling the new pod would produce the lowest skew across all domains. With the `DoNotSchedule` strict constraint, no placement satisfies the maximum skew of 1 because the new rack starts completely empty at zero pods, meaning the skew would immediately jump to 2 or 3. To fix this in modern Kubernetes (1.27+), you should use `matchLabelKeys` targeting the pod template hash. This scopes the skew calculation only to the new ReplicaSet being rolled out, allowing a standard rollout restart to rebalance the pods seamlessly across all four racks without violating the constraint during the transition.
 
 **The math:**
 - Existing: 3 racks, each with some pods of the critical service
@@ -547,16 +549,10 @@ When a new pod needs to be scheduled:
 - rack-a: 3, rack-b: 3, rack-c: 3, rack-d: 0
 - Minimum count: 0 (rack-d), maximum count: 3 (any existing rack)
 - Skew = 3 - 0 = 3, which exceeds maxSkew=1
-- **Result**: Pod CAN schedule on rack-d (it would reduce the skew to 3-1=2... wait, no)
-
-Actually, the topology spread constraint evaluates where scheduling the new pod would produce the lowest skew:
-- Schedule on rack-d: counts become 3,3,3,1 -> max-min = 3-1 = 2 -> skew=2 > maxSkew=1 -> **rejected if `DoNotSchedule`**
-- Schedule on rack-a: counts become 4,3,3,0 -> skew=4 -> worse
-
-**The problem**: With `whenUnsatisfiable: DoNotSchedule`, no placement satisfies maxSkew=1 because the new rack starts at 0.
+- **Result**: Pod CANNOT schedule on rack-d
 
 **Fix options:**
-1. **Use `matchLabelKeys` (recommended, K8s 1.27+):** Add `matchLabelKeys: ["pod-template-hash"]` to the topology spread constraint. This makes the skew calculation scoped to only the current ReplicaSet, so a `rollout restart` will redistribute pods evenly because it only counts new pods:
+1. **Use `matchLabelKeys` (recommended, K8s 1.27+):** Add `matchLabelKeys: ["pod-template-hash"]` to the topology spread constraint:
    ```yaml
    topologySpreadConstraints:
      - maxSkew: 1
@@ -576,9 +572,7 @@ Actually, the topology spread constraint evaluates where scheduling the new pod 
 3. Use `whenUnsatisfiable: ScheduleAnyway` (soft constraint)
 4. Scale up the deployment so pods can be placed on rack-d, then scale back down
 
-**Note:** A plain `rollout restart` without `matchLabelKeys` will NOT fix this. The default `labelSelector` matches pods from both old and new ReplicaSets (they share the `app: critical-service` label), so the skew calculation still sees the old pod distribution and new pods cannot schedule on rack-d.
-
-After rebalancing with `matchLabelKeys`: 9 replicas across 4 racks = 3,2,2,2 or 2,3,2,2 (skew=1, satisfied).
+**Note:** A plain `rollout restart` without `matchLabelKeys` will NOT fix this. The default `labelSelector` matches pods from both old and new ReplicaSets, so the skew calculation still sees the old pod distribution and new pods cannot schedule on the new rack.
 </details>
 
 ### Question 3
@@ -586,6 +580,8 @@ Your company uses a 5-year refresh cycle. It is now year 4 and disk failure rate
 
 <details>
 <summary>Answer</summary>
+
+Extending the hardware lifecycle to seven years introduces compounding hidden costs that negate the deferred capital expenditure. As servers age past year five, component failure rates skyrocket, particularly for mechanical or heavily written storage drives, increasing labor and emergency replacement costs. Additionally, older hardware is significantly less power-efficient than newer generations, leading to inflated electricity bills that can completely offset the price of new servers. Finally, keeping slower legacy processors limits application throughput, forcing you to run more nodes to handle the same workload volume and increasing the operational burden on the infrastructure team.
 
 **Argument against extending to 7 years:**
 
@@ -628,6 +624,8 @@ You are planning a staggered refresh, replacing 33 nodes per year in a 100-node 
 
 <details>
 <summary>Answer</summary>
+
+Migrating workloads between different CPU vendors introduces subtle architectural differences that can unexpectedly impact application performance or stability. Because AMD and Intel processors handle NUMA topologies, memory models, and advanced vector extensions (like AVX-512) differently, workloads heavily reliant on specific instruction sets or memory bandwidth may behave unpredictably. Comprehensive testing ensures that the container runtime, CNI plugins, and underlying storage drivers interact correctly with the new hardware architecture before entering production. Gradually rolling out the new nodes as a canary deployment allows you to observe these architectural nuances under real-world traffic patterns without risking widespread outages.
 
 **Testing plan for cross-vendor CPU migration:**
 
