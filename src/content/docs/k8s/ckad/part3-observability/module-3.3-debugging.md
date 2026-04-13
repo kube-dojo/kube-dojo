@@ -402,7 +402,7 @@ k get pods --show-labels
 k describe svc myservice | grep Selector
 
 # Step 4: Test from inside cluster
-k run test --image=busybox --rm -it -- wget -qO- http://myservice
+k run test --image=busybox --rm -i -- wget -qO- http://myservice
 ```
 
 ---
@@ -512,16 +512,27 @@ EOF
 k get pod broken1
 k describe pod broken1 | tail -10
 # Fix: Change image to nginx:latest
+k set image pod/broken1 app=nginx:latest
+# Verify fix
+k wait --for=condition=Ready pod/broken1 --timeout=30s
 
 # Debug broken2
 k get pod broken2
+# Wait for crashloop to trigger a restart (minimum 10s backoff)
+sleep 20
 k logs broken2 --previous
-# Fix: Provide correct config
+# Fix: Provide correct config by replacing the pod
+k get pod broken2 -o yaml | sed 's/exit 1/sleep 3600/' | k replace --force -f -
+# Verify fix
+k wait --for=condition=Ready pod/broken2 --timeout=30s
 
 # Debug broken3
 k get pod broken3
 k describe pod broken3 | grep -A5 Events
-# Fix: Reduce memory request
+# Fix: Reduce memory request by replacing the pod
+k get pod broken3 -o yaml | sed 's/999Gi/256Mi/' | k replace --force -f -
+# Verify fix
+k wait --for=condition=Ready pod/broken3 --timeout=30s
 ```
 
 **Cleanup:**
@@ -554,13 +565,10 @@ k delete pod drill1
 ```bash
 # Create pod
 k run drill2 --image=nginx
+k wait --for=condition=Ready pod/drill2 --timeout=30s
 
-# Exec into it
-k exec -it drill2 -- bash
-
-# Inside: check nginx is running
-ps aux | grep nginx
-exit
+# Exec into it (non-interactive command execution)
+k exec drill2 -- bash -c 'ps aux | grep nginx'
 
 # Cleanup
 k delete pod drill2
@@ -582,8 +590,9 @@ spec:
     command: ['sh', '-c', 'echo error; exit 1']
 EOF
 
-# Wait for crash
-k get pod drill3 -w
+# Wait for crash and restart
+sleep 20
+k get pod drill3
 
 # Get logs from previous
 k logs drill3 --previous
@@ -597,6 +606,9 @@ k delete pod drill3
 ```bash
 # Create pod with bad image
 k run drill4 --image=invalid-registry.io/no-such-image:v1
+
+# Wait for pull failure
+sleep 5
 
 # Check status
 k get pod drill4
