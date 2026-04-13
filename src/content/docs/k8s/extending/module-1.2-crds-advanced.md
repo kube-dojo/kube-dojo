@@ -533,6 +533,14 @@ k get webapps --all-namespaces -o yaml > /dev/null
 
 > **Stop and think**: If you have 10,000 `WebApp` resources stored in etcd as `v1alpha1`, and you change the CRD to make `v1beta1` the storage version, do those 10,000 resources instantly get rewritten in etcd? What is the performance implication?
 
+### 3.5 Diagnosing Version-Skew and Validation Failures
+
+When evolving CRDs, you may encounter version-skew issues (e.g., clients using an older API version while the conversion webhook fails) or complex CEL validation errors. Use these techniques to diagnose them without modifying cluster state:
+
+- **API Discovery**: Run `kubectl api-resources | grep <crd>` to verify which API version is preferred and currently served by the API Server.
+- **Explicit Version Requests**: Fetch a resource using a specific fully-qualified version like `kubectl get webapps.v1alpha1.apps.kubedojo.io my-app -o yaml` to see exactly what older clients receive and test conversion webhook output.
+- **Server-Side Dry Run**: Run `kubectl apply --dry-run=server -f <manifest>` to execute all CEL validation rules and admission webhooks in the API Server. This surfaces validation rejections immediately without saving partial or invalid objects to etcd.
+
 ---
 
 ## Part 4: Subresources
@@ -657,7 +665,7 @@ frontend   react-app:2.1     2          1       False    2m
 
 ### 6.1 Putting It All Together
 
-Here is a production-grade CRD that uses every feature covered in this module:
+Here is a production-grade CRD that uses every feature covered in this module. Save this as `webapp-crd.yaml`:
 
 ```yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -874,8 +882,8 @@ spec:
 # Apply the CRD
 k apply -f webapp-crd.yaml
 
-# Verify it registered
-k get crd webapps.apps.kubedojo.io
+# Verify it registered and wait for the API server to serve it
+k wait --for=condition=established crd/webapps.apps.kubedojo.io
 k api-resources | grep webapp
 
 # Create a valid WebApp
@@ -917,8 +925,8 @@ EOF
 k get webapps
 k get wa            # shortName works
 
-# Try an invalid resource (should be rejected)
-cat << 'EOF' | k apply -f -
+# Try an invalid resource to diagnose validation failures using server dry-run
+cat << 'EOF' | k apply --dry-run=server -f -
 apiVersion: apps.kubedojo.io/v1beta1
 kind: WebApp
 metadata:
@@ -1228,6 +1236,11 @@ spec:
                       type: string
                       format: date-time
 CRDEOF
+```
+
+```bash
+# Wait for the CRD to become established before using it
+k wait --for=condition=established crd/backuppolicies.data.kubedojo.io
 ```
 
 2. **Create a valid BackupPolicy**:
