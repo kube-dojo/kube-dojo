@@ -499,9 +499,8 @@ k describe website my-blog
 # Get YAML
 k get ws my-blog -o yaml
 
-# Edit
-k edit website my-blog
-# Change replicas to 2
+# Edit (using patch for non-interactive automation)
+k patch website my-blog --type=merge -p '{"spec":{"replicas":2}}'
 ```
 
 **Part 4: Explore API**
