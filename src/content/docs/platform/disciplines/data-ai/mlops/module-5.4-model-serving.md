@@ -31,6 +31,8 @@ Model serving is where ML meets reality. Latency matters. Scalability matters. R
 
 The gap between "model works in Jupyter" and "model serves 10,000 requests per second" is where most ML projects fail.
 
+> **Stop and think**: Think about the last time a mobile app or website took more than 3 seconds to load. Did you wait, or did you abandon it? Your model's inference time directly impacts this user experience.
+
 ## Did You Know?
 
 - **Netflix serves 150 million predictions per second** using a combination of batch and real-time serving—different use cases need different architectures
@@ -42,41 +44,27 @@ The gap between "model works in Jupyter" and "model serves 10,000 requests per s
 
 Different use cases require different serving patterns:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    MODEL SERVING PATTERNS                        │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  ONLINE (Real-time)                                              │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │ Request ──▶ Feature Lookup ──▶ Model ──▶ Response        │   │
-│  │                                                          │   │
-│  │ Latency: <100ms  │  Throughput: High  │  Example: Fraud  │   │
-│  └──────────────────────────────────────────────────────────┘   │
-│                                                                  │
-│  BATCH (Scheduled)                                               │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │ Data ──▶ Model ──▶ Predictions ──▶ Store                 │   │
-│  │                                                          │   │
-│  │ Latency: Hours   │  Throughput: Very High  │  Example:   │   │
-│  │                                               Recommendations│
-│  └──────────────────────────────────────────────────────────┘   │
-│                                                                  │
-│  STREAMING (Event-driven)                                        │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │ Event Stream ──▶ Model ──▶ Event Stream                  │   │
-│  │                                                          │   │
-│  │ Latency: Seconds │  Throughput: High  │  Example: Anomaly│   │
-│  └──────────────────────────────────────────────────────────┘   │
-│                                                                  │
-│  EDGE (On-device)                                                │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │ Device Input ──▶ Local Model ──▶ Prediction              │   │
-│  │                                                          │   │
-│  │ Latency: <10ms  │  Throughput: N/A    │  Example: Face ID│   │
-│  └──────────────────────────────────────────────────────────┘   │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Online [ONLINE / Real-time]
+        direction LR
+        Req1[Request] --> FL[Feature Lookup] --> Mod1[Model] --> Resp1[Response]
+    end
+
+    subgraph Batch [BATCH / Scheduled]
+        direction LR
+        Data2[Data] --> Mod2[Model] --> Pred2[Predictions] --> Store2[Store]
+    end
+
+    subgraph Streaming [STREAMING / Event-driven]
+        direction LR
+        Ev1[Event Stream] --> Mod3[Model] --> Ev2[Event Stream]
+    end
+
+    subgraph Edge [EDGE / On-device]
+        direction LR
+        Dev[Device Input] --> LMod[Local Model] --> Pred3[Prediction]
+    end
 ```
 
 ### Choosing a Pattern
@@ -93,42 +81,22 @@ Different use cases require different serving patterns:
 
 A startup built an amazing recommendation model. In tests, it was perfect—personalized, relevant, engaging. They deployed it as a real-time service.
 
+> **Pause and predict**: What happens to a web page when it has to wait for a complex machine learning model to run sequentially before rendering the HTML?
+
 Launch day: 500ms latency per recommendation. Pages with 20 recommendations took 10 seconds to load. Users bounced. Revenue tanked.
 
 The fix? Batch predictions. Pre-compute recommendations hourly, serve from Redis. Latency dropped to 5ms. Same model, different serving pattern.
 
 ## Online Serving Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                  ONLINE SERVING ARCHITECTURE                     │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  Client Request                                                  │
-│       │                                                          │
-│       ▼                                                          │
-│  ┌─────────────┐                                                │
-│  │   Gateway   │  (Rate limiting, auth, routing)                │
-│  │  (Kong/Istio)│                                                │
-│  └──────┬──────┘                                                │
-│         │                                                        │
-│         ▼                                                        │
-│  ┌─────────────┐     ┌─────────────┐                            │
-│  │  Inference  │◀────│   Feature   │  (Low-latency lookup)      │
-│  │   Service   │     │    Store    │                            │
-│  │  (KServe)   │     │   (Redis)   │                            │
-│  └──────┬──────┘     └─────────────┘                            │
-│         │                                                        │
-│         ▼                                                        │
-│  ┌─────────────┐     ┌─────────────┐                            │
-│  │   Model     │     │  Monitoring │  (Latency, throughput)     │
-│  │  (loaded)   │     │ (Prometheus)│                            │
-│  └──────┬──────┘     └─────────────┘                            │
-│         │                                                        │
-│         ▼                                                        │
-│  Response                                                        │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Client[Client Request] --> Gateway[Gateway<br/>Rate limiting, auth, routing]
+    Gateway --> IS[Inference Service<br/>KServe]
+    IS <--> FS[Feature Store<br/>Low-latency lookup]
+    IS --> Model[Model<br/>loaded]
+    Model --> Mon[Monitoring<br/>Latency, throughput]
+    Model --> Resp[Response]
 ```
 
 ## Model Serving Frameworks
@@ -148,28 +116,16 @@ The fix? Batch predictions. Pre-compute recommendations hourly, serve from Redis
 
 KServe (formerly KFServing) is the standard for Kubernetes-native model serving:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         KSERVE                                   │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │                 InferenceService                         │    │
-│  │  ┌───────────────┐  ┌───────────────┐  ┌─────────────┐  │    │
-│  │  │  Transformer  │  │   Predictor   │  │  Explainer  │  │    │
-│  │  │  (preprocess) │  │   (model)     │  │ (optional)  │  │    │
-│  │  └───────┬───────┘  └───────┬───────┘  └──────┬──────┘  │    │
-│  │          │                  │                 │          │    │
-│  │          └──────────────────┼─────────────────┘          │    │
-│  │                             │                            │    │
-│  │  ┌──────────────────────────▼────────────────────────┐  │    │
-│  │  │                    Knative                         │  │    │
-│  │  │  • Scale to zero    • Canary deployments          │  │    │
-│  │  │  • Auto-scaling     • Traffic splitting           │  │    │
-│  │  └───────────────────────────────────────────────────┘  │    │
-│  └─────────────────────────────────────────────────────────┘    │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph KServe
+        subgraph IS [InferenceService]
+            direction LR
+            Trans[Transformer<br/>preprocess] --> Pred[Predictor<br/>model]
+            Pred --> Exp[Explainer<br/>optional]
+        end
+        IS --> Knative[Knative<br/>Scale to zero, Canary deployments,<br/>Auto-scaling, Traffic splitting]
+    end
 ```
 
 ### KServe InferenceService
@@ -221,30 +177,26 @@ curl -X POST "http://${SERVICE_URL}/v1/models/fraud-detector:predict" \
 
 ### Canary Deployments
 
+```mermaid
+gantt
+    title Canary Deployment Traffic Shift
+    dateFormat X
+    axisFormat %s
+    section Day 1
+    v1 (100%) : 0, 10
+    v2 (0%)   : 0, 0
+    section Day 2
+    v1 (90%)  : 0, 9
+    v2 (10%)  : 0, 1
+    section Day 3
+    v1 (50%)  : 0, 5
+    v2 (50%)  : 0, 5
+    section Day 4
+    v1 (0%)   : 0, 0
+    v2 (100%) : 0, 10
 ```
-CANARY DEPLOYMENT
-─────────────────────────────────────────────────────────────────
 
-Traffic Distribution:
-┌───────────────────────────────────────────────────────────────┐
-│                                                               │
-│  Day 1:    v1 ████████████████████████████████████████ 100%  │
-│            v2                                            0%   │
-│                                                               │
-│  Day 2:    v1 ████████████████████████████████████     90%   │
-│            v2 ████                                       10%  │
-│                                                               │
-│  Day 3:    v1 ████████████████████                      50%   │
-│            v2 ████████████████████                      50%   │
-│                                                               │
-│  Day 4:    v1                                            0%   │
-│            v2 ████████████████████████████████████████ 100%  │
-│                                                               │
-└───────────────────────────────────────────────────────────────┘
-
-Monitor: latency, errors, business metrics
-Rollback: If metrics degrade, shift traffic back to v1
-```
+Monitor: latency, errors, business metrics. Rollback: If metrics degrade, shift traffic back to v1.
 
 ### KServe Canary
 
@@ -274,20 +226,21 @@ spec:
 
 Shadow mode runs the new model on real traffic without affecting responses:
 
+```mermaid
+flowchart LR
+    Req[User Request] --> Prod[Production Model]
+    Req --> Shad[Shadow Model]
+    Prod --> Resp[User Response]
+    Shad --> Log[Log Only<br/>compare later]
 ```
-SHADOW DEPLOYMENT
-─────────────────────────────────────────────────────────────────
-
-User Request ──┬──▶ Production Model ──▶ User Response
-               │
-               └──▶ Shadow Model ──▶ Log Only (compare later)
 
 Benefits:
-• Real production traffic
-• No user impact
-• Compare performance on real data
-• Validate before promotion
-```
+- Real production traffic
+- No user impact
+- Compare performance on real data
+- Validate before promotion
+
+> **Stop and think**: If a shadow deployment proves the new model is technically stable and returns fast predictions, does it prove the model will actually improve user engagement?
 
 ### A/B Testing
 
@@ -326,30 +279,23 @@ spec:
 
 ### Optimization Techniques
 
-```
-MODEL OPTIMIZATION TECHNIQUES
-─────────────────────────────────────────────────────────────────
-
-QUANTIZATION (Reduce precision)
-├── FP32 → FP16: 2x smaller, ~same accuracy
-├── FP32 → INT8: 4x smaller, slight accuracy loss
-└── Example: TensorRT, ONNX Runtime
-
-PRUNING (Remove weights)
-├── Unstructured: Zero out small weights
-├── Structured: Remove entire neurons/layers
-└── Trade-off: Size vs. accuracy
-
-DISTILLATION (Smaller model learns from larger)
-├── Teacher: Large, accurate model
-├── Student: Small, fast model
-└── Result: Student ~= Teacher accuracy, much faster
-
-COMPILATION (Optimize for hardware)
-├── ONNX: Standard format, cross-platform
-├── TensorRT: NVIDIA GPU optimization
-├── XLA: TensorFlow compilation
-└── TorchScript: PyTorch JIT compilation
+```mermaid
+mindmap
+  root((Optimization))
+    Quantization
+      FP16
+      INT8
+    Pruning
+      Unstructured
+      Structured
+    Distillation
+      Teacher Model
+      Student Model
+    Compilation
+      ONNX
+      TensorRT
+      XLA
+      TorchScript
 ```
 
 ### ONNX for Portability
@@ -409,27 +355,18 @@ print(f"Quantized: {os.path.getsize('model_quantized.tflite') / 1024 / 1024:.2f}
 
 ### Horizontal vs. Vertical Scaling
 
-```
-SCALING STRATEGIES
-─────────────────────────────────────────────────────────────────
-
-VERTICAL (Scale Up)
-├── More CPU/memory per pod
-├── Larger GPU
-├── Limits: Max instance size
-└── Use when: Model needs more resources
-
-HORIZONTAL (Scale Out)
-├── More replicas
-├── Load balancing
-├── Limits: Coordination overhead
-└── Use when: Need more throughput
-
-AUTO-SCALING
-├── Scale on CPU/memory
-├── Scale on requests per second
-├── Scale on queue depth
-└── Scale to zero (cost savings)
+```mermaid
+mindmap
+  root((Scaling))
+    Vertical
+      More CPU and Memory
+      Larger GPUs
+    Horizontal
+      More Replicas
+      Load Balancing
+    AutoScaling
+      Scale on Traffic
+      Scale to Zero
 ```
 
 ### KServe Autoscaling
@@ -470,61 +407,27 @@ spec:
 Test your understanding:
 
 <details>
-<summary>1. When would you choose batch serving over real-time serving?</summary>
+<summary>1. An e-commerce site wants to show "Products you might like" on the homepage. They have a massive matrix factorization model, but generating recommendations on the fly is causing the homepage to load 3 seconds slower. Why might batch serving be the correct architectural choice here, and how does it work compared to real-time?</summary>
 
-**Answer**: Choose batch serving when:
-- **Latency isn't critical**: Recommendations can be hours old
-- **High volume**: Pre-compute for all users is efficient
-- **Complex models**: Slow models can run offline
-- **Cost optimization**: Batch is cheaper than real-time
-
-Real-time is needed when:
-- Immediate response required (fraud detection)
-- Input is dynamic (can't pre-compute all possibilities)
-- Freshness matters (current context affects prediction)
+**Answer**: Real-time serving requires the application to wait for the model to compute a prediction on demand, which severely impacts latency if the model is slow. By switching to batch serving, predictions are computed asynchronously offline (e.g., in a nightly pipeline) and saved into a fast key-value store like Redis. When the user visits the homepage, the application simply performs a sub-millisecond lookup against Redis to retrieve the pre-computed recommendations. This decouples the heavy ML computation from the critical user-facing response path, immediately solving the 3-second delay.
 </details>
 
 <details>
-<summary>2. What's the difference between canary and shadow deployments?</summary>
+<summary>2. Your team has developed a new credit scoring model. The business is terrified that a bug in the model might incorrectly auto-approve bad loans. You need to validate the model in production without risking business capital. Should you use a canary or shadow deployment first, and why?</summary>
 
-**Answer**:
-- **Canary**: New model serves a percentage of real traffic. Users receive predictions from the new model. Risk: Bad predictions affect some users.
-
-- **Shadow**: New model receives real traffic but responses are logged, not served. Users always get predictions from the current model. Risk: None to users, but can't measure user impact.
-
-Use shadow first (validate technical metrics), then canary (validate business metrics).
+**Answer**: You should definitely use a shadow deployment first. A shadow deployment mirrors live production traffic to the new model, but its predictions are only logged and never returned to the user or business systems. This allows you to evaluate how the new model behaves on real-world, current data and compare its outputs to the existing model without any financial risk. A canary deployment, by contrast, would actually serve the new model's predictions to a small percentage of real users, exposing the business to the exact risk they are trying to avoid before validation is complete.
 </details>
 
 <details>
-<summary>3. Why is model optimization important for serving?</summary>
+<summary>3. Your fraud detection model works perfectly, but to handle Black Friday traffic (10,000 RPS), your cloud bill for GPU instances is projected to exceed the revenue saved by the fraud detection. What specific optimization techniques should you apply before scaling horizontally, and why?</summary>
 
-**Answer**: Serving costs dominate ML costs:
-- Training: Once or occasionally
-- Serving: Continuous, at scale
-
-Optimization reduces:
-- **Latency**: Better user experience
-- **Cost**: Fewer resources per prediction
-- **Scale**: More predictions per dollar
-- **Memory**: More models per server
-
-A 2x faster model can mean 50% cost savings—significant at scale.
+**Answer**: You should apply quantization (reducing precision from FP32 to FP16 or INT8) and model compilation (using TensorRT or ONNX) before scaling out. Quantization drastically reduces the memory footprint and speeds up computation by using simpler math, often with negligible loss in accuracy. Compilation optimizes the computational graph specifically for the underlying hardware, minimizing overhead. By optimizing the model vertically first, you increase the throughput (RPS) that a single GPU or CPU can handle, meaning you will need far fewer replicas when you finally scale horizontally, dramatically reducing your cloud bill.
 </details>
 
 <details>
-<summary>4. What causes cold start problems and how do you mitigate them?</summary>
+<summary>4. You configured KServe to scale your internal NLP model to zero during the night to save costs. However, the first user who logs in at 6 AM consistently experiences a 15-second timeout error. What is causing this, and how can you fix it without completely giving up the cost savings of autoscaling?</summary>
 
-**Answer**: Cold start occurs when:
-- Model loads into memory for first request
-- Pods scale from zero
-- New replicas initialize
-
-Mitigation strategies:
-- **minReplicas > 0**: Always have warm replicas
-- **Pre-warm**: Send synthetic requests before traffic
-- **Smaller models**: Faster to load
-- **Model caching**: Keep models in shared storage
-- **Predictive scaling**: Scale before traffic spike
+**Answer**: This is a classic "cold start" problem. Because the replicas scaled to zero, the first request forces Kubernetes to spin up a new pod, download the model weights from storage, and load them into memory before it can serve the prediction, which easily exceeds standard timeouts. You can fix this by setting the `minReplicas` to `1` so there is always at least one pod ready to serve the first request immediately. Alternatively, if strict zero-cost is needed overnight, you could implement predictive scaling by writing a cron job that pings the service at 5:55 AM to "pre-warm" the pods just before the first user arrives.
 </details>
 
 ## Hands-On Exercise: Deploy a Model with KServe
