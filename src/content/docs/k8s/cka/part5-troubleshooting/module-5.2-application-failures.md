@@ -210,7 +210,9 @@ k describe pod <pod> | grep -A 10 Events
 k describe pod <pod> | grep -A 10 "State:"
 
 # Step 4: Check PREVIOUS container logs (crucial!)
-k logs <pod> --previous
+# For multi-container pods, identify the failing container and specify it with -c
+# k get pod <pod> -o jsonpath='{range .status.containerStatuses[*]}{.name}{"\t"}{.restartCount}{"\n"}{end}'
+k logs <pod> --previous # add -c <container-name> if multiple containers
 
 # Step 5: Check exit code
 k get pod <pod> -o jsonpath='{.status.containerStatuses[0].lastState.terminated.exitCode}'
@@ -336,8 +338,8 @@ k create secret docker-registry dockerhub \
   --docker-username=<username> \
   --docker-password=<token>
 
-# Option 2: Use alternative registry (gcr.io, quay.io)
-# nginx:latest -> gcr.io/google-containers/nginx:latest
+# Option 2: Use alternative registry (e.g., quay.io, public.ecr.aws)
+# nginx:latest -> public.ecr.aws/nginx/nginx:latest
 ```
 
 ---
@@ -349,7 +351,7 @@ k create secret docker-registry dockerhub \
 > **Pause and predict**: What exact pod status would you expect if a referenced Secret does not exist in the namespace?
 
 **Symptoms**:
-- Pod stuck in ContainerCreating
+- Pod status shows `CreateContainerConfigError` or is stuck in `ContainerCreating`
 - Events show "configmap not found" or "secret not found"
 
 **Diagnosis**:
@@ -699,6 +701,14 @@ EOF
 k logs crash-app -n app-debug-lab --previous
 k get pod crash-app -n app-debug-lab -o jsonpath='{.status.containerStatuses[0].lastState.terminated.exitCode}'
 # Exit code 1 - the command explicitly exits with error
+
+# Fix: update the command to sleep instead of exit
+k get pod crash-app -n app-debug-lab -o yaml > crash.yaml
+sed -i 's/exit 1/sleep 3600/g' crash.yaml
+k replace --force -f crash.yaml
+
+# Verify
+k get pod crash-app -n app-debug-lab
 ```
 
 </details>
@@ -772,8 +782,11 @@ k describe pod image-app -n app-debug-lab | grep -A 5 "Failed\|Error"
 # "manifest for nginx:v99.99.99 not found"
 
 # Fix - delete and recreate with correct image
-k delete pod image-app -n app-debug-lab
+k delete pod image-app -n app-debug-lab --force
 k run image-app -n app-debug-lab --image=nginx:1.25
+
+# Verify
+k get pod image-app -n app-debug-lab
 ```
 
 </details>
@@ -810,7 +823,13 @@ k get pod oom-app -n app-debug-lab -o jsonpath='{.status.containerStatuses[0].la
 # "OOMKilled"
 
 # The container tries to use 500MB but only has 100Mi limit
-# Fix: increase memory limit or reduce app memory usage
+# Fix: increase memory limit by replacing the pod
+k get pod oom-app -n app-debug-lab -o yaml > oom.yaml
+sed -i 's/100Mi/600Mi/g' oom.yaml
+k replace --force -f oom.yaml
+
+# Verify
+k get pod oom-app -n app-debug-lab
 ```
 
 </details>
