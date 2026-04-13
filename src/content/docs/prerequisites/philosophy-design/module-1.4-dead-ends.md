@@ -38,13 +38,14 @@ In technology, knowing what **NOT** to learn is as important as knowing what to 
 
 **Status**: Effectively deprecated. Docker Desktop removed Swarm mode in 2022.
 
-```text
-Timeline:
-2015: Docker Swarm launched as K8s competitor
-2017: Docker adds K8s support (admission of defeat)
-2019: Docker Enterprise sold to Mirantis
-2020: Mirantis announces Swarm deprecation timeline
-2022: Swarm removed from Docker Desktop
+```mermaid
+timeline
+    title Docker Swarm Timeline
+    2015 : Docker Swarm launched as K8s competitor
+    2017 : Docker adds K8s support (admission of defeat)
+    2019 : Docker Enterprise sold to Mirantis
+    2020 : Mirantis announces Swarm deprecation timeline
+    2022 : Swarm removed from Docker Desktop
 ```
 
 **Why it died**:
@@ -65,14 +66,15 @@ Timeline:
 
 **Status**: Marathon abandoned. Mesos in maintenance mode.
 
-```text
-Timeline:
-2009: Mesos created at UC Berkeley
-2013: Marathon launched for containers
-2016: Peak adoption (Twitter, Airbnb, Apple)
-2020: Twitter announces migration to K8s
-2021: Marathon declared unmaintained
-2022: Mesos usage effectively zero for new projects
+```mermaid
+timeline
+    title Apache Mesos + Marathon Timeline
+    2009 : Mesos created at UC Berkeley
+    2013 : Marathon launched for containers
+    2016 : Peak adoption (Twitter, Airbnb, Apple)
+    2020 : Twitter announces migration to K8s
+    2021 : Marathon declared unmaintained
+    2022 : Mesos usage effectively zero for new projects
 ```
 
 **Why it died**:
@@ -108,13 +110,16 @@ Cloud Foundry was incredible at its narrow use case: `cf push` and your app was 
 
 **Status**: Removed from Kubernetes in version 1.24 (May 2022).
 
-```text
-Timeline:
-2014-2016: Docker is THE way to run containers in K8s
-2016: CRI (Container Runtime Interface) introduced
-2017: containerd becomes CNCF project
-2020: K8s announces dockershim deprecation
-2022: K8s 1.24 removes dockershim completely
+> **Pause and predict**: If Docker was the first major container runtime, why did the Kubernetes community build the CRI (Container Runtime Interface) instead of just hardcoding Docker support forever?
+
+```mermaid
+timeline
+    title Docker as Kubernetes Runtime Timeline
+    2014-2016 : Docker is THE way to run containers in K8s
+    2016 : CRI (Container Runtime Interface) introduced
+    2017 : containerd becomes CNCF project
+    2020 : K8s announces dockershim deprecation
+    2022 : K8s 1.24 removes dockershim completely
 ```
 
 **Why it was removed**:
@@ -163,18 +168,21 @@ flowchart LR
 | Agent on each server | No agents needed |
 | Imperative scripts | Declarative YAML |
 
-```text
-Traditional (Chef/Puppet/Ansible):
-1. SSH to server
-2. Check current state
-3. Apply changes to reach desired state
-4. Hope nothing drifted
-
-Kubernetes:
-1. Define desired state in YAML
-2. kubectl apply
-3. K8s continuously reconciles
-4. Self-healing, no SSH
+```mermaid
+flowchart TD
+    subgraph Traditional ["Traditional (Chef/Puppet/Ansible)"]
+        direction TB
+        T1[1. SSH to server] --> T2[2. Check current state]
+        T2 --> T3[3. Apply changes to reach desired state]
+        T3 --> T4[4. Hope nothing drifted]
+    end
+    
+    subgraph K8s ["Kubernetes Native"]
+        direction TB
+        K1[1. Define desired state in YAML] --> K2[2. kubectl apply]
+        K2 --> K3[3. K8s continuously reconciles]
+        K3 --> K4[4. Self-healing, no SSH]
+    end
 ```
 
 **Don't learn**: Using Ansible to manage K8s resources, Chef cookbooks for K8s, Puppet manifests for containers
@@ -225,39 +233,31 @@ Common patterns in technological dead ends:
 
 ### Pattern 1: Single Vendor vs. Community
 
-```text
-Swarm:    Docker Inc. controlled → Limited adoption
-K8s:      CNCF neutral → Industry-wide adoption
-Lesson:   Community governance wins for infrastructure
-```
+**Swarm:** Docker Inc. controlled → Limited adoption  
+**K8s:** CNCF neutral → Industry-wide adoption  
+**Lesson:** Community governance wins for infrastructure
 
 ### Pattern 2: Complexity Without Benefit
 
-```text
-Mesos:    Powerful but complex → Limited ecosystem
-K8s:      Complex but valuable → Massive ecosystem
-Lesson:   Complexity is only acceptable with proportional benefit
-```
+**Mesos:** Powerful but complex → Limited ecosystem  
+**K8s:** Complex but valuable → Massive ecosystem  
+**Lesson:** Complexity is only acceptable with proportional benefit
 
 ### Pattern 3: Wrong Abstraction Level
 
-```text
-Chef/Puppet: Server-level → Doesn't fit containers
-K8s:         Container-level → Perfect fit
-Lesson:      Paradigm shifts require new tools
-```
+**Chef/Puppet:** Server-level → Doesn't fit containers  
+**K8s:** Container-level → Perfect fit  
+**Lesson:** Paradigm shifts require new tools
 
 ### Pattern 4: Ecosystem Effects
 
-```text
 Once K8s hit critical mass:
 - Cloud providers built managed services
 - Tool vendors targeted K8s
 - Talent learned K8s
 - Alternatives became unviable
 
-Lesson: Network effects are powerful. Sometimes the best tech loses.
-```
+**Lesson:** Network effects are powerful. Sometimes the best tech loses.
 
 ---
 
