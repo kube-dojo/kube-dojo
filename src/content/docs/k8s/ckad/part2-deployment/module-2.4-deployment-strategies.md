@@ -121,7 +121,7 @@ k set image deploy/web-app nginx=nginx:1.21
 k rollout status deploy/web-app
 
 # Check pods transitioning
-k get pods -l app=web -w
+k get pods -l app=web
 ```
 
 ---
@@ -263,13 +263,14 @@ k apply -f blue-deployment.yaml
 k apply -f service.yaml
 
 # Test blue
-k run test --image=busybox --rm -it --restart=Never -- wget -qO- http://myapp
+k run test --image=busybox --rm -i --restart=Never -- wget -qO- http://myapp
 
 # Deploy green (without traffic)
 k apply -f green-deployment.yaml
 
 # Test green directly (port-forward or separate service)
 k port-forward deploy/app-green 8080:80 &
+sleep 2
 curl localhost:8080
 
 # Switch traffic to green
@@ -375,13 +376,12 @@ k scale deploy app-stable --replicas=9
 k scale deploy app-canary --replicas=5
 k scale deploy app-stable --replicas=5
 
-# Full rollout (100% new version)
-k scale deploy app-canary --replicas=10
-k scale deploy app-stable --replicas=0
+# Full rollout (update stable to new version)
+k set image deploy/app-stable app=myapp:2.0
+k rollout status deploy/app-stable
 
-# Cleanup: rename canary to stable
-k delete deploy app-stable
-k patch deploy app-canary -p '{"metadata":{"name":"app-stable"}}'
+# Cleanup: remove canary
+k delete deploy app-canary
 ```
 
 ---
@@ -610,7 +610,7 @@ EOF
 
 # Update and watch (should see 5 pods max)
 k set image deploy/rolling-demo nginx=nginx:1.21
-k get pods -l app=rolling -w
+k rollout status deploy/rolling-demo
 
 # Cleanup
 k delete deploy rolling-demo
@@ -814,7 +814,7 @@ EOF
 
 # Update (watch all pods terminate first)
 k set image deploy/drill2 nginx=nginx:1.21
-k get pods -l app=drill2 -w
+k rollout status deploy/drill2
 
 # Cleanup
 k delete deploy drill2
@@ -825,17 +825,15 @@ k delete deploy drill2
 ```bash
 # Create blue
 k create deploy blue --image=nginx:1.20 --replicas=2
-k patch deploy blue -p '{"spec":{"selector":{"matchLabels":{"version":"blue"}},"template":{"metadata":{"labels":{"version":"blue"}}}}}'
 
-# Service
-k expose deploy blue --name=app --port=80 --selector=version=blue
+# Service (k create deploy sets app=blue)
+k expose deploy blue --name=app --port=80 --selector=app=blue
 
 # Create green
 k create deploy green --image=nginx:1.21 --replicas=2
-k patch deploy green -p '{"spec":{"selector":{"matchLabels":{"version":"green"}},"template":{"metadata":{"labels":{"version":"green"}}}}}'
 
-# Switch
-k patch svc app -p '{"spec":{"selector":{"version":"green"}}}'
+# Switch to green
+k patch svc app -p '{"spec":{"selector":{"app":"green"}}}'
 
 # Verify
 k get ep app
@@ -852,12 +850,12 @@ k delete svc app
 k create deploy stable --image=nginx:1.20 --replicas=9
 k create deploy canary --image=nginx:1.21 --replicas=1
 
-# Add common label
-k patch deploy stable -p '{"spec":{"template":{"metadata":{"labels":{"app":"myapp"}}}}}'
-k patch deploy canary -p '{"spec":{"template":{"metadata":{"labels":{"app":"myapp"}}}}}'
+# Add common label (must not overwrite the selector label 'app')
+k patch deploy stable -p '{"spec":{"template":{"metadata":{"labels":{"shared":"myapp"}}}}}'
+k patch deploy canary -p '{"spec":{"template":{"metadata":{"labels":{"shared":"myapp"}}}}}'
 
 # Service for both
-k expose deploy stable --name=myapp --port=80 --selector=app=myapp
+k expose deploy stable --name=myapp --port=80 --selector=shared=myapp
 
 # Verify endpoints include both
 k get ep myapp
@@ -927,7 +925,7 @@ k create deploy canary --image=nginx:1.21 --replicas=1
 # 4. Point service to both
 k patch deploy prod -p '{"spec":{"template":{"metadata":{"labels":{"release":"production"}}}}}'
 k patch deploy canary -p '{"spec":{"template":{"metadata":{"labels":{"release":"production"}}}}}'
-k patch svc production -p '{"spec":{"selector":{"release":"production"}}}'
+k set selector svc production release=production
 
 # 5. Test canary
 k logs -l app=canary
