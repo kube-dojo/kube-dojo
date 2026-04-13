@@ -96,19 +96,24 @@ Real network degradation is not a constant delay. It fluctuates. Chaos Mesh mode
 
 **Correlation**: How much the current delay correlates with the previous one. At 100% correlation, if one packet is delayed 280ms, the next will likely be close to 280ms. At 0% correlation, each packet's delay is independent. Real networks have 60-85% correlation.
 
-```
+> **Stop and think**: If you set correlation to 100%, what happens to the jitter? The latency remains exactly the same as the first randomized value for the duration of the experiment, effectively eliminating the ongoing randomness of jitter.
+
 Latency patterns with different correlation values:
 
-Low correlation (25%):     High correlation (90%):
-  ▲                          ▲
-  │ ╱╲  ╱╲╱╲  ╱╲            │     ╱──────╲
-  │╱  ╲╱    ╲╱  ╲           │    ╱        ╲
-  │              ╲╱╲        │   ╱          ╲──────╱
-  │                 ╲╱      │  ╱
-  └──────────────────→      └──────────────────→
-     Random-looking             Burst-like
-     (each packet                (sustained
-      independent)                degradation)
+```mermaid
+xychart-beta
+    title "Low correlation (25%) - Random-looking (each packet independent)"
+    x-axis "Time" [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    y-axis "Latency" 0 --> 10
+    line [2, 8, 3, 9, 2, 7, 1, 6, 4, 8]
+```
+
+```mermaid
+xychart-beta
+    title "High correlation (90%) - Burst-like (sustained degradation)"
+    x-axis "Time" [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    y-axis "Latency" 0 --> 10
+    line [1, 2, 8, 9, 9, 9, 8, 2, 1, 1]
 ```
 
 High correlation is more realistic and more dangerous — it simulates sustained network degradation rather than random jitter. Always test with correlation >= 70%.
@@ -181,6 +186,8 @@ spec:
 ```
 
 **Hypothesis**: "We believe the frontend will return a graceful error page (HTTP 503) when DNS resolution for the backend fails, because our connection handling catches UnknownHostException and returns a fallback response."
+
+> **Pause and predict**: If you inject a DNS error but your application has already resolved and cached the IP address internally, will the application fail immediately? (Hint: DNS caching in the application layer often masks DNS failures until the cache expires.)
 
 ```bash
 # Apply DNS chaos
@@ -288,6 +295,8 @@ This is extremely powerful because you can target **specific endpoints** with **
 ### HTTP Delay
 
 Add latency at the HTTP layer (different from NetworkChaos delay because it affects only HTTP traffic, not all TCP):
+
+> **Pause and predict**: If you add a 3-second HTTP delay, but your frontend has a 1-second timeout, what will the user experience? Will they see a graceful error, or will the frontend automatically retry and inadvertently multiply the delay?
 
 ```yaml
 # http-delay-experiment.yaml
@@ -614,104 +623,57 @@ This workflow first adds network latency, then adds CPU stress while the latency
 
 ## Quiz
 
-### Question 1: What is the difference between NetworkChaos delay and HTTPChaos delay?
+### Question 1: You are troubleshooting a microservice that communicates with a legacy database via TCP, and a modern REST API via HTTP. You want to test how the service handles slow responses from the REST API without affecting the database connection. Which chaos type should you use and why?
 
 <details>
 <summary>Show Answer</summary>
 
-**NetworkChaos delay** operates at the TCP/IP layer using Linux `tc` (traffic control). It delays ALL packets — TCP handshakes, data packets, ACKs, and any protocol running over the network interface. It affects HTTP, gRPC, database connections, and any other protocol equally.
-
-**HTTPChaos delay** operates at the HTTP application layer. It only delays HTTP request/response processing and can target specific HTTP methods, paths, and status codes. Non-HTTP traffic is unaffected.
-
-Use NetworkChaos delay when you want to simulate a degraded network link. Use HTTPChaos delay when you want to simulate a slow specific API endpoint without affecting other traffic.
+You should use HTTPChaos delay instead of NetworkChaos delay. NetworkChaos operates at the TCP/IP layer using Linux `tc` (traffic control), meaning it delays all packets on the network interface, which would affect both the database and REST API connections equally. HTTPChaos delay operates specifically at the application layer, allowing you to target only HTTP request/response processing. Furthermore, HTTPChaos allows you to filter by specific HTTP methods, paths, and status codes, ensuring that only the REST API traffic is degraded while the TCP database connection remains completely unaffected.
 
 </details>
 
-### Question 2: Why is DNS chaos particularly dangerous in Kubernetes, and how should you scope it?
+### Question 2: A junior engineer on your team wants to test what happens when the product catalog service cannot resolve the inventory service. They propose injecting a DNS error cluster-wide to see how the system reacts. Why is this approach dangerous in a Kubernetes environment, and how should they safely scope the experiment instead?
 
 <details>
 <summary>Show Answer</summary>
 
-DNS is critical in Kubernetes because **all** service discovery relies on it. Every `ServiceName.Namespace.svc.cluster.local` lookup goes through CoreDNS. DNS chaos can cascade across the entire cluster because:
-
-1. Pods with `ndots:5` generate multiple DNS queries for each lookup
-2. Failed DNS causes connection failures to every dependent service
-3. DNS caching means bad results can persist after the experiment ends
-
-To scope DNS chaos safely:
-- Target **specific pods** (not CoreDNS itself, unless in dev)
-- Use the `patterns` field to affect only specific domain names
-- Keep duration short (60-120 seconds)
-- Verify DNS caches are cleared after the experiment
+Injecting a cluster-wide DNS error is extremely dangerous because DNS is the critical foundation for all service discovery in Kubernetes, meaning every single `ServiceName.Namespace.svc.cluster.local` lookup would fail. This would cause massive cascading failures across entirely unrelated workloads, potentially breaking cluster controllers and service meshes. Furthermore, due to DNS caching and `ndots:5` configurations generating multiple queries, the effects can be unpredictable and persist even after the chaos experiment ends. To safely scope this test, the engineer should target only the specific product catalog pods using label selectors, restrict the chaos duration to 60-120 seconds, and use the `patterns` field to specifically target only the inventory service's domain name.
 
 </details>
 
-### Question 3: A backend service has a 3-second timeout for database queries. You inject 2 seconds of latency on the network between the backend and database. Will the timeout fire? Explain.
+### Question 3: Your checkout service has a strict 3-second timeout configured for its database queries. To test this timeout, you inject exactly 2 seconds of network latency between the checkout service and the database using NetworkChaos. During the test, you observe that some queries are still timing out and failing. Why might the 3-second timeout fire when only 2 seconds of latency were injected?
 
 <details>
 <summary>Show Answer</summary>
 
-**Not necessarily, and the answer depends on multiple factors:**
-
-The 2-second network latency affects the round trip. If the database query itself takes 500ms, the total time is: network latency to DB (2s) + query execution (500ms) + network latency back (2s) = 4.5 seconds. The 3-second timeout would fire.
-
-However, if the timeout is measured from the application's perspective and only counts time after the TCP connection is established, and the connection was already pooled, the timing is different. Also, with jitter and correlation, actual latency varies around 2 seconds — some requests might complete in 3.8 seconds while others in 5.2 seconds.
-
-This is exactly why you run the experiment — **you cannot reliably predict the outcome by reasoning about it**. The interaction of network latency, TCP retransmission, connection pooling, timeout implementation, and jitter creates emergent behavior.
+The timeout can still fire because the injected 2 seconds of latency is only one component of the total round-trip time. You must account for the actual database query execution time, the network latency in both directions (request and response), and any application-level processing time. Additionally, when using Chaos Mesh, network latency typically includes a `jitter` parameter, meaning some packets will experience delays longer than the baseline 2 seconds. When combined with potential TCP retransmissions, connection pool exhaustion, or CPU throttling during the test, the cumulative delay can easily exceed the 3-second threshold. This is exactly why testing the actual behavior is far more reliable than just calculating theoretical limits.
 
 </details>
 
-### Question 4: What does clock skew of -5 minutes break in a Kubernetes environment?
+### Question 4: You are running a chaos experiment where you apply a -5 minute TimeChaos (clock skew) to a pod responsible for issuing JWT tokens and communicating with an external payment gateway via mTLS. Suddenly, the pod stops being able to communicate with the payment gateway, and other internal services reject its tokens. What specific mechanisms are failing due to this clock skew?
 
 <details>
 <summary>Show Answer</summary>
 
-A -5 minute clock skew (clock is 5 minutes behind) breaks:
-
-1. **TLS/mTLS connections**: Certificates may appear "not yet valid" to the skewed pod, causing TLS handshake failures with other services
-2. **JWT validation**: Tokens issued by other services appear to have been created "in the future" from the skewed pod's perspective; the `iat` claim check fails
-3. **Kubernetes lease renewal**: If a controller or leader election depends on lease timestamps, the skewed pod may fail to renew leases correctly
-4. **Distributed locks**: Redis locks with TTL may appear to have more time remaining than they should, causing locks to be held too long
-5. **Scheduled jobs**: CronJobs or in-app schedulers fire 5 minutes late
-6. **Log timestamps**: Logs from the skewed pod will be 5 minutes behind, making incident debugging extremely confusing
+The clock skew is causing critical timestamp validations to fail across multiple security mechanisms. First, the mTLS connection to the payment gateway fails because the pod's local clock is 5 minutes in the past, making the external server's certificate appear as "not yet valid" during the TLS handshake. Second, the JWT tokens issued by this pod are being rejected by other internal services because the tokens' `iat` (issued at) claim indicates a time 5 minutes in the past, but depending on the validation logic, they might also have expiration (`exp`) claims that are now completely misaligned with the receiving services' real-time clocks. Furthermore, if the pod relies on distributed locks or lease renewals, those mechanisms will also calculate incorrect TTLs, leading to lock contention or lease loss.
 
 </details>
 
-### Question 5: You're running a chaos experiment with NetworkChaos (200ms latency) and the frontend has a 5-second timeout. No requests fail, but users report the application feels sluggish. What's happening and what should you investigate?
+### Question 5: You inject 200ms of network latency between your frontend and backend services. Your frontend has a generously configured 5-second timeout, and monitoring shows exactly zero HTTP 5xx errors or timeout exceptions. However, customer support is flooded with complaints that the application is completely unusable and "hanging." What is the most likely cause of this discrepancy, and what should you investigate?
 
 <details>
 <summary>Show Answer</summary>
 
-The 200ms latency per request doesn't trigger the 5-second timeout, but it **compounds across sequential requests**. If a single page load requires 12 API calls made sequentially (not in parallel), the total added latency is 200ms x 12 = 2.4 seconds. The page that loaded in 1 second now takes 3.4 seconds — below the timeout but well above the user's patience threshold.
-
-You should investigate:
-1. **Request waterfall**: How many sequential API calls does a page load require? Can they be parallelized?
-2. **User-facing SLOs**: Your timeout is 5 seconds, but what latency does the user consider acceptable? (Usually 1-2 seconds for web pages)
-3. **Cumulative latency**: Measure end-to-end page load time, not individual request latency
-4. **Connection reuse**: Are connections being reestablished for each request (each paying the latency penalty on the TCP handshake)?
-
-This finding — that the system is technically "working" but degraded from the user's perspective — is one of the most valuable outcomes of chaos experiments.
+The application feels sluggish because the 200ms delay is compounding across multiple sequential requests, creating a massive total wait time for the user. While no single request hits the 5-second timeout threshold, a page load that requires 10 sequential API calls will now take an additional 2 seconds to render, far exceeding the typical user patience threshold of 1-2 seconds. To fix this, you should investigate the request waterfall in the frontend to see if these API calls can be parallelized or batched together into a single GraphQL or BFF (Backend-for-Frontend) request. Additionally, you should review your user-facing Service Level Objectives (SLOs) and connection reuse settings to ensure the system degrades gracefully or provides loading feedback rather than just technically keeping connections alive.
 
 </details>
 
-### Question 6: When should you use JVMChaos instead of NetworkChaos or HTTPChaos?
+### Question 6: Your team is building a Java-based payment processing microservice that sits behind an Istio service mesh. You want to test how the application handles an internal `java.sql.SQLException` when the connection pool is exhausted, without actually taking down the database. Why should you choose JVMChaos for this test rather than NetworkChaos or HTTPChaos?
 
 <details>
 <summary>Show Answer</summary>
 
-Use JVMChaos when you need to:
-
-1. **Test specific method behavior**: Inject exceptions into `PaymentService.processPayment()` without affecting `PaymentService.getBalance()`. Network/HTTP chaos cannot target individual methods.
-
-2. **Simulate application-level failures**: OOM conditions, GC pressure, thread pool exhaustion. These are internal to the JVM and invisible at the network layer.
-
-3. **Test error handling paths**: Inject specific exception types (IOException, SQLException, NullPointerException) to verify that catch blocks and error handlers work correctly.
-
-4. **Avoid network-level side effects**: Network chaos affects all traffic on the interface. JVMChaos affects only the targeted method, leaving all other communication intact.
-
-5. **Test behind a service mesh**: When Envoy/Istio is handling network traffic, network-level injection may interact with the mesh in unpredictable ways. JVM-level injection bypasses the mesh entirely.
-
-The tradeoff is that JVMChaos requires the Byteman agent and only works for JVM-based services.
+You should choose JVMChaos because it allows you to inject faults directly into the application's runtime execution, bypassing the network layer entirely. NetworkChaos and HTTPChaos operate at the network interface level, meaning they cannot trigger specific application-level exceptions like a `java.sql.SQLException` or simulate internal thread pool exhaustion. Furthermore, because your service is running behind an Istio service mesh, using network-level chaos might interact unpredictably with Envoy's own retry logic and routing rules, masking the application's actual behavior. JVMChaos uses the Byteman agent to target the exact Java method where the exception should occur, providing precise, localized fault injection that perfectly simulates the application state without impacting actual database connectivity.
 
 </details>
 
@@ -725,14 +687,13 @@ Inject a 5-second network delay between a frontend and backend service, and obse
 
 ### Architecture
 
-```
-┌──────────┐    5s delay    ┌──────────┐
-│ Frontend │ ──────────────→│ Backend  │
-│ (3 pods) │                │ (3 pods) │
-│          │  ←──────────── │          │
-│ timeout: │    normal      │          │
-│ 3s       │                │          │
-└──────────┘                └──────────┘
+```mermaid
+flowchart LR
+    F["Frontend<br/>(3 pods)<br/><br/>timeout: 3s"]
+    B["Backend<br/>(3 pods)"]
+    
+    F -- "5s delay" --> B
+    B -- "normal" --> F
 ```
 
 The frontend has a 3-second timeout. We're injecting 5 seconds of delay. Every request from frontend to backend will timeout. The question is: **what happens to the frontend when all backend requests timeout?**
