@@ -1688,13 +1688,23 @@ mkdir airflow-lab && cd airflow-lab
 python3 -m venv venv
 source venv/bin/activate
 pip install apache-airflow==2.8.0 pandas scikit-learn
+# Set AIRFLOW_HOME so Airflow uses our local directory instead of ~/airflow
 export AIRFLOW_HOME=$(pwd)/airflow
+# Initialize the local SQLite metadata database required by Airflow
 airflow db migrate
+
+# Checkpoint: Verify Airflow is installed and the database is initialized
+airflow info
 ```
 
 **Task 2: Generate the Core DAG Scaffold**
 Construct a directory specifically named `dags` located deep inside your `airflow` directory. Create a new Python file named `ml_dag.py` and immediately insert the provided starter configuration structure:
 
+```bash
+mkdir -p airflow/dags
+```
+
+Inside `airflow/dags/ml_dag.py`, add:
 ```python
 from airflow import DAG
 from airflow.operators.python import PythonOperator, BranchPythonOperator
@@ -1716,6 +1726,8 @@ with DAG(
     # Your tasks here
     pass
 ```
+
+*Checkpoint*: Run `airflow dags list` to ensure your empty DAG is parsed and recognized by the scheduler.
 
 **Task 3: Develop the Core Python Callables**
 At the exact top of your `ml_dag.py` (positioned below the absolute imports), write the functional Python logic required to extract a dataset, calculate a training iteration, and evaluate deployment thresholds.
@@ -1829,6 +1841,9 @@ with DAG(
 While remaining directly inside your virtual environment, forcefully install the core Prefect libraries and modern HTTP clients.
 ```bash
 pip install prefect httpx
+
+# Checkpoint: Verify Prefect installation
+prefect version
 ```
 
 **Task 2: Implement the Core Flow Script Scaffold**
@@ -1902,6 +1917,9 @@ if __name__ == "__main__":
 Immediately install Dagster execution frameworks alongside its integrated webserver ecosystem.
 ```bash
 pip install dagster dagster-webserver pandas
+
+# Checkpoint: Verify Dagster installation
+dagster --version
 ```
 
 **Task 2: Define Core Bronze Assets**
@@ -2023,9 +2041,9 @@ defs = Definitions(
 </details>
 
 <details>
-<summary>6. What is the fundamental operational difference between an orchestrator's central scheduler and its executing workers?</summary>
+<summary>6. Scenario: You notice that tasks in your Airflow cluster are successfully entering the "queued" state but remain there indefinitely without starting. Based on the operational responsibilities of an orchestrator's components, which system component is most likely experiencing a critical failure?</summary>
 
-**Answer:** The core scheduler is the intelligent "brain" of the entire orchestration architecture, heavily responsible for actively parsing complex workflow structural definitions, strictly determining precisely when a task is legitimately ready to formally run, and carefully submitting those ready tasks rapidly to an execution queue. The executor is strictly the operational "muscle," exclusively responsible for actively extracting those scheduled tasks dynamically from the execution queue and formally executing them aggressively on isolated compute resources.
+**Answer:** The executing workers (or the executor component) are most likely failing. The central scheduler has successfully performed its responsibility of parsing the DAG, determining the tasks are ready, and placing them in the execution queue. The failure occurs at the next step, where the operational "muscle" (the workers) should be actively extracting and running those queued tasks.
 </details>
 
 ---
