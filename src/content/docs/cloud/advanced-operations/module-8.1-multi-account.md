@@ -296,7 +296,7 @@ Not every team needs its own account. And not every workload needs its own clust
 
 ### The War Story: When Namespace Isolation Isn't Enough
 
-A healthcare company ran production workloads in a single EKS cluster, using namespaces for isolation between teams. Their compliance team signed off because NetworkPolicies were in place. Then during a PCI audit, the auditor asked: "Can a pod in namespace `team-b` read the Kubernetes API and discover that namespace `team-a-pci` exists?" The answer was yes. `kubectl get namespaces` works for any authenticated service account by default. The auditor flagged it as a data leakage risk -- not because data was exposed, but because the existence of a PCI workload was discoverable.
+A healthcare company ran production workloads in a single EKS cluster, using namespaces for isolation between teams. Their compliance team signed off because NetworkPolicies were in place. Then during a PCI audit, the auditor asked: "Can a pod in namespace `team-b` read the Kubernetes API and discover that namespace `team-a-pci` exists?" The answer was yes. Due to overly permissive default RBAC configurations, `kubectl get namespaces` worked for any authenticated service account in the cluster. The auditor flagged it as a data leakage risk -- not because data was exposed, but because the existence of a PCI workload was discoverable.
 
 The fix required separate clusters. But by then, 14 teams had built tooling assuming a single cluster. The migration took five months.
 
@@ -974,9 +974,12 @@ resource "aws_iam_role" "audit_log_writer" {
       {
         Effect = "Allow"
         Principal = {
-          Service = "eks.amazonaws.com"
+          Service = "pods.eks.amazonaws.com"
         }
-        Action = "sts:AssumeRole"
+        Action = [
+          "sts:AssumeRole",
+          "sts:TagSession"
+        ]
       }
     ]
   })
