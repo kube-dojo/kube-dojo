@@ -34,30 +34,30 @@ Many engineers mistakenly believe that when they reference `origin/main`, they a
 
 To understand collaboration, you must visualize the three distinct layers of repository state:
 
-```text
-+-----------------------------------------------------------------------+
-|                         Git Branch Architecture                       |
-+-----------------------------------+-----------------------------------+
-|           Local Machine           |           Remote Server           |
-|                                   |                                   |
-|  +-----------------------------+  |   +-----------------------------+ |
-|  |       Local Branches        |  |   |      Remote Repository      | |
-|  |       (refs/heads/)         |  |   |          (origin)           | |
-|  |                             |  |   |                             | |
-|  |  * main                     |  |   |  * main                     | |
-|  |  * feature/add-redis        |  |   |  * feature/add-redis        | |
-|  +--------------+--------------+  |   +---------------+-------------+ |
-|                 |                 |                   |               |
-|            git merge              |                   |               |
-|                 |                 |                   |               |
-|  +--------------v--------------+  |                   |               |
-|  |   Remote Tracking Branches  |  |                   |               |
-|  |      (refs/remotes/)        | <----- git fetch ----+               |
-|  |                             |  |                                   |
-|  |  * origin/main              |  |                                   |
-|  |  * origin/feature/add-redis |  |                                   |
-|  +-----------------------------+  |                                   |
-+-----------------------------------+-----------------------------------+
+```mermaid
+flowchart TD
+    subgraph LocalMachine [Local Machine]
+        direction TB
+        subgraph LocalBranches [Local Branches refs/heads/]
+            L_main["* main"]
+            L_feat["* feature/add-redis"]
+        end
+        subgraph TrackingBranches [Remote Tracking Branches refs/remotes/]
+            T_main["* origin/main"]
+            T_feat["* origin/feature/add-redis"]
+        end
+        TrackingBranches -- "git merge" --> LocalBranches
+    end
+    
+    subgraph RemoteServer [Remote Server]
+        direction TB
+        subgraph RemoteRepo [Remote Repository origin]
+            R_main["* main"]
+            R_feat["* feature/add-redis"]
+        end
+    end
+    
+    RemoteRepo -- "git fetch" --> TrackingBranches
 ```
 
 When you work offline, you can checkout `main` and compare it against `origin/main` because `origin/main` is just a file on your hard drive (located in `.git/refs/remotes/origin/main`). It acts as a proxy.
@@ -126,18 +126,21 @@ sequenceDiagram
 ### The Merge Commit Menace
 If you have made local commits on `main`, and the remote `main` has also received new commits, `git pull` will automatically create a "Merge commit" to reconcile the two diverged histories.
 
-```text
-Fast-Forward Merge (Clean - when you have no local commits):
-A --- B --- C (origin/main)
-             \
-              C' (main, after pull)
-
-3-Way Merge (Messy - when histories have diverged):
-A --- B --- C (origin/main)
-       \      \
-        D ---- M (main, after pull)
-        ^
-    Your local commit
+```mermaid
+flowchart LR
+    subgraph Fast-Forward Merge
+        direction LR
+        A1((A)) --> B1((B)) --> C1(("C (origin/main)"))
+        C1 --> C2(("C' (main, after pull)"))
+    end
+    
+    subgraph 3-Way Merge
+        direction LR
+        A2((A)) --> B2((B)) --> C3(("C (origin/main)"))
+        B2 --> D1(("D (Your local commit)"))
+        C3 --> M1(("M (main, after pull)"))
+        D1 --> M1
+    end
 ```
 
 This clutters the project history with unnecessary branch diamonds. To maintain a clean, linear history, modern engineering teams prefer rebasing over merging when pulling updates.
@@ -216,6 +219,8 @@ Instead of unconditional destruction, use a lease.
 ```bash
 git push --force-with-lease origin feature/helm-migration
 ```
+
+> **Stop and think**: Why is `--force-with-lease` safer than `--force`? What specific check does it perform before rewriting history?
 
 When you use `--force-with-lease`, Git performs a safety check. It compares your local tracking branch (`origin/feature/helm-migration`) with the actual branch on the remote server. 
 - If they match, it means nobody else has pushed new commits since your last fetch. The force push succeeds.
@@ -410,42 +415,42 @@ Answer: It was rejected because rebasing rewrites commit hashes, causing your lo
 
 <details>
 <summary>Question 3: Your team requires atomic commits. You have added a new Redis deployment manifest, updated the backend Service manifest to expose a new port, and fixed a typo in the README. How should you commit these?</summary>
-Answer: You should create three separate commits using `git add -p` or by specifying the files individually: one commit for the Redis deployment (`feat(cache): add redis deployment`), one for the Service port update (`feat(api): expose backend port 8080`), and one for the README typo (`docs: fix typo in setup instructions`). This separation is necessary because it isolates changes by their logical purpose, allowing reviewers to verify them independently. Furthermore, atomic commits enable safe, precise rollbacks if one specific component fails without taking down unrelated changes.
+Answer: You should create three separate commits using `git add -p` or by specifying the files individually: one commit for the Redis deployment (`feat(cache): add redis deployment`), one for the Service port update (`feat(api): expose backend port 8080`), and one for the README typo (`docs: fix typo in setup instructions`). This separation is necessary because it isolates changes by their logical purpose, allowing reviewers to verify them independently. Furthermore, atomic commits enable safe, precise rollbacks if one specific component fails without taking down unrelated changes. If you grouped them together, a rollback of the Redis deployment would needlessly revert the typo fix as well.
 </details>
 
 <details>
 <summary>Question 4: You have uncommitted changes in your working directory and your teammate just pushed a breaking change to `origin/main`. You run `git fetch origin`. What is the state of your working directory and local `main` branch afterward?</summary>
-Answer: Your working directory and local `main` branch remain completely unchanged. `git fetch` is a safe operation that only downloads the new objects from the remote server and updates your hidden Remote Tracking Branches (like `origin/main`). You must explicitly merge or rebase to integrate those breaking changes into your local files. This behavior ensures your uncommitted work remains safe from being unexpectedly overwritten during routine synchronization.
+Answer: Your working directory and local `main` branch remain completely unchanged. `git fetch` is a safe operation that only downloads the new objects from the remote server and updates your hidden Remote Tracking Branches (like `origin/main`). You must explicitly merge or rebase to integrate those breaking changes into your local files. This behavior ensures your uncommitted work remains safe from being unexpectedly overwritten during routine synchronization. It gives you the opportunity to review the remote changes before applying them locally.
 </details>
 
 <details>
 <summary>Question 5: You are contributing to an open-source Kubernetes controller using the Fork and Pull model. You clone your personal fork to your laptop. A maintainer merges a major feature into the central repository. Which remote should you fetch from to get these changes, and why is this separation of remotes necessary?</summary>
-Answer: You should fetch from the `upstream` remote, which points to the central, authoritative repository. This separation is necessary for security and access control, as you do not have direct write permissions to the `upstream` server. By maintaining both an `origin` (your writable fork) and an `upstream` (the read-only central repo), you can pull the latest community changes safely. This workflow allows you to push your own proposals to your fork without risking the integrity of the main project's history.
+Answer: You should fetch from the `upstream` remote, which points to the central, authoritative repository. This separation is necessary for security and access control, as you do not have direct write permissions to the `upstream` server. By maintaining both an `origin` (your writable fork) and an `upstream` (the read-only central repo), you can pull the latest community changes safely. This workflow allows you to push your own proposals to your fork without risking the integrity of the main project's history. It acts as a deliberate buffer between your local experiments and the central codebase.
 </details>
 
 <details>
 <summary>Question 6: A teammate reviews your Pull Request and asks you to change a label in your Kubernetes Deployment manifest. You make the change locally. How do you update the PR without adding a messy "fix label" commit to the history?</summary>
-Answer: You stage the change with `git add deployment.yaml`, then run `git commit --amend --no-edit` to fold the change into your previous commit. Finally, you run `git push --force-with-lease origin branch-name` to update the Pull Request on the server. This workflow is important because it maintains a clean, atomic commit history that reflects the final intended state of the feature. By amending instead of adding new commits, you avoid polluting the project log with incremental trial-and-error corrections.
+Answer: You stage the change with `git add deployment.yaml`, then run `git commit --amend --no-edit` to fold the change into your previous commit. Finally, you run `git push --force-with-lease origin branch-name` to update the Pull Request on the server. This workflow is important because it maintains a clean, atomic commit history that reflects the final intended state of the feature. By amending instead of adding new commits, you avoid polluting the project log with incremental trial-and-error corrections. Reviewers will see a single, cohesive commit rather than a chaotic trail of fixes.
 </details>
 
 <details>
 <summary>Question 7: Your CI pipeline uses commit prefixes to decide whether to trigger a deployment. A teammate pushes a commit with the message `chore(deps): bump helm to 3.15`. Should the pipeline trigger a production deployment? Why or why not?</summary>
-Answer: The pipeline should not trigger a production deployment. According to the Conventional Commits specification, the `chore` type indicates routine maintenance that does not modify application logic or add features. Specifically, `chore(deps)` means a dependency was updated. Triggering a deployment for non-functional or non-user-facing changes introduces unnecessary risk and deployment churn, which is why CI pipelines typically ignore these commits.
+Answer: The pipeline should not trigger a production deployment. According to the Conventional Commits specification, the `chore` type indicates routine maintenance that does not modify application logic or add features. Specifically, `chore(deps)` means a dependency was updated. Triggering a deployment for non-functional or non-user-facing changes introduces unnecessary risk and deployment churn, which is why CI pipelines typically ignore these commits. By reserving deployments for `feat` or `fix` commits, the team ensures that releases are stable and purpose-driven.
 </details>
 
 <details>
 <summary>Question 8: A malicious actor gains access to your organization's internal network and attempts to push a backdoor to a deployment script, configuring their Git client to use your name and email. How does cryptographically signing commits prevent this code from being trusted?</summary>
-Answer: While anyone can configure their local `user.name` and `user.email` to impersonate another developer, they cannot forge a cryptographic signature without possessing your private SSH or GPG key. When commits are signed, CI pipelines and code review platforms verify the signature against your public key. The malicious actor's commit would fail verification and lack the "Verified" badge. This missing badge immediately flags the spoofing attempt to reviewers and prevents the unauthorized backdoor from being merged.
+Answer: While anyone can configure their local `user.name` and `user.email` to impersonate another developer, they cannot forge a cryptographic signature without possessing your private SSH or GPG key. When commits are signed, CI pipelines and code review platforms verify the signature against your public key. The malicious actor's commit would fail verification and lack the "Verified" badge. This missing badge immediately flags the spoofing attempt to reviewers and prevents the unauthorized backdoor from being merged. Enforcing signed commits thus acts as a critical security boundary for enterprise repositories.
 </details>
 
 <details>
 <summary>Question 9: You are reviewing a Pull Request that introduces a new microservice. The PR contains a single commit with a 2,500-line diff modifying Kubernetes Deployment, Service, ConfigMap, Ingress, and application source code simultaneously. Why should you reject this PR, and what should you instruct the author to do?</summary>
-Answer: You should reject the PR because the commit is monolithic, making it impossible to review effectively or revert safely if a specific component fails. The blast radius is simply too large for a single approval. You should instruct the author to use `git add -p` to break the changes into smaller, atomic commits. This approach allows isolating the ConfigMap update, the application code changes, and the Ingress routing into independent, logically separated commits that can be reviewed thoroughly.
+Answer: You should reject the PR because the commit is monolithic, making it impossible to review effectively or revert safely if a specific component fails. The blast radius is simply too large for a single approval. You should instruct the author to use `git add -p` to break the changes into smaller, atomic commits. This approach allows isolating the ConfigMap update, the application code changes, and the Ingress routing into independent, logically separated commits that can be reviewed thoroughly. Doing so ensures each change can be individually tested, verified, and safely rolled back if necessary.
 </details>
 
 <details>
 <summary>Question 10: During an incident response, you need to revert a recent update to a Kubernetes ConfigMap that broke production. The commit history shows that the ConfigMap change was bundled in the same commit as a critical security patch for the application image. What is the consequence of this non-atomic commit, and how does it complicate the rollback?</summary>
-Answer: Because the changes were bundled non-atomically, you cannot use a simple `git revert` to undo the ConfigMap update without also removing the critical security patch. This forces the team to manually extract the ConfigMap change, write a new commit to fix it, and push it forward while the system is degraded. If the commit had been atomic (one commit for the ConfigMap, one for the security patch), you could have instantly reverted only the configuration error. This scenario highlights exactly why atomic commits are a fundamental requirement for reliable incident response.
+Answer: Because the changes were bundled non-atomically, you cannot use a simple `git revert` to undo the ConfigMap update without also removing the critical security patch. This forces the team to manually extract the ConfigMap change, write a new commit to fix it, and push it forward while the system is degraded. If the commit had been atomic (one commit for the ConfigMap, one for the security patch), you could have instantly reverted only the configuration error. This scenario highlights exactly why atomic commits are a fundamental requirement for reliable incident response. It minimizes downtime by allowing surgical rollbacks instead of messy manual interventions.
 </details>
 
 ## Hands-On Exercise
