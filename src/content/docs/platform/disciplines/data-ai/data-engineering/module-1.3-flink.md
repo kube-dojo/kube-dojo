@@ -53,22 +53,27 @@ This module teaches you to deploy Flink on Kubernetes, understand its execution 
 
 Every data processing system must answer one question: **does the data have an end?**
 
-```
-BOUNDED DATA (Batch):
-┌──────────────────────────────────────────┐
-│  [record] [record] [record] ... [END]    │
-│                                          │
-│  "Process all records, then output"      │
-│  Example: Last month's sales CSV         │
-└──────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Bounded["Bounded Data (Batch)"]
+        direction LR
+        B1[record] --> B2[record] --> B3[record] --> B4[END]
+    end
+    B_Desc["Process all records, then output.<br/>Example: Last month's sales CSV."]
 
-UNBOUNDED DATA (Streaming):
-┌──────────────────────────────────────────→  (never ends)
-│  [event] [event] [event] [event] ...
-│
-│  "Process each event as it arrives"
-│  Example: Live clickstream from website
-└──────────────────────────────────────────→
+    subgraph Unbounded["Unbounded Data (Streaming)"]
+        direction LR
+        U1[event] --> U2[event] --> U3[event] --> U4[...]
+    end
+    U_Desc["Process each event as it arrives.<br/>Example: Live clickstream from website."]
+
+    Bounded --- B_Desc
+    Unbounded --- U_Desc
+    
+    style Bounded fill:#f9f9f9,stroke:#333,stroke-width:2px
+    style Unbounded fill:#f9f9f9,stroke:#333,stroke-width:2px
+    style B_Desc fill:none,stroke:none
+    style U_Desc fill:none,stroke:none
 ```
 
 Traditional batch systems (MapReduce, Spark) were designed for bounded data. They read all input, process it, and write output. Clean, simple, and completely useless for real-time applications.
@@ -76,6 +81,8 @@ Traditional batch systems (MapReduce, Spark) were designed for bounded data. The
 Flink's insight: **batch is just streaming with an end**. Build your engine for unbounded data, and bounded data becomes trivial. The reverse is not true — bolting streaming onto a batch engine produces awkward compromises.
 
 ### Why This Matters in Practice
+
+> **Stop and think**: If Flink processes unbounded data continuously, how does it know when to output a result for an aggregation like 'average purchase amount'?
 
 Consider computing the average purchase amount per customer:
 
@@ -91,28 +98,34 @@ Flink handles the hard case natively, which is why it excels at streaming.
 
 ### The Two Key Processes
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                      FLINK CLUSTER                           │
-│                                                              │
-│  ┌────────────────────────────┐    ┌──────────────────────┐  │
-│  │      JobManager           │    │    TaskManagers       │  │
-│  │                            │    │                      │  │
-│  │  ┌──────────────────────┐ │    │  ┌────────────────┐  │  │
-│  │  │ Job Scheduling       │ │    │  │ Task Slots     │  │  │
-│  │  │ Checkpoint Coord.    │ │    │  │ ┌──┐┌──┐┌──┐  │  │  │
-│  │  │ Resource Management  │ │    │  │ │T1││T2││T3│  │  │  │
-│  │  │ Failure Recovery     │ │    │  │ └──┘└──┘└──┘  │  │  │
-│  │  └──────────────────────┘ │    │  └────────────────┘  │  │
-│  └────────────────────────────┘    │                      │  │
-│                                    │  ┌────────────────┐  │  │
-│                                    │  │ Task Slots     │  │  │
-│                                    │  │ ┌──┐┌──┐┌──┐  │  │  │
-│                                    │  │ │T4││T5││T6│  │  │  │
-│                                    │  │ └──┘└──┘└──┘  │  │  │
-│                                    │  └────────────────┘  │  │
-│                                    └──────────────────────┘  │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph FlinkCluster["FLINK CLUSTER"]
+        direction LR
+        subgraph JobManager["JobManager"]
+            JS[Job Scheduling]
+            CC[Checkpoint Coord.]
+            RM[Resource Management]
+            FR[Failure Recovery]
+        end
+
+        subgraph TaskManagers["TaskManagers"]
+            direction TB
+            subgraph TM1["TaskManager 1"]
+                direction LR
+                T1[Slot 1]
+                T2[Slot 2]
+                T3[Slot 3]
+            end
+            subgraph TM2["TaskManager 2"]
+                direction LR
+                T4[Slot 4]
+                T5[Slot 5]
+                T6[Slot 6]
+            end
+        end
+        JobManager -->|Coordinates| TaskManagers
+    end
 ```
 
 **JobManager** (the brain):
@@ -131,16 +144,26 @@ Flink handles the hard case natively, which is why it excels at streaming.
 
 Each TaskManager has a fixed number of **task slots**. A slot is a unit of resource isolation — it gets a fraction of the TaskManager's memory and can run one parallel pipeline.
 
+```mermaid
+flowchart TD
+    subgraph TM["TaskManager (8 GB memory, 4 slots)"]
+        direction LR
+        subgraph S1["Slot 1 (2GB)"]
+            Src1[Source] --> M1[Map]
+        end
+        subgraph S2["Slot 2 (2GB)"]
+            Src2[Source] --> M2[Map]
+        end
+        subgraph S3["Slot 3 (2GB)"]
+            Src3[Source] --> M3[Map]
+        end
+        subgraph S4["Slot 4 (2GB)"]
+            Src4[Source] --> M4[Map]
+        end
+    end
 ```
-TaskManager (8 GB memory, 4 slots):
-┌──────────────────────────────────────┐
-│ Slot 1 (2GB)  │ Slot 2 (2GB)        │
-│ Source → Map  │ Source → Map         │
-│               │                      │
-│ Slot 3 (2GB)  │ Slot 4 (2GB)        │
-│ Source → Map  │ Source → Map         │
-└──────────────────────────────────────┘
-```
+
+> **Pause and predict**: If you have 24 Kafka partitions but set your Flink source operator's parallelism to 36, what will the remaining 12 slots do?
 
 **Parallelism** determines how many slots a job uses. A job with parallelism 8 running on 2 TaskManagers with 4 slots each uses all 8 slots.
 
@@ -301,28 +324,33 @@ Flink processes millions of events per second while maintaining state. If a Task
 
 Checkpoints are periodic, consistent snapshots of the entire job's state. They are taken automatically and stored on durable storage (S3, HDFS, GCS).
 
-```
-Time ──────────────────────────────────────────────→
+```mermaid
+flowchart LR
+    subgraph Stream["Time"]
+        direction LR
+        E1[e1] --> E2[e2] --> E3[e3] --> E4[e4] --> E5[e5] --> E6[e6] --> E7[e7] --> E8[e8] --> E9[e9] --> E10[e10]
+    end
 
-Events:  e1  e2  e3  e4  e5  e6  e7  e8  e9  e10
-              │              │              │
-         Checkpoint 1   Checkpoint 2   Checkpoint 3
+    C1((CP 1)) -.-> E2
+    C2((CP 2)) -.-> E5
+    C3((CP 3)) -.-> E9
 
-If crash after e7:
-  → Restore from Checkpoint 2 (state at e5)
-  → Replay e6, e7 from Kafka
-  → Continue processing e8+
+    Crash[Crash after e7] -.-> E7
+
+    Restore[1. Restore from CP 2] --> C2
+    Replay[2. Replay e6, e7] --> E6
+    Continue[3. Continue processing e8+] --> E8
 ```
 
 **The barrier mechanism:**
 
 Flink uses a clever algorithm called **aligned checkpointing** (inspired by the Chandy-Lamport algorithm):
 
-```
-Source ──[e1]──[e2]──[BARRIER]──[e3]──[e4]──→ Operator
-                         │
-                    "Snapshot your state now,
-                     then forward the barrier"
+```mermaid
+flowchart LR
+    Source --> E1[e1] --> E2[e2] --> Barrier[BARRIER] --> E3[e3] --> E4[e4] --> Operator
+    
+    SnapshotNote["Snapshot your state now,<br/>then forward the barrier"] -.-> Barrier
 ```
 
 The barrier flows through the dataflow graph like a regular event. When an operator receives a barrier, it snapshots its state. This ensures the checkpoint is a consistent cut across all operators without stopping processing.
@@ -371,21 +399,16 @@ kubectl -n flink get flinkdeployment fraud-detector -o yaml | grep -A5 savepoint
 
 ### The Three Notions of Time
 
-```
-┌──────────────────────────────────────────────────────┐
-│                TIME IN STREAM PROCESSING             │
-├──────────────────────────────────────────────────────┤
-│                                                      │
-│  Event Time      │  When the event actually happened │
-│  (embedded in    │  e.g., sensor reading at 14:05:03 │
-│   the event)     │                                   │
-│                  │                                   │
-│  Ingestion Time  │  When Flink received the event    │
-│                  │  e.g., arrived at 14:05:07         │
-│                  │                                   │
-│  Processing Time │  When Flink processes the event   │
-│                  │  e.g., processed at 14:05:09       │
-└──────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph Time["Time in Stream Processing"]
+        direction TB
+        ET["Event Time<br/>(Embedded in event)<br/>When it actually happened<br/>e.g., 14:05:03"]
+        IT["Ingestion Time<br/>When Flink received it<br/>e.g., 14:05:07"]
+        PT["Processing Time<br/>When Flink processes it<br/>e.g., 14:05:09"]
+
+        ET -->|Network Delay| IT -->|Queuing/Buffering| PT
+    end
 ```
 
 **Why event time matters:** Events arrive out of order. A mobile app might batch events and send them minutes later. A network partition might delay events. If you use processing time, your windowed aggregations will include events in the wrong window.
@@ -394,18 +417,22 @@ kubectl -n flink get flinkdeployment fraud-detector -o yaml | grep -A5 savepoint
 
 A watermark is Flink's way of saying: "I believe all events with timestamps up to time T have arrived."
 
-```
-Events arriving (event time shown):
+```mermaid
+flowchart LR
+    subgraph Arriving Events
+        direction LR
+        E1["14:05:01"] --> E2["14:05:03"] --> E3["14:05:02"] --> E4["14:05:05"] --> E5["14:05:04"] --> E6["14:05:07"]
+    end
 
-  14:05:01  14:05:03  14:05:02  14:05:05  14:05:04  14:05:07
-     │         │         │         │         │         │
-     ▼         ▼         ▼         ▼         ▼         ▼
+    subgraph Watermarks
+        W1["W(14:05:00)<br/>All events before 14:05:00<br/>have arrived"]
+        W2["W(14:05:01)<br/>All events before 14:05:01<br/>have arrived"]
+        W3["W(14:05:05)<br/>All events before 14:05:05<br/>have arrived"]
+    end
 
-Watermark progression:
-  W(14:05:00)          W(14:05:01)          W(14:05:05)
-  "All events          "All events          "All events
-   before 14:05:00      before 14:05:01      before 14:05:05
-   have arrived"        have arrived"        have arrived"
+    E1 -.-> W1
+    E3 -.-> W2
+    E5 -.-> W3
 ```
 
 **Watermark strategies:**
@@ -432,26 +459,25 @@ Windows group events into finite chunks for aggregation.
 
 ### Window Types
 
+```mermaid
+gantt
+    title Tumbling vs Sliding Windows
+    dateFormat X
+    axisFormat %s
+    
+    section Tumbling
+    0-5 min  :0, 5
+    5-10 min :5, 10
+    10-15 min :10, 15
+
+    section Sliding
+    0-10 min :0, 10
+    5-15 min :5, 15
+    10-20 min :10, 20
 ```
-TUMBLING WINDOW (fixed, non-overlapping):
-|  Window 1  |  Window 2  |  Window 3  |
-|  0-5 min   |  5-10 min  | 10-15 min  |
 
-SLIDING WINDOW (fixed, overlapping):
-|  Window 1 (0-10 min)   |
-     |  Window 2 (5-15 min)   |
-          |  Window 3 (10-20 min)  |
-(window size = 10 min, slide = 5 min)
-
-SESSION WINDOW (dynamic, gap-based):
-|  Session 1  |        |  Session 2       |  |  Session 3  |
-events: ●●●●           ●●●●●●●●●             ●●●
-(gap timeout = 5 min)
-
-GLOBAL WINDOW (single window per key):
-|  All events for key  ───────────────────────────→ |
-(requires custom trigger)
-```
+- **Session Windows**: Dynamic, gap-based windows. A new window starts when an event arrives, and closes when a specified period of inactivity (the gap timeout) passes.
+- **Global Windows**: A single window per key that encompasses all events. Requires a custom trigger to determine when to compute and emit results.
 
 ### Flink SQL Example
 
@@ -503,85 +529,57 @@ GROUP BY
 
 ## Quiz
 
-**Question 1:** What is the difference between a checkpoint and a savepoint?
+**Question 1:** You are planning to roll out a new version of your Flink job that changes the business logic of an operator. You need to stop the current job and start the new one without losing state or reprocessing events. Would you rely on a checkpoint or a savepoint for this operation, and why?
 
 <details>
 <summary>Show Answer</summary>
 
-**Checkpoints** are automatic, periodic, lightweight snapshots taken by Flink for failure recovery. They are tied to a specific job graph and may use incremental state. Flink manages their lifecycle (creation, deletion).
-
-**Savepoints** are manually triggered, full snapshots designed for operational use cases: job upgrades, migration, A/B testing. They are portable across job versions (as long as state schema is compatible) and must be explicitly managed by the user.
-
-Key difference: checkpoints are for crash recovery, savepoints are for planned operations.
+You must use a **savepoint** for this planned upgrade. Savepoints are manually triggered, full snapshots designed specifically for operational tasks like job upgrades, A/B testing, and migrations. They are portable across job versions, provided the state schema remains compatible. While checkpoints also capture state, they are automatic, lightweight snapshots strictly intended for crash recovery and are intimately tied to the specific job graph, meaning they often cannot be used to restore a modified job version.
 
 </details>
 
-**Question 2:** Why does Flink use watermarks, and what problem do they solve?
+**Question 2:** Your e-commerce system uses Flink to compute daily active users. Due to a major cloud outage, mobile client events generated on Tuesday were buffered on devices and didn't reach Kafka until Wednesday. If your Flink job was configured to use processing time, what would happen to these events?
 
 <details>
 <summary>Show Answer</summary>
 
-Watermarks solve the problem of **out-of-order event arrival**. In the real world, events generated at time T do not arrive at the processing system at time T — network delays, batching, and retries cause events to arrive late and out of order.
-
-A watermark W(T) tells Flink: "I believe all events with timestamps <= T have arrived." When a watermark passes the end of a window, Flink knows it is safe to compute and emit results for that window.
-
-Without watermarks, Flink would either have to wait indefinitely (never emitting results) or use processing time (producing incorrect results for late events).
+If the job uses processing time, Tuesday's events would be incorrectly counted towards Wednesday's daily active users metric. Processing time evaluates events based on when the Flink TaskManager executes them, completely ignoring when the event actually occurred. This leads to wildly inaccurate windowed aggregations during outages, network delays, or whenever data is replayed from historical storage. To fix this, you must use event time with watermarks, ensuring events are bucketed into Tuesday's window regardless of when they arrive.
 
 </details>
 
-**Question 3:** A Flink job reads from a Kafka topic with 24 partitions. You set the job's parallelism to 36. How many source operator instances actually process data?
+**Question 3:** You have a Kafka topic with 12 partitions feeding into a Flink job. A junior engineer notices the job is falling behind and increases the parallelism of the Flink source operator to 24, expecting it to process data twice as fast. What will actually happen when the job restarts?
 
 <details>
 <summary>Show Answer</summary>
 
-Only **24 source operator instances** will process data. Each Kafka partition can only be assigned to one parallel source instance. The remaining 12 instances will be idle with no partitions assigned. This wastes resources. You should set the source operator's parallelism to match (or be less than) the number of Kafka partitions. Downstream operators can have different parallelism if needed.
+The processing speed will not double, and 12 of the parallel source instances will sit completely idle. A single Kafka partition can only be consumed by exactly one Flink source instance at a time to maintain ordering guarantees. Because the source parallelism (24) exceeds the available Kafka partitions (12), the extra instances will have no data to read, wasting cluster resources. To actually increase throughput in this scenario, the engineer would need to first increase the number of Kafka partitions to 24, and then scale the Flink job.
 
 </details>
 
-**Question 4:** When should you use RocksDB state backend instead of the HashMapStateBackend?
+**Question 4:** Your team deployed a new real-time fraud detection Flink job that maintains a massive historical profile for every user, accumulating over 2 TB of state. The job is currently crashing repeatedly with `OutOfMemoryError` in the TaskManagers. What state backend misconfiguration is likely causing this, and how do you fix it?
 
 <details>
 <summary>Show Answer</summary>
 
-Use **RocksDB** when:
-- State size exceeds a few hundred MB (RocksDB stores state on disk with an in-memory cache, so it is not limited by JVM heap)
-- You need incremental checkpoints (only changed state is checkpointed, reducing checkpoint size and duration)
-- You are running in production (RocksDB is more predictable under load)
-
-Use **HashMapStateBackend** when:
-- State is small (< 500 MB) and fits comfortably in memory
-- You need minimum latency (no disk I/O for state access)
-- You are developing or testing locally
+The job is almost certainly using the default `HashMapStateBackend`, which stores all in-flight state directly on the JVM heap. When state grows to terabytes, it inevitably exhausts the available heap memory, triggering massive Garbage Collection pauses and eventual out-of-memory crashes. To fix this, you must switch to the `EmbeddedRocksDBStateBackend`. RocksDB stores state on the local disk (SSD) and only uses memory for caching, allowing Flink to reliably manage state sizes far larger than the TaskManager's available RAM.
 
 </details>
 
-**Question 5:** Explain the difference between tumbling and sliding windows. Give a use case for each.
+**Question 5:** You are building a live dashboard for a ride-sharing app. You need to show the total number of rides requested in the last hour, and the dashboard must update every minute to feel "live." Which windowing strategy should you implement, and why?
 
 <details>
 <summary>Show Answer</summary>
 
-**Tumbling windows** are fixed-size, non-overlapping time intervals. Each event belongs to exactly one window. Use case: computing hourly revenue — each hour is a distinct window, and every transaction counts toward exactly one hour.
-
-**Sliding windows** are fixed-size but overlapping. Each event can belong to multiple windows. Use case: computing a 1-hour moving average updated every 5 minutes — this creates a new window every 5 minutes, each covering the last 60 minutes, so events near window boundaries appear in multiple windows.
-
-The key difference: tumbling windows partition time, sliding windows sample time.
+You should implement a **sliding window** configured with a 1-hour size and a 1-minute slide. A sliding window is designed for fixed-size intervals that overlap, meaning a single event will participate in multiple consecutive windows. In this scenario, every minute Flink will emit a new result covering the previous 60 minutes, perfectly matching the requirement for a continuously updating 1-hour metric. A tumbling window would not work here, as it would only emit a single update once per hour.
 
 </details>
 
-**Question 6:** What happens to in-flight state when a Flink TaskManager crashes and restarts?
+**Question 6:** A TaskManager running a critical Flink job suddenly loses power and dies. The job uses `EXACTLY_ONCE` checkpointing every 60 seconds. Walk through exactly what happens to the events that were being processed during the crash.
 
 <details>
 <summary>Show Answer</summary>
 
-When a TaskManager crashes:
-1. The JobManager detects the failure (via heartbeat timeout).
-2. The JobManager cancels all tasks in the affected job.
-3. The JobManager restores the job from the **last completed checkpoint** — all operator state is reloaded from durable storage (S3/GCS/HDFS).
-4. Source operators (e.g., Kafka consumer) rewind to the offsets recorded in that checkpoint.
-5. Events between the checkpoint and the crash are **replayed** from Kafka.
-6. Processing continues from the restored state.
-
-With `EXACTLY_ONCE` checkpointing, no events are lost or double-counted. The recovery time depends on state size and checkpoint storage throughput.
+When the JobManager detects the lost TaskManager, it immediately cancels all running tasks and initiates a recovery process from the most recent successful checkpoint. The entire job state is restored from durable storage (like S3) to the exact moment that checkpoint was taken. Crucially, the Kafka source operators rewind their read offsets to the positions recorded in that checkpoint. Flink then replays all events from Kafka that occurred after the checkpoint, ensuring no events are skipped and no internal state is double-counted.
 
 </details>
 
