@@ -497,9 +497,9 @@ error: error validating "deployment.yaml": error validating data: ValidationErro
 </details>
 
 <details>
-<summary>3. Scenario: You are tasked with determining exactly how to configure an AWS Elastic Block Store (EBS) volume directly within a Pod's specification. You have no internet access to check the official documentation. What exact command do you run to read the documentation locally?</summary>
+<summary>3. Scenario: You are tasked with determining exactly how to configure a PersistentVolumeClaim (PVC) volume directly within a Pod's specification. You have no internet access to check the official documentation. What exact command do you run to read the documentation locally?</summary>
 
-**Answer:** You should run the command `kubectl explain pod.spec.volumes.awsElasticBlockStore`. The `kubectl explain` utility is incredibly powerful because it queries the cluster's OpenAPI schema directly, giving you offline access to the exact, authoritative documentation for your specific cluster version. By chaining the fields with dots, you traverse the nested structure of the Pod object straight to the EBS configuration block without needing an internet connection. This output will list all the valid keys (like `volumeID` or `fsType`), their expected data types, and a comprehensive description of what they do, entirely removing the need to search the web.
+**Answer:** You should run the command `kubectl explain pod.spec.volumes.persistentVolumeClaim`. The `kubectl explain` utility is incredibly powerful because it queries the cluster's OpenAPI schema directly, giving you offline access to the exact, authoritative documentation for your specific cluster version. By chaining the fields with dots, you traverse the nested structure of the Pod object straight to the persistent volume claim configuration block without needing an internet connection. This output will list all the valid keys (like `claimName` or `readOnly`), their expected data types, and a comprehensive description of what they do, entirely removing the need to search the web.
 </details>
 
 <details>
@@ -548,7 +548,7 @@ spec:
     spec:
       containers:
       name: nginx
-      image: nginx:1.24
+      image: nginx:1.27
 ```
 
 <details>
@@ -577,7 +577,7 @@ Apply the file again (client dry-run). You will hit more errors. Fix them one by
     ```yaml
       containers:
       - name: nginx
-        image: nginx:1.24
+        image: nginx:1.27
     ```
 </details>
 
@@ -659,7 +659,7 @@ spec:
     spec:
       containers:
       - name: nginx
-        image: nginx:1.24
+        image: nginx:1.27
         env:
         - name: GREETING
           valueFrom:
