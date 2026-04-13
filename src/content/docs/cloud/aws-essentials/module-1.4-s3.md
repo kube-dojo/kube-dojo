@@ -58,57 +58,28 @@ Because S3 buckets exist in a global namespace and are addressable via HTTP endp
 
 Here is how the full access evaluation flow works when a request hits S3:
 
+```mermaid
+flowchart TD
+    Req["Incoming Request<br>(GET /my-bucket/obj)"] --> BPA{"S3 Block Public Access (BPA)<br>Is the request public?<br>Is BPA enabled?"}
+    
+    BPA -- "BPA blocks<br>(DENY)" --> Deny1["DENIED"]
+    BPA -- "BPA allows<br>(not public or BPA off)" --> BP{"Bucket Policy<br>Explicit Deny?"}
+    
+    BP -- "Explicit DENY" --> Deny2["DENIED"]
+    BP -- "No explicit deny" --> BP2{"Bucket Policy<br>Explicit Allow?"}
+    
+    BP2 -- "Explicit ALLOW" --> Allow1["ALLOWED<br>(if same acct)"]
+    BP2 -- "No bucket policy match" --> IAM{"IAM Policy<br>on the caller"}
+    
+    IAM -- "IAM Allow" --> Allow2["ALLOWED"]
+    IAM -- "No IAM Allow" --> Deny3["DENIED"]
 ```
-                         ┌──────────────────────┐
-                         │   Incoming Request    │
-                         │  (GET /my-bucket/obj) │
-                         └──────────┬───────────┘
-                                    │
-                                    ▼
-                   ┌────────────────────────────────┐
-                   │  S3 Block Public Access (BPA)  │
-                   │  Is the request public?         │
-                   │  Is BPA enabled?                │
-                   └───────────┬───────┬────────────┘
-                               │       │
-                          BPA blocks   BPA allows
-                          (DENY)       (not public or BPA off)
-                               │       │
-                               ▼       ▼
-                           DENIED   ┌──────────────────────┐
-                                    │   Bucket Policy       │
-                                    │   Explicit Deny?      │
-                                    └──┬─────────┬─────────┘
-                                       │         │
-                                  Explicit      No explicit
-                                  DENY          deny
-                                       │         │
-                                       ▼         ▼
-                                   DENIED   ┌──────────────────────┐
-                                            │   Bucket Policy       │
-                                            │   Explicit Allow?     │
-                                            └──┬─────────┬─────────┘
-                                               │         │
-                                          Explicit      No bucket
-                                          ALLOW         policy match
-                                               │         │
-                                               ▼         ▼
-                                           ALLOWED  ┌──────────────────┐
-                                            (if     │   IAM Policy      │
-                                            same    │   on the caller   │
-                                            acct)   └──┬──────┬────────┘
-                                                       │      │
-                                                  IAM Allow  No IAM
-                                                       │     Allow
-                                                       ▼      ▼
-                                                   ALLOWED  DENIED
 
-  Key rules:
-  - Explicit DENY always wins, anywhere in the chain
-  - Cross-account: BOTH bucket policy AND caller IAM must Allow
-  - Same account: Either bucket policy OR IAM Allow is sufficient
-  - BPA is the master override for public access attempts
-```
+**Key rules:**
+- Explicit DENY always wins, anywhere in the chain
+- Cross-account: BOTH bucket policy AND caller IAM must Allow
+- Same account: Either bucket policy OR IAM Allow is sufficient
+- BPA is the master override for public access attempts
 
 ### 1. S3 Block Public Access (BPA)
 
@@ -309,14 +280,14 @@ aws s3api delete-bucket-lifecycle --bucket my-bucket
 
 There are ordering rules you must follow when transitioning between storage classes. S3 enforces a "waterfall" — you can only transition downward:
 
-```
-S3 Standard
-    ├──► S3 Intelligent-Tiering
-    ├──► S3 Standard-IA  (min 30 days after creation)
-    ├──► S3 One Zone-IA  (min 30 days after creation)
-    ├──► S3 Glacier Instant Retrieval  (min 90 days after creation)
-    ├──► S3 Glacier Flexible Retrieval
-    └──► S3 Glacier Deep Archive
+```mermaid
+flowchart TD
+    Standard["S3 Standard"] --> Intelligent["S3 Intelligent-Tiering"]
+    Standard --> SIA["S3 Standard-IA (min 30 days after creation)"]
+    Standard --> OZ["S3 One Zone-IA (min 30 days after creation)"]
+    Standard --> GIR["S3 Glacier Instant Retrieval (min 90 days after creation)"]
+    Standard --> GFR["S3 Glacier Flexible Retrieval"]
+    Standard --> GDA["S3 Glacier Deep Archive"]
 ```
 
 You cannot transition from Glacier back to Standard-IA via a lifecycle rule. To move data "upward," you must restore and copy it manually.
@@ -470,24 +441,21 @@ S3 offers multiple encryption options. Since January 2023, **all new objects are
 
 When versioning is enabled, every overwrite or delete creates a new version rather than destroying data.
 
+```mermaid
+flowchart TD
+    subgraph "Key: reports/q4.pdf (newest first)"
+        DM["Delete Marker (no data) ← current state = deleted"]
+        V3["Version: abc789 (Final draft)"]
+        V2["Version: def456 (Second draft)"]
+        V1["Version: ghi123 (First upload)"]
+        
+        DM --> V3 --> V2 --> V1
+    end
 ```
-Key: reports/q4.pdf
-
-Version Stack (newest first):
-┌─────────────────────────────────────────┐
-│ Delete Marker         (no data)         │ ← current "state" = deleted
-├─────────────────────────────────────────┤
-│ Version: abc789       (Final draft)     │
-├─────────────────────────────────────────┤
-│ Version: def456       (Second draft)    │
-├─────────────────────────────────────────┤
-│ Version: ghi123       (First upload)    │
-└─────────────────────────────────────────┘
 
 A standard GET returns 404 (delete marker).
-GET with ?versionId=abc789 returns the Final draft.
+GET with `?versionId=abc789` returns the Final draft.
 DELETE the delete marker → restores abc789 as current.
-```
 
 Important versioning behaviors:
 - Versioning cannot be disabled once enabled. You can only **suspend** it (new objects get a null version ID, but existing versions remain).
@@ -563,9 +531,9 @@ The developer will receive the full object without any corruption or partial dat
 </details>
 
 <details>
-<summary>Question 7: Why is a Pre-Signed URL more secure than modifying a bucket policy to allow temporary access to a file?</summary>
+<summary>Question 7: Your development team needs to grant a third-party auditor 24-hour read access to a specific confidential report stored in S3. One engineer suggests temporarily modifying the bucket policy to allow their IP address, while another suggests generating a Pre-Signed URL. Why is the Pre-Signed URL the more secure approach for this scenario?</summary>
 
-A Pre-Signed URL is significantly more secure because it uses programmatic cryptography to generate a specific, time-bound signature for a single object operation. Modifying a bucket policy, on the other hand, affects the permissions of the bucket broadly and relies entirely on an administrator remembering to manually change the policy back later. Once the expiration time on a Pre-Signed URL passes, the signature becomes mathematically invalid, requiring no cleanup or state changes to the bucket itself. Furthermore, Pre-Signed URLs operate with the permissions of the identity that created them, meaning they never grant more access than the original user possessed.
+A Pre-Signed URL is significantly more secure because it uses programmatic cryptography to generate a specific, time-bound signature for a single object operation. Modifying a bucket policy affects the permissions of the bucket broadly and relies entirely on an administrator remembering to manually revert the change later, which often leads to accidental exposure if forgotten. Once the expiration time on a Pre-Signed URL passes, the signature becomes mathematically invalid, requiring no cleanup or state changes to the bucket itself. Furthermore, Pre-Signed URLs operate with the permissions of the identity that created them and apply only to the precise object specified, meaning they never grant more access than intended.
 </details>
 
 <details>
