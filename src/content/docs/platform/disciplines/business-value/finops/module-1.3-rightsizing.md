@@ -34,24 +34,17 @@ Why does this happen? Because engineers are *rational*.
 
 When a developer sets resource requests, they face an asymmetric risk: **request too little and the app crashes at 3 AM. Request too much and... nothing bad happens.** The cost is invisible, the outage is a PagerDuty alert. So developers round up. Way up.
 
-```
-The Developer's Dilemma:
-┌────────────────────────────────────────────────────┐
-│                                                    │
-│  "My app uses ~200m CPU normally, but once last    │
-│   quarter it spiked to 800m during Black Friday.   │
-│   I'll request 1000m to be safe."                  │
-│                                                    │
-│   Actual usage (p95):   250m  CPU                  │
-│   Requested:           1000m  CPU                  │
-│   Wasted:               750m  CPU  (75%)           │
-│                                                    │
-│   Annual waste per replica: ~$270                  │
-│   × 6 replicas: ~$1,620/year                      │
-│   × 80 similar services: ~$129,600/year            │
-│                                                    │
-│   That's one senior engineer's salary in waste.    │
-└────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph "The Developer's Dilemma"
+        A["'My app uses ~200m CPU normally, but once last<br>quarter it spiked to 800m during Black Friday.<br>I'll request 1000m to be safe.'"]
+        B["Actual usage (p95): 250m CPU<br>Requested: 1000m CPU<br>Wasted: 750m CPU (75%)"]
+        C["Annual waste per replica: ~$270<br>× 6 replicas: ~$1,620/year<br>× 80 similar services: ~$129,600/year"]
+        D["That's one senior engineer's salary in waste."]
+    end
+    A --> B
+    B --> C
+    C --> D
 ```
 
 **Rightsizing** is the practice of aligning resource requests with actual usage. It's the single highest-ROI FinOps activity for Kubernetes — and this module shows you exactly how to do it.
@@ -150,20 +143,18 @@ Categorize workloads based on their usage patterns:
 
 ---
 
+> **Pause and predict**: If you scale up replicas using HPA based on CPU, and VPA also tries to change CPU requests, what might happen?
+
 ## The Vertical Pod Autoscaler (VPA)
 
 ### What VPA Does
 
 VPA watches actual resource consumption over time and adjusts (or recommends) resource requests accordingly.
 
-```
-VPA Workflow:
-┌──────────┐     ┌──────────┐     ┌──────────┐
-│ Observe  │────▶│ Calculate│────▶│  Apply   │
-│ usage    │     │ optimal  │     │ new      │
-│ metrics  │     │ requests │     │ requests │
-└──────────┘     └──────────┘     └──────────┘
-  (Recommender)   (Recommender)   (Updater — optional)
+```mermaid
+graph LR
+    A["Observe<br>usage<br>metrics<br>(Recommender)"] --> B["Calculate<br>optimal<br>requests<br>(Recommender)"]
+    B --> C["Apply<br>new<br>requests<br>(Updater — optional)"]
 ```
 
 ### VPA Components
@@ -306,6 +297,8 @@ spec:
 
 ---
 
+> **Stop and think**: Does Kubernetes evict Pods based on how much they cost, or based on how their resources are configured?
+
 ## Quality of Service (QoS) for Cost
 
 Kubernetes assigns QoS classes to pods based on how requests and limits are configured. QoS affects eviction priority, which has cost implications.
@@ -348,21 +341,11 @@ resources: {}         # Empty — no guarantees
 
 **Cost-optimized strategy**: Use Guaranteed only for truly critical workloads (< 20% of pods). Make most workloads Burstable. Use BestEffort for development and batch processing.
 
-```
-Cost-Optimized QoS Distribution:
-┌─────────────────────────────────────────┐
-│                                         │
-│  Guaranteed  ██████             15%     │
-│  (critical)                             │
-│                                         │
-│  Burstable   ████████████████   65%     │
-│  (standard)                             │
-│                                         │
-│  BestEffort  ████                20%    │
-│  (dev/batch)                            │
-│                                         │
-│  Target utilization: 55-70%             │
-└─────────────────────────────────────────┘
+```mermaid
+pie title Cost-Optimized QoS Distribution (Target utilization: 55-70%)
+    "Burstable (standard)" : 65
+    "BestEffort (dev/batch)" : 20
+    "Guaranteed (critical)" : 15
 ```
 
 ---
@@ -566,77 +549,50 @@ kubectl get events -n payments --field-selector reason=OOMKilling
 ## Quiz
 
 ### Question 1
-A Pod requests 2 CPU and 8Gi memory. Over 14 days, its CPU p95 usage is 340m and memory p95 is 2.1Gi. What would you recommend as the new resource requests?
+Scenario: You are auditing a legacy batch processing application. The main Pod requests 2 CPU and 8Gi memory. Over the last 14 days, Prometheus metrics show its CPU p95 usage is 340m and memory p95 is 2.1Gi. The tech lead asks you to provide new resource request recommendations to cut costs without risking stability. What would you recommend, and how did you arrive at those numbers?
 
 <details>
 <summary>Show Answer</summary>
 
-**CPU**: p95 is 340m. Add ~15% margin: 340m * 1.15 = 391m. Round to **400m**.
-**Memory**: p95 is 2.1Gi. Add ~20% margin (memory needs more headroom): 2.1 * 1.20 = 2.52Gi. Round to **2.5Gi** or **3Gi** for safety.
+**CPU**: Recommend 400m. **Memory**: Recommend 2.5Gi to 3Gi.
 
-**New requests**: cpu=400m, memory=3Gi (from cpu=2000m, memory=8Gi)
-**Savings**: 80% CPU reduction, 62.5% memory reduction
-
-Check p99 and max values too — if p99 is 600m CPU, you might set 700m instead of 400m. Always validate with a canary first.
+Here is why: For CPU, we take the p95 usage of 340m and add a ~15% safety margin (340m * 1.15 = 391m), rounding up to 400m. For memory, because under-provisioning leads to catastrophic OOM-kills rather than just graceful throttling, we apply a larger safety margin of at least 20%. Taking the 2.1Gi p95 and adding 20% gives us 2.52Gi, which we round up to 2.5Gi or 3Gi for extra safety. By applying these calculated margins, you safely reduce CPU waste by 80% and memory waste by over 60% without risking application stability.
 </details>
 
 ### Question 2
-Why is it dangerous to rightsize memory the same way you rightsize CPU?
+Scenario: A junior engineer on your team proposes a new rightsizing policy: "Set all resource requests (both CPU and memory) to exactly the p95 usage observed over the last 30 days." You need to explain why this policy is dangerous for the application's reliability. How do you explain the difference between CPU and memory under-provisioning?
 
 <details>
 <summary>Show Answer</summary>
 
-**CPU under-provisioning causes throttling** — the container runs slower but stays alive. This is graceful degradation.
-
-**Memory under-provisioning causes OOM-killing** — the container is terminated immediately. This is catastrophic for stateful applications and can cause data corruption.
-
-Because of this asymmetry, memory requests should include a larger safety margin (20-25% above p99) compared to CPU (10-15% above p95). It's better to waste a little memory than risk OOM-kills in production.
+If a container exceeds its allocated CPU, the Linux kernel simply throttles it by limiting its CPU time. The application will run slower and latency will increase, but the process remains alive and can eventually recover once the load decreases. However, memory is an incompressible resource; if a container attempts to allocate more memory than its limit, the kernel immediately terminates it via an OOM-kill. This catastrophic termination can corrupt in-flight transactions, cause data loss, and lead to service outages. Therefore, memory requests and limits must always include a significantly larger safety margin than CPU to absorb sudden spikes without killing the application.
 </details>
 
 ### Question 3
-Can VPA and HPA run on the same Deployment? If so, how?
+Scenario: Your team has deployed a critical payment API using the Horizontal Pod Autoscaler (HPA) to scale replicas based on CPU utilization. A colleague now wants to enable the Vertical Pod Autoscaler (VPA) to automatically optimize resource requests for the same Deployment. They ask you if this is a safe configuration. How do you advise them to configure VPA and HPA to work together?
 
 <details>
 <summary>Show Answer</summary>
 
-Yes, but they must manage **different dimensions**. If both try to scale based on CPU, they conflict: VPA increases per-pod CPU requests while HPA tries to add replicas for the same CPU pressure.
-
-The safe pattern is:
-- **VPA manages memory** (rightsize memory requests per pod)
-- **HPA manages CPU** (scale replica count based on CPU utilization)
-
-Configure VPA's `controlledResources` to only include `["memory"]` and let HPA use CPU as its scaling metric.
+You should advise them that VPA and HPA can only safely coexist if they are configured to manage entirely different resource dimensions. If both autoscalers attempt to respond to CPU metrics simultaneously, they will conflict—VPA will try to increase the per-pod CPU requests while HPA tries to add more replicas, leading to unpredictable scaling behavior and thrashing. The safe pattern is to configure VPA to manage only memory by setting its `controlledResources` to `["memory"]`, while allowing HPA to continue scaling the replica count based purely on CPU utilization. This ensures each autoscaler operates independently without interfering with the other's scaling logic.
 </details>
 
 ### Question 4
-What are the VPA update modes, and which should you start with?
+Scenario: You are tasked with rolling out VPA across a production cluster that hosts dozens of microservices. You want to gain visibility into resource waste, but the engineering teams are terrified that automated changes will cause pod evictions and unexpected downtime. Which VPA update mode should you use to start this initiative, and how does the adoption path look over time?
 
 <details>
 <summary>Show Answer</summary>
 
-Four modes:
-- **Off**: Only generates recommendations, changes nothing. **Start here.**
-- **Initial**: Sets requests on new pod creation, doesn't touch running pods.
-- **Auto**: Evicts running pods and recreates them with updated requests.
-- **Recreate**: Legacy name for Auto.
-
-Always start with **Off** mode to review recommendations before applying them. This lets you validate that VPA's suggestions are reasonable (check bounds, compare to your knowledge of the workload). After gaining confidence, move to Initial for new deployments, then Auto for full automation — always with PodDisruptionBudgets in place.
+You should start by deploying VPA in `Off` mode for all workloads. In this mode, VPA acts purely as an observability tool—it analyzes historical usage and generates recommendations without applying any changes or evicting running pods. This allows engineering teams to review the suggested requests, compare them against their own understanding of the workload, and build trust in the tool's accuracy. Once the teams are confident in the recommendations, you can transition to `Initial` mode for new deployments, and eventually to `Auto` mode for full automation, provided that proper PodDisruptionBudgets are in place to ensure safe evictions.
 </details>
 
 ### Question 5
-Your cluster has 50 Deployments. How would you prioritize which ones to rightsize first?
+Scenario: You've run a cluster-wide analysis and identified that 50 different Deployments are significantly over-provisioned. Your FinOps manager wants to see a quick reduction in the monthly cloud bill, but the SRE team insists on minimizing risk to critical user journeys. How do you prioritize which Deployments to rightsize first?
 
 <details>
 <summary>Show Answer</summary>
 
-Prioritize by **waste potential** = (requested - used) * replicas * cost_per_unit.
-
-1. **Largest request-usage gaps** — workloads at < 15% utilization with high replica counts
-2. **Highest absolute cost** — a 3-replica service requesting 4 CPU each wastes more than a 1-replica service requesting 500m
-3. **Non-critical workloads first** — staging, dev, batch jobs have lower risk if rightsizing goes wrong
-4. **Stateless over stateful** — stateless services recover from OOMKills via restarts; stateful services might lose data
-
-Sort all 50 Deployments by `(cpu_requested - cpu_p95_usage) * replicas` descending, then start from the top.
+You should prioritize workloads by calculating their 'waste potential', which is the difference between requested and used resources multiplied by the number of replicas and the unit cost. To balance cost savings with risk, you start by targeting non-critical workloads (such as staging environments, batch jobs, or internal tools) that exhibit the largest request-usage gaps and run with high replica counts. Additionally, you should prioritize stateless services over stateful ones, as stateless applications can recover seamlessly from unexpected OOM-kills via simple restarts. By following this strategy, you secure the largest and safest financial wins early on while gradually building the organizational confidence needed to rightsize the more sensitive, mission-critical applications later.
 </details>
 
 ---
