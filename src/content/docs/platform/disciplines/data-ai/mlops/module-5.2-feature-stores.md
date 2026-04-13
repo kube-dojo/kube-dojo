@@ -42,54 +42,37 @@ If you're doing ML at scale without a feature store, you're building technical d
 
 A feature store is a centralized repository for storing, sharing, and serving ML features. Think of it as a "data warehouse for ML features."
 
+```mermaid
+flowchart TB
+    subgraph Without["WITHOUT FEATURE STORE"]
+        direction LR
+        subgraph Training["TRAINING PIPELINE"]
+            direction TB
+            A1[SQL Query A<br/>batch, complex] --> B1[Python Transform<br/>pandas]
+            B1 --> C1[Training Data<br/>features: X]
+        end
+        subgraph Serving["SERVING PIPELINE"]
+            direction TB
+            A2[SQL Query B<br/>realtime, fast] --> B2[Java Transform<br/>custom code]
+            B2 --> C2[Serving Data<br/>features: X']
+        end
+        A1 -.->|"Different!"| A2
+        B1 -.->|"Different!"| B2
+        C1 -.->|"SKEW!"| C2
+    end
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                 WITHOUT FEATURE STORE                            │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  TRAINING PIPELINE           SERVING PIPELINE                    │
-│  ┌──────────────────┐        ┌──────────────────┐               │
-│  │ SQL Query A      │        │ SQL Query B      │ ← Different!  │
-│  │ (batch, complex) │        │ (realtime, fast) │               │
-│  └────────┬─────────┘        └────────┬─────────┘               │
-│           │                           │                          │
-│  ┌────────▼─────────┐        ┌────────▼─────────┐               │
-│  │ Python Transform │        │ Java Transform   │ ← Different!  │
-│  │ (pandas)         │        │ (custom code)    │               │
-│  └────────┬─────────┘        └────────┬─────────┘               │
-│           │                           │                          │
-│           ▼                           ▼                          │
-│      Training Data              Serving Data                     │
-│      (features: X)              (features: X') ← SKEW!          │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
 
-
-┌─────────────────────────────────────────────────────────────────┐
-│                  WITH FEATURE STORE                              │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│                    ┌──────────────────┐                         │
-│                    │  FEATURE STORE   │                         │
-│                    │  ┌────────────┐  │                         │
-│                    │  │ Feature    │  │                         │
-│                    │  │ Definition │  │ ← Single source of truth│
-│                    │  └──────┬─────┘  │                         │
-│                    │         │        │                         │
-│           ┌────────┴─────────┴────────┴─────────┐               │
-│           │                                      │               │
-│  ┌────────▼─────────┐                ┌──────────▼───────┐       │
-│  │  OFFLINE STORE   │                │  ONLINE STORE    │       │
-│  │  (training)      │                │  (serving)       │       │
-│  │  - Data Lake     │                │  - Redis/DynamoDB│       │
-│  │  - Batch queries │                │  - Low latency   │       │
-│  └────────┬─────────┘                └──────────┬───────┘       │
-│           │                                      │               │
-│           ▼                                      ▼               │
-│      Training Data                         Serving Data          │
-│      (features: X)                         (features: X) ← SAME! │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph With["WITH FEATURE STORE"]
+        direction TB
+        FS[FEATURE STORE<br/>Feature Definition<br/>Single source of truth]
+        FS --> Offline[OFFLINE STORE<br/>Training<br/>Data Lake<br/>Batch queries]
+        FS --> Online[ONLINE STORE<br/>Serving<br/>Redis / DynamoDB<br/>Low latency]
+        Offline --> TrainData[Training Data<br/>features: X]
+        Online --> ServData[Serving Data<br/>features: X]
+        TrainData -.->|"SAME!"| ServData
+    end
 ```
 
 ### The Training/Serving Skew Problem
@@ -113,6 +96,8 @@ Small differences cause big problems:
 - Timezone mismatches
 - Rounding errors
 
+> **Stop and think**: How would you ensure that a feature calculated as a 30-day rolling average in batch (using pandas) matches the exact same logic when calculated per-user in real-time (using custom SQL or Java)? Without a unified feature store framework, you are relying entirely on manual code translation, leaving you highly vulnerable to these small discrepancies.
+
 ### War Story: The $10M Feature Bug
 
 A financial services company deployed a credit risk model. The training pipeline computed "average balance over 90 days" correctly. The serving pipeline had a bug—it computed 30-day average instead.
@@ -125,38 +110,36 @@ A feature store would have prevented this entirely.
 
 ### Core Components
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                   FEATURE STORE ARCHITECTURE                     │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  ┌────────────────────────────────────────────────────────────┐ │
-│  │                    FEATURE REGISTRY                         │ │
-│  │  ┌────────────┐ ┌────────────┐ ┌────────────┐             │ │
-│  │  │ user_      │ │ product_   │ │ transaction│             │ │
-│  │  │ features   │ │ features   │ │ _features  │             │ │
-│  │  │ ─────────  │ │ ─────────  │ │ ──────────│             │ │
-│  │  │ age        │ │ price      │ │ amount     │             │ │
-│  │  │ tenure     │ │ category   │ │ is_fraud   │             │ │
-│  │  │ avg_spend  │ │ popularity │ │ hour_of_day│             │ │
-│  │  └────────────┘ └────────────┘ └────────────┘             │ │
-│  └────────────────────────────────────────────────────────────┘ │
-│                              │                                   │
-│              ┌───────────────┴───────────────┐                  │
-│              │                               │                   │
-│  ┌───────────▼───────────┐     ┌────────────▼────────────┐     │
-│  │     OFFLINE STORE     │     │      ONLINE STORE       │     │
-│  │   ┌───────────────┐   │     │   ┌───────────────┐    │     │
-│  │   │  Data Lake    │   │     │   │ Redis/DynamoDB│    │     │
-│  │   │  (Parquet)    │   │     │   │ (Key-Value)   │    │     │
-│  │   └───────────────┘   │     │   └───────────────┘    │     │
-│  │                       │     │                         │     │
-│  │  • Historical data    │     │  • Latest values only  │     │
-│  │  • Point-in-time      │     │  • Millisecond latency │     │
-│  │  • Training datasets  │     │  • Online inference    │     │
-│  └───────────────────────┘     └─────────────────────────┘     │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Registry["FEATURE REGISTRY"]
+        direction LR
+        subgraph U["user_features"]
+            direction TB
+            U1[age<br/>tenure<br/>avg_spend]
+        end
+        subgraph P["product_features"]
+            direction TB
+            P1[price<br/>category<br/>popularity]
+        end
+        subgraph T["transaction_features"]
+            direction TB
+            T1[amount<br/>is_fraud<br/>hour_of_day]
+        end
+    end
+    
+    Registry --> Offline
+    Registry --> Online
+    
+    subgraph Offline["OFFLINE STORE"]
+        direction TB
+        DL[Data Lake / Parquet<br/>• Historical data<br/>• Point-in-time<br/>• Training datasets]
+    end
+    
+    subgraph Online["ONLINE STORE"]
+        direction TB
+        KV[Redis / DynamoDB<br/>• Latest values only<br/>• Millisecond latency<br/>• Online inference]
+    end
 ```
 
 ### Offline vs. Online Stores
@@ -174,34 +157,29 @@ A feature store would have prevented this entirely.
 
 ### Feature Types
 
-```
-FEATURE CATEGORIES
-─────────────────────────────────────────────────────────────────
-
-IDENTITY FEATURES (Entity attributes)
-├── user_id, product_id
-├── Static or slowly changing
-└── Usually joined, not computed
-
-NUMERICAL FEATURES (Quantitative)
-├── Raw: age, price, quantity
-├── Transformed: log(price), sqrt(amount)
-└── Normalized: z-score, min-max scaling
-
-CATEGORICAL FEATURES (Qualitative)
-├── One-hot: category_electronics, category_books
-├── Ordinal: size_small=1, size_medium=2, size_large=3
-└── Embeddings: learned representations
-
-TEMPORAL FEATURES (Time-based)
-├── Extracted: hour, day_of_week, month
-├── Cyclical: sin(hour), cos(hour)
-└── Lagged: value_yesterday, value_last_week
-
-AGGREGATE FEATURES (Windowed computations)
-├── Rolling: avg_purchases_7d, max_amount_30d
-├── Cumulative: total_lifetime_purchases
-└── Relative: purchases_vs_avg_user
+```mermaid
+mindmap
+  root((FEATURE<br/>CATEGORIES))
+    IDENTITY FEATURES
+      user_id, product_id
+      Static or slowly changing
+      Usually joined, not computed
+    NUMERICAL FEATURES
+      Raw: age, price
+      Transformed: log
+      Normalized: z-score
+    CATEGORICAL FEATURES
+      One-hot
+      Ordinal
+      Embeddings
+    TEMPORAL FEATURES
+      Extracted: hour, day
+      Cyclical: sin, cos
+      Lagged: yesterday
+    AGGREGATE FEATURES
+      Rolling: avg_7d
+      Cumulative: lifetime
+      Relative: vs_avg
 ```
 
 ### Transformation Code
@@ -238,36 +216,23 @@ def create_user_features(df: pd.DataFrame) -> pd.DataFrame:
 
 The most critical feature store capability is **point-in-time correctness**—ensuring you only use data that was available at prediction time.
 
+> **Pause and predict**: If you inadvertently use future data to train your model (e.g., calculating a user's total spend up to today for a purchase that happened last month), what will happen to your model's evaluation metrics during offline testing versus live production?
+
+```mermaid
+timeline
+    title Point-in-Time Join (Correct)
+    Jan 1 : Purchase $50
+    Jan 5 : Purchase $30
+    Jan 10 : Purchase $100
+    Jan 15 : PREDICT : Known: 3 purchases, $180 total, $60 avg
+    Jan 20 : Purchase $80 : FUTURE - Do not include!
 ```
-POINT-IN-TIME JOIN (Correct)
-─────────────────────────────────────────────────────────────────
 
-Training Example: Predict if user will purchase on 2024-01-15
-
-Timeline:
-Jan 1    Jan 5    Jan 10   Jan 15   Jan 20
-  │        │        │        │        │
-  ▼        ▼        ▼        ▼        ▼
-Purchase Purchase Purchase  PREDICT  Purchase
-  $50      $30      $100      │        $80
-                              │
-                              └── At prediction time, we knew:
-                                  - 3 purchases
-                                  - $180 total
-                                  - $60 average
-
-                                  NOT $260 total (includes future!)
-
-
-WITHOUT POINT-IN-TIME (Data Leakage)
-─────────────────────────────────────────────────────────────────
-
-If you compute features using ALL data:
-- avg_purchase = $65 (includes Jan 20!)
-- This is FUTURE INFORMATION
-- Model learns from data it won't have in production
-- Backtests look amazing, production fails
-```
+If you compute features using ALL data without enforcing a point-in-time boundary:
+- `avg_purchase` = $65 (includes the Jan 20 transaction!)
+- This introduces FUTURE INFORMATION into your training data.
+- The model learns from data it won't actually possess in production.
+- Your offline backtests will look amazing, but the model will fail entirely when deployed.
 
 ### Implementing Point-in-Time Joins
 
@@ -301,23 +266,22 @@ training_df = store.get_historical_features(
 
 ### Feast (Open Source)
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         FEAST                                    │
-│              "Feature Store for Machine Learning"                │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  PROS                          CONS                              │
-│  ├── Open source, free         ├── Less polished UI              │
-│  ├── Cloud agnostic            ├── Smaller community             │
-│  ├── Kubernetes native         ├── Limited streaming             │
-│  ├── Point-in-time joins       └── Manual schema management      │
-│  └── Growing ecosystem                                           │
-│                                                                  │
-│  BEST FOR: Teams wanting control, K8s environments               │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
-```
+**"Feature Store for Machine Learning"**
+
+**Pros:**
+- Open source, free
+- Cloud agnostic
+- Kubernetes native
+- Point-in-time joins
+- Growing ecosystem
+
+**Cons:**
+- Less polished UI
+- Smaller community
+- Limited streaming capabilities
+- Manual schema management
+
+**Best For:** Teams wanting control, K8s environments
 
 ### Feature Store Comparison
 
@@ -518,49 +482,27 @@ def create_interaction_features(df):
 Test your understanding:
 
 <details>
-<summary>1. What is training/serving skew and why is it dangerous?</summary>
+<summary>1. Your data science team built a fraud detection model that achieves 95% accuracy in offline testing using a massive Parquet dataset. When deployed to production using a real-time Redis cache and a Java-based serving API, the model's accuracy drops to 60%. What is the most likely architectural cause of this massive performance drop?</summary>
 
-**Answer**: Training/serving skew occurs when features are computed differently during training vs. inference. Even small differences (date ranges, NULL handling, timezone) cause the model to receive different inputs than it was trained on, leading to degraded predictions. It's dangerous because:
-1. Silent failure—no errors, just wrong predictions
-2. Hard to debug—model "works" but performs poorly
-3. Can be very subtle—off-by-one errors, timezone issues
+**Answer**: This is a classic symptom of training/serving skew, which occurs when feature computation logic diverges between the offline training environment and the online serving environment. In this scenario, the batch transformations applied to the Parquet dataset (e.g., aggregating 30-day transaction volumes) likely do not mathematically match the real-time Java code extracting data from the Redis cache. Even minor discrepancies—such as different timezone handling, NULL value imputation, or trailing window boundaries—will result in the model receiving inputs it has never seen before. A feature store resolves this by ensuring a single, centralized definition generates both the historical training data and the real-time serving vectors.
 </details>
 
 <details>
-<summary>2. Why do feature stores have both offline and online stores?</summary>
+<summary>2. You are tasked with designing a system that must supply 10 years of historical user behavior to train a new recommendation model, while simultaneously supplying the current user's last 5 clicks to the live website with under 10 milliseconds of latency. Why would attempting to use a single database (like PostgreSQL or Snowflake) for both of these workloads fail?</summary>
 
-**Answer**: Different use cases require different tradeoffs:
-- **Offline store**: For training. Needs full history, point-in-time queries, can tolerate latency. Optimized for storage cost and batch queries (data lake).
-- **Online store**: For serving. Needs low latency (milliseconds), only latest values. Optimized for fast lookups (Redis, DynamoDB).
-
-Both stores are populated from the same feature definitions, ensuring consistency.
+**Answer**: Attempting to use a single database will fail because the workload requirements are fundamentally opposed, which is exactly why feature stores separate the offline and online stores. An offline store (typically a data lake or warehouse like Snowflake) is optimized for high-throughput batch queries across massive historical datasets, which is necessary for point-in-time correct training data but far too slow for real-time inference. Conversely, an online store (like Redis) is optimized for ultra-low latency key-value lookups for individual entities, but would be prohibitively expensive and inefficient for storing and joining years of historical data. By splitting the architecture, a feature store can independently optimize both workloads while maintaining a single logical definition of the features.
 </details>
 
 <details>
-<summary>3. What is point-in-time correctness and what happens without it?</summary>
+<summary>3. Your ML engineer trained a model to predict customer churn. They calculated a feature called "total_support_tickets" by querying the entire database for each customer's ticket history up to today, and joined it to churn events from six months ago. The model looks fantastic in backtesting. What critical mistake was made, and what will happen when this model is deployed?</summary>
 
-**Answer**: Point-in-time correctness ensures training data only includes features that were available at prediction time. Without it:
-- **Data leakage**: Future information leaks into training
-- **Overly optimistic backtests**: Model appears better than it is
-- **Production failure**: Model underperforms because it doesn't have "future" data in production
-
-Example: Training a purchase prediction model with user's "total lifetime purchases" that includes purchases AFTER the prediction date.
+**Answer**: The engineer failed to enforce point-in-time correctness, meaning they introduced severe data leakage into the training dataset. By including support tickets from the last six months in the feature calculation for a churn event that happened six months ago, the model was trained using future information it would never have in a real-time scenario. When deployed, the model will catastrophically underperform because the production system will only have access to strictly past data, rendering the learned patterns useless. A feature store prevents this by performing automated point-in-time joins, "time-traveling" to calculate the exact feature values as they existed at the specific moment of the historical event.
 </details>
 
 <details>
-<summary>4. When should you NOT use a feature store?</summary>
+<summary>4. Your startup is building its first machine learning feature—a simple daily batch job that predicts which users might upgrade their subscription based on three static demographic features. The CTO suggests implementing Feast and Redis to ensure "enterprise readiness." Why is this likely a bad architectural decision?</summary>
 
-**Answer**: Feature stores add complexity. Skip them when:
-- **Simple models**: Few features, single model
-- **No serving component**: Analytics/reporting only
-- **Small team**: Overhead exceeds benefit
-- **Early exploration**: Still validating ML value
-
-Consider a feature store when:
-- Multiple models share features
-- Training/serving skew is causing issues
-- Feature computation is slow/expensive
-- Team is growing and needs collaboration
+**Answer**: Implementing a feature store in this scenario introduces massive unnecessary complexity and operational overhead for a use case that does not actually require it. Feature stores are designed to solve problems of scale, specifically training/serving skew, feature reuse across multiple models, and low-latency real-time inference. Since your model runs as a simple daily batch job using only a few static features, there is no online serving component, no strict latency requirement, and no complex feature sharing needed. Adopting a feature store too early will slow down development and waste engineering resources; you should wait until you experience the pain of feature duplication or require real-time serving before introducing this infrastructure.
 </details>
 
 ## Hands-On Exercise: Build a Feature Store
