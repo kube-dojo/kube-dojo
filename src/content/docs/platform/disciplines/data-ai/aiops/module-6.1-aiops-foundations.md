@@ -39,31 +39,11 @@ The result? Alert fatigue. Teams receive thousands of alerts daily, miss critica
 
 AIOps (Artificial Intelligence for IT Operations) applies machine learning and big data analytics to automate IT operations tasks. It sits at the intersection of observability, machine learning, and operations:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        AIOPS VENN DIAGRAM                       │
-│                                                                  │
-│         OBSERVABILITY          MACHINE LEARNING                  │
-│        ┌────────────┐         ┌────────────┐                    │
-│        │            │         │            │                    │
-│        │  Metrics   │         │ Anomaly    │                    │
-│        │  Logs      │────┬────│ Detection  │                    │
-│        │  Traces    │    │    │ Prediction │                    │
-│        │            │    │    │            │                    │
-│        └────────────┘    │    └────────────┘                    │
-│                          │                                       │
-│                      ┌───▼───┐                                   │
-│                      │ AIOPS │                                   │
-│                      └───┬───┘                                   │
-│                          │                                       │
-│                    ┌─────▼─────┐                                 │
-│                    │OPERATIONS │                                 │
-│                    │ Incident  │                                 │
-│                    │ Response  │                                 │
-│                    │Automation │                                 │
-│                    └───────────┘                                 │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    O[Observability: Metrics, Logs, Traces] --> A[AIOps]
+    M[Machine Learning: Anomaly Detection, Prediction] --> A
+    A --> P[Operations: Incident Response, Automation]
 ```
 
 ### AIOps vs Traditional Monitoring
@@ -84,49 +64,23 @@ The on-call engineer spent 45 minutes correlating alerts to find the root cause.
 
 That's not science fiction—it's what modern AIOps platforms do every day.
 
+> **Stop and think**: How much time does your team currently spend manually correlating logs and metrics when a major incident occurs before you even begin mitigation?
+
 ## The AIOps Maturity Model
 
 Organizations progress through maturity levels:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                   AIOPS MATURITY MODEL                           │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  LEVEL 0: Reactive                                               │
-│  ├── Static thresholds                                          │
-│  ├── Manual alert triage                                        │
-│  ├── Firefighting mode                                          │
-│  └── "The pager went off, now what?"                            │
-│                                                                  │
-│  LEVEL 1: Basic Analytics                                        │
-│  ├── Basic anomaly detection                                    │
-│  ├── Simple event grouping                                      │
-│  ├── Dashboard-driven                                           │
-│  └── "Something looks weird here"                               │
-│                                                                  │
-│  LEVEL 2: Intelligent Triage                                     │
-│  ├── ML-based anomaly detection                                 │
-│  ├── Cross-system correlation                                   │
-│  ├── Probable cause suggestions                                 │
-│  └── "The system suggests this root cause"                      │
-│                                                                  │
-│  LEVEL 3: Predictive                                             │
-│  ├── Failure prediction                                         │
-│  ├── Capacity forecasting                                       │
-│  ├── Proactive alerting                                         │
-│  └── "We should fix this before it fails"                       │
-│                                                                  │
-│  LEVEL 4: Autonomous                                             │
-│  ├── Auto-remediation with guardrails                           │
-│  ├── Self-healing systems                                       │
-│  ├── Human oversight, not intervention                          │
-│  └── "The system fixed it while you were sleeping"              │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    L0["Level 0: Reactive<br/>• Static thresholds<br/>• Manual alert triage<br/>• Firefighting mode"] --> L1["Level 1: Basic Analytics<br/>• Basic anomaly detection<br/>• Simple event grouping<br/>• Dashboard-driven"]
+    L1 --> L2["Level 2: Intelligent Triage<br/>• ML-based anomaly detection<br/>• Cross-system correlation<br/>• Probable cause suggestions"]
+    L2 --> L3["Level 3: Predictive<br/>• Failure prediction<br/>• Capacity forecasting<br/>• Proactive alerting"]
+    L3 --> L4["Level 4: Autonomous<br/>• Auto-remediation with guardrails<br/>• Self-healing systems<br/>• Human oversight"]
 ```
 
 **Most organizations are at Level 0 or 1.** Getting to Level 2 provides the biggest value leap.
+
+> **Pause and predict**: Based on these descriptions, what data quality prerequisites must be met before an organization can successfully transition from Level 1 to Level 2?
 
 ## Core AIOps Capabilities
 
@@ -134,41 +88,17 @@ Organizations progress through maturity levels:
 
 Finding problems without predefined thresholds:
 
-```
-TRADITIONAL THRESHOLD
-─────────────────────────────────────────────────────────────────
-
-CPU %
-100 ─┬─────────────────────────────────────────────────────────
-     │                              ALERT!
- 80 ─┼─ - - - - - - - - - - - - - - -X- - - - - - - - threshold
-     │                             /│\
- 60 ─┼─────────────────────────────  │
-     │                    normal     │  missed slow climb
- 40 ─┼─────────────────             │  until threshold
-     │                               │
- 20 ─┼─                              │
-     │                               │
-  0 ─┼─────┬─────┬─────┬─────┬─────┬─────┬─────┬─────┬─────
-        Mon   Tue   Wed   Thu   Fri   Sat   Sun   Mon
-
-
-ML-BASED ANOMALY DETECTION
-─────────────────────────────────────────────────────────────────
-
-CPU %
-100 ─┬─────────────────────────────────────────────────────────
-     │
- 80 ─┼─
-     │    ANOMALY!
- 60 ─┼─   X unusual pattern detected early
-     │   /│  (learns normal = 20-40%)
- 40 ─┼──  │
-     │   normal baseline
- 20 ─┼─────────────────
-     │
-  0 ─┼─────┬─────┬─────┬─────┬─────┬─────┬─────┬─────┬─────
-        Mon   Tue   Wed   Thu   Fri   Sat   Sun   Mon
+```mermaid
+flowchart LR
+    subgraph Traditional Threshold
+        T1[CPU crosses fixed 80% line] --> T2[Alert Triggered]
+        T3[Slow CPU climb under 80%] --> T4[Missed completely]
+    end
+    subgraph ML-Based Anomaly Detection
+        M1[Learned normal baseline: 20-40%]
+        M2[CPU reaches 60%] --> M3[Deviation from baseline]
+        M3 --> M4[Anomaly Detected Early]
+    end
 ```
 
 Key techniques:
@@ -180,34 +110,22 @@ Key techniques:
 
 Grouping related alerts to reduce noise:
 
-```
-WITHOUT CORRELATION (2000 alerts)
-─────────────────────────────────────────────────────────────────
-
-[ALERT] MySQL: Connection refused
-[ALERT] API: Database timeout
-[ALERT] API: Database timeout
-[ALERT] Health: /api/users failing
-[ALERT] Queue: Messages backing up
-[ALERT] Health: /api/orders failing
-[ALERT] MySQL: Max connections exceeded
-... (1993 more alerts)
-
-
-WITH CORRELATION (1 incident)
-─────────────────────────────────────────────────────────────────
-
-┌─────────────────────────────────────────────────────────────┐
-│ INCIDENT: Database Connection Issue                          │
-├─────────────────────────────────────────────────────────────┤
-│ Root Cause: MySQL primary failover                          │
-│ Impact: 47 dependent services                               │
-│ Related Alerts: 2,000 (auto-grouped)                        │
-│ Suggested Actions:                                          │
-│   1. Verify MySQL cluster status                            │
-│   2. Check connection pool settings                         │
-│   3. Review recent deployment changes                       │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Without Correlation
+        A1[Alert: MySQL Connection refused]
+        A2[Alert: API Database timeout]
+        A3[Alert: Queue Messages backing up]
+        A4[... 1997 more alerts]
+    end
+    subgraph With Correlation
+        C1[Incident: Database Connection Issue]
+        C2[Root Cause: MySQL primary failover]
+        C3[Impact: 47 dependent services]
+        C1 --- C2
+        C1 --- C3
+    end
+    A1 & A2 & A3 & A4 -->|AIOps Engine| C1
 ```
 
 Correlation approaches:
@@ -220,135 +138,76 @@ Correlation approaches:
 
 Automatically identifying probable causes:
 
-```
-DEPENDENCY GRAPH ANALYSIS
-─────────────────────────────────────────────────────────────────
-
-                    ┌─────────┐
-                    │ Frontend│ ──▶ Alert: Slow responses
-                    └────┬────┘
-                         │
-                    ┌────▼────┐
-                    │   API   │ ──▶ Alert: High latency
-                    └────┬────┘
-                         │
-              ┌──────────┼──────────┐
-              │          │          │
-         ┌────▼────┐┌────▼────┐┌────▼────┐
-         │ Service ││ Service ││ Service │
-         │    A    ││    B    ││    C    │
-         └────┬────┘└────┬────┘└────┬────┘
-              │          │          │
-              └──────────┼──────────┘
-                         │
-                    ┌────▼────┐
-                    │ Database│ ◀── ROOT CAUSE: Slow queries
-                    └─────────┘
-
-AIOps traces the dependency graph to find the actual source.
+```mermaid
+flowchart TD
+    Front["Frontend (Alert: Slow responses)"] --> API["API (Alert: High latency)"]
+    API --> SA["Service A"]
+    API --> SB["Service B"]
+    API --> SC["Service C"]
+    SA --> DB["Database (ROOT CAUSE: Slow queries)"]
+    SB --> DB
+    SC --> DB
+    
+    style DB stroke:#ff0000,stroke-width:2px
 ```
 
 ### 4. Predictive Analytics
 
 Forecasting problems before they occur:
 
-```
-PREDICTIVE DISK USAGE
-─────────────────────────────────────────────────────────────────
-
-Disk %
-100 ─┬─────────────────────────────────X FULL (predicted)
-     │                              /
- 90 ─┼─ - - - - - - - - - - - - -/- - - - ALERT threshold
-     │                         /
- 80 ─┼─                       /     ▲ Take action here
-     │                      /       │
- 70 ─┼─                    /        │ 3 days before full
-     │                   /          │
- 60 ─┼─            current         │
-     │           ───────●           │
- 50 ─┼─    trend line               │
-     │                              │
- 40 ─┼─────────────────────────────────────────────────────────
-     │
-  0 ─┼─────┬─────┬─────┬─────┬─────┬─────┬─────┬─────┬─────
-       -7d   -6d   -5d  TODAY  +1d   +2d   +3d   +4d   +5d
-
-"Disk will be full in 3 days at current growth rate"
+```mermaid
+flowchart LR
+    Current["Current State (Disk at 60%)"] --> Trend["Trend Line Calculated"]
+    Trend -->|Predicts growth| Alert["Proactive Alert (3 days before full)"]
+    Alert --> Action["Action Taken"]
+    Action -.-> Full["100% Full Avoided"]
 ```
 
 ### 5. Auto-Remediation
 
 Executing fixes with safety guardrails:
 
-```
-AUTO-REMEDIATION WORKFLOW
-─────────────────────────────────────────────────────────────────
-
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│  Detection  │────▶│  Analysis   │────▶│  Decision   │
-│  (Anomaly)  │     │ (Root Cause)│     │   Engine    │
-└─────────────┘     └─────────────┘     └──────┬──────┘
-                                               │
-                                        ┌──────▼──────┐
-                                        │  Guardrails │
-                                        │  - Blast    │
-                                        │    radius   │
-                                        │  - Rollback │
-                                        │    capable  │
-                                        │  - Human    │
-                                        │    approval │
-                                        └──────┬──────┘
-                                               │
-                    ┌──────────────────────────┼──────┐
-                    │                          │      │
-              ┌─────▼─────┐              ┌─────▼─────┐│
-              │  Execute  │              │  Notify   ││
-              │  Runbook  │              │  Human    ││
-              └─────┬─────┘              └───────────┘│
-                    │                                 │
-              ┌─────▼─────┐                          │
-              │  Verify   │                          │
-              │  Success  │──────────────────────────┘
-              └───────────┘
+```mermaid
+flowchart LR
+    Det["Detection (Anomaly)"] --> Ana["Analysis (Root Cause)"]
+    Ana --> Dec["Decision Engine"]
+    Dec --> Guard["Guardrails (Blast radius, Human approval)"]
+    Guard --> Exec["Execute Runbook"]
+    Guard --> Notif["Notify Human"]
+    Exec --> Ver["Verify Success"]
 ```
 
 ## AIOps Architecture
 
 ### Data Flow
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    AIOPS DATA FLOW                              │
-│                                                                  │
-│  DATA COLLECTION                                                 │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐           │
-│  │  Metrics │ │   Logs   │ │  Traces  │ │  Events  │           │
-│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘           │
-│       │            │            │            │                   │
-│       └────────────┴────────────┴────────────┘                   │
-│                          │                                       │
-│  DATA PROCESSING         ▼                                       │
-│  ┌─────────────────────────────────────────────────┐            │
-│  │              Stream Processing                  │            │
-│  │     (Kafka, Flink, Kinesis)                     │            │
-│  └───────────────────────┬─────────────────────────┘            │
-│                          │                                       │
-│  ANALYSIS                ▼                                       │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐           │
-│  │ Anomaly  │ │  Event   │ │   RCA    │ │Prediction│           │
-│  │Detection │ │Correlate │ │  Engine  │ │  Engine  │           │
-│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘           │
-│       │            │            │            │                   │
-│       └────────────┴────────────┴────────────┘                   │
-│                          │                                       │
-│  ACTION                  ▼                                       │
-│  ┌─────────────────────────────────────────────────┐            │
-│  │           Orchestration & Automation            │            │
-│  │     (Runbooks, Notifications, Integrations)     │            │
-│  └─────────────────────────────────────────────────┘            │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Data Collection
+        M[Metrics]
+        L[Logs]
+        T[Traces]
+        E[Events]
+    end
+    
+    subgraph Data Processing
+        SP[Stream Processing: Kafka, Flink, Kinesis]
+    end
+    
+    subgraph Analysis
+        AD[Anomaly Detection]
+        EC[Event Correlation]
+        RCA[RCA Engine]
+        PE[Prediction Engine]
+    end
+    
+    subgraph Action
+        OA[Orchestration & Automation: Runbooks, Notifications]
+    end
+
+    M & L & T & E --> SP
+    SP --> AD & EC & RCA & PE
+    AD & EC & RCA & PE --> OA
 ```
 
 ### Build vs Buy
@@ -364,38 +223,39 @@ AUTO-REMEDIATION WORKFLOW
 
 **Recommendation**: Start with a platform, build custom components where needed.
 
+> **Stop and think**: Does your organization have the specialized data science and engineering resources required to maintain and constantly retrain a custom ML platform in-house?
+
 ## The AIOps Tool Landscape
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                   AIOPS TOOL LANDSCAPE                          │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  FULL PLATFORMS                                                  │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐           │
-│  │ BigPanda │ │ Moogsoft │ │ Dynatrace│ │ Datadog  │           │
-│  │          │ │          │ │  Davis   │ │ Watchdog │           │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────┘           │
-│                                                                  │
-│  ANOMALY DETECTION                                               │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐           │
-│  │ Prophet  │ │Luminaire │ │  PyOD    │ │ Amazon   │           │
-│  │(Facebook)│ │ (Zillow) │ │(library) │ │Lookout   │           │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────┘           │
-│                                                                  │
-│  EVENT CORRELATION                                               │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐           │
-│  │PagerDuty │ │ServiceNow│ │ OpsGenie │ │ Splunk   │           │
-│  │  AIOps   │ │  ITOM    │ │          │ │   ITSI   │           │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────┘           │
-│                                                                  │
-│  OPEN SOURCE                                                     │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐           │
-│  │ Prophet  │ │  Flink   │ │ Kafka    │ │Prometheus│           │
-│  │          │ │(process) │ │(ingest)  │ │+ ML libs │           │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────┘           │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Full Platforms
+        FP1[BigPanda]
+        FP2[Moogsoft]
+        FP3[Dynatrace Davis]
+        FP4[Datadog Watchdog]
+    end
+    
+    subgraph Anomaly Detection
+        AD1[Prophet]
+        AD2[Luminaire]
+        AD3[PyOD]
+        AD4[Amazon Lookout]
+    end
+    
+    subgraph Event Correlation
+        EC1[PagerDuty AIOps]
+        EC2[ServiceNow ITOM]
+        EC3[OpsGenie]
+        EC4[Splunk ITSI]
+    end
+    
+    subgraph Open Source
+        OS1[Prophet]
+        OS2[Flink]
+        OS3[Kafka]
+        OS4[Prometheus + ML libs]
+    end
 ```
 
 ## Common Mistakes
@@ -414,55 +274,27 @@ AUTO-REMEDIATION WORKFLOW
 Test your understanding:
 
 <details>
-<summary>1. Why can't humans effectively handle modern IT operations without AIOps assistance?</summary>
+<summary>1. Your e-commerce platform spans 50 microservices running on Kubernetes. During Black Friday, a networking issue causes intermittent packet loss, triggering 15,000 alerts across metrics, logs, and traces within a 3-minute window. Why is it impossible for your on-call team to manually resolve this using traditional monitoring?</summary>
 
-**Answer**: Modern systems generate data volumes beyond human cognitive capacity:
-1. **Volume**: Millions of metrics, thousands of log lines/second
-2. **Speed**: Correlating thousands of events in seconds
-3. **Patterns**: Detecting subtle anomalies across high-dimensional data
-4. **Fatigue**: 24/7 alerting leads to missed signals
-
-AIOps augments humans with capabilities they don't have, not replacing judgment but amplifying it.
+**Answer**: In this scenario, the volume and velocity of telemetry data vastly exceed human cognitive limits. An on-call engineer would have to mentally filter out the noise of thousands of downstream symptom alerts (like API timeouts and database connection drops) to find the network-level root cause. By the time a human manually cross-references logs, metrics, and traces across 50 services, the business has already suffered catastrophic downtime. AIOps solves this by ingesting the massive data stream and automatically correlating the 15,000 alerts into a single actionable incident.
 </details>
 
 <details>
-<summary>2. What's the biggest value jump in the AIOps maturity model?</summary>
+<summary>2. Your organization currently relies on static CPU thresholds (Level 1) and your on-call engineers are experiencing severe burnout from daily false positives. You secure funding to upgrade your observability stack. Which AIOps maturity transition will provide the most immediate relief to your team, and why?</summary>
 
-**Answer**: Moving from Level 1 (Basic Analytics) to Level 2 (Intelligent Triage) provides the biggest value jump:
-- **Noise reduction**: From thousands of alerts to tens of incidents
-- **Faster diagnosis**: ML-suggested root causes vs. manual investigation
-- **Proactive awareness**: Anomaly detection catches issues earlier
-
-Most organizations are stuck at Level 0-1. Level 2 is achievable and high-impact.
+**Answer**: Moving from Level 1 (Basic Analytics) to Level 2 (Intelligent Triage) will provide the most significant and immediate relief. At Level 1, your engineers are drowning in noise because simple, static thresholds trigger alerts for harmless traffic spikes. Level 2 introduces ML-based anomaly detection and cross-system correlation, which automatically groups those false positives or clusters related symptom alerts into a single incident. This directly reduces pager noise and provides probable cause suggestions, dramatically cutting down the time spent investigating.
 </details>
 
 <details>
-<summary>3. Why is event correlation critical for AIOps success?</summary>
+<summary>3. A core database node in your cluster undergoes an automated failover. Instantly, your payment service logs connection timeouts, the frontend reports HTTP 500s, and the message queue starts backing up. If your AIOps platform lacks event correlation, what happens to your incident response?</summary>
 
-**Answer**: A single failure cascades through distributed systems, generating hundreds or thousands of alerts:
-- Database fails → API timeouts → Health checks fail → Queues back up → More timeouts...
-- Without correlation: On-call engineers drown in alerts
-- With correlation: One incident, clear root cause, focused response
-
-Correlation is the difference between alert fatigue and actionable incidents.
+**Answer**: Without event correlation, your monitoring system treats every symptom as an isolated failure, burying the on-call engineer in hundreds of separate notifications. The engineer must manually investigate the payment service, frontend, and message queue independently before realizing they all point back to the database failover. Event correlation analyzes the time topology and system dependencies to group these cascading failures together. Instead of investigating 500 alerts, the responder receives one unified incident report pointing directly to the root cause.
 </details>
 
 <details>
-<summary>4. When should you build custom AIOps vs. buy a platform?</summary>
+<summary>4. Your financial services company needs to implement AIOps to reduce MTTR. You have a standard microservices architecture, a small DevOps team, and a strict requirement to show ROI within the next quarter. Should you build a custom AIOps solution using open-source tools or purchase a commercial platform?</summary>
 
-**Answer**: Build when:
-- Unique scale or data requirements
-- Specific algorithms needed for your domain
-- Full data privacy control required
-- Strong ML engineering team available
-
-Buy when:
-- Standard IT operations use cases
-- Need quick time to value (weeks vs. months)
-- Limited ML expertise
-- Integration with existing tools important
-
-**Most organizations should buy first, build custom components only where needed.**
+**Answer**: In this scenario, you should definitely purchase a commercial AIOps platform rather than building one. Building a custom solution requires a dedicated team of ML and data engineers, and typically takes 6 to 18 months before demonstrating any significant value. Since your organization has a standard architecture and an aggressive three-month timeline to prove ROI, an off-the-shelf platform provides the fastest time-to-value. You can integrate a commercial solution with your existing tools in a matter of weeks and start reducing alert noise almost immediately.
 </details>
 
 ## Hands-On Exercise: Assess Your AIOps Readiness
