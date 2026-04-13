@@ -42,57 +42,53 @@ This module teaches you the components, architecture, and decision frameworks fo
 
 ## What is an Internal Developer Platform?
 
+> **Stop and think**: If you had to build a platform today, what is the absolute minimum capability you would need to provide to make a developer's life easier?
+
 ### Definition
 
 An Internal Developer Platform (IDP) is a **layer of tools, workflows, and self-service capabilities** that sits between developers and underlying infrastructure, reducing cognitive load and enabling self-service.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      Developers                              │
-│                                                              │
-│  "I need to deploy"  "Give me a database"  "Show me logs"  │
-└───────────────────────────┬─────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────┐
-│               Internal Developer Platform                    │
-│                                                              │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐      │
-│  │ Portal   │ │ Deploy   │ │ Infra    │ │ Observe  │      │
-│  │ (UI/API) │ │ Platform │ │ Platform │ │ Platform │      │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────┘      │
-│                                                              │
-│  Golden Paths | Templates | Self-Service | Guardrails       │
-└───────────────────────────┬─────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────┐
-│                  Infrastructure Layer                        │
-│                                                              │
-│  Kubernetes | Cloud | Databases | Networking | Security     │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    devs[Developers<br/>"I need to deploy" | "Give me a database" | "Show me logs"]
+    
+    subgraph IDP [Internal Developer Platform]
+        direction LR
+        portal[Portal<br/>UI/API]
+        deploy[Deploy<br/>Platform]
+        infra[Infra<br/>Platform]
+        obs[Observe<br/>Platform]
+    end
+    
+    features[Golden Paths | Templates | Self-Service | Guardrails]
+    
+    infraLayer[Infrastructure Layer<br/>Kubernetes | Cloud | Databases | Networking | Security]
+
+    devs --> IDP
+    IDP --- features
+    features --> infraLayer
 ```
 
 ### IDP vs Point Solutions
 
 **Without IDP (Point Solutions)**:
-```
-Developer needs to:
-├── Use GitHub for code
-├── Configure CircleCI for builds
-├── Write Terraform for infra
-├── Manage Kubernetes YAML
-├── Configure Datadog for monitoring
-├── Use PagerDuty for alerts
-├── Navigate Vault for secrets
-└── Understand how they all connect
+```mermaid
+flowchart LR
+    Dev[Developer needs to:] --> gh[Use GitHub for code]
+    Dev --> ci[Configure CI for builds]
+    Dev --> tf[Write Terraform for infra]
+    Dev --> k8s[Manage K8s YAML]
+    Dev --> dd[Configure monitoring]
+    Dev --> pd[Use PagerDuty for alerts]
+    Dev --> vault[Navigate Vault for secrets]
+    Dev --> connect[Understand how they all connect]
 ```
 
 **With IDP**:
-```
-Developer needs to:
-├── Use the portal
-└── Everything else happens automatically
+```mermaid
+flowchart LR
+    Dev[Developer needs to:] --> portal[Use the portal]
+    portal --> auto[Everything else happens automatically]
 ```
 
 The IDP doesn't replace these tools—it **integrates and abstracts** them into a cohesive experience.
@@ -105,27 +101,16 @@ The IDP doesn't replace these tools—it **integrates and abstracts** them into 
 
 Every IDP has five core components:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    IDP Architecture                          │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  1. DEVELOPER PORTAL                                        │
-│     Service catalog, docs, templates, search                │
-│                                                              │
-│  2. INFRASTRUCTURE ORCHESTRATION                            │
-│     Compute, storage, databases, networking                 │
-│                                                              │
-│  3. APPLICATION DELIVERY                                    │
-│     CI/CD, GitOps, deployments, environments                │
-│                                                              │
-│  4. SECURITY & GOVERNANCE                                   │
-│     Secrets, policies, compliance, access control           │
-│                                                              │
-│  5. OBSERVABILITY                                           │
-│     Metrics, logs, traces, alerting, dashboards            │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph IDP_Architecture [IDP Architecture]
+        direction TB
+        p1[1. DEVELOPER PORTAL<br/>Service catalog, docs, templates, search]
+        p2[2. INFRASTRUCTURE ORCHESTRATION<br/>Compute, storage, databases, networking]
+        p3[3. APPLICATION DELIVERY<br/>CI/CD, GitOps, deployments, environments]
+        p4[4. SECURITY & GOVERNANCE<br/>Secrets, policies, compliance, access control]
+        p5[5. OBSERVABILITY<br/>Metrics, logs, traces, alerting, dashboards]
+    end
 ```
 
 ### 1. Developer Portal
@@ -414,105 +399,60 @@ How well do these tools work together? (1-5): ___
 
 ---
 
+> **Pause and predict**: How do you think the complexity and toolchain of an IDP changes as a company scales from 20 developers to over 100?
+
 ## IDP Reference Architectures
 
 ### Small Team IDP (< 20 developers)
 
+```mermaid
+flowchart TD
+    subgraph Small [Small Team IDP < 20 developers]
+        direction TB
+        p[Portal: README + Wiki + Slack]
+        i[Infra: Terraform modules + Kubernetes]
+        d[Delivery: GitHub Actions + ArgoCD]
+        s[Security: GitHub Dependabot + Sealed Secrets]
+        o[Observability: Prometheus + Grafana + Loki]
+    end
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Small Team IDP                            │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  Portal: README + Wiki + Slack                              │
-│                                                              │
-│  Infra: Terraform modules + Kubernetes                      │
-│                                                              │
-│  Delivery: GitHub Actions + ArgoCD                          │
-│                                                              │
-│  Security: GitHub Dependabot + Sealed Secrets               │
-│                                                              │
-│  Observability: Prometheus + Grafana + Loki                 │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
 
 Investment: 0.5-1 FTE
 Timeline: 1-3 months
-```
 
 ### Medium Team IDP (20-100 developers)
 
+```mermaid
+flowchart TD
+    subgraph Medium [Medium Team IDP 20-100 developers]
+        direction TB
+        p["Portal: Backstage (basic)<br/>- Service catalog<br/>- Docs<br/>- Basic templates"]
+        i["Infra: Crossplane or Terraform Cloud<br/>- Database self-service<br/>- Storage self-service"]
+        d["Delivery: GitHub Actions + ArgoCD<br/>- Environment promotion<br/>- Preview environments"]
+        s["Security: Vault + OPA + Trivy<br/>- Secrets management<br/>- Policy enforcement<br/>- Container scanning"]
+        o["Observability: Prometheus + Grafana + Jaeger<br/>- Standard dashboards<br/>- Distributed tracing"]
+    end
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Medium Team IDP                           │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  Portal: Backstage (basic)                                  │
-│    - Service catalog                                        │
-│    - Docs                                                   │
-│    - Basic templates                                        │
-│                                                              │
-│  Infra: Crossplane or Terraform Cloud                       │
-│    - Database self-service                                  │
-│    - Storage self-service                                   │
-│                                                              │
-│  Delivery: GitHub Actions + ArgoCD                          │
-│    - Environment promotion                                  │
-│    - Preview environments                                   │
-│                                                              │
-│  Security: Vault + OPA + Trivy                              │
-│    - Secrets management                                     │
-│    - Policy enforcement                                     │
-│    - Container scanning                                     │
-│                                                              │
-│  Observability: Prometheus + Grafana + Jaeger               │
-│    - Standard dashboards                                    │
-│    - Distributed tracing                                    │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
 
 Investment: 2-4 FTE
 Timeline: 3-6 months
-```
 
 ### Large Team IDP (100+ developers)
 
+```mermaid
+flowchart TD
+    subgraph Large [Large Team IDP 100+ developers]
+        direction TB
+        p["Portal: Backstage (full)<br/>- Service catalog + Dependencies<br/>- Software templates<br/>- TechDocs<br/>- Search<br/>- Plugins ecosystem"]
+        i["Infra: Crossplane + Custom controllers<br/>- Full self-service<br/>- Multi-cloud abstraction<br/>- Custom resources"]
+        d["Delivery: Multi-tenant CI + ArgoCD + Flagger<br/>- Progressive delivery<br/>- Automated promotion<br/>- Feature flags"]
+        s["Security: Vault + OPA/Kyverno + Falco<br/>- Dynamic secrets<br/>- Runtime security<br/>- Compliance automation"]
+        o["Observability: OpenTelemetry + Vendor<br/>- Full observability stack<br/>- Cost tracking<br/>- SLO management"]
+    end
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     Large Team IDP                           │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  Portal: Backstage (full)                                   │
-│    - Service catalog + Dependencies                         │
-│    - Software templates                                     │
-│    - TechDocs                                              │
-│    - Search                                                 │
-│    - Plugins ecosystem                                      │
-│                                                              │
-│  Infra: Crossplane + Custom controllers                     │
-│    - Full self-service                                      │
-│    - Multi-cloud abstraction                                │
-│    - Custom resources                                       │
-│                                                              │
-│  Delivery: Multi-tenant CI + ArgoCD + Flagger               │
-│    - Progressive delivery                                   │
-│    - Automated promotion                                    │
-│    - Feature flags                                          │
-│                                                              │
-│  Security: Vault + OPA/Kyverno + Falco                      │
-│    - Dynamic secrets                                        │
-│    - Runtime security                                       │
-│    - Compliance automation                                  │
-│                                                              │
-│  Observability: OpenTelemetry + Vendor (Datadog/NR)         │
-│    - Full observability stack                               │
-│    - Cost tracking                                          │
-│    - SLO management                                         │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
 
 Investment: 5-15 FTE (dedicated platform team)
 Timeline: 6-12 months initial, continuous evolution
-```
 
 ---
 
@@ -594,6 +534,8 @@ Developer satisfaction: Up 40%
 
 ---
 
+> **Stop and think**: What is the danger of a platform team deciding to build everything in-house because "our use case is special"?
+
 ## Build vs Buy Decision Framework
 
 ### When to Build
@@ -645,21 +587,20 @@ buy_examples:
 
 Even "buying" requires building:
 
-```
-What you buy:
-├── Backstage
-├── ArgoCD
-├── Crossplane
-├── Vault
-└── Prometheus
+```mermaid
+flowchart TD
+    buy[What you buy] --> b1[Backstage]
+    buy --> b2[ArgoCD]
+    buy --> b3[Crossplane]
+    buy --> b4[Vault]
+    buy --> b5[Prometheus]
 
-What you still build:
-├── Backstage plugins for your tools
-├── ArgoCD ApplicationSets for your workflow
-├── Crossplane Compositions for your infra
-├── Vault integration with your identity
-├── Prometheus rules for your services
-└── The glue connecting everything
+    build[What you still build] --> c1[Backstage plugins for your tools]
+    build --> c2[ArgoCD ApplicationSets for your workflow]
+    build --> c3[Crossplane Compositions for your infra]
+    build --> c4[Vault integration with your identity]
+    build --> c5[Prometheus rules for your services]
+    build --> c6[The glue connecting everything]
 ```
 
 **Budget accordingly**: Buy = 30% cost. Integration = 70% cost.
@@ -755,187 +696,42 @@ Success rate: High
 ## Quiz: Check Your Understanding
 
 ### Question 1
-A team wants to build their own CI system. What questions should you ask?
+You are the lead platform engineer at a mid-sized fintech startup. The engineering director comes to you suggesting the company should build a custom, proprietary CI/CD orchestrator because "existing tools like GitHub Actions and Jenkins don't perfectly match our strict compliance approval steps." How do you evaluate this build vs. buy decision?
 
 <details>
 <summary>Show Answer</summary>
 
-**Questions to challenge build decision:**
-
-1. **What's unique about your needs?**
-   - "Standard CI" is not unique
-   - "Integrate with our proprietary build system" might be
-
-2. **What exists already?**
-   - GitHub Actions, GitLab CI, CircleCI, Jenkins, etc.
-   - Have you evaluated all options?
-
-3. **What's the true cost?**
-   - Build time + maintenance forever
-   - Opportunity cost of not working on product
-
-4. **What happens when the team changes?**
-   - Tribal knowledge
-   - Bus factor
-
-5. **Is this a competitive advantage?**
-   - Probably not
-   - Your customers don't care about your CI
-
-**Likely recommendation**: Use existing CI, build plugins/integrations for your specific needs.
-
-**When custom CI makes sense**:
-- Extreme scale (Google, Meta)
-- Unique security requirements (defense, air-gapped)
-- Already exhausted existing options
+You should strongly advise against building a custom CI/CD orchestrator from scratch and instead look to integrate your compliance steps into a commodity tool. Building a CI system is incredibly complex and represents a massive ongoing maintenance burden that distracts from your company's core product. "Standard CI" capabilities are not a competitive differentiator for a fintech company. Instead, you should "buy" (or adopt) an existing solution and "build" only the specific compliance plugins or custom steps needed to satisfy your security team's requirements. This approach minimizes your time to value while still meeting your strict constraints.
 
 </details>
 
 ### Question 2
-You're starting an IDP for a 50-person engineering team. What's your first component?
+You've just been hired as the first platform engineer for a growing software company with 60 developers. The developers complain that they can't figure out who owns which microservice, and provisioning a new database takes 3 weeks of Jira tickets. You have a budget to implement your first IDP component. Where should you start and why?
 
 <details>
 <summary>Show Answer</summary>
 
-**Recommended first component**: **Developer Portal** (service catalog + docs)
-
-**Why portal first:**
-
-1. **Immediate value**: Developers can find things
-2. **Low risk**: Doesn't change production systems
-3. **Foundation for everything**: Other capabilities surface here
-4. **Quick win**: Can ship in weeks
-5. **Builds trust**: Team sees platform team delivering value
-
-**What to include in MVP portal:**
-```
-- Service catalog (even if manual entry)
-- Documentation aggregation
-- Link to existing tools (CI, monitoring)
-- Basic search
-```
-
-**Common mistake**: Starting with infrastructure abstraction
-- Higher risk (production impact)
-- Longer time to value
-- Developers don't see benefit until complete
-
-**Sequence recommendation:**
-1. Portal (visibility)
-2. CI/CD improvements (existing pain)
-3. Observability standards (help debugging)
-4. Infrastructure abstraction (self-service)
+You should start by implementing a Developer Portal (like Backstage) focused primarily on a service catalog and centralized documentation. While the 3-week database provisioning time is a painful bottleneck, tackling infrastructure abstraction first carries high risk and takes much longer to deliver visible value. A developer portal provides an immediate, low-risk "quick win" that solves the discoverability problem ("who owns what?"). This early victory builds trust with the development teams and establishes a central front door where you can later integrate self-service infrastructure capabilities once the foundational layer is solid.
 
 </details>
 
 ### Question 3
-How do you measure IDP success?
+Six months after launching your new Internal Developer Platform, the CTO asks you to prove that the platform is actually working and worth the investment. What specific combination of metrics should you present to provide a complete picture of the platform's success?
 
 <details>
 <summary>Show Answer</summary>
 
-**IDP Success Metrics (by category):**
-
-**Adoption**
-```yaml
-adoption_metrics:
-  - Percent of teams using platform
-  - New projects on platform vs off
-  - Voluntary migration rate
-  - Portal daily active users
-```
-
-**Developer Experience**
-```yaml
-devex_metrics:
-  - Developer satisfaction (NPS/CSAT)
-  - Time to first deployment
-  - Onboarding time
-  - Support tickets per developer
-```
-
-**Efficiency**
-```yaml
-efficiency_metrics:
-  - Deployment frequency
-  - Lead time for changes
-  - Self-service rate (vs tickets)
-  - Time to provision resources
-```
-
-**Quality**
-```yaml
-quality_metrics:
-  - Change failure rate
-  - Mean time to recovery
-  - Security incidents
-  - Compliance audit results
-```
-
-**Business Impact**
-```yaml
-business_metrics:
-  - Time to market for features
-  - Engineering velocity
-  - Reduced duplicated effort
-  - Cost per deployment
-```
-
-**Key principle**: Track multiple dimensions. High adoption with low satisfaction is a warning sign.
+You must present a balanced combination of metrics spanning adoption, developer experience, and business efficiency. Showing only adoption rates (e.g., "80% of teams are on the platform") is misleading if teams were forced to migrate and are deeply unhappy. You should pair adoption metrics with Developer Experience scores (like platform NPS or CSAT) to prove the tool is actually liked. Additionally, you should highlight efficiency gains such as a reduction in "time to first deployment" for new engineers or an increase in the self-service rate versus manual IT tickets, demonstrating that the platform is tangibly speeding up product delivery.
 
 </details>
 
 ### Question 4
-Your IDP has 80% adoption but 40% satisfaction. What's wrong?
+Your organization mandated that all engineering teams migrate to the new Internal Developer Platform by Q3. As Q4 begins, your dashboard shows 95% adoption, but your developer satisfaction surveys return an abysmal 35% approval rating. What is the most likely cause of this discrepancy, and what should be your immediate next step?
 
 <details>
 <summary>Show Answer</summary>
 
-**This indicates forced adoption, not genuine value.**
-
-**Likely causes:**
-
-1. **Mandated migration**
-   - Teams forced to use platform
-   - Not because it's better
-
-2. **Missing capabilities**
-   - Platform lacks what teams need
-   - Workarounds required
-
-3. **Poor developer experience**
-   - Hard to use
-   - Poor documentation
-   - Slow response
-
-4. **One-size-doesn't-fit-all**
-   - Works for some teams, not others
-   - Insufficient customization
-
-**Investigation steps:**
-
-1. **Survey dissatisfied users**
-   - "What's frustrating?"
-   - "What would you do differently?"
-   - "What's missing?"
-
-2. **Watch developers use it**
-   - Observe friction points
-   - Note workarounds
-
-3. **Compare satisfied vs dissatisfied**
-   - Different team types?
-   - Different use cases?
-
-**Fixes:**
-
-- Address top pain points
-- Add escape hatches / flexibility
-- Improve documentation
-- Consider making parts optional
-- Invest in onboarding
-
-**Target state**: High adoption AND high satisfaction. If you can't have both, focus on satisfaction—adoption follows value.
+The discrepancy is almost certainly caused by the fact that adoption was forcefully mandated rather than earned through genuine value, leading developers to use the platform begrudgingly. When an IDP lacks critical capabilities or creates friction, developers are forced to invent awkward workarounds, which destroys morale and satisfaction. Your immediate next step must be to interview the most dissatisfied teams and directly observe them using the platform to identify their friction points. You should focus your next sprints entirely on resolving these pain points and potentially relaxing the mandate until the platform acts as a paved road that developers actually *want* to use.
 
 </details>
 
@@ -985,16 +781,21 @@ Design an IDP for your organization.
 | Delivery | | | |
 | Security | | | |
 | Observability | | | |
+```
 
 ### Integration Points
 How will components connect?
 
-```
-[Portal] ←→ [CI/CD] ←→ [GitOps]
-    ↓           ↓          ↓
-[Docs]    [Secrets]   [Infra]
-    ↓           ↓          ↓
-         [Observability]
+```mermaid
+flowchart TD
+    Portal <--> CI_CD[CI/CD]
+    CI_CD <--> GitOps
+    Portal --> Docs
+    CI_CD --> Secrets
+    GitOps --> Infra
+    Docs --> Observability
+    Secrets --> Observability
+    Infra --> Observability
 ```
 
 ### Abstraction Layer
@@ -1007,7 +808,6 @@ kind: Application
 spec:
   # What fields do developers set?
   # What does platform handle?
-```
 ```
 
 ### Part 3: Roadmap
