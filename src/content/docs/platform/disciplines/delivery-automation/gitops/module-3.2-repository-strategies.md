@@ -40,13 +40,15 @@ This module helps you choose the right structure for your organization.
 
 ---
 
+> **Stop and think**: If you put all your configurations in a single repository, how will you prevent a junior developer from accidentally breaking production infrastructure while updating a staging application?
+
 ## The Core Decision: Monorepo vs Polyrepo
 
 ### Monorepo
 
 All configuration in a single repository.
 
-```
+```text
 gitops-config/
 ├── apps/
 │   ├── frontend/
@@ -90,7 +92,7 @@ gitops-config/
 
 Configuration spread across multiple repositories.
 
-```
+```text
 # Repository: team-a-config
 team-a-config/
 ├── service-1/
@@ -131,7 +133,7 @@ platform-config/
 
 Most organizations land somewhere in between:
 
-```
+```text
 # Platform repo (central team)
 platform-config/
 ├── infrastructure/
@@ -153,13 +155,15 @@ team-b-apps/
 
 ---
 
+> **Pause and predict**: If your application source code and deployment manifests live in the same repository, what happens to your Git history and CI pipeline when you need to scale up replicas without changing any application code?
+
 ## App Repo vs Config Repo
 
 Another key decision: where does configuration live relative to application code?
 
 ### Single Repo (App + Config Together)
 
-```
+```text
 my-service/
 ├── src/
 │   └── main.go
@@ -190,7 +194,7 @@ my-service/
 
 ### Separate Repos
 
-```
+```text
 # Repository: my-service (app code)
 my-service/
 ├── src/
@@ -223,25 +227,12 @@ my-service-config/
 
 Most teams settle on:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      Application Repo                        │
-│                                                              │
-│  Source code + Dockerfile + CI pipeline                      │
-│  CI builds image, pushes to registry                         │
-│  CI updates image tag in Config Repo                         │
-└───────────────────────────┬─────────────────────────────────┘
-                            │
-                    Updates image tag
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────┐
-│                       Config Repo                            │
-│                                                              │
-│  Kubernetes manifests, Kustomize overlays                   │
-│  GitOps agent watches this repo                              │
-│  Agent syncs to cluster                                      │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    AppRepo["Application Repo<br/>Source code + Dockerfile + CI pipeline<br/>CI builds image, pushes to registry<br/>CI updates image tag in Config Repo"]
+    ConfigRepo["Config Repo<br/>Kubernetes manifests, Kustomize overlays<br/>GitOps agent watches this repo<br/>Agent syncs to cluster"]
+
+    AppRepo -->|Updates image tag| ConfigRepo
 ```
 
 ---
@@ -250,7 +241,7 @@ Most teams settle on:
 
 Draw your current repository structure:
 
-```
+```text
 Current structure:
 ├── Where is app code? _________________
 ├── Where are Kubernetes manifests? _________________
@@ -272,7 +263,7 @@ How you organize files within repos matters as much as which repos you use.
 
 ### Environment-Based Structure
 
-```
+```text
 my-service/
 ├── base/
 │   ├── deployment.yaml
@@ -311,16 +302,16 @@ kind: Kustomization
 resources:
   - ../../base
 patches:
-  - replica-patch.yaml
-  - hpa.yaml
-  - pdb.yaml
+  - path: replica-patch.yaml
+  - path: hpa.yaml
+  - path: pdb.yaml
 ```
 
 ### Cluster-Based Structure
 
 When managing multiple clusters:
 
-```
+```text
 clusters/
 ├── dev-cluster/
 │   ├── kustomization.yaml
@@ -343,7 +334,7 @@ clusters/
 
 Organized by application, then environment:
 
-```
+```text
 apps/
 ├── frontend/
 │   ├── base/
@@ -385,12 +376,14 @@ apps/
 
 ---
 
+> **Pause and predict**: What happens when the staging environment branch receives three hotfixes that were originally pushed to the development branch, but one of them was deliberately excluded from the upcoming production release?
+
 ## War Story: The Branch Strategy That Backfired
 
 A company I worked with tried branch-per-environment GitOps:
 
 **The Setup:**
-```
+```text
 main branch → production
 staging branch → staging
 develop branch → development
@@ -406,7 +399,7 @@ develop branch → development
 Week 1: "This is clean!"
 
 Week 4:
-```
+```text
 develop: 127 commits ahead of staging
 staging: 43 commits ahead of main
 ```
@@ -426,7 +419,7 @@ Branches diverge. That's what branches do. Environment promotion isn't the same 
 
 Switched to directory-per-environment:
 
-```
+```text
 config-repo/
 └── my-service/
     ├── base/
@@ -467,7 +460,7 @@ Branches feel natural for environments:
 ### The Problems
 
 **Problem 1: Divergence**
-```
+```text
 Branches naturally diverge. Environments shouldn't.
 
 develop: adds feature A, B, C
@@ -478,7 +471,7 @@ Now you have three different states to reason about.
 ```
 
 **Problem 2: Merge Conflicts**
-```
+```text
 Config conflicts are worse than code conflicts.
 Code: "which version of this function?"
 Config: "which version of the cluster state?"
@@ -487,7 +480,7 @@ Bad merges → bad deployments.
 ```
 
 **Problem 3: Lost Changes**
-```
+```text
 Feature in develop, cherry-picked to main,
 but staging branch never got it.
 
@@ -495,7 +488,7 @@ but staging branch never got it.
 ```
 
 **Problem 4: Audit Complexity**
-```
+```text
 Q: "What changed between staging and prod?"
 A: "Let me diff two branches that have
     diverged significantly..."
@@ -515,7 +508,7 @@ A: "Let me diff two directories on main."
 
 **Use directories, not branches, for environment separation.**
 
-```
+```bash
 # Instead of:
 git checkout staging
 git merge develop
@@ -544,140 +537,42 @@ git push origin main
 ## Quiz: Check Your Understanding
 
 ### Question 1
-Why is branch-per-environment problematic for GitOps?
+Your team currently uses a branching strategy where the `develop` branch deploys to the development environment, and the `main` branch deploys to production. Recently, an urgent hotfix was merged directly into `main` and deployed successfully, but two weeks later, the bug reappeared in production after a routine release. Based on GitOps principles, what architectural flaw in your repository strategy caused this, and how should it be redesigned?
 
 <details>
 <summary>Show Answer</summary>
 
-Several reasons:
-
-1. **Branches diverge**: Unlike code, environment configs shouldn't diverge from each other except for intentional differences (replicas, resources)
-
-2. **Merge conflicts**: Config merge conflicts can cause deployment failures
-
-3. **Lost changes**: Cherry-picks and selective merges can miss changes
-
-4. **Audit difficulty**: Comparing branches that have diverged is harder than comparing directories
-
-5. **Cognitive load**: "Which branch is truth for which env?"
-
-**Better approach**: Directory-per-environment on a single branch (main). Promotion = update the directory, PR, merge.
+The root cause of this regression is the use of a branch-per-environment strategy, which inevitably leads to configuration divergence. When the hotfix was applied directly to `main`, the `develop` branch lost sync with production's actual state. Later, when `develop` was merged into `main` for the routine release, the hotfix was overwritten or ignored because the environments were represented by divergent histories rather than a single source of truth. To solve this, the team should adopt a directory-per-environment structure on a single branch (such as `main`). In this model, both the development and production configurations live side-by-side, making promotions a simple file update (like changing an image tag) rather than a complex Git merge, which completely eliminates environment divergence and prevents lost changes.
 
 </details>
 
 ### Question 2
-When would you choose polyrepo over monorepo?
+You are the lead architect for a rapidly growing fintech company. Currently, all 50 microservices and the core infrastructure configurations are housed in a single GitOps monorepo. Recently, the platform team has complained that their PRs are being delayed by application team approvals, and application teams are accidentally modifying ingress configurations they shouldn't have access to. Why is the current monorepo failing your organizational needs, and what GitOps repository pattern would better serve your scaling company?
 
 <details>
 <summary>Show Answer</summary>
 
-Choose polyrepo when:
-
-1. **Large organization**: Many teams, need independence
-2. **Strong team boundaries**: Teams shouldn't see/change each other's configs
-3. **Different access needs**: Varying permission requirements
-4. **Scale concerns**: Single repo would be too large
-5. **Autonomy culture**: Teams want full ownership
-
-Choose monorepo when:
-
-1. **Small organization**: < 50 engineers typically
-2. **Central platform team**: Manages most config
-3. **Cross-cutting changes**: Frequent changes affecting multiple services
-4. **Visibility**: Need to see everything in one place
-
-Most organizations use **hybrid**: platform monorepo + team polyrepos.
+The monorepo pattern is failing because it forces tight coupling and centralized access control on an organization that has outgrown it, creating bottlenecks and security risks. As organizations scale, different teams require distinct permission boundaries and independent deployment lifecycles that a single repository cannot easily enforce without highly complex tooling. To resolve this, you should migrate to a hybrid polyrepo strategy where the platform team manages a core infrastructure repository and individual application teams own their specific configuration repositories. This separation naturally enforces fine-grained access control through repository permissions and allows teams to operate with full autonomy, ensuring that platform changes do not block application deployments and vice versa.
 
 </details>
 
 ### Question 3
-You have 10 microservices and 3 environments (dev, staging, prod). How would you structure the config repo(s)?
+Your platform engineering team is setting up GitOps for a new product suite consisting of 10 microservices. The services will be deployed across three distinct Kubernetes clusters representing `dev`, `staging`, and `prod` environments. The application developers want a straightforward way to update their services, while the platform team needs to maintain consistent baseline configurations. How should you structure the configuration repository to satisfy both teams while minimizing configuration duplication?
 
 <details>
 <summary>Show Answer</summary>
 
-Several valid approaches:
-
-**Option A: Single repo, app-centric**
-```
-config/
-├── services/
-│   ├── service-1/
-│   │   ├── base/
-│   │   └── overlays/{dev,staging,prod}
-│   ├── service-2/
-│   │   ├── base/
-│   │   └── overlays/{dev,staging,prod}
-│   └── ... (10 services)
-└── infrastructure/
-    └── overlays/{dev,staging,prod}
-```
-
-**Option B: Single repo, env-centric**
-```
-config/
-├── dev/
-│   ├── services/
-│   └── infrastructure/
-├── staging/
-│   └── ...
-└── prod/
-    └── ...
-```
-
-**Option C: Team repos (if teams own different services)**
-```
-team-a-config/ (services 1-4)
-team-b-config/ (services 5-7)
-team-c-config/ (services 8-10)
-platform-config/ (infrastructure)
-```
-
-**Recommendation**: Option A is most common for 10 services.
-- Base reduces duplication
-- Overlays capture env differences
-- One place per service
+You should implement an application-centric directory structure utilizing Kustomize within a single configuration repository. In this setup, each microservice gets its own top-level directory containing a `base` folder for shared configurations and an `overlays` folder containing subdirectories for `dev`, `staging`, and `prod`. This structure minimizes duplication by keeping all common manifests in the base, while allowing environment-specific patches (like replica counts or resource limits) to be cleanly isolated in the overlays. It provides developers with a clear, single location to manage their application's entire lifecycle across all clusters, while enabling the platform team to enforce standard baseline policies that apply to every environment.
 
 </details>
 
 ### Question 4
-How does CI interact with GitOps config repos?
+A developer on your team is confused about the new deployment pipeline. They just merged a feature into the application repository, and the CI system successfully built and pushed the new Docker image to the registry. However, the developer is asking why the GitOps agent hasn't deployed the new image to the cluster yet. What crucial step is missing in the CI/CD flow, and how does this separation protect the GitOps model?
 
 <details>
 <summary>Show Answer</summary>
 
-Typical flow:
-
-```
-1. Developer pushes code to app repo
-2. CI builds and tests
-3. CI builds container image
-4. CI pushes image to registry (e.g., myapp:v1.2.3)
-5. CI updates config repo:
-   - Clone config repo
-   - Update image tag in dev overlay
-   - Commit and push (or create PR)
-6. GitOps agent detects config repo change
-7. Agent syncs new image to cluster
-```
-
-**Key points:**
-- CI doesn't deploy directly to cluster
-- CI only updates Git (image tags)
-- GitOps agent does actual deployment
-- Image tag is the link between CI and GitOps
-
-**Example CI step (GitHub Actions):**
-```yaml
-- name: Update config repo
-  run: |
-    git clone https://github.com/org/config-repo
-    cd config-repo
-    yq eval '.images[0].newTag = "${{ env.IMAGE_TAG }}"' \
-      -i services/myapp/overlays/dev/kustomization.yaml
-    git commit -am "Update myapp to ${{ env.IMAGE_TAG }}"
-    git push
-```
+The missing step is that the CI pipeline did not update the configuration repository with the newly generated image tag. In a proper GitOps workflow, the CI system never communicates directly with the Kubernetes cluster or the GitOps agent; its final job is to commit the new image tag to the deployment manifests in the configuration repository. Once the configuration repository is updated, the GitOps agent detects the Git commit and automatically syncs the cluster state to match. This strict separation of concerns is vital because it ensures that the Git repository remains the sole, auditable source of truth for the environment, preventing untracked changes and allowing for instant rollbacks by simply reverting a Git commit.
 
 </details>
 
