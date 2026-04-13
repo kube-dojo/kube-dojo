@@ -97,7 +97,7 @@ Bisecting: 125 revisions left to test after this (roughly 7 steps)
 
 At this moment, Git has physically checked out commit `a1b2c3d4`. Your repository is now in a "detached HEAD" state, "time-traveled" to the exact moment that commit was made.
 
-> **Pause and predict**: If you run `kubectl apply --dry-run=client -f deployment.yaml` right now and it succeeds, what specific command should you issue to Git next?
+> **Pause and predict**: If you run `kubectl apply --dry-run=server -f deployment.yaml` right now and it succeeds, what specific command should you issue to Git next?
 >
 > *Answer*: You must run `git bisect good`. This tells Git that the bug was introduced *after* this checked-out commit, allowing the algorithm to safely discard the older, left half of the search space.
 
@@ -159,7 +159,7 @@ We can author a dedicated bash script, `test-manifest.sh`.
 echo "Testing commit: $(git rev-parse --short HEAD)"
 
 # Run a dry-run apply against the API server to validate the YAML schema
-kubectl apply -f k8s/production/statefulset.yaml --dry-run=client > /dev/null 2>&1
+kubectl apply -f k8s/production/statefulset.yaml --dry-run=server > /dev/null 2>&1
 
 # Capture the exit code of the kubectl command
 EXIT_CODE=$?
@@ -447,7 +447,7 @@ git grep -e "kind: Service" --and -e "type: LoadBalancer"
 You can even combine this with Git's tree objects to search the entire repository history simultaneously. To search all branches and all historical commits for a specific, highly deprecated API version:
 
 ```bash
-git grep "apiVersion: policy/v1" $(git rev-list --all)
+git grep "apiVersion: policy/v1beta1" $(git rev-list --all)
 ```
 *(Warning: This command searches the raw contents of every single commit ever made across all branches. It may take several seconds on massive monorepos, but it is an incredibly powerful audit tool).*
 
