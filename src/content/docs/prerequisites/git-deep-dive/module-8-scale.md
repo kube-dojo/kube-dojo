@@ -47,27 +47,39 @@ Modern Git introduced **Cone Mode**. Cone mode restricts the matching logic to e
 
 Let us visualize the difference in a standard Kubernetes platform repository:
 
-```text
-+-----------------------------------------------------+
-|              Monorepo Directory Tree                |
-+-----------------------------------------------------+
-|                                                     |
-|  platform-repo/                                     |
-|  ├── .git/                     (Full History)       |
-|  ├── cluster-addons/           (Hidden)             |
-|  │   ├── calico/                                    |
-|  │   └── cert-manager/                              |
-|  ├── namespaces/               (Hidden)             |
-|  │   ├── default/                                   |
-|  │   └── kube-system/                               |
-|  └── services/                 (Sparse Checkout)    |
-|      ├── payment-gateway/      (Visible in tree)    |
-|      │   ├── deployment.yaml                        |
-|      │   └── service.yaml                           |
-|      ├── inventory-api/        (Hidden)             |
-|      └── user-auth/            (Hidden)             |
-|                                                     |
-+-----------------------------------------------------+
+```mermaid
+graph TD
+    PR["platform-repo/"]
+    GIT[".git/ <br> Full History"]
+    CA["cluster-addons/ <br> Hidden"]
+    CAL["calico/"]
+    CERT["cert-manager/"]
+    NS["namespaces/ <br> Hidden"]
+    DEF["default/"]
+    KS["kube-system/"]
+    SVC["services/ <br> Sparse Checkout"]
+    PG["payment-gateway/ <br> Visible in tree"]
+    DEP["deployment.yaml"]
+    SER["service.yaml"]
+    INV["inventory-api/ <br> Hidden"]
+    UA["user-auth/ <br> Hidden"]
+
+    PR --> GIT
+    PR --> CA
+    CA --> CAL
+    CA --> CERT
+    PR --> NS
+    NS --> DEF
+    NS --> KS
+    PR --> SVC
+    SVC --> PG
+    PG --> DEP
+    PG --> SER
+    SVC --> INV
+    SVC --> UA
+
+    classDef hidden stroke-dasharray: 5 5, color: #999, fill: #f9f9f9, stroke: #ccc;
+    class CA,CAL,CERT,NS,DEF,KS,INV,UA hidden;
 ```
 
 In cone mode, if you specify `services/payment-gateway`, Git automatically includes the files directly in `platform-repo/` (like `README.md` or `.gitignore`), the files directly in `platform-repo/services/`, and everything recursively inside `platform-repo/services/payment-gateway/`.
@@ -178,35 +190,29 @@ Git is exceptionally terrible at versioning compiled binaries, database dumps, o
 
 When you commit a file tracked by LFS, the actual binary data is intercepted and uploaded to the LFS server via an HTTP API. Git only records a pointer file in the commit history.
 
-```text
-+----------------------------------------------------------+
-|                 How Git LFS Operates                     |
-+----------------------------------------------------------+
-|                                                          |
-|  Your Working Tree                                       |
-|  ├── deployment.yaml (1KB)                               |
-|  └── monitoring-chart-v2.tgz (50MB)                      |
-|                                                          |
-|       |                                                  |
-|       |  git add & git commit                            |
-|       v                                                  |
-|                                                          |
-|  Local .git Database                                     |
-|  ├── Blob: deployment.yaml content                       |
-|  └── Blob: Pointer File (130 bytes)                      |
-|      |                                                   |
-|      |  version https://git-lfs.github.com/spec/v1       |
-|      |  oid sha256:4d7a214614ab2...                      |
-|      |  size 52428800                                    |
-|                                                          |
-|       |                                                  |
-|       |  git push                                        |
-|       v                                                  |
-|                                                          |
-|  Remote Git Server           Remote LFS Server           |
-|  [Stores the 130b pointer]   [Stores the 50MB binary]    |
-|                                                          |
-+----------------------------------------------------------+
+```mermaid
+flowchart TD
+    subgraph WT [Your Working Tree]
+        A1["deployment.yaml <br> 1KB"]
+        A2["monitoring-chart-v2.tgz <br> 50MB"]
+    end
+
+    subgraph DB [Local .git Database]
+        B1["Blob: deployment.yaml content"]
+        B2["Blob: Pointer File (130 bytes)<br>version https://git-lfs.github.com/spec/v1<br>oid sha256:4d7a214614ab2...<br>size 52428800"]
+    end
+
+    subgraph RS [Remote Servers]
+        C1["Remote Git Server<br>[Stores the 130b pointer]"]
+        C2["Remote LFS Server<br>[Stores the 50MB binary]"]
+    end
+
+    A1 -->|git add & commit| B1
+    A2 -->|git add & commit| B2
+
+    B1 -->|git push| C1
+    B2 -->|git push pointer| C1
+    B2 -.->|LFS extension uploads binary| C2
 ```
 
 > **Stop and think**: If you run `git log -p` on a file tracked by LFS, what will you see in the diff — the binary content or the pointer file content? What if you have the LFS extension installed vs not installed?
