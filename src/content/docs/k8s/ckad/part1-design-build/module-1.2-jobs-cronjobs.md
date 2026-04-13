@@ -463,8 +463,9 @@ k patch cronjob my-cronjob -p '{"spec":{"suspend":false}}'
 # Create a job that simulates a database backup
 k create job db-backup --image=busybox -- sh -c "echo 'Backing up database' && sleep 5 && echo 'Backup complete'"
 
-# Watch completion
-k get job db-backup -w
+# Wait for completion
+k wait --for=condition=complete job/db-backup --timeout=60s
+k get job db-backup
 
 # Check logs
 k logs job/db-backup
@@ -487,8 +488,9 @@ k logs job/manual-cleanup
 ```
 
 **Part 3: Parallel Job**
-```yaml
+```bash
 # Create parallel-job.yaml
+cat << 'EOF' > parallel-job.yaml
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -503,11 +505,10 @@ spec:
         image: busybox
         command: ["sh", "-c", "echo Processing item $JOB_COMPLETION_INDEX && sleep 3"]
       restartPolicy: Never
-```
+EOF
 
-```bash
 k apply -f parallel-job.yaml
-k get pods -l job-name=parallel-process -w
+k get pods -l job-name=parallel-process
 ```
 
 **Cleanup:**
@@ -582,8 +583,9 @@ spec:
       restartPolicy: Never
 EOF
 
-# Watch retries
-k get pods -l job-name=retry-job -w
+# Verify retries
+sleep 5
+k get pods -l job-name=retry-job
 
 # Check job status
 k describe job retry-job | grep -A5 Conditions
@@ -613,8 +615,9 @@ spec:
       restartPolicy: Never
 EOF
 
-# Watch parallel execution
-k get pods -l job-name=parallel -w
+# Verify parallel execution
+sleep 5
+k get pods -l job-name=parallel
 
 # Verify all completed
 k get job parallel
@@ -651,7 +654,7 @@ k get cronjob no-overlap -o jsonpath='{.spec.concurrencyPolicy}'
 
 # Wait 2 minutes and verify only 1 job runs
 sleep 120
-k get jobs -l job-name=no-overlap
+k get jobs | grep no-overlap
 
 # Cleanup
 k delete cronjob no-overlap
