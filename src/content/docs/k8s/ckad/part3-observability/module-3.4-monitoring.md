@@ -365,6 +365,10 @@ spec:
             cpu: 100m
             memory: 128Mi
 EOF
+
+# Wait for pods to be ready and metrics to populate
+k rollout status deployment/monitor-demo
+sleep 30
 ```
 
 **Part 1: Basic Monitoring**
@@ -414,6 +418,10 @@ k top nodes --sort-by=cpu
 k run drill2a --image=nginx
 k run drill2b --image=nginx
 
+# Wait for metrics to populate
+k wait --for=condition=ready pod/drill2a pod/drill2b
+sleep 30
+
 # Check their metrics
 k top pods
 
@@ -438,6 +446,10 @@ spec:
     image: busybox
     command: ['sleep', '3600']
 EOF
+
+# Wait for pod and metrics to populate
+k wait --for=condition=ready pod/drill3
+sleep 30
 
 # View per-container metrics
 k top pods drill3 --containers
@@ -474,8 +486,9 @@ k top pods -n kube-system --sort-by=cpu
 # Create deployment with multiple replicas
 k create deploy drill6 --image=nginx --replicas=5
 
-# Wait for pods
-k get pods -l app=drill6 -w
+# Wait for pods and metrics to populate
+k rollout status deployment/drill6
+sleep 30
 
 # Check overall deployment resource usage
 k top pods -l app=drill6
