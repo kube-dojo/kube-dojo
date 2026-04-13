@@ -582,6 +582,14 @@ The responding developer simply described the symptoms to the terminal agent. Th
 
 ## Hands-On Practice
 
+> **Lab Prerequisites — API Key Required**: Aider (used in Tasks 2 and 4) requires an active LLM API key. Before starting, export one of the following in your shell:
+> ```bash
+> export ANTHROPIC_API_KEY="sk-ant-..."
+> # OR
+> export OPENAI_API_KEY="sk-..."
+> ```
+> Without this, both Aider invocations fail immediately with an authentication error. If you do not have a key, register at https://console.anthropic.com (Anthropic) or https://platform.openai.com (OpenAI) before proceeding.
+
 This comprehensive lab will walk you through the fundamental mechanics of utilizing CLI coding agents programmatically. You must execute these commands sequentially. Ensure you have python installed in your local environment.
 
 ### Task 1: Environment Preparation and Initialization
@@ -598,6 +606,8 @@ mkdir -p /tmp/cli-agent-lab && cd /tmp/cli-agent-lab
 
 # Initialize git tracking
 git init
+git config user.email "lab@example.com"
+git config user.name "Lab User"
 
 # Generate a baseline legacy functional script
 cat << 'EOF' > user_service.py
@@ -630,7 +640,7 @@ Run `git status` to confirm the working tree is completely clean and `user_servi
 pip install aider-chat
 
 # Execute the agent, passing the target file and the instruction
-aider user_service.py --message "Convert this functional script into a User dataclass with an explicit email validator method. Retain the age logic as a property."
+aider --yes user_service.py --message "Convert this functional script into a User dataclass with an explicit email validator method. Retain the age logic as a property."
 ```
 
 <details>
@@ -679,7 +689,8 @@ The pytest runner will output a clean pass if the AI correctly implemented the `
 
 ```bash
 # Intentionally break the test file by removing an assertion dependency
-sed -i 's/assert/assrt/g' test_user_service.py
+# sed -i.bak works identically on both macOS and Linux (creates a .bak backup)
+sed -i.bak 's/assert/assrt/g' test_user_service.py
 
 # Construct the auto-fix pipeline
 cat << 'EOF' > smart-fix.sh
@@ -688,8 +699,8 @@ pytest --tb=short 2>&1 | tee test_output.txt
 
 if [ ${PIPESTATUS[0]} -ne 0 ]; then
   echo "Failure detected. Dispatching AI agent..."
-  aider --message "Fix the failing tests shown in test_output.txt. Do not modify the underlying domain model." \
-        --file test_output.txt test_user_service.py
+  aider --yes --message "Fix the failing tests shown in test_output.txt. Do not modify the underlying domain model." \
+        --read test_output.txt test_user_service.py
 fi
 EOF
 
