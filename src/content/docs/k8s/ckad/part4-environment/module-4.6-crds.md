@@ -461,7 +461,8 @@ spec:
     - ws
 EOF
 
-# Verify CRD created
+# Verify CRD created and API endpoint is established
+kubectl wait --for condition=established --timeout=60s crd/websites.example.com
 k get crd websites.example.com
 ```
 
@@ -500,6 +501,7 @@ k describe website my-blog
 k get ws my-blog -o yaml
 
 # Edit (using patch for non-interactive automation)
+# Rationale: CRDs do not support strategic merge patch (the default), so we must explicitly use --type=merge
 k patch website my-blog --type=merge -p '{"spec":{"replicas":2}}'
 ```
 
@@ -611,6 +613,9 @@ spec:
     kind: Task
 EOF
 
+# Verify CRD is established
+kubectl wait --for condition=established --timeout=60s crd/tasks.drill.example.com
+
 # Create CR
 cat << 'EOF' | k apply -f -
 apiVersion: drill.example.com/v1
@@ -677,6 +682,9 @@ spec:
     kind: Config
 EOF
 
+# Verify CRD is established
+kubectl wait --for condition=established --timeout=60s crd/configs.drill.example.com
+
 # Use explain
 k explain config
 k explain config.spec
@@ -720,6 +728,9 @@ spec:
     singular: cache
     kind: Cache
 EOF
+
+# Verify CRD is established
+kubectl wait --for condition=established --timeout=60s crd/caches.drill.example.com
 
 # 2. Try to apply an invalid CR (memoryLimit is a string instead of integer, and too small)
 cat << 'EOF' | k apply -f -
