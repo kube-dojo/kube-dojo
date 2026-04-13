@@ -81,7 +81,7 @@ git status
 ```
 
 > **Pause and predict**: What do you think happens if you run `git commit -m "Same thing"` immediately after a `git reset --soft HEAD~1`?
-> *Prediction*: You would recreate the exact same commit you just undid, containing the exact same file states. Because `--soft` leaves the staging area untouched, the snapshot ready for the next commit is identical to the one you just rolled back.
+> *Prediction*: You would recreate the exact same commit you just undid, containing the exact same file states. Because `--soft` leaves the staging area untouched, the snapshot ready for the next commit is identical to one you just rolled back.
 
 ### `git reset --mixed` (The Default)
 
