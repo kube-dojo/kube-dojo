@@ -90,6 +90,8 @@ flowchart TD
 - Team coordination becomes difficult
 - Codebase becomes unwieldy
 
+> **Pause and predict**: If a monolith shares a single database, what happens when the "Order Module" accidentally executes a poorly written database query that consumes 100% of the database CPU? How does this affect the "User Module"?
+
 ---
 
 ## The Microservices Approach
@@ -147,6 +149,8 @@ flowchart TD
 - Operational complexity
 - Debugging across services
 - Need for robust infrastructure
+
+> **Stop and think**: In a monolith, a function call takes microseconds and always succeeds unless the app crashes. In microservices, a network call takes milliseconds and can fail due to timeouts, network partitions, or the remote service being down. How does this fundamental shift change the way you write code?
 
 ---
 
