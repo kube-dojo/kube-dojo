@@ -272,7 +272,7 @@ spec:
 
 ```bash
 # Check VPA recommendations
-k get vpa recommendation-engine-vpa -n ml-platform -o yaml
+kubectl get vpa recommendation-engine-vpa -n ml-platform -o yaml
 
 # The recommendation section shows:
 # - lowerBound: minimum safe resources
@@ -341,6 +341,8 @@ spec:
 
 ---
 
+> **Pause and predict**: If your application traffic doubles every year, is it more cost-effective to buy 3-year Reserved Instances or stick to 1-year commitments?
+
 ## Pillar 3: Rate Optimization
 
 ### Savings Plans and Committed Use Discounts
@@ -402,6 +404,8 @@ gcloud billing accounts describe BILLING_ACCOUNT_ID --format=json
 ```
 
 ---
+
+> **Stop and think**: If Spot instances can be terminated at any time, what types of applications are completely unsuitable for them?
 
 ## Pillar 4: Spot Instance Lifecycle
 
@@ -542,6 +546,8 @@ spec:
 
 ---
 
+> **Pause and predict**: When a Kubernetes namespace is deleted, what cloud resources might be left behind?
+
 ## Orphaned Resource Cleanup
 
 Orphaned resources are cloud resources that are no longer attached to any active workload but continue accruing charges. They are the silent budget killer.
@@ -679,9 +685,9 @@ If you use VPA in auto-update mode on an unpredictable workload, it will aggress
 </details>
 
 <details>
-<summary>3. You have $10,000/month in on-demand EC2 usage that runs 24/7. Should you commit to a $10,000/month Savings Plan?</summary>
+<summary>3. Your infrastructure currently incurs $10,000/month in on-demand EC2 usage for backend services that run 24/7. Your procurement manager suggests committing to a $10,000/month Compute Savings Plan to maximize discounts. Why is this a dangerous financial strategy?</summary>
 
-No. Commit to $6,000-$7,000 (60-70% of current usage). Savings Plans commit you to a minimum hourly spend regardless of actual usage. If your usage drops (due to right-sizing, traffic changes, or migration), you still pay the committed amount. The remaining 30-40% stays on-demand, giving you flexibility. Over time, as you're confident in your baseline, you can increase the commitment. Also consider: some of that $10K might be better served by Spot instances (for fault-tolerant workloads), which provide deeper discounts without long-term commitment. The optimal strategy is often: 60% Savings Plans + 20% Spot + 20% On-demand.
+Committing to the full $10,000 is a mistake because Savings Plans lock you into a minimum hourly spend regardless of your actual usage. If your usage drops due to future right-sizing, architectural changes, or migration, you will still be forced to pay the fully committed amount for idle capacity. Instead, you should commit to only 60-70% of your current baseline to maintain flexibility for dynamic scaling and optimization. The remaining infrastructure can run on on-demand pricing, or ideally on Spot instances for fault-tolerant workloads, which provide deeper discounts without any long-term commitment.
 </details>
 
 <details>
@@ -691,15 +697,15 @@ Spot instances can be reclaimed by the cloud provider with only a 2-minute inter
 </details>
 
 <details>
-<summary>5. A development EKS cluster costs $3,000/month and is used Monday-Friday, 9AM-6PM. How much can you save?</summary>
+<summary>5. Your engineering team maintains a dedicated development EKS cluster that costs $3,000/month and is only actively used by developers Monday through Friday from 9 AM to 6 PM. How much could you realistically save, and what mechanisms would you use to achieve this?</summary>
 
-Business hours represent roughly 45 hours per week out of 168 total hours (27% of the time). If you scale the cluster to zero (or minimum) outside business hours, you save approximately 73% of compute costs: $3,000 x 0.73 = $2,190/month saved. Implementation options: (a) Karpenter with consolidation + scheduled scaling to zero, (b) a CronJob that scales node groups to 0 at 6PM and back to desired count at 9AM, (c) tools like kube-downscaler that annotate deployments with shutdown schedules. Additional savings: shut down NAT Gateways and load balancers when the cluster is empty. Caveat: factor in the 10-15 minute spin-up time each morning.
+Because business hours represent roughly 45 hours out of a 168-hour week, leaving the cluster running 24/7 means you are paying for unused capacity 73% of the time. By implementing a scheduled auto-shutdown strategy that scales node groups down to zero outside of business hours, you can save approximately $2,190 per month. This can be achieved using tools like Karpenter with scheduled consolidation, custom CronJobs that manipulate node group sizes, or specialized downscaler controllers. Beyond compute nodes, you should also automate the suspension of NAT Gateways and LoadBalancers during these off-hours to eliminate all residual infrastructure costs.
 </details>
 
 <details>
 <summary>6. You recently deleted a large development namespace containing StatefulSets, LoadBalancer services, and hundreds of pods. A month later, your cloud bill shows an unexpected $800 charge associated with the deleted environment. What specific Kubernetes architectural mechanisms likely caused these resources to be orphaned and continue accruing charges?</summary>
 
-When deleting Kubernetes resources, the underlying cloud infrastructure isn't always automatically cleaned up due to default retention policies. The most likely culprit for the $800 charge is unattached EBS volumes left behind by the StatefulSets, because the default `StorageClass` often uses `reclaimPolicy: Retain`, meaning the cloud disk persists even after the PersistentVolumeClaim is deleted. Additionally, if the LoadBalancer services were forcefully deleted or the namespace was abruptly terminated without allowing controllers to finalize cleanup, the cloud provider's Load Balancers and associated Elastic IPs would remain active. To prevent this, you must configure `reclaimPolicy: Delete` for non-critical storage and implement automated scanning tools to detect and alert on unattached cloud resources.
+When deleting Kubernetes resources, the underlying cloud infrastructure isn't always automatically cleaned up due to default retention policies. The most likely culprit for the $800 charge is unattached EBS volumes left behind by the StatefulSets, because the default `StorageClass` often uses `reclaimPolicy: Retain`, meaning the cloud disk persists even after the PersistentVolumeClaim is deleted. Additionally, if the LoadBalancer services were forcefully deleted or the namespace was abruptly terminated without allowing controllers to finalize cleanup, the cloud provider's Load Balancers and associated Elastic IPs would remain active. To prevent this, you must configure `reclaimPolicy: Delete` for non-critical storage and implement automated scanning tools to detect and alert on unattached cloud resources. This ensures cloud provider costs are stopped when cluster resources are removed.
 </details>
 
 ---
