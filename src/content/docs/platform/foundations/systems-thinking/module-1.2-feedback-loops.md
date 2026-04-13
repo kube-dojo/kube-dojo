@@ -41,6 +41,8 @@ The senior DBA pulls up query logs. Queries are taking 3x longer than normal. No
 
 **The root cause?** A single slow query. One poorly indexed query that normally took 50ms started taking 500ms under load. Connections held 10x longer meant connection pool filled 10x faster. Which meant more queuing. Which meant even longer waits. Which meant more timeouts. Which meant retries. Which added more load. Which made queries even slower.
 
+> **Stop and think**: If a system is perfectly stable under normal load, what makes it suddenly collapse under higher load rather than just slowing down proportionally?
+
 A **feedback loop** turned a minor performance issue into a complete system collapse in under 25 minutes.
 
 ---
@@ -89,36 +91,29 @@ All feedback loops fall into two categories. Master this distinction and you'll 
 
 Think of a microphone placed in front of a speaker. Sound enters the mic → gets amplified → comes out the speaker → enters the mic louder → gets amplified more. Without intervention, you get that ear-piercing screech within seconds.
 
+> **Pause and predict**: What happens if a system has a reinforcing loop but no balancing loop to counteract it?
+
+```mermaid
+flowchart TD
+    subgraph "The Death Spiral"
+        L[Latency Increases] --> T[Timeouts Occur]
+        T --> R[Retries Happen]
+        R -->|Each retry adds load| S[Server becomes more overloaded]
+        S --> L
+    end
 ```
-THE ANATOMY OF A RETRY STORM
-═══════════════════════════════════════════════════════════════
 
-     ┌─────────────────────────────────────────────────┐
-     │              THE DEATH SPIRAL                   │
-     │                                                 │
-     ▼                                                 │
-┌─────────┐      ┌─────────┐      ┌─────────┐         │
-│ Latency │─────▶│Timeouts │─────▶│ Retries │─────────┘
-│Increases│      │ Occur   │      │ Happen  │
-└─────────┘      └─────────┘      └─────────┘
-     ▲                                 │
-     │                                 │ Each retry adds load
-     │                                 ▼
-     │                        ┌─────────────────┐
-     └────────────────────────│ Server becomes  │
-                              │ more overloaded │
-                              └─────────────────┘
+**Timeline of a real incident:**
 
-Timeline of a real incident:
+| Time | Latency | Timeouts | Load |
+|---|---|---|---|
+| t=0:00 | 200ms | 0/sec | 1000 req/s |
+| t=0:30 | 500ms | 50/sec | 1050 req/s |
+| t=1:00 | 2000ms | 400/sec | 1400 req/s |
+| t=1:30 | 5000ms | 1200/sec | 2200 req/s |
+| t=2:00 | DEAD | ALL | 4000+ req/s |
 
-t=0:00   Latency: 200ms   Timeouts: 0/sec      Load: 1000 req/s
-t=0:30   Latency: 500ms   Timeouts: 50/sec     Load: 1050 req/s
-t=1:00   Latency: 2000ms  Timeouts: 400/sec    Load: 1400 req/s
-t=1:30   Latency: 5000ms  Timeouts: 1200/sec   Load: 2200 req/s
-t=2:00   Latency: DEAD    Timeouts: ALL        Load: 4000+ req/s
-
-From "a little slow" to "completely dead" in 2 minutes.
-```
+*From "a little slow" to "completely dead" in 2 minutes.*
 
 **The mathematics of reinforcing loops are terrifying.** If each loop iteration increases load by just 10%, after 10 iterations you're at 2.6x original load. After 20 iterations, 6.7x. After 30, 17x. This is exponential growth—and it happens fast.
 
@@ -138,44 +133,18 @@ From "a little slow" to "completely dead" in 2 minutes.
 
 Your body temperature is maintained by balancing loops. Too hot → you sweat → cooling → temperature drops. Too cold → you shiver → heat generation → temperature rises. The target is 37°C, and your body fights any deviation.
 
+```mermaid
+flowchart TD
+    T[Target: 70% CPU] --> C
+    M[Measure: 85%] --> C[Compare]
+    C --> A[Adjust: Scale pods]
+    A --> P[Add pods]
+    P --> R[CPU back to 70%]
+    R --> M
 ```
-HOW AUTOSCALING SHOULD WORK
-═══════════════════════════════════════════════════════════════
 
-                     Target: 70% CPU
-                          │
-                     ┌────┴────┐
-                     │         │
-     ┌───────────────▼─────────▼───────────────┐
-     │                                         │
-     │   Measure ──▶ Compare ──▶ Adjust        │
-     │                                         │
-     │      70%        vs        Scale         │
-     │     ━━━━━━    target      pods          │
-     │                                         │
-     └─────────────────────────────────────────┘
-               │                  │
-               │                  │
-               ▼                  ▼
-         ┌─────────┐        ┌─────────┐
-         │CPU high │        │Add pods │
-         │ (85%)   │        │         │
-         └────┬────┘        └────┬────┘
-              │                  │
-              │                  │
-              └─────────┬────────┘
-                        │
-                        ▼
-                  ┌──────────┐
-                  │ CPU back │
-                  │ to 70%   │
-                  └──────────┘
-
-This is a BALANCING loop: it opposes change.
-High CPU → action → lower CPU.
-Low CPU → action → higher CPU.
-System stabilizes around target.
-```
+This is a **BALANCING** loop: it opposes change.
+High CPU → action → lower CPU. Low CPU → action → higher CPU. System stabilizes around target.
 
 **Common balancing loops in production:**
 
@@ -199,34 +168,26 @@ System stabilizes around target.
 
 Quick technique: Count the inversions. An **inversion** is when an increase in one thing causes a *decrease* in another (or vice versa).
 
+> **Stop and think**: Can a system have both reinforcing and balancing loops at the same time? Which one usually wins?
+
+```mermaid
+flowchart LR
+    subgraph Reinforcing [REINFORCING: 0 inversions]
+        A1[Load &uarr;] --> B1[Latency &uarr;]
+        B1 --> C1[Retries &uarr;]
+        C1 --> A1
+    end
+    
+    subgraph Balancing [BALANCING: 1 inversion]
+        A2[CPU &uarr;] --> B2[Pods &uarr;]
+        B2 -->|INVERSION| C2[Load per pod &darr;]
+        C2 --> A2
+    end
 ```
-THE POLARITY TEST
-═══════════════════════════════════════════════════════════════
-
-Count the "inversions" (where ↑ causes ↓ or ↓ causes ↑):
-
-REINFORCING (even number of inversions: 0, 2, 4...):
-┌───────────────────────────────────────────────┐
-│  A ↑ ─────▶ B ↑ ─────▶ C ↑ ─────▶ A ↑        │
-│                                               │
-│  Load ↑ → Latency ↑ → Retries ↑ → Load ↑     │
-│  (0 inversions = reinforcing)                 │
-└───────────────────────────────────────────────┘
-
-BALANCING (odd number of inversions: 1, 3, 5...):
-┌───────────────────────────────────────────────┐
-│  A ↑ ─────▶ B ↑ ─────▶ C ↓ ─────▶ A ↓        │
-│                    ▲                          │
-│                 INVERSION                     │
-│                                               │
-│  CPU ↑ → Pods ↑ → Load per pod ↓ → CPU ↓     │
-│  (1 inversion = balancing)                    │
-└───────────────────────────────────────────────┘
 
 Quick test: Start with "A increases" and follow the loop.
 If A ends up increasing more → Reinforcing
 If A ends up decreasing back → Balancing
-```
 
 **Practice examples:**
 
@@ -266,57 +227,32 @@ This is a **balancing loop with delay**. The longer the delay relative to how fa
 
 ### 2.2 Autoscaler Oscillation: A Story in Three Graphs
 
-```
-SCENARIO: Autoscaler with 3-minute pod startup delay
-═══════════════════════════════════════════════════════════════
+> **Pause and predict**: If you increase the frequency of metric collection but leave the pod startup delay the same, will the oscillation get better or worse?
 
-GRAPH 1: What the autoscaler SEES (metrics with delay)
-──────────────────────────────────────────────────────
-CPU %
-100│     ●       ●       ●       ●       (metrics arrive)
-   │    ╱│      ╱│      ╱│      ╱│
- 70│───╱─┼─────╱─┼─────╱─┼─────╱─┼────── Target
-   │  ╱  │    ╱  │    ╱  │    ╱  │
- 40│ ╱   │   ╱   │   ╱   │   ╱   │
-   │╱    │  ╱    │  ╱    │  ╱    │
-   └─────┴──────┴──────┴──────┴─────── Time
-         ↑      ↑      ↑      ↑
-      "High!" "High!" "High!" "High!"
-      +5 pods +5 pods +5 pods +5 pods
-
-
-GRAPH 2: What ACTUALLY happened (reality)
-──────────────────────────────────────────────────────
-CPU %
-100│            ╱╲
-   │           ╱  ╲
- 70│──────────╱────╲────────────────── Target
-   │         ╱      ╲
- 40│        ╱        ╲
-   │       ╱          ╲_______________
- 20│──────╱────────────────────────── Massive overshoot!
-   └────────────────────────────────── Time
-           ↑
-      All 20 pods
-      become ready
-      simultaneously
-
-
-GRAPH 3: The oscillation continues
-──────────────────────────────────────────────────────
-CPU %
-100│    ╱╲              ╱╲              ╱╲
-   │   ╱  ╲            ╱  ╲            ╱  ╲
- 70│──╱────╲──────────╱────╲──────────╱────╲── Target
-   │ ╱      ╲        ╱      ╲        ╱      ╲
- 40│╱        ╲      ╱        ╲      ╱        ╲
-   │          ╲    ╱          ╲    ╱          ╲
- 20│           ╲__╱            ╲__╱            ╲_
-   └────────────────────────────────────────────── Time
-         Scale up  Scale down  Scale up  Scale down
-         (overshoot)(undershoot)(overshoot)...
-
-Without damping, this continues indefinitely.
+```mermaid
+sequenceDiagram
+    participant HPA as Autoscaler
+    participant Pods as Kubernetes Pods
+    participant Metric as Prometheus Metrics
+    
+    Note over Metric: Traffic spikes (CPU 85%)
+    Metric->>HPA: Reports 85% CPU
+    HPA->>Pods: Add 5 pods (Takes 3 mins)
+    
+    Note over Metric: 15s later (Pods not ready)
+    Metric->>HPA: Still reports 85% CPU
+    HPA->>Pods: Add 5 pods
+    
+    Note over Metric: 30s later (Pods not ready)
+    Metric->>HPA: Still reports 85% CPU
+    HPA->>Pods: Add 5 pods
+    
+    Note over Pods: 3 minutes later...
+    Pods-->>Metric: All 20 pods become ready
+    Note over Metric: CPU plummets to 20%
+    Metric->>HPA: Reports 20% CPU
+    HPA->>Pods: Scale down (Overshoot!)
+    Note over HPA, Pods: Oscillation continues indefinitely
 ```
 
 ### 2.3 The Delay Inventory
@@ -372,38 +308,11 @@ These patterns cause the majority of cascading failures in distributed systems. 
 
 **Pattern:** Failure triggers retries, retries add load, load causes more failures.
 
-```
-THE RETRY STORM ANATOMY
-═══════════════════════════════════════════════════════════════
-
-Normal state:
-┌────────┐  1000 req/s  ┌────────┐
-│ Client │─────────────▶│ Server │  Everything fine
-└────────┘              └────────┘
-
-Trouble begins (server slow):
-┌────────┐  1000 req/s  ┌────────┐
-│ Client │─────────────▶│ Server │  Latency: 500ms
-└────────┘     +        └────────┘  (normal: 50ms)
-              200 retries
-
-Getting worse:
-┌────────┐  1000 req/s  ┌────────┐
-│ Client │─────────────▶│ Server │  Latency: 2000ms
-└────────┘     +        └────────┘  Timeouts starting
-              800 retries
-                 +
-              200 retry-of-retries
-
-Death spiral:
-┌────────┐  1000 req/s  ┌────────────────┐
-│ Client │─────────────▶│    Server      │
-└────────┘     +        │  OVERLOADED    │
-            3000 retries│  100% failure  │
-              (3x load) └────────────────┘
-
-Total traffic: 4000+ req/s from 1000 original requests.
-Server never recovers without external intervention.
+```mermaid
+flowchart LR
+    A[Normal State\n1000 req/s] --> B[Trouble Begins\n+200 retries\n500ms latency]
+    B --> C[Getting Worse\n+1000 retries\n2000ms latency]
+    C --> D[Death Spiral\n+3000 retries\n100% failure]
 ```
 
 **Breaking the loop:**
@@ -416,38 +325,25 @@ Server never recovers without external intervention.
 
 **Pattern:** Synchronized events cause coordinated resource access.
 
-```
-THE THUNDERING HERD
-═══════════════════════════════════════════════════════════════
+```mermaid
+sequenceDiagram
+    participant U as 10,000 Users
+    participant C as Cache
+    participant D as Database
 
-Setup: 10,000 users, cache TTL = 3600s (1 hour)
-Cache populated at 10:00 AM
+    Note over U,D: 10:00 AM - Normal Operation (TTL 3600s)
+    U->>C: Request
+    C-->>U: Cache HIT
 
-Normal operation (10:00 AM - 10:59 AM):
-┌─────────┐                         ┌──────────┐
-│  Users  │──▶ Cache HIT (99.9%) ──▶│  Happy   │
-│ 10,000  │                         │  users   │
-└─────────┘                         └──────────┘
-                                    DB load: ~10 req/s
+    Note over U,D: 11:00:00 AM - Cache expires simultaneously
+    U->>C: Request (10,000 users)
+    C->>D: Cache MISS (all at once)
+    Note over D: OVERWHELMED
 
-11:00:00 AM - Cache expires (simultaneously for everyone):
-┌─────────┐                         ┌──────────┐
-│  Users  │──▶ Cache MISS ─────────▶│ Database │
-│ 10,000  │    (all at once!)       │          │
-└─────────┘                         └──────────┘
-                                    DB load: 10,000 req/s
-                                              ↓
-                                         OVERWHELMED
-
-11:00:01 AM - Database too slow, queries timeout:
-┌─────────┐                         ┌──────────┐
-│  Users  │──▶ Cache MISS ─────────▶│ Database │
-│ 10,000  │    (still empty!)       │  DYING   │
-└─────────┘       +                 └──────────┘
-            Retries from
-            first requests         DB can't recover
-                                   because cache can't
-                                   be repopulated
+    Note over U,D: 11:00:01 AM - Database dying
+    U->>C: Request + Retries
+    C->>D: Cache MISS (still empty)
+    Note over D: DYING - Cannot recover
 ```
 
 **Breaking the loop:**
@@ -460,50 +356,13 @@ Normal operation (10:00 AM - 10:59 AM):
 
 **Pattern:** Slow operations hold connections longer, exhausting the pool.
 
-```
-THE CONNECTION POOL DEATH SPIRAL
-═══════════════════════════════════════════════════════════════
-
-Pool size: 100 connections
-Normal query time: 10ms
-Queries per second: 500
-
-Normal state:
-────────────────────────────────────────────────────────────
-Connections in use: ~5 (500 req/s × 10ms = 5 concurrent)
-Pool utilization: 5%
-Wait time: 0ms
-────────────────────────────────────────────────────────────
-
-Something makes queries slow (50ms instead of 10ms):
-────────────────────────────────────────────────────────────
-Connections in use: ~25 (500 req/s × 50ms = 25 concurrent)
-Pool utilization: 25%
-Wait time: 0ms    ← Still fine, but watch this...
-────────────────────────────────────────────────────────────
-
-Requests queue because of slow queries (now 500ms):
-────────────────────────────────────────────────────────────
-Connections in use: 100 (MAXED)
-Pool utilization: 100%
-Wait time: 500ms  ← Total request time now 1000ms
-New requests timing out while waiting for connections
-Timeouts trigger retries...
-────────────────────────────────────────────────────────────
-
-Death spiral engaged:
-────────────────────────────────────────────────────────────
-Connections in use: 100 (MAXED)
-Waiting for connection: 500 requests
-Wait time: 10,000ms+
-Database sees 100 concurrent slow queries
-Database gets slower
-Queries take longer
-Connections held longer
-More requests waiting
-More retries
-MORE LOAD ON ALREADY DYING DATABASE
-────────────────────────────────────────────────────────────
+```mermaid
+flowchart TD
+    A[Normal: 10ms queries, 5/100 connections] --> B[Slowdown: 50ms queries, 25/100 connections]
+    B --> C[Queueing: 500ms queries, 100/100 connections MAXED]
+    C --> D[Timeouts and Retries]
+    D --> E[Death Spiral: 100+ concurrent slow queries, DB overwhelmed]
+    E --> C
 ```
 
 **Breaking the loop:**
@@ -516,51 +375,14 @@ MORE LOAD ON ALREADY DYING DATABASE
 
 **Pattern:** Resource pressure causes evictions, evictions redistribute load, causing more pressure.
 
-```
-THE EVICTION CASCADE
-═══════════════════════════════════════════════════════════════
-
-Setup: 10 pods handling traffic evenly
-
-Normal state:
-─────────────────────────────────────────────────────
-│ Pod 1 │ Pod 2 │ Pod 3 │ ... │ Pod 10 │
-│  10%  │  10%  │  10%  │ ... │   10%  │  (load each)
-─────────────────────────────────────────────────────
-Memory per pod: 400MB (limit: 512MB)
-
-Memory leak develops in Pod 3:
-─────────────────────────────────────────────────────
-│ Pod 1 │ Pod 2 │ Pod 3 │ ... │ Pod 10 │
-│  10%  │  10%  │  10%  │ ... │   10%  │
-│ 400MB │ 400MB │ 512MB │ ... │  400MB │
-                    ↓
-              OOMKilled
-─────────────────────────────────────────────────────
-
-Pod 3 evicted, load redistributed:
-─────────────────────────────────────────────────────
-│ Pod 1 │ Pod 2 │       │ ... │ Pod 10 │
-│  11%  │  11%  │ GONE  │ ... │   11%  │
-│ 440MB │ 440MB │       │ ... │  440MB │  ← Memory rising!
-─────────────────────────────────────────────────────
-
-More pods approach limit:
-─────────────────────────────────────────────────────
-│ Pod 1 │ Pod 2 │       │ ... │ Pod 10 │
-│  11%  │  11%  │ GONE  │ ... │   11%  │
-│ 490MB │ 510MB │       │ ... │  500MB │
-            ↓
-       OOMKilled (Pod 2)
-─────────────────────────────────────────────────────
-
-Cascade accelerates (now 8 pods for same traffic):
-─────────────────────────────────────────────────────
-8 pods... 7 pods... 6 pods... 5 pods...
-Each eviction increases load on survivors
-Each survivor moves closer to memory limit
-Evictions accelerate until cluster collapse
-─────────────────────────────────────────────────────
+```mermaid
+flowchart TD
+    A[10 Pods: 10% load each, 400MB memory] --> B[Memory leak in Pod 3 hits 512MB limit]
+    B --> C[Pod 3 OOMKilled and Evicted]
+    C --> D[9 Pods: 11% load each, 440MB memory]
+    D --> E[Pod 2 hits limit and is OOMKilled]
+    E --> F[8 Pods: More load, more memory]
+    F --> G[Cascade accelerates until cluster collapse]
 ```
 
 **Breaking the loop:**
@@ -573,41 +395,16 @@ Evictions accelerate until cluster collapse
 
 **Pattern:** Incidents generate alerts, alerts overwhelm responders, overwhelmed responders miss alerts, more incidents.
 
-```
-THE ALERT STORM
-═══════════════════════════════════════════════════════════════
-
-Normal:
-┌────────────────┐     ┌────────────────┐
-│ 5 alerts/day   │────▶│ Engineer reads │──▶ Issues fixed
-│ All meaningful │     │ all of them    │
-└────────────────┘     └────────────────┘
-
-After "improving monitoring":
-┌────────────────┐     ┌────────────────┐
-│ 50 alerts/day  │────▶│ Engineer skims │──▶ Some fixed
-│ Mostly noise   │     │ ignores most   │
-└────────────────┘     └────────────────┘
-
-After the first missed incident:
-┌────────────────┐     ┌────────────────────────┐
-│ 100 alerts/day │────▶│ "Add more monitoring!" │
-│ Even more noise│     │ Now 200 alerts/day     │
-└────────────────┘     └────────────────────────┘
-
-Alert fatigue sets in:
-┌────────────────┐     ┌────────────────┐     ┌─────────────┐
-│ 200 alerts/day │────▶│ Engineer mutes │────▶│ Incidents   │
-│ All ignored    │     │ notifications  │     │ go unnoticed│
-└────────────────┘     └────────────────┘     └─────────────┘
-                                                     │
-           ┌─────────────────────────────────────────┘
-           │
-           ▼
-┌─────────────────────┐
-│ "We need EVEN MORE  │
-│ monitoring!" (loop) │
-└─────────────────────┘
+```mermaid
+flowchart TD
+    A[5 alerts/day: All meaningful] --> B[Engineer reads and fixes]
+    C[50 alerts/day: Mostly noise] --> D[Engineer skims, ignores most]
+    D --> E[First missed incident]
+    E --> F["Add more monitoring!"]
+    F --> G[200 alerts/day: All ignored]
+    G --> H[Engineer mutes notifications]
+    H --> I[Incidents go unnoticed]
+    I --> F
 ```
 
 **Breaking the loop:**
@@ -620,45 +417,17 @@ Alert fatigue sets in:
 
 **Pattern:** Under-provisioning causes incidents, incidents cause over-provisioning, budgets cut, under-provisioning.
 
-```
-THE CAPACITY PLANNING SPIRAL
-═══════════════════════════════════════════════════════════════
-
-Year 1: Launch
-┌─────────────────────────────────────┐
-│ "We'll scale as needed"             │
-│ Provisioned: Just enough            │
-│ Buffer: ~5%                         │
-└─────────────────────────────────────┘
-
-Year 1, Month 6: Black Friday
-┌─────────────────────────────────────┐
-│ Traffic: 10x normal                 │
-│ Result: Outage                      │
-│ Blame: "We need more capacity!"     │
-└─────────────────────────────────────┘
-
-Year 2: Post-mortem
-┌─────────────────────────────────────┐
-│ Provisioned: 20x normal (just in case) │
-│ Actual usage: 2x normal             │
-│ Utilization: 10%                    │
-│ CFO: "Why are we paying for this?"  │
-└─────────────────────────────────────┘
-
-Year 2, Month 6: Budget cuts
-┌─────────────────────────────────────┐
-│ "Reduce cloud spend by 50%"         │
-│ Provisioned: Back to 10x            │
-│ Buffer: ~5% again                   │
-└─────────────────────────────────────┘
-
-Year 2, Month 11: Pre-holiday traffic
-┌─────────────────────────────────────┐
-│ Traffic: 12x normal                 │
-│ Result: Outage (again)              │
-│ Loop repeats                        │
-└─────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A[Year 1: Provisioned Just Enough] --> B[Month 6: Black Friday 10x traffic]
+    B --> C[Result: Outage]
+    C --> D[Year 2: Provision 20x normal]
+    D --> E[Utilization: 10%]
+    E --> F[Month 6: Budget Cuts - Reduce spend by 50%]
+    F --> G[Provisioning back to 10x]
+    G --> H[Month 11: 12x traffic]
+    H --> I[Result: Outage]
+    I --> D
 ```
 
 **Breaking the loop:**
@@ -821,42 +590,34 @@ def retry_with_backoff(func, max_retries=5):
 
 Before deploying any system with feedback mechanisms, answer these questions:
 
-```
-FEEDBACK LOOP ANALYSIS CHECKLIST
-═══════════════════════════════════════════════════════════════
+### Feedback Loop Analysis Checklist
 
 For each feedback loop in your system:
 
-□ IDENTIFICATION
+- [ ] **IDENTIFICATION**
   - What are the elements in the loop?
   - Is it reinforcing or balancing?
   - What behavior does it create?
-
-□ DELAYS
+- [ ] **DELAYS**
   - What is the total delay around the loop?
   - Is the loop evaluation faster than the delay?
   - What happens during the delay period?
-
-□ STABILITY
+- [ ] **STABILITY**
   - Is there damping/smoothing?
   - Are there stabilization windows?
   - Can the loop oscillate? At what frequency?
-
-□ FAILURE MODES
+- [ ] **FAILURE MODES**
   - What happens if feedback is delayed/lost?
   - What happens under extreme load?
   - Is there a circuit breaker to stop runaway loops?
-
-□ SYNCHRONIZATION
+- [ ] **SYNCHRONIZATION**
   - Can multiple instances synchronize?
   - Is there jitter on timers/TTLs?
   - What triggers correlated behavior?
-
-□ OBSERVABILITY
+- [ ] **OBSERVABILITY**
   - Can you see the loop in action?
   - What metrics show loop behavior?
   - How would you detect a runaway loop?
-```
 
 ---
 
@@ -888,70 +649,32 @@ For each feedback loop in your system:
 
 ## Quiz
 
-1. **What's the difference between a reinforcing and a balancing feedback loop?**
+1. **Scenario: Your e-commerce checkout service has a default timeout of 5 seconds. During a database slowdown, requests start taking 8 seconds. The payment processing pods automatically retry failed requests up to 3 times immediately. What type of feedback loop is this, and what will happen to the database?**
    <details>
    <summary>Answer</summary>
 
-   **Reinforcing loops** amplify change in the current direction. If the system is moving up, reinforcing loops push it further up. If moving down, further down. Examples: retry storms (failures cause retries cause more failures), viral growth (users invite users who invite more users).
-
-   **Balancing loops** oppose change, pushing the system toward a target equilibrium. High CPU → add pods → lower CPU. High temperature → cooling → lower temperature.
-
-   Quick test: If A increases, trace through the loop. Does A end up increasing more (reinforcing) or decreasing back toward a target (balancing)?
+   This is a **reinforcing loop** (specifically, a retry storm). The database is already slow due to load or locking. When the checkout service times out and immediately retries 3 times, it multiplies the load on the database by 4. This additional load makes the database even slower, causing more timeouts, which cause even more retries. The loop will amplify the failure until the database or the payment service completely collapses.
    </details>
 
-2. **Why do delays turn balancing loops into oscillating disasters?**
+2. **Scenario: You configure a HorizontalPodAutoscaler (HPA) to maintain 70% CPU utilization. It evaluates metrics every 15 seconds. However, your application pods take 4 minutes to start up and become ready because they need to download a large machine learning model. After a spike in traffic, you notice the number of pods fluctuating wildly between 10 and 100 every few minutes, while CPU usage bounces between 10% and 100%. What is causing this behavior?**
    <details>
    <summary>Answer</summary>
 
-   Delays cause oscillation because corrective actions are based on stale information. The sequence:
-
-   1. System detects problem (using delayed metrics)
-   2. System applies correction
-   3. During delay, system applies more correction (still seeing old data)
-   4. All corrections take effect simultaneously
-   5. System overshoots target in opposite direction
-   6. Process repeats in reverse
-
-   The longer the delay relative to correction speed, the worse the oscillation. Solution: evaluation interval should exceed total delay, and changes should be gradual (damped).
+   This oscillation is caused by a **balancing loop with a severe delay**. The HPA sees high CPU and adds pods to counteract the load. Because the pods take 4 minutes to start, the CPU metric remains high during the next 15-second evaluation, prompting the HPA to add even more pods. By the time the pods finally start, the HPA has over-provisioned massively, dropping CPU to near zero and triggering an aggressive scale-down. The system oscillates wildly because the corrective action takes longer to take effect than the HPA's evaluation interval.
    </details>
 
-3. **Explain how a thundering herd creates a reinforcing loop.**
+3. **Scenario: You launch a new popular mobile game. At exactly midnight, the daily quests reset for all players. Every player's app simultaneously requests the new quests from the backend. The backend checks a Redis cache, but the quest data for the new day hasn't been cached yet. The backend then queries the database. Within seconds, the database crashes. What pattern is this, and how does it create a reinforcing loop?**
    <details>
    <summary>Answer</summary>
 
-   The thundering herd reinforcing loop:
-
-   1. Cache expires simultaneously for many users
-   2. All requests miss cache, hit database
-   3. Database overwhelmed, queries slow or fail
-   4. Failed queries can't populate cache
-   5. Next requests still miss cache
-   6. Even more database load
-   7. Database slower, even fewer successful cache populations
-   8. Loop continues until intervention
-
-   The reinforcing element: cache failure → database overload → cache stays empty → more database overload. Each iteration makes things worse.
-
-   Breaking the loop: jittered TTLs, single-writer pattern, request coalescing, cache warming before expiration.
+   This is the **thundering herd** pattern, which creates a destructive reinforcing loop. The simultaneous cache misses cause a massive spike in database queries that overwhelms the database backend. The database slows down significantly, causing those queries to time out and fail to populate the cache. Because the queries time out, subsequent requests from the apps also miss the cache and hit the database directly. This keeps the database overwhelmed and ensures the cache remains empty indefinitely.
    </details>
 
-4. **What is jitter and why is it crucial in distributed systems?**
+4. **Scenario: To fix the daily quest crash from the previous scenario, you decide to cache the daily quests for 24 hours. However, you notice that exactly 24 hours later, the database crashes again. Your senior engineer suggests adding "jitter" to the cache TTL. Why is jitter the correct solution here?**
    <details>
    <summary>Answer</summary>
 
-   **Jitter** is deliberate randomness added to timing. Instead of exact intervals, you use a range.
-
-   Why it's crucial:
-   - **Prevents synchronization**: Without jitter, all caches expire at once, all retries happen together, all health checks fire simultaneously
-   - **Converts spikes to spreads**: Instead of 10,000 requests at second 0, you get 10,000 spread over 10 minutes
-   - **Breaks thundering herds**: If TTL is 3600 ± 600 seconds, expirations are spread over 20 minutes instead of all at once
-   - **Reduces retry collisions**: Random backoff means retries don't all hit at 1s, 2s, 4s
-
-   Common applications:
-   - Cache TTLs: ±10-20% jitter
-   - Retry backoff: Add random 0-50% of base delay
-   - Periodic jobs: Random delay on startup
-   - Health checks: Random offset from interval
+   Jitter is the correct solution because it breaks the synchronization of the **thundering herd**. If all cache entries have an exact TTL of 24 hours (86,400 seconds), they will all expire at exactly the same time the next day, causing another simultaneous wave of database queries. By adding a random jitter value (e.g., between -30 and +30 minutes), the cache expirations are spread out over a wide time window. This converts a massive, instantaneous spike in load into a manageable, distributed stream of requests. The database can then comfortably repopulate the cache without becoming overwhelmed.
    </details>
 
 ---
@@ -962,28 +685,13 @@ For each feedback loop in your system:
 
 **Scenario**: You're reviewing this API service architecture:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    PRODUCTION SYSTEM                        │
-│                                                             │
-│   Users ──▶ CDN ──▶ Load Balancer ──▶ API Pods (HPA)       │
-│                                            │                │
-│                                            ▼                │
-│                    ┌─────────── Redis Cache ────────────┐   │
-│                    │              TTL: 1 hour           │   │
-│                    │              (no jitter)           │   │
-│                    └────────────────────────────────────┘   │
-│                                            │                │
-│                                            ▼                │
-│                                     PostgreSQL              │
-│                              (connection pool: 50)          │
-│                                                             │
-│   Retry Policy: 3 retries, 1s fixed delay                  │
-│   HPA: Scale on CPU, check every 15s, cooldown 30s         │
-│   Rate Limit: 1000 req/s per user                          │
-│   Circuit Breaker: None                                     │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    U[Users] --> CDN
+    CDN --> LB[Load Balancer]
+    LB --> API[API Pods HPA\nRate Limit: 1000 req/s\nRetry: 3 retries, 1s fixed\nCB: None]
+    API -->|TTL: 1 hour, no jitter| Cache[(Redis Cache)]
+    API -->|Pool: 50| DB[(PostgreSQL)]
 ```
 
 **Your Analysis**:
@@ -1121,3 +829,4 @@ pool:
 ## Next Module
 
 [Module 1.3: Mental Models for Operations](../module-1.3-mental-models-for-operations/) - Build practical mental models for understanding production systems: leverage points, stock-and-flow diagrams, and the frameworks that experienced operators use instinctively.
+---
