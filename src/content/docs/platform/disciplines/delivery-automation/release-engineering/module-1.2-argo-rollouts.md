@@ -42,6 +42,8 @@ After this module, you will have a fully automated canary pipeline that promotes
 
 ## What is Argo Rollouts?
 
+> **Stop and think**: What happens to user traffic in a standard Kubernetes `Deployment` with the `RollingUpdate` strategy if the new pods start returning HTTP 500 errors but their readiness probes still pass?
+
 ### The Gap in Native Kubernetes
 
 Kubernetes Deployments support two strategies: `RollingUpdate` and `Recreate`. Neither gives you:
@@ -56,31 +58,18 @@ Argo Rollouts fills this gap with a custom `Rollout` resource that replaces the 
 
 ### Architecture
 
-```
-┌────────────────────────────────────────────────────────────────┐
-│                     Argo Rollouts Controller                    │
-│                                                                │
-│   Watches Rollout CRDs → Manages ReplicaSets → Runs Analyses  │
-└───────────────┬──────────────────────────────┬─────────────────┘
-                │                              │
-                ▼                              ▼
-┌───────────────────────────┐   ┌───────────────────────────────┐
-│   Rollout Resource         │   │   AnalysisTemplate Resource   │
-│                           │   │                               │
-│  - Canary strategy         │   │  - Prometheus queries          │
-│  - Traffic weight steps    │   │  - Success criteria            │
-│  - Analysis references     │   │  - Failure thresholds          │
-│  - Rollback rules          │   │  - Measurement intervals       │
-└──────────┬────────────────┘   └───────────────┬───────────────┘
-           │                                    │
-           ▼                                    ▼
-┌───────────────────────────┐   ┌───────────────────────────────┐
-│   ReplicaSets             │   │   AnalysisRun (instance)       │
-│                           │   │                               │
-│  - Stable (current live)   │   │  - Running metrics queries     │
-│  - Canary (new version)    │   │  - Evaluating pass/fail        │
-│                           │   │  - Reporting to controller      │
-└───────────────────────────┘   └───────────────────────────────┘
+```mermaid
+flowchart TD
+    Controller["Argo Rollouts Controller\n(Watches CRDs, Manages ReplicaSets, Runs Analyses)"]
+    
+    Controller --> Rollout
+    Controller --> AnalysisTemplate
+    
+    Rollout["Rollout Resource\n- Canary strategy\n- Traffic weight steps\n- Analysis references\n- Rollback rules"]
+    AnalysisTemplate["AnalysisTemplate Resource\n- Prometheus queries\n- Success criteria\n- Failure thresholds\n- Measurement intervals"]
+    
+    Rollout --> RS["ReplicaSets\n- Stable (current live)\n- Canary (new version)"]
+    AnalysisTemplate --> ARun["AnalysisRun (instance)\n- Running metrics queries\n- Evaluating pass/fail\n- Reporting to controller"]
 ```
 
 ### Core CRDs
@@ -207,7 +196,7 @@ Argo Rollouts supports multiple traffic routing mechanisms:
 
 Traffic is split proportionally by pod count. If you have 10 replicas and set canary weight to 20%, Argo Rollouts runs 2 canary pods and 8 stable pods.
 
-```
+```text
 Limitation: You can only achieve traffic splits that align with replica counts.
 With 5 replicas, your options are 20%, 40%, 60%, 80% — not 5% or 10%.
 ```
@@ -299,6 +288,8 @@ trafficRouting:
 ---
 
 ## AnalysisTemplates: Metrics-Driven Decisions
+
+> **Pause and predict**: If your AnalysisTemplate checks an error rate metric every 60 seconds and requires 5 successful measurements to pass, what is the absolute minimum time this step will take to complete?
 
 ### The Core Innovation
 
@@ -418,28 +409,22 @@ spec:
 
 When a Rollout step triggers an analysis, an AnalysisRun is created:
 
-```
-AnalysisTemplate (definition)
-         │
-         ▼
-  AnalysisRun (instance)
-         │
-         ├── Measurement 1: ✓ Pass (success rate: 0.98)
-         ├── Measurement 2: ✓ Pass (success rate: 0.97)
-         ├── Measurement 3: ✓ Pass (success rate: 0.96)
-         │
-         └── Result: Successful → Rollout proceeds to next step
+```mermaid
+flowchart TD
+    Template["AnalysisTemplate (definition)"] --> Run["AnalysisRun (instance)"]
+    Run --> M1["Measurement 1: ✓ Pass (success rate: 0.98)"]
+    Run --> M2["Measurement 2: ✓ Pass (success rate: 0.97)"]
+    Run --> M3["Measurement 3: ✓ Pass (success rate: 0.96)"]
+    Run --> Result["Result: Successful → Rollout proceeds to next step"]
 ```
 
 If a measurement fails:
 
-```
-  AnalysisRun (instance)
-         │
-         ├── Measurement 1: ✓ Pass (success rate: 0.97)
-         ├── Measurement 2: ✗ Fail (success rate: 0.82)
-         │
-         └── Result: Failed → Rollout automatically rolls back
+```mermaid
+flowchart TD
+    Run["AnalysisRun (instance)"] --> M1["Measurement 1: ✓ Pass (success rate: 0.97)"]
+    Run --> M2["Measurement 2: ✗ Fail (success rate: 0.82)"]
+    Run --> Result["Result: Failed → Rollout automatically rolls back"]
 ```
 
 ### Supported Providers
@@ -459,6 +444,8 @@ If a measurement fails:
 
 ## Automated Rollback
 
+> **Stop and think**: Why does Argo Rollouts scale the canary ReplicaSet down to zero immediately after an AnalysisRun fails, rather than leaving the pods running for debugging?
+
 ### How Rollback Works
 
 When an AnalysisRun fails, Argo Rollouts:
@@ -468,7 +455,7 @@ When an AnalysisRun fails, Argo Rollouts:
 3. Updates the traffic routing to send 100% to stable
 4. Marks the Rollout as "Degraded"
 
-```
+```text
 Before failure:
   Stable (v1): 8 pods, 80% traffic
   Canary (v2): 2 pods, 20% traffic
@@ -492,7 +479,7 @@ metrics:
 
 With this configuration, the worst-case detection time is 30 seconds (one interval). Total rollback time:
 
-```
+```text
 Detection:  30 seconds (one interval)
 Decision:    ~1 second (controller processes failure)
 Scale down:  ~5 seconds (canary pods terminated)
@@ -548,17 +535,12 @@ This tells Kubernetes to prefer scheduling canary pods on different nodes than s
 
 ### Understanding Rollout Phases
 
-```
-┌──────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐
-│  Healthy │ ──► │ Paused   │ ──► │Progressing──► │  Healthy │
-│  (v1)    │     │ (canary) │     │ (promote)│     │  (v2)    │
-└──────────┘     └────┬─────┘     └──────────┘     └──────────┘
-                      │
-                      ▼ (analysis failure)
-                ┌──────────┐
-                │ Degraded │
-                │(rollback)│
-                └──────────┘
+```mermaid
+flowchart LR
+    H1["Healthy\n(v1)"] --> P["Paused\n(canary)"]
+    P -->|"Promote"| Prog["Progressing\n(promote)"]
+    Prog --> H2["Healthy\n(v2)"]
+    P -->|"Analysis failure"| D["Degraded\n(rollback)"]
 ```
 
 ### Monitoring Rollouts
@@ -761,120 +743,62 @@ metrics:
 ## Quiz: Check Your Understanding
 
 ### Question 1
-What is the difference between an AnalysisTemplate and an AnalysisRun?
+Scenario: Your team wants to monitor the error rate of a new payment service during a canary deployment. You write the configuration to check Prometheus every 60 seconds and deploy it to the cluster, but nothing happens. The metrics aren't being checked until a rollout actually starts. Why does the evaluation only begin later, and what is the difference between what you created and what actually executes the checks?
 
 <details>
 <summary>Show Answer</summary>
 
-An **AnalysisTemplate** is a definition — a template that specifies which metrics to check, how often to check them, and what constitutes success or failure. It is like a class definition.
-
-An **AnalysisRun** is an instance — a running execution of an AnalysisTemplate created automatically by the Rollout controller when a rollout step triggers analysis. It contains the actual measurements and results. It is like an object instantiated from the class.
-
-You create AnalysisTemplates. Argo Rollouts creates AnalysisRuns for you.
+You created an **AnalysisTemplate**, which is essentially a blueprint or definition of what metrics to check, how often, and the success criteria. It does not actively evaluate anything on its own, which is why nothing happened immediately after you deployed it. When the rollout reaches a step that references this template, the Argo Rollouts controller automatically instantiates an **AnalysisRun**. The AnalysisRun is the actual execution instance that performs the live queries against Prometheus and records the pass/fail measurements based on the template's rules. You can think of the template as a class definition, and the run as an instantiated object performing the work.
 
 </details>
 
 ### Question 2
-Why is replica-based traffic splitting insufficient for most production canary deployments?
+Scenario: A team manages a critical microservice that runs with 4 replicas in production. They want to implement a highly cautious canary rollout, exposing the new version to only 2% of live traffic initially before ramping up. However, without adding an ingress controller integration like NGINX or Istio, they find this configuration is impossible to achieve. Why does native Argo Rollouts without traffic routing integration fail to support this 2% requirement?
 
 <details>
 <summary>Show Answer</summary>
 
-Replica-based splitting divides traffic proportionally by pod count. With 10 replicas, your traffic increments are limited to multiples of 10% (1 pod = 10%, 2 pods = 20%, etc.).
-
-Problems with this approach:
-- You cannot achieve small percentages like 1% or 5% without running many replicas
-- With 5 replicas, your minimum canary weight is 20% — far too high for initial canary exposure
-- The traffic split is approximate because Kubernetes load balancing is not perfectly even
-
-Ingress controller or service mesh integration solves this by splitting traffic at the routing layer, independent of pod count. You can send exactly 1% to the canary while running a single canary pod.
+By default, Argo Rollouts uses replica-based traffic splitting, meaning user traffic is distributed proportionally based on the number of pods running. Because this team only has 4 replicas in their deployment, their minimum possible canary exposure is 1 pod, which equates to 25% of the total traffic (1 out of 4 pods). To achieve a 2% traffic split natively without external tools, they would need to run 50 total replicas (1 canary and 49 stable), which unnecessarily wastes compute resources. Integrating a service mesh or an advanced ingress controller solves this by separating the routing layer from the replica count, allowing exact percentage splits regardless of how many pods are running.
 
 </details>
 
 ### Question 3
-What happens when an AnalysisRun fails during a canary rollout?
+Scenario: During an automated rollout to a user-facing API, the canary version reaches 25% traffic weight. Suddenly, an `AnalysisRun` checking the P99 latency metric fails because the new database queries are unoptimized. Without any human intervention, the system automatically corrects itself within seconds. What exactly does the Argo Rollouts controller do behind the scenes to restore the service to a healthy state?
 
 <details>
 <summary>Show Answer</summary>
 
-When an AnalysisRun fails:
-
-1. The Rollout controller scales the canary ReplicaSet to zero
-2. The stable ReplicaSet scales to the full desired replica count
-3. Traffic routing is updated to send 100% of traffic to stable
-4. The Rollout status is set to "Degraded"
-5. The AnalysisRun is marked as "Failed" with the failing measurements recorded
-
-This entire process typically completes in under 60 seconds. The Rollout stays in "Degraded" state until a new version is deployed or the operator manually retries (`kubectl argo rollouts retry`).
+When an AnalysisRun fails, the Argo Rollouts controller immediately initiates an automated rollback sequence to protect the system. It quickly scales the canary ReplicaSet down to zero and ensures the stable ReplicaSet is scaled back up to the full desired replica count. Simultaneously, it updates the traffic routing configuration to instantly shift 100% of user traffic back to the known-good stable version. Finally, the controller marks the Rollout's status as "Degraded" and the AnalysisRun as "Failed," leaving a clear audit trail of the failing measurements for engineers to review. This entire sequence happens autonomously and typically completes in under a minute.
 
 </details>
 
 ### Question 4
-When should you use background analysis vs inline (step-based) analysis?
+Scenario: You are designing a rollout strategy for a checkout service. You want to ensure the CPU usage remains stable throughout the entire 2-hour deployment process. You also want to run a specific synthetic load test immediately after the canary receives its first 5% of traffic, before letting real users onto the new version. How should you structure your Argo Rollouts analysis steps to accommodate both the continuous monitoring and the one-off test?
 
 <details>
 <summary>Show Answer</summary>
 
-**Background analysis** runs continuously from a specified step until the rollout completes. Use it for:
-- Core health metrics that should always be monitored (error rate, latency)
-- Metrics that need time to accumulate statistical significance
-- Catching degradation between steps, not just at step boundaries
-
-**Inline analysis** runs at a specific step and must complete before proceeding. Use it for:
-- Step-specific validations (smoke test after first deployment)
-- Different criteria at different traffic levels (stricter checks at higher weight)
-- One-off checks like load tests or integration tests
-
-Best practice: use background analysis for core metrics AND inline analysis for step-specific checks. They complement each other.
+You must use a combination of **background analysis** and **inline analysis** to accommodate both requirements. The CPU usage check should be configured as a background analysis using the `startingStep` field in the Rollout strategy, ensuring it continuously monitors performance from that point until the rollout fully completes. Conversely, the synthetic load test should be configured as an inline analysis directly attached to the 5% weight step. The rollout will pause execution at that specific step, trigger the load test AnalysisRun, and strictly require it to pass before the controller allows the progression to higher traffic weights. This hybrid approach guarantees both point-in-time validation and continuous systemic health monitoring.
 
 </details>
 
 ### Question 5
-A team's canary analysis checks HTTP error rate and P99 latency, yet they still experience production issues after canary promotion. What metrics might they be missing?
+Scenario: An e-commerce team configures their Argo Rollouts AnalysisTemplate to strictly monitor HTTP 5xx error rates and P99 response latency. During a Black Friday deployment, the canary version is successfully promoted to 100% traffic because both metrics remained perfectly green. However, they soon discover that the new version had a bug causing shopping carts to empty silently—returning a `200 OK` response but failing to save the data. What critical category of metrics did their analysis strategy miss, and how should they fix it?
 
 <details>
 <summary>Show Answer</summary>
 
-Common metrics that HTTP error rate and P99 latency miss:
-
-1. **Business metrics**: Payment completion rate, signup conversion, order success rate — a bug could return 200 OK but produce wrong results
-2. **Resource metrics**: Memory usage trending upward (slow leak), CPU utilization, connection pool exhaustion
-3. **Downstream dependency health**: Increased errors from services that the canary calls
-4. **Error distribution**: Overall error rate might be fine, but a specific endpoint could have 50% errors
-5. **Client-side metrics**: JavaScript errors, mobile crash rates, client-observed latency
-6. **Data quality**: Correct results returned but data corruption in writes
-
-The lesson: canary analysis should check multiple layers — infrastructure, application, and business metrics.
+The team fundamentally missed monitoring **business metrics**, focusing entirely on infrastructure and HTTP-level health signals. Because the application gracefully handled the logic failure by returning a `200 OK` instead of throwing an exception, the HTTP error rate remained completely unaffected by the bug. To prevent this from recurring, their AnalysisTemplate must include domain-specific queries that validate actual business logic, such as the ratio of items added to carts versus successful checkouts. Canary analysis is only as effective as the metrics it evaluates, meaning a robust strategy must observe infrastructure, application, and core business KPIs simultaneously.
 
 </details>
 
 ### Question 6
-How would you implement a "soak test" with Argo Rollouts — where the canary runs at 100% for 24 hours before being fully promoted?
+Scenario: A financial institution requires that any new transaction processing code runs in production for a full 24-hour cycle to catch issues related to end-of-day batch jobs. They want the new version to handle 100% of the traffic, but they want Argo Rollouts to automatically roll back to the previous version if any memory leaks or job failures occur during that 24-hour window. How can this "soak test" pattern be implemented using Argo Rollouts?
 
 <details>
 <summary>Show Answer</summary>
 
-Use a combination of weight steps, background analysis, and a long pause:
-
-```yaml
-strategy:
-  canary:
-    analysis:
-      templates:
-        - templateName: continuous-health
-      startingStep: 1
-    steps:
-      - setWeight: 5
-      - pause: { duration: 30m }
-      - setWeight: 25
-      - pause: { duration: 1h }
-      - setWeight: 100
-      - pause: { duration: 24h }    # 24-hour soak at full traffic
-```
-
-The background analysis monitors health continuously during the entire 24-hour soak period. If any metric fails at any point during those 24 hours, the rollout rolls back automatically. Only after 24 hours of clean metrics does the rollout complete and the canary become the new stable version.
-
-This catches time-dependent bugs: midnight cron interactions, timezone issues, daily traffic pattern variations, and slow resource leaks.
+You can implement this soak test pattern by thoughtfully combining a 100% weight step, a long pause duration, and continuous background analysis. In the `steps` array, you would configure `- setWeight: 100` followed immediately by a step for `- pause: { duration: 24h }`. Crucially, you must also define a background analysis block with `startingStep: 1` that continuously evaluates metrics like memory consumption and batch job success rates. During the 24-hour pause, the new version handles all production traffic while the background analysis constantly monitors its health. If any critical metric breaches the failure threshold at any point—even at hour 23—the controller will instantly abort the rollout and shift 100% of traffic back to the older, stable ReplicaSet.
 
 </details>
 
