@@ -76,6 +76,7 @@ flowchart TD
 3. **The `pre-push` Hook**: This hook executes during a `git push` operation, occurring after the remote references have been updated but strictly before any objects have been transferred over the network. It is ideal for executing heavier, longer-running integration tests or verifying that you aren't accidentally pushing experimental code to a highly protected branch.
 
 > **Pause and predict**: What do you think happens if a `pre-commit` hook is explicitly bypassed by a developer using the `--no-verify` flag?
+> 
 > If a developer runs `git commit --no-verify` (or `-n`), Git completely bypasses the execution of the `pre-commit` and `commit-msg` hooks. This highlights a critical, unshakeable rule: **Client-side hooks are entirely for developer convenience and fast, localized feedback; they are NOT a hard security boundary.** A malicious or lazy developer can easily circumvent them. True, unbreakable security enforcement must always occur via server-side hooks or centralized CI/CD pipelines.
 
 ---
@@ -95,6 +96,7 @@ ls -l
 ```
 
 > **Stop and think**: If you were to write pseudocode for a `pre-commit` hook that checks for trailing spaces, what steps would it need to take to ensure it only checks the code about to be committed?
+> 
 > It would need to first identify only the files currently sitting in the staging area. Then, instead of reading those files directly from the hard drive's working directory, it would need to extract the exact snapshot of the file from Git's index to scan for trailing spaces, ensuring unstaged changes aren't accidentally validated.
 
 To create an actively executing hook, we simply create a new file named exactly after the specific hook phase (with no file extension whatsoever) and ensure it has executable permissions.
@@ -300,6 +302,7 @@ exit 0
 ```
 
 > **Pause and predict**: Before blindly running this, what output do you expect if you impulsively type `git commit -m "WIP: fixing stuff"`?
+> 
 > The `commit-msg` hook will instantly intercept your message, compare it against the rigidly defined `$REGEX` string, fail the `grep` evaluation, print the highly detailed rejection error explaining *why* it failed, and exit with status `1`. Your lazy commit will not be recorded in the repository's history, forcing you to think about your change.
 
 ---
@@ -443,6 +446,7 @@ git reset --hard HEAD~1
 ```
 
 > **Pause and predict**: If you ran `git rerere forget app-config.yaml` right now, before executing the checkout and rebase, what would Git do when it encounters the conflict again?
+> 
 > Git would completely erase the previously saved resolution from its internal memory cache. When the rebase operation subsequently replays the commits and hits the exact same file collision, Git would immediately halt the process. It would insert the standard conflict markers into the file and force you to manually resolve the issue all over again, exactly as if it were the first time.
 
 ```bash
@@ -462,6 +466,7 @@ Resolved 'app-config.yaml' using previous resolution.
 Git automatically fixed the file for you! You still must run `git add app-config.yaml` and `git rebase --continue` to manually confirm the automated resolution, but the painful cognitive labor of deciphering the markers is completely eliminated.
 
 > **Stop and think**: If a senior colleague suggests turning `rerere.autoupdate = true` so Git automatically stages the resolution without asking you, should you do it? Which approach would you choose here and why?
+> 
 > While highly tempting for speed, it is generally much safer to leave `autoupdate` off. You desperately want a brief moment to inspect `git diff` to ensure Git's automated resolution is actually semantically correct in the context of the new codebase before blindly continuing the rebase. A textually identical conflict might require a slightly different resolution depending on surrounding code changes.
 
 ---
@@ -567,32 +572,44 @@ Now, whenever you execute `git clone <url>` or `git init`, Git will silently and
 
 <details>
 <summary><strong>Question 1:</strong> You have meticulously written a fantastic `pre-commit` hook in Python that lints Kubernetes manifests. You place the `pre-commit.py` file securely in `.git/hooks/` and make it executable. However, when you run `git commit`, the hook inexplicably fails to trigger. What is the fundamental issue?</summary>
+
 Git hook execution relies strictly on predefined filenames with no extensions. Because the Git internal system is hardcoded to execute a file named exactly `pre-commit`, it completely ignores `pre-commit.py`, assuming it is just a standard file in the directory. To resolve this, you must rename the file to strip the `.py` extension entirely. The operating system will still understand it is a Python script because of the `#!/usr/bin/env python3` shebang at the top of the file.
+
 </details>
 
 <details>
 <summary><strong>Question 2:</strong> Your engineering team uses a rigid `pre-push` hook to run unit tests. A critical production bug is found, and you've coded a hotfix locally. However, the unit tests are currently failing on the main branch due to an unrelated flaky test. You need to push your hotfix to the remote immediately. How do you push without triggering the hook block?</summary>
+
 You can bypass any client-side hook execution by appending the `--no-verify` (or `-n`) flag to your command. By running `git push origin HEAD --no-verify`, you explicitly instruct Git's internal engine to skip the `pre-push` script evaluation phase entirely and immediately begin the network transfer. This feature exists because client-side hooks are fundamentally designed for developer convenience and fast feedback, not as impenetrable security boundaries. In emergency situations, engineers must have an escape hatch to override local checks, relying on the server-side CI/CD pipeline as the ultimate source of truth.
+
 </details>
 
 <details>
 <summary><strong>Question 3:</strong> You want to ensure that every new infrastructure engineer who clones your core microservices repository automatically has the team's standard `commit-msg` hook installed. Why is placing the hook file in the `.git/hooks` directory and pushing to the remote repository an utterly ineffective strategy?</summary>
-The entire `.git/` directory structure, including the nested `hooks/` subdirectory, is strictly local to your specific machine and is explicitly excluded from version control transfer. When another engineer runs `git clone`, Git generates a totally fresh, default `.git` directory on their local workstation. It fundamentally does not download or sync the custom hooks you placed in your local `.git/hooks` folder. To solve this organizational challenge, you must either track the hooks in a standard repository folder and use a wrapper framework like `pre-commit`, or rely on configuring Git Template Directories across the team.
+
+The entire `.git/` directory structure, including the nested `hooks/` subdirectory, is strictly local to your specific machine and is explicitly excluded from version control transfer. When another engineer runs `git clone`, Git generates a totally fresh, default `.git/` directory on their local workstation. It fundamentally does not download or sync the custom hooks you placed in your local `.git/hooks` folder. To solve this organizational challenge, you must either track the hooks in a standard repository folder and use a wrapper framework like `pre-commit`, or rely on configuring Git Template Directories across the team.
+
 </details>
 
 <details>
 <summary><strong>Question 4:</strong> Your `pre-commit` hook script currently contains the raw command: `yamllint deployment.yaml`. A developer stages a perfectly valid YAML file, but right before committing, they mistakenly type a massive typo into the file without staging it. The commit is rejected. Why did this happen, and how must the hook be rewritten?</summary>
+
 The hook mistakenly evaluated the file exactly as it existed on the disk in the working directory, completely ignoring the pristine version safely locked in the staging area (the index). When the developer introduced the typo, they modified the working tree, which the flawed hook then read, causing it to reject the commit of the perfectly valid staged payload. The hook must be architecturally rewritten to dynamically extract and evaluate the staged blob content directly. This is typically achieved by using a command stream like `git show ":deployment.yaml" | yamllint -` to ensure you only validate what Git is actually about to record.
+
 </details>
 
 <details>
 <summary><strong>Question 5:</strong> You are actively rebasing a massive, long-lived feature branch onto `main`. You slam into a highly complex merge conflict in `deployment.yaml`. You manually resolve it, stage it, and run `git rebase --continue`. Three commits later, the rebase violently halts again with the *exact same textual conflict* in `deployment.yaml`. What hidden Git feature could have prevented this repetitive, painful work?</summary>
+
 The hidden Git feature that automates this is `rerere` (Reuse Recorded Resolution). If you had executed `git config --global rerere.enabled true` before the rebase started, Git would have silently recorded the exact conflict geometry and your manual resolution during the first encounter. When the rebase replayed subsequent commits and hit the identical textual conflict, the `rerere` subsystem would have recognized the signature and automatically applied your previous fix. This transforms a tedious, error-prone manual process into an instantaneous, automated operation, saving immense time on long-lived branches.
+
 </details>
 
 <details>
 <summary><strong>Question 6:</strong> You eagerly enabled `rerere.autoupdate=true` to save maximum time. During a complex rebase, Git flawlessly auto-resolves a conflict in a Go application file and immediately stages it. The rebase continues successfully to completion. Later, you realize the application won't even compile because the auto-resolution aggressively stripped out a necessary import statement. What is the inherent danger of `autoupdate`?</summary>
+
 The `autoupdate` configuration setting instructs the `rerere` subsystem to not only resolve the conflict internally but also to automatically execute `git add` on the file, blindly assuming the resolution is perfectly accurate. This dangerously bypasses the critical human review step—executing `git diff`—before continuing the rebase. Context matters intensely in software engineering, and a textually identical conflict might require a slightly different semantic resolution based on newly introduced surrounding code changes. By auto-staging, you lose the opportunity to catch these subtle logic errors before they are permanently baked into the commit history.
+
 </details>
 
 ---
@@ -617,10 +634,12 @@ To ensure all future repositories created on your machine automatically inherit 
 
 <details>
 <summary><strong>Solution: Task 1</strong></summary>
+
 ```bash
 mkdir -p ~/.git-templates/hooks
 git config --global init.templatedir '~/.git-templates'
 ```
+
 </details>
 
 #### Task 2: Build the Global `pre-commit` Bouncer
@@ -631,6 +650,7 @@ The hook must reliably accomplish two distinct things:
 
 <details>
 <summary><strong>Solution: Task 2</strong></summary>
+
 Create the file and set execution bits:
 ```bash
 touch ~/.git-templates/hooks/pre-commit
@@ -670,6 +690,7 @@ fi
 echo "Pre-commit validation passed."
 exit 0
 ```
+
 </details>
 
 #### Task 3: Initialize, Trigger, and Test the Quality Gate
@@ -716,6 +737,7 @@ git add clean-deployment.yaml
 git commit -m "feat: add initial clean deployment manifest"
 # Expected Output: Pre-commit validation passed.
 ```
+
 </details>
 
 #### Task 4: Stretch Task — Enforce Ticket Tracking via commit-msg
@@ -723,6 +745,7 @@ Modify your template directory to include a `commit-msg` hook that ensures robus
 
 <details>
 <summary><strong>Solution: Task 4</strong></summary>
+
 Create the file and set execution bits:
 ```bash
 touch ~/.git-templates/hooks/commit-msg
@@ -743,6 +766,7 @@ if ! echo "$MESSAGE" | grep -qE "^\[?[A-Z]+-[0-9]+\]?:? "; then
 fi
 exit 0
 ```
+
 Test the implementation in your repository:
 ```bash
 git commit -m "update readme" --allow-empty
@@ -751,6 +775,7 @@ git commit -m "update readme" --allow-empty
 git commit -m "KUBE-42: update readme" --allow-empty
 # Commit succeeds.
 ```
+
 </details>
 
 ### Success Criteria Checklist
