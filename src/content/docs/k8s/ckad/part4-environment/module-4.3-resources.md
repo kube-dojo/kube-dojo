@@ -23,7 +23,7 @@ lab:
 After completing this module, you will be able to:
 - **Configure** resource requests and limits for CPU and memory in pod specifications
 - **Diagnose** OOMKilled and CPU throttling issues by correlating limits with observed behavior
-- **Design** resource allocations that balance performance, cost, and scheduling reliability
+- **Design** resource allocations that balance performance, node capacity, and scheduling reliability
 - **Explain** how requests affect scheduling and limits affect runtime enforcement
 
 ---
@@ -157,11 +157,11 @@ CPU throttling is invisible to the container—it just runs slower.
 
 Kubernetes assigns Quality of Service classes based on resource settings:
 
-| QoS Class | Condition | Eviction Priority |
-|-----------|-----------|-------------------|
-| **Guaranteed** | Requests = Limits for all containers | Last (protected) |
-| **Burstable** | Requests < Limits (or only one set) | Middle |
-| **BestEffort** | No requests or limits set | First (evicted first) |
+| QoS Class | Condition | Eviction Likelihood |
+|-----------|-----------|---------------------|
+| **Guaranteed** | Requests = Limits for all containers | Lowest (protected) |
+| **Burstable** | Requests < Limits (or only one set) | Medium |
+| **BestEffort** | No requests or limits set | Highest |
 
 > **Stop and think**: A pod has requests but no limits set. Which QoS class will it receive — Guaranteed, Burstable, or BestEffort? What about a pod with limits but no requests?
 
@@ -351,7 +351,7 @@ k get pod POD -o jsonpath='{.status.qosClass}'
 3. **A deployment runs 5 replicas with no resource requests or limits set. During a node memory pressure event, all 5 pods are evicted before pods from other deployments. Why were these pods targeted first?**
    <details>
    <summary>Answer</summary>
-   Pods without resource requests or limits receive the BestEffort QoS class, which has the lowest priority during eviction. When a node runs low on memory, the kubelet evicts pods in QoS order: BestEffort first, then Burstable, then Guaranteed last. The other deployments likely had requests and/or limits set, giving them Burstable or Guaranteed QoS class. The fix is to always set at least resource requests on production pods. Setting requests equal to limits gives Guaranteed QoS (highest protection), while having requests lower than limits gives Burstable QoS (middle tier).
+   Pods without resource requests or limits receive the BestEffort QoS class. During node memory pressure, the kubelet orders eviction candidates primarily by whether their memory usage exceeds their requests. Because BestEffort pods have a request of 0, any memory usage means they exceed their requests, making them prime candidates for early eviction. The other deployments likely had requests set, meaning they had buffer before exceeding their requests. The fix is to always set at least resource requests on production pods. Setting requests equal to limits gives Guaranteed QoS (highest protection), while having requests lower than limits gives Burstable QoS (middle tier).
    </details>
 
 4. **A namespace has a LimitRange with `default.cpu: 200m` and `default.memory: 256Mi`. A developer creates a pod without specifying any resources. They later notice the pod has resource limits they didn't set. What happened, and how does this interact with ResourceQuota?**
@@ -412,8 +412,11 @@ spec:
         memory: "100Mi"
 EOF
 
-# Wait for it to get OOMKilled
-sleep 5
+# Wait for pod initialization (image pull may take time)
+kubectl wait --for=condition=Initialized pod/memory-hog --timeout=60s
+
+# Allow time for the stress test to hit the memory limit
+sleep 10
 k get pod memory-hog
 
 # Check reason
@@ -485,10 +488,11 @@ k delete pod drill2
 ### Drill 3: Generate Pod with Resources (Target: 2 minutes)
 
 ```bash
-# Use --dry-run to generate, then add resources
-k run drill3 --image=nginx --dry-run=client -o yaml > /tmp/drill3.yaml
+# In an exam, you would generate a manifest and edit it:
+# k run drill3 --image=nginx --dry-run=client -o yaml > /tmp/drill3.yaml
+# vim /tmp/drill3.yaml
 
-# Edit to add resources (in exam, use vim)
+# For this drill, apply the completed manifest directly:
 cat << 'EOF' | k apply -f -
 apiVersion: v1
 kind: Pod
@@ -542,6 +546,8 @@ spec:
 EOF
 
 k get pods -l app=drill4
+k get deploy drill4 -o jsonpath='{.spec.template.spec.containers[0].resources}'
+echo
 k delete deploy drill4
 ```
 
