@@ -37,7 +37,7 @@ The senior engineer opens their logging system. Searches for "payment." Gets 847
 
 **Hour 1**: They try regex patterns on raw logs. The patterns match too much. False positives everywhere.
 
-**Hour 2**: They dump logs to CSV and manually filter in Excel. The file is 47GB. Excel crashes.
+**Hour 2**: They dump logs to CSV and manually filter in Excel. The file is 52GB. Excel crashes.
 
 **Hour 3**: They start reading logs line by line, trying to reconstruct transaction flows manually. Ten engineers working in parallel.
 
@@ -75,10 +75,12 @@ No tracing                             Spans: payment-service → fraud-check
 TIME TO ANSWER "What transactions used code path X?"
 
 With their setup:   4+ hours (and failed)
-With proper setup:  47 seconds (WHERE code_path = 'X' AND timestamp > '3 days ago')
+With proper setup:  52 seconds (WHERE code_path = 'X' AND timestamp > '3 days ago')
 ```
 
 After the incident, they spent 3 months instrumenting properly. The same regulatory request—which came again during the next quarterly audit—took 2 minutes to answer.
+
+> **Stop and think**: How would you have solved this without proper instrumentation? Is it even possible to retroactively extract execution paths without traces?
 
 ---
 
@@ -112,32 +114,15 @@ This module teaches you instrumentation principles that apply regardless of lang
 
 Not everything needs instrumentation. Focus on:
 
+```mermaid
+flowchart TD
+    A[ERRORS: Everything that fails] --> B[BOUNDARIES: Incoming/outgoing requests]
+    B --> C[BUSINESS OPERATIONS: Key domain events]
+    C --> D[INTERNAL OPERATIONS: Database queries, cache]
+    D --> E[LOW-LEVEL LOOPS: Skip unless debugging]
 ```
-INSTRUMENTATION PRIORITY PYRAMID
-═══════════════════════════════════════════════════════════════
 
-                    ▲
-                   ╱ ╲
-                  ╱   ╲     ERRORS
-                 ╱ ███ ╲    Everything that fails
-                ╱───────╲   (highest priority)
-               ╱         ╲
-              ╱   █████   ╲  BOUNDARIES
-             ╱─────────────╲ Incoming/outgoing requests
-            ╱               ╲ (most value)
-           ╱     ███████     ╲
-          ╱───────────────────╲  BUSINESS OPERATIONS
-         ╱                     ╲ Key domain events
-        ╱       ███████████     ╲ (checkout, signup)
-       ╱─────────────────────────╲
-      ╱                           ╲  INTERNAL OPERATIONS
-     ╱         █████████████       ╲ Database queries, cache
-    ╱───────────────────────────────╲ (selective)
-   ╱                                 ╲
-  ╱           ░░░░░░░░░░░░░           ╲  LOW-LEVEL LOOPS
- ╱─────────────────────────────────────╲ Skip unless debugging
-╱                                       ╲ (usually not needed)
-```
+> **Pause and predict**: If you only had time to instrument one of the layers in the priority pyramid, which one would give you the highest return on investment?
 
 ### 1.2 Must-Instrument: Service Boundaries
 
@@ -428,38 +413,17 @@ Use baggage for:
 
 ### 3.3 Propagation Implementation
 
-```
-PROPAGATION FLOW
-═══════════════════════════════════════════════════════════════
+```mermaid
+flowchart TD
+    A[1. RECEIVE REQUEST<br>Extract context from incoming headers:<br>traceparent → trace_id, parent_span_id<br>baggage → user_id, tenant<br><br>Store in thread-local/async context]
+    
+    B[2. DO WORK<br>Log with context: logger.info, trace_id=ctx.id<br>Create spans as children of parent_span<br>Record metrics]
+    
+    C[3. CALL DOWNSTREAM<br>Inject context into outgoing headers:<br>Set traceparent, baggage on HTTP client<br>Set trace headers on message/queue]
+    
+    D[4. DOWNSTREAM REPEATS<br>Extract → Work → Inject → ...<br>Chain continues through all services]
 
-1. RECEIVE REQUEST
-   ┌─────────────────────────────────────────────────────────┐
-   │  Extract context from incoming headers:                 │
-   │  traceparent → trace_id, parent_span_id                │
-   │  baggage → user_id, tenant                             │
-   │                                                         │
-   │  Store in thread-local/async context                   │
-   └─────────────────────────────────────────────────────────┘
-
-2. DO WORK
-   ┌─────────────────────────────────────────────────────────┐
-   │  Log with context: logger.info("...", trace_id=ctx.id) │
-   │  Create spans as children of parent_span               │
-   │  Record metrics (optionally tag with trace_id)         │
-   └─────────────────────────────────────────────────────────┘
-
-3. CALL DOWNSTREAM
-   ┌─────────────────────────────────────────────────────────┐
-   │  Inject context into outgoing headers:                 │
-   │  Set traceparent, baggage on HTTP client               │
-   │  Set trace headers on message/queue                    │
-   └─────────────────────────────────────────────────────────┘
-
-4. DOWNSTREAM REPEATS
-   ┌─────────────────────────────────────────────────────────┐
-   │  Extract → Work → Inject → ...                         │
-   │  Chain continues through all services                  │
-   └─────────────────────────────────────────────────────────┘
+    A --> B --> C --> D
 ```
 
 > **Gotcha: Broken Propagation**
@@ -674,11 +638,11 @@ except TimeoutError:
 >
 > **Month 1**: Observability bill: $12,000. "Worth it for visibility."
 >
-> **Month 3**: Bill: $28,000. Dashboards taking 45 seconds to load. "We'll optimize later."
+> **Month 3**: Bill: $28,000. Dashboards taking 52 seconds to load. "We'll optimize later."
 >
 > **Month 6**: Bill: $52,000. Queries timing out. Engineers avoiding the observability stack because it's too slow. Alert fatigue from 400+ daily alerts.
 >
-> **The Breaking Point**: A P0 incident occurs. The on-call engineer opens their dashboard. 47-second load time. They search for the error in logs. Query times out after 5 minutes. They try to find relevant metrics among 847,000 series. Needle in a haystack.
+> **The Breaking Point**: A P0 incident occurs. The on-call engineer opens their dashboard. 52-second load time. They search for the error in logs. Query times out after 5 minutes. They try to find relevant metrics among 847,000 series. Needle in a haystack.
 >
 > The incident that should have taken 15 minutes to debug took 3 hours. Their "comprehensive observability" was actually *anti-observability*—so much noise that signal was invisible.
 >
@@ -690,7 +654,7 @@ except TimeoutError:
 > | 2.3 TB daily logs | 180 GB daily logs |
 > | Every function instrumented | Boundaries + business ops + errors |
 > | $52,000/month | $4,200/month |
-> | 45-second dashboard load | 1.2-second dashboard load |
+> | 52-second dashboard load | 1.2-second dashboard load |
 > | 400 daily alerts (90% noise) | 23 daily alerts (95% actionable) |
 >
 > **What they removed**:
@@ -736,186 +700,60 @@ except TimeoutError:
 
 ## Quiz
 
-1. **Why should you instrument at service boundaries rather than deep inside business logic?**
+1. **Your team is launching a new microservice and has exactly two days to add observability before the release freeze. An engineer suggests instrumenting all internal helper functions, while another suggests only instrumenting the HTTP handlers and database clients. Which approach is correct and why?**
    <details>
    <summary>Answer</summary>
 
-   Service boundaries are where:
-   1. **Requests enter and leave** - This is what users experience
-   2. **Context changes** - You cross trust/network boundaries
-   3. **Failures occur** - Network, timeout, authentication issues
-   4. **Dependencies are called** - External services, databases, caches
-
-   Instrumenting boundaries captures the most valuable data (request flow, latencies, errors) with the least code changes. Internal business logic can be traced when needed, but boundaries are always valuable.
-
-   Additionally, boundary instrumentation is often automatic (HTTP middleware, database drivers) while internal instrumentation requires manual effort.
+   The second engineer's approach (instrumenting boundaries) is correct because boundaries are where requests enter/leave and where context changes. By instrumenting HTTP handlers and database clients, you immediately capture the most valuable data—inbound request flows, outbound dependency latencies, and cross-service errors—with minimal code changes. Internal helper functions often generate high volumes of low-value spans that increase costs without providing systemic insight. Furthermore, boundary instrumentation ensures that if a failure occurs at a network or trust boundary, it is captured, whereas deep internal traces might miss the forest for the trees.
    </details>
 
-2. **What's the difference between head-based and tail-based sampling?**
+2. **Your e-commerce platform processes 10,000 requests per second. You've implemented a 1% trace sampling strategy at the API gateway, but developers are complaining that they can never find traces for the intermittent 500 errors occurring in the payment service. What sampling approach is currently causing this, and what should you switch to?**
    <details>
    <summary>Answer</summary>
 
-   **Head-based sampling** decides at the START of a request whether to trace it:
-   - Simple: Random decision at entry point
-   - Predictable: Fixed sampling rate
-   - Problem: Might miss interesting (error, slow) requests
-
-   **Tail-based sampling** decides at the END based on what happened:
-   - Smart: Keep all errors, all slow requests, sample normal ones
-   - Complex: Must buffer all traces until decision point
-   - Better coverage: Important traces are kept
-
-   Trade-off: Head-based is simpler and cheaper; tail-based captures more valuable data but requires more infrastructure (collectors that can buffer and decide).
+   The current issue is caused by head-based sampling, which randomly decides whether to trace a request at the very beginning of the transaction. Because the decision is made upfront and randomly (at 1%), there is a 99% chance that any given failed payment request was simply dropped before the error even occurred. To fix this, you should switch to tail-based sampling, where the tracing system buffers the spans and makes the sampling decision at the end of the request. This allows you to configure a rule that retains 100% of traces containing errors, ensuring developers always have the context they need for debugging while still randomly sampling successful requests to save costs.
    </details>
 
-3. **Why is consistent field naming important across services?**
+3. **During a severe outage, you're trying to trace a user's journey across three services. Service A logs `userId: 12345`, Service B logs `user_id: 12345`, and Service C logs `account_id: 12345`. How does this impact your incident response, and what instrumentation principle was violated?**
    <details>
    <summary>Answer</summary>
 
-   Consistent field names enable:
-   1. **Cross-service queries**: `WHERE user_id = 123` works everywhere
-   2. **Correlation**: Same trace_id field links logs across services
-   3. **Dashboards**: One dashboard works for all services
-   4. **Automation**: Alert rules apply uniformly
-
-   Inconsistent naming (user_id vs userId vs uid) means:
-   - Manual mapping for every query
-   - Separate dashboards per service
-   - Can't easily correlate related events
-   - Increased cognitive load for operators
-
-   Define a naming convention (snake_case, camelCase) and enforce it across teams.
+   This inconsistency drastically slows down incident response because you cannot use a single query to correlate the user's journey across the entire system. Instead of writing one simple search, responders must manually map the fields and write complex, brittle queries tailored to each service's specific logging schema. This violates the principle of consistent field naming, which mandates that dimensions like user identifiers must use the exact same key across all services. Enforcing a standardized logging schema ensures that observability tools can automatically link related events, reducing cognitive load during high-stress situations.
    </details>
 
-4. **How do you decide what to log vs. what to make a metric?**
+4. **Your service is experiencing memory pressure. An engineer proposes adding a log line that prints the current memory usage every time a request is processed. Another engineer suggests this is a bad idea. Who is right, and what is the proper way to instrument this data?**
    <details>
    <summary>Answer</summary>
 
-   **Use LOGS when**:
-   - You need rich context (error messages, stack traces)
-   - Data has high cardinality (user_id, request details)
-   - You're debugging specific events
-   - Events are infrequent
-
-   **Use METRICS when**:
-   - You need aggregations (rate, count, average)
-   - You're alerting on thresholds
-   - Data has low cardinality (endpoint, status code)
-   - You need efficient time-series storage
-   - You're building dashboards
-
-   Rule of thumb: If you'll ask "how many" or "what's the average," use metrics. If you'll ask "what happened to this specific thing," use logs. Use both when appropriate—they complement each other.
+   The second engineer is right; logging memory usage per request is an anti-pattern that misuses the logging system for time-series data. Logs are designed for high-cardinality, contextual data about specific events, whereas metrics are optimized for tracking numeric values over time and performing aggregations. Printing memory usage on every request will bloat your log storage and make it extremely difficult to visualize trends or set up alerts for memory leaks. The proper approach is to expose memory usage as a metric (e.g., a gauge) and scrape it periodically, keeping the telemetry lightweight and perfectly suited for alerting dashboards.
    </details>
 
-5. **A service has 100 endpoints, 50 status codes, and 1 million users. An engineer wants to add a metric with labels for endpoint, status, and user_id. Calculate the potential cardinality explosion and explain why this is problematic.**
+5. **Your billing service has 100 endpoints, returns 50 possible status codes, and serves 1 million active users. A junior engineer submits a pull request adding a Prometheus metric `http_requests_total` with labels for `endpoint`, `status_code`, and `user_id`. What will happen to your metrics infrastructure if this PR is merged, and how should it be fixed?**
    <details>
    <summary>Answer</summary>
 
-   **Calculation**:
-   100 endpoints × 50 status codes × 1,000,000 users = **5 billion potential time series**
-
-   **Why this is problematic**:
-   1. **Storage**: Each time series needs ~3KB of memory for efficient querying. 5B × 3KB = 15TB of memory
-   2. **Query performance**: Scanning 5B series for a dashboard = timeout
-   3. **Cost**: At $0.10 per 1000 active series, that's $500,000/month
-   4. **Prometheus limits**: Default recommendation is <10M series
-
-   **The fix**:
-   - Remove user_id from metric labels (move to logs instead)
-   - Keep endpoint × status = 5,000 series (manageable)
-   - Log user_id with structured fields for per-user debugging
-
-   **Rule**: Metrics = low cardinality (bounded dimensions). Logs = high cardinality welcome.
+   Merging this PR will cause a massive cardinality explosion that will likely crash or severely degrade your Prometheus infrastructure. Because each unique combination of labels creates a new time series, including `user_id` will generate 5 billion potential time series (100 × 50 × 1,000,000), vastly exceeding the system's capacity. Metrics must be strictly limited to low-cardinality dimensions like `endpoint` and `status_code` to remain performant and cost-effective. To fix the PR, the `user_id` label must be removed from the metric entirely, and user-specific context should instead be captured in structured logs where high cardinality is supported.
    </details>
 
-6. **Your team uses head-based sampling at 1%. A critical bug affects 0.1% of requests. Calculate the probability of catching this bug in your traces. What sampling strategy would help?**
+6. **You've configured your API gateway to randomly sample 1% of all requests. A critical bug that only affects 0.1% of transactions was deployed yesterday. The engineering manager asks you to pull the traces for the failed transactions. Why might you struggle to fulfill this request, and how would you redesign the sampling architecture?**
    <details>
    <summary>Answer</summary>
 
-   **With head-based 1% sampling**:
-   - Bug affects 0.1% of requests
-   - You sample 1% of all requests randomly
-   - Probability of sampling a buggy request: 1% × 0.1% = 0.001% of total traffic
-   - If you have 1M requests/day: 1M × 0.00001 = **10 buggy traces/day**
-
-   **The problem**: You might catch 10 examples, but:
-   - If the bug is intermittent, you might not even notice the pattern
-   - If you need to analyze 100+ cases to understand the bug, you're waiting 10+ days
-
-   **Better strategy: Tail-based sampling**:
-   - Keep 100% of error traces (not sampled)
-   - Bug causes errors → all buggy requests are traced
-   - Analysis: immediate, comprehensive
-
-   **Even better: Adaptive sampling**:
-   - Normal requests: 1% sampling
-   - Errors: 100% retention
-   - Slow requests (>p99): 100% retention
-   - New code paths: elevated sampling for first 24 hours
+   With a 1% head-based sampling rate, you are randomly keeping only 1 in 100 requests, meaning the vast majority of the already-rare buggy transactions (0.1%) are simply discarded by the system. You will struggle to find traces because the statistical probability of capturing one of these specific failures is incredibly low, leaving you with almost no diagnostic data. To redesign this, you should implement tail-based or adaptive sampling, which evaluates the trace after the request completes. By doing so, you can configure the system to retain 100% of traces that contain errors or anomalous latencies, ensuring critical diagnostic data is never dropped.
    </details>
 
-7. **An engineer adds this log line: `logger.info(f"Processing request for user {user.email} with password {user.password}")`. List all the problems with this instrumentation.**
+7. **During a code review, you spot the following line in a new authentication service: `logger.info(f"Processing login for user {user.email} with password {user.password}")`. Identify all the critical problems with this instrumentation approach and explain how to rewrite it properly.**
    <details>
    <summary>Answer</summary>
 
-   **Critical problems**:
-
-   1. **PII exposure**: Email is personally identifiable information (PII)
-   2. **Credential leak**: Password in logs is a severe security vulnerability
-   3. **Compliance violation**: GDPR, CCPA, SOC2 all prohibit logging credentials
-   4. **Unstructured format**: f-string isn't queryable
-   5. **Missing context**: No trace_id, request_id, timestamp
-   6. **Audit liability**: Logs may be retained for years—credentials persist
-
-   **The fix**:
-   ```python
-   logger.info("request_processing_started", extra={
-       "user_id": user.id,  # ID, not email
-       "trace_id": get_trace_id(),
-       "request_id": request.id,
-       # NEVER log: password, tokens, SSN, credit card, email (use user_id)
-   })
-   ```
-
-   **Best practice**: Use allow-lists (explicitly list what CAN be logged) rather than deny-lists (trying to catch everything that shouldn't be logged). Assume everything is sensitive unless proven otherwise.
+   This log line introduces severe security, compliance, and observability problems. First, logging plain-text passwords is a critical credential leak that violates nearly all security standards (like SOC2 or GDPR) and exposes user accounts to anyone with log access. Second, the use of an unstructured Python f-string makes it impossible to efficiently query or filter the logs in a modern observability platform. Finally, it uses an email address (PII) instead of an opaque user ID and lacks correlating identifiers like a `trace_id`. It should be rewritten using a structured logging approach that drops the password, replaces the email with an opaque `user_id`, and includes distributed tracing context.
    </details>
 
-8. **Your service calls a third-party API. Traces show the span but context propagation breaks—downstream spans aren't connected. List three possible causes and how to debug each.**
+8. **Your checkout service calls an external payment gateway. When looking at your tracing dashboard, you see the trace end at the checkout service, and a completely separate, disconnected trace begin when the payment gateway sends a webhook response back to your system. What distributed tracing concept has failed, and how would you debug it?**
    <details>
    <summary>Answer</summary>
 
-   **Possible causes and debugging**:
-
-   1. **HTTP client not instrumented**
-      - Debug: Check if traceparent header is being sent
-      - Fix: Use OTel-instrumented HTTP client or add manual header injection
-      ```bash
-      # Verify header propagation
-      curl -v yourservice.com 2>&1 | grep -i traceparent
-      ```
-
-   2. **Third-party API doesn't propagate context**
-      - Debug: Check if third-party returns/forwards trace context
-      - Fix: You can't fix their code, but you can:
-        - End your span when you make the call
-        - Start a new trace when response returns (link to original via span attributes)
-
-   3. **Async boundary drops context**
-      - Debug: Check if context is preserved across await/callback
-      - Fix: Use context propagation utilities:
-      ```python
-      # Python example with OTel
-      from opentelemetry import context
-      ctx = context.get_current()
-      # ... in callback ...
-      context.attach(ctx)
-      ```
-
-   **Debugging workflow**:
-   1. Add debug logging at call site: log trace_id before and after
-   2. Inspect outgoing HTTP headers
-   3. Check if response includes trace context
-   4. Verify context storage across async boundaries
+   This scenario indicates a complete failure of context propagation across service boundaries or asynchronous boundaries. When the checkout service calls the external gateway, it fails to inject the trace context (like a W3C `traceparent` header) into the outbound request, or the gateway fails to return it in the webhook. Because the context is lost, the webhook receiver starts a brand-new trace, severing the causal link between the checkout attempt and the payment result. To debug this, you would first inspect the outgoing HTTP headers from the checkout service to ensure context is being injected, and then verify whether the payment gateway's documentation supports passing trace identifiers through their webhook payload.
    </details>
 
 ---
