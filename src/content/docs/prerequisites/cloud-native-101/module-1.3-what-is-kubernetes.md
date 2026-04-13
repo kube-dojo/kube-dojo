@@ -116,7 +116,7 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    subgraph CP["Control Plane (Master)"]
+    subgraph CP["Control Plane"]
         direction LR
         API[API Server]
         Sched[Scheduler]
