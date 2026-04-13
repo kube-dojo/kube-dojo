@@ -10,28 +10,24 @@ sidebar:
 
 ## Why This Module Matters: The Incident That Changed Everything
 
-**Seattle. November 15, 2019. 2:48 AM.**
+**Austin, Texas. July 19, 2024. 04:09 UTC.**
 
-Kevin Chen, a senior SRE at a Fortune 500 e-commerce company, was staring at his laptop through bleary eyes. Their Black Friday preparations had gone catastrophically wrong. The checkout service was failing for roughly 12% of customers—not enough to trigger the hard alerts, but enough to cost the company millions in lost sales during the busiest shopping period of the year.
+What began as a routine sensor configuration update pushed by CrowdStrike to its Falcon sensor quickly escalated into one of the largest IT outages in global history. Within minutes, approximately 8.5 million Windows devices across the globe crashed into endless Blue Screen of Death (BSOD) boot loops. The financial impact was staggering, with direct losses estimated at over $5.4 billion. Airlines grounded thousands of flights, hospitals canceled critical surgeries, and global banking infrastructure ground to a halt.
 
-"The dashboards all look green," Kevin muttered to his colleague on the video call. "CPU is fine. Memory is fine. Network latency is fine."
+The profound tragedy of the CrowdStrike outage was not just the bug itself—a logic error caused by an out-of-bounds memory read when processing a newly deployed channel file—but the catastrophic delay in Root Cause Analysis (RCA). Traditional monitoring systems were flooded with offline alerts, but the actual root cause was obscured by the sheer volume of disconnected infrastructure failures. Engineers spent crucial hours manually correlating the timing of the global crashes with recent deployment manifests. Because the affected machines could not boot to forward their crash dumps to centralized logging platforms, the observability pipeline was effectively blind.
 
-But the customer complaints kept flooding in. Shopping carts abandoned. Payments failing silently. And somewhere in the 48 terabytes of logs their infrastructure generated every day, the answer was hiding.
-
-Kevin's team of six engineers spent the next four hours grep-ing through logs. They wrote regex patterns. They filtered by timestamp. They scrolled through endless walls of JSON. At 6:52 AM, they finally found it: a third-party payment provider had started rate-limiting their requests, but was returning HTTP 200 responses with error messages buried in the response body. Their monitoring checked the status code but never parsed the body. 
-
-Four hours to find a single misconfigured integration. Millions of dollars lost. And the worst part? The signal was there in the logs the entire time—humans just couldn't read fast enough. The shift to AI-powered log analysis isn't a luxury—it is an absolute necessity.
+If a mature, automated AIOps architecture had been orchestrating the rollout, the outcome could have been drastically different. An AI-driven causal graph could have instantaneously correlated the sub-millisecond deployment of the `C-00000291*.sys` channel file with the cascading host offline metrics, halting the staggered rollout before it reached global saturation. The transition to AI-powered operations is no longer just about saving engineering time; it is an absolute business necessity to prevent total systemic collapse at enterprise scale.
 
 ---
 
 ## Learning Outcomes
 
 By the end of this module, you will be able to:
-- **Diagnose** complex performance bottlenecks using AI-powered root cause analysis causal graphs.
-- **Design** a hybrid log parsing pipeline combining deterministic template mining with LLM inference.
-- **Implement** statistical and ML-based anomaly detection for time-series infrastructure telemetry.
-- **Evaluate** the safety, maturity, and guardrails required for automated runbook remediations in production.
-- **Compare** vendor capabilities and open-source alternatives in the modern observability ecosystem.
+- **Diagnose** complex performance bottlenecks and distributed system failures using AI-powered causal graphs and topology mapping.
+- **Design** a resilient, hybrid log parsing pipeline that combines deterministic template mining with dynamic LLM inference for unknown formats.
+- **Implement** statistical baseline modeling and machine-learning-based anomaly detection for high-throughput time-series infrastructure telemetry.
+- **Evaluate** the safety, maturity, and required technical guardrails for deploying automated runbook remediations in production environments.
+- **Compare** proprietary vendor capabilities against modern open-source observability ecosystems for building an AIOps stack.
 
 ---
 
@@ -39,13 +35,13 @@ By the end of this module, you will be able to:
 
 ### The Fundamental Problem: More Data Than Humans Can Process
 
-Think of logs like the black box recorder on an airplane. Every system in your infrastructure is constantly recording what it is doing: web servers log every request, databases log every query, applications log every function call. This seems useful until you realize the sheer scale involved.
+Think of logs like the black box flight data recorder on an airplane. Every microservice, sidecar proxy, database cluster, and network appliance in your infrastructure is constantly streaming state changes to standard output. This diagnostic telemetry is invaluable until you confront the sheer mathematical scale involved in modern cloud-native architectures.
 
-A small startup generates about 1 GB of logs per day, while hyperscalers generate over 1 PB (petabyte) per day. At one petabyte per day, you are looking at approximately 10 billion individual log lines. Human-scale analysis simply cannot keep pace with machine-scale data generation. Market research firms offer conflicting estimates for the global AIOps market size in 2024, with some citing $14.6 billion, while others estimate between $2.23 billion and $8.91 billion due to varying definitions of the market scope. However, Forrester predicted in 2025 that tech leaders will triple AIOps adoption to reduce technical debt, showing unanimous agreement on the trend's trajectory.
+A moderately sized startup with a microservice architecture generates roughly 50 to 100 GB of logs per day. Enterprise platforms and hyperscalers routinely ingest over 1 PB (petabyte) of log data daily. At one petabyte per day, you are looking at approximately 10 billion individual log events. Human-scale analysis—the traditional workflow of `grep`, `awk`, and visual scanning—simply cannot keep pace with machine-scale data generation. To find the root cause of an incident, you are essentially looking for a specific drop of water while drinking from a firehose. 
 
 ### The Log Format Jungle
 
-Before you can analyze logs, you need to parse them—extracting structured data from raw text. This sounds simple until you realize how many different log formats exist.
+Before an AIOps pipeline can mathematically analyze logs for anomalies, it must parse them. Parsing is the act of extracting structured, typed data fields from raw, unstructured text streams. This sounds straightforward until you audit the diversity of log formats present in a typical Kubernetes cluster.
 
 ```text
 DIVERSE LOG FORMATS
@@ -71,7 +67,7 @@ java.lang.NullPointerException
 
 ### The Regex Maintenance Nightmare
 
-The traditional approach requires a regex pattern for every format. Here is what that code typically looks like:
+Historically, Platform Engineering teams solved the parsing problem by writing regular expressions (regex). They would configure Logstash or Fluentd with a massive dictionary of regex capture groups to map unstructured text into searchable Elasticsearch fields.
 
 ```python
 # The old way: regex for every format
@@ -91,13 +87,13 @@ def parse_log(line):
 # Problem: Brittle, hard to maintain, misses variations
 ```
 
-Regular expressions are fragile. A log format change breaks patterns that took weeks to develop. Regex only finds patterns you have already seen, leaving you blind to unknown errors.
+Regular expressions are notoriously fragile and computationally expensive (prone to catastrophic backtracking). A simple version bump in a third-party dependency can slightly alter a log format, silently breaking your parser. Worse, regex only matches patterns you have explicitly programmed it to find, leaving you completely blind to novel error structures.
 
 > **Pause and predict**: If a developer introduces a new multi-line log format for a critical microservice, what happens to your regex-based alerting pipeline? Will it false-positive or false-negative?
 
 ### LLM-Powered Parsing: Let the AI Figure It Out
 
-Large Language Models (LLMs) offer a fundamentally different approach. Instead of encoding rigid rules, you describe what you want and let the model's understanding of language and structure do the heavy lifting.
+Large Language Models (LLMs) provide a paradigm shift in data parsing. Instead of defining rigid, character-by-character syntax rules, you provide the LLM with a semantic prompt describing the desired output structure. The model leverages its vast pre-training on code and log structures to infer the correct extraction schema dynamically.
 
 ```python
 def parse_with_llm(log_line: str) -> dict:
@@ -123,11 +119,11 @@ Return only valid JSON."""
 
 ## Log Anomaly Detection: Finding Needles in Petabyte Haystacks
 
-When engineers think about log analysis, they often focus on finding errors. But many of the most serious issues do not produce obvious errors at all. Anomaly detection identifies frequency anomalies, sequence anomalies, and silence anomalies.
+When engineers think about log analysis, they often focus exclusively on finding the word `ERROR` or `FATAL`. However, modern distributed systems fail in subtle ways. A database that is locked up might not print an error; it might just stop printing query logs entirely. Anomaly detection algorithms identify three core deviations: frequency spikes, sequence mutations, and volumetric silence.
 
 ### Log Template Mining: Finding the Signal in the Noise
 
-Before detecting anomalies, you need to understand what "normal" looks like. Log template mining extracts the underlying structure from raw log messages, separating the template from the variable parameters.
+To detect an anomaly, the AI must first establish a baseline of "normal." Log template mining algorithms (like Drain3) parse raw logs to extract the static structural template, stripping away dynamic variables like IP addresses, timestamps, and usernames. This reduces millions of raw logs into a few hundred behavioral templates.
 
 ```text
 RAW LOGS → TEMPLATES
@@ -148,7 +144,7 @@ Variables:
 
 ### Statistical Anomaly Detection: When Numbers Tell the Story
 
-The simplest anomaly detection uses basic statistics.
+Once logs are templated, the simplest anomaly detection strategy involves statistical frequency analysis. By tracking the occurrence rate of each template, the system can calculate a rolling mean and standard deviation.
 
 ```python
 def detect_frequency_anomaly(
@@ -166,7 +162,7 @@ def detect_frequency_anomaly(
 
 ### Deep Learning for Sequence Analysis
 
-Modern systems use neural networks, particularly LSTMs (Long Short-Term Memory networks), to learn normal log sequences.
+Sometimes the volume of logs is perfectly normal, but the order of operations is wrong. Deep learning architectures, particularly Long Short-Term Memory networks (LSTMs), excel at modeling sequential data. By training an LSTM on normal log sequences, the model learns to predict the next log template. If the actual incoming log template has a vanishingly low predicted probability, it is flagged as an anomaly.
 
 ```python
 # Train LSTM on normal log sequences
@@ -189,6 +185,8 @@ class LogSequenceModel(nn.Module):
 
 ### LLM-Based Detection: Bringing Human Reasoning to Machine Scale
 
+When statistical models flag an anomaly, they lack semantic context. They know the sequence is unusual, but they cannot explain *why*. Injecting an LLM at the final evaluation layer allows the system to analyze the anomalous log within its surrounding temporal context and provide a human-readable diagnosis.
+
 ```python
 def detect_anomaly_with_llm(log_context: str, current_log: str) -> dict:
     """Use LLM to detect if a log is anomalous given context."""
@@ -207,7 +205,7 @@ Return JSON: {{"is_anomaly": bool, "confidence": 0-1, "explanation": "..."}}"""
     return llm.generate(prompt)
 ```
 
-**Did You Know?** Prometheus became the second project ever to graduate from the CNCF in August 2018, following only Kubernetes. It revolutionized how we collect the time-series metrics that feed these AI engines.
+**Did You Know?** Prometheus became the second project ever to graduate from the CNCF in August 2018, following only Kubernetes. It revolutionized how we collect the time-series metrics that feed these sophisticated AI anomaly engines.
 
 ---
 
@@ -215,7 +213,7 @@ Return JSON: {{"is_anomaly": bool, "confidence": 0-1, "explanation": "..."}}"""
 
 ### The RCA Challenge vs. AI RCA
 
-Traditional root cause analysis is painfully slow:
+Traditional incident response relies on human intuition and manual cross-referencing. When an alert fires, engineers open multiple browser tabs—tracing metrics, logs, and database performance individually—in a linear, time-consuming investigation process.
 
 ```text
 TRADITIONAL RCA TIMELINE
@@ -234,7 +232,7 @@ TRADITIONAL RCA TIMELINE
 Time to resolution: 2 hours
 ```
 
-AI fundamentally changes this equation by correlating all available data simultaneously:
+AI disrupts this linear process by performing parallel multidimensional correlation. The AIOps engine ingests thousands of metric streams simultaneously, isolating temporal correlations in milliseconds.
 
 ```text
 AI RCA TIMELINE
@@ -253,7 +251,7 @@ Time to resolution: 5 minutes
 
 ### Causal Graph Analysis: Understanding Cause and Effect
 
-Sophisticated RCA systems build causal graphs. When something goes wrong, the system traces backward through the graph to find the root cause. Commercial offerings like Datadog's Watchdog (an AI/ML engine that autonomously detects anomalies without manual thresholds) or Dynatrace's "hypermodal AI" (which combines predictive AI, causal AI, and generative AI) excel at this.
+The most advanced AIOps platforms move beyond mere correlation to true causal inference. They construct topological maps of the infrastructure and overlay time-series events to build directed causal graphs. This allows the AI to differentiate between the true root cause (e.g., a Redis memory limit) and downstream symptoms (e.g., API timeouts).
 
 ```mermaid
 graph TD
@@ -268,6 +266,8 @@ graph TD
 > **Stop and think**: Look at the causal graph above. If you only had CPU monitoring on the API servers, would you be able to find the root cause? What false conclusions might you draw?
 
 ### LLM for Complex RCA: When the Graph Isn't Enough
+
+Sometimes, the causal graph points to an application code issue or a complex configuration drift that requires semantic interpretation. In these scenarios, the telemetry is bundled and passed to a large language model.
 
 ```python
 def ai_root_cause_analysis(
@@ -308,7 +308,7 @@ Be specific and cite evidence from logs/metrics."""
 
 ### The Evolution of Runbooks
 
-The first evolution was runbook automation—turning documented procedures into executable code:
+Early automation in operations took the form of imperative runbooks—static scripts that codified specific troubleshooting paths. While useful, they were brittle and unable to adapt to novel edge cases.
 
 ```python
 # Traditional runbook as code
@@ -328,6 +328,8 @@ def respond_to_high_cpu_alert(server):
 ```
 
 ### AI-Powered Runbooks
+
+The modern evolution replaces static scripts with autonomous, goal-oriented AI agents. The agent is provided with a suite of tools (API clients, SSH keys, Kubernetes RBAC tokens) and iterates continuously until the infrastructure returns to a healthy state.
 
 ```python
 class IntelligentRunbook:
@@ -362,6 +364,8 @@ class IntelligentRunbook:
 
 ### Automation Levels and Safety Guardrails
 
+Granting an AI system write access to a production environment requires a highly disciplined governance structure. You cannot simply flip a switch and allow an LLM to mutate state. You must implement progressive automation levels.
+
 ```text
 AUTOMATION LEVELS
 =================
@@ -389,6 +393,8 @@ TRUST PROGRESSION
 Start at Level 1 → Build trust → Progress to higher levels
 Never skip levels. Trust is earned through successful remediations.
 ```
+
+To implement these levels safely, engineering teams must wrap AI remediation workflows in rigorous programmatic guardrails that enforce circuit breakers and rate limits.
 
 ```python
 async def auto_remediate(alert: Alert) -> RemediationResult:
@@ -427,13 +433,15 @@ async def auto_remediate(alert: Alert) -> RemediationResult:
         return escalate_to_human(alert, error=e)
 ```
 
-**Did You Know?** On March 10, 2025, Gartner officially rebranded its "Market Guide for AIOps Platforms" to the "Market Guide for Event Intelligence Solutions (EIS)", defining its core objectives as Augmentation, Acceleration, and Automation. While some sources claim Gartner originally coined the term 'AIOps' in 2016, other press releases indicate the shift to algorithmic operations occurred in 2017, making the exact origin year historically contested.
+**Did You Know?** On March 10, 2025, Gartner officially rebranded its "Market Guide for AIOps Platforms" to the "Market Guide for Event Intelligence Solutions (EIS)", defining its core objectives as Augmentation, Acceleration, and Automation.
 
 ---
 
-## Log-Based Metrics, Pipelines, and the AIOps Ecosystem
+## Ecosystem, Metrics, and OpenTelemetry
 
 ### Beyond Counting Errors
+
+To feed advanced ML models effectively, logs must be distilled into numerical metrics. AIOps thrives not on individual text strings, but on multidimensional time-series data.
 
 ```text
 LOG-DERIVED METRICS
@@ -474,7 +482,7 @@ flowchart LR
 
 ### Commercial Platforms and Open Source
 
-The AIOps market is massive. The Forrester Wave: AIOps Platforms, Q2 2025 named Dynatrace, Datadog, and ScienceLogic as Leaders. IBM Cloud Pak for AIOps continues to operate on Red Hat OpenShift, while ServiceNow's ITOM AIOps Event Intelligence combines Event Management, Metric Intelligence (MI), and Health Log Analytics (HLA). PagerDuty was named a Leader in the 2025 GigaOm Radar for AIOps. (Note: PagerDuty claims their AIOps platform reduces alert noise by 91%, though this figure is self-reported and lacks independent third-party verification). Furthermore, Dell Technologies completed its acquisition of AIOps pioneer Moogsoft on September 17, 2023.
+The observability landscape is fiercely competitive, split between heavy enterprise platforms and nimble open-source stacks. Adopting open-source tooling avoids vendor lock-in but requires significant engineering effort to maintain the underlying message brokers (like Kafka) and indexing databases (like Elasticsearch). 
 
 ```text
 AIOPS PLATFORMS (2024)
@@ -499,7 +507,7 @@ Cloud-Native:
   • GCP Operations    - Integrated logging and monitoring
 ```
 
-**Did You Know?** In November 2023, New Relic was taken private by Francisco Partners and TPG in a massive transaction valued at $6.5 billion. According to New Relic's self-published 2026 data report, their AIOps users ship code at an 80% higher frequency; however, these figures represent vendor-reported correlation without independent validation. 
+**Did You Know?** In November 2023, New Relic was taken private by Francisco Partners and TPG in a massive transaction valued at $6.5 billion. According to New Relic's self-published 2026 data report, their AIOps users ship code at an 80% higher frequency.
 
 ```text
 OPEN SOURCE AIOPS
@@ -564,6 +572,8 @@ flowchart TD
     AI --> Action
 ```
 
+When integrating these architectures, the central aggregation fabric becomes critical. The AIOps agent acts as a unified translation layer across disparate API endpoints.
+
 ```python
 class AIOpsIntegration:
     """Example integrations for an AIOps system."""
@@ -597,6 +607,10 @@ class AIOpsIntegration:
     ]
 ```
 
+### The State of OpenTelemetry (2026)
+
+To feed the architecture above, the industry has standardized around the CNCF OpenTelemetry (OTel) project. OTel provides a single, vendor-agnostic standard for emitting telemetry. However, it is critical to understand the project's maturity matrix when architecting an AIOps pipeline. As of April 2026, OpenTelemetry traces, metrics, and logs have all reached full stability and are widely adopted in production. Conversely, the continuous profiling signal (*profiles*) remains in active development status. Relying on profiles for critical ML anomaly detection introduces risk, as breaking protocol changes are still occurring in upstream releases.
+
 ---
 
 ## Common Mistakes in AIOps Adoption
@@ -615,11 +629,34 @@ class AIOpsIntegration:
 
 ## Hands-On Exercise: Building the AIOps Foundations
 
-In this lab, you will move beyond theory and implement the core components of an AIOps pipeline. Attempt to solve the challenges on your own before expanding the solutions.
+In this lab, you will move beyond theory and execute a local simulation of an AIOps pipeline. To ensure these examples are fully executable in your local terminal or CI/CD lab validation environments, we will begin by mocking the LLM integration.
+
+### Task 0: Environment Setup
+
+Execute the following Python setup in your local environment. This creates the foundational dependencies and the dummy LLM interface required for the subsequent tasks.
+
+```python
+# Save as lab_setup.py and run: python3 lab_setup.py
+import json
+import re
+import statistics
+from collections import deque
+
+class MockLLMClient:
+    def generate(self, prompt: str) -> str:
+        if "strict JSON with fields" in prompt:
+            return '{"timestamp": "2026-04-13T10:00:00Z", "level": "WARN", "message": "Unknown format detected by LLM fallback"}'
+        if "causal chain" in prompt:
+            return "High Traffic -> Resource Starvation -> API Timeout. Suggestion: Apply Horizontal Pod Autoscaler scaling."
+        return "{}"
+
+llm_client = MockLLMClient()
+print("Environment initialized successfully.")
+```
 
 ### Task 1: Build a Log Parser
 
-**Challenge**: Implement an intelligent log parser that attempts deterministic pattern matching first, but falls back to an LLM for unknown formats.
+**Challenge**: Implement an intelligent log parser that attempts deterministic pattern matching first, but falls back to the LLM for unknown formats. You must complete the implementation of the class stub below:
 
 ```python
 # TODO: Implement intelligent log parser
@@ -658,12 +695,16 @@ class IntelligentLogParser:
         prompt = f"Parse this unknown log line into strict JSON with fields: timestamp, level, message. Log: {log_line}"
         llm_response = self.llm.generate(prompt)
         return {"format": "llm_inferred", "data": json.loads(llm_response)}
+
+# Executable Test:
+# parser = IntelligentLogParser(llm_client)
+# print(parser.parse('192.168.1.1 - - [13/Apr/2026:10:00:00 +0000] "GET /" 200 123'))
 ```
 </details>
 
 ### Task 2: Implement Anomaly Detection
 
-**Challenge**: Build a log anomaly detector that identifies frequency anomalies using Z-scores over a rolling window.
+**Challenge**: Build a log anomaly detector that identifies frequency anomalies using Z-scores over a rolling window. Complete the class stub below:
 
 ```python
 # TODO: Build log anomaly detector
@@ -705,12 +746,18 @@ class LogAnomalyDetector:
             
         self.history.append(current_count)
         return z_score > self.threshold
+
+# Executable Test:
+# detector = LogAnomalyDetector(threshold=2.0)
+# for i in range(15): detector.analyze_frequency(10) # Seed baseline
+# is_anomaly = detector.analyze_frequency(150) # Feed massive spike
+# print(f"Spike detected? {is_anomaly}")
 ```
 </details>
 
 ### Task 3: Create an RCA Assistant
 
-**Challenge**: Create an RCA Assistant that takes incident context and formats a robust prompt to synthesize a causal chain.
+**Challenge**: Create an RCA Assistant that takes incident context and formats a robust prompt to synthesize a causal chain. Complete the stub:
 
 ```python
 # TODO: Build AI-powered RCA assistant
@@ -743,12 +790,17 @@ class RCAAssistant:
         Output a causal chain using arrows (A -> B -> C) and suggest a safe Level 1 remediation.
         """
         return self.llm.generate(prompt)
+
+# Executable Test:
+# rca = RCAAssistant(llm_client)
+# report = rca.synthesize_incident("API Latency", {"cpu": "99%"}, ["Timeout occurred"])
+# print(report)
 ```
 </details>
 
 ### Task 4: Resource Optimization in K8s v1.35+
 
-**Challenge**: Use the Robusta KRR (Kubernetes Resource Recommender) CLI tool to analyze your cluster's Prometheus data and output optimized CPU/Memory limits for your deployments running on Kubernetes v1.35. 
+**Challenge**: Use the Robusta KRR (Kubernetes Resource Recommender) CLI tool to analyze your cluster's Prometheus data and output optimized CPU/Memory limits for your deployments running on Kubernetes v1.35.
 
 <details>
 <summary>View Task 4 Solution</summary>
@@ -766,14 +818,16 @@ docker run --rm -it \
   --namespace production \
   --prometheus-url http://prometheus-server.monitoring.svc.cluster.local:9090
 ```
+
+*CI/CD Pipeline Note:* If you are executing this within an automated, non-interactive CI/CD pipeline script, omit the `-it` flags to prevent the process from hanging while attempting to allocate a TTY. 
 This generates an AI-informed report suggesting exact YAML adjustments for your `resources.requests` and `resources.limits`.
 </details>
 
 ### Success Checklist
-- [ ] You implemented a hybrid deterministic/LLM parser.
-- [ ] You successfully utilized rolling windows for statistical anomaly detection.
-- [ ] You crafted a structured prompt for Root Cause Analysis.
-- [ ] You executed Robusta KRR against a modern K8s deployment.
+- [ ] You implemented a hybrid deterministic/LLM parser and successfully ran the fallback branch.
+- [ ] You successfully utilized rolling windows for statistical anomaly detection, catching a synthesized spike.
+- [ ] You crafted a structured prompt for Root Cause Analysis and received a valid causal chain output.
+- [ ] You executed Robusta KRR against a modern K8s deployment (or properly simulated the script locally).
 
 ---
 
@@ -825,16 +879,16 @@ This generates an AI-informed report suggesting exact YAML adjustments for your 
 
 ## ⏭ Next Steps
 
-You've completed all the core technical modules! 
+You've successfully completed all the core technical infrastructure modules!
 
-**Up Next**: Phase 12 - History of AI/ML
+**Up Next**: [Phase 12 - History of AI/ML](../history/module-55-foundations.md)
 
-Learn the fascinating history behind the technologies you've been building:
+Learn the fascinating history behind the statistical models and algorithms you've just deployed:
 - Module 55: History of AI/ML - Foundations
 - Module 56: History of AI/ML - Modern Era
 - Module 57: History of AI/ML - Future Directions
 
 ---
 
-_Module 54 Complete! You now understand AIOps and AI-powered log analysis!_
+_Module 1.2 Complete! You now understand AIOps and AI-powered log analysis!_  
 _"The best alert is the one that tells you exactly what's wrong and how to fix it."_
