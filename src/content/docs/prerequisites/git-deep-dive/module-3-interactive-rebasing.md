@@ -42,34 +42,30 @@ If you rebase a shared branch and force-push the result, the next time your coll
 
 When you need to integrate changes from a main branch into your feature branch, you have two primary mechanisms.
 
-+---------------------------------------------------+
-|               THE MERGE STRATEGY                  |
-+---------------------------------------------------+
-|                                                   |
-| Feature Branch:     [C1] ---> [C2] ---> [C3]      |
-|                    /                        \     |
-|                   /                          \    |
-| Main Branch:  [M1] --------> [M2] --------> [M3]  |
-|                                                   |
-| Result: A non-linear history with a merge commit. |
-| The timeline shows exactly when things happened.  |
-+---------------------------------------------------+
+```mermaid
+flowchart LR
+    subgraph The Merge Strategy
+        direction LR
+        M1[M1] --> M2[M2] --> M3[M3]
+        M1 --> C1[C1] --> C2[C2] --> C3[C3] --> M3
+    end
+```
 
 A merge preserves the exact chronological history. It creates a new "merge commit" that has two parents. This is factually accurate but can lead to a tangled, "diamond-patterned" commit graph that is difficult to read.
 
-+---------------------------------------------------+
-|               THE REBASE STRATEGY                 |
-+---------------------------------------------------+
-|                                                   |
-| Feature Branch:                  [C1'] -> [C2']   |
-|                                 /                 |
-|                                /                  |
-| Main Branch:  [M1] -> [M2] -> [M3]                |
-|                                                   |
-| Result: A linear history. Feature commits are     |
-| re-written as if they were based on the latest    |
-| main branch. Old [C1] and [C2] are discarded.     |
-+---------------------------------------------------+
+```mermaid
+flowchart LR
+    subgraph The Rebase Strategy
+        direction LR
+        M1[M1] --> M2[M2] --> M3[M3]
+        M3 --> C1_new["C1'"] --> C2_new["C2'"]
+        
+        M1 -.-> C1[C1] -.-> C2[C2]
+    end
+    
+    classDef discarded fill:#f9f9f9,stroke:#999,stroke-dasharray: 5 5,color:#999;
+    class C1,C2 discarded;
+```
 
 A rebase takes your feature branch commits, temporarily sets them aside, updates your branch to point to the latest main branch commit, and then replays your work on top of it. This creates a perfectly linear history, which makes tools like `git log` and `git bisect` significantly more effective. The trade-off is that it rewrites history—the original SHAs of your commits are destroyed and replaced with new ones.
 
@@ -131,28 +127,29 @@ Understanding the subtle differences between these commands is essential for eff
 | `drop` | Completely ignores the commit. It will not be replayed. | Deleting experimental code or accidental commits entirely. (You can also just delete the line in the editor). |
 | `exec` | Runs an arbitrary shell command after the previous line is applied. | Running a test suite or linter automatically after every commit to ensure the build isn't broken mid-history. |
 
-+-------------------------------------------------------------+
-|              INTERACTIVE REBASE EXECUTION ENGINE            |
-+-------------------------------------------------------------+
-|                                                             |
-| [HEAD] Current State                                        |
-|   |                                                         |
-|   v                                                         |
-| 1. Detach HEAD at the chosen base commit.                   |
-|                                                             |
-| 2. Read the instructions from the text editor.              |
-|                                                             |
-| 3. Apply the first commit in the list.                      |
-|    +-- Is it 'pick'? Apply and move to next.                |
-|    +-- Is it 'squash'? Apply, wait for message edit.        |
-|    +-- Is it 'edit'? Apply, STOP execution, return control. |
-|                                                             |
-| 4. Repeat until the list is empty.                          |
-|                                                             |
-| 5. Point the original branch reference to the new HEAD.     |
-|                                                             |
-| 6. Garbage collect the old orphaned commits eventually.     |
-+-------------------------------------------------------------+
+```mermaid
+flowchart TD
+    Start["[HEAD] Current State"] --> Step1["1. Detach HEAD at the chosen base commit."]
+    Step1 --> Step2["2. Read the instructions from the text editor."]
+    Step2 --> Step3["3. Apply the first commit in the list."]
+    
+    Step3 --> IsPick{"Is it 'pick'?"}
+    IsPick -- Yes --> ApplyPick["Apply and move to next."]
+    
+    IsPick -- No --> IsSquash{"Is it 'squash'?"}
+    IsSquash -- Yes --> ApplySquash["Apply, wait for message edit."]
+    
+    IsSquash -- No --> IsEdit{"Is it 'edit'?"}
+    IsEdit -- Yes --> ApplyEdit["Apply, STOP execution, return control."]
+    
+    ApplyPick --> Step4["4. Repeat until the list is empty."]
+    ApplySquash --> Step4
+    
+    Step4 -- "List not empty" --> Step3
+    Step4 -- "List empty" --> Step5["5. Point the original branch reference to the new HEAD."]
+    
+    Step5 --> Step6["6. Garbage collect the old orphaned commits eventually."]
+```
 
 ## Crafting the Perfect Pull Request
 
@@ -254,26 +251,24 @@ Your colleague merges `feature-db-migration` into `main`, but they use a "Squash
 
 You need to sever the API updates from the old ghost commits and graft them directly onto `main`.
 
-+---------------------------------------------------+
-|           TRANSPLANTING WITH --ONTO               |
-+---------------------------------------------------+
-|                                                   |
-| BEFORE:                                           |
-|                                                   |
-| Main:    [M1] ---> [M2] (Squashed DB Migration)   |
-|                                                   |
-| Ghost:       [D1] ---> [D2] (Old DB Migration)    |
-|                           \                       |
-| API Branch:                [A1] ---> [A2]         |
-|                                                   |
-| COMMAND: git rebase --onto main D2 api-branch     |
-|                                                   |
-| AFTER:                                            |
-|                                                   |
-| Main:    [M1] ---> [M2]                           |
-|                        \                          |
-| API Branch:             [A1'] ---> [A2']          |
-+---------------------------------------------------+
+```mermaid
+flowchart LR
+    subgraph BEFORE
+        direction LR
+        M1_B[M1] --> M2_B["M2 (Squashed DB Migration)"]
+        M1_B -.-> D1_B["D1 (Ghost)"] -.-> D2_B["D2 (Ghost)"]
+        D2_B --> A1_B[A1] --> A2_B[A2]
+    end
+
+    subgraph AFTER
+        direction LR
+        M1_A[M1] --> M2_A["M2 (Squashed DB Migration)"]
+        M2_A --> A1_A["A1'"] --> A2_A["A2'"]
+    end
+    
+    classDef ghost fill:#f9f9f9,stroke:#999,stroke-dasharray: 5 5,color:#999;
+    class D1_B,D2_B ghost;
+```
 
 The syntax is:
 `git rebase --onto <new-base> <old-upstream> <branch-to-move>`
@@ -329,32 +324,32 @@ This command instantly terminates the rebase operation and returns your branch t
 
 <details>
 <summary>Question 1: You are rebasing a feature branch onto main. Midway through, Git pauses and reports a conflict in `service.yaml`. You open the file, resolve the conflict, and save it. What is your exact next step to resume the rebase?</summary>
-You must stage the resolved file using `git add service.yaml`, and then execute `git rebase --continue`. You must NOT run `git commit`, as the interactive rebase engine is already actively managing the commit construction for you. Running a commit command manually will prematurely finalize the current state and disrupt the automated sequence, leading to a tangled history.
+The correct next steps are to stage the resolved file using `git add service.yaml`, and then immediately execute `git rebase --continue`. You must explicitly avoid running `git commit` in this situation, because the interactive rebase engine is already actively managing the commit construction process on your behalf. Running a manual commit command will prematurely finalize the current state of the detached HEAD, creating a new commit outside of the planned rebase sequence. This manual intervention disrupts the automated playback of commits, inevitably leading to a tangled, duplicated history. By using `--continue`, you hand control back to the rebase engine so it can correctly package your resolved changes into the commit it was currently applying.
 </details>
 
 <details>
 <summary>Question 2: You have three commits: Commit A (Add Deployment), Commit B (WIP testing), and Commit C (Fix Deployment configuration). You want to combine them all into a single commit with a brand new message. Which sequence of interactive rebase commands should you use?</summary>
-You should use `reword` on Commit A, `fixup` on Commit B, and `fixup` on Commit C. The `reword` instruction tells Git to apply the base commit but pause to let you write a brand new, comprehensive message. Meanwhile, the `fixup` commands instruct Git to meld the subsequent file changes directly into Commit A. Crucially, `fixup` automatically discards the useless "WIP" and "Fix" commit messages, leaving you with a single, clean commit that contains all the modifications under your newly written message.
+You should set the instruction for Commit A to `reword`, and set both Commit B and Commit C to `fixup`. The `reword` instruction tells Git to apply the initial base commit but pause execution to open your text editor, allowing you to write a brand new, comprehensive commit message. Meanwhile, the `fixup` commands instruct the rebase engine to meld the subsequent file changes from B and C directly into the modified Commit A. Crucially, `fixup` automatically discards the useless 'WIP' and 'Fix' commit messages rather than appending them. This sequence leaves you with a single, clean commit that contains all the structural modifications seamlessly integrated under your newly drafted message.
 </details>
 
 <details>
 <summary>Question 3: You accidentally committed an API token in Commit 2 of your feature branch. You are currently on Commit 6. You start an interactive rebase to remove it. You change Commit 2's instruction to `edit`. Git pauses the rebase. What commands do you run to remove the token and continue?</summary>
-First, open the file containing the token, securely delete the token, and save the file. Next, stage the corrected file using `git add <filename>`. Then, you must modify the currently paused commit by executing `git commit --amend`, which replaces the vulnerable commit with your sanitized version rather than creating a new one. Finally, tell the rebase engine to proceed with the rest of the history by running `git rebase --continue`.
+First, open the file containing the sensitive token, securely delete the credential, and save the changes to disk. Next, stage this corrected file using `git add <filename>` so that Git tracks the removal. Then, you must forcefully modify the currently paused commit by executing `git commit --amend`, which physically replaces the vulnerable commit with your newly sanitized version rather than creating an extraneous new commit on top of it. Modifying the commit in place ensures the credential is fully eradicated from that point in the branch's timeline. Finally, instruct the rebase engine to replay the remainder of your history based on this new, clean commit by running `git rebase --continue`.
 </details>
 
 <details>
 <summary>Question 4: You are halfway through a complex interactive rebase and you realize you have made a terrible mistake resolving a conflict. The files are a mess and you want to completely bail out and return to the state before you typed the rebase command. What do you do?</summary>
-You run `git rebase --abort` to safely terminate the operation. This command acts as an immediate escape hatch when you are overwhelmed by complex conflicts or realize you made an error in your instruction sheet. By executing this, Git completely stops the rebase engine and clears out all temporary state files. It then cleanly resets your working directory and branch pointer back to exactly where they were before the rebase began, ensuring no data is lost.
+You should execute the `git rebase --abort` command to safely and immediately terminate the ongoing operation. This command acts as an emergency escape hatch when you become overwhelmed by complex merge conflicts or realize you made a fundamental error in your rebase instruction sheet. By executing this abort sequence, Git decisively halts the rebase engine and clears out all temporary state files it was tracking. It then cleanly resets your working directory, index, and branch pointer back to the exact state they were in immediately before you initiated the rebase. This ensures that absolutely no data or historical context is lost due to a botched rebase attempt.
 </details>
 
 <details>
 <summary>Question 5: You pushed `feature-auth` to the remote repository yesterday, and your colleague pulled it to help test. Today, you realize your local commit history is messy. Should you run an interactive rebase to clean it up before opening the Pull Request?</summary>
-No, you should not run an interactive rebase in this situation. Doing so directly violates the Golden Rule of rebasing, which states you must never rewrite history that has been shared with others. Because your colleague has already pulled the branch, rewriting your local history and force-pushing it will cause their local repository to diverge catastrophically from the remote. To resolve this without breaking their workflow, you must either coordinate with them to wipe their local branch and pull your new one, or accept the messy history and proceed with standard merges.
+No, you should never run an interactive rebase on a branch that has already been shared and pulled by collaborators. Doing so directly violates the Golden Rule of rebasing, which explicitly forbids rewriting history that exists outside your personal local repository. Because your colleague has already pulled the `feature-auth` branch, rewriting your local history and force-pushing it will cause their local repository state to diverge catastrophically from the updated remote. When they attempt to pull or push again, Git will fail to reconcile the divergent timelines, resulting in an unmanageable web of duplicate commits and merge conflicts. To resolve this cleanly, you must either strictly coordinate with them to delete their local branch and pull your newly rebased version, or simply accept the messy history and proceed with standard merge commits.
 </details>
 
 <details>
 <summary>Question 6: Your team uses a "Squash and Merge" policy for Pull Requests. You branched `backend-v2` off of `backend-v1`. `backend-v1` was just squashed and merged into main. You need to update `backend-v2` with the latest main. Why is a standard `git rebase main` a bad idea here?</summary>
-A standard `git rebase main` will fail because the original commits of `backend-v1` were squashed, meaning their distinct cryptographic SHAs no longer exist on the main branch. Instead, they were replaced by a single new commit with a completely different SHA. If you perform a standard rebase, Git will attempt to blindly replay your original `backend-v1` commits—which are still lingering in `backend-v2`'s history—onto main, causing massive conflicts since main already contains those exact changes in a condensed form. To safely resolve this, you must use `git rebase --onto` to surgically sever and transplant only the specific `v2` commits onto the new base.
+A standard `git rebase main` is highly problematic here because the original sequential commits of `backend-v1` were squashed upon merging, meaning their distinct cryptographic SHAs no longer exist anywhere on the main branch. Instead, those historical commits were entirely replaced by a single, monolithic commit bearing a completely different SHA. If you perform a standard rebase, Git will fail to recognize that the changes are already present and will attempt to blindly replay your original `backend-v1` commits—which are still lingering in `backend-v2`'s local history—directly onto main. This redundant application guarantees massive, complex merge conflicts, because main already contains those exact code changes in a condensed structural form. To safely maneuver around this, you must use the `git rebase --onto` command to surgically sever the history and transplant only the specific `v2` commits onto the new base branch.
 </details>
 
 ## Hands-On Exercise
