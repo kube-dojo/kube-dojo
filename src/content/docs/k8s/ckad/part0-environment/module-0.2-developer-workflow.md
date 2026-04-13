@@ -21,7 +21,7 @@ lab:
 ## Learning Outcomes
 
 After completing this module, you will be able to:
-- **Configure** kubectl aliases, shell completions, and CKAD-specific shortcuts for maximum speed
+- **Configure** kubectl aliases and CKAD-specific shortcuts for maximum speed
 - **Create** Kubernetes resources imperatively using `kubectl run`, `kubectl create`, and `kubectl expose`
 - **Debug** resource issues rapidly using `kubectl describe`, `kubectl logs`, and `kubectl exec`
 - **Explain** the developer-centric kubectl workflow that distinguishes CKAD from CKA tasks
@@ -30,7 +30,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-CKAD is about speed AND correctness. You have 2 hours for ~15-20 tasks. Every second counts. The difference between a passing and failing score is often not knowledge—it's execution speed.
+CKAD is about speed AND correctness. You have 2 hours to complete the performance-based tasks. Every second counts. The difference between a passing and failing score is often not knowledge—it's execution speed.
 
 This module focuses on the developer-specific kubectl patterns you'll use repeatedly. If you completed the CKA curriculum, you already have aliases and completions set up. Here we add CKAD-specific optimizations.
 
@@ -63,7 +63,7 @@ alias kgy='kubectl get -o yaml'
 alias kgw='kubectl get -o wide'
 
 # Dry-run pattern (CKAD essential)
-alias kdr='kubectl --dry-run=client -o yaml'
+export kdr='--dry-run=client -o yaml'
 
 # Quick run
 alias kr='kubectl run'
@@ -98,16 +98,16 @@ The `--dry-run=client -o yaml` pattern generates YAML without creating resources
 
 ```bash
 # Generate pod YAML
-k run nginx --image=nginx $kdr > pod.yaml
+k run nginx --image=nginx --dry-run=client -o yaml > pod.yaml
 
 # Generate deployment YAML
-k create deploy web --image=nginx --replicas=3 $kdr > deploy.yaml
+k create deploy web --image=nginx --replicas=3 --dry-run=client -o yaml > deploy.yaml
 
 # Generate job YAML
-k create job backup --image=busybox -- echo done $kdr > job.yaml
+k create job backup --image=busybox --dry-run=client -o yaml -- echo done > job.yaml
 
 # Generate service YAML
-k expose deploy web --port=80 $kdr > svc.yaml
+k expose deploy web --port=80 --dry-run=client -o yaml > svc.yaml
 ```
 
 ### The $kdr Variable
@@ -147,7 +147,7 @@ metadata:
   name: multi
 spec:
   containers:
-  - name: nginx
+  - name: multi
     image: nginx
   - name: sidecar          # Add this
     image: busybox         # Add this
@@ -346,7 +346,7 @@ When adding a sidecar container, you'll copy an existing container spec:
 - **The `--restart=Never` flag** sets the pod's `restartPolicy` to `Never`. This is crucial for test pods that run a single command and exit, preventing Kubernetes from continuously restarting the container after it finishes.
 - **The `--rm` flag** deletes the pod after it exits, which is perfect for one-off tests and keeps your environment clean.
 - **You can combine `-it` and `--rm`** for ephemeral debug sessions. The pod runs interactively and disappears entirely when you exit the shell.
-- **JSONPath in kubectl** uses the exact same syntax as the Kubernetes API. Practicing it helps with both the exam and real-world automation scripts.
+- **JSONPath in kubectl** uses a custom implementation based on the JSONPath template. Practicing it helps with both the exam and real-world automation scripts.
 
 ---
 
@@ -367,7 +367,7 @@ When adding a sidecar container, you'll copy an existing container spec:
 1. **Your team lead asks you to quickly generate the YAML for a new batch Job without actually running it in the cluster. You need to hand off the YAML file for code review. What's the fastest approach?**
    <details>
    <summary>Answer</summary>
-   Use `kubectl create job myjob --image=busybox -- echo done --dry-run=client -o yaml > job.yaml`. The `--dry-run=client` flag generates valid YAML without contacting the API server, and `-o yaml` outputs it in YAML format. This is the standard generate-then-edit workflow for CKAD because you generate a skeleton imperatively, then customize the YAML as needed. This practice saves significant time compared to writing YAML completely from scratch.
+   Use `kubectl create job myjob --image=busybox --dry-run=client -o yaml -- echo done > job.yaml`. The `--dry-run=client` flag generates valid YAML without contacting the API server, and `-o yaml` outputs it in YAML format. This is the standard generate-then-edit workflow for CKAD because you generate a skeleton imperatively, then customize the YAML as needed. This practice saves significant time compared to writing YAML completely from scratch.
    </details>
 
 2. **After deploying a new Service called `api-gateway`, you need to verify it's reachable from inside the cluster -- but you don't want to leave any debug resources behind. How do you test this cleanly?**
@@ -402,6 +402,16 @@ When adding a sidecar container, you'll copy an existing container spec:
 # 3. Job named 'backup' that echoes "complete"
 # 4. CronJob named 'hourly' running every hour
 ```
+<details>
+<summary>Solution</summary>
+
+```bash
+k run web --image=nginx $kdr > web.yaml
+k create deploy api --image=httpd --replicas=2 $kdr > api.yaml
+k create job backup --image=busybox $kdr -- echo complete > backup.yaml
+k create cronjob hourly --image=busybox --schedule="0 * * * *" $kdr -- echo complete > hourly.yaml
+```
+</details>
 
 **Part 2: Multi-Container Creation (Target: 4 minutes)**
 ```bash
@@ -409,6 +419,27 @@ When adding a sidecar container, you'll copy an existing container spec:
 # - main: nginx
 # - sidecar: busybox running "sleep 3600"
 ```
+<details>
+<summary>Solution</summary>
+
+```bash
+cat <<EOF > pod.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multi
+spec:
+  containers:
+  - name: main
+    image: nginx
+  - name: sidecar
+    image: busybox
+    command: ["sleep", "3600"]
+EOF
+k apply -f pod.yaml
+k wait --for=condition=Ready pod/multi
+```
+</details>
 
 **Part 3: Quick Testing (Target: 2 minutes)**
 ```bash
@@ -416,6 +447,15 @@ When adding a sidecar container, you'll copy an existing container spec:
 # Verify pod logs work
 # Execute a command in a container
 ```
+<details>
+<summary>Solution</summary>
+
+```bash
+k run test --image=busybox --rm -it --restart=Never -- nslookup kubernetes.default.svc
+k logs multi -c main
+k exec multi -c main -- ls /
+```
+</details>
 
 **Success Criteria**:
 - [ ] All YAML files generated correctly
@@ -433,8 +473,10 @@ Verify your aliases work:
 ```bash
 # These should all work
 k get pods
-kgy pod nginx  # Get YAML of a pod
-kdr            # Should echo "--dry-run=client -o yaml"
+k run test-alias --image=nginx
+kgy pod test-alias  # Get YAML of a pod
+echo $kdr      # Should echo "--dry-run=client -o yaml"
+k delete pod test-alias
 ```
 
 ### Drill 2: YAML Generation Speed (Target: 5 minutes)
@@ -452,10 +494,10 @@ k create deploy web --image=nginx $kdr > /tmp/deploy.yaml
 k create svc clusterip mysvc --tcp=80:80 $kdr > /tmp/svc.yaml
 
 # Job
-k create job backup --image=busybox -- echo done $kdr > /tmp/job.yaml
+k create job backup --image=busybox $kdr -- echo done > /tmp/job.yaml
 
 # CronJob
-k create cronjob hourly --image=busybox --schedule="0 * * * *" -- date $kdr > /tmp/cronjob.yaml
+k create cronjob hourly --image=busybox --schedule="0 * * * *" $kdr -- date > /tmp/cronjob.yaml
 
 # ConfigMap
 k create cm myconfig --from-literal=key=value $kdr > /tmp/cm.yaml
@@ -472,15 +514,33 @@ Create a multi-container pod from scratch:
 # Generate base
 k run multi --image=nginx $kdr > /tmp/multi.yaml
 
-# Edit to add sidecar (use vim)
-vim /tmp/multi.yaml
+# Edit to add sidecar (use vim in practice)
+# vim /tmp/multi.yaml
+# 
+# (Using cat to overwrite for non-interactive execution)
+cat <<EOF > /tmp/multi.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multi
+  labels:
+    run: multi
+spec:
+  containers:
+  - name: multi
+    image: nginx
+  - name: sidecar
+    image: busybox
+    command: ["sleep", "3600"]
+EOF
 
 # Apply
 k apply -f /tmp/multi.yaml
 
 # Verify both containers running
+k wait --for=condition=Ready pod/multi
 k get pod multi -o jsonpath='{.spec.containers[*].name}'
-# Expected: nginx sidecar
+# Expected: multi sidecar
 
 # Cleanup
 k delete pod multi
@@ -554,19 +614,46 @@ k config set-context --current --namespace=web-app
 # 3. Generate multi-container pod YAML
 k run webapp --image=nginx $kdr > /tmp/webapp.yaml
 
-# 4. Edit to add sidecar (logs container)
-# Add this container:
+# 4. Edit to add sidecar (logs container) and shared volume
+# In practice, use vim to add the emptyDir volume and this container:
 #   - name: logger
 #     image: busybox
 #     command: ["sh", "-c", "tail -f /var/log/nginx/access.log"]
 #     volumeMounts:
 #     - name: logs
 #       mountPath: /var/log/nginx
+#
+# (Using cat to overwrite for non-interactive execution)
+cat <<EOF > /tmp/webapp.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: webapp
+  labels:
+    run: webapp
+spec:
+  volumes:
+  - name: logs
+    emptyDir: {}
+  containers:
+  - name: webapp
+    image: nginx
+    volumeMounts:
+    - name: logs
+      mountPath: /var/log/nginx
+  - name: logger
+    image: busybox
+    command: ["sh", "-c", "tail -f /var/log/nginx/access.log"]
+    volumeMounts:
+    - name: logs
+      mountPath: /var/log/nginx
+EOF
 
 # 5. Apply
 k apply -f /tmp/webapp.yaml
 
 # 6. Verify both containers running
+k wait --for=condition=Ready pod/webapp
 k get pod webapp -o wide
 k describe pod webapp | grep -A5 Containers
 
@@ -583,4 +670,4 @@ k delete ns web-app
 
 ## Next Module
 
-[Module 1.1: Container Images](../part1-design-build/module-1.1-container-images/) - Build, tag, and push container images for CKAD.
+[Module 1.1: Container Images](/k8s/ckad/part1-design-build/module-1.1-container-images/) - Build, tag, and push container images for CKAD.
