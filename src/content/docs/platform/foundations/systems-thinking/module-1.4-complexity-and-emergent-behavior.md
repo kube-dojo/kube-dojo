@@ -37,6 +37,8 @@ Three unrelated failures, all hitting within hours of each other, creating a day
 
 The truth was stranger: each failure was independently caused by mundane issues. NYSE had a software glitch during a routine update. United had a network router problem. WSJ had a technical issue with their content delivery. No coordination. No attack. Just three independent complex systems failing in ways that seemed impossible—until they happened.
 
+> **Stop and think**: Before reading further, consider the last major incident you experienced. Did it have one clear cause, or was it a combination of seemingly unrelated, small factors?
+
 **This is how complex systems work.** They don't fail in the ways you predict. They fail in ways that seem obvious only in hindsight. They create coincidences that look like conspiracies. And they resist all attempts to make them "safe."
 
 ---
@@ -86,55 +88,41 @@ Not all difficult problems are the same. A Boeing 747 is **complicated**. A floc
 | Can be **designed** top-down | Must be **evolved** |
 | Example: Airplane engine | Example: Air traffic control system |
 
+```mermaid
+graph TD
+    subgraph Complicated [Complicated System: Airplane Engine]
+        direction LR
+        A[Fuel] --> B[Combustion] --> C[Turbine] --> D[Thrust]
+    end
+
+    subgraph Complex [Complex System: Production Environment]
+        direction LR
+        O[Operators] --> S1[Service A]
+        O --> S2[Service B]
+        S1 <-->|Traffic| S2
+        S2 <-->|Behavior Changes| S3[Service C]
+        U[Users] --> S1
+        U --> S2
+    end
 ```
-THE CRUCIAL DISTINCTION
-═══════════════════════════════════════════════════════════════
 
-COMPLICATED SYSTEM: Airplane Engine
-────────────────────────────────────────────────────────────────
-┌───────────────────────────────────────────────────────────┐
-│                                                           │
-│   Fuel ─────▶ Combustion ─────▶ Turbine ─────▶ Thrust    │
-│                                                           │
-│   Characteristics:                                        │
-│   • Relationships are FIXED                              │
-│   • Expert mechanic can predict every behavior           │
-│   • Same input = Same output (always)                    │
-│   • Built from a blueprint                               │
-│   • Can be disassembled, understood, reassembled         │
-│   • Failure modes are KNOWN and FINITE                   │
-│                                                           │
-│   You CAN fully understand a complicated system.          │
-│                                                           │
-└───────────────────────────────────────────────────────────┘
+**Complicated Systems (Airplane Engine):**
+- Relationships are FIXED
+- Expert mechanics can predict every behavior
+- Same input = Same output (always)
+- Built from a blueprint
+- Can be disassembled, understood, and reassembled
+- Failure modes are KNOWN and FINITE
+- **You CAN fully understand a complicated system.**
 
-
-COMPLEX SYSTEM: Your Production Environment
-────────────────────────────────────────────────────────────────
-┌───────────────────────────────────────────────────────────┐
-│                                                           │
-│       ┌──────◀────────┐     Operators                    │
-│       │               │         │                         │
-│       ▼               │         ▼                         │
-│   Service A ◀─────▶ Service B ◀─────▶ Service C          │
-│       │     traffic   ▲    behavior  │                   │
-│       │               │    changes   │                   │
-│       └───────▶───────┴───────◀──────┘                   │
-│              Users change behavior                        │
-│                                                           │
-│   Characteristics:                                        │
-│   • Relationships change DYNAMICALLY                      │
-│   • No one understands full system behavior              │
-│   • Same input ≠ Same output (depends on state)          │
-│   • Emerges from evolution, not design                   │
-│   • Cannot be fully modeled or predicted                 │
-│   • Failure modes are UNKNOWN and INFINITE               │
-│                                                           │
-│   You CANNOT fully understand a complex system.           │
-│   And that's not a failure—it's fundamental.              │
-│                                                           │
-└───────────────────────────────────────────────────────────┘
-```
+**Complex Systems (Your Production Environment):**
+- Relationships change DYNAMICALLY
+- No one understands full system behavior
+- Same input ≠ Same output (depends on state)
+- Emerges from evolution, not design
+- Cannot be fully modeled or predicted
+- Failure modes are UNKNOWN and INFINITE
+- **You CANNOT fully understand a complex system. And that's not a failure—it's fundamental.**
 
 ### 1.2 Why Production Systems Are Complex
 
@@ -178,58 +166,22 @@ Millisecond network issues interact with second-level retries, minute-level auto
 
 The most dangerous mistake isn't being in a complex domain—it's treating a complex problem like a complicated one, or treating chaos like complexity.
 
-```
-THE CYNEFIN FRAMEWORK
-═══════════════════════════════════════════════════════════════
+```mermaid
+graph TD
+    Complex["<b>COMPLEX</b> (Unordered)<br/>Probe → Sense → Respond<br/><br/>• Emergent practice<br/>• Safe-to-fail probes"]
+    Complicated["<b>COMPLICATED</b> (Ordered)<br/>Sense → Analyze → Respond<br/><br/>• Good practice<br/>• Expert analysis"]
+    Chaotic["<b>CHAOTIC</b> (Unordered)<br/>Act → Sense → Respond<br/><br/>• Novel practice<br/>• Stabilize first!"]
+    Clear["<b>CLEAR</b> (Ordered)<br/>Sense → Categorize → Respond<br/><br/>• Best practice<br/>• Follow playbook"]
+    Confused(("<b>CONFUSED</b><br/>(Disorder)"))
 
-            UNORDERED                      ORDERED
-     (Cause-effect unclear)        (Cause-effect clear)
-    ┌─────────────────────────┬─────────────────────────┐
-    │                         │                         │
-    │       COMPLEX           │      COMPLICATED        │
-    │                         │                         │
-    │   Probe → Sense → Act   │   Sense → Analyze → Act│
-    │                         │                         │
-    │   • Emergent practice   │   • Good practice       │
-    │   • Run experiments     │   • Expert analysis     │
-    │   • Safe-to-fail probes │   • Best known methods  │
-    │   • Pattern recognition │   • Cause analysis      │
-    │                         │                         │
-    │   Example: "Why are     │   Example: "Database    │
-    │   users abandoning      │   queries are slow"     │
-    │   checkout?"            │   → Profile, analyze    │
-    │   → A/B test hypotheses │                         │
-    │                         │                         │
-    ├─────────────────────────┼─────────────────────────┤
-    │                         │                         │
-    │       CHAOTIC           │        CLEAR            │
-    │                         │       (Obvious)         │
-    │   Act → Sense → Respond │   Sense → Categorize    │
-    │                         │              → Respond  │
-    │   • Novel practice      │   • Best practice       │
-    │   • Stabilize first!    │   • Standard operating  │
-    │   • Act decisively      │     procedure           │
-    │   • No time for analysis│   • Just follow the     │
-    │                         │     playbook            │
-    │                         │                         │
-    │   Example: "Site is     │   Example: "Disk 90%    │
-    │   completely down,      │   full" → Run cleanup   │
-    │   everything is red"    │   script                │
-    │   → Restart, rollback,  │                         │
-    │     do SOMETHING        │                         │
-    │                         │                         │
-    └─────────────────────────┴─────────────────────────┘
-
-                    ┌───────────────────┐
-                    │     CONFUSED      │
-                    │    (Disorder)     │
-                    │                   │
-                    │  Don't know which │
-                    │  domain you're in │
-                    │                   │
-                    │  → Gather more    │
-                    │    information    │
-                    └───────────────────┘
+    Complex --- Complicated
+    Chaotic --- Clear
+    Complex --- Chaotic
+    Complicated --- Clear
+    Complex -.- Confused
+    Complicated -.- Confused
+    Chaotic -.- Confused
+    Clear -.- Confused
 ```
 
 ### 2.2 Why the Order of Actions Matters
@@ -244,86 +196,33 @@ Each domain requires a different approach. Using the wrong approach is worse tha
 | **Chaotic** | No perceivable cause-effect | Act → Sense → Respond (stabilize first) | Continued analysis while burning |
 | **Confused** | Don't know which domain | Break down and gather information | Acting without knowing the domain |
 
+> **Pause and predict**: If your system goes completely down and you have no idea why, what should your first action be? Analyze the logs, or restart the system? (Hint: You are in the Chaotic domain).
+
 ### 2.3 Cynefin in Operations: Real Examples
 
-**Clear Domain**: "Disk is 90% full"
-```
-┌────────────────────────────────────────────────────────────┐
-│ CLEAR: Disk Space Alert                                    │
-├────────────────────────────────────────────────────────────┤
-│ Sense: See the alert                                       │
-│ Categorize: This is a known issue with a known fix         │
-│ Respond: Run the disk cleanup playbook                     │
-│                                                            │
-│ ⚠️  Danger: Don't overcomplicate it!                       │
-│     If you start analyzing why logs grew so much,          │
-│     you're treating a clear problem as complicated.        │
-│     First: fix it. Then: investigate (separate action).    │
-└────────────────────────────────────────────────────────────┘
-```
+**CLEAR: Disk Space Alert**
+* **Sense:** See the alert.
+* **Categorize:** This is a known issue with a known fix.
+* **Respond:** Run the disk cleanup playbook.
+> ⚠️ **Danger:** Don't overcomplicate it! If you start analyzing why logs grew so much, you're treating a clear problem as complicated. First: fix it. Then: investigate (separate action).
 
-**Complicated Domain**: "API response time increased 30%"
-```
-┌────────────────────────────────────────────────────────────┐
-│ COMPLICATED: Performance Degradation                        │
-├────────────────────────────────────────────────────────────┤
-│ Sense: Gather data (metrics, traces, logs)                 │
-│ Analyze: Have experts examine the evidence                 │
-│         - Profile code paths                               │
-│         - Check database query plans                       │
-│         - Examine network latency                          │
-│ Respond: Implement the fix that analysis reveals           │
-│                                                            │
-│ ⚠️  Danger: Analysis paralysis!                            │
-│     If you're still analyzing after 30 minutes while       │
-│     users are affected, you've waited too long.            │
-│     Set a time limit. Act with best available information. │
-└────────────────────────────────────────────────────────────┘
-```
+**COMPLICATED: Performance Degradation**
+* **Sense:** Gather data (metrics, traces, logs).
+* **Analyze:** Have experts examine the evidence (profile code paths, check query plans, examine network latency).
+* **Respond:** Implement the fix that analysis reveals.
+> ⚠️ **Danger:** Analysis paralysis! If you're still analyzing after 30 minutes while users are affected, you've waited too long. Set a time limit. Act with the best available information.
 
-**Complex Domain**: "Users complain checkout fails but metrics look fine"
-```
-┌────────────────────────────────────────────────────────────┐
-│ COMPLEX: Mystery Failures                                   │
-├────────────────────────────────────────────────────────────┤
-│ Probe: Run safe-to-fail experiments                        │
-│        - Canary with verbose logging                       │
-│        - Try different user segments                       │
-│        - Test different network paths                      │
-│ Sense: Observe patterns that emerge                        │
-│        - "Oh, it only happens on mobile Safari"            │
-│        - "It correlates with CDN cache age"                │
-│ Respond: Amplify what works, dampen what doesn't           │
-│                                                            │
-│ ⚠️  Danger: Premature convergence!                         │
-│     "I bet it's the database" → immediate fix attempt      │
-│     is treating a complex problem as complicated.          │
-│     Run experiments first. Let patterns emerge.            │
-└────────────────────────────────────────────────────────────┘
-```
+**COMPLEX: Mystery Failures** (Users complain checkout fails but metrics look fine)
+* **Probe:** Run safe-to-fail experiments (Canary with verbose logging, test different user segments).
+* **Sense:** Observe patterns that emerge ("Oh, it only happens on mobile Safari" or "It correlates with CDN cache age").
+* **Respond:** Amplify what works, dampen what doesn't.
+> ⚠️ **Danger:** Premature convergence! Saying "I bet it's the database" and attempting an immediate fix is treating a complex problem as complicated. Run experiments first. Let patterns emerge.
 
-**Chaotic Domain**: "Site is completely down, everything is red"
-```
-┌────────────────────────────────────────────────────────────┐
-│ CHAOTIC: Complete Outage                                   │
-├────────────────────────────────────────────────────────────┤
-│ Act: Do something immediately to stabilize                 │
-│      - Roll back the last deployment                       │
-│      - Restart critical services                           │
-│      - Fail over to backup region                          │
-│      - Enable circuit breakers                             │
-│ Sense: What effect did the action have?                    │
-│ Respond: Iterate until stable                              │
-│                                                            │
-│ ⚠️  Danger: Analysis during chaos!                         │
-│     "Let's understand what's happening first..."           │
-│     NO. The site is down. Users are angry. Revenue lost.   │
-│     ACT FIRST. Understand later.                           │
-│                                                            │
-│ A wrong action that provides information is better than    │
-│ perfect analysis while everything burns.                   │
-└────────────────────────────────────────────────────────────┘
-```
+**CHAOTIC: Complete Outage** (Site is completely down, everything is red)
+* **Act:** Do something immediately to stabilize (Roll back the last deployment, restart critical services, fail over to backup region).
+* **Sense:** What effect did the action have?
+* **Respond:** Iterate until stable.
+> ⚠️ **Danger:** Analysis during chaos! "Let's understand what's happening first..." NO. The site is down. Users are angry. Revenue is lost. ACT FIRST. Understand later. A wrong action that provides information is better than perfect analysis while everything burns.
 
 > **War Story: The 45-Minute Analysis Meeting**
 >
@@ -337,61 +236,28 @@ Each domain requires a different approach. Using the wrong approach is worse tha
 
 Situations can shift between domains. Understanding these transitions helps you respond appropriately.
 
+```mermaid
+graph LR
+    subgraph Healthy Progression
+        direction LR
+        H_Chaotic["CHAOTIC<br/>(Site down!)"] -->|Stabilize| H_Complex["COMPLEX<br/>(Working, let's experiment)"]
+        H_Complex -->|Find patterns| H_Complicated["COMPLICATED<br/>(Analyze data)"]
+        H_Complicated -->|Codify| H_Clear["CLEAR<br/>(New playbook)"]
+    end
 ```
-DOMAIN TRANSITIONS
-═══════════════════════════════════════════════════════════════
 
-HEALTHY PROGRESSION (stabilize → understand → codify)
-───────────────────────────────────────────────────────────────
-
-CHAOTIC ──stabilize──▶ COMPLEX ──find patterns──▶ COMPLICATED
-                                                        │
-    "Site down!          "It's working but        ─codify─┘
-     Do something!"       we don't know why.        │
-                          Let's experiment."        │
-                                                    ▼
-                                                 CLEAR
-
-                                            "Now we have a
-                                             playbook for this."
-
-
-DANGEROUS TRANSITION (the cliff edge)
-───────────────────────────────────────────────────────────────
-
-CLEAR ────complacency────▶ CHAOTIC
-
-"We always do it this way"     →     Sudden catastrophic failure
-"Nothing bad has happened"     →     The thing nobody expected
-"We don't need to check that"  →     Everything breaks at once
-
-The boundary between Clear and Chaotic is a CLIFF EDGE.
-There is no gradual decline. You fall off.
-This is why "it's always worked" is the most dangerous phrase.
-
-
-GETTING STUCK
-───────────────────────────────────────────────────────────────
-
-Common stuck states:
-
-COMPLICATED → still COMPLICATED
-  "We need more data" (forever)
-  "One more analysis" (forever)
-  → Set time limits. Decide with imperfect information.
-
-COMPLEX → forced to COMPLICATED
-  Management: "What's the root cause?"
-  You: "There isn't one single cause."
-  Management: "Find it anyway."
-  → Educate stakeholders on complexity. Or give them
-    a satisfying (if oversimplified) answer.
-
-CHAOTIC → still CHAOTIC
-  Stabilize one thing → something else breaks
-  → You may have multiple concurrent issues.
-    Triage. Fix the biggest impact first.
+```mermaid
+graph LR
+    subgraph Dangerous Transition
+        direction LR
+        D_Clear["CLEAR<br/>(We always do it this way)"] -->|Complacency cliff edge| D_Chaotic["CHAOTIC<br/>(Sudden catastrophic failure)"]
+    end
 ```
+
+**Common stuck states:**
+* **COMPLICATED → still COMPLICATED**: "We need more data" (forever). Set time limits. Decide with imperfect information.
+* **COMPLEX → forced to COMPLICATED**: Management demands a single "root cause" when there isn't one. Educate stakeholders on complexity.
+* **CHAOTIC → still CHAOTIC**: Stabilize one thing, something else breaks. Triage. Fix the biggest impact first.
 
 ---
 
@@ -402,190 +268,90 @@ CHAOTIC → still CHAOTIC
 Dr. Richard Cook's "How Complex Systems Fail" is three pages that will change how you think about operations. Here are the key insights, applied to production systems:
 
 **PRINCIPLE 1: Complex systems are intrinsically hazardous**
-
-```
-What this means for you:
-────────────────────────────────────────────────────────────────
-Your production system is inherently dangerous.
-Not because you built it wrong—because it's complex.
-
-This isn't failure. This is physics.
-
-Accept it. Don't fight it. Design for it.
-```
+Your production system is inherently dangerous. Not because you built it wrong—because it's complex. This isn't failure. This is physics. Accept it. Don't fight it. Design for it.
 
 **PRINCIPLE 2: Complex systems are heavily defended against failure**
-
 Your system has multiple layers of defense: redundancy, monitoring, alerting, failover, backups, circuit breakers, retries. These defenses work—that's why catastrophic failures are rare.
 
 **PRINCIPLE 3: Catastrophe requires multiple failures**
-
 Single points of failure are myths. The real danger is multiple defenses failing simultaneously in ways nobody anticipated.
 
+```mermaid
+graph LR
+    Start([Threat / Hazard]) --> |Bypasses| L1[Defense 1: Hole]
+    L1 --> |Bypasses| L2[Defense 2: Hole]
+    L2 --> |Bypasses| L3[Defense 3: Hole]
+    L3 --> |Bypasses| L4[Defense 4: Hole]
+    L4 --> End([Catastrophe])
 ```
-THE SWISS CHEESE MODEL
-═══════════════════════════════════════════════════════════════
-
-Each defense layer has holes. Most of the time, the holes
-don't align. Occasionally, they do.
-
-Normal:
-  Defense 1     Defense 2     Defense 3     Defense 4
-    ┌───┐         ┌───┐         ┌───┐         ┌───┐
-    │ ○ │         │   │         │   │         │ ○ │
-    │   │    ●────│─○─│────●    │ ○ │         │   │
-    │   │   blocked│   │  blocked│   │         │   │
-    │ ○ │         │ ○ │         │   │         │   │
-    └───┘         └───┘         └───┘         └───┘
-
-Catastrophe (all holes align):
-  Defense 1     Defense 2     Defense 3     Defense 4
-    ┌───┐         ┌───┐         ┌───┐         ┌───┐
-    │   │         │   │         │   │         │   │
-    │   │  ●──────│───│─────────│───│─────────│───│──▶ FAILURE
-    │ ○ │         │ ○ │         │ ○ │         │ ○ │
-    │   │         │   │         │   │         │   │
-    └───┘         └───┘         └───┘         └───┘
-
-The holes are always there. Most days, they don't align.
-Some days, they do.
-```
+*The Swiss Cheese Model: Each defense layer has holes. Most days, they don't align. Some days, they do.*
 
 **PRINCIPLE 4: Complex systems contain changing mixtures of latent failures**
-
 Your system has bugs right now. It has misconfigurations. It has race conditions. It has capacity limits waiting to be hit. It works **despite** these problems, not because they're absent.
 
+```mermaid
+graph LR
+    subgraph Belief
+        W1((Working)) --- F1((Failed))
+    end
+    subgraph Reality
+        W2((Fully Working)) ===|Most of the time| M2((Mostly Working))
+        M2 ===|Compensating| B2((Barely Working))
+        B2 ===|Rarely| F2((Actually Failed))
+    end
 ```
-THE GAP BETWEEN BELIEF AND REALITY
-═══════════════════════════════════════════════════════════════
+*The question isn't "is anything wrong?" but "what's wrong that we're compensating for?"*
 
-What we believe:
-────────────────────────────────────────────────────────────────
-                Working                              Failed
-                   ○──────────────────────────────────○
-
-There are two states. System is either working or failed.
-Green or red. Up or down.
-
-
-Reality:
-────────────────────────────────────────────────────────────────
-        Fully        Mostly           Barely        Actually
-        Working      Working          Working       Failed
-           ●═══════════════════════════════●════════════●
-         (rare)    (most of the time)                (rare)
-
-Your system is almost never fully working.
-It's usually in various states of partial failure.
-The question isn't "is anything wrong?" but
-"what's wrong that we're compensating for?"
-```
+> **Stop and think**: If your system is currently running without active incidents, does that mean it is completely healthy? Or is it just compensating for hidden failures?
 
 **PRINCIPLE 5: Complex systems run in degraded mode**
-
 "Normal operation" includes partial failures. The metrics you're seeing right now probably include a slow query, a flaky connection, a service that's about to run out of memory. The system works because humans and automated systems compensate.
 
 **PRINCIPLE 6: Catastrophe is always just around the corner**
-
 Safety margins exist. But they erode. Small pressures—ship faster, cut costs, do more with less—gradually consume safety margins until there's none left.
 
 **PRINCIPLE 7: Post-accident attribution is fundamentally wrong**
-
 "Root cause" is a myth. Assigning blame to a single cause obscures the system conditions that allowed the incident.
 
 ### 3.2 The Myth of Root Cause
 
 Complex system failures don't have a single "root cause." They have multiple contributing factors that combine in novel ways.
 
+```mermaid
+graph TD
+    subgraph Flawed: Root Cause Thinking
+        I[Incident] -->|Search for single cause| R[Root Cause: Deployment Bug]
+        style R fill:#ff9999
+    end
 ```
-ROOT CAUSE THINKING (Flawed)
-═══════════════════════════════════════════════════════════════
 
-Management: "What was the root cause?"
-Engineer: "The deployment failed."
-Management: "Good. Let's fix deployments."
-
-                     ┌────────────────┐
-                     │  Incident      │
-                     └───────┬────────┘
-                             │
-                     ┌───────▼────────┐
-                     │  Root Cause    │  ← "Find and fix this"
-                     │  (Deployment)  │
-                     └────────────────┘
-
-Problem: This misses everything that made the deployment
-         failure become an incident.
-
-
-COMPLEX SYSTEMS THINKING (Accurate)
-═══════════════════════════════════════════════════════════════
-
-              ┌─────────────────────────────────────┐
-              │           Incident                  │
-              └──┬───────┬───────┬───────┬─────────┘
-                 │       │       │       │
-    ┌────────────▼─┐ ┌───▼───┐ ┌─▼─────┐ ▼─────────┐
-    │  Deployment  │ │ Alert │ │ Timing │ │  Load   │
-    │  had a bug   │ │ muted │ │ (peak) │ │  spike  │
-    └──────────────┘ └───────┘ └───────┘ └─────────┘
-                 │       │       │       │
-                 └───────┼───────┼───────┘
-                         │       │
-            INDIVIDUALLY HARMLESS
-            COMBINED = CATASTROPHE
-
-The deployment bug existed for weeks.
-The alert was muted months ago.
-The timing was random.
-The load spike was normal for that time.
-
-NONE of these alone would cause an incident.
-TOGETHER, they did.
-
-Which one is the "root cause"?
-Answer: That's the wrong question.
+```mermaid
+graph TD
+    subgraph Accurate: Complex Systems Thinking
+        DB[Deployment Bug] --> I2[Incident]
+        AM[Alert Muted] --> I2
+        PT[Peak Timing] --> I2
+        LS[Load Spike] --> I2
+        style I2 fill:#ff9999
+    end
 ```
+*Individually harmless factors combine to create catastrophe.*
+
+The deployment bug existed for weeks. The alert was muted months ago. The timing was random. The load spike was normal for that time. NONE of these alone would cause an incident. TOGETHER, they did.
 
 ### 3.3 Drift into Failure
 
 Sidney Dekker's crucial concept: systems don't fail suddenly. They **drift** toward failure through small, locally rational decisions.
 
-```
-DRIFT INTO FAILURE: The Invisible Slide
-═══════════════════════════════════════════════════════════════
-
-Safety margin
-─────────────────────────────────────────────────────────────
-                                                  ╲
-        ╱                   ╱                      ╲
-       ╱                   ╱                        ╲
-      ╱                   ╱                          ╲
-Start                 Small                           Small
-     ╲                 deviation                      deviation
-      ╲               (seems okay)                    (seems okay)
-       ╲                   ╲                           ╲
-        ╲                   ╲                           ╲
-──────────────────────────────────────────────────────── Boundary
-                                                        ╲
-                                                         ╲  Accident
-                                                          ●
-
-Timeline of drift:
-
-Year 1: "Let's skip the code review this once—we need to ship."
-        (Nothing bad happens)
-
-Year 2: "Code reviews slow us down. Let's make them optional."
-        (Nothing bad happens)
-
-Year 3: "Nobody does code reviews anyway. Let's remove them."
-        (Nothing bad happens)
-
-Year 4: Bug reaches production. Major incident.
-
-Year 4 Post-mortem: "Root cause: no code review"
-Reality: The drift took 4 years. Each step was locally rational.
+```mermaid
+graph TD
+    Start((Start: Full Safety Margin)) --> D1[Small deviation: seems okay]
+    D1 --> D2[Small deviation: seems okay]
+    D2 --> D3[Small deviation: seems okay]
+    D3 --> Boundary[Safety Boundary Reached]
+    Boundary --> Accident((Accident!))
+    
+    style Accident fill:#f00,color:#fff
 ```
 
 **Common drift patterns in tech:**
@@ -610,182 +376,63 @@ Each decision seems small. Each is locally rational. Together, they erode safety
 **Robustness** = Resist known failures
 **Resilience** = Adapt to any failure
 
+```mermaid
+graph TD
+    subgraph Robust System: The Fortress
+        R_Low[Low Stress] --> R_Perf1[100% Performance]
+        R_Med[Medium Stress] --> R_Perf2[100% Performance]
+        R_High[High Stress] --> R_Perf3[100% Performance]
+        R_Unk[Unknown Stress] --> R_Fail[Catastrophic FAILURE]
+        style R_Fail fill:#ff9999
+    end
 ```
-ROBUSTNESS vs RESILIENCE
-═══════════════════════════════════════════════════════════════
 
-ROBUST SYSTEM: The Fortress
-────────────────────────────────────────────────────────────────
-Stress level:  Low │ Medium │ High │ Unknown
-               ────┼────────┼──────┼──────────
-Performance:   ████│████████│██████│   FAIL
-                   │        │      │    ↓
-                   │        │      │  (unexpected
-                   │        │      │   input)
-
-Philosophy: "Build walls high enough that nothing gets through"
-Reality: Something always gets through eventually.
-
-Works perfectly... until it doesn't.
-When it fails, it fails catastrophically.
-
-
-RESILIENT SYSTEM: The Reed
-────────────────────────────────────────────────────────────────
-Stress level:  Low │ Medium │ High │ Unknown
-               ────┼────────┼──────┼──────────
-Performance:   ████│████████│████  │ ██
-                   │        │  ↓   │  ↓
-                   │        │Degrades gracefully
-                   │        │      │Still working,
-                   │        │      │just reduced
-
-Philosophy: "Bend but don't break"
-Reality: Some degradation, but never catastrophe.
-
-May not be optimal, but doesn't collapse.
-Survives the things you didn't anticipate.
-
-
-Which do you want?
-────────────────────────────────────────────────────────────────
-Robust: Handles known failures perfectly, collapses on unknown
-Resilient: Handles everything imperfectly, survives everything
-
-For complex systems: ALWAYS choose resilience.
+```mermaid
+graph TD
+    subgraph Resilient System: The Reed
+        Re_Low[Low Stress] --> Re_Perf1[100% Performance]
+        Re_Med[Medium Stress] --> Re_Perf2[90% Performance]
+        Re_High[High Stress] --> Re_Perf3[70% Performance]
+        Re_Unk[Unknown Stress] --> Re_Perf4[40% Performance: Degrades Gracefully]
+        style Re_Perf4 fill:#99ff99
+    end
 ```
+
+Robustness handles known failures perfectly, but collapses on the unknown. Resilience handles everything imperfectly, surviving what you didn't anticipate. **For complex systems: ALWAYS choose resilience.**
 
 ### 4.2 The Four Resilience Capabilities
 
 Resilience engineering identifies four capabilities that enable systems to adapt:
 
-```
-THE FOUR CAPABILITIES
-═══════════════════════════════════════════════════════════════
+**1. RESPOND: Address disturbances as they occur**
+* **Question:** "What can we do when things go wrong?"
+* **Good:** Circuit breakers, graceful degradation, failover.
+* **Bad:** Rigid systems with no alternatives (e.g., throwing a Timeout Error when the DB is slow instead of returning cached data).
 
-1. RESPOND: Address disturbances as they occur
-────────────────────────────────────────────────────────────────
-Question: "What can we do when things go wrong?"
+**2. MONITOR: Know what's happening in the system**
+* **Question:** "What should we look for?"
+* **Good:** Business metrics, user experience, leading indicators.
+* **Bad:** Only infrastructure metrics (CPU, memory, disk).
 
-Good: Circuit breakers, graceful degradation, failover
-Bad: Rigid systems with no alternatives
+**3. ANTICIPATE: Identify potential future issues**
+* **Question:** "What might go wrong?"
+* **Good:** Chaos engineering, load testing, gamedays, threat modeling.
+* **Bad:** "It's never failed before."
 
-Example:
-  if database.slow?
-    return cached_response(stale: true)  # Stale but fast
-  else
-    return fresh_response
-  end
-
-# Instead of:
-  if database.slow?
-    raise Timeout::Error  # Everything breaks
-  end
-
-
-2. MONITOR: Know what's happening in the system
-────────────────────────────────────────────────────────────────
-Question: "What should we look for?"
-
-Good: Business metrics, user experience, leading indicators
-Bad: Only infrastructure metrics (CPU, memory, disk)
-
-Monitor:
-- What users experience (error rate, latency, success rate)
-- Business outcomes (conversions, revenue, engagement)
-- Leading indicators (queue depth, saturation, error budget burn)
-- Dependency health (upstream and downstream services)
-
-Not just: Server CPU is 40%
-
-
-3. ANTICIPATE: Identify potential future issues
-────────────────────────────────────────────────────────────────
-Question: "What might go wrong?"
-
-Good: Chaos engineering, load testing, gamedays
-Bad: "It's never failed before"
-
-Activities:
-- Chaos experiments in production
-- Load testing beyond expected capacity
-- "Pre-mortem": What would cause us to fail?
-- Threat modeling
-- Capacity planning
-
-
-4. LEARN: Improve from experience
-────────────────────────────────────────────────────────────────
-Question: "How do we get better?"
-
-Good: Blameless postmortems, systemic analysis, action items
-Bad: "Human error" and moving on
-
-Requirements:
-- Blameless culture (focus on systems, not individuals)
-- Actually follow up on action items
-- Share learnings across teams
-- Study successes, not just failures (Safety-II)
-```
+**4. LEARN: Improve from experience**
+* **Question:** "How do we get better?"
+* **Good:** Blameless postmortems, systemic analysis, studying successes (Safety-II).
+* **Bad:** Categorizing issues as "human error" and moving on.
 
 ### 4.3 Chaos Engineering—Practicing Failure Before It Happens
 
 Chaos Engineering deliberately introduces failures to discover weaknesses before real incidents.
 
-```
-CHAOS ENGINEERING PRINCIPLES
-═══════════════════════════════════════════════════════════════
-
-1. START WITH A HYPOTHESIS
-   ─────────────────────────────────────────────────────────────
-   Before: "Let's kill some pods and see what happens"  ❌
-   After:  "If we kill 30% of API pods, latency should stay
-            under 200ms because the autoscaler will add
-            capacity within 60 seconds"  ✓
-
-   Why: A hypothesis lets you learn regardless of outcome.
-
-
-2. USE PRODUCTION-LIKE CONDITIONS
-   ─────────────────────────────────────────────────────────────
-   Staging doesn't have:
-   - Real traffic patterns
-   - Real data volumes
-   - Real user behavior
-   - Real third-party integrations
-
-   Real chaos happens in production. Start in staging if you
-   must, but graduate to production.
-
-
-3. MINIMIZE BLAST RADIUS
-   ─────────────────────────────────────────────────────────────
-   Week 1: Kill one pod in one service
-   Week 2: Kill 10% of pods in one service
-   Week 3: Kill 30% of pods across multiple services
-   Week 4: Simulate zone failure
-
-   Start small. Build confidence. Expand gradually.
-   Have a way to stop the experiment instantly.
-
-
-4. RUN EXPERIMENTS CONTINUOUSLY
-   ─────────────────────────────────────────────────────────────
-   One-time chaos: Finds the bugs that exist today
-   Continuous chaos: Finds the bugs introduced tomorrow
-
-   Systems drift. New code, new configurations, new patterns.
-   Regular chaos experiments detect drift.
-
-
-5. BUILD CONFIDENCE, NOT HEROICS
-   ─────────────────────────────────────────────────────────────
-   Goal: Boring incident response because you've seen it before
-   Not: "We survived by working all night"
-
-   Success = "Oh, this? Yeah, we practiced this. Here's
-              the runbook."
-```
+1. **Start with a hypothesis**: "If we kill 30% of API pods, latency should stay under 200ms." This lets you learn regardless of outcome.
+2. **Use production-like conditions**: Real chaos happens in production because staging lacks real user behavior and data volumes.
+3. **Minimize blast radius**: Start small. Build confidence. Expand gradually.
+4. **Run experiments continuously**: Systems drift. Regular chaos experiments detect this drift.
+5. **Build confidence, not heroics**: The goal is a boring incident response because you've seen it before.
 
 **Common Chaos Experiments:**
 
@@ -797,7 +444,6 @@ CHAOS ENGINEERING PRINCIPLES
 | **Latency injection** | Timeout handling, circuit breakers | Toxiproxy |
 | **CPU/memory stress** | Autoscaling, resource limits, throttling | stress-ng |
 | **DNS failure** | Fallback mechanisms, caching | Block DNS queries |
-| **Clock skew** | Time-dependent operations | libfaketime |
 
 > **Did You Know?**
 >
@@ -805,55 +451,9 @@ CHAOS ENGINEERING PRINCIPLES
 
 ### 4.4 Safety-I vs Safety-II
 
-Traditional safety focuses on what goes wrong. Resilience engineering also studies what goes right.
+Traditional safety (**Safety-I**) focuses on what goes wrong. It counts errors, eliminates causes, and asks "Why did this fail?"
 
-```
-TWO VIEWS OF SAFETY
-═══════════════════════════════════════════════════════════════
-
-SAFETY-I (Traditional)
-────────────────────────────────────────────────────────────────
-Definition: Safety is the ABSENCE of accidents
-
-Focus:
-- Count what goes wrong (incidents, errors, failures)
-- Investigate failures
-- Eliminate causes
-- Find who made the mistake
-
-Question: "Why did this fail?"
-
-
-SAFETY-II (Resilience)
-────────────────────────────────────────────────────────────────
-Definition: Safety is the PRESENCE of success
-
-Focus:
-- Study what goes right (how normal work succeeds)
-- Learn from successes
-- Amplify successful adaptations
-- Understand how people make things work
-
-Question: "Why does this usually work?"
-
-
-THE INSIGHT
-────────────────────────────────────────────────────────────────
-
-Most operations succeed despite latent failures.
-Something is always partially broken.
-Yet people make it work anyway.
-
-Studying ONLY failures misses:
-- The workarounds operators use
-- The informal knowledge that prevents incidents
-- The adaptations that keep systems running
-- The conditions that enable success
-
-Study success, not just failure.
-Ask "how did we prevent incidents?" not just
-"how did we cause them?"
-```
+Resilience engineering (**Safety-II**) also studies what goes right. It recognizes that most operations succeed despite latent failures. Operators constantly work around issues to keep the system running. By asking "Why does this usually work?" we can learn from successful adaptations and amplify them.
 
 ---
 
@@ -885,72 +485,32 @@ Ask "how did we prevent incidents?" not just
 
 ## Quiz
 
-1. **What's the key difference between complicated and complex systems?**
+1. **A team is managing a fleet of self-driving delivery robots. When a robot's battery degrades, it predictably runs out of power sooner. When a robot encounters an unexpected construction zone, it gets confused, stops, and causes other robots to reroute, creating a massive traffic jam that brings the whole fleet to a halt. Which of these issues is complicated and which is complex?**
    <details>
    <summary>Answer</summary>
 
-   **Complicated systems** have fixed, knowable relationships. An expert can understand them fully, predict their behavior, and design them from blueprints. Cause-and-effect is clear. Examples: airplane engines, mechanical watches.
-
-   **Complex systems** have dynamic, unknowable relationships. No individual can understand them fully. Cause-and-effect is only visible in hindsight. They emerge from evolution, not design. Examples: production systems, cities, economies.
-
-   **The implication**: You can't manage complex systems with complicated-system approaches (expert analysis, best practices, top-down design). You need experiments, adaptation, and resilience.
+   The battery degradation is a complicated problem, while the traffic jam is a complex problem. **WHY?** A complicated problem (battery) has fixed, knowable relationships. An expert can calculate exactly when it will fail based on chemistry and usage. A complex problem (traffic jam) involves dynamic interactions where cause-and-effect are only visible in hindsight. The traffic jam emerged from simple rerouting rules interacting in unexpected ways, a hallmark of complex systems. You cannot predict the system-wide traffic jam simply by looking at the code for one robot.
    </details>
 
-2. **Why does Cynefin use different action orders for each domain?**
+2. **During Black Friday, your payment gateway suddenly drops 100% of transactions. The dashboard is a sea of red. Your senior engineer says, "Let's gather the logs and spend 30 minutes analyzing the query plans before we touch anything." Which Cynefin domain are you in, and is this the right approach?**
    <details>
    <summary>Answer</summary>
 
-   The order changes because the visibility of cause-effect relationships differs:
-
-   - **Clear**: Cause-effect obvious → **Sense → Categorize → Respond** (see the problem, match it to a known solution, apply the playbook)
-
-   - **Complicated**: Cause-effect requires analysis → **Sense → Analyze → Respond** (gather data, have experts study it, implement their recommendation)
-
-   - **Complex**: Cause-effect only visible in hindsight → **Probe → Sense → Respond** (run safe-to-fail experiments, observe what emerges, amplify what works)
-
-   - **Chaotic**: No perceivable cause-effect → **Act → Sense → Respond** (do something immediately to stabilize, see what effect it had, iterate)
-
-   **The danger**: In chaos, analyzing before acting wastes critical time. In complexity, acting before experimenting leads to premature convergence. Using the wrong order makes things worse.
+   You are in the Chaotic domain, and this is the wrong approach. **WHY?** When 100% of transactions are dropping during a critical business event, cause-and-effect is currently imperceptible and the priority is stopping the bleeding. In the Chaotic domain, the correct pattern is Act → Sense → Respond. You should immediately attempt to stabilize (e.g., rollback the last deploy, failover to a backup gateway, restart the service) rather than analyzing logs, which is the strategy for the Complicated domain. Perfect analysis is useless if the business burns down while you do it.
    </details>
 
-3. **What does Richard Cook mean by "complex systems run in degraded mode"?**
+3. **After a major database outage, management demands a "Root Cause Analysis" (RCA) document that identifies the single exact reason for the failure so they can fire the responsible person. Based on Richard Cook's principles, why is this request fundamentally flawed?**
    <details>
    <summary>Answer</summary>
 
-   "Normal" operation for complex systems includes partial failures. Right now, your system probably has:
-   - A slow query nobody has noticed
-   - A connection that occasionally flakes
-   - A service approaching a resource limit
-   - A configuration that's slightly wrong
-
-   The system works **despite** these issues, not because they're absent. Humans and automated systems constantly adapt and compensate.
-
-   **Implications:**
-   - "Green" dashboards don't mean everything is fine
-   - Near-misses are information, not relief
-   - The question isn't "is anything wrong?" but "what's wrong that we're compensating for?"
-   - Human operators are part of why systems work, not just why they fail
+   The request is flawed because complex systems do not fail due to a single "root cause." **WHY?** In complex systems, catastrophe requires multiple defenses to fail simultaneously (the Swiss Cheese model). The incident was likely caused by a combination of individually harmless factors (e.g., a latent bug in a recent PR, a muted alert from last month, a peak load spike, and random timing) that happened to align perfectly. Searching for a single root cause, especially to assign blame, ignores the systemic conditions that made the failure possible and guarantees the real vulnerabilities will remain unaddressed.
    </details>
 
-4. **How does chaos engineering contribute to resilience?**
+4. **Team A builds an API that rigidly rejects any request taking longer than 500ms, causing the entire frontend to crash with a 500 Error when the database slows down. Team B builds an API that returns cached, slightly stale data if the database takes longer than 500ms, allowing the user to continue using the app. Which team built a robust system and which built a resilient system?**
    <details>
    <summary>Answer</summary>
 
-   Chaos engineering contributes to resilience by:
-
-   1. **Discovering weaknesses proactively**: Find failure modes before real incidents find them for you
-
-   2. **Building confidence**: Teams know how systems behave under stress. "We've practiced this."
-
-   3. **Creating institutional knowledge**: When a real incident occurs, it's familiar, not novel
-
-   4. **Forcing design improvements**: If developers know Chaos Monkey will kill their pods, they design for pod failure
-
-   5. **Validating recovery mechanisms**: Do autoscaling, circuit breakers, and failover actually work?
-
-   6. **Detecting drift**: Regular experiments catch erosion of safety margins
-
-   **The goal** isn't to cause outages—it's to make real outages boring because you've already practiced.
+   Team A built a robust system, while Team B built a resilient system. **WHY?** A robust system (Team A) is designed like a fortress to resist known failures up to a specific threshold, but when it encounters unexpected stress (like a database slow down that pushes past its rigid limits), it fails catastrophically (crashing the frontend). A resilient system (Team B) is designed to adapt and bend like a reed; it accepts that failures will happen and degrades gracefully (returning stale data) rather than collapsing completely. For complex systems, resilience is always preferred over robustness.
    </details>
 
 ---
@@ -961,7 +521,7 @@ Ask "how did we prevent incidents?" not just
 
 **Objective**: Experience how a resilient system handles failure and observe emergence.
 
-**Prerequisites**: A running Kubernetes cluster (kind, minikube, or any cluster)
+**Prerequisites**: A running Kubernetes v1.35+ cluster (kind, minikube, or managed)
 
 **Step 1: Create a resilient deployment**
 
