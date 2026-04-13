@@ -39,31 +39,12 @@ Every component of this failure was an identity problem: long-lived credentials 
 
 A trust boundary is the line between "I trust you" and "prove yourself." In a single AWS account, trust is implicit -- IAM roles trust the account they live in. In a multi-account world, you must explicitly establish trust between accounts.
 
-```
-TRUST BOUNDARY HIERARCHY
-════════════════════════════════════════════════════════════════
-
-  ┌─────────────────────────────────────────────────────────┐
-  │  Organization Trust (AWS Organizations / GCP Org)       │
-  │  "These accounts are all part of our organization"      │
-  │                                                         │
-  │  ┌──────────────────────────────────────────────────┐   │
-  │  │  Account Trust (IAM role trust policies)          │   │
-  │  │  "Account A trusts Account B to assume this role" │   │
-  │  │                                                    │   │
-  │  │  ┌─────────────────────────────────────────────┐  │   │
-  │  │  │  Service Trust (IRSA / Workload Identity)    │  │   │
-  │  │  │  "Pod X in K8s namespace Y can assume this  │  │   │
-  │  │  │   IAM role"                                  │  │   │
-  │  │  │                                              │  │   │
-  │  │  │  ┌────────────────────────────────────────┐ │  │   │
-  │  │  │  │  Application Trust (mTLS, JWT, SPIFFE) │ │  │   │
-  │  │  │  │  "This specific workload identity is   │ │  │   │
-  │  │  │  │   allowed to call this API"            │ │  │   │
-  │  │  │  └────────────────────────────────────────┘ │  │   │
-  │  │  └─────────────────────────────────────────────┘  │   │
-  │  └──────────────────────────────────────────────────┘   │
-  └─────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A[Organization Trust<br/>AWS Organizations / GCP Org] -->|"These accounts are all part of our organization"| B[Account Trust<br/>IAM role trust policies]
+    B -->|"Account A trusts Account B to assume this role"| C[Service Trust<br/>IRSA / Workload Identity]
+    C -->|"Pod X in K8s namespace Y can assume this IAM role"| D[Application Trust<br/>mTLS, JWT, SPIFFE]
+    D -.->|"This specific workload identity is allowed to call this API"| E(((Target API)))
 ```
 
 ### The Three Types of Identity
@@ -84,36 +65,28 @@ The fundamental mechanism for cross-account access in AWS is role assumption. Ac
 
 ### The Role Chain Pattern
 
-```
-CROSS-ACCOUNT ROLE ASSUMPTION
-════════════════════════════════════════════════════════════════
-
-  Identity Account (Hub)           Workload Account (Spoke)
-  ┌───────────────────────┐       ┌───────────────────────────┐
-  │                       │       │                           │
-  │  IAM Identity Center  │       │  Role: EKS-Admin          │
-  │  (SSO)                │       │  Trust: Identity Account  │
-  │       │               │       │  Permissions:             │
-  │       │ User logs in  │       │    eks:DescribeCluster    │
-  │       │ via SSO       │       │    eks:ListClusters       │
-  │       ▼               │       │    eks:AccessKubernetesApi│
-  │  Permission Set:      │       │                           │
-  │  "EKS-ReadOnly"       │       │  Role: Deploy-Pipeline    │
-  │       │               │       │  Trust: Shared Services   │
-  │       │ Assumes role ─┼──────▶│  Permissions:             │
-  │       │ in spoke      │  STS  │    ecr:GetDownloadUrl     │
-  │       │               │       │    eks:AccessKubernetesApi│
-  └───────────────────────┘       │                           │
-                                  │  Role: Pod-S3-Reader      │
-  Shared Services Account        │  Trust: OIDC provider (EKS)│
-  ┌───────────────────────┐       │  Permissions:             │
-  │                       │       │    s3:GetObject            │
-  │  CI/CD Pipeline       │       │    s3:ListBucket           │
-  │  (CodeBuild/GH Actions)       │                           │
-  │       │               │       └───────────────────────────┘
-  │       │ Assumes role ─┼──────▶
-  │       │ in spoke      │  STS
-  └───────────────────────┘
+```mermaid
+flowchart LR
+    subgraph Hub [Identity Account - Hub]
+        SSO[IAM Identity Center<br/>SSO]
+        User[User logs in via SSO]
+        PS[Permission Set:<br/>'EKS-ReadOnly']
+        
+        SSO --> User --> PS
+    end
+    
+    subgraph Spoke [Workload Account - Spoke]
+        Role1[Role: EKS-Admin<br/>Trust: Identity Account<br/>Permissions: eks:DescribeCluster...]
+        Role2[Role: Deploy-Pipeline<br/>Trust: Shared Services<br/>Permissions: ecr:GetDownloadUrl...]
+        Role3[Role: Pod-S3-Reader<br/>Trust: OIDC provider<br/>Permissions: s3:GetObject...]
+    end
+    
+    subgraph Shared [Shared Services Account]
+        CI[CI/CD Pipeline<br/>CodeBuild/GH Actions]
+    end
+    
+    PS -- "sts:AssumeRole" --> Role1
+    CI -- "sts:AssumeRole" --> Role2
 ```
 
 > **Stop and think**: What would happen if the Workload Account role (`EKS-Admin`) omitted the `aws:PrincipalOrgID` condition in its trust policy? If an attacker somehow guessed the role ARN, could they assume it?
@@ -205,43 +178,31 @@ aws eks update-kubeconfig --name prod-cluster --region us-east-1
 
 IAM Identity Center is the recommended way to manage human access to multiple AWS accounts. It provides a single sign-on portal where users authenticate once and then can switch between accounts and permission sets.
 
-```
-IAM IDENTITY CENTER ARCHITECTURE
-════════════════════════════════════════════════════════════════
-
-  External IdP                    IAM Identity Center
-  (Okta, Entra ID)               (Management Account)
-  ┌──────────────────┐           ┌──────────────────────────┐
-  │  User: alice      │   SAML/  │                          │
-  │  Groups:          │   SCIM   │  Users synced from IdP   │
-  │   - platform-eng  │─────────▶│  Groups synced from IdP  │
-  │   - sre-oncall    │          │                          │
-  └──────────────────┘           │  Permission Sets:        │
-                                  │  ┌────────────────────┐  │
-                                  │  │ ProdReadOnly       │  │
-                                  │  │ - eks:Describe*    │  │
-                                  │  │ - logs:Get*        │  │
-                                  │  │ - cloudwatch:Get*  │  │
-                                  │  └────────────────────┘  │
-                                  │  ┌────────────────────┐  │
-                                  │  │ ProdAdmin          │  │
-                                  │  │ - eks:*            │  │
-                                  │  │ - ec2:Describe*    │  │
-                                  │  │ - s3:*             │  │
-                                  │  └────────────────────┘  │
-                                  │  ┌────────────────────┐  │
-                                  │  │ DevFullAccess      │  │
-                                  │  │ - * (all actions)  │  │
-                                  │  └────────────────────┘  │
-                                  │                          │
-                                  │  Assignments:            │
-                                  │  platform-eng + ProdRead │
-                                  │   -> Accounts: prod-*    │
-                                  │  sre-oncall + ProdAdmin  │
-                                  │   -> Accounts: prod-*    │
-                                  │  platform-eng + DevFull  │
-                                  │   -> Accounts: dev-*     │
-                                  └──────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph IdP [External IdP]
+        Alice[User: alice<br/>Groups: platform-eng, sre-oncall]
+    end
+    
+    subgraph SSO [IAM Identity Center - Management Account]
+        Sync[Users/Groups synced from IdP]
+        
+        subgraph PS [Permission Sets]
+            PR[ProdReadOnly<br/>- eks:Describe*<br/>- logs:Get*]
+            PA[ProdAdmin<br/>- eks:*<br/>- ec2:Describe*]
+            DF[DevFullAccess<br/>- * all actions]
+        end
+        
+        subgraph Assign [Assignments]
+            A1[platform-eng + ProdReadOnly<br/>-> Accounts: prod-*]
+            A2[sre-oncall + ProdAdmin<br/>-> Accounts: prod-*]
+            A3[platform-eng + DevFullAccess<br/>-> Accounts: dev-*]
+        end
+    end
+    
+    Alice -- "SAML/SCIM" --> Sync
+    Sync -.-> Assign
+    PS -.-> Assign
 ```
 
 ### Setting Up IAM Identity Center with Terraform
@@ -316,28 +277,25 @@ resource "aws_ssoadmin_account_assignment" "sre_prod_admin" {
 
 GCP's approach to cross-project identity uses Workload Identity Federation -- allowing GKE workloads in one project to impersonate service accounts in another project without managing keys.
 
-```
-GCP WORKLOAD IDENTITY ACROSS PROJECTS
-════════════════════════════════════════════════════════════════
-
-  GKE Project (team-a-prod)          Target Project (data-lake)
-  ┌──────────────────────────┐      ┌──────────────────────────┐
-  │                          │      │                          │
-  │  GKE Cluster             │      │  BigQuery Dataset        │
-  │  ┌────────────────────┐  │      │  Cloud Storage Buckets   │
-  │  │  Pod                │  │      │                          │
-  │  │  SA: data-reader    │  │      │  Service Account:        │
-  │  │  (K8s SA)           │  │      │  bq-reader@data-lake     │
-  │  └────────┬───────────┘  │      │  .iam.gserviceaccount.com│
-  │           │              │      │                          │
-  │  Workload Identity binds │      │  IAM Policy:             │
-  │  K8s SA to GCP SA ──────┼─────▶│  roles/bigquery.dataViewer│
-  │                          │      │                          │
-  └──────────────────────────┘      └──────────────────────────┘
-
-  The Pod authenticates as bq-reader@data-lake WITHOUT any
-  service account keys. GKE's Workload Identity provides
-  federated tokens that GCP IAM trusts.
+```mermaid
+flowchart LR
+    subgraph GKE [GKE Project: team-a-prod]
+        subgraph Cluster [GKE Cluster]
+            Pod[Pod]
+            KSA[K8s SA: data-reader]
+            Pod --> KSA
+        end
+    end
+    
+    subgraph Target [Target Project: data-lake]
+        BQ[BigQuery Dataset / Cloud Storage]
+        GSA[GCP SA: bq-reader@data-lake...]
+        Policy[IAM Policy:<br/>roles/bigquery.dataViewer]
+        
+        GSA --> Policy --> BQ
+    end
+    
+    KSA -- "Workload Identity binds<br/>K8s SA to GCP SA" --> GSA
 ```
 
 > **Pause and predict**: In the GCP Workload Identity binding below, we specify `serviceAccount:team-a-prod.svc.id.goog[analytics/data-reader]`. What would happen if a developer in the same GKE cluster created a pod in the `default` namespace using a service account also named `data-reader`?
@@ -475,25 +433,17 @@ EOF
 
 ABAC extends traditional RBAC by making access decisions based on attributes of the requester, the resource, and the environment -- not just static role assignments.
 
-```
-RBAC vs ABAC
-════════════════════════════════════════════════════════════════
+### RBAC vs ABAC
 
-RBAC: "Alice has the EKS-Admin role, which allows eks:* on all clusters"
-  - Static assignment
-  - Broad permissions
-  - No context awareness
+**RBAC**: *"Alice has the EKS-Admin role, which allows eks:\* on all clusters"*
+- Static assignment
+- Broad permissions
+- No context awareness
 
-ABAC: "Alice can access EKS clusters IF:
-  - She is in the sre-oncall group AND
-  - The cluster has tag Environment=production AND
-  - The current time is during her on-call shift AND
-  - She has completed the security training this quarter AND
-  - The request originates from the corporate VPN"
-  - Dynamic, context-aware
-  - Fine-grained
-  - Harder to reason about
-```
+**ABAC**: *"Alice can access EKS clusters IF: she is in the sre-oncall group AND the cluster has tag Environment=production AND the current time is during her on-call shift AND she has completed the security training this quarter AND the request originates from the corporate VPN"*
+- Dynamic, context-aware
+- Fine-grained
+- Harder to reason about
 
 ### AWS ABAC with Tags
 
@@ -554,25 +504,29 @@ When identities span multiple cloud accounts and Kubernetes clusters, distribute
 
 You must aggregate identity events into a centralized, immutable security account (often integrated with a SIEM like Splunk or Datadog).
 
-```
-CENTRALIZED AUDIT ARCHITECTURE
-════════════════════════════════════════════════════════════════
-
-  Spoke Accounts (Workloads)        Security Account (Central)
-  ┌───────────────────────┐       ┌───────────────────────────┐
-  │  AWS CloudTrail       │       │                           │
-  │  (Org-wide trail)     │──────▶│  Central S3 Log Bucket    │
-  │                       │       │  (Object Lock Enabled)    │
-  │  EKS Control Plane    │       │                           │
-  │  Audit Logs           │──────▶│  CloudWatch Log Group     │
-  │                       │       │  (cross-account policy)   │
-  └───────────────────────┘       │             │             │
-                                  │             ▼             │
-  Identity Account (IdP)          │  SIEM / Threat Detection  │
-  ┌───────────────────────┐       │  (GuardDuty / Datadog)    │
-  │  IAM Identity Center  │──────▶│                           │
-  │  Auth Logs            │       │                           │
-  └───────────────────────┘       └───────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph Spoke [Spoke Accounts - Workloads]
+        CT[AWS CloudTrail<br/>Org-wide trail]
+        EKS[EKS Control Plane<br/>Audit Logs]
+    end
+    
+    subgraph IdP [Identity Account - IdP]
+        AuthLogs[IAM Identity Center<br/>Auth Logs]
+    end
+    
+    subgraph Security [Security Account - Central]
+        S3[Central S3 Log Bucket<br/>Object Lock Enabled]
+        CW[CloudWatch Log Group<br/>cross-account policy]
+        SIEM[SIEM / Threat Detection<br/>GuardDuty / Datadog]
+        
+        S3 --> SIEM
+        CW --> SIEM
+    end
+    
+    CT --> S3
+    EKS --> CW
+    AuthLogs --> SIEM
 ```
 
 ### Key Configurations for Identity Auditing
@@ -623,31 +577,29 @@ By querying your SIEM for `user.extra.sessionName = "alice-session"`, you can tr
 
 JIT access grants elevated permissions only when needed, for a limited duration, with an approval workflow. It eliminates standing privileges -- the most dangerous security pattern in cloud environments.
 
-```
-JIT ACCESS FLOW
-════════════════════════════════════════════════════════════════
+```mermaid
+sequenceDiagram
+    participant Eng as Engineer
+    participant JIT as Approval System<br/>(ConductorOne/Indent)
+    participant IAM as Cloud IAM
 
-  Engineer                     Approval System              Cloud IAM
-  ┌───────────┐               ┌──────────────┐            ┌──────────┐
-  │           │    Request    │              │            │          │
-  │  "I need  │──────────────▶│  ConductorOne │            │  No access│
-  │  prod     │    reason:   │  / Indent /   │            │  (default)│
-  │  access"  │   "PD-1234"  │  AccessLint   │            │          │
-  │           │               │              │            │          │
-  │           │               │  Auto-approve│  Grant     │          │
-  │           │               │  IF:         │──────────▶│  Temporary│
-  │           │               │  - On-call   │  role for  │  role     │
-  │           │               │  - PagerDuty │  4 hours   │  active   │
-  │           │               │    incident  │            │          │
-  │           │               │  - Team lead │            │          │
-  │           │               │    approval  │  Revoke    │          │
-  │  Access   │               │              │──────────▶│  Access   │
-  │  expires  │               │  After 4hrs: │  after TTL │  revoked  │
-  │           │               │  auto-revoke │            │          │
-  └───────────┘               └──────────────┘            └──────────┘
-
-  Key principle: NO standing admin access.
-  Even the CEO cannot access prod without going through JIT.
+    Note over IAM: No access (default)
+    Eng->>JIT: Request prod access<br/>Reason: PD-1234
+    
+    alt On-call + PagerDuty incident
+        JIT-->>JIT: Auto-approve
+    else Needs team lead approval
+        JIT-->>JIT: Manual approval
+    end
+    
+    JIT->>IAM: Grant role for 4 hours
+    Note over IAM: Temporary role active
+    
+    loop After 4 hours TTL
+        JIT->>IAM: Revoke access
+    end
+    
+    Note over IAM: Access revoked
 ```
 
 ### Implementing JIT with AWS SSO Permission Sets
