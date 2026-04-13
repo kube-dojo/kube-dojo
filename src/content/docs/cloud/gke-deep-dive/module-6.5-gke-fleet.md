@@ -33,32 +33,19 @@ GKE integrates natively with Google Cloud's operations suite (formerly Stackdriv
 
 ### What Gets Collected Automatically
 
-```text
-  ┌──────────────────────────────────────────────────────────┐
-  │  GKE Cluster                                             │
-  │                                                          │
-  │  System Metrics (automatic):                             │
-  │  ├── Node CPU, memory, disk, network                     │
-  │  ├── Pod CPU, memory, restart count                      │
-  │  ├── Container resource usage vs requests/limits         │
-  │  ├── kube-state-metrics (deployment replicas, etc.)      │
-  │  └── Control plane metrics (API server latency, etc.)    │
-  │                                                          │
-  │  System Logs (automatic):                                │
-  │  ├── Container stdout/stderr                             │
-  │  ├── Kubernetes audit logs                               │
-  │  ├── Kubernetes event logs                               │
-  │  ├── Node system logs (kubelet, containerd)              │
-  │  └── Control plane component logs                        │
-  └──────────────────────────────┬───────────────────────────┘
-                                 │
-                    ┌────────────▼────────────┐
-                    │  Cloud Operations Suite  │
-                    │  ├── Cloud Logging       │
-                    │  ├── Cloud Monitoring    │
-                    │  ├── Cloud Trace         │
-                    │  └── Error Reporting     │
-                    └─────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph cluster_gke [GKE Cluster]
+        metrics["<b>System Metrics (automatic)</b><br/>• Node CPU, memory, disk, network<br/>• Pod CPU, memory, restart count<br/>• Container resource usage vs requests/limits<br/>• kube-state-metrics (deployment replicas, etc.)<br/>• Control plane metrics (API server latency, etc.)"]
+        
+        logs["<b>System Logs (automatic)</b><br/>• Container stdout/stderr<br/>• Kubernetes audit logs<br/>• Kubernetes event logs<br/>• Node system logs (kubelet, containerd)<br/>• Control plane component logs"]
+    end
+
+    subgraph cluster_cos [Cloud Operations Suite]
+        cos["• Cloud Logging<br/>• Cloud Monitoring<br/>• Cloud Trace<br/>• Error Reporting"]
+    end
+
+    cluster_gke --> cluster_cos
 ```
 
 ### Configuring Logging and Monitoring Scope
@@ -331,30 +318,22 @@ A Fleet is a logical grouping of GKE clusters (and non-GKE Kubernetes clusters) 
 
 ### Fleet Architecture
 
-```text
-  ┌─────────────────────────────────────────────────────────┐
-  │  Fleet (project-level or org-level)                     │
-  │                                                         │
-  │  ┌────────────┐  ┌────────────┐  ┌────────────┐       │
-  │  │ GKE Cluster│  │ GKE Cluster│  │ GKE Cluster│       │
-  │  │ us-central1│  │ eu-west1   │  │ asia-east1 │       │
-  │  │            │  │            │  │            │       │
-  │  │ Membership │  │ Membership │  │ Membership │       │
-  │  │ registered │  │ registered │  │ registered │       │
-  │  └─────┬──────┘  └─────┬──────┘  └─────┬──────┘       │
-  │        │               │               │               │
-  │        └───────────────┼───────────────┘               │
-  │                        │                               │
-  │  ┌─────────────────────▼──────────────────────────┐   │
-  │  │  Fleet Features:                                │   │
-  │  │  - Config Sync (GitOps)                         │   │
-  │  │  - Policy Controller (OPA Gatekeeper)           │   │
-  │  │  - Multi-Cluster Ingress                        │   │
-  │  │  - Multi-Cluster Services (MCS)                 │   │
-  │  │  - Fleet-wide security posture                  │   │
-  │  │  - Centralized logging/monitoring               │   │
-  │  └────────────────────────────────────────────────┘   │
-  └─────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph cluster_fleet [Fleet - project-level or org-level]
+        direction TB
+        
+        subgraph cluster_clusters [Registered Clusters]
+            direction LR
+            c1["<b>GKE Cluster</b><br/>us-central1<br/><i>Membership registered</i>"]
+            c2["<b>GKE Cluster</b><br/>eu-west1<br/><i>Membership registered</i>"]
+            c3["<b>GKE Cluster</b><br/>asia-east1<br/><i>Membership registered</i>"]
+        end
+        
+        features["<b>Fleet Features:</b><br/>• Config Sync (GitOps)<br/>• Policy Controller (OPA Gatekeeper)<br/>• Multi-Cluster Ingress<br/>• Multi-Cluster Services (MCS)<br/>• Fleet-wide security posture<br/>• Centralized logging/monitoring"]
+        
+        cluster_clusters --> features
+    end
 ```
 
 ### Registering Clusters in a Fleet
@@ -452,31 +431,28 @@ Multi-Cluster Services enables pods in one cluster to discover and communicate w
 
 ### How MCS Works
 
-```text
-  Cluster A (us-central1)              Cluster B (europe-west1)
-  ┌──────────────────────┐            ┌──────────────────────┐
-  │                      │            │                      │
-  │  Service: api        │            │  Service: api        │
-  │  (exported via       │            │  (exported via       │
-  │   ServiceExport)     │            │   ServiceExport)     │
-  │                      │            │                      │
-  │  ┌────┐ ┌────┐      │            │  ┌────┐ ┌────┐      │
-  │  │Pod │ │Pod │      │            │  │Pod │ │Pod │      │
-  │  └────┘ └────┘      │            │  └────┘ └────┘      │
-  └──────────┬───────────┘            └──────────┬───────────┘
-             │                                    │
-             └──────────┬─────────────────────────┘
-                        │
-            ┌───────────▼───────────────┐
-            │  MCS Controller           │
-            │  Creates ServiceImport    │
-            │  in both clusters         │
-            │                           │
-            │  DNS: api.ns.svc.         │
-            │  clusterset.local         │
-            │  (resolves to pods in     │
-            │   BOTH clusters)          │
-            └───────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph cluster_a [Cluster A: us-central1]
+        sa["<b>Service: api</b><br/>(exported via ServiceExport)"]
+        pa1[Pod]
+        pa2[Pod]
+        sa --- pa1
+        sa --- pa2
+    end
+    
+    subgraph cluster_b [Cluster B: europe-west1]
+        sb["<b>Service: api</b><br/>(exported via ServiceExport)"]
+        pb1[Pod]
+        pb2[Pod]
+        sb --- pb1
+        sb --- pb2
+    end
+    
+    mcs["<b>MCS Controller</b><br/>Creates ServiceImport in both clusters<br/><br/><b>DNS:</b> api.ns.svc.clusterset.local<br/>(resolves to pods in BOTH clusters)"]
+    
+    cluster_a --> mcs
+    cluster_b --> mcs
 ```
 
 ### Setting Up MCS
@@ -618,29 +594,19 @@ gcloud container clusters update my-cluster \
 
 ### Understanding GKE Costs
 
-```text
-  Total GKE Cost Breakdown:
-  ┌──────────────────────────────────────────────────┐
-  │  Compute (nodes)              ~60-70% of total  │
-  │  ├── On-demand VMs                              │
-  │  ├── Spot VMs                                   │
-  │  └── Committed Use Discounts                    │
-  │                                                  │
-  │  Networking                   ~15-25% of total  │
-  │  ├── Load balancer hours + data processed       │
-  │  ├── Inter-zone egress ($0.01/GB)               │
-  │  ├── Internet egress ($0.08-0.12/GB)            │
-  │  └── Cloud NAT (if private cluster)             │
-  │                                                  │
-  │  Storage                      ~5-10% of total   │
-  │  ├── Persistent Disks                           │
-  │  ├── Filestore                                  │
-  │  └── Snapshots/backups                          │
-  │                                                  │
-  │  Management fee               ~5% of total      │
-  │  └── $0.10/hr per cluster (Standard)            │
-  │      Autopilot: included in pod pricing         │
-  └──────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Cost["<b>Total GKE Cost Breakdown</b>"]
+    
+    Compute["<b>Compute (nodes) [~60-70%]</b><br/>• On-demand VMs<br/>• Spot VMs<br/>• Committed Use Discounts"]
+    Networking["<b>Networking [~15-25%]</b><br/>• Load balancer hours + data processed<br/>• Inter-zone egress ($0.01/GB)<br/>• Internet egress ($0.08-0.12/GB)<br/>• Cloud NAT (if private cluster)"]
+    Storage["<b>Storage [~5-10%]</b><br/>• Persistent Disks<br/>• Filestore<br/>• Snapshots/backups"]
+    Mgmt["<b>Management fee [~5%]</b><br/>• $0.10/hr per cluster (Standard)<br/>• Autopilot: included in pod pricing"]
+    
+    Cost --- Compute
+    Cost --- Networking
+    Cost --- Storage
+    Cost --- Mgmt
 ```
 
 ### Cost Allocation by Namespace and Label
