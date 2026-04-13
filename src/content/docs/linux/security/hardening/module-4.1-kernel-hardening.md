@@ -70,25 +70,28 @@ While this makes for a friendly, compatible operating system out of the box, it'
 
 **sysctl** modifies kernel parameters at runtime. These parameters live in `/proc/sys/` as virtual files.
 
-```
-/proc/sys/
-├── kernel/          # Kernel behavior
-│   ├── randomize_va_space
-│   ├── pid_max
-│   └── ...
-├── net/             # Network stack
-│   ├── ipv4/
-│   │   ├── ip_forward
-│   │   ├── tcp_syncookies
-│   │   └── ...
-│   └── ipv6/
-├── vm/              # Virtual memory
-│   ├── swappiness
-│   ├── overcommit_memory
-│   └── ...
-└── fs/              # Filesystem
-    ├── file-max
-    └── ...
+```mermaid
+graph LR
+    ProcSys["/proc/sys/"] --> Kernel["kernel/<br/>(Kernel behavior)"]
+    Kernel --> RandVA["randomize_va_space"]
+    Kernel --> PidMax["pid_max"]
+    Kernel --> Kdots["..."]
+    
+    ProcSys --> Net["net/<br/>(Network stack)"]
+    Net --> IPv4["ipv4/"]
+    IPv4 --> IpFwd["ip_forward"]
+    IPv4 --> TcpSyn["tcp_syncookies"]
+    IPv4 --> V4dots["..."]
+    Net --> IPv6["ipv6/"]
+    
+    ProcSys --> VM["vm/<br/>(Virtual memory)"]
+    VM --> Swap["swappiness"]
+    VM --> OverMem["overcommit_memory"]
+    VM --> VMdots["..."]
+    
+    ProcSys --> FS["fs/<br/>(Filesystem)"]
+    FS --> FileMax["file-max"]
+    FS --> FSdots["..."]
 ```
 
 ### Using sysctl
