@@ -41,25 +41,24 @@ This module builds that fluency.
 
 Before diving into individual CLI commands, it is crucial to understand *where* each tool fits in a defense-in-depth strategy. Security in Kubernetes is not a single checkpoint; it is a continuous process applied across multiple stages of the container lifecycle.
 
-```text
-┌─────────────────────────────────────────────────────────────┐
-│                 THE SECURITY LIFECYCLE                      │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  1. BUILD / REGISTRY          2. CI/CD / MANIFESTS          │
-│  ┌─────────────────┐          ┌─────────────────┐           │
-│  │     Trivy       │          │    kubesec      │           │
-│  │ (Image Scanning)│ ───────> │(Static Analysis)│           │
-│  └─────────────────┘          └─────────────────┘           │
-│                                        │                    │
-│                                        ▼                    │
-│  4. RUNTIME                   3. INFRASTRUCTURE             │
-│  ┌─────────────────┐          ┌─────────────────┐           │
-│  │     Falco       │          │   kube-bench    │           │
-│  │(Threat Detect)  │ <─────── │ (CIS Auditing)  │           │
-│  └─────────────────┘          └─────────────────┘           │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph "1. Build / Registry"
+        A[Trivy<br/>Image Scanning]
+    end
+    subgraph "2. CI/CD / Manifests"
+        B[kubesec<br/>Static Analysis]
+    end
+    subgraph "3. Infrastructure"
+        C[kube-bench<br/>CIS Auditing]
+    end
+    subgraph "4. Runtime"
+        D[Falco<br/>Threat Detect]
+    end
+
+    A --> B
+    B --> C
+    C --> D
 ```
 
 - **Trivy (Build/Registry):** Scans container images for known CVEs before they ever reach the cluster.
@@ -89,7 +88,7 @@ trivy image --exit-code 1 --severity CRITICAL nginx:latest
 
 ### Understanding Trivy Output
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              TRIVY SCAN OUTPUT EXPLAINED                    │
 ├─────────────────────────────────────────────────────────────┤
@@ -161,45 +160,19 @@ trivy image -f json -o report.json nginx:latest
 
 ### How Falco Works
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              FALCO ARCHITECTURE                             │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  ┌─────────────────┐                                       │
-│  │   System Calls  │ ← Every syscall goes through kernel   │
-│  └────────┬────────┘                                       │
-│           │                                                 │
-│           ▼                                                 │
-│  ┌─────────────────┐                                       │
-│  │  eBPF/Kernel    │ ← Falco driver captures events        │
-│  │     Driver      │                                       │
-│  └────────┬────────┘                                       │
-│           │                                                 │
-│           ▼                                                 │
-│  ┌─────────────────┐                                       │
-│  │  Falco Engine   │ ← Matches events against rules        │
-│  └────────┬────────┘                                       │
-│           │                                                 │
-│           ▼                                                 │
-│  ┌─────────────────┐                                       │
-│  │  Rules File     │ ← YAML rules define what's suspicious │
-│  │  /etc/falco/    │                                       │
-│  └────────┬────────┘                                       │
-│           │                                                 │
-│           ▼                                                 │
-│  ┌─────────────────┐                                       │
-│  │  Alert Output   │ ← stdout, file, Slack, etc.          │
-│  └─────────────────┘                                       │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A[System Calls<br/>Every syscall goes through kernel] --> B[eBPF / Kernel Driver<br/>Falco driver captures events]
+    B --> C[Falco Engine<br/>Matches events against rules]
+    C --> D[Rules File /etc/falco/<br/>YAML rules define what is suspicious]
+    D --> E[Alert Output<br/>stdout, file, Slack, etc.]
 ```
 
 ### Viewing Falco Alerts
 
 ```bash
 # Check Falco logs
-kubectl logs -n falco -l app.kubernetes.io/name=falco -f
+kubectl logs -n falco -l app.kubernetes.io/name=falco --tail=50
 
 # Example alert:
 # 14:23:45.123456789: Warning Shell spawned in container
@@ -228,7 +201,7 @@ kubectl logs -n falco -l app.kubernetes.io/name=falco -f
 # - desc: Human-readable description
 # - condition: When to trigger (Falco filter syntax)
 # - output: What to log when triggered
-# - priority: EMERGENCY, ALERT, CRITICAL, ERROR, WARNING, NOTICE, INFO, DEBUG
+# - priority: EMERGENCY, ALERT, CRITICAL, ERROR, WARNING, NOTICE, INFORMATIONAL (often aliased as INFO), DEBUG
 # - tags: Categories for filtering
 ```
 
@@ -266,7 +239,7 @@ condition: >
 # - falco_rules.yaml: Default rules (don't edit)
 # - falco_rules.local.yaml: Your custom rules
 
-# Method 1: Helm values (RECOMMENDED — persists across restarts)
+# Method 1: Helm values (RECOMMENDED — keeps all Falco configuration managed in a single Helm release)
 # Create a values file with custom rules
 cat <<EOF > falco-custom-rules.yaml
 customRules:
@@ -282,11 +255,12 @@ customRules:
       priority: WARNING
 EOF
 
-# Upgrade Falco with custom rules
+# Upgrade Falco with custom rules (using --reuse-values to preserve existing configuration)
 helm upgrade falco falcosecurity/falco \
   --namespace falco \
   --reuse-values \
-  -f falco-custom-rules.yaml
+  -f falco-custom-rules.yaml \
+  --wait
 
 # Method 2: ConfigMap (alternative — also persists)
 kubectl create configmap falco-custom-rules \
@@ -306,6 +280,7 @@ kubectl create configmap falco-custom-rules \
 # Then reference the ConfigMap in Helm values or mount it manually
 # Restart Falco pods to pick up changes
 kubectl rollout restart daemonset/falco -n falco
+kubectl rollout status daemonset/falco -n falco --timeout=120s
 ```
 
 > **Important**: Never modify rules by exec-ing into Falco pods — those changes are lost when pods restart. Always use Helm values or ConfigMaps so custom rules survive upgrades and restarts.
@@ -322,7 +297,7 @@ kubectl exec test -- /bin/bash -c "exit"
 kubectl logs -n falco -l app.kubernetes.io/name=falco | grep "shell"
 
 # Cleanup
-kubectl delete pod test
+kubectl delete pod test --force
 ```
 
 ---
@@ -342,13 +317,13 @@ kubectl logs job/kube-bench
 ./kube-bench run --targets=node    # Worker nodes only
 ./kube-bench run --targets=etcd    # etcd only
 
-# Run specific benchmark
-./kube-bench run --benchmark cis-1.8  # CIS 1.8 benchmark
+# Run specific benchmark (e.g., CIS 1.12 benchmark for newer K8s versions)
+./kube-bench run --benchmark cis-1.12
 ```
 
 ### Understanding kube-bench Output
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              KUBE-BENCH OUTPUT EXPLAINED                    │
 ├─────────────────────────────────────────────────────────────┤
@@ -422,16 +397,16 @@ cat pod.yaml | kubesec scan /dev/stdin
 # ]
 ```
 
-> **What would happen if**: You run `kube-bench` and get 15 [FAIL] results. You fix all 15 and re-run -- but now you get 3 new [FAIL] results that weren't there before. How is that possible?
+> **Stop and think**: You run `kube-bench` and get 15 [FAIL] results. You fix all 15 and re-run -- but now you get 3 new [FAIL] results that weren't there before. How is that possible?
 
 ### Understanding kubesec Scores
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              KUBESEC SCORING                                │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
-│  Score ranges:                                             │
+│  Score ranges (Informal Community Convention):             │
 │  ─────────────────────────────────────────────────────────  │
 │  10+   : Good security posture                             │
 │  0-10  : Acceptable, room for improvement                   │
@@ -454,11 +429,11 @@ cat pod.yaml | kubesec scan /dev/stdin
 
 - **Trivy was created by Aqua Security** and is now the most popular open-source vulnerability scanner. It's faster than Clair and more user-friendly.
 
-- **Falco processes millions of events per second** using eBPF for near-zero overhead. It was originally created by Sysdig.
+- **Falco uses eBPF or a kernel driver** to capture system calls with high performance. While often cited for low overhead, actual throughput and overhead depend heavily on your specific workload and configuration. It was originally created by Sysdig and has graduated as a CNCF project.
 
 - **CIS Benchmarks** are developed by the Center for Internet Security with input from security experts worldwide. They're the de facto standard for Kubernetes security auditing.
 
-- **kubesec was created by Control Plane** (the same team behind the CNCF-certified Kubernetes security training).
+- **kubesec was created by Control Plane (controlplaneio)**, a company known for Kubernetes security training, though the CKS certification itself is officially administered by the CNCF and Linux Foundation.
 
 ---
 
@@ -479,25 +454,25 @@ cat pod.yaml | kubesec scan /dev/stdin
 1. **Your CI/CD pipeline uses Trivy to scan images before deployment. A developer complains that their build keeps failing even though "the app works fine." The Trivy output shows 3 CRITICAL CVEs in the base image. What flags would you configure in the pipeline, and how should the developer fix their build?**
    <details>
    <summary>Answer</summary>
-   The pipeline likely uses `--exit-code 1 --severity CRITICAL` which returns non-zero when CRITICAL vulnerabilities are found, causing the build to fail. The developer should update their base image to a version with the CVEs fixed (check the "Fixed Version" column in Trivy output), or switch to a minimal base image like distroless. "The app works fine" is irrelevant -- a working app with critical CVEs is a security liability. The developer should also run `trivy image --severity HIGH,CRITICAL` locally before pushing.
+   The pipeline likely uses `--exit-code 1 --severity CRITICAL` which returns non-zero when CRITICAL vulnerabilities are found, causing the build to fail. The developer should update their base image to a version with the CVEs fixed (check the "Fixed Version" column in Trivy output), or switch to a minimal base image like distroless. "The app works fine" is irrelevant -- a working app with critical CVEs is a security liability. To prevent this, the developer should integrate local scanning by running `trivy image --severity HIGH,CRITICAL` before pushing their code.
    </details>
 
 2. **A security incident occurs: someone exec'd into a production container and read `/etc/shadow`. Your Falco installation didn't alert. You check and find the rule exists in `falco_rules.yaml`. What's the most likely cause, and where should custom rules actually live?**
    <details>
    <summary>Answer</summary>
-   Custom rules belong in `/etc/falco/falco_rules.local.yaml`, not the default `falco_rules.yaml`. The default file may have been overwritten during a Falco upgrade, or the rule may have been disabled by a later rule. For production, custom rules should be deployed via Helm values (`customRules` in values.yaml) or ConfigMaps so they persist across pod restarts and upgrades. Never edit rules by exec-ing into Falco pods -- those changes are lost when pods restart.
+   Custom rules belong in `/etc/falco/falco_rules.local.yaml`, not the default `falco_rules.yaml`. The default file may have been overwritten during a Falco upgrade, or the rule may have been disabled by a later rule in the processing chain. For production deployments, custom rules should be deployed via Helm values (`customRules` in values.yaml) or ConfigMaps so they persist across pod restarts and upgrades. You must never edit rules by directly exec-ing into Falco pods, as those temporary changes are permanently lost when the daemonset restarts the pods.
    </details>
 
 3. **You run kube-bench and see: `[FAIL] 1.2.6 Ensure --authorization-mode argument is not set to AlwaysAllow`. The remediation says to edit the API server manifest. You make the change, but `kubectl` stops responding for 2 minutes. What happened and how do you avoid panic?**
    <details>
    <summary>Answer</summary>
-   When you edit `/etc/kubernetes/manifests/kube-apiserver.yaml`, the kubelet detects the change and restarts the API server as a static pod. During restart, `kubectl` is unavailable because it connects through the API server. This is normal behavior -- wait 1-2 minutes for the API server to come back. If it doesn't recover, you likely introduced a syntax error. Check with `crictl ps` and `crictl logs` on the control plane node. Always verify your changes are syntactically correct before saving.
+   When you edit `/etc/kubernetes/manifests/kube-apiserver.yaml`, the kubelet detects the change and automatically restarts the API server as a static pod. During this restart process, `kubectl` is temporarily unavailable because it connects through the API server to manage the cluster. This is entirely normal behavior -- you should wait 1-2 minutes for the API server to come back online. If it doesn't recover, you likely introduced a YAML syntax error or invalid flag. Always verify your changes are syntactically correct before saving. You can troubleshoot by checking with `crictl ps` and `crictl logs` directly on the control plane node.
    </details>
 
 4. **You scan a pod manifest with kubesec and get a score of -30. Your colleague scans a different manifest and gets a score of +3. Without seeing the manifests, what can you infer about the security posture of each?**
    <details>
    <summary>Answer</summary>
-   A score of -30 indicates critical security issues -- almost certainly `privileged: true` (which alone is -30) or similar dangerous configurations like `hostNetwork`, `hostPID`, or running as root. A score of +3 indicates a reasonable security posture with some positive controls (like `runAsNonRoot: true`, `readOnlyRootFilesystem: true`, or defined resource limits -- each worth +1). The first manifest needs immediate remediation; the second could still be improved but passes basic security checks.
+   A score of -30 indicates critical security issues -- almost certainly the presence of `privileged: true` (which alone penalizes by -30) or similar dangerous configurations like `hostNetwork`, `hostPID`, or running as root. A score of +3 indicates a reasonable security posture with some positive controls configured (like `runAsNonRoot: true`, `readOnlyRootFilesystem: true`, or defined resource limits -- each worth +1). The first manifest needs immediate remediation and should not be deployed; the second could still be improved but passes basic security baseline checks. Note that these score bands are informal community conventions, but they provide a helpful threshold for CI/CD gating.
    </details>
 
 ---
@@ -517,7 +492,7 @@ kubectl run falco-test --image=nginx --restart=Never
 kubectl wait --for=condition=Ready pod/falco-test --timeout=60s
 kubectl exec falco-test -- cat /etc/passwd
 kubectl logs -n falco -l app.kubernetes.io/name=falco --tail=5
-kubectl delete pod falco-test
+kubectl delete pod falco-test --force
 
 # 3. Run kube-bench
 echo "=== kube-bench ==="
