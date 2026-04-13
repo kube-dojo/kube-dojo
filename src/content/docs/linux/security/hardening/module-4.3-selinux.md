@@ -8,7 +8,7 @@ lab:
   url: "https://killercoda.com/kubedojo/scenario/linux-4.3-selinux"
   duration: "40 min"
   difficulty: "advanced"
-  environment: "ubuntu"
+  environment: "centos"
 ---
 > **Linux Security** | Complexity: `[COMPLEX]` | Time: 35-40 min
 
@@ -17,7 +17,7 @@ lab:
 Before starting this module:
 - **Required**: [Module 2.3: Capabilities & LSMs](/linux/foundations/container-primitives/module-2.3-capabilities-lsms/)
 - **Helpful**: [Module 4.2: AppArmor Profiles](../module-4.2-apparmor/) for comparison
-- **Helpful**: Access to RHEL/CentOS/Fedora system
+- **Helpful**: Access to RHEL/CentOS/Fedora/Rocky system
 
 ---
 
@@ -77,17 +77,16 @@ When something works on Ubuntu but fails on RHEL with no obvious cause, SELinux 
 
 ### Security Labels
 
-Every file, process, and resource has a **security context** (label):
+Every file, process, and resource has a **security context** (label). The structure is: `user:role:type:level`
 
-```
-user:role:type:level
-
-Example: system_u:object_r:httpd_sys_content_t:s0
-         │       │        │                    │
-         │       │        │                    └── MLS level
-         │       │        └── Type (most important!)
-         │       └── Role
-         └── User
+```mermaid
+flowchart TD
+    L["system_u : object_r : httpd_sys_content_t : s0"]
+    
+    L --> U["User<br>system_u"]
+    L --> R["Role<br>object_r"]
+    L --> T["Type (most important!)<br>httpd_sys_content_t"]
+    L --> M["MLS level<br>s0"]
 ```
 
 > **Pause and predict**: If a process with context `httpd_t` attempts to read a file with context `user_home_t`, but the file's standard Linux permission is `777` (world-readable), what will the SELinux enforcement engine decide and why?
@@ -96,29 +95,24 @@ Example: system_u:object_r:httpd_sys_content_t:s0
 
 Most SELinux decisions use **type enforcement**:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    TYPE ENFORCEMENT                              │
-│                                                                  │
-│  Process Context: httpd_t                                       │
-│       │                                                          │
-│       │ wants to read                                           │
-│       │                                                          │
-│       ▼                                                          │
-│  File Context: httpd_sys_content_t                              │
-│       │                                                          │
-│       ▼                                                          │
-│  ┌─────────────────────────────────────────┐                    │
-│  │ Policy rule exists?                     │                    │
-│  │                                         │                    │
-│  │ allow httpd_t httpd_sys_content_t:file read;                │
-│  │                                         │                    │
-│  │ YES → ALLOW                             │                    │
-│  │ NO  → DENY                              │                    │
-│  └─────────────────────────────────────────┘                    │
-│                                                                  │
-│  Access requires: DAC allows AND SELinux policy allows         │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Type Enforcement
+        direction TB
+        Process["Process Context: httpd_t"]
+        File["File Context: httpd_sys_content_t"]
+        Rule{"Policy rule exists?<br>allow httpd_t httpd_sys_content_t:file read;"}
+        Allow["ALLOW"]
+        Deny["DENY"]
+        
+        Process -- "wants to read" --> File
+        File --> Rule
+        Rule -- "YES" --> Allow
+        Rule -- "NO" --> Deny
+    end
+    
+    Note["Access requires: DAC allows AND SELinux policy allows"]
+    Type Enforcement ~~~ Note
 ```
 
 ### Common Types
@@ -303,16 +297,20 @@ sudo sealert -a /var/log/audit/audit.log
 
 ### Interpreting Denials
 
-```
-avc:  denied  { read } for  pid=1234
-      │        │         │
-      │        │         └── Process ID
-      │        └── Operation attempted
-      └── Denial
-
-scontext=system_u:system_r:httpd_t:s0    ← Source (process)
-tcontext=system_u:object_r:admin_home_t:s0   ← Target (file)
-tclass=file    ← Object class
+```mermaid
+flowchart TD
+    subgraph Log Entry Analysis
+        direction TB
+        Log["avc: denied { read } for pid=1234"]
+        Log --> Deny["avc: denied (Denial)"]
+        Log --> Op["{ read } (Operation attempted)"]
+        Log --> Pid["pid=1234 (Process ID)"]
+        
+        Context["Context Information"]
+        Context --> Src["scontext=...:httpd_t:s0 (Source/Process)"]
+        Context --> Tgt["tcontext=...:admin_home_t:s0 (Target/File)"]
+        Context --> Cls["tclass=file (Object class)"]
+    end
 ```
 
 ### Generate Policy from Denials
@@ -365,15 +363,18 @@ ls -Z /var/lib/containers/
 
 Containers get unique MCS labels for isolation:
 
-```
-container_t:s0:c123,c456
-                │
-                └── Category pair (unique per container)
-
-Container A: container_t:s0:c1,c2
-Container B: container_t:s0:c3,c4
-
-Container A cannot access Container B's files (different categories)
+```mermaid
+flowchart TD
+    subgraph Multi-Category Security
+        direction TB
+        Base["container_t : s0 : c123,c456"]
+        Base --> Cat["c123,c456 (Category pair - unique per container)"]
+        
+        ContA["Container A<br>container_t:s0:c1,c2"]
+        ContB["Container B<br>container_t:s0:c3,c4"]
+        
+        ContA -. "Cannot access (different categories)" .-> ContB
+    end
 ```
 
 ### Podman/Docker SELinux
