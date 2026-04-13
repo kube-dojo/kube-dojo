@@ -111,9 +111,8 @@ flowchart BT
         hw2[Hardware] --> host2[Host OS]
         host2 --> cr[Container Runtime]
         cr --> capp1[App A]
-        cr capp2[App B]
+        cr --> capp2[App B]
         cr --> capp3[App C]
-        cr --> capp2
     end
 ```
 
@@ -340,6 +339,7 @@ Software Containers:
 
 1. **Scenario**: A developer's Node.js application works perfectly on their MacOS laptop but crashes on the Ubuntu production server because of a missing C++ compilation library.
    **Question**: How exactly does a container solve this specific issue?
+
    <details>
    <summary>Answer</summary>
    The container image packages not just the Node.js application code, but also the exact operating system runtime environment (e.g., a specific Debian base) and all system-level dependencies (like the C++ library). Because the container runs the exact same packaged environment on the laptop and the server, the missing library on the host Ubuntu server no longer matters. The application uses the packaged library inside the container, completely ignoring what is installed on the host. This guarantees that if it works on the developer's machine, it will work exactly the same way in production.
@@ -347,6 +347,7 @@ Software Containers:
 
 2. **Scenario**: Your company has merged with another firm and inherited a critical legacy application that only runs on Windows Server 2012. Your infrastructure is entirely Linux-based.
    **Question**: Can you package this Windows application in a standard container and run it on your Linux servers? Why or why not?
+
    <details>
    <summary>Answer</summary>
    No, you cannot. Containers are not full virtual machines; they inherently share the underlying host operating system's kernel to function. A standard container running on a Linux host relies entirely on the Linux kernel to execute its processes. A Windows application requires a Windows kernel and its specific APIs. To run this legacy application, you would need to either provision a Virtual Machine running a full Windows guest OS, or set up a dedicated Windows server capable of running Windows containers natively.
@@ -354,6 +355,7 @@ Software Containers:
 
 3. **Scenario**: You launch three different web application containers on a single host server. All three applications are hardcoded to listen on port 8080.
    **Question**: Why doesn't the host server throw a "Port already in use" error when the second and third containers start?
+
    <details>
    <summary>Answer</summary>
    This is due to the Linux `NET` (Network) namespace isolation feature. Each container is provisioned with its own completely isolated network stack, which includes its own virtual IP address and its own independent set of ports. From the perspective of each container, it is the only process running and using port 8080 on its specific isolated network interface. The host machine handles the complexity of routing incoming external traffic to the correct container's internal virtual IP and port, avoiding any conflicts on the host itself.
@@ -361,6 +363,7 @@ Software Containers:
 
 4. **Scenario**: A newly deployed Java application has a severe memory leak. Within minutes, it attempts to allocate 64GB of RAM, which is the entire capacity of the host server.
    **Question**: If this application is running in a properly configured container, what prevents it from crashing the host server, and what Linux feature is responsible?
+
    <details>
    <summary>Answer</summary>
    The container will be forcefully terminated (OOMKilled - Out Of Memory) by the system before it can consume enough resources to crash the entire host. This protection relies on a Linux kernel feature called `cgroups` (Control Groups). Administrators use cgroups to enforce strict, hard limits on the maximum amount of CPU and memory a specific process or container can consume. By fencing in the memory usage, `cgroups` ensures that a runaway process is killed off, successfully protecting the host operating system and all other containers from resource starvation.
@@ -368,6 +371,7 @@ Software Containers:
 
 5. **Scenario**: An e-commerce site experiences a massive spike in traffic during a flash sale. The single shopping cart container is overwhelmed, and the orchestrator needs to scale up to 10 instances immediately.
    **Question**: Does the system need to build 9 new container images, or launch 9 new containers? Explain the difference.
+
    <details>
    <summary>Answer</summary>
    The system will instantly launch 9 new containers from the 1 existing container image. A container image serves as a static, immutable, and read-only template or blueprint for your application. A container is simply the running, instantiated object created from that blueprint. Because the underlying image is an immutable template, the container orchestrator can rapidly stamp out as many identical running containers as your underlying hardware can support without needing to rebuild or download the application code again.
@@ -375,6 +379,7 @@ Software Containers:
 
 6. **Scenario**: A junior developer configures a containerized blogging platform to save uploaded user profile pictures directly to the `/var/www/uploads` directory inside the running container. Later that night, the container crashes and is automatically restarted.
    **Question**: What happens to the users' profile pictures, and why?
+
    <details>
    <summary>Answer</summary>
    The uploaded profile pictures are permanently lost the moment the container crashes. By default, containers are completely ephemeral, meaning any data written to a container's internal, writable filesystem layer only exists for the lifecycle of that specific container instance. When the system restarts the container, a fresh, clean instance is created directly from the original read-only image, discarding all previous state. To ensure data persists across restarts, developers must explicitly configure external storage volumes and mount them into the container's filesystem.
@@ -382,6 +387,7 @@ Software Containers:
 
 7. **Scenario**: You write a deployment script that pulls and runs `my-api:latest`. It works fine on Tuesday. On Thursday, you run the exact same script on a new server, and the application fails to start due to a database schema mismatch.
    **Question**: Assuming the database hasn't changed, what is the most likely cause of this failure?
+
    <details>
    <summary>Answer</summary>
    The `latest` tag is merely a mutable pointer, and it was highly likely updated to point to a new version of the image by the developers between Tuesday and Thursday. When the script ran on Thursday, it pulled this completely different, newer version of the application code that expected an updated database schema. This scenario directly violates the principle of predictable, repeatable deployments. You should always pin your deployments to specific, immutable version tags (such as `my-api:v1.2.4`) in production environments to mathematically guarantee the exact same code runs every single time.
