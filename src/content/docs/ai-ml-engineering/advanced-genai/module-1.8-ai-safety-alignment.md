@@ -12,7 +12,7 @@ sidebar:
 
 In February 2023, Alphabet experienced one of the most expensive technological errors in corporate history. During the highly anticipated public unveiling of Google's Bard AI, the model confidently claimed that the James Webb Space Telescope took the very first pictures of a planet outside our own solar system. This was factually incorrect—the European Southern Observatory's Very Large Telescope achieved that milestone in 2004.
 
-The financial impact was immediate and devastating. Within hours of astronomers pointing out the hallucination on social media, Alphabet's stock plummeted by 9%, wiping $100 billion off the company's market capitalization. It was a stark reminder that deploying unaligned, hallucination-prone generative models to the public carries astronomical financial and reputational risks. The failure was not one of compute or architecture, but of evaluation and factual alignment.
+The financial impact was immediate and devastating. Within hours of astronomers pointing out the hallucination on social media, Alphabet's stock plummeted by nine percent, wiping one hundred billion dollars off the company's market capitalization. It was a stark reminder that deploying unaligned, hallucination-prone generative models to the public carries astronomical financial and reputational risks. The failure was not one of compute or architecture, but of evaluation and factual alignment.
 
 This incident catalyzed the industry's shift from pure capability scaling to rigorous evaluation and safety alignment. Without robust pipelines to measure factuality, handle edge cases, and align models with human intent, advanced capabilities become massive enterprise liabilities. In modern deployments—especially those running on production infrastructure like Kubernetes v1.35+—evaluation must be as systematic, measurable, and automated as the infrastructure deployment itself.
 
@@ -25,13 +25,9 @@ By the end of this module, you will be able to:
 - **Implement** rigorous statistical methodologies, including A/B testing and confidence intervals, to validate model improvements objectively.
 - **Compare** the operational trade-offs of various alignment strategies within enterprise settings.
 
----
-
 ## 1. The Fundamentals of Alignment and Evaluation
 
-The core terminology we use to discuss AI safety—specifically the distinction between "outer alignment" (does the training objective capture what we want?) and "inner alignment" (does the model actually optimize that objective?) alongside the concept of "mesa-optimization"—was formally defined in the seminal paper *Risks from Learned Optimization in Advanced Machine Learning Systems* by Hubinger et al. (Machine Intelligence Research Institute, 2019). 
-
-Evaluating whether a language model is properly aligned is one of the hardest problems in modern AI. Unlike image classification where we can measure accuracy on labeled images, LLMs generate open-ended text, perform highly diverse tasks, exhibit unpredictable emergent capabilities, and interact with subjective human preferences.
+The core terminology we use to discuss AI safety frames the complex task of ensuring systems behave as intended. Evaluating whether a language model is properly aligned is one of the hardest problems in modern AI. Unlike image classification where we can measure accuracy on labeled images, LLMs generate open-ended text, perform highly diverse tasks, exhibit unpredictable emergent capabilities, and interact with subjective human preferences.
 
 ### Goodhart's Law in AI
 
@@ -60,7 +56,7 @@ The metric becomes the enemy of the goal!
 
 ### What We Actually Care About
 
-To avoid the benchmark optimization trap, we must understand that evaluation operates across multiple distinct tiers. Capabilities alone do not guarantee reliability, and reliability does not guarantee alignment. You must architect your evaluation suite to measure every level of this hierarchy independently.
+To avoid the benchmark optimization trap, we must understand that evaluation operates across multiple distinct tiers.
 
 ```mermaid
 graph TD
@@ -90,11 +86,9 @@ graph TD
     F --> F3[Example: Do users prefer it over alternatives?]
 ```
 
----
+## 2. Standard Benchmarks: The LLM Report Card
 
-## 2. Standard and Specialized Benchmarks
-
-Every major model release reports scores on a core set of standardized benchmarks to evaluate generalized knowledge and reasoning. However, as models saturate these benchmarks, their utility decreases. You must understand how they work to recognize their limitations.
+Every major model release reports scores on a core set of standardized benchmarks to evaluate generalized knowledge and reasoning.
 
 ```mermaid
 graph TD
@@ -130,9 +124,9 @@ graph TD
     F --> F4[Top scores: ~92% with CoT]
 ```
 
-### The Knowledge and Honesty Tests
+### MMLU: The Knowledge Test
 
-Massive Multitask Language Understanding (MMLU) remains the default standard for evaluating a model's zero-shot and few-shot academic knowledge. It tests subjects ranging from abstract algebra to professional medicine. While a high MMLU score indicates broad pre-training data coverage, it does not correlate strongly with reasoning ability or safety.
+Massive Multitask Language Understanding (MMLU) remains the default standard for evaluating a model's zero-shot and few-shot academic knowledge.
 
 ```python
 # Example MMLU question (Professional Medicine)
@@ -181,7 +175,42 @@ MMLU_CATEGORIES = {
 }
 ```
 
-Models often learn common human misconceptions present in their training data. TruthfulQA adversarialy targets these misconceptions to measure a model's propensity to hallucinate or echo false beliefs.
+### HumanEval: The Coding Test
+
+HumanEval measures functional correctness by evaluating whether the generated code passes a suite of hidden unit tests.
+
+```python
+# Example HumanEval problem
+def has_close_elements(numbers: List[float], threshold: float) -> bool:
+    """
+    Check if in given list of numbers, are any two numbers closer to each
+    other than given threshold.
+
+    >>> has_close_elements([1.0, 2.0, 3.0], 0.5)
+    False
+    >>> has_close_elements([1.0, 2.8, 3.0, 4.0, 5.0, 2.0], 0.3)
+    True
+    """
+    # Model must generate the implementation
+    pass
+
+# Evaluation: Run generated code against test cases
+def evaluate_humaneval(model_code: str, test_cases: List[dict]) -> float:
+    """
+    Pass @src/content/docs/platform/toolkits/infrastructure-networking/k8s-distributions/module-14.7-rke2.md metric: Probability of at least one correct solution
+    in k attempts.
+    """
+    try:
+        exec(model_code)
+        passed = sum(1 for tc in test_cases if run_test(tc))
+        return passed / len(test_cases)
+    except Exception:
+        return 0.0
+```
+
+### TruthfulQA: The Honesty Test
+
+Models often learn common human misconceptions present in their training data. TruthfulQA adversarialy targets these misconceptions.
 
 ```python
 # Example TruthfulQA questions
@@ -213,40 +242,9 @@ TRUTHFULQA_EXAMPLES = [
 ]
 ```
 
-### The Coding and Reasoning Tests
+### HellaSwag: Common Sense Reasoning
 
-Code generation requires precise syntactic and logical structure. HumanEval measures functional correctness by evaluating whether the generated code passes a suite of hidden unit tests. It remains the baseline for assessing coding capabilities.
-
-```python
-# Example HumanEval problem
-def has_close_elements(numbers: List[float], threshold: float) -> bool:
-    """
-    Check if in given list of numbers, are any two numbers closer to each
-    other than given threshold.
-
-    >>> has_close_elements([1.0, 2.0, 3.0], 0.5)
-    False
-    >>> has_close_elements([1.0, 2.8, 3.0, 4.0, 5.0, 2.0], 0.3)
-    True
-    """
-    # Model must generate the implementation
-    pass
-
-# Evaluation: Run generated code against test cases
-def evaluate_humaneval(model_code: str, test_cases: List[dict]) -> float:
-    """
-    Pass @src/content/docs/cloud/advanced-operations/module-8.3-cross-cluster-networking.md metric: Probability of at least one correct solution
-    in k attempts.
-    """
-    try:
-        exec(model_code)
-        passed = sum(1 for tc in test_cases if run_test(tc))
-        return passed / len(test_cases)
-    except Exception:
-        return 0.0
-```
-
-HellaSwag tests physical and social intuition by asking models to complete scenarios. While humans find this trivial, models historically struggled with the implicit temporal and physical logic required. Modern frontier models now score over 90%, saturating the benchmark.
+HellaSwag tests physical and social intuition by asking models to complete scenarios.
 
 ```python
 # Example HellaSwag question
@@ -272,7 +270,9 @@ HELLASWAG_CHALLENGES = {
 }
 ```
 
-Grade School Math 8K requires models to perform multi-step arithmetic reasoning. It popularized the "Chain of Thought" prompting technique, proving that intermediate reasoning steps drastically improve final answer accuracy.
+### GSM8K: Mathematical Reasoning
+
+Grade School Math 8K requires models to perform multi-step arithmetic reasoning, popularizing Chain of Thought techniques.
 
 ```python
 # Example GSM8K problem
@@ -305,16 +305,18 @@ def evaluate_gsm8k(model_answer: str, correct_answer: str) -> bool:
     return abs(model_number - correct_number) < 0.01
 ```
 
-### Expanding into Specialized Domains
+## 3. Beyond the Big Five: Specialized Benchmarks
 
-The coding evaluation landscape has evolved beyond basic function completion. Modern frameworks like SWE-bench require models to navigate entire repositories, understand complex dependencies, and generate multi-file pull requests to resolve real-world GitHub issues.
+As foundational models achieve human-parity on standard tasks, evaluators employ specialized benchmarking to probe specific modalities.
+
+### Code Generation Benchmarks
 
 ```mermaid
 graph TD
     A[CODE EVALUATION LANDSCAPE] --> B[HumanEval]
     B --> B1[164 problems]
     B --> B2[Function completion]
-    B --> B3[Pass @src/content/docs/cloud/advanced-operations/module-8.3-cross-cluster-networking.md metric]
+    B --> B3[Pass @src/content/docs/platform/toolkits/infrastructure-networking/k8s-distributions/module-14.7-rke2.md metric]
 
     A --> C[MBPP]
     C --> C1[974 problems]
@@ -333,7 +335,7 @@ graph TD
     E --> E4[Tests real-world engineering ability]
 ```
 
-Similarly, reasoning evaluations are branching into more nuanced logical domains, testing physical world knowledge and reading comprehension under complex contexts.
+### Reasoning Benchmarks
 
 ```mermaid
 graph TD
@@ -360,7 +362,7 @@ graph TD
     F --> F3[Top models: ~88%]
 ```
 
-Safety evaluation is a specialized discipline. Red-teaming frameworks probe the model's resistance to jailbreaks, while bias benchmarks measure the unintended amplification of stereotypes.
+### Safety Benchmarks
 
 ```mermaid
 graph TD
@@ -385,7 +387,11 @@ graph TD
     F --> F2[Standard + adaptive attacks]
 ```
 
+## 4. Evaluation Frameworks
+
 Executing thousands of evaluations manually is impossible. The industry relies on standardized execution harnesses to automate benchmark runs, ensuring reproducibility and consistency across model versions.
+
+### lm-eval-harness (EleutherAI)
 
 ```python
 # Installation
@@ -421,7 +427,7 @@ results = evaluator.simple_evaluate(
 print(results["results"]["mmlu"]["acc"])  # Accuracy on MMLU
 ```
 
-Stanford's Holistic Evaluation of Language Models (HELM) project provides a broader taxonomy, ensuring that models are measured not just on accuracy, but on fairness, calibration, and efficiency.
+### HELM (Stanford)
 
 ```mermaid
 graph TD
@@ -454,7 +460,7 @@ helm-run \
 # - Reproducibility information
 ```
 
-Google's BIG-bench initiative further expands the scope, incorporating over 200 distinct tasks designed to be incredibly difficult for current generation models, including hyperbaton and causal judgment.
+### BIG-bench (Google)
 
 ```mermaid
 graph TD
@@ -477,9 +483,7 @@ graph TD
     C --> C5[Navigate]
 ```
 
----
-
-## 3. Evaluating at Scale: LLM-as-Judge
+## 5. Evaluating at Scale: LLM-as-Judge
 
 ```text
 EVALUATION SCALING CHALLENGE
@@ -502,7 +506,7 @@ Solution: Use LLMs to evaluate LLMs
 
 ### LLM-as-Judge Architecture
 
-Using frontier models (like GPT-4 or Claude 3) to judge the outputs of other models is the only financially viable method for large-scale continuous evaluation. The judge model is prompted with the question, the candidate answers, and a strict grading rubric.
+Using frontier models (like GPT-4 or Claude 3) to judge the outputs of other models is the only financially viable method for large-scale continuous evaluation.
 
 ```python
 def llm_as_judge(
@@ -552,7 +556,7 @@ Confidence: [0-1]
 
 ### Position Bias and Mitigation
 
-Judge models are notoriously susceptible to position bias, frequently favoring whichever response is presented first, regardless of quality. To mitigate this, robust pipelines run evaluations twice with swapped positions and only declare a winner if both evaluations agree.
+Judge models are notoriously susceptible to position bias, frequently favoring whichever response is presented first, regardless of quality.
 
 ```python
 def llm_judge_with_position_debiasing(
@@ -585,7 +589,7 @@ def llm_judge_with_position_debiasing(
 
 ### MT-Bench and Arena Hard
 
-Evaluating multi-turn conversations is notoriously difficult because the context window evolves dynamically. MT-Bench measures how well a model maintains coherence, follows instructions, and retains context across multiple conversational turns. Arena Hard extends this by curating highly difficult prompts specifically chosen to separate frontier-class models.
+Evaluating multi-turn conversations is notoriously difficult because the context window evolves dynamically.
 
 ```text
 MT-BENCH: MULTI-TURN CONVERSATION BENCHMARK
@@ -622,11 +626,7 @@ Used for: Rapid model comparison without
           expensive human evaluation
 ```
 
----
-
-## 4. Human Evaluation and Statistical Rigor
-
-Despite the efficiency of LLM-as-Judge, human evaluation remains the gold standard for subjective quality, safety-critical applications, and calibrating automated judges. Relying exclusively on automated metrics will eventually result in catastrophic alignment drift.
+## 6. Human Evaluation and Statistical Rigor
 
 ```mermaid
 graph TD
@@ -646,7 +646,7 @@ graph TD
 
 ### A/B Testing Framework
 
-When human judges evaluate model outputs, strict blinding and randomization protocols must be enforced. Presenting identical prompts with responses from two different models allows you to calculate preference win-rates.
+When human judges evaluate model outputs, strict blinding and randomization protocols must be enforced.
 
 ```python
 from dataclasses import dataclass
@@ -733,8 +733,6 @@ def run_ab_test(
 
 ### Inter-Annotator Agreement
 
-Human evaluation is only valid if the judges agree with each other. If your judges exhibit low agreement (measured via Cohen's or Fleiss' Kappa), your evaluation rubric is likely too ambiguous, or the task is highly subjective.
-
 ```python
 def calculate_agreement(annotations: List[List[str]]) -> dict:
     """
@@ -792,8 +790,6 @@ def interpret_kappa(kappa: float) -> str:
 ```
 
 ### Rubric-Based Evaluation
-
-Whether evaluated by humans or LLMs, scoring must be anchored to explicit, granular rubrics. This prevents subjective drift and ensures consistency over time.
 
 ```python
 EVALUATION_RUBRIC = {
@@ -921,8 +917,6 @@ print(f"Win rate: {wins/total:.1%}, 95% CI: [{ci[0]:.1%}, {ci[1]:.1%}]")
 # Win rate: 60.0%, 95% CI: [50.2%, 69.1%]
 ```
 
-For continuous, multi-model tracking over time, the Elo rating system (originally designed for chess) provides a robust mathematical framework for ranking models based on pairwise battle outcomes.
-
 ```python
 class EloRatingSystem:
     """
@@ -965,9 +959,7 @@ class EloRatingSystem:
         return sorted(self.ratings.items(), key=lambda x: x[1], reverse=True)
 ```
 
----
-
-## 5. Architecting Production Evaluation Pipelines
+## 7. Architecting Production Evaluation Pipelines
 
 Deploying evaluation infrastructure is as critical as deploying the inference infrastructure itself. A modern evaluation engine must handle batch testing, continuous sampling, and asynchronous judgment.
 
@@ -997,7 +989,7 @@ flowchart TD
     end
 ```
 
-When deploying such an Evaluation Engine to a modern cluster (e.g., Kubernetes v1.35), you can containerize the components and scale them horizontally to process thousands of generations concurrently.
+When deploying such an Evaluation Engine to a modern cluster, containerize the components:
 
 ```yaml
 apiVersion: apps/v1
@@ -1027,8 +1019,6 @@ spec:
 ```
 
 ### Complete Evaluation Pipeline Implementation
-
-A production-grade pipeline abstracts the generation and evaluation logic, allowing engineers to plug in arbitrary models and arbitrary scoring functions.
 
 ```python
 from dataclasses import dataclass, field
@@ -1187,8 +1177,6 @@ def contains_evaluator(case: EvalCase, response: str) -> Dict:
 
 ### Continuous Evaluation
 
-Pre-deployment testing is insufficient. User distribution shifts, and models can degrade in unexpected ways. Continuous evaluation samples a fraction of production traffic, strips personally identifiable information, and asynchronously runs it through the judge pipeline to detect quality drift.
-
 ```python
 class ContinuousEvaluator:
     """
@@ -1271,9 +1259,7 @@ class ContinuousEvaluator:
         print(f" [ALERT]: {message}")
 ```
 
-### Task-Specific and Domain-Specific Benchmarks
-
-Public benchmarks do not measure how well your model performs your specific enterprise task. You must build custom evaluation suites tailored to your RAG pipelines and domain logic.
+### Task-Specific Evaluation
 
 ```python
 # Example: RAG System Evaluation
@@ -1346,6 +1332,8 @@ class RAGEvaluator:
         # Would use actual LLM in production
         return 0.85  # Placeholder
 ```
+
+### Domain-Specific Benchmarks
 
 ```python
 # Example: Customer Service Bot Evaluation
@@ -1438,20 +1426,7 @@ graph TD
     D --> D3[Periodic re-evaluation: Drift check]
 ```
 
----
-
-## 6. The Economics of Evaluation and Common Mistakes
-
-Evaluating models rigorously is expensive, but failing to evaluate them is disastrous. You must balance the cost of automated metrics, LLM judges, and expert human reviewers against the financial risk of a catastrophic production failure.
-
-| Method | Cost per 1K Evaluations | Quality | Speed |
-|--------|------------------------|---------|-------|
-| Automated metrics (BLEU, ROUGE) | ~$0 | Low | Instant |
-| Benchmark suite (MMLU, etc.) | ~$1-5 | Medium | Minutes |
-| LLM-as-Judge (gpt-5) | $5-20 | Medium-High | Hours |
-| LLM-as-Judge (Claude) | $3-15 | Medium-High | Hours |
-| Crowdsourced human eval | $50-200 | High | Days |
-| Expert human eval | $200-1000 | Highest | Weeks |
+## 8. Economics and Common Mistakes
 
 ```text
 Scenario: Evaluating a new customer service model
@@ -1469,10 +1444,6 @@ Option B: Comprehensive evaluation before deployment
 
 ROI of comprehensive evaluation: $15K savings + risk reduction
 ```
-
-### Common Mistakes in LLM Evaluation
-
-Evaluating non-deterministic systems requires a completely different mindset than traditional software testing. Many engineering teams port over unit-testing mentalities, resulting in fundamentally flawed evaluation paradigms.
 
 | Mistake | Why It Happens | Fix |
 |---------|----------------|-----|
@@ -1579,16 +1550,12 @@ def report_results_detailed(predictions, labels, questions, metadata):
         print(f"  - {q[:100]}...")
 ```
 
----
-
 ## Did You Know?
 
 1. Under the EU AI Act (which entered into force August 2, 2024), the maximum administrative fine for violating Article 5 prohibited AI practices is €35 million or 7% of worldwide annual turnover, whichever is higher.
 2. In comprehensive autonomy evaluations by METR, research shows that AI systems' autonomous task completion capability (with a 50% task-completion time horizon) has been doubling approximately every 7 months since 2019.
-3. OpenAI's Superalignment team, originally launched with a goal to dedicate 20% of compute to solving superintelligence alignment, was officially dissolved in May 2024 after co-leaders departed.
+3. OpenAI's Superalignment team, originally launched with a goal to dedicate 20% of compute to solving superintelligence alignment, was officially dissolved in May 2024 after co-leaders Ilya Sutskever and Jan Leike departed.
 4. Anthropic significantly expanded its Claude model specification (its internal "constitution") in 2026, ballooning the document from approximately 2,700 words in 2023 to roughly 23,000 words to rigorously define behavioral hierarchy.
-
----
 
 ## Knowledge Check
 
@@ -1628,13 +1595,34 @@ def report_results_detailed(predictions, labels, questions, metadata):
 **Answer:** The primary risk is failing to detect smaller, yet highly significant regressions or improvements, leading to false confidence or a missed opportunity. An effect size of 0.25 is massive; most realistic model improvements only yield single-digit percentage gains in user preference. You must extend the duration of the A/B test to accumulate a larger sample size, which will provide the statistical power necessary to reliably detect smaller, more realistic effect sizes.
 </details>
 
----
+## Hands-On Exercises: End-to-End Evaluation Pipeline
 
-## Hands-On Exercises
+In this lab, you will build and deploy a statistical evaluation pipeline for a generative AI model.
+
+### Prerequisites and Environment Setup
+
+First, set up your local execution environment. Open your terminal and create an isolated workspace.
+
+```bash
+mkdir -p ~/evaluation-lab
+cd ~/evaluation-lab
+python3 -m venv .venv
+source .venv/bin/activate
+pip install scipy scikit-learn numpy
+```
+
+Verify your environment:
+```bash
+python3 -c "import scipy, sklearn, numpy; print('Environment Ready')"
+```
 
 ### Task 1: Build a Mini Benchmark
 
-In this task, you will create a domain-specific evaluation dataset. Academic benchmarks are highly contaminated. You must build internal, private evaluations to avoid data contamination.
+Academic benchmarks are highly contaminated. You must build internal, private evaluations to avoid data contamination. 
+
+**Instructions:**
+1. Create a file named `benchmark.py` in your `evaluation-lab` directory.
+2. Use the following template to define your dataset:
 
 ```python
 # TODO: Create a 20-question benchmark for [your domain]
@@ -1654,10 +1642,8 @@ MINI_BENCHMARK = [
 ]
 ```
 
-**Instructions:**
-1. Define a JSON structure for your evaluation cases.
-2. Write at least three distinct questions targeting edge cases.
-3. Ensure each question has a deterministic correct answer.
+3. Populate the benchmark with at least three distinct questions targeting edge cases.
+4. Verify the syntax is valid by running `python3 -m py_compile benchmark.py`.
 
 <details>
 <summary><strong>View Solution for Task 1</strong></summary>
@@ -1688,7 +1674,11 @@ MINI_BENCHMARK = [
 
 ### Task 2: Implement LLM-as-Judge
 
-Now that you have a dataset, implement the automated judge. You must handle position bias by querying the model twice and parsing both responses.
+Now implement the automated judge. You must handle position bias by querying the model twice and parsing both responses. 
+
+**Instructions:**
+1. Create a file named `judge.py` in your lab directory.
+2. Start with this template:
 
 ```python
 # TODO: Implement a complete LLM-as-Judge evaluator
@@ -1705,10 +1695,9 @@ def comprehensive_llm_judge(
     pass
 ```
 
-**Instructions:**
-1. Implement the `comprehensive_llm_judge` function.
-2. Make two calls to a mock `call_llm` function, swapping `response_a` and `response_b`.
-3. Resolve the winner based on the combined results to eliminate position bias.
+3. Implement the dual-call logic to swap `response_a` and `response_b`.
+4. Ensure the winner is resolved properly to eliminate position bias.
+5. Test the script execution: `python3 judge.py`
 
 <details>
 <summary><strong>View Solution for Task 2</strong></summary>
@@ -1743,7 +1732,11 @@ def comprehensive_llm_judge(
 
 ### Task 3: Statistical Analysis
 
-Determine if your evaluation results are statistically significant, ensuring your sample sizes hold up against rigorous scrutiny.
+Determine if your evaluation results are statistically significant. 
+
+**Instructions:**
+1. Create a file named `stats.py` in your lab directory.
+2. Start with this template:
 
 ```python
 # TODO: Given these A/B test results, determine:
@@ -1758,10 +1751,9 @@ results = {
 }
 ```
 
-**Instructions:**
-1. Use the scipy `binomtest` to calculate the p-value.
-2. Determine if the result is significant at alpha = 0.05.
-3. Calculate the confidence interval using standard statistical formulas.
+3. Use `scipy.stats.binomtest` to calculate the p-value.
+4. Calculate the 95% confidence interval using standard statistical formulas.
+5. Run the analysis script: `python3 stats.py`
 
 <details>
 <summary><strong>View Solution for Task 3</strong></summary>
@@ -1798,13 +1790,39 @@ print(f"95% CI: [{ci_lower:.2%}, {ci_upper:.2%}]")
 
 ### Task 4: Deploy the Evaluator to Kubernetes
 
-Package your evaluation script and deploy it as a continuous evaluation job on Kubernetes v1.35.
+Package your evaluation script and deploy it as a continuous evaluation job on your Kubernetes v1.35 cluster.
 
 **Instructions:**
-1. Create a Kubernetes `CronJob` manifest.
-2. Ensure the container image targets your internal registry.
-3. Schedule the task to execute nightly at 2:00 AM.
-4. Securely mount necessary credentials using a `Secret`.
+1. Create a Kubernetes `CronJob` manifest named `nightly-eval.yaml`.
+2. Schedule the task to execute nightly at 2:00 AM.
+3. Apply the manifest to your cluster: `kubectl apply -f nightly-eval.yaml`
+
+Here is the completed manifest you must construct:
+```yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nightly-eval-job
+  namespace: ml-ops
+spec:
+  schedule: "0 2 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: evaluator
+            image: registry.internal/eval-engine:v1.0
+            env:
+            - name: KUBERNETES_VERSION
+              value: "v1.35.0"
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: eval-secrets
+                  key: api-key
+          restartPolicy: OnFailure
+```
 
 <details>
 <summary><strong>View Solution for Task 4</strong></summary>
@@ -1838,7 +1856,10 @@ spec:
 
 ### Verification
 
-Ensure you have completed all objectives before moving on.
+Run these final checks to validate your pipeline:
+```bash
+kubectl get cronjob nightly-eval-job -n ml-ops
+```
 
 <details>
 <summary><strong>View Solutions Checklist</strong></summary>
@@ -1851,10 +1872,6 @@ Ensure you have completed all objectives before moving on.
 - [x] Results reporting with comprehensive error analysis implementations.
 </details>
 
----
+## Next Module
 
-## Next Steps
-
-Congratulations on completing the module on AI Safety & Evaluation! You are now equipped to build evaluation engines that scale alongside your model capabilities and can rigorously defend your models against statistical noise and alignment drift.
-
-**Up Next**: [Module 43: Deploying AI to Production (MLOps)](../module-1.9-mlops-deployment/) — We will translate your evaluation suites into live deployment validation gates using automated CI/CD pipelines in Kubernetes.
+**Up Next**: [Module 43: Deploying AI to Production (MLOps)](/ai-ml-engineering/advanced-genai/module-1.9-mlops) — We will translate your evaluation suites into live deployment validation gates using automated pipelines.
