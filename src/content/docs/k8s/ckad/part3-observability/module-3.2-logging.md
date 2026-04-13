@@ -386,6 +386,9 @@ spec:
     image: busybox
     command: ['sh', '-c', 'i=0; while true; do echo "$(date) - Log entry $i"; i=$((i+1)); sleep 2; done']
 EOF
+
+# Wait for pod to be ready
+k wait --for=condition=Ready pod/log-demo --timeout=30s
 ```
 
 **Part 1: Basic Logs**
@@ -420,6 +423,9 @@ spec:
     command: ['sh', '-c', 'while true; do echo Sidecar log; sleep 5; done']
 EOF
 
+# Wait for pod to be ready
+k wait --for=condition=Ready pod/multi-log --timeout=30s
+
 # List containers
 k get pod multi-log -o jsonpath='{.spec.containers[*].name}'
 
@@ -447,7 +453,8 @@ spec:
 EOF
 
 # Wait for restart, then check previous logs
-k get pod crasher -w
+sleep 15
+k get pod crasher
 k logs crasher --previous
 ```
 
@@ -466,6 +473,9 @@ k delete pod log-demo multi-log crasher
 # Create pod
 k run drill1 --image=nginx
 
+# Wait for pod to be ready
+k wait --for=condition=Ready pod/drill1 --timeout=30s
+
 # View logs
 k logs drill1
 
@@ -478,6 +488,9 @@ k delete pod drill1
 ```bash
 # Create logging pod
 k run drill2 --image=busybox -- sh -c 'while true; do echo tick; sleep 1; done'
+
+# Wait for pod to be ready
+k wait --for=condition=Ready pod/drill2 --timeout=30s
 
 # Follow (Ctrl+C after a few ticks)
 k logs drill2 -f
@@ -503,6 +516,9 @@ spec:
     command: ['sh', '-c', 'while true; do echo monitoring; sleep 5; done']
 EOF
 
+# Wait for pod to be ready
+k wait --for=condition=Ready pod/drill3 --timeout=30s
+
 # Get logs from each
 k logs drill3 -c web
 k logs drill3 -c monitor
@@ -517,6 +533,9 @@ k delete pod drill3
 # Create multiple pods
 k run drill4a --image=nginx -l app=drill4
 k run drill4b --image=nginx -l app=drill4
+
+# Wait for pods to be ready
+k wait --for=condition=Ready pod -l app=drill4 --timeout=30s
 
 # Logs from all with label
 k logs -l app=drill4
@@ -542,7 +561,8 @@ spec:
 EOF
 
 # Watch it crash
-k get pod drill5 -w
+sleep 15
+k get pod drill5
 
 # After restart, get previous logs
 k logs drill5 --previous
@@ -577,6 +597,9 @@ spec:
         image: busybox
         command: ['sh', '-c', 'echo "Starting app"; echo "ERROR: Database connection failed"; exit 1']
 EOF
+
+# Wait for pods to be created
+sleep 5
 
 # Find pods
 k get pods -l app=drill6
