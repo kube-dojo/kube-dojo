@@ -62,42 +62,14 @@ Disk I/O is often the hidden bottleneck.
 
 ### I/O Stack
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    I/O STACK                                     │
-│                                                                  │
-│  Application                                                     │
-│       │                                                          │
-│       ▼                                                          │
-│  ┌─────────────────────────────────────┐                        │
-│  │ VFS (Virtual File System)           │  ← Abstraction layer   │
-│  └─────────────────────────────────────┘                        │
-│       │                                                          │
-│       ▼                                                          │
-│  ┌─────────────────────────────────────┐                        │
-│  │ Page Cache                          │  ← Reads from here     │
-│  └─────────────────────────────────────┘    if cached           │
-│       │                                                          │
-│       ▼                                                          │
-│  ┌─────────────────────────────────────┐                        │
-│  │ Filesystem (ext4, xfs, etc.)        │  ← Layout, metadata    │
-│  └─────────────────────────────────────┘                        │
-│       │                                                          │
-│       ▼                                                          │
-│  ┌─────────────────────────────────────┐                        │
-│  │ Block Layer / I/O Scheduler         │  ← Queue, merge, order │
-│  └─────────────────────────────────────┘                        │
-│       │                                                          │
-│       ▼                                                          │
-│  ┌─────────────────────────────────────┐                        │
-│  │ Device Driver                       │  ← Hardware interface  │
-│  └─────────────────────────────────────┘                        │
-│       │                                                          │
-│       ▼                                                          │
-│  ┌─────────────────────────────────────┐                        │
-│  │ Physical Device (SSD/HDD/NVMe)      │  ← Actual storage      │
-│  └─────────────────────────────────────┘                        │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    App[Application] --> VFS[VFS: Virtual File System]
+    VFS -->|Abstraction layer| PC[Page Cache]
+    PC -->|Reads from here if cached| FS[Filesystem: ext4, xfs, etc.]
+    FS -->|Layout, metadata| BL[Block Layer / I/O Scheduler]
+    BL -->|Queue, merge, order| DD[Device Driver]
+    DD -->|Hardware interface| PD[Physical Device: SSD/HDD/NVMe]
 ```
 
 > **Stop and think**: If an application writes a 1GB file to disk, but the physical disk's write throughput is only 100MB/s, why might the application report that the write completed in under a second? Consider the layers of the I/O stack and what actually happens when a write system call returns.
@@ -109,21 +81,15 @@ Disk I/O is often the hidden bottleneck.
 | **IOPS** | I/O Operations Per Second | Small, random I/O |
 | **Throughput** | MB/s transferred | Large, sequential I/O |
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    IOPS vs THROUGHPUT                            │
-│                                                                  │
-│  Database workload:              Video streaming:               │
-│  ┌───────────────────────┐      ┌───────────────────────────┐  │
-│  │ 10,000 IOPS           │      │ 500 IOPS                  │  │
-│  │ Small random reads    │      │ Large sequential reads    │  │
-│  │ 4KB blocks            │      │ 1MB blocks                │  │
-│  │ Throughput: 40 MB/s   │      │ Throughput: 500 MB/s      │  │
-│  └───────────────────────┘      └───────────────────────────┘  │
-│                                                                  │
-│  Same disk could be bottleneck for database (IOPS limited)      │
-│  but fine for streaming (throughput limited)                    │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    DB["Database Workload<br/>10,000 IOPS<br/>Small random reads<br/>4KB blocks<br/>Throughput: 40 MB/s"]
+    VS["Video Streaming<br/>500 IOPS<br/>Large sequential reads<br/>1MB blocks<br/>Throughput: 500 MB/s"]
+    
+    Summary("Same disk could be bottleneck for database (IOPS limited)<br/>but fine for streaming (throughput limited)")
+    
+    DB --> Summary
+    VS --> Summary
 ```
 
 ### Latency Components
@@ -316,12 +282,12 @@ docker stats --format "{{.Name}}: BlockIO: {{.BlockIO}}"
 ### Kubernetes Storage
 
 ```yaml
-# StorageClass with I/O parameters
+# StorageClass with I/O parameters targeting v1.35+ best practices
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
   name: fast-storage
-provisioner: kubernetes.io/aws-ebs
+provisioner: ebs.csi.aws.com
 parameters:
   type: gp3
   iops: "3000"
@@ -330,9 +296,12 @@ parameters:
 # Pod using PVC
 apiVersion: v1
 kind: Pod
+metadata:
+  name: io-test-pod
 spec:
   containers:
   - name: app
+    image: nginx:latest
     volumeMounts:
     - name: data
       mountPath: /data
@@ -439,7 +408,7 @@ You are monitoring a server equipped with a modern NVMe SSD array. During a nigh
 
 **The storage subsystem is handling the load perfectly and is not a bottleneck.**
 
-The `%util` metric only measures the percentage of time the device had at least one outstanding I/O request, not its total capacity or saturation. Because NVMe SSDs are highly parallel, they can process many requests simultaneously without slowing down. The crucial metrics here are `await` (latency) and `avgqu-sz` (queue depth); since latency remains sub-millisecond and the queue is very small, the drives are processing requests as fast as they arrive. The junior engineer is misinterpreting a "busy" drive for a "saturated" drive.
+The `%util` metric only measures the percentage of time the device had at least one outstanding I/O request, not its total capacity or saturation limit. Because modern NVMe SSDs are designed to be highly parallel, they can efficiently process numerous requests simultaneously without slowing down. The crucial metrics to observe here are `await` (latency) and `avgqu-sz` (queue depth); since latency remains sub-millisecond and the queue is very small, the drives are processing requests as quickly as they arrive. Ultimately, the junior engineer is misinterpreting a "busy" drive for a "saturated" drive, a common mistake when dealing with parallel storage architectures.
 
 </details>
 
@@ -451,7 +420,7 @@ Your team deploys a new read-heavy analytics application. During the first 10 mi
 
 **The Linux Page Cache has successfully cached the frequently accessed data in RAM.**
 
-When the application first started, the data resided only on the physical disk, forcing the kernel to perform actual disk reads, which surfaced in `iostat`. As this data was read into memory, the kernel retained it in the Page Cache (unused RAM). Subsequent queries for the same data are served directly from the extremely fast RAM rather than the physical disk. Therefore, `iostat` shows no physical block device reads, and the application experiences significantly lower latency because memory access is orders of magnitude faster than disk I/O.
+When the application first started, the working data set resided solely on the physical disk, forcing the kernel to perform actual block device reads that surfaced in `iostat`. As this data was sequentially read into memory, the Linux kernel intelligently retained it within the Page Cache using otherwise free RAM. Subsequent queries for the same data are therefore served directly from this extremely fast RAM cache rather than returning to the slower physical disk. Consequently, `iostat` shows no physical block device reads, and the application experiences significantly lower latency because memory access is orders of magnitude faster than disk I/O.
 
 </details>
 
@@ -463,7 +432,7 @@ You are troubleshooting a legacy application running on an older server with spi
 
 **The physical disks are becoming saturated and cannot process requests fast enough, leading to queuing.**
 
-Unlike modern SSDs, spinning HDDs have very low parallel processing capabilities; they physically rely on a moving read/write head. An `avgqu-sz` of 15 means there are 15 requests waiting in line for the disk head to move to the correct physical location. This mechanical limitation causes the `await` time (which includes time spent waiting in the queue plus actual service time) to skyrocket to 200ms. Even though the disk isn't busy 100% of the time over the polling interval (`%util`), during the bursts of activity, the hardware simply cannot keep up with the concurrent I/O demands.
+Unlike modern solid-state drives, spinning HDDs have extremely limited parallel processing capabilities because they must physically move a mechanical read/write head across platters. An `avgqu-sz` of 15 indicates that there are 15 distinct I/O requests waiting in line for the disk head to seek to the correct physical location. This severe mechanical limitation causes the `await` time—which combines the time spent waiting in the queue with the actual service time—to skyrocket to 200ms. Even though the disk isn't busy 100% of the time over the polling interval (`%util`), during sudden bursts of activity, the mechanical hardware simply cannot keep up with the concurrent I/O demands.
 
 </details>
 
@@ -473,9 +442,9 @@ You have just provisioned a high-performance database server on a public cloud p
 <details>
 <summary>Show Answer</summary>
 
-**Yes, you should change the scheduler to `none`.**
+**Yes, you should change the I/O scheduler to `none`.**
 
-The `mq-deadline` scheduler is designed to sort and merge I/O requests to optimize the physical movement of HDD read/write heads, preventing starvation. However, in this scenario, your VM is writing to a virtualized NVMe device backed by a cloud provider's distributed storage system, meaning physical head movement is irrelevant and the underlying hardware/hypervisor already handles scheduling optimally. By keeping a complex scheduler active in the guest OS, you are only adding unnecessary CPU overhead and latency. Setting it to `none` allows the kernel to pass the I/O requests directly to the hypervisor as quickly as possible.
+The `mq-deadline` scheduler is fundamentally designed to sort and merge I/O requests to optimize the physical movement of HDD read/write heads and prevent starvation. However, in this scenario, your virtual machine is writing to a virtualized NVMe device that is backed by a cloud provider's distributed storage system. This means physical head movement is entirely irrelevant to your guest OS, and the underlying cloud hypervisor already handles storage scheduling optimally. By keeping a complex scheduler active in the guest OS, you are simply adding unnecessary CPU overhead and artificial latency to every storage request. Setting the scheduler to `none` allows the Linux kernel to pass the I/O requests directly to the hypervisor as efficiently and quickly as possible.
 
 </details>
 
@@ -485,9 +454,9 @@ A production web server is suddenly unresponsive. You log in and run `uptime`, s
 <details>
 <summary>Show Answer</summary>
 
-**You should use a tool like `iotop` or `pidstat -d` to measure per-process I/O bandwidth.**
+**You should use a specialized I/O tool like `iotop` or `pidstat -d` to measure per-process disk bandwidth.**
 
-The high `%wa` and processes in the `D` (uninterruptible sleep) state confirm that the CPUs are idle because they are waiting on the storage subsystem to return data. However, `top` only shows CPU and memory usage, not how many bytes a process is reading or writing to the disk. By running `sudo iotop -o`, you can see a real-time, top-like view sorted by actual disk read and write bandwidth (MB/s). This immediately pinpoints the exact PID and command (e.g., a runaway logging process or an unoptimized database query) that is overwhelming the block device.
+The high `%wa` (iowait) and the presence of processes in the `D` (uninterruptible sleep) state confirm that your CPUs are sitting idle because they are waiting on the storage subsystem to acknowledge data requests. However, standard tools like `top` only display CPU and memory utilization, entirely masking how many bytes a specific process is reading or writing to the disk. By running `sudo iotop -o`, you gain a real-time, top-like interface that sorts active processes by their actual disk read and write bandwidth in MB/s. This visibility will immediately pinpoint the exact PID and command—such as a runaway logging process or an unoptimized database query—that is physically overwhelming the block device.
 
 </details>
 
