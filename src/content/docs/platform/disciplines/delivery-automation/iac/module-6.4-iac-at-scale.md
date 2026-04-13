@@ -32,13 +32,13 @@ After completing this module, you will be able to:
 
 **The Great Terraform Migration Crisis**
 
-The platform team at a rapidly growing fintech company had what seemed like a great problem: they'd grown from 3 to 47 engineering teams in two years. Each team had been given autonomy to manage their own infrastructure, and they'd all chosen Terraform. The company now had over 2,400 Terraform configurations spread across 180 repositories.
+The platform team at a rapidly growing fintech company had what seemed like a great problem: they'd grown from 3 to 50 engineering teams in two years. Each team had been given autonomy to manage their own infrastructure, and they'd all chosen Terraform. The company now had over 2,500 Terraform configurations spread across 200 repositories.
 
 Then came the compliance audit.
 
 The auditors needed to verify that all databases were encrypted, all S3 buckets had versioning enabled, and all security groups followed the corporate baseline. The platform team spent three weeks writing scripts to scan the configurations. They found that 23% of databases weren't encrypted, 41% of S3 buckets lacked versioning, and security group configurations ranged from locked-down to completely open.
 
-Fixing these issues took 4 months. During that time, teams couldn't ship new features because every infrastructure change required security review. The total cost in delayed features, overtime, and audit fees: $8.7 million.
+Fixing these issues took 4 months. During that time, teams couldn't ship new features because every infrastructure change required security review. The total cost in delayed features, overtime, and audit fees: $8.5 million.
 
 This module teaches you how to scale infrastructure as code without losing control—because managing IaC for 3 teams is fundamentally different from managing it for 300.
 
@@ -48,45 +48,30 @@ This module teaches you how to scale infrastructure as code without losing contr
 
 As organizations grow, IaC complexity increases exponentially.
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    IAC COMPLEXITY GROWTH                            │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  Complexity                                                         │
-│      ▲                                                              │
-│      │                                                      ████    │
-│      │                                                 ████████     │
-│      │                                            ████████████      │
-│      │                                       █████████████████      │
-│      │                                  ██████████████████████      │
-│      │                             ███████████████████████████      │
-│      │                        ████████████████████████████████      │
-│      │                   █████████████████████████████████████      │
-│      │              ██████████████████████████████████████████      │
-│      │         ███████████████████████████████████████████████      │
-│      │    ████████████████████████████████████████████████████      │
-│      └─────────────────────────────────────────────────────────►    │
-│           3       10      25      50     100     200+   Teams       │
-│                                                                     │
-│  Scale Challenges:                                                  │
-│  ┌────────────────────────────────────────────────────────────┐    │
-│  │ • State file conflicts and corruption                       │    │
-│  │ • Inconsistent module versions across teams                 │    │
-│  │ • Divergent security and compliance standards               │    │
-│  │ • Duplicate infrastructure definitions                      │    │
-│  │ • Long plan/apply times (10+ minutes)                       │    │
-│  │ • Difficulty tracking who owns what                         │    │
-│  │ • Cascading breaking changes from module updates            │    │
-│  │ • Knowledge silos and tribal knowledge                      │    │
-│  └────────────────────────────────────────────────────────────┘    │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    Scale[Organization Scale] -->|More Teams| Complexity[IaC Complexity]
+    
+    Complexity --> Challenges
+    
+    subgraph Challenges [Common Scale Challenges]
+        direction TB
+        C1[State file conflicts & corruption]
+        C2[Inconsistent module versions]
+        C3[Divergent compliance standards]
+        C4[Duplicate infrastructure definitions]
+        C5[Plan/Apply takes 10+ minutes]
+        C6[Difficulty tracking ownership]
+        C7[Cascading breaking changes]
+        C8[Knowledge silos]
+    end
 ```
 
 ---
 
 ## Repository Strategies
+
+> **Pause and predict**: If you put all your company's infrastructure in a single Terraform repository, what will be the biggest bottleneck after you reach 50 engineers?
 
 ### Monorepo: Single Repository for All Infrastructure
 
@@ -281,48 +266,38 @@ module "vpc" {
 
 ## State Management at Scale
 
+> **Stop and think**: What happens if two teams try to apply changes to the same monolithic state file at exactly the same time?
+
 ### State File Organization
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                   STATE FILE ARCHITECTURE                       │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  Approach 1: Monolithic State (Bad for Scale)                   │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │  terraform.tfstate                                       │   │
-│  │  ├── All VPCs                                            │   │
-│  │  ├── All EKS clusters                                    │   │
-│  │  ├── All databases                                       │   │
-│  │  └── 50,000+ resources                                   │   │
-│  │                                                          │   │
-│  │  Problems:                                               │   │
-│  │  • Plan takes 10+ minutes                                │   │
-│  │  • Single team blocks all changes                        │   │
-│  │  • Corruption affects everything                         │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                 │
-│  Approach 2: State per Environment (Better)                     │
-│  ┌────────────────────────────────────────────────────────┐    │
-│  │  s3://state/                                            │    │
-│  │  ├── dev/terraform.tfstate                              │    │
-│  │  ├── staging/terraform.tfstate                          │    │
-│  │  └── production/terraform.tfstate                       │    │
-│  └────────────────────────────────────────────────────────┘    │
-│                                                                 │
-│  Approach 3: State per Component (Best for Scale)               │
-│  ┌────────────────────────────────────────────────────────┐    │
-│  │  s3://state/production/                                 │    │
-│  │  ├── networking/terraform.tfstate      (VPC, subnets)   │    │
-│  │  ├── security/terraform.tfstate        (IAM, KMS)       │    │
-│  │  ├── eks/terraform.tfstate             (EKS cluster)    │    │
-│  │  ├── databases/terraform.tfstate       (RDS, DynamoDB)  │    │
-│  │  ├── team-alpha/terraform.tfstate      (Team workloads) │    │
-│  │  ├── team-beta/terraform.tfstate                        │    │
-│  │  └── team-gamma/terraform.tfstate                       │    │
-│  └────────────────────────────────────────────────────────┘    │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph A1[Approach 1: Monolithic State - Bad for Scale]
+        direction TB
+        MS[terraform.tfstate] --> MS1[All VPCs]
+        MS --> MS2[All EKS clusters]
+        MS --> MS3[All databases]
+        MS --> MS4[50,000+ resources]
+    end
+
+    subgraph A2[Approach 2: State per Environment - Better]
+        direction TB
+        S3A[s3://state/] --> EnvDev[dev/terraform.tfstate]
+        S3A --> EnvStg[staging/terraform.tfstate]
+        S3A --> EnvProd[production/terraform.tfstate]
+    end
+
+    subgraph A3[Approach 3: State per Component - Best for Scale]
+        direction TB
+        S3B[s3://state/production/] --> CompNet[networking/terraform.tfstate]
+        S3B --> CompSec[security/terraform.tfstate]
+        S3B --> CompEks[eks/terraform.tfstate]
+        S3B --> CompDB[databases/terraform.tfstate]
+        S3B --> CompTeamA[team-alpha/terraform.tfstate]
+    end
+    
+    A1 -.-> A2
+    A2 -.-> A3
 ```
 
 ### Workspaces vs. Directories
@@ -591,10 +566,10 @@ jobs:
   policy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout @v4
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform @v3
 
       - name: Generate Plan
         run: |
@@ -620,30 +595,24 @@ jobs:
 
 ## Self-Service Infrastructure
 
+> **Stop and think**: Why is giving developers direct access to write raw Terraform files often less effective than providing a self-service portal or template?
+
 ### Platform Engineering Approach
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                 SELF-SERVICE INFRASTRUCTURE                     │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  Traditional Model:                                             │
-│  ┌─────────┐    Ticket    ┌──────────┐    Manual    ┌───────┐  │
-│  │Developer│ ──────────► │  Ops/SRE  │ ──────────► │Infra   │  │
-│  └─────────┘   (days)    └──────────┘   (days)    └───────┘  │
-│                                                                 │
-│  Self-Service Model:                                            │
-│  ┌─────────┐    PR/Form   ┌──────────┐  Automated   ┌───────┐  │
-│  │Developer│ ──────────► │ Platform  │ ──────────► │Infra   │  │
-│  └─────────┘  (minutes)  │    API    │  (minutes)  └───────┘  │
-│                          └──────────┘                          │
-│                               │                                 │
-│                    ┌──────────┴──────────┐                     │
-│                    │                     │                     │
-│               Policy Gates         Module Library              │
-│               (guardrails)         (golden paths)              │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+graph LR
+    subgraph Traditional[Traditional Model]
+        Dev1[Developer] -->|Ticket - Days| Ops1[Ops/SRE]
+        Ops1 -->|Manual - Days| Infra1[Infrastructure]
+    end
+
+    subgraph SelfService[Self-Service Model]
+        Dev2[Developer] -->|PR/Form - Minutes| API[Platform API]
+        API -->|Automated - Minutes| Infra2[Infrastructure]
+        
+        Policy[Policy Gates] -.-> API
+        Modules[Module Library] -.-> API
+    end
 ```
 
 ### Service Catalog with Backstage
@@ -935,39 +904,26 @@ output "database_endpoint" {
 
 ### Team Topologies for IaC
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    IaC TEAM TOPOLOGIES                          │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  Platform Team (Enabling)                                       │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │ Responsibilities:                                        │   │
-│  │ • Build and maintain module library                      │   │
-│  │ • Define and enforce policies                            │   │
-│  │ • Manage shared infrastructure (networking, security)    │   │
-│  │ • Provide self-service capabilities                      │   │
-│  │ • Train and support stream-aligned teams                 │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                          │                                      │
-│          ┌───────────────┼───────────────┐                     │
-│          ▼               ▼               ▼                     │
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐               │
-│  │Stream-Aligned│ │Stream-Aligned│ │Stream-Aligned│              │
-│  │  Team Alpha  │ │  Team Beta   │ │  Team Gamma  │              │
-│  ├─────────────┤ ├─────────────┤ ├─────────────┤               │
-│  │ Own service │ │ Own service │ │ Own service │               │
-│  │ Use modules │ │ Use modules │ │ Use modules │               │
-│  │ Self-service│ │ Self-service│ │ Self-service│               │
-│  │ deployments │ │ deployments │ │ deployments │               │
-│  └─────────────┘ └─────────────┘ └─────────────┘               │
-│                                                                 │
-│  Interaction Modes:                                             │
-│  • Collaboration: Platform helps team with complex needs        │
-│  • X-as-a-Service: Teams consume modules independently          │
-│  • Facilitation: Platform trains teams on IaC practices         │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph Platform[Platform Team - Enabling]
+        direction TB
+        P1[Build & maintain module library]
+        P2[Define & enforce policies]
+        P3[Manage shared infrastructure]
+        P4[Provide self-service capabilities]
+    end
+    
+    subgraph Streams[Stream-Aligned Teams]
+        direction LR
+        S1[Team Alpha<br/>Owns service]
+        S2[Team Beta<br/>Owns service]
+        S3[Team Gamma<br/>Owns service]
+    end
+    
+    Platform -->|Collaboration| S1
+    Platform -->|X-as-a-Service| S2
+    Platform -->|Facilitation| S3
 ```
 
 ### Ownership Model
@@ -975,10 +931,10 @@ output "database_endpoint" {
 ```yaml
 # CODEOWNERS - Define ownership at scale
 # Platform team owns shared infrastructure
-/modules/                     @platform-team
-/environments/*/networking/   @platform-team
-/environments/*/security/     @platform-team
-/policies/                    @platform-team @security-team
+/modules/                     @src/content/docs/platform/disciplines/core-platform/leadership/module-1.1-platform-team-building.md
+/environments/*/networking/   @src/content/docs/platform/disciplines/core-platform/leadership/module-1.1-platform-team-building.md
+/environments/*/security/     @src/content/docs/platform/disciplines/core-platform/leadership/module-1.1-platform-team-building.md
+/policies/                    @src/content/docs/platform/disciplines/core-platform/leadership/module-1.1-platform-team-building.md @security-team
 
 # Teams own their own infrastructure
 /environments/*/team-alpha/   @team-alpha
@@ -986,7 +942,7 @@ output "database_endpoint" {
 /environments/*/team-gamma/   @team-gamma
 
 # Security review required for production
-/environments/production/     @platform-team @security-team
+/environments/production/     @src/content/docs/platform/disciplines/core-platform/leadership/module-1.1-platform-team-building.md @security-team
 ```
 
 ```hcl
@@ -1020,16 +976,16 @@ resource "aws_instance" "app" {
 
 ---
 
-## War Story: The 47-Team Consolidation
+## War Story: The 50-Team Consolidation
 
 **Company**: Fast-growing fintech
-**Challenge**: 47 teams, 180 repositories, 2,400 Terraform configurations
+**Challenge**: 50 teams, 200 repositories, 2,500 Terraform configurations
 
 **The Problem**:
 ```
 Before Consolidation:
-├── 180 repositories with Terraform
-├── 47 different VPC designs
+├── 200 repositories with Terraform
+├── 50 different VPC designs
 ├── 23 different RDS configurations
 ├── 12 different EKS setups
 ├── 0 standardization
@@ -1050,13 +1006,13 @@ for repo in $(gh repo list company --json name -q '.[].name'); do
   rm -rf temp-repo
 done
 
-# Result: 2,400 configurations, 847 unique resource types
+# Result: 2,500 configurations, 847 unique resource types
 ```
 
 Phase 2: Module Library (6 weeks)
 ```
 Consolidated to 15 blessed modules:
-├── vpc (replaced 47 variants)
+├── vpc (replaced 50 variants)
 ├── eks (replaced 12 variants)
 ├── rds-postgresql
 ├── rds-mysql
@@ -1154,129 +1110,51 @@ After Consolidation:
 ## Quiz
 
 <details>
-<summary>1. What are the three main repository strategies for IaC at scale?</summary>
+<summary>1. Your organization has just acquired two startups. You now have three separate engineering departments with different release cadences and strict isolation requirements for their product infrastructure. However, you want them all to use your central platform team's hardened Kubernetes and Database Terraform modules. Which repository strategy should you choose and how would it be structured?</summary>
 
-**Answer**:
-1. **Monorepo**: All infrastructure in one repository
-   - Pros: Single source of truth, atomic changes, consistent tooling
-   - Cons: Large repo, requires strong access controls
-
-2. **Polyrepo**: Separate repository per team/project
-   - Pros: Clear ownership, independent releases, simpler permissions
-   - Cons: Module fragmentation, inconsistent practices
-
-3. **Hybrid**: Central modules + team-owned configurations
-   - Pros: Shared standards with team autonomy
-   - Cons: More complex to set up
+**Answer**: You should adopt a Hybrid repository strategy. In this scenario, a pure monorepo would cause friction due to the different release cadences and strict isolation requirements, while a pure polyrepo would fail to enforce the central platform team's hardened modules. By using a Hybrid approach, the central platform team maintains the hardened modules in a centralized repository (or private registry), while each independent engineering department maintains their own repositories for their specific environments. This allows the independent teams to iterate at their own pace and maintain isolation while still consuming the required organizational standards. The monorepo creates too much friction for newly acquired entities, and polyrepo offers no control, making hybrid the optimal path for scaling governance.
 </details>
 
 <details>
-<summary>2. Why should state files be split by component rather than having one large state file?</summary>
+<summary>2. A large e-commerce platform uses a single Terraform state file for their entire production environment. During Black Friday preparations, the networking team is updating VPC routing while the checkout team is trying to add more application replicas. The checkout team's CI/CD pipeline fails repeatedly with "state lock" errors, and when it finally runs, the plan step takes 14 minutes. What is the architectural root cause and how would you resolve it?</summary>
 
-**Answer**: Splitting state files:
-- **Faster operations**: Plan/apply only processes relevant resources
-- **Reduced blast radius**: Errors affect only one component
-- **Parallel changes**: Teams can work simultaneously
-- **Clearer ownership**: Each state file has defined owners
-- **Easier debugging**: Smaller state files are easier to inspect
-- **Less lock contention**: Different teams don't block each other
-
-A 50,000-resource state file might take 10+ minutes to plan; split into 50 files of 1,000 resources each, plans complete in seconds.
+**Answer**: The root cause is the use of a monolithic state file, which creates a massive concurrency bottleneck and bloated execution times. When multiple teams attempt to modify infrastructure simultaneously, the state lock prevents parallel changes, forcing teams to wait for each other. Furthermore, a single state file containing every resource in production means Terraform must refresh the status of thousands of irrelevant resources (like databases and VPCs) just to add application replicas. To resolve this, the organization must split the state file by component or team (e.g., separate states for networking, shared services, and individual application teams) so changes can be planned quickly and applied concurrently without stepping on each other's locks. Splitting the state also drastically reduces the blast radius if state corruption were to occur.
 </details>
 
 <details>
-<summary>3. What is the purpose of semantic versioning for Terraform modules?</summary>
+<summary>3. The platform team updates the shared RDS Terraform module to enforce storage encryption by default, but to do so, they had to change the `subnet_group_name` variable to `db_subnet_ids`. The next morning, 15 different application teams have broken CI/CD pipelines because their infrastructure code is still passing the old variable. What versioning practice failed here, and how should consumers reference the module to prevent this?</summary>
 
-**Answer**: Semantic versioning (MAJOR.MINOR.PATCH):
-- **MAJOR**: Breaking changes - consumers must update their code
-- **MINOR**: New features - backward compatible additions
-- **PATCH**: Bug fixes - backward compatible fixes
-
-This allows consumers to:
-- Pin exact versions for stability (`version = "2.1.0"`)
-- Accept patches automatically (`version = "~> 2.1.0"`)
-- Accept minor updates (`version = "~> 2.0"`)
-- Make informed decisions about upgrades
-- Avoid surprise breaking changes
+**Answer**: The platform team failed to properly use semantic versioning and module consumers were likely pointing to the `main` branch or a mutable tag rather than a pinned version constraint. Changing a variable name is a breaking interface change, meaning the module version should have been incremented by a MAJOR version (e.g., from v2.4.0 to v3.0.0) according to semantic versioning rules. Consumers should reference modules using pessimistic version constraints (e.g., `version = "~> 2.4.0"`) so they automatically receive backward-compatible patch and minor updates, but are protected from breaking major updates until they are ready to refactor their code. By relying on mutable tags or failing to pin versions, the application teams exposed themselves to immediate breakage from upstream changes without a review period.
 </details>
 
 <details>
-<summary>4. Calculate the time savings if 47 teams each spend 2 hours/week on infrastructure requests, and self-service reduces this to 15 minutes/week.</summary>
+<summary>4. A financial services company has 50 stream-aligned teams. Currently, when a team needs a new database, they file a Jira ticket to the Ops team, wait 3 days for approval, and the Ops engineer spends 2 hours manually writing and applying the Terraform. If the platform team implements a Backstage self-service portal that completely automates this process to 15 minutes of developer time (and 0 Ops time), and each team requests one database per week, what is the impact on organizational efficiency?</summary>
 
-**Answer**:
-- Before: 47 teams × 2 hours/week = **94 hours/week**
-- After: 47 teams × 0.25 hours/week = **11.75 hours/week**
-- Weekly savings: 94 - 11.75 = **82.25 hours/week**
-- Annual savings: 82.25 × 52 = **4,277 hours/year**
-- At $100/hour engineering cost: **$427,700/year saved**
-
-Plus qualitative benefits: faster time-to-market, reduced context switching, fewer errors.
+**Answer**: The impact is a massive reduction in toil and lead time, saving the organization 100 hours of Ops engineering time per week (50 teams × 2 hours). Additionally, it eliminates 150 days of aggregate wait time (50 teams × 3 days), allowing product teams to deliver value much faster. By shifting the interaction model from a manual ticket queue to automated self-service, the Ops team is freed to work on high-leverage platform capabilities rather than repetitive provisioning tasks. The Backstage template ensures that every provisioned database still adheres to organizational standards, meaning this efficiency is gained without sacrificing compliance or security. This cultural shift translates directly into faster time-to-market for the business.
 </details>
 
 <details>
-<summary>5. What is the role of a Platform Team in IaC at scale?</summary>
+<summary>5. A newly hired Director of Infrastructure notices that her 12 "platform engineers" spend their entire day fulfilling Jira requests to create S3 buckets, update IAM roles, and provision EKS clusters for the company's 50 product teams. Developer satisfaction is low due to slow turnaround times, and the platform engineers are burned out. According to Team Topologies, what team type are they accidentally functioning as, and what should their actual role be?</summary>
 
-**Answer**: Platform Team responsibilities:
-- **Build module library**: Create and maintain blessed modules
-- **Define policies**: Security, compliance, and architectural standards
-- **Manage shared infrastructure**: Networking, security, identity
-- **Enable self-service**: Build tooling for team autonomy
-- **Provide guardrails**: Policy as code enforcement
-- **Support teams**: Training, documentation, troubleshooting
-- **Reduce cognitive load**: Abstract complexity behind simple interfaces
-
-They operate as an "enabling team" that makes stream-aligned teams more effective.
+**Answer**: The team is accidentally functioning as a traditional IT Service Bureau or an overwhelmed Complicated Subsystem team, rather than a true Platform team. In an IaC-at-scale model, a true Platform team's role is to operate as an enabling force that builds self-service capabilities, defines golden paths, and curates a library of hardened modules. They should be building the tooling and abstractions (like a developer portal or secure Terraform modules) that allow the 50 product teams to provision their own S3 buckets and IAM roles safely and independently. By shifting from fulfilling tickets to building self-service products, the platform team reduces their own operational toil and dramatically decreases lead times for developers. This transition from a service bureau to an enabling team is critical for organizational scaling.
 </details>
 
 <details>
-<summary>6. What is Terragrunt and when should you use it?</summary>
+<summary>6. Your infrastructure repository contains 50 identical `backend.tf` and `provider.tf` files across different environment directories (dev, staging, prod) and components. When the company decides to migrate the Terraform state bucket to a new AWS account, your team has to manually update and test 50 separate files. What tool could have prevented this duplication, and how does it solve the problem?</summary>
 
-**Answer**: Terragrunt is a thin wrapper for Terraform that helps with:
-- **DRY configuration**: Generate backend, provider blocks automatically
-- **Dependencies**: Manage cross-module dependencies explicitly
-- **Multi-environment**: Apply same code across environments with different inputs
-- **Remote state**: Consistent state configuration across all modules
-
-Use it when:
-- You have many environments with similar configurations
-- You need to manage complex module dependencies
-- You want to reduce boilerplate in terraform configurations
-- You need run-all commands across multiple modules
+**Answer**: Terragrunt is the tool that could have prevented this massive duplication of configuration. It acts as a thin wrapper for Terraform that allows you to define your remote state, backend configurations, and provider setups once in a root configuration file. The child directories then simply `include` this root configuration, keeping your codebase DRY (Don't Repeat Yourself). When a centralized change is needed—like migrating the state bucket to a new account—you only need to update the root `terragrunt.hcl` file, and the change automatically cascades to all 50 environments. This dramatically reduces maintenance overhead, ensures consistency across environments, and eliminates the risk of human error when performing repetitive updates.
 </details>
 
 <details>
-<summary>7. How do CODEOWNERS files help with IaC governance at scale?</summary>
+<summary>7. In a monorepo containing all of the company's infrastructure, a junior developer on the frontend team accidentally submits a pull request that modifies the global `iam_admin_roles` Terraform module while trying to add permissions for their specific app. The PR is merged by another frontend developer who didn't understand the impact, inadvertently granting broad admin access to a third-party service. How could a `CODEOWNERS` file have prevented this security incident?</summary>
 
-**Answer**: CODEOWNERS:
-- **Automatic review assignment**: PRs automatically request review from owners
-- **Enforce approval requirements**: Changes require owner approval
-- **Clear responsibility**: Everyone knows who owns what
-- **Security boundaries**: Security team reviews sensitive changes
-- **Compliance**: Audit trail of who approved what
-
-Example governance:
-- Platform team must approve module changes
-- Security team must approve production changes
-- Teams can self-serve within their owned directories
+**Answer**: A `CODEOWNERS` file maps directory paths to responsible teams, enforcing automatic review assignments and approval requirements before a merge can occur. In this scenario, the `/modules/iam_admin_roles/` path should have been explicitly assigned to the `@security-team` or `@platform-team`. With this governance in place, the version control system would have automatically blocked the PR from being merged until a designated member of the security or platform team reviewed and approved the change. This allows organizations to safely use a monorepo by enforcing strict ownership boundaries and ensuring sensitive infrastructure modifications are vetted by the correct subject matter experts.
 </details>
 
 <details>
-<summary>8. A company has 180 Terraform repositories with 847 unique resource configurations. They want to consolidate to a module library. What would be a reasonable number of modules to target?</summary>
+<summary>8. A rapidly scaling healthcare startup performs an audit and discovers they have 200 distinct Terraform repositories across their organization, resulting in 50 different variations of a VPC configuration and 23 different ways to deploy an RDS database. They want to standardize, but the security team suggests creating a single, massive Terraform module that can deploy an entire application stack (VPC, EKS, RDS, S3, and IAM) at once to ensure everything is compliant. Why is this a bad approach, and what module strategy should they use instead?</summary>
 
-**Answer**: Target 15-25 modules covering:
-- Core networking (VPC, subnets, security groups)
-- Compute (EKS, ECS, Lambda, EC2)
-- Databases (RDS variants, DynamoDB, ElastiCache)
-- Storage (S3, EFS)
-- Messaging (SQS, SNS, EventBridge)
-- Security (IAM roles, KMS, ACM)
-- CDN/API (CloudFront, API Gateway)
-
-Reasoning:
-- 847 variants → 15-25 modules = ~95% reduction
-- Each module should be cohesive and reusable
-- Too few = modules too complex, too many = no standardization benefit
-- Pareto principle: 20% of resource types cover 80% of use cases
+**Answer**: Creating a single, massive "mega-module" is an anti-pattern because it becomes too rigid, overly complex, and impossible to maintain, forcing teams to adopt a one-size-fits-all architecture that stifles innovation. Every time a new parameter or slight variation is needed for one service, the mega-module must be updated, increasing the blast radius of changes and causing versioning bottlenecks. Instead, the startup should build a curated library of small, composable, and single-purpose "blessed modules" (e.g., one module for VPCs, one for RDS, one for EKS). This allows stream-aligned teams to mix and match compliant building blocks to suit their specific application needs while still ensuring that each individual component adheres to the organization's security baseline.
 </details>
 
 ---
@@ -1306,12 +1184,12 @@ done
 # Create CODEOWNERS
 cat > iac-at-scale/CODEOWNERS << 'EOF'
 # Platform team owns shared infrastructure
-/modules/                           @platform-team
-/environments/*/platform/           @platform-team
-/policies/                          @platform-team @security-team
+/modules/                           @src/content/docs/platform/disciplines/core-platform/leadership/module-1.1-platform-team-building.md
+/environments/*/platform/           @src/content/docs/platform/disciplines/core-platform/leadership/module-1.1-platform-team-building.md
+/policies/                          @src/content/docs/platform/disciplines/core-platform/leadership/module-1.1-platform-team-building.md @security-team
 
 # Production requires security review
-/environments/production/           @platform-team @security-team
+/environments/production/           @src/content/docs/platform/disciplines/core-platform/leadership/module-1.1-platform-team-building.md @security-team
 
 # Teams own their directories
 /environments/*/alpha/              @team-alpha
@@ -1440,7 +1318,7 @@ EOF
 
 ## Did You Know?
 
-> **Module Reuse Statistics**: Organizations with mature IaC practices reuse modules an average of 47 times each, compared to 3 times for organizations without a module strategy.
+> **Module Reuse Statistics**: Organizations with mature IaC practices reuse modules an average of 50 times each, compared to 3 times for organizations without a module strategy.
 
 > **State File Growth**: A typical enterprise Terraform state file grows by approximately 1,000 resources per year. Without splitting, plan times can exceed 30 minutes after 5 years.
 
