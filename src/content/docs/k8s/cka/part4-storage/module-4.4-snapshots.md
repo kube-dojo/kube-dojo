@@ -320,7 +320,7 @@ spec:
     namespace: production         # Source namespace
 ```
 
-**Note**: Cross-namespace restore requires Kubernetes 1.26+ and proper RBAC.
+**Note**: Cross-namespace restore requires Kubernetes 1.26+ with the `CrossNamespaceVolumeDataSource` feature gate enabled, and a `ReferenceGrant` resource in the source namespace.
 
 ---
 
@@ -433,6 +433,20 @@ k exec mysql-pod -- mysql -e "UNLOCK TABLES;"
 
 ---
 
+## Debugging Snapshot Failures
+
+When snapshots fail, check these two areas:
+1. **CSI Driver Capabilities**: Not all drivers support snapshots. Verify by checking the `CSIDriver` object:
+```bash
+kubectl get csidriver
+kubectl describe csidriver <driver-name>
+```
+2. **Snapshot Controller Logs**: The snapshot controller orchestrates the process. Check its logs for validation errors:
+```bash
+kubectl get pods -n kube-system | grep snapshot
+kubectl logs -n kube-system deploy/snapshot-controller
+```
+
 ## Common Mistakes
 
 | Mistake | Problem | Solution |
@@ -474,7 +488,7 @@ You need to create a test environment in the `staging` namespace using productio
 <details>
 <summary>Answer</summary>
 
-The clone failed because PVC cloning requires the **source and destination to be in the same namespace** -- this is a hard limitation. The snapshot approach **does work** because VolumeSnapshotContent (the actual snapshot reference) is **cluster-scoped**, not namespaced. The workflow is: (1) Create a VolumeSnapshot in the `production` namespace pointing at the production PVC. (2) In the `staging` namespace, create a new PVC with `dataSourceRef` referencing the snapshot (using the `namespace: production` field, available in Kubernetes 1.26+). The new PVC gets a fresh PV provisioned from the snapshot data. This is the standard pattern for cross-namespace data copies and disaster recovery testing.
+The clone failed because PVC cloning requires the **source and destination to be in the same namespace** -- this is a hard limitation. The snapshot approach **does work** because VolumeSnapshotContent (the actual snapshot reference) is **cluster-scoped**, not namespaced. The workflow is: (1) Create a VolumeSnapshot in the `production` namespace pointing at the production PVC. (2) In the `staging` namespace, create a new PVC with `dataSourceRef` referencing the snapshot (using the `namespace: production` field, available in Kubernetes 1.26+). The new PVC gets a fresh PV provisioned from the snapshot data. This is the pattern for cross-namespace copies, though it requires the `CrossNamespaceVolumeDataSource` alpha feature gate and a `ReferenceGrant` in the source namespace.
 
 </details>
 
@@ -537,6 +551,9 @@ k get volumesnapshotclass
 # Create namespace
 k create ns snapshot-lab
 
+# Get default StorageClass
+DEFAULT_SC=$(kubectl get sc | awk '/\(default\)/ {print $1}')
+
 # Create a PVC
 cat <<EOF | k apply -f -
 apiVersion: v1
@@ -550,7 +567,7 @@ spec:
   resources:
     requests:
       storage: 1Gi
-  storageClassName: standard    # Use your cluster's StorageClass
+  storageClassName: ${DEFAULT_SC}
 EOF
 
 # Create pod to write data
@@ -574,21 +591,23 @@ spec:
       claimName: source-data
 EOF
 
-# Wait for data to be written
-sleep 10
+# Wait for pod to be ready and data to be written
+kubectl wait --for=condition=Ready pod/data-writer -n snapshot-lab --timeout=60s
 k exec -n snapshot-lab data-writer -- cat /data/important.txt
 ```
 
 ### Task 3: Create VolumeSnapshotClass (if needed)
 
 ```bash
-# Example for AWS EBS CSI (modify for your driver)
+# Get the CSI driver of the default StorageClass
+CSI_DRIVER=$(kubectl get sc ${DEFAULT_SC} -o jsonpath='{.provisioner}')
+
 cat <<EOF | k apply -f -
 apiVersion: snapshot.storage.k8s.io/v1
 kind: VolumeSnapshotClass
 metadata:
   name: csi-snapclass
-driver: ebs.csi.aws.com    # Change to your CSI driver
+driver: ${CSI_DRIVER}
 deletionPolicy: Delete
 EOF
 ```
@@ -609,8 +628,9 @@ spec:
 EOF
 
 # Wait for snapshot to be ready
-k get volumesnapshot -n snapshot-lab -w
-# Wait until READYTOUSE shows "true"
+kubectl wait --for=jsonpath='{.status.readyToUse}'=true volumesnapshot/source-snapshot -n snapshot-lab --timeout=120s
+# Verify snapshot status
+k get volumesnapshot source-snapshot -n snapshot-lab
 ```
 
 ### Task 5: "Corrupt" the Original Data
@@ -638,7 +658,7 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: standard
+  storageClassName: ${DEFAULT_SC}
   resources:
     requests:
       storage: 1Gi
@@ -668,6 +688,9 @@ spec:
     persistentVolumeClaim:
       claimName: restored-data
 EOF
+
+# Wait for reader pod to be ready
+kubectl wait --for=condition=Ready pod/data-reader -n snapshot-lab --timeout=60s
 
 # Verify original data is restored
 k logs -n snapshot-lab data-reader
@@ -705,7 +728,7 @@ apiVersion: snapshot.storage.k8s.io/v1
 kind: VolumeSnapshotClass
 metadata:
   name: practice-snapclass
-driver: ebs.csi.aws.com
+driver: ${CSI_DRIVER} # Use driver found in lab
 deletionPolicy: Delete
 EOF
 ```
