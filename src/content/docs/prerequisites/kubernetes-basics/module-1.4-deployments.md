@@ -98,7 +98,7 @@ spec:
     spec:
       containers:
       - name: nginx
-        image: nginx:1.25
+        image: nginx:1.28
         ports:
         - containerPort: 80
 ```
@@ -161,7 +161,7 @@ kubectl get pods -w
 
 ```bash
 # Update image
-kubectl set image deployment/nginx nginx=nginx:1.26
+kubectl set image deployment/nginx nginx=nginx:1.29
 
 # Or edit deployment
 kubectl edit deployment nginx
@@ -174,7 +174,7 @@ kubectl rollout history deployment nginx
 ```
 
 > **Stop and think**: Try running `kubectl set image deployment/nginx nginx=nginx:broken` on a running deployment. Use `kubectl get pods` and `kubectl rollout status deployment nginx`. What do you see?
-> *Hint*: Kubernetes pauses the rollout because the new Pods never become ready, protecting your existing running Pods from being terminated. You'll see `ImagePullBackOff` for the new pods while old ones remain `Running`.
+> *Explanation*: Kubernetes pauses the rollout because the new Pods never become ready, protecting your existing running Pods from being terminated. You'll see `ImagePullBackOff` for the new pods while old ones remain `Running`.
 
 ### Rollback
 
@@ -244,7 +244,7 @@ spec:
     spec:
       containers:
       - name: nginx
-        image: nginx:1.25
+        image: nginx:1.28
         ports:
         - containerPort: 80
         resources:
@@ -331,7 +331,7 @@ kubectl get deployment nginx
 4. **Scenario**: During a major traffic spike, your team triggers a rolling update to fix a critical bug. Midway through the rollout, traffic doubles again and you run `kubectl scale deployment web --replicas=10`. How does the Deployment handle this scaling event during an active rollout?
    <details>
    <summary>Answer</summary>
-   The Deployment is smart enough to handle simultaneous scaling and updating without dropping traffic, using a mechanism called proportional scaling. It temporarily pauses the rolling update and distributes the new replica count across both the old and new ReplicaSets based on their current sizes. Once the scaling is achieved, it resumes the rolling update, gradually shifting the newly scaled pods from the old version to the new version. This ensures you immediately get the capacity you need to handle the traffic spike while still progressing toward the bug fix. Note that scaling operations do not trigger a new rollout, they merely adjust the replica counts of the existing active ReplicaSets.
+   The Deployment is smart enough to handle simultaneous scaling and updating without dropping traffic, using a mechanism called proportional scaling. It temporarily pauses the rolling update and distributes the new replica count across both the old and new ReplicaSets based on their current sizes. Once the scaling is achieved, it resumes the rolling update, gradually shifting the newly scaled pods from the old version to the new version. This ensures you immediately get the capacity you need to handle the traffic spike while still progressing toward the bug fix. Note that scaling operations do not trigger a new rollout; they merely adjust the replica counts of the existing active ReplicaSets.
    </details>
 
 5. **Scenario**: Your team uses `maxSurge: 100%` and `maxUnavailable: 0%` for a 10-replica Deployment to ensure ultra-fast rollouts. What are the cluster capacity implications of this configuration during an update?
@@ -354,7 +354,7 @@ kubectl get deployment nginx
 
 ```bash
 # 1. Create deployment
-kubectl create deployment web --image=nginx:1.24
+kubectl create deployment web --image=nginx:1.28
 
 # 2. Scale to 3 replicas
 kubectl scale deployment web --replicas=3
@@ -363,7 +363,7 @@ kubectl scale deployment web --replicas=3
 kubectl get deploy,rs,pods
 
 # 4. Update image
-kubectl set image deployment/web nginx=nginx:1.25
+kubectl set image deployment/web nginx=nginx:1.29
 
 # 5. Watch rollout
 kubectl rollout status deployment web
@@ -376,20 +376,20 @@ kubectl rollout undo deployment web
 
 # 8. Verify rollback
 kubectl get deployment web -o jsonpath='{.spec.template.spec.containers[0].image}'
-# Should show nginx:1.24
+# Should show nginx:1.28
 
 # 9. Cleanup
 kubectl delete deployment web
 ```
 
 **Success Criteria**:
-- [ ] Create a deployment named `web` with image `nginx:1.24`
+- [ ] Create a deployment named `web` with image `nginx:1.28`
 - [ ] Scale the deployment to 3 replicas
 - [ ] Verify 3 pods are running using `kubectl get pods`
-- [ ] Update the image to `nginx:1.25`
+- [ ] Update the image to `nginx:1.29`
 - [ ] Watch the rollout complete using `kubectl rollout status`
 - [ ] Roll back the deployment to the previous version
-- [ ] Verify the active pods are running `nginx:1.24`
+- [ ] Verify the active pods are running `nginx:1.28`
 - [ ] Clean up by deleting the deployment
 
 ---
