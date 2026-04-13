@@ -455,7 +455,11 @@ grep -E "COPY.*\.env|COPY.*secret" Dockerfile
 # 4. Unnecessary tools installed?
 grep -E "curl|wget|vim|nano|ssh|git" Dockerfile
 
-# 5. Using exec form?
+# 5. Setuid/setgid binaries?
+# Are there commands to remove setuid bits if not needed?
+# e.g., RUN find / -xdev -perm /6000 -exec chmod a-s {} \; || true
+
+# 6. Using exec form?
 grep "^ENTRYPOINT\|^CMD" Dockerfile
 # Shell form: ENTRYPOINT /bin/sh -c "..."
 # Exec form: ENTRYPOINT ["...", "..."]
@@ -542,6 +546,9 @@ spec:
     image: nginx:latest
     imagePullPolicy: Always
 EOF
+
+# Wait for pod to be ready so the image is pulled and imageID is populated
+kubectl wait --for=condition=Ready pod/insecure-pod --timeout=60s
 
 # Step 3: Get the actual digest of the image
 kubectl get pod insecure-pod -o jsonpath='{.status.containerStatuses[0].imageID}'
