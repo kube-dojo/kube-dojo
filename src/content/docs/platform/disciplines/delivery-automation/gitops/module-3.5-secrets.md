@@ -14,6 +14,8 @@ Before starting this module:
 - **Recommended**: Understanding of Kubernetes Secrets
 - **Helpful**: Basic cryptography concepts (encryption, keys)
 
+> **Stop and think**: How are you currently managing secrets in your non-GitOps deployments? Do developers have direct access to production credentials?
+
 ---
 
 ## What You'll Be Able to Do
@@ -77,20 +79,15 @@ data:
 
 ### The GitOps Secret Dilemma
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    GitOps Promise                            │
-│                                                              │
-│   "Git is the source of truth for all resources"            │
-└─────────────────────────────────────────────────────────────┘
-                              vs
-┌─────────────────────────────────────────────────────────────┐
-│                   Security Requirement                       │
-│                                                              │
-│   "Never store plaintext secrets in version control"        │
-└─────────────────────────────────────────────────────────────┘
-
-How do we reconcile these?
+```mermaid
+graph TD
+    subgraph GitOps Promise
+    A["Git is the source of truth for all resources"]
+    end
+    subgraph Security Requirement
+    B["Never store plaintext secrets in version control"]
+    end
+    A <-->|How do we reconcile these?| B
 ```
 
 ---
@@ -105,21 +102,10 @@ Store encrypted secrets in Git. Decrypt at deploy time.
 
 **Tools**: Sealed Secrets, SOPS, git-crypt
 
-```
-Git Repo                    Cluster
-   │                           │
-   │  Encrypted Secret         │
-   │  (safe to commit)         │
-   │           │               │
-   │           ▼               │
-   │      GitOps Agent         │
-   │           │               │
-   │           ▼               │
-   │      Decrypt              │
-   │           │               │
-   │           ▼               │
-   │      Kubernetes Secret    │
-   │      (plaintext)          │
+```mermaid
+flowchart TD
+    A[Git Repo: Encrypted Secret] -->|Safe to commit| B[GitOps Agent]
+    B -->|Decrypt| C[Kubernetes Secret: Plaintext]
 ```
 
 ### 2. Reference External Secrets
@@ -128,20 +114,11 @@ Store secrets in external manager. Reference them in Git.
 
 **Tools**: External Secrets Operator, Secrets Store CSI Driver
 
-```
-Git Repo                    External Store         Cluster
-   │                            │                     │
-   │  Secret Reference          │                     │
-   │  (not actual secret)       │                     │
-   │           │                │                     │
-   │           ▼                │                     │
-   │      GitOps Agent ─────────┼──── Fetch ──────────▶
-   │                            │                     │
-   │                            ▼                     │
-   │                       Actual Secret              │
-   │                            │                     │
-   │                            ▼                     │
-   │                    Kubernetes Secret             │
+```mermaid
+flowchart TD
+    A[Git Repo: Secret Reference] --> B[GitOps Agent]
+    C[(External Store)] -->|Fetch| B
+    B --> D[Kubernetes Secret]
 ```
 
 ### 3. Inject at Runtime
@@ -150,19 +127,14 @@ Don't put secrets in Kubernetes at all. Inject directly to pods.
 
 **Tools**: Vault Agent, Secrets Store CSI Driver (mounted)
 
+```mermaid
+flowchart TD
+    A[Git Repo: Pod spec with Vault annotations] --> B[Pod created]
+    B -->|Auth| C[(Vault)]
+    C -->|Secret injected into pod filesystem| D[Pod]
 ```
-Git Repo                    Vault                  Pod
-   │                          │                     │
-   │  Pod spec with           │                     │
-   │  Vault annotations       │                     │
-   │           │              │                     │
-   │           ▼              │                     │
-   │      Pod created ────────┼───── Auth ─────────▶
-   │                          │                     │
-   │                          ▼                     │
-   │                    Secret injected             │
-   │                    into pod filesystem         │
-```
+
+> **Pause and predict**: Based on these three approaches, which one introduces the tightest coupling between your Kubernetes cluster and your cloud provider's IAM?
 
 ---
 
@@ -172,40 +144,26 @@ The most GitOps-native solution. Secrets encrypted before Git, decrypted in clus
 
 ### How It Works
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      Encryption Flow                         │
-│                                                              │
-│   1. Create regular Kubernetes Secret                        │
-│   2. Use kubeseal CLI to encrypt with cluster's public key  │
-│   3. Commit SealedSecret to Git                              │
-│   4. Sealed Secrets controller decrypts in cluster          │
-│   5. Regular Secret created for pods to use                 │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Encryption Flow
+    step1[1. Create regular Kubernetes Secret] --> step2[2. Use kubeseal CLI to encrypt with cluster's public key]
+    step2 --> step3[3. Commit SealedSecret to Git]
+    step3 --> step4[4. Sealed Secrets controller decrypts in cluster]
+    step4 --> step5[5. Regular Secret created for pods to use]
+    end
 
-Developer                Git                   Cluster
-    │                     │                       │
-    │ kubeseal           │                       │
-    │─────────▶          │                       │
-    │                     │                       │
-    │ SealedSecret       │                       │
-    │──────────────────▶ │                       │
-    │                     │                       │
-    │                     │  GitOps sync         │
-    │                     │──────────────────────▶│
-    │                     │                       │
-    │                     │     Controller        │
-    │                     │     decrypts          │
-    │                     │         │             │
-    │                     │         ▼             │
-    │                     │     K8s Secret        │
+    A[Developer] -->|kubeseal| B[SealedSecret]
+    B -->|Commit| C[(Git)]
+    C -->|GitOps sync| D[Controller]
+    D -->|Decrypts| E[K8s Secret]
 ```
 
 ### Installing Sealed Secrets
 
 ```bash
-# Add controller to cluster
-kubectl apply -f https://github.com/bitnami-labs/sealed-secrets/releases/download/v0.24.0/controller.yaml
+# Add controller to cluster (Ensure compatibility with Kubernetes v1.35+)
+kubectl apply -f https://github.com/bitnami-labs/sealed-secrets/releases/download/v0.27.3/controller.yaml
 
 # Install kubeseal CLI
 brew install kubeseal  # macOS
@@ -382,21 +340,12 @@ spec:
         property: password
 ```
 
-```
-Git                     Operator            Vault           Cluster
- │                          │                 │                │
- │  ExternalSecret          │                 │                │
- │  (reference)             │                 │                │
- │───────────────────────▶ GitOps syncs       │                │
- │                          │                 │                │
- │                          │  Fetch secret   │                │
- │                          │────────────────▶│                │
- │                          │                 │                │
- │                          │◀────────────────│                │
- │                          │  Secret data    │                │
- │                          │                 │                │
- │                          │  Create K8s Secret               │
- │                          │────────────────────────────────▶│
+```mermaid
+flowchart LR
+    A[Git: ExternalSecret reference] -->|GitOps syncs| B[Operator]
+    B -->|Fetch secret| C[(Vault / Secret Store)]
+    C -->|Secret data| B
+    B -->|Create K8s Secret| D[Cluster]
 ```
 
 ### Supported Backends
@@ -456,25 +405,25 @@ Answer these questions to help choose:
 
 ```
 1. Do you already have a secrets manager (Vault, AWS SM, etc.)?
-   [ ] Yes → Consider External Secrets Operator
-   [ ] No → Sealed Secrets or SOPS
+   [ ] Yes -> Consider External Secrets Operator
+   [ ] No -> Sealed Secrets or SOPS
 
 2. How many clusters do you have?
-   [ ] One → Sealed Secrets is simple
-   [ ] Many → SOPS or External Secrets (shareable)
+   [ ] One -> Sealed Secrets is simple
+   [ ] Many -> SOPS or External Secrets (shareable)
 
 3. Who manages secrets?
-   [ ] Same team as infrastructure → Any approach
-   [ ] Security team separately → External Secrets (separation)
+   [ ] Same team as infrastructure -> Any approach
+   [ ] Security team separately -> External Secrets (separation)
 
 4. Do you need secrets in Git history for audit?
-   [ ] Yes → Sealed Secrets or SOPS
-   [ ] No → External Secrets
+   [ ] Yes -> Sealed Secrets or SOPS
+   [ ] No -> External Secrets
 
 5. Cloud provider preference?
-   [ ] AWS/GCP/Azure → Use their KMS with SOPS
-   [ ] Multi-cloud → Vault + External Secrets
-   [ ] On-prem → Sealed Secrets or Vault
+   [ ] AWS/GCP/Azure -> Use their KMS with SOPS
+   [ ] Multi-cloud -> Vault + External Secrets
+   [ ] On-prem -> Sealed Secrets or Vault
 ```
 
 ---
@@ -618,142 +567,42 @@ Rotation happens in the external store. ESO picks up changes automatically.
 ## Quiz: Check Your Understanding
 
 ### Question 1
-Why is base64 encoding insufficient for storing secrets in Git?
+Your junior developer just committed a Kubernetes Secret to the repository. They assure you it is secure because the database password is "encrypted" using base64. How do you explain to them that this represents a critical security vulnerability?
 
 <details>
 <summary>Show Answer</summary>
 
-Base64 is **encoding, not encryption**.
-
-```bash
-# Anyone can decode it instantly
-echo "c3VwZXJzZWNyZXQ=" | base64 -d
-# Output: supersecret
-```
-
-**Base64:**
-- Transforms data to printable characters
-- No key required to reverse
-- Provides zero security
-- Required by Kubernetes for Secret data field
-
-**Encryption:**
-- Requires a key to decrypt
-- Computationally hard to reverse without key
-- Provides actual security
-
-Kubernetes uses base64 because Secret data might be binary. It's not trying to hide the value.
+Base64 is a data encoding scheme, not an encryption algorithm. Its purpose is to safely transport binary data across text-based protocols, meaning anyone with access to the repository can instantly decode the string using standard command-line tools without needing a decryption key. True encryption requires a cryptographic key to both scramble and unscramble the data, making it computationally infeasible to read without authorization. Because Git history is permanent, that base64-encoded secret is now compromised forever, even if you delete the file in a subsequent commit. You must immediately rotate the database password and implement a proper secrets management solution.
 
 </details>
 
 ### Question 2
-You have 5 clusters and want to share the same encrypted secrets across all of them. Which approach works best?
+You are architecting a multi-region deployment across 5 Kubernetes v1.35 clusters. You have a single configuration repository and want to reuse the exact same encrypted database credentials across all environments without having to encrypt the file 5 separate times. Which secrets management strategy should you implement, and why?
 
 <details>
 <summary>Show Answer</summary>
 
-**SOPS or External Secrets Operator** — not Sealed Secrets.
-
-**Why not Sealed Secrets?**
-- Sealed Secrets encrypts with a cluster-specific public key
-- Each cluster has its own key pair
-- A secret sealed for Cluster A can't be unsealed in Cluster B
-- You'd have to seal 5 times for 5 clusters
-
-**SOPS works because:**
-- Encrypts with a shared key (KMS, PGP)
-- Any cluster with KMS access can decrypt
-- Same encrypted file works everywhere
-
-**External Secrets works because:**
-- Secret stored once in central manager (Vault, AWS SM)
-- Each cluster fetches from same source
-- Change once, propagates everywhere
-
-**Sealed Secrets is great for:**
-- Single cluster
-- When you want cluster-specific secrets
-- Simplicity over sharing
+For a multi-cluster setup sharing the exact same secret, SOPS or the External Secrets Operator are the optimal choices. Sealed Secrets uses a unique asymmetric key pair generated per cluster, meaning a secret sealed for the US-East cluster cannot be decrypted by the EU-West cluster unless you manually synchronize their sealing keys (which is a security risk). SOPS solves this by encrypting the secret against a centralized Key Management Service (KMS), allowing any cluster with the correct IAM role to decrypt the single file. Alternatively, the External Secrets Operator allows you to store the secret once in a central vault and simply commit references to it, enabling all 5 clusters to fetch the credential dynamically.
 
 </details>
 
 ### Question 3
-Your application loads secrets at startup and caches them. You rotate a secret using External Secrets. What happens?
+A database administrator rotates a compromised password in AWS Secrets Manager. The External Secrets Operator in your cluster successfully detects this change and updates the underlying Kubernetes Secret. However, five minutes later, your application begins throwing authentication errors. What is causing this failure, and how can you fix it?
 
 <details>
 <summary>Show Answer</summary>
 
-**The application still has the old secret.**
-
-External Secrets Operator:
-1. Fetches new secret from backend ✓
-2. Updates Kubernetes Secret ✓
-3. Application doesn't know about update ✗
-
-**Solutions:**
-
-1. **Restart pods** (simple but disruptive)
-   ```bash
-   kubectl rollout restart deployment my-app
-   ```
-
-2. **Stakater Reloader** (automatic pod restart on Secret change)
-   ```yaml
-   metadata:
-     annotations:
-       reloader.stakater.com/auto: "true"
-   ```
-
-3. **Watch for Secret changes** (app-level)
-   ```go
-   // Application watches Secret file for changes
-   ```
-
-4. **Use Vault Agent** (sidecar handles rotation)
-   - Vault Agent renews secrets
-   - Writes to shared volume
-   - App reads from file (can watch for changes)
-
-**Best practice:** Design applications to handle secret rotation. Don't assume secrets are static.
+The failure occurs because standard Kubernetes Pods do not automatically reload environment variables or files when the underlying Secret resource changes. The External Secrets Operator did its job by updating the Kubernetes Secret, but the application is still holding the old password in memory from when it first started. To resolve this without manual intervention, you must implement a mechanism to restart the pods or notify the application of the change. Common solutions include using a tool like Reloader to automatically restart deployments when their Secrets change, or refactoring the application to dynamically watch its mounted secret files for modifications.
 
 </details>
 
 ### Question 4
-How do you recover if you lose the Sealed Secrets controller key?
+A cluster node failure leads to the loss of your Sealed Secrets controller's private key. You have 50 SealedSecrets committed to your Git repository, but you did not configure a backup for the controller's key. The infrastructure team asks how long it will take to recover the secrets. What must you tell them, and what steps are required to restore service?
 
 <details>
 <summary>Show Answer</summary>
 
-**Short answer: You can't decrypt existing SealedSecrets.**
-
-**Recovery options:**
-
-1. **Restore from backup** (if you have one)
-   ```bash
-   kubectl apply -f sealed-secrets-key-backup.yaml
-   kubectl rollout restart deployment sealed-secrets-controller -n kube-system
-   ```
-
-2. **Re-create all secrets** (if you have original values)
-   - Get plaintext values from application configs, password managers, etc.
-   - Create new SealedSecrets with new controller key
-   - Commit and deploy
-
-3. **You're stuck** (if no backup, no original values)
-   - Rotate everything
-   - This is a disaster scenario
-
-**Prevention:**
-
-```bash
-# Backup the key
-kubectl get secret -n kube-system -l sealedsecrets.bitnami.com/sealed-secrets-key -o yaml > sealed-secrets-key-backup.yaml
-
-# Store securely (Vault, encrypted S3, HSM)
-# Not in the same Git repo!
-```
-
-**Lesson:** Back up the sealing key immediately after installing Sealed Secrets.
+You must tell the infrastructure team that the existing encrypted secrets are permanently lost and cannot be recovered under any circumstances. Sealed Secrets relies on standard asymmetric cryptography; without the private key, the ciphertexts in your Git repository are mathematically impossible to decrypt. To restore service, you will need to manually regenerate or retrieve every single plaintext password, API key, and certificate from their original sources (like password managers or database consoles). Once gathered, you must seal them again using the new controller's public key, commit the new SealedSecrets to Git, and implement a secure backup process for the new controller key to prevent this from happening again.
 
 </details>
 
@@ -914,7 +763,7 @@ kubectl exec -it deploy/my-app -- env | grep DB_
 
 **Documentation**:
 - **Sealed Secrets** — github.com/bitnami-labs/sealed-secrets
-- **SOPS** — github.com/mozilla/sops
+- **SOPS** — github.com/getsops/sops
 - **External Secrets Operator** — external-secrets.io
 
 **Articles**:
