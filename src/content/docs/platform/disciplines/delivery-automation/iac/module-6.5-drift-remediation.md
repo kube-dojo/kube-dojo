@@ -45,45 +45,42 @@ This module teaches you how to detect and remediate infrastructure drift—becau
 
 Infrastructure drift occurs when the actual state of resources diverges from the desired state defined in code.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    INFRASTRUCTURE DRIFT                         │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│   DESIRED STATE              ACTUAL STATE                       │
-│   (Terraform)                (Cloud)                            │
-│   ┌──────────────┐           ┌──────────────┐                  │
-│   │ instance_type│           │ instance_type│                  │
-│   │ = "t3.medium"│           │ = "t3.large" │ ◄── DRIFT!       │
-│   ├──────────────┤           ├──────────────┤                  │
-│   │ tags = {     │           │ tags = {     │                  │
-│   │   env: prod  │           │   env: prod  │                  │
-│   │ }            │           │   temp: true │ ◄── DRIFT!       │
-│   ├──────────────┤           │ }            │                  │
-│   │ sg_rules:    │           ├──────────────┤                  │
-│   │ - port: 443  │           │ sg_rules:    │                  │
-│   │   cidr: vpc  │           │ - port: 443  │                  │
-│   │              │           │   cidr: vpc  │                  │
-│   └──────────────┘           │ - port: 22   │ ◄── DRIFT!       │
-│                              │   cidr: any  │                  │
-│                              └──────────────┘                  │
-│                                                                 │
-│   DRIFT SOURCES:                                                │
-│   ┌────────────────────────────────────────────────────────┐   │
-│   │ • Manual console changes (most common)                  │   │
-│   │ • Emergency fixes not back-ported to code               │   │
-│   │ • Auto-scaling / self-healing systems                   │   │
-│   │ • Other automation tools (scripts, Lambda)              │   │
-│   │ • Cloud provider auto-updates                           │   │
-│   │ • Malicious actors                                      │   │
-│   └────────────────────────────────────────────────────────┘   │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+graph LR
+    subgraph Desired State [Desired State - Terraform]
+        direction TB
+        DS_Inst["instance_type = t3.medium"]
+        DS_Tags["tags = { env: prod }"]
+        DS_SG["sg_rules: port: 443"]
+    end
+
+    subgraph Actual State [Actual State - Cloud]
+        direction TB
+        AS_Inst["instance_type = t3.large"]
+        AS_Tags["tags = { env: prod, temp: true }"]
+        AS_SG["sg_rules: port: 443, port: 22"]
+    end
+
+    DS_Inst -.->|"DRIFT!"| AS_Inst
+    DS_Tags -.->|"DRIFT!"| AS_Tags
+    DS_SG -.->|"DRIFT!"| AS_SG
+
+    subgraph Sources [Common Drift Sources]
+        direction TB
+        C1["Manual console changes"]
+        C2["Emergency fixes not back-ported to code"]
+        C3["Auto-scaling / self-healing systems"]
+        C4["Other automation tools (scripts, Lambda)"]
+        C5["Cloud provider auto-updates"]
+        C6["Malicious actors"]
+    end
 ```
 
 ---
 
 ## Types of Drift
+
+> **Stop and think**: If an automated incident response tool correctly modifies an auto-scaling group's size to mitigate an attack, but Terraform runs its next plan, will Terraform see this as drift? How should your configuration handle this?
 
 ### 1. Configuration Drift
 
@@ -129,6 +126,8 @@ instance_type = "t3.large"
 ---
 
 ## Detecting Drift
+
+> **Pause and predict**: If you rely solely on `terraform plan` to detect drift, what blind spots remain in your infrastructure visibility? What types of shadow IT might slip past this check?
 
 ### Method 1: Terraform Plan
 
@@ -351,6 +350,8 @@ aws_iam_service_linked_role.*
 
 ## Remediation Strategies
 
+> **Stop and think**: If we block all manual console changes using SCPs, how will an on-call engineer address an emergency outage at 3 AM if the CI/CD pipeline is also down? What kind of "break-glass" mechanism is needed?
+
 ### Strategy 1: Auto-Remediate with Apply
 
 For non-critical drift, automatically apply to restore desired state:
@@ -562,46 +563,23 @@ resource "aws_iam_policy" "read_only_managed" {
 
 ### Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│               DRIFT MONITORING ARCHITECTURE                     │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌──────────────┐                                               │
-│  │  Scheduled   │                                               │
-│  │    Job       │──────┐                                        │
-│  │  (6 hours)   │      │                                        │
-│  └──────────────┘      │                                        │
-│                        ▼                                        │
-│  ┌──────────────┐  ┌───────────────┐  ┌──────────────┐         │
-│  │  CloudTrail  │  │    Drift      │  │   AWS        │         │
-│  │   Events     │─▶│   Detection   │◀─│   Config     │         │
-│  │              │  │   Service     │  │   Rules      │         │
-│  └──────────────┘  └───────────────┘  └──────────────┘         │
-│                           │                                     │
-│          ┌────────────────┼────────────────┐                   │
-│          ▼                ▼                ▼                   │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐            │
-│  │   Metrics    │ │   Alerts     │ │   Reports    │            │
-│  │  Dashboard   │ │  (Slack/PD)  │ │  (Weekly)    │            │
-│  └──────────────┘ └──────────────┘ └──────────────┘            │
-│          │                │                │                    │
-│          └────────────────┼────────────────┘                   │
-│                           ▼                                     │
-│                  ┌──────────────┐                               │
-│                  │ Remediation  │                               │
-│                  │  Runbook     │                               │
-│                  └──────────────┘                               │
-│                           │                                     │
-│          ┌────────────────┼────────────────┐                   │
-│          ▼                ▼                ▼                   │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐            │
-│  │    Auto      │ │   Manual     │ │   Accept &   │            │
-│  │  Remediate   │ │   Review     │ │   Document   │            │
-│  │   (Dev)      │ │   (Prod)     │ │   (Known)    │            │
-│  └──────────────┘ └──────────────┘ └──────────────┘            │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Sched["Scheduled Job<br>(6 hours)"] --> Detect["Drift Detection Service"]
+    CT["CloudTrail Events"] --> Detect
+    Config["AWS Config Rules"] --> Detect
+
+    Detect --> Metrics["Metrics Dashboard"]
+    Detect --> Alerts["Alerts (Slack/PD)"]
+    Detect --> Reports["Weekly Reports"]
+
+    Metrics --> Runbook["Remediation Runbook"]
+    Alerts --> Runbook
+    Reports --> Runbook
+
+    Runbook --> Auto["Auto-Remediate (Dev)"]
+    Runbook --> Manual["Manual Review (Prod)"]
+    Runbook --> Accept["Accept & Document (Known)"]
 ```
 
 ### CloudWatch Dashboard
@@ -883,110 +861,59 @@ resource "aws_cloudwatch_event_rule" "sg_changes" {
 ## Quiz
 
 <details>
-<summary>1. What are the three main types of infrastructure drift?</summary>
+<summary>1. A junior engineer manually resizes a database instance from the AWS console during a load spike, while another engineer updates the Terraform code to change a security group rule, but hasn't applied it yet. What types of drift are occurring in this scenario?</summary>
 
 **Answer**:
-1. **Configuration Drift**: Resource attributes in cloud differ from Terraform code
-2. **State Drift**: Resources exist in cloud but not in Terraform state (unmanaged)
-3. **Code Drift**: Terraform code and state don't match (uncommitted local changes)
+In this scenario, two distinct types of drift are occurring simultaneously. First, there is configuration drift because the database instance size in the cloud now differs from the desired state defined in the Terraform configuration. Second, there is code drift because the unapplied security group changes mean the local Terraform codebase and state diverge from the actual active state. Understanding the difference is crucial because running a standard plan will detect both, but only one represents a shadow IT change that circumvented the deployment process.
 </details>
 
 <details>
-<summary>2. What exit code does `terraform plan -detailed-exitcode` return when drift is detected?</summary>
-
-**Answer**: Exit code **2** indicates changes are needed (drift detected).
-- 0 = No changes, infrastructure matches configuration
-- 1 = Error during planning
-- 2 = Succeeded with non-empty diff (drift or planned changes)
-</details>
-
-<details>
-<summary>3. When should you use `lifecycle { ignore_changes = [...] }` versus fixing the drift?</summary>
-
-**Answer**: Use `ignore_changes` when:
-- Resource is managed by another system (auto-scaling, cluster autoscaler)
-- Attribute is intentionally dynamic (secret rotation, tags added by AWS)
-- You're migrating and need temporary flexibility
-
-Fix the drift when:
-- Change was unintentional (manual console change)
-- Change violates security/compliance requirements
-- Change could affect system behavior
-- Source of change is unknown
-</details>
-
-<details>
-<summary>4. Calculate the cost impact if drift detection runs every 6 hours versus no detection, assuming drift causes one 8-hour outage per quarter at $50K/hour.</summary>
+<summary>2. You are configuring a CI/CD pipeline to automatically check for drift every night. You write a bash script that runs `terraform plan -detailed-exitcode`. The pipeline fails and reports an exit code of 2. What exactly does this indicate, and how should your pipeline handle it?</summary>
 
 **Answer**:
-- **Without detection**: 1 outage × 8 hours × $50K/hour = **$400K/quarter** = **$1.6M/year**
-- **With 6-hour detection**: Maximum 6-hour exposure window
-  - Assume 75% of drift is caught before causing outage
-  - Cost: 0.25 × $400K = **$100K/quarter** = **$400K/year**
-- **Annual savings**: $1.6M - $400K = **$1.2M/year**
-- Plus: Reduced security risk, compliance benefits, team confidence
+An exit code of 2 from `terraform plan -detailed-exitcode` specifically indicates that Terraform ran successfully but detected a non-empty diff, meaning drift or unapplied changes exist. This is distinct from an exit code of 0 (no changes) or an exit code of 1 (a runtime or syntax error during the planning phase). Your CI/CD pipeline should be configured to interpret exit code 2 not as a pipeline crash, but as a trigger to generate an alert, capture the plan output, and notify the infrastructure team that a divergence requires their attention. By capturing the specific drift output before exiting, the pipeline ensures the infrastructure team has immediate context on exactly which resources diverged without needing to rerun the check manually.
 </details>
 
 <details>
-<summary>5. What is driftctl and how does it differ from terraform plan?</summary>
+<summary>3. Your team uses an AWS Lambda function to automatically rotate a database password stored in AWS Secrets Manager every 30 days. However, your daily Terraform pipeline keeps detecting drift on the `secret_string` attribute and attempting to revert the password. How do you resolve this conflict?</summary>
 
 **Answer**:
-**driftctl** is a specialized drift detection tool that:
-- Scans cloud resources directly (not just state)
-- Detects **unmanaged resources** (exist in cloud but not in Terraform)
-- Provides coverage metrics (% of cloud resources managed by IaC)
-- Supports `.driftignore` for known exceptions
-- Faster for drift-only scans
-
-**terraform plan** is:
-- Part of standard Terraform workflow
-- Detects drift from state, not from all cloud resources
-- Doesn't find unmanaged resources (shadow IT)
-- Shows planned changes as well as drift
+You should resolve this by adding a `lifecycle { ignore_changes = [secret_string] }` block to the secret version resource in your Terraform code. This tells Terraform to ignore any future changes to that specific attribute after the resource is initially created. You apply this strategy because the attribute is intentionally managed by a secondary, dynamic system rather than static IaC. If you instead tried to "fix" the drift by running Terraform, you would overwrite the securely rotated password with the original state, causing an immediate database authentication outage.
 </details>
 
 <details>
-<summary>6. What is a Service Control Policy (SCP) and how can it prevent drift?</summary>
-
-**Answer**: An SCP is an AWS Organizations policy that sets permission guardrails across accounts. For drift prevention:
-- Deny manual changes to resources tagged as Terraform-managed
-- Allow exceptions only for designated Terraform roles
-- Apply at organizational unit level for broad coverage
-- Cannot be overridden by IAM policies (hard boundary)
-
-Example: Deny `ec2:ModifySecurityGroupRules` for any principal except `TerraformRole`.
-</details>
-
-<details>
-<summary>7. A production database security group has a manually added rule that's been there for 42 days. What's the remediation process?</summary>
+<summary>4. Your leadership is hesitant to invest engineering time into a scheduled drift detection pipeline. They argue that manual reviews are sufficient. If an unmanaged change causes one 8-hour outage per quarter at $50,000 per hour, how can you financially justify implementing a 6-hour automated detection window?</summary>
 
 **Answer**:
-1. **Assess risk**: Is the rule still needed? Is it overly permissive?
-2. **Document**: Create incident report, note who/when/why
-3. **Decide action**:
-   - If needed: Add to Terraform code, run apply to sync state
-   - If not needed: Run Terraform apply to remove (terraform is source of truth)
-   - If unsure: Add to code temporarily with TODO, schedule review
-4. **Root cause**: Why was it added manually? Fix process gap
-5. **Prevent recurrence**: SCPs, alerts, break-glass procedure
-6. **Monitor**: Watch for similar drift patterns
+Without automated detection, a single 8-hour outage costs the company $400,000 per quarter, or $1.6 million annually. By implementing a 6-hour automated detection window, the maximum time a drifting configuration can exist undetected shrinks drastically, making it highly probable to catch the anomaly before it triggers an outage. Even if the automated detection only prevents 75 percent of the outages, it would save the organization $1.2 million per year. This massive cost avoidance far outweighs the minimal engineering investment required to set up a scheduled GitHub Action or CloudWatch rule, proving that drift detection is a highly profitable operational safeguard.
 </details>
 
 <details>
-<summary>8. Why is auto-remediation typically not recommended for production environments?</summary>
+<summary>5. You run `terraform plan` and it reports zero changes. However, your security team informs you that a new, unapproved S3 bucket exists in the production account. Why did Terraform miss this, and what tool should you use to catch it next time?</summary>
 
 **Answer**:
-- **Risk of disruption**: Reverting drift might break something that depends on it
-- **Loss of information**: Manual changes might be intentional emergency fixes
-- **Blast radius**: Auto-apply could cascade to dependent resources
-- **Compliance**: Changes should be reviewed and approved
-- **Audit trail**: Need human decision recorded for compliance
+Terraform missed the S3 bucket because standard Terraform commands only track resources that are already defined in its state file; it ignores unmanaged resources entirely. The S3 bucket represents "state drift" or shadow IT, which falls outside Terraform's default purview. To catch this, you should use a specialized tool like driftctl, which actively scans the entire cloud environment and compares all discovered resources against the Terraform state. This provides a comprehensive coverage report identifying exactly what exists in the cloud but is missing from your IaC definitions, allowing you to quickly identify shadow resources.
+</details>
 
-Better approach for production:
-- Alert on drift
-- Create ticket for review
-- Require approval before remediation
-- Auto-remediate only in dev/staging
+<details>
+<summary>6. Despite strict company policies, developers continue to manually modify EC2 security groups through the AWS console to quickly test new features. You need to implement a technical control that physically prevents this behavior for Terraform-managed resources without blocking read access. What is the most robust implementation?</summary>
+
+**Answer**:
+The most robust implementation is to apply an AWS Organizations Service Control Policy (SCP) that explicitly denies modification actions, such as `ec2:ModifySecurityGroupRules`, to any resource tagged as managed by Terraform. You must include an exception condition that allows these actions only if the caller's Principal ARN matches your dedicated Terraform execution role. This approach represents a hard boundary that cannot be overridden by individual IAM permissions or local account administrators. It effectively forces developers to route all changes through the IaC pipeline while preserving their ability to view resources via the console.
+</details>
+
+<details>
+<summary>7. During a routine audit, you discover a manually added ingress rule on a production database security group that has been present for 42 days. The engineer who added it has left the company, and there is no documentation explaining its purpose. What is the safest, most systematic way to handle this drift?</summary>
+
+**Answer**:
+The safest approach is to first assess the immediate security risk of the rule and document the finding in an incident or audit report. Since the rule's purpose is unknown and reverting it blindly might break a critical undocumented integration, you should temporarily codify the rule into your Terraform configuration to bring it under management. Once the state is synchronized, you can monitor network traffic to see if the rule is actively used by reviewing VPC flow logs. If it is unused or deemed too risky, you then remove it via standard Terraform deployment processes, ensuring the removal is tracked, reviewed, and easily reversible.
+</details>
+
+<details>
+<summary>8. You successfully configured a drift remediation script that automatically runs `terraform apply` whenever drift is detected. You deployed this to your staging environment and it worked perfectly. Why should you strongly reconsider deploying this same auto-remediation script to your production environment?</summary>
+
+**Answer**:
+Deploying auto-remediation to production is highly dangerous because manual changes often represent emergency "break-glass" fixes implemented during critical outages. If an automated system immediately reverts those fixes, it will instantly recreate the outage, leading to a looping battle between the incident responders and the CI/CD pipeline. Additionally, automatically applying state changes strips away the human review process necessary to understand the blast radius of the remediation. For production environments, drift should trigger high-priority alerts and tickets, requiring human judgment to decide whether to codify the drift into the official configuration or safely revert it during a maintenance window.
 </details>
 
 ---
