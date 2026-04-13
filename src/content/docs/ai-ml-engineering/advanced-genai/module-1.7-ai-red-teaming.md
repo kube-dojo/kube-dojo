@@ -1851,7 +1851,15 @@ class MockVulnerableAPI:
         return "I am a helpful, secure corporate assistant."
 ```
 
+Verify the API initializes correctly:
+```bash
+python3 -c "from mock_api import MockVulnerableAPI; api = MockVulnerableAPI(); print(api.state)"
+```
+Expected output should be `secure`.
+
 ### Task 2: Build an Attack Test Suite
+
+Append the following attack test suite to your `mock_api.py` file:
 
 ```python
 """
@@ -1920,7 +1928,14 @@ for category, tests in suite.items():
 ```
 </details>
 
+Run the attack suite to execute the simulated bypasses:
+```bash
+python3 mock_api.py
+```
+
 ### Task 3: Implement Defense Layers
+
+Append your defense implementation to `mock_api.py`:
 
 ```python
 """
@@ -1989,6 +2004,11 @@ final_output, was_modified = defense.process_output(api_response)
 print(f"Final output: {final_output}")
 ```
 </details>
+
+Run the file again to see the defense system successfully block the attack:
+```bash
+python3 mock_api.py
+```
 
 ### Task 4: Create a Red Team Report
 
