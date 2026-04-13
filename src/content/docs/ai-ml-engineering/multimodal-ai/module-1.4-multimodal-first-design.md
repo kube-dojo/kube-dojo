@@ -1,6 +1,6 @@
 ---
 title: "Multimodal-First AI Design"
-slug: ai-ml-engineering/multimodal-ai/module-8.4-multimodal-first-design
+slug: ai-ml-engineering/multimodal-ai/module-1.4-multimodal-first-design
 sidebar:
   order: 905
 ---
@@ -14,7 +14,7 @@ By the end of this module, you will be able to:
 *   **Implement** real-time streaming interfaces for voice agents that achieve near-zero latency by eliminating intermediary transcription and synthesis steps.
 *   **Diagnose** latency bottlenecks and synchronization issues in high-bandwidth video and audio streaming applications.
 *   **Evaluate** the trade-offs between composite (bolt-on) multimodal systems and native foundational models across latency, cost, and semantic retention.
-*   **Debug** multimodal tokenization schemas and attention mechanisms when handling interleaved modality inputs in production environments.
+*   **Construct** valid interleaved multimodal payloads and manage context windows to prevent state corruption during interruptions.
 *   **Compare** spatial and temporal compression strategies for streaming live video feeds into multimodal context windows.
 
 ## Why This Module Matters
@@ -404,6 +404,7 @@ In this exercise, you will construct a valid JSON payload for a native multimoda
 
 **Task 2: Write the encoding script**
 *   Write a Python script that reads both files and encodes them into Base64 strings.
+*   **Verification:** Add a print statement to output the first 20 characters of each Base64 string to verify successful encoding before proceeding.
 
 <details>
 <summary>Show Solution for Task 1 & 2</summary>
@@ -421,6 +422,9 @@ def encode_file(filepath):
 
 audio_b64 = encode_file("rattle.wav")
 image_b64 = encode_file("engine.jpg")
+
+print(f"Audio start: {audio_b64[:20]}")
+print(f"Image start: {image_b64[:20]}")
 ```
 </details>
 
@@ -432,6 +436,7 @@ image_b64 = encode_file("engine.jpg")
     2. The Audio data.
     3. The Image data.
     4. Text: "Is it safe to drive to the nearest shop?"
+*   **Verification:** Run the script and verify it outputs the complete JSON payload without serialization errors.
 
 <details>
 <summary>Show Solution for Task 3</summary>
@@ -508,4 +513,4 @@ def truncate_context(generated_chunks, interruption_timestamp):
 
 ## Next Module
 
-Now that you understand the architectural foundations of native multimodal processing and real-time streaming, you are ready to tackle the complexities of spatial reasoning. In [Module 8.5: Spatial and Embodied AI](./module-8.5-spatial-and-embodied-ai), we will explore how these models are integrated with robotic systems and 3D environments, translating multimodal understanding into physical action in the real world.
+Now that you understand the architectural foundations of native multimodal processing and real-time streaming, you are ready to tackle the complexities of spatial reasoning. In [Module 8.5: Spatial and Embodied AI](/ai-ml-engineering/multimodal-ai/module-1.4-multimodal-first-design/), we will explore how these models are integrated with robotic systems and 3D environments, translating multimodal understanding into physical action in the real world.
