@@ -1171,7 +1171,7 @@ kubectl apply -f langchain-deployment.yaml --dry-run=client
 ## Next Steps
 
 After mastering LangChain fundamentals, you will dive into integrating APIs securely.
-- [**Module 1.2: Tools & Function Calling**](./module-1.2-tools-functions) -> Learn how to grant your LLMs read/write access to external databases safely.
+- [**Module 1.2: LangChain Advanced**](./module-1.2-langchain-advanced) -> Learn how to grant your LLMs read/write access to external databases safely.
 
 _Last updated: 2026-04-13_
 _Module 1.1 of KubeDojo AI/ML Engineering Track_

@@ -1629,4 +1629,4 @@ End users rarely type the exact same string, but they frequently ask questions w
 Congratulations on completing Phase 4: Frameworks & Agents. You have successfully progressed from building fragile local prototypes to engineering hardened, scalable, and observable multi-agent architectures suitable for high-stakes enterprise environments.
 
 **Next Phase**: Phase 5: Multimodal AI
-Check out [Module 22: Speech AI](/ai-ml-engineering/multimodal/module-5.1-speech-ai) to learn how to integrate audio perception capabilities seamlessly into your production pipelines.
+Check out [Module 1.1: Voice & Audio AI](/ai-ml-engineering/multimodal-ai/module-1.1-voice-audio-ai) to learn how to integrate audio perception capabilities seamlessly into your production pipelines.

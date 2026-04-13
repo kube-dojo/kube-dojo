@@ -1052,13 +1052,13 @@ MRR = 1 / (rank of first relevant document)
 ```
 
 ## Key Links
-- [Simple RAG Pipeline](../../examples/module_12/01_simple_rag.py)
-- [Document Chunking](../../examples/module_12/02_chunking_strategies.py)
-- [RAG Evaluation](../../examples/module_12/03_rag_evaluation.py)
+- Simple RAG Pipeline: `module_12/01_simple_rag.py`
+- Document Chunking: `module_12/02_chunking_strategies.py`
+- RAG Evaluation: `module_12/03_rag_evaluation.py`
 - [LangChain RAG Tutorial](https://python.langchain.com/docs/use_cases/question_answering/)
 - [LlamaIndex Getting Started](https://docs.llamaindex.ai/en/stable/)
 - [Pinecone RAG Guide](https://www.pinecone.io/learn/retrieval-augmented-generation/)
 
 ## Next Steps
 
-Ready to move beyond basic RAG? Proceed to [Module 13: RAG vs Fine-tuning Trade-offs](module-1.3-rag-vs-finetuning). You will explore parameter-efficient fine-tuning techniques like LoRA and discover exactly when to inject facts into a prompt versus baking them directly into the model weights.
+Ready to move beyond basic RAG? Proceed to [Module 1.3: Advanced RAG Patterns](./module-1.3-advanced-rag-patterns). You will explore reranking, hybrid retrieval, query transformation, and the architectural tradeoffs behind production-grade retrieval systems.

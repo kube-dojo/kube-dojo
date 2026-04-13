@@ -886,7 +886,8 @@ queue := workqueue.NewTypedRateLimitingQueue(
 
 // Custom: exponential backoff (5ms base, 1000s max)
 queue := workqueue.NewTypedRateLimitingQueue(
-    workqueue.NewTypedItemExponentialFailureRateLimiter[string](
+    workqueue.NewTypedItemExponentialFailureRateLimiter[string]
+    (
         5*time.Millisecond,    // base delay
         1000*time.Second,      // max delay
     ),
@@ -902,7 +903,8 @@ queue := workqueue.NewTypedRateLimitingQueue(
 // Combine multiple limiters (all must allow)
 queue := workqueue.NewTypedRateLimitingQueue(
     workqueue.NewTypedMaxOfRateLimiter(
-        workqueue.NewTypedItemExponentialFailureRateLimiter[string](
+        workqueue.NewTypedItemExponentialFailureRateLimiter[string]
+        (
             5*time.Millisecond, 60*time.Second),
         &workqueue.TypedBucketRateLimiter[string]{
             Limiter: rate.NewLimiter(rate.Limit(10), 100)},

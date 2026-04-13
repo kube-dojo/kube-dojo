@@ -981,10 +981,10 @@ Generating high-dimensional embeddings sequentially vastly underutilizes the mas
 
 ## Key Links
 
-- [Vector Arithmetic](../../examples/module_10/01_vector_arithmetic.py)
-- [Production Semantic Search](../../examples/module_10/02_production_search.py)
-- [01_vector_arithmetic.py](../../examples/module_10/01_vector_arithmetic.py)
-- [02_production_search.py](../../examples/module_10/02_production_search.py)
+- Vector Arithmetic: `module_10/01_vector_arithmetic.py`
+- Production Semantic Search: `module_10/02_production_search.py`
+- `module_10/01_vector_arithmetic.py`
+- `module_10/02_production_search.py`
 - [Paper](https://arxiv.org/abs/1301.3781)
 - [Paper](https://nlp.stanford.edu/pubs/glove.pdf)
 - [Paper](https://arxiv.org/abs/1603.09320)
@@ -996,6 +996,6 @@ Generating high-dimensional embeddings sequentially vastly underutilizes the mas
 
 ## Next Steps
 
-**Next module**: [Module 1.6: Introduction to RAG (Retrieval-Augmented Generation)](../module-1.6-introduction-to-rag)
+**Next module**: [Module 1.6: Reasoning Models](./module-1.6-reasoning-models)
 
-You have successfully mastered the complex mathematics of meaning and high-dimensional visualization. Now it is time to connect this rapid retrieval power directly to the text generation capabilities of Large Language Models. In the highly anticipated next module, you will strategically architect a pipeline that retrieves factual context from a vector database and feeds it directly into an LLM context window to prevent hallucinations.
+You have successfully mastered the complex mathematics of meaning and high-dimensional visualization. In the next module, you will examine how modern reasoning-focused models plan multi-step solutions, when they outperform standard generation models, and how to use them effectively in production systems.

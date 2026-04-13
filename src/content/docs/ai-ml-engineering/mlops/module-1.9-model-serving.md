@@ -1281,4 +1281,4 @@ kubectl apply -f ingress-canary.yaml
 
 ## Next Steps
 
-Now that you have established robust, scalable deployment patterns for serving predictions, you must ensure you have visibility into their behavior. Proceed to [Module 52: Monitoring & Observability](ai-ml-engineering/mlops/module-1.10-monitoring), where we dive into establishing latency telemetry, alert fatigue, and detecting statistical model drift.
+Now that you have established robust, scalable deployment patterns for serving predictions, you must ensure you have visibility into their behavior. Proceed to [Module 1.10: ML Monitoring](./module-1.10-ml-monitoring), where we dive into establishing latency telemetry, alert fatigue, and detecting statistical model drift.

@@ -1940,4 +1940,4 @@ The fixed sample window will cycle entirely within a fraction of a second, causi
 
 ## Next Module
 
-Now that you have constructed mathematically rigorous observability around your models, how do you handle the continuous flow of retraining without breaking production? Head over to [Module 1.11: Continuous Training Pipelines (CT)](./module-1.11-continuous-training) to learn how to automate retraining using Argo Workflows and Kubeflow on K8s.
+Now that you have constructed mathematically rigorous observability around your models, revisit [Module 1.8: ML Pipelines](./module-1.8-ml-pipelines) to wire monitoring signals back into retraining, validation, and controlled promotion workflows.

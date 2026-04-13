@@ -1533,19 +1533,19 @@ python3 logic_bug.py
 - [ ] You implemented the fix alongside an automated edge-case test.
 
 ## Reference Links
-- [Syntax & Type Debugging](../../examples/module_04/01_syntax_debugging.py)
-- [Logic Error Debugging](../../examples/module_04/02_logic_debugging.py)
-- [Performance Profiling](../../examples/module_04/03_performance_profiling.py)
-- [Async & Concurrent Debugging](../../examples/module_04/04_async_debugging.py)
-- [Integration Debugging](../../examples/module_04/05_integration_debugging.py)
-- [Optimization Examples](../../examples/module_04/06_optimization_examples.py)
-- [Debugging Patterns](../../examples/module_04/07_debugging_patterns.py)
-- [Example 01: Syntax & Type Debugging](../../examples/module_04/01_syntax_debugging.py)
-- [Example 02: Logic Error Debugging](../../examples/module_04/02_logic_debugging.py)
-- [Example 03: Performance Profiling](../../examples/module_04/03_performance_profiling.py)
-- [Example 04: Async & Concurrent Debugging](../../examples/module_04/04_async_debugging.py)
-- [Example 06: Optimization Examples](../../examples/module_04/06_optimization_examples.py)
-- [Example 07: Debugging Patterns](../../examples/module_04/07_debugging_patterns.py)
+- Syntax & Type Debugging: `module_04/01_syntax_debugging.py`
+- Logic Error Debugging: `module_04/02_logic_debugging.py`
+- Performance Profiling: `module_04/03_performance_profiling.py`
+- Async & Concurrent Debugging: `module_04/04_async_debugging.py`
+- Integration Debugging: `module_04/05_integration_debugging.py`
+- Optimization Examples: `module_04/06_optimization_examples.py`
+- Debugging Patterns: `module_04/07_debugging_patterns.py`
+- Example 01: Syntax & Type Debugging: `module_04/01_syntax_debugging.py`
+- Example 02: Logic Error Debugging: `module_04/02_logic_debugging.py`
+- Example 03: Performance Profiling: `module_04/03_performance_profiling.py`
+- Example 04: Async & Concurrent Debugging: `module_04/04_async_debugging.py`
+- Example 06: Optimization Examples: `module_04/06_optimization_examples.py`
+- Example 07: Debugging Patterns: `module_04/07_debugging_patterns.py`
 
 ## Next Module
 

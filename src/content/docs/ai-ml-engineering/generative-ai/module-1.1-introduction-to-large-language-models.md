@@ -699,7 +699,7 @@ Claude's 200K context window can fit the entire Harry Potter and the Philosopher
 
 **Best Practice**: Use only as much context as you need!
 
-** Test context limits yourself! Run [Example 02: Context Window Experiments](../../examples/module_06/02_context_windows.py) to see how models handle different context sizes.**
+** Test context limits yourself! Run `module_06/02_context_windows.py` to see how models handle different context sizes.**
 
 ---
 
@@ -743,7 +743,7 @@ Claude's 200K context window can fit the entire Harry Potter and the Philosopher
 
 **Rule of thumb**: OpenAI/Anthropic for <1M tokens/month, self-host for higher volume.
 
-** Calculate YOUR costs! Use [Example 05: Cost Calculator](../../examples/module_06/05_cost_calculator.py) to estimate what your use case would cost on different providers.**
+** Calculate YOUR costs! Use `module_06/05_cost_calculator.py` to estimate what your use case would cost on different providers.**
 
 ---
 
@@ -753,31 +753,31 @@ You've learned the landscape. Now **code it** to understand it.
 
 ### Practice Path
 
-**1. [Model Comparison](../../examples/module_06/01_model_comparison.py)** - Compare different LLMs
+**1. Model Comparison (`module_06/01_model_comparison.py`)** - Compare different LLMs
    -  Concept: Understanding model capabilities
    - ⏱️ Time: 15-20 minutes
    - Goal: See differences between GPT, Claude, and open models
    - What you'll learn: Cost vs quality trade-offs
 
-**2. [Context Window Experiments](../../examples/module_06/02_context_windows.py)** - Test context limits
+**2. Context Window Experiments (`module_06/02_context_windows.py`)** - Test context limits
    -  Concept: How much context can models handle?
    - ⏱️ Time: 20-25 minutes
    - Goal: See how models perform with different context sizes
    - What you'll learn: When to use RAG vs long context
 
-**3. [API Integration](../../examples/module_06/03_api_integration.py)** - Build your first LLM integration
+**3. API Integration (`module_06/03_api_integration.py`)** - Build your first LLM integration
    -  Concept: Production API usage
    - ⏱️ Time: 25-30 minutes
    - Goal: Working API client with error handling
    - What you'll learn: Real-world API patterns
 
-**4. [Prompt Testing Framework](../../examples/module_06/04_prompt_testing.py)** - Test prompts across models
+**4. Prompt Testing Framework (`module_06/04_prompt_testing.py`)** - Test prompts across models
    -  Concept: Model selection for your use case
    - ⏱️ Time: 30-35 minutes
    - Goal: A/B test prompts on different models
    - What you'll learn: How to choose the right model
 
-**5. [Cost Calculator](../../examples/module_06/05_cost_calculator.py)** - Estimate API costs
+**5. Cost Calculator (`module_06/05_cost_calculator.py`)** - Estimate API costs
    -  Concept: Production cost estimation
    - ⏱️ Time: 20-25 minutes
    - Goal: Calculate costs for your use case
@@ -789,7 +789,7 @@ You've learned the landscape. Now **code it** to understand it.
 
 After completing examples, build your **portfolio project**:
 
-**[LLM Gateway Service](../../examples/module_06/deliverable/)**
+**LLM Gateway Service (`module_06/deliverable/`)**
 - Route requests to best model based on task
 - Track costs across providers
 - Implement fallbacks (if Claude fails, try gpt-5)
@@ -804,7 +804,7 @@ After completing examples, build your **portfolio project**:
 
 ##  Your First API Integration
 
-** Before reading further, try [Example 03: API Integration](../../examples/module_06/03_api_integration.py) to see this in action!**
+** Before reading further, try `module_06/03_api_integration.py` to see this in action!**
 
 
 
@@ -932,7 +932,7 @@ print(response.choices[0].message.content)
 
 **Pro Tip**: Test multiple models with YOUR specific use case. Benchmarks are guides, not gospel.
 
-** Ready to see this in action? Run [Example 01: Model Comparison](../../examples/module_06/01_model_comparison.py) to compare GPT vs Claude vs Gemini on the SAME prompt!**
+** Ready to see this in action? Run `module_06/01_model_comparison.py` to compare GPT vs Claude vs Gemini on the SAME prompt!**
 
 ---
 

@@ -895,14 +895,14 @@ The developer failed to include explicit input validation and path sanitization 
 
 The concepts discussed throughout this module map to the following complete, verified baseline implementations. Review these local files for perfect architectural blueprints.
 
-- [Basic Generation](../../examples/module_03/01_basic_generation.py)
-- [Test Generation](../../examples/module_03/02_test_generation.py)
-- [Refactoring](../../examples/module_03/03_refactoring.py)
-- [API Client](../../examples/module_03/04_api_client_generation.py)
-- [CLI Tool](../../examples/module_03/05_cli_generation.py)
-- [Complete Python Package](../../examples/module_03/project/)
+- Basic Generation: `module_03/01_basic_generation.py`
+- Test Generation: `module_03/02_test_generation.py`
+- Refactoring: `module_03/03_refactoring.py`
+- API Client: `module_03/04_api_client_generation.py`
+- CLI Tool: `module_03/05_cli_generation.py`
+- Complete Python Package: `module_03/project/`
 
 ---
 
-**Next Module**: [Module 1.8 - AI-Assisted Debugging & Optimization](./module-1.8-ai-assisted-debugging.md)
+**Next Module**: [Module 1.8 - AI-Assisted Debugging & Optimization](./module-1.8-ai-assisted-debugging-optimization)
 *You know how to build it. Now learn how to diagnose the hardest failures at scale.*

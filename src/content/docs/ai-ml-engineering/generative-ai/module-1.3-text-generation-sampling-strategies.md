@@ -50,13 +50,13 @@ Understanding sampling parameters is like learning to drive - theory is importan
 
 ### Practice Path (~2.5-3 hours total)
 
-**1. [Sampling Playground](../../examples/module_08/01_sampling_playground.py)** - Experiment with all parameters
+**1. Sampling Playground (`module_08/01_sampling_playground.py`)** - Experiment with all parameters
    -  Concept: Interactive exploration of sampling strategies
    - ⏱️ Time: 75-90 minutes
    - Goal: Build intuition for temperature, top-p, and repetition penalty
    - What you'll learn: Same prompt + different parameters = dramatically different outputs!
 
-**2. [Temperature Explorer](../../examples/module_08/02_temperature_explorer.py)** - Deep dive into temperature
+**2. Temperature Explorer (`module_08/02_temperature_explorer.py`)** - Deep dive into temperature
    -  Concept: Systematic temperature comparison (0.0 to 2.0)
    - ⏱️ Time: 60-75 minutes
    - Goal: Find the perfect temperature for different use cases
@@ -154,7 +154,7 @@ flowchart TD
 
 **Solution**: Sample from the probability distribution instead of always picking the top choice.
 
-** Ready to experiment? [01_sampling_playground.py](../../examples/module_08/01_sampling_playground.py) lets you try greedy vs sampling live!**
+** Ready to experiment? `module_08/01_sampling_playground.py` lets you try greedy vs sampling live!**
 
 ---
 
@@ -333,7 +333,7 @@ The "temperature" name comes from statistical mechanics in physics! In thermodyn
 
 **Default**: Most APIs default to 0.7-1.0.
 
-** See temperature in action! [02_temperature_explorer.py](../../examples/module_08/02_temperature_explorer.py) compares outputs from 0.0 to 2.0!**
+** See temperature in action! `module_08/02_temperature_explorer.py` compares outputs from 0.0 to 2.0!**
 
 ---
 
@@ -528,7 +528,7 @@ Top-p=0.9: Includes 15-20 tokens (also good)
 
 **Modern practice**: Top-p is generally preferred over top-k (more adaptive).
 
-** Compare top-p vs top-k yourself: [01_sampling_playground.py](../../examples/module_08/01_sampling_playground.py) shows the difference!**
+** Compare top-p vs top-k yourself: `module_08/01_sampling_playground.py` shows the difference!**
 
 ---
 

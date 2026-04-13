@@ -1008,6 +1008,6 @@ To deepen your mathematical foundations and physical intuition before advancing,
 
 ## Next Steps
 
-With the rigorous mathematical foundations securely locked in and fully verified against PyTorch's underlying C++ execution engine, you are completely ready to tackle [Module 1.3: PyTorch Neural Network Architectures](./module-1.3-pytorch-architectures.md). 
+With the rigorous mathematical foundations securely locked in and fully verified against PyTorch's underlying C++ execution engine, you are completely ready to tackle [Module 1.3: Training Neural Networks](./module-1.3-training-neural-networks).
 
-In the subsequent module, we will permanently stop building flat tensors manually and begin heavily leveraging PyTorch's high-level `torch.nn` module to architect exceptionally deep Convolutional Neural Networks, simultaneously executing fully automated, high-performance training loops directly on raw GPU hardware infrastructure. You have diligently learned the hard mathematical realities—now it is finally time to scale and build with industrial power tools.
+In the subsequent module, we will stop building flat tensors manually and begin leveraging PyTorch's high-level `torch.nn` module, training loops, and optimization tooling to build and train models at practical scale. You have learned the mathematical foundations; now it is time to turn them into working systems.

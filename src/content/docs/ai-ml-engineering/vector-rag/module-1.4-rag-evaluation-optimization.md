@@ -1006,7 +1006,7 @@ kubectl logs -l app=rag-api -n rag-system
 
 ## Next Module
 
-[Module 1.5: Autonomous Agent Architectures](/ai-ml-engineering/agents/module-1.5-autonomous-agents) - Discover how to upgrade a static RAG pipeline into an autonomous LangGraph agent that can independently plan, use tools, and execute multi-step research loops.
+[Module 1.5: Long Context & Prompt Caching](./module-1.5-long-context-prompt-caching) - Compare retrieval against long-context strategies, learn when prompt caching pays off, and design cost-aware context windows for large-scale AI systems.
 
 ---
 

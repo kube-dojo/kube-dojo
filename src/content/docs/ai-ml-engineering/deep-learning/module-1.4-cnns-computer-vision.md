@@ -1696,4 +1696,4 @@ Upon running the script, `BatchNorm` will display a heavily perturbed, unstable 
 
 Now that you have mastered the nuances of parameter initialization, numerical profiling, and optimizing complex pipelines to absolute mathematical stability, you must construct custom architectural backbones tailored to dense unstructured image data streams.
 
-- [Proceed to Module 29: Convolutional Neural Networks (CNNs) for images](./module-1.5-cnn-architectures.md)
+- [Proceed to Module 1.5: RNNs & Sequence Models](./module-1.5-rnns-sequence-models)

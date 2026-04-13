@@ -1255,7 +1255,7 @@ python decision_engine.py analyze \
 
 Now that you have mastered the exact architectural boundaries determining when to use RAG versus when to fine-tune weights via gradient descent, you are prepared to build complex orchestrations that tie these systems together.
 
-[Module 14: LangChain Fundamentals](./module-1.4-langchain-fundamentals) - Build sophisticated RAG and chain routing systems utilizing LangChain's powerful abstractions. You will learn to construct sequence chains, inject complex memory profiles, and write seamless LangChain Expression Language (LCEL) scripts to manage your new hybrid architectures.
+[Module 1.4: RAG Evaluation & Optimization](./module-1.4-rag-evaluation-optimization) - Measure retrieval quality, tune chunking and reranking strategies, and build repeatable evaluation loops for your hybrid RAG architectures.
 
 _Last updated: 2026-04-13_
-_Next: Module 14 - LangChain Fundamentals_
+_Next: Module 1.4 - RAG Evaluation & Optimization_

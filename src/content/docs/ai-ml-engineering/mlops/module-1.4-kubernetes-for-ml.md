@@ -1615,4 +1615,4 @@ kubectl exec -it <pod> -- /bin/sh  # Get a shell and investigate
 
 You have now securely mastered the incredibly complex art of managing dynamic machine learning environments utilizing the foundational orchestration power of Kubernetes. By orchestrating heavily robust deployments, firmly enforcing meticulous hardware resource policies, and actively monitoring overall cluster health, your deep learning infrastructure is deeply fortified for extreme scale.
 
-**Up Next**: [Module 48 - FastAPI for High-Performance ML Serving](ai-ml-engineering/mlops/module-1.5-fastapi-serving)
+**Up Next**: [Module 1.5 - Advanced Kubernetes](./module-1.5-advanced-kubernetes)

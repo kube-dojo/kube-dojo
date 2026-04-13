@@ -693,17 +693,18 @@ Create your plan:"""
 
         for i, step in enumerate(plan.steps, 1):
             tool_name = step.get("tool")
-            tool_input = step.get("input", "")
+            tool_args = step.get("input", "")
             evidence_var = step.get("evidence_var", f"#E{i}")
 
             # Substitute previous evidence into input
             for var, value in evidence.items():
-                tool_input = tool_input.replace(var, value)
+                tool_args = tool_args.replace(var, value)
 
             # Execute tool
             if tool_name and tool_name in self.tools:
                 try:
-                    result = self.tools[tool_name](tool_input)
+                    tool_fn = self.tools[tool_name]
+                    result = tool_fn(tool_args)
                     evidence[evidence_var] = str(result)
                 except Exception as e:
                     evidence[evidence_var] = f"Error: {e}"
@@ -1614,11 +1615,12 @@ Your solution:"""
 
         def replace_call(match):
             tool_name = match.group(1)
-            tool_input = match.group(2)
+            tool_args = match.group(2)
 
             if tool_name in self.tools:
                 try:
-                    result = self.tools[tool_name](tool_input)
+                    tool_fn = self.tools[tool_name]
+                    result = tool_fn(tool_args)
                     return f"[{tool_name} result: {result}]"
                 except Exception as e:
                     return f"[{tool_name} error: {e}]"
@@ -2275,4 +2277,4 @@ ReWOO drastically reduces the sheer number of expensive LLM reasoning calls by g
 
 Now that you have implemented scalable memory architectures and contained the chaos of runaway planning algorithms, it's time to secure these pipelines for real-world enterprise traffic.
 
-Move on to **[Module 21: AI Agents in Production](./module-1.7-agents-production)** to master observability tracing, RBAC-compliant tool execution, and implementing fail-safe human-in-the-loop (HITL) checkpoints.
+Move on to **[Module 1.7: Multi-Agent Systems](./module-1.7-multi-agent-systems)** to master coordination patterns, observability tracing, RBAC-compliant tool execution, and fail-safe human-in-the-loop (HITL) checkpoints.

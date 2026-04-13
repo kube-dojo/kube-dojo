@@ -622,14 +622,14 @@ print(f"Final Prompt Tokens: {count_tokens(safe_prompt)}")
 
 ## Technical Assets Index
 
-- [Token Counter](../../examples/module_07/01_token_counter.py)
-- [Token Optimization](../../examples/module_07/02_optimization.py)
-- [Multilingual Tokenization](../../examples/module_07/03_multilingual.py)
-- [01_token_counter.py](../../examples/module_07/01_token_counter.py)
-- [02_optimization.py](../../examples/module_07/02_optimization.py)
+- Token Counter: `module_07/01_token_counter.py`
+- Token Optimization: `module_07/02_optimization.py`
+- Multilingual Tokenization: `module_07/03_multilingual.py`
+- `module_07/01_token_counter.py`
+- `module_07/02_optimization.py`
 - [OpenAI Tokenizer](https://platform.openai.com/tokenizer)
 - [Hugging Face Tokenizers](https://huggingface.co/docs/tokenizers)
-- [03_multilingual.py](../../examples/module_07/03_multilingual.py)
+- `module_07/03_multilingual.py`
 - ["Neural Machine Translation of Rare Words with Subword Units"](https://arxiv.org/abs/1508.07909)
 - ["SentencePiece: A simple and language independent approach"](https://arxiv.org/abs/1808.06226)
 - [Tiktoken](https://github.com/openai/tiktoken)

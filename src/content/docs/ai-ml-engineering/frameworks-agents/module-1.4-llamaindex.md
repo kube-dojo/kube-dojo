@@ -1227,4 +1227,4 @@ LangGraph achieves system resiliency using persistent Checkpointers backed by ex
 ---
 _Module 18 Complete! Progress: 21/56 modules (38%)_
 
-_Next: [Module 19 - LlamaIndex & Alternative Frameworks](./module-19-llamaindex)_ — Compare LangChain + LangGraph with the index-heavy document architectures of LlamaIndex, diving deep into auto-retrieval routing!
+_Next: [Module 1.5 - Building AI Agents](./module-1.5-building-ai-agents)_ — Move from framework components to full agent architectures, orchestration patterns, and production-ready design tradeoffs.
