@@ -185,27 +185,24 @@ groups newuser
 
 ### The Permission Model
 
-```
-┌────────────────────────────────────────────────────────────────┐
-│                       -rwxr-xr-x                               │
-│                        │││││││││                               │
-│  Type ─────────────────┘││││││││                               │
-│                          │││││││                               │
-│  Owner permissions ──────┴┴┴│││││                              │
-│       r = read                │││││                             │
-│       w = write               │││││                             │
-│       x = execute             │││││                             │
-│                               │││││                             │
-│  Group permissions ───────────┴┴┴││                            │
-│       r = read                    ││                            │
-│       - = no write                ││                            │
-│       x = execute                 ││                            │
-│                                   ││                            │
-│  Other permissions ───────────────┴┴                           │
-│       r = read                                                  │
-│       - = no write                                              │
-│       x = execute                                               │
-└────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    A["-rwxr-xr-x"] --> B["- (File Type)"]
+    A --> C["rwx (Owner permissions)"]
+    A --> D["r-x (Group permissions)"]
+    A --> E["r-x (Other permissions)"]
+    
+    C --> C1["r = read"]
+    C --> C2["w = write"]
+    C --> C3["x = execute"]
+    
+    D --> D1["r = read"]
+    D --> D2["- = no write"]
+    D --> D3["x = execute"]
+    
+    E --> E1["r = read"]
+    E --> E2["- = no write"]
+    E --> E3["x = execute"]
 ```
 
 ### Permission Meanings
@@ -353,16 +350,10 @@ chmod 1777 /shared/
 
 ### How sudo Works
 
-```
-┌──────────────┐     sudo     ┌──────────────┐
-│  User Shell  │────command───│   command    │
-│   UID 1000   │              │   UID 0      │
-└──────────────┘              └──────────────┘
-       │                             │
-       │  1. Check /etc/sudoers      │
-       │  2. Verify user's password  │
-       │  3. Execute as root         │
-       └─────────────────────────────┘
+```mermaid
+flowchart LR
+    A["User Shell<br>UID 1000"] -- sudo command --> B{"1. Check /etc/sudoers<br>2. Verify user's password"}
+    B -- Success --> C["Execute command<br>UID 0"]
 ```
 
 ### /etc/sudoers Configuration
@@ -416,18 +407,11 @@ PAM (Pluggable Authentication Modules) is the framework Linux uses for authentic
 
 > **Pause and predict**: If you lock yourself out of a server because `pam_faillock` triggered after 5 failed attempts, how does the system know when to let you try again?
 
-```
-User action (login, sudo, su)
-        │
-        ▼
-  /etc/pam.d/<service>        ← per-application PAM config
-        │
-        ▼
-  PAM modules execute in order
-  (pam_unix, pam_faillock, pam_limits, ...)
-        │
-        ▼
-  Allow or deny access
+```mermaid
+flowchart TD
+    A["User action<br>(login, sudo, su)"] --> B["/etc/pam.d/&lt;service&gt;<br>(per-application PAM config)"]
+    B --> C["PAM modules execute in order<br>(pam_unix, pam_faillock, pam_limits, ...)"]
+    C --> D{"Allow or deny access"}
 ```
 
 ### /etc/pam.d/ Structure
@@ -546,16 +530,23 @@ spec:
 
 ### UID Mapping
 
+```mermaid
+flowchart LR
+    subgraph Container["Container (with user namespace)"]
+        C1["UID 0 (root)"]
+        C2["UID 1000 (app)"]
+    end
+    
+    subgraph Host["Host System"]
+        H1["UID 100000"]
+        H2["UID 101000"]
+    end
+    
+    C1 -- Maps to --> H1
+    C2 -- Maps to --> H2
 ```
-Host System                     Container (with user namespace)
-┌──────────────────────┐       ┌──────────────────────┐
-│ UID 0 (root)         │       │ UID 0 (root) ────────┼──► Maps to UID 100000
-│ UID 1000 (ubuntu)    │       │ UID 1000 (app) ──────┼──► Maps to UID 101000
-└──────────────────────┘       └──────────────────────┘
 
-Without user namespace:
-Container UID 0 = Host UID 0 (DANGEROUS!)
-```
+> **Warning**: Without a user namespace configured, Container UID 0 maps directly to Host UID 0, which is extremely dangerous!
 
 ### Common Permission Issues in Kubernetes
 
