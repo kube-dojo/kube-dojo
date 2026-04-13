@@ -1,6 +1,6 @@
 ---
 title: "Reasoning Models: System 2 Thinking"
-slug: ai-ml-engineering/generative-ai/module-2.6-reasoning-models
+slug: ai-ml-engineering/generative-ai/module-1.6-reasoning-models
 sidebar:
   order: 307
 ---
@@ -155,6 +155,10 @@ The most significant engineering challenge when adopting reasoning models is man
 
 With reasoning models, the "time to first token" is massive. The model might spend thirty seconds generating thousands of hidden tokens before it outputs the first visible character. Since API providers charge for these hidden reasoning tokens at the same rate as visible output tokens, a single query can easily cost dollars rather than fractions of a cent.
 
+### Implementing Asynchronous Fallbacks
+
+To prevent infrastructure timeouts caused by the massive "time to first token" of reasoning models, pipelines must abandon synchronous HTTP requests. Instead, engineers should implement an asynchronous webhook or polling fallback mechanism. When the semantic router forwards a request to a reasoning model, the API should immediately return a `202 Accepted` status with a `job_id`. The client then polls a status endpoint while the reasoning model computes the response in a background worker queue. If the reasoning model times out, the background worker can execute a fallback query to a standard model using a constrained prompt to guarantee a response.
+
 To debug a poorly performing reasoning pipeline, engineers must rely on token metadata rather than just reading the output text. Analyzing the ratio of reasoning tokens to output tokens is the primary diagnostic method. If a model uses an astronomical number of reasoning tokens to produce a simple output, it indicates that the prompt is too ambiguous, forcing the model to evaluate an unnecessarily large hypothesis space before committing to an answer.
 
 ```python
@@ -253,7 +257,7 @@ A massive reasoning-to-output ratio indicates that the model is struggling heavi
 In this exercise, you will build a Python simulation of a Semantic Router that dynamically routes tasks to either a fast standard model or a high-latency reasoning model. You will calculate the simulated token costs to prove the financial viability of the cascade pattern.
 
 ### Task 1: Define the Router Logic
-Write a function `classify_task(prompt: str) -> str` that inspects the input string. If the prompt contains words like "calculate", "prove", "architect", or "analyze", return `"reasoning"`. Otherwise, return `"standard"`.
+Create a new file named `semantic_router.py`. Inside it, write a function `classify_task(prompt: str) -> str` that inspects the input string. If the prompt contains words like "calculate", "prove", "architect", or "analyze", return `"reasoning"`. Otherwise, return `"standard"`.
 
 <details>
 <summary>View Solution for Task 1</summary>
@@ -351,25 +355,32 @@ def process_request(prompt: str):
 </details>
 
 ### Task 5: Analyze the Token Economics
-Run a test suite with two prompts: "Summarize this brief email" and "Analyze the time complexity of this recursive function." Compare the cost and latency outputs to validate the architectural necessity of the router.
+Add a test suite at the bottom of `semantic_router.py` with two prompts: "Summarize this brief email" and "Analyze the time complexity of this recursive function." Compare the cost and latency outputs to validate the architectural necessity of the router.
 
 <details>
 <summary>View Solution for Task 5</summary>
 
 ```python
 # Run the test suite
-prompts = [
-    "Summarize this brief email regarding the team lunch.",
-    "Analyze the time complexity of this recursive function and prove its bounds."
-]
+if __name__ == "__main__":
+    prompts = [
+        "Summarize this brief email regarding the team lunch.",
+        "Analyze the time complexity of this recursive function and prove its bounds."
+    ]
 
-for p in prompts:
-    process_request(p)
-    
+    for p in prompts:
+        process_request(p)
+        
 # Expected Output Analysis:
 # The first prompt costs fractions of a cent and returns in 0.5s.
 # The second prompt costs significantly more (e.g., $75.0+) and takes 5.0s,
 # proving that routing is essential to prevent bankrupting the system on trivial tasks.
+```
+
+**Checkpoint Verification:**
+Execute the simulator to confirm your routing logic works:
+```bash
+python3 semantic_router.py
 ```
 </details>
 
