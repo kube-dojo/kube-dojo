@@ -40,28 +40,19 @@ Disk full in 3 days? Scale now. Memory leak causing crash in 6 hours? Fix the co
 
 ### What Can We Predict?
 
+```mermaid
+graph TD
+    subgraph "High Predictability ◀─────────────────────────────────▶ Low Predictability"
+        direction LR
+        A["<b>CAPACITY EXHAUSTION</b><br>Disk full<br>Connection pool<br><i>Days ahead (~95% acc.)</i>"]
+        B["<b>RESOURCE TRENDS</b><br>Memory leak<br>CPU creep<br><i>Hours ahead (~85% acc.)</i>"]
+        C["<b>FAILURE PATTERNS</b><br>Hardware degradation<br>Repeated errors<br><i>Days ahead (~70% acc.)</i>"]
+        D["<b>TRAFFIC ANOMALIES</b><br>Viral content<br>DDoS / Flash sale<br><i>Minutes (~60% acc.)</i>"]
+        A --> B --> C --> D
+    end
 ```
-PREDICTIVE OPERATIONS SPECTRUM
-─────────────────────────────────────────────────────────────────
 
-High Predictability ◀─────────────────────────────────▶ Low Predictability
-
-┌─────────────┬─────────────┬─────────────┬─────────────┐
-│  CAPACITY   │  RESOURCE   │   FAILURE   │   TRAFFIC   │
-│  EXHAUSTION │    TRENDS   │  PATTERNS   │   ANOMALIES │
-├─────────────┼─────────────┼─────────────┼─────────────┤
-│ Disk full   │ Memory leak │ Hardware    │ Viral       │
-│ Connection  │ CPU creep   │ degradation │ content     │
-│ pool        │ Queue       │ Repeated    │ DDoS        │
-│ exhaustion  │ growth      │ errors      │ Flash sale  │
-├─────────────┼─────────────┼─────────────┼─────────────┤
-│ Days ahead  │ Hours ahead │ Days ahead  │ Minutes     │
-│ ~95% acc.   │ ~85% acc.   │ ~70% acc.   │ ~60% acc.   │
-└─────────────┴─────────────┴─────────────┴─────────────┘
-
-Linear growth patterns are highly predictable
-Sudden failures and external events are harder
-```
+> **Stop and think**: Why is a 95% full disk with 0% growth less dangerous than a 40% full disk with 5% daily growth? Reactive systems alert on the 95% full disk and cause immediate panic, while predictive systems foresee the trajectory of the 40% full disk and allow for planned mitigation.
 
 ### Predictive vs Reactive
 
@@ -79,31 +70,12 @@ Sudden failures and external events are harder
 
 The simplest prediction: extend the trend line.
 
-```
-LINEAR EXTRAPOLATION
-─────────────────────────────────────────────────────────────────
-
-Disk %
-100 ─┬─────────────────────────────────────X FULL (predicted)
-     │                                   /
- 90 ─┼─ - - - - - - - - - - - - - - - -/- - - THRESHOLD
-     │                               /
- 80 ─┼─                             /
-     │                            /
- 70 ─┼─                          /
-     │                         /
- 60 ─┼─                       ●  Current: 60%
-     │                      /
- 50 ─┼─                   /
-     │                  /
- 40 ─┼─               ●
-     │              /     Growth: 5%/day
- 30 ─┼─           ●       Time to full: 8 days
-     │          /
- 20 ─┼─       ●
-     └────┬────┬────┬────┬────┬────┬────┬────┬────┬────┬────
-        -4   -3   -2   -1   Now  +1   +2   +3   +4   +5   +6
-                              Days
+```mermaid
+xychart-beta
+    title "Linear Extrapolation"
+    x-axis "Days (-4 to +8)" [-4, -3, -2, -1, "Now", 1, 2, 3, 4, 5, 6, 7, 8]
+    y-axis "Disk %" 20 --> 100
+    line [20, 30, 40, 50, 60, 65, 70, 75, 80, 85, 90, 95, 100]
 ```
 
 ```python
@@ -181,6 +153,8 @@ for i in range(7):
 days, when, conf = forecaster.forecast(threshold=90)
 # days ≈ 5, conf ≈ 0.99
 ```
+
+> **Pause and predict**: If your application suddenly receives a 5x traffic spike due to a viral social media post, which predictive model will catch this fastest? Linear models rely on historical trends and take time to shift their slope, meaning they are often too slow for instant anomalies. This is why a mature observability stack utilizes both predictive forecasting and instantaneous anomaly detection.
 
 ### Seasonal Forecasting with Prophet
 
@@ -278,42 +252,34 @@ breach_time, conf = forecaster.predict_threshold_breach(threshold=10000)
 
 ### 1. Capacity Exhaustion Prediction
 
-```
-CAPACITY PREDICTION PIPELINE
-─────────────────────────────────────────────────────────────────
+```mermaid
+graph TD
+    subgraph "Resource Types"
+        direction LR
+        A["<b>DISK</b><br>Threshold: 90%<br>Growth: Linear<br>Accuracy: High"]
+        B["<b>MEMORY</b><br>Threshold: 85%<br>Growth: Mixed<br>Accuracy: Med"]
+        C["<b>CONNECTIONS</b><br>Threshold: 80%<br>Growth: Step<br>Accuracy: Med"]
+    end
 
-┌──────────────────────────────────────────────────────────────┐
-│                     RESOURCE TYPES                           │
-├────────────────┬────────────────┬────────────────────────────┤
-│     DISK       │    MEMORY      │    CONNECTIONS             │
-├────────────────┼────────────────┼────────────────────────────┤
-│ Threshold: 90% │ Threshold: 85% │ Threshold: 80% of max      │
-│ Growth: Linear │ Growth: Mixed  │ Growth: Step function      │
-│ Accuracy: High │ Accuracy: Med  │ Accuracy: Med              │
-└────────────────┴────────────────┴────────────────────────────┘
-                           │
-                           ▼
-┌──────────────────────────────────────────────────────────────┐
-│                   FORECAST ENGINE                            │
-│                                                              │
-│   For each resource:                                         │
-│   1. Collect historical data (7-30 days)                     │
-│   2. Fit appropriate model                                   │
-│   3. Predict time to threshold                               │
-│   4. Generate alert if < X days                              │
-│                                                              │
-└──────────────────────────────────────────────────────────────┘
-                           │
-                           ▼
-┌──────────────────────────────────────────────────────────────┐
-│                   ALERT TIERS                                │
-│                                                              │
-│   > 7 days:  INFO      "Disk will fill in ~12 days"         │
-│   3-7 days:  WARNING   "Disk will fill in ~5 days"          │
-│   1-3 days:  HIGH      "Disk will fill in ~2 days"          │
-│   < 1 day:   CRITICAL  "Disk will fill in ~8 hours"         │
-│                                                              │
-└──────────────────────────────────────────────────────────────┘
+    subgraph "Forecast Engine"
+        F1["1. Collect historical data (7-30 days)"]
+        F2["2. Fit appropriate model"]
+        F3["3. Predict time to threshold"]
+        F4["4. Generate alert if < X days"]
+        F1 --> F2 --> F3 --> F4
+    end
+
+    subgraph "Alert Tiers"
+        T1["INFO: > 7 days"]
+        T2["WARNING: 3-7 days"]
+        T3["HIGH: 1-3 days"]
+        T4["CRITICAL: < 1 day"]
+    end
+
+    A --> Forecast Engine
+    B --> Forecast Engine
+    C --> Forecast Engine
+    Forecast Engine --> Alert Tiers
 ```
 
 ```python
@@ -584,45 +550,17 @@ class TrafficPredictor:
 
 ### Tiered Alert Strategy
 
-```
-PREDICTIVE ALERT TIERS
-─────────────────────────────────────────────────────────────────
-
-┌─────────────────────────────────────────────────────────────────┐
-│   TIME HORIZON          ACTION          URGENCY                  │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│   > 7 days             Plan            INFO                      │
-│   ════════════════════════════════════════════════════════════  │
-│   "Database storage will exhaust in ~14 days"                   │
-│   → Create capacity ticket                                       │
-│   → Schedule for next sprint                                     │
-│                                                                  │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│   3-7 days             Schedule        WARNING                   │
-│   ════════════════════════════════════════════════════════════  │
-│   "Memory leak will cause OOM in ~5 days"                       │
-│   → Schedule maintenance window                                  │
-│   → Prepare fix or workaround                                    │
-│                                                                  │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│   1-3 days             Prepare         HIGH                      │
-│   ════════════════════════════════════════════════════════════  │
-│   "Connection pool exhaustion in ~36 hours"                     │
-│   → Alert team lead                                              │
-│   → Have runbook ready                                           │
-│                                                                  │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│   < 24 hours           Act Now         CRITICAL                  │
-│   ════════════════════════════════════════════════════════════  │
-│   "Disk full in ~6 hours"                                       │
-│   → Page on-call                                                 │
-│   → Execute remediation immediately                              │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+graph LR
+    A["<b>> 7 days</b><br>Plan"] -->|INFO| B["Create capacity ticket<br>Schedule for next sprint"]
+    C["<b>3-7 days</b><br>Schedule"] -->|WARNING| D["Schedule maintenance window<br>Prepare fix or workaround"]
+    E["<b>1-3 days</b><br>Prepare"] -->|HIGH| F["Alert team lead<br>Have runbook ready"]
+    G["<b>< 24 hours</b><br>Act Now"] -->|CRITICAL| H["Page on-call<br>Execute remediation immediately"]
+    
+    style A fill:#e3f2fd,stroke:#1e88e5
+    style C fill:#fff3e0,stroke:#fb8c00
+    style E fill:#fbe9e7,stroke:#e64a19
+    style G fill:#ffebee,stroke:#e53935
 ```
 
 ```python
@@ -709,45 +647,32 @@ class PredictiveAlerter:
 
 ## Predictive Operations Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│               PREDICTIVE OPERATIONS SYSTEM                      │
-│                                                                  │
-│  DATA COLLECTION                                                 │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │  Time Series Database (Prometheus, InfluxDB, etc.)       │   │
-│  │                                                          │   │
-│  │  Metrics: disk, memory, CPU, connections, traffic        │   │
-│  │  Retention: 30+ days for trend analysis                  │   │
-│  └───────────────────────┬──────────────────────────────────┘   │
-│                          │                                       │
-│  FORECASTING ENGINE      ▼                                       │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │                                                          │   │
-│  │  ┌────────────┐  ┌────────────┐  ┌────────────┐         │   │
-│  │  │   Linear   │  │   Prophet  │  │   ML       │         │   │
-│  │  │  (Capacity)│  │  (Traffic) │  │  (Failure) │         │   │
-│  │  └────────────┘  └────────────┘  └────────────┘         │   │
-│  │                                                          │   │
-│  │  Scheduled: Every hour                                   │   │
-│  │  Output: Predictions with confidence intervals           │   │
-│  └───────────────────────┬──────────────────────────────────┘   │
-│                          │                                       │
-│  ALERT GENERATION        ▼                                       │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │  Predictive Alerter                                      │   │
-│  │  - Tier by time horizon                                  │   │
-│  │  - Adjust by confidence                                  │   │
-│  │  - Generate recommendations                              │   │
-│  └───────────────────────┬──────────────────────────────────┘   │
-│                          │                                       │
-│  ACTIONS                 ▼                                       │
-│  ┌────────────┐  ┌────────────┐  ┌────────────┐                 │
-│  │ Ticketing  │  │ Paging     │  │ Auto-Scale │                 │
-│  │ (Jira)     │  │ (PagerDuty)│  │ (K8s HPA)  │                 │
-│  └────────────┘  └────────────┘  └────────────┘                 │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph "Data Collection"
+        DB[("Time Series Database<br>(Prometheus, InfluxDB)")]
+        Metrics["Metrics: disk, memory, CPU, connections, traffic<br>Retention: 30+ days"]
+        Metrics --> DB
+    end
+
+    subgraph "Forecasting Engine"
+        DB --> Mod1["Linear (Capacity)"]
+        DB --> Mod2["Prophet (Traffic)"]
+        DB --> Mod3["ML (Failure)"]
+        Mod1 & Mod2 & Mod3 --> Schedule["Scheduled: Every hour<br>Output: Predictions + Confidence"]
+    end
+
+    subgraph "Alert Generation"
+        Schedule --> Alerter{"Predictive Alerter"}
+        Alerter --> |"Tier by time horizon"| Tiers["Adjust by confidence"]
+        Tiers --> Recs["Generate recommendations"]
+    end
+
+    subgraph "Actions"
+        Recs --> Act1["Ticketing (Jira)"]
+        Recs --> Act2["Paging (PagerDuty)"]
+        Recs --> Act3["Auto-Scale (K8s v1.35+ HPA)"]
+    end
 ```
 
 ## Common Mistakes
@@ -764,72 +689,27 @@ class PredictiveAlerter:
 ## Quiz
 
 <details>
-<summary>1. Why is linear extrapolation effective for disk usage but not traffic prediction?</summary>
+<summary>1. You are configuring a predictive model for your API gateway's request volume, which peaks every day at 2 PM and drops near zero on weekends. A junior engineer suggests using a linear extrapolation model. Why will this approach fail?</summary>
 
-**Answer**:
-
-**Disk usage**: Typically grows monotonically (data accumulates). Linear trends are stable and predictable.
-
-**Traffic**: Has multiple seasonalities (hourly, daily, weekly) plus random spikes. Linear models miss these patterns entirely.
-
-For traffic, use Prophet or similar seasonal decomposition models that capture recurring patterns.
+**Answer**: Linear models assume a constant rate of change (a straight line) and cannot capture recurring cycles. Traffic has multiple seasonalities (daily and weekly) plus random spikes. A linear model would likely average these out, leading to massive under-provisioning during peak hours and over-provisioning on weekends. For traffic, you must use seasonal decomposition models (like Prophet) that explicitly model these recurring patterns.
 </details>
 
 <details>
-<summary>2. How do you handle low-confidence predictions?</summary>
+<summary>2. Your predictive engine alerts that a database will run out of connections in 4 hours, but the prediction confidence is only 42%. The standard policy for < 24h exhaustion is to page the on-call engineer at 3 AM. What is the best way to handle this alert?</summary>
 
-**Answer**: Several strategies:
-
-1. **Don't alert**: If confidence < threshold (e.g., 50%), suppress the alert
-2. **Downgrade severity**: CRITICAL → HIGH, HIGH → WARNING
-3. **Use wider bounds**: Alert on upper confidence interval instead of point estimate
-4. **Request more data**: Wait for additional data points before alerting
-
-Key principle: Low confidence means high uncertainty. Don't page on-call for uncertain predictions.
+**Answer**: You should downgrade the severity or suppress the immediate page. Low confidence means there is high uncertainty in the prediction—perhaps due to noisy data or a recent transient spike. Paging an engineer at 3 AM for a highly uncertain prediction leads directly to alert fatigue. Instead, log the prediction, widen the alert bounds, or require more data points before escalating to a page.
 </details>
 
 <details>
-<summary>3. What's the optimal time horizon for predictive alerts?</summary>
+<summary>3. You are setting up alerts for an expected memory leak that will eventually cause an Out-Of-Memory (OOM) crash. The model predicts the crash will happen in 14 days. Should you configure this as a CRITICAL alert to page the on-call engineer immediately?</summary>
 
-**Answer**: Depends on the resource and your operational capacity:
-
-| Horizon | Good For | Why |
-|---------|----------|-----|
-| 7+ days | Capacity planning | Time to provision, no urgency |
-| 3-7 days | Scheduled maintenance | Can plan during business hours |
-| 1-3 days | Preparation | Alert team, prepare runbooks |
-| < 24h | Immediate action | Page on-call, act now |
-
-Too far out: Predictions become uncertain
-Too short: No time to act proactively
+**Answer**: No. A 14-day horizon falls into the "Plan" tier (INFO severity). Paging an engineer for an issue that won't happen for two weeks is a misuse of emergency channels and causes alert fatigue. With 14 days of lead time, the correct response is to create a ticket, schedule the fix for the next sprint, and address it during normal business hours without any urgency.
 </details>
 
 <details>
-<summary>4. How do you validate prediction accuracy?</summary>
+<summary>4. You implemented a disk prediction model three months ago, but the operations team complains that "the alerts are always wrong." How do you empirically prove or disprove their claim using telemetry?</summary>
 
-**Answer**: Track predictions vs. actuals:
-
-```python
-# Log every prediction
-{
-    'timestamp': now,
-    'resource': 'disk',
-    'predicted_exhaustion': '2024-01-15 14:00',
-    'confidence': 0.85
-}
-
-# Compare when threshold is actually hit
-{
-    'actual_exhaustion': '2024-01-15 16:00',
-    'prediction_error_hours': 2
-}
-```
-
-Metrics to track:
-- Mean Absolute Error (MAE) in hours
-- % of predictions within ±10% of actual
-- False positive rate (predicted but didn't happen)
-- False negative rate (happened but wasn't predicted)
+**Answer**: You must track and compare the predicted exhaustion times against the actual occurrences. Log every prediction's timestamp, expected breach time, and confidence interval. When the threshold is actually hit, calculate the Mean Absolute Error (MAE) between the predicted time and actual time. If the false positive rate is high, you can use this data to tune the model's sensitivity or adjust the minimum confidence required to trigger an alert.
 </details>
 
 ## Hands-On Exercise: Build a Capacity Predictor
@@ -1160,3 +1040,4 @@ The key is matching the model to the pattern (linear vs. seasonal), acting on pr
 ## Next Module
 
 Continue to [Module 6.6: Auto-Remediation](../module-6.6-auto-remediation/) to learn how to safely automate fixes with proper guardrails.
+---
