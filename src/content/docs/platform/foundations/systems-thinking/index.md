@@ -37,7 +37,7 @@ This foundation applies to everything that follows in the Platform Engineering t
 
 ## Learning Path
 
-```
+```text
 START HERE
     │
     ▼
