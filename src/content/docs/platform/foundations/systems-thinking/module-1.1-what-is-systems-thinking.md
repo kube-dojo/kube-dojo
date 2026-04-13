@@ -43,6 +43,8 @@ The payment service was *perfect*. It was the victim of a system-level problem t
 
 This scenario plays out in engineering teams every day. This module will teach you how to avoid it.
 
+> **Stop and think**: How often does your team play "whack-a-mole" with production issues? Can you recall an incident where the root cause was entirely disconnected from the service that triggered the alert?
+
 ---
 
 ## What You'll Learn
@@ -67,39 +69,20 @@ An **engineer** understands how the car actually works. They know that a weak al
 
 Most ops teams are mechanics. They replace parts (restart services, scale pods, rollback deployments) until the alert goes away. Sometimes that's enough. But for complex systems, you need to be an engineer.
 
-```
-THE MECHANIC VS THE ENGINEER
-═══════════════════════════════════════════════════════════════════
+```mermaid
+flowchart TD
+    subgraph Mechanic ["MECHANIC APPROACH"]
+        M1["Alert fires"] --> M2["Check the broken thing"]
+        M2 --> M3["Restart it"]
+        M3 --> M4["Alert clears → Done! (until next time)"]
+    end
 
-MECHANIC APPROACH:
-─────────────────────────────────────────────────────────────────
-Alert fires
-    │
-    ▼
-Check the broken thing
-    │
-    ▼
-Restart it
-    │
-    ▼
-Alert clears → Done! (until next time)
-
-
-ENGINEER APPROACH:
-─────────────────────────────────────────────────────────────────
-Alert fires
-    │
-    ▼
-What's the pattern? When did this start?
-    │
-    ▼
-What changed in the system? What's connected?
-    │
-    ▼
-What's the actual cause? (Often not where the alert fired)
-    │
-    ▼
-Fix the cause → Problem actually solved
+    subgraph Engineer ["ENGINEER APPROACH"]
+        E1["Alert fires"] --> E2["What is the pattern? When did this start?"]
+        E2 --> E3["What changed in the system? What is connected?"]
+        E3 --> E4["What is the actual cause?"]
+        E4 --> E5["Fix the cause → Problem actually solved"]
+    end
 ```
 
 ### What is a System?
@@ -116,30 +99,21 @@ Three key parts:
 
 Here's the crucial insight: **you can understand every element perfectly and still not understand the system.**
 
-```
-COMPONENT VIEW                      SYSTEMS VIEW
-─────────────────────────────────────────────────────────────────
+```mermaid
+flowchart LR
+    subgraph ComponentView ["COMPONENT VIEW (tells you nothing)"]
+        direction TB
+        CA["Service A"]
+        CB["Service B"]
+        CDB[/"Database"/]
+    end
 
-┌─────────────────────────────────────────────────────────────────┐
-│                                                                 │
-│     ┌─────────┐                    ┌─────────┐                 │
-│     │ Service │                    │ Service │◀──────┐         │
-│     │    A    │                    │    A    │       │         │
-│     └─────────┘                    └────┬────┘       │         │
-│                                         │            │         │
-│     ┌─────────┐                    ┌────▼────┐       │ Feedback│
-│     │ Service │        ──▶         │ Service │───────┤  Loops  │
-│     │    B    │                    │    B    │       │         │
-│     └─────────┘                    └────┬────┘       │         │
-│                                         │            │         │
-│     ┌─────────┐                    ┌────▼────┐       │         │
-│     │Database │                    │Database │───────┘         │
-│     └─────────┘                    └─────────┘                 │
-│                                                                 │
-│    "Three healthy boxes"       "A system with behavior"        │
-│    (tells you nothing)         (tells you everything)          │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+    subgraph SystemsView ["SYSTEMS VIEW (tells you everything)"]
+        direction TB
+        SA["Service A"] -->|"Calls"| SB["Service B"]
+        SB -->|"Queries"| SDB[/"Database"/]
+        SDB -.->|"Feedback Loops"| SA
+    end
 ```
 
 > 💡 **Did You Know?** The word "system" comes from Greek *systema*, meaning "organized whole." The ancient Greeks understood something we keep forgetting: the whole is fundamentally different from the sum of its parts. Aristotle wrote about this 2,400 years ago. We're still learning the same lesson.
@@ -159,33 +133,27 @@ In distributed systems:
 
 Where did the 2000ms come from? Where did the cascades come from? Not from any individual service. They emerged from the interactions—retries that amplify load, connection pools that exhaust, locks that contend.
 
-```
-EMERGENCE: THE 50ms SERVICES THAT CREATE 2-SECOND LATENCY
-═══════════════════════════════════════════════════════════════════
+```mermaid
+sequenceDiagram
+    participant User
+    participant A as Service A
+    participant B as Service B
+    participant C as Service C
 
-Individual service latencies:
-───────────────────────────────────────────────────────────────────
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│ Service A   │    │ Service B   │    │ Service C   │
-│   50ms avg  │    │   40ms avg  │    │   30ms avg  │
-│  Looking    │    │  Looking    │    │  Looking    │
-│  healthy!   │    │  healthy!   │    │  healthy!   │
-└─────────────┘    └─────────────┘    └─────────────┘
-
-What the dashboards show: "Everything is fine ✅"
-
-Actual system behavior:
-───────────────────────────────────────────────────────────────────
-Request hits A → A calls B → B times out → A retries
-→ B finally responds → A calls C → C is slow because
-B's retry exhausted the shared connection pool → C times out
-→ Request fails → User retries → Adds more load → Everything
-gets worse
-
-What users experience: "Your system is broken 🔥"
-
-The 2-second latency doesn't exist in any component.
-It EMERGES from their interaction.
+    Note over A, C: What dashboards show: "Everything is fine" (50ms, 40ms, 30ms)
+    
+    User->>A: Request
+    A->>B: Call
+    B-->>A: Timeout
+    A->>B: Retry
+    B-->>A: Success (eventually)
+    
+    A->>C: Call
+    Note right of C: Slow because B's retries<br/>exhausted shared connection pool
+    C-->>A: Timeout
+    A-->>User: Failed Request (2-second latency)
+    
+    Note over User, C: What users experience: "Your system is broken"
 ```
 
 > **Thought Exercise (2 minutes)**
@@ -225,6 +193,8 @@ This is why "works on my machine" is such a meme. Your laptop isn't the system. 
 >
 > This is called **suboptimization**—winning locally while losing globally. It's one of the most common mistakes in distributed systems.
 
+> **Pause and predict**: If optimizing a single component can sometimes make the system slower, what is the safest way to approach performance tuning in a microservices architecture?
+
 ---
 
 ## Part 2: The Iceberg Model
@@ -235,45 +205,21 @@ Most troubleshooting happens at the surface level. An alert fires, we react. Ano
 
 The iceberg model teaches us to look deeper:
 
-```
-THE ICEBERG MODEL
-═══════════════════════════════════════════════════════════════════
-
-               ≈≈≈≈≈≈ VISIBLE (what we react to) ≈≈≈≈≈≈
-
-        ╔═══════════════════════════════════════════════════╗
-        ║                    EVENTS                         ║
-        ║         "Payment service is slow right now"       ║
-        ║                                                   ║
-        ║         Response: Restart it, scale it up         ║
-        ║         Mindset: REACTIVE                         ║
-        ╠═══════════════════════════════════════════════════╣
-        ║                                                   ║
-        ║                   PATTERNS                        ║
-        ║    "Payment is slow every Monday 6-9 AM"          ║
-        ║                                                   ║
-        ║    Response: Create runbook, schedule extra pods  ║
-        ║    Mindset: ADAPTIVE                              ║
-        ╠═══════════════════════════════════════════════════╣
-        ║                                                   ║
-        ║                  STRUCTURES                       ║
-        ║     "Batch job shares database with payments"     ║
-        ║     "No resource isolation between workloads"     ║
-        ║                                                   ║
-        ║     Response: Separate resources, add limits      ║
-        ║     Mindset: REDESIGN                             ║
-        ╠═══════════════════════════════════════════════════╣
-        ║                                                   ║
-        ║               MENTAL MODELS                       ║
-        ║   "All workloads can safely share infrastructure" ║
-        ║   "Batch jobs don't affect real-time traffic"     ║
-        ║                                                   ║
-        ║   Response: New policies, architecture reviews    ║
-        ║   Mindset: TRANSFORM                              ║
-        ╚═══════════════════════════════════════════════════╝
-
-                        THE DEEPER YOU GO,
-                   THE MORE LEVERAGE YOU HAVE
+```mermaid
+flowchart TD
+    subgraph Visible [VISIBLE - What we react to]
+        E["EVENTS<br/>'Payment service is slow right now'<br/>Response: Restart it, scale it up<br/>Mindset: REACTIVE"]
+    end
+    
+    subgraph Invisible [INVISIBLE - Below the surface]
+        P["PATTERNS<br/>'Payment is slow every Monday 6-9 AM'<br/>Response: Create runbook, schedule extra pods<br/>Mindset: ADAPTIVE"]
+        S["STRUCTURES<br/>'Batch job shares database with payments'<br/>'No resource isolation between workloads'<br/>Response: Separate resources, add limits<br/>Mindset: REDESIGN"]
+        M["MENTAL MODELS<br/>'All workloads can safely share infrastructure'<br/>'Batch jobs do not affect real-time traffic'<br/>Response: New policies, architecture reviews<br/>Mindset: TRANSFORM"]
+    end
+    
+    E --> P
+    P --> S
+    S --> M
 ```
 
 ### Each Level Explained
@@ -359,68 +305,31 @@ To see systems clearly, you need the right words. These terms will become essent
 
 The easiest way to understand stocks and flows is to think of a bathtub:
 
+```mermaid
+flowchart TD
+    Inflow["INFLOW (faucet)<br/>10 liters/min"] --> Tub
+    
+    subgraph TubGroup [ ]
+        Tub["STOCK: Water<br/>(liters in tub)<br/>Current: 50L"]
+    end
+    
+    Tub --> Outflow["OUTFLOW (drain)<br/>8 liters/min"]
 ```
-STOCKS AND FLOWS: THE BATHTUB
-═══════════════════════════════════════════════════════════════════
-
-                 INFLOW (faucet)
-                       │
-                       │   10 liters/min
-                       ▼
-            ┌───────────────────┐
-            │                   │
-            │   STOCK: Water    │
-            │   (liters in tub) │
-            │                   │
-            │   Current: 50L    │
-            │                   │
-            └────────┬──────────┘
-                     │
-                     ▼   8 liters/min
-                 OUTFLOW (drain)
-
-
-RULES:
-─────────────────────────────────────────────────────────────────
-• If INFLOW > OUTFLOW → Stock rises (tub fills up)
-• If INFLOW < OUTFLOW → Stock falls (tub drains)
-• If INFLOW = OUTFLOW → Stock stable (water level constant)
-
-Right now: 10 in, 8 out → Tub is filling at 2L/min → Overflow coming!
-```
+*Rules: If INFLOW > OUTFLOW, stock rises. If INFLOW < OUTFLOW, stock falls. If INFLOW == OUTFLOW, stock is stable. Right now: 10 in, 8 out → Tub is filling at 2L/min → Overflow coming!*
 
 Now apply this to your systems:
 
+```mermaid
+flowchart TD
+    Inflow["INFLOW: Incoming requests<br/>1000 req/sec"] --> Queue
+    
+    subgraph QueueGroup [ ]
+        Queue["STOCK: Queue depth<br/>Current: 5000 requests"]
+    end
+    
+    Queue --> Outflow["OUTFLOW: Processed requests<br/>800 req/sec"]
 ```
-STOCKS AND FLOWS: REQUEST QUEUE
-═══════════════════════════════════════════════════════════════════
-
-                 INFLOW: Incoming requests
-                       │
-                       │   1000 req/sec
-                       ▼
-            ┌───────────────────┐
-            │                   │
-            │   STOCK: Queue    │
-            │   depth           │
-            │                   │
-            │   Current: 5000   │
-            │   requests        │
-            │                   │
-            └────────┬──────────┘
-                     │
-                     ▼   800 req/sec
-                 OUTFLOW: Processed requests
-
-
-You can't fix latency by looking at inflow or outflow alone.
-The STOCK determines latency. 5000 queued ÷ 800/sec = 6.25 seconds.
-
-The only ways to reduce latency:
-1. Reduce inflow (rate limiting, shedding load)
-2. Increase outflow (more capacity, faster processing)
-3. Accept the backlog will drain eventually (if traffic drops)
-```
+*You can't fix latency by looking at inflow or outflow alone. The STOCK determines latency. 5000 queued ÷ 800/sec = 6.25 seconds. The only ways to reduce latency: 1. Reduce inflow (rate limiting), 2. Increase outflow (more capacity), 3. Accept the backlog will drain eventually.*
 
 ### Delays: The Hidden Cause of Chaos
 
@@ -437,52 +346,26 @@ Delays are everywhere in distributed systems:
 
 **Why delays matter**: They cause oscillation and overshoot.
 
-```
-AUTOSCALER OSCILLATION: A TRAGEDY IN THREE ACTS
-═══════════════════════════════════════════════════════════════════
+```mermaid
+sequenceDiagram
+    participant L as Load
+    participant A as Autoscaler
+    participant P as Pods
 
-                                    Target
-                                       │
-                                       │
-ACT 1: The Spike                       │
-─────────────────────────────────      │
-                                       │
-Load: ═══════════════╗                 │
-                     ║                 │
-Pods:      ┌─────────╨────┐            │
-           │              │            │
-           │ Autoscaler:  │            │
-           │ "Need more   │            │
-           │  pods!"      │            │
-           └──────────────┘            │
-                                       │
-                                       │
-ACT 2: The Overshoot                   │
-─────────────────────────────────      │
-                                       │
-Load: ══════════════════════════╗      │
-                                ║      │
-                                ║      │
-Pods:     ══════════════════════╬═══   │   ← Way too many pods!
-                                ║      │
-          New pods finally ready!      │
-          But load already dropped.    │
-                                       │
-                                       │
-ACT 3: The Oscillation                 │
-─────────────────────────────────      │
-                                       │
-Load:     ╱╲    ╱╲    ╱╲               │
-         ╱  ╲  ╱  ╲  ╱  ╲              │
-────────╱────╲╱────╲╱────╲─────────────│── Target
-       ╱                   ╲           │
-      ╱                     ╲          │
-                                       │
-     Delay → Overshoot → Undershoot → Repeat
-
-
-THE FIX: Account for delays. Scale gradually. Use predictive scaling.
-         The delay isn't a bug—it's physics. Design around it.
+    Note over L, P: ACT 1: The Spike
+    L->>A: Load increases
+    A->>P: "Need more pods!" (Delay starts)
+    
+    Note over L, P: ACT 2: The Overshoot
+    L->>L: Load drops back to normal
+    P-->>A: New pods finally ready
+    Note over A, P: We now have way too many pods!
+    
+    Note over L, P: ACT 3: The Oscillation
+    A->>P: "Need fewer pods!" (Delay starts)
+    L->>L: Load spikes again
+    P-->>A: Pods terminated
+    Note over A, P: We now have too few pods! (Repeat)
 ```
 
 > 💡 **Did You Know?** The famous "thundering herd" problem is a delay-induced catastrophe. A cache expires. All requests hit the database simultaneously. The database slows down. Requests time out and retry. More load. More timeouts. More retries. The delay between cache miss and successful refill creates a feedback loop that amplifies the original problem exponentially.
@@ -517,51 +400,39 @@ When troubleshooting or designing systems, systems thinkers ask different questi
 
 **Systems approach**:
 
+**Step 1: Map the System** (Draw connections, not just boxes)
+```mermaid
+flowchart LR
+    User --> API
+    API --> Cache
+    Cache --> ServiceA[Service A]
+    Cache --> ServiceB[Service B]
+    Cache --> ServiceC[Service C]
+    ServiceB --> DB[(Database)]
+    ServiceC --> DB
+    
+    classDef highlight fill:#f9f,stroke:#333,stroke-width:2px;
+    class ServiceB,ServiceC,DB highlight;
 ```
-Step 1: MAP THE SYSTEM
-───────────────────────────────────────────────────────────────────
-Draw connections, not just boxes. What calls what? What shares what?
 
-            ┌────────────────────────────────────────────────┐
-            │                                                │
-   User ───▶│   API ──▶ Cache ──┬──▶ Service A ──┐          │
-            │     │             │                │          │
-            │     │             └──▶ Service B ──┼──▶ DB    │
-            │     │                              │    │     │
-            │     └───────────────▶ Service C ──┘    │     │
-            │                            │           │     │
-            │                            └───────────┘     │
-            │                                              │
-            │         ↑ Both B and C share DB connection   │
-            │           pool. Did we check pool exhaustion? │
-            └────────────────────────────────────────────────┘
+**Step 2: Identify Feedback Loops**
+- Cache misses → DB load → Slower queries → More timeouts → More retries → More DB load... (Reinforcing loop)
+- Rate limiter → Rejected requests → Less load → Faster response... (Balancing loop)
 
-Step 2: IDENTIFY FEEDBACK LOOPS
-───────────────────────────────────────────────────────────────────
-• Cache misses → DB load → Slower queries → More timeouts →
-  More retries → More DB load → ... (Reinforcing loop!)
+**Step 3: Look for Stocks**
+- Queue depths? Growing.
+- Connection pool? 100% utilized!
+- Error budget? Almost gone.
 
-• Rate limiter → Rejected requests → Less load → Faster response →
-  Rate limiter allows more → ... (Balancing loop ✓)
+**Step 4: Check the Delays**
+- How old are these metrics? 60 seconds old.
+- Autoscaler cooldown? 5 minutes.
+- When did the pattern start? Yesterday at 3 PM.
 
-Step 3: LOOK FOR STOCKS
-───────────────────────────────────────────────────────────────────
-• Queue depths? Growing.
-• Connection pool? 100% utilized!
-• Error budget? Almost gone.
-
-Step 4: CHECK THE DELAYS
-───────────────────────────────────────────────────────────────────
-• How old are these metrics? 60 seconds old.
-• Autoscaler cooldown? 5 minutes.
-• When did the pattern start? Yesterday at 3 PM.
-
-Step 5: GO DEEPER THAN EVENTS
-───────────────────────────────────────────────────────────────────
-• Is this a pattern? Yes—happens during peak hours.
-• What structure enables it? Shared DB connection pool with no limits.
-• What mental model? "Services are independent."
-```
+**Step 5: Go Deeper Than Events**
+- Is this a pattern? Yes—happens during peak hours.
+- What structure enables it? Shared DB connection pool with no limits.
+- What mental model? "Services are independent."
 
 **Root cause found**: Service B and C share a database connection pool. During peak load, Service B takes all connections for a slow analytics query. Service C starves. Timeouts cascade.
 
@@ -585,74 +456,47 @@ Step 5: GO DEEPER THAN EVENTS
 ## Quiz
 
 ### Question 1
-"A system's behavior is best understood by studying its individual components in isolation." True or false?
+**Scenario:** Your company's checkout flow involves a Cart Service, a Pricing Service, and a Payment Service. Recently, users are experiencing 5-second delays during checkout. You check the dashboards for Cart, Pricing, and Payment, and all three services report average response times under 50ms with no errors. Your manager suggests putting a dedicated team on each service to optimize their individual performance to fix the delay. Is this the right approach?
 
 <details>
 <summary>Show Answer</summary>
 
-**False.** A system's behavior emerges from the interactions between components, not the components themselves. You can have five healthy services that together create an unhealthy system. Studying parts in isolation misses the relationships, feedback loops, and emergent properties that determine actual behavior.
+**No, this approach relies on component-level optimization rather than systems thinking.**
 
-This is why "all services green" and "users unhappy" can coexist.
-
+In a complex distributed system, behavior emerges from the interactions between components, not the components themselves. The 5-second delay does not exist within the Cart, Pricing, or Payment services in isolation; it arises from how they communicate, such as network retries, connection pool exhaustion, or locking on a shared database. Optimizing the individual services without understanding their interconnections might actually make the problem worse (e.g., a faster Cart service could overwhelm a shared database). To solve this, you must map the system boundaries and look for delays or bottlenecks in the spaces *between* the services.
 </details>
 
 ### Question 2
-What is "emergence" and why does it matter for troubleshooting?
+**Scenario:** You deploy a new microservice that automatically retries failed network requests up to 3 times. During testing, it works perfectly. However, in production during a minor network blip, this retry logic causes a massive spike in traffic that takes down an entirely unrelated legacy database. You are tasked with writing the incident report. How does the concept of "emergence" explain why this wasn't caught in component testing?
 
 <details>
 <summary>Show Answer</summary>
 
-**Emergence** is when a system exhibits properties that none of its individual parts possess.
+**Emergence explains that the cascading failure is a property of the entire system, not the individual retry logic.**
 
-Why it matters for troubleshooting:
-- The 2-second latency doesn't exist in any single service
-- Cascading failures don't exist in any single service
-- The behavior you're trying to fix might not be *in* any component
-- You have to look at interactions, not just parts
-
-Examples: Traffic jams emerge from cars (no car is a jam). Consciousness emerges from neurons (no neuron thinks). Cascading failures emerge from microservices (no service is a cascade).
-
+When you tested the microservice in isolation, the retry logic behaved exactly as designed: it made the service more resilient to transient faults. However, when integrated into the broader production environment, the interaction between the retries, the network blip, and the shared database's limited connection pool created a completely new, unpredictable behavior—a cascading failure. Emergent properties cannot be predicted by looking at a component alone because they are born from the relationships and feedback loops across the system. This is why troubleshooting complex systems requires looking at the system in motion, rather than examining isolated parts.
 </details>
 
 ### Question 3
-In the iceberg model, why is addressing mental models more impactful than addressing events?
+**Scenario:** Every Friday afternoon, your team's CI/CD pipeline backs up, delaying deployments by hours. The team's current solution is to manually cancel non-essential builds (Event level) and scale up the runner pool on Friday mornings (Pattern level). If you apply the Iceberg Model, what would a "Mental Model" level solution look like, and why is it more effective?
 
 <details>
 <summary>Show Answer</summary>
 
-Mental models are the beliefs and assumptions that shape the structures we build. Structures create patterns. Patterns produce events.
+**A Mental Model solution would challenge the underlying assumption that all deployments must happen at the end of the week, which fundamentally eliminates the problem.**
 
-| Level | Leverage | Example Fix |
-|-------|----------|-------------|
-| Events | Low | Restart service when it's slow |
-| Patterns | Medium | Schedule extra capacity for Mondays |
-| Structures | High | Add connection pool isolation |
-| Mental Models | Highest | "All workloads must declare resource needs" |
-
-Changing mental models prevents entire *categories* of problems—not just the current incident, but all future incidents that would arise from the same flawed assumptions.
-
-The Monday Mystery team spent 8 months managing events. Once they changed the mental model ("batch jobs don't affect real-time traffic" → "all workloads must be isolated"), the problem and all similar future problems disappeared.
-
+Addressing events (canceling builds) or patterns (scaling runners) only manages the symptoms and requires continuous ongoing effort. By digging down to the Mental Model, you might discover the team believes "deployments are risky, so they should be grouped together on Fridays," which creates the structural bottleneck in the first place. Changing this belief to "deployments should be small, continuous, and safe at any time" would lead to a steady, even flow of CI/CD pipeline usage throughout the week. This approach is far more impactful because resolving a flawed mental model permanently prevents the entire category of problems from recurring.
 </details>
 
 ### Question 4
-Why do delays in distributed systems cause oscillation?
+**Scenario:** You configure a Kubernetes Horizontal Pod Autoscaler (HPA) to scale up your application when CPU exceeds 70%. During a traffic spike, the HPA triggers a scale-up. However, it takes 3 minutes for the new pods to become ready. By the time they start, the traffic spike has ended, leaving the cluster heavily over-provisioned. The HPA then scales down, but another traffic spike hits just as the pods terminate. Why does this specific sequence lead to system oscillation?
 
 <details>
 <summary>Show Answer</summary>
 
-Delays cause oscillation because by the time a corrective action takes effect, the original condition may have changed.
+**The delay between the autoscaler's decision and the actual realization of capacity creates a mismatch between current state and current demand.**
 
-**Example**: Autoscaler sees high CPU → Adds pods → Pods take 3 minutes to start → By then, load dropped → Now we have too many pods → Autoscaler removes pods → Pods take 1 minute to terminate → By then, load increased → Now we have too few pods → Repeat.
-
-Without delays, adjustments would be instant and smooth. Delays create the gap where overshoot and undershoot live.
-
-**Solutions**:
-- Account for delays in your scaling algorithms
-- Use predictive scaling (ML-based) instead of reactive
-- Add dampening (don't react to every fluctuation)
-- Accept some oscillation as normal, design for it
-
+In distributed systems, whenever there is a delay between cause and effect (such as the 3 minutes it takes for pods to boot), the system's corrective actions are essentially reacting to outdated information. By the time the new pods are ready, the initial condition (the traffic spike) has already changed, leading to an overshoot where there are too many resources. This overshoot triggers a corrective scale-down, which also suffers from delays, subsequently causing an undershoot when demand returns. Without accounting for these delays—such as by implementing predictive scaling, smoothing metrics, or adding stabilization windows—the system will continuously bounce between extremes instead of reaching equilibrium.
 </details>
 
 ---
