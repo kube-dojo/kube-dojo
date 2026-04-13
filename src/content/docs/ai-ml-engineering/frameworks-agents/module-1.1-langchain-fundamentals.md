@@ -1161,8 +1161,8 @@ spec:
             memory: "1Gi"
 EOF
 
-# Dry-run apply to validate syntax against local K8s config
-kubectl apply -f langchain-deployment.yaml --dry-run=client
+# Dry-run create to validate syntax without requiring a local K8s cluster connection
+kubectl create -f langchain-deployment.yaml --dry-run=client
 ```
 </details>
 

@@ -13,10 +13,10 @@ Shell scripting transforms repetitive manual tasks into reliable automation. Thi
 
 | # | Module | Description | Time |
 |---|--------|-------------|------|
-| 7.1 | [Bash Fundamentals](module-7.1-bash-fundamentals/) | Variables, conditionals, loops, functions | 30-35 min |
-| 7.2 | [Text Processing](module-7.2-text-processing/) | grep, sed, awk, jq for data manipulation | 30-35 min |
-| 7.3 | [Practical Scripts](module-7.3-practical-scripts/) | Common patterns, error handling, logging | 25-30 min |
-| 7.4 | [DevOps Automation](module-7.4-devops-automation/) | kubectl scripts, CI/CD helpers, operational tools | 30-35 min |
+| 7.1 | [Module 7.1: Bash Fundamentals](module-7.1-bash-fundamentals/) | Variables, conditionals, loops, functions | 30-35 min |
+| 7.2 | [Module 7.2: Text Processing](module-7.2-text-processing/) | grep, sed, awk, jq for data manipulation | 30-35 min |
+| 7.3 | [Module 7.3: Practical Scripts](module-7.3-practical-scripts/) | Common patterns, error handling, logging | 25-30 min |
+| 7.4 | [Module 7.4: DevOps Automation](module-7.4-devops-automation/) | kubectl scripts, CI/CD helpers, operational tools | 30-35 min |
 
 ## Why This Section Matters
 
