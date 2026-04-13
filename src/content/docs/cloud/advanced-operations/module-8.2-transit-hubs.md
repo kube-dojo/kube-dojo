@@ -43,28 +43,21 @@ Every multi-account cloud architecture needs a network topology -- a plan for ho
 
 Every VPC connects directly to every other VPC that needs to communicate.
 
+```mermaid
+graph TD
+    A["VPC A (10.0.0.0/16)"] <--> B["VPC B (10.1.0.0/16)"]
+    A <--> C["VPC C (10.2.0.0/16)"]
+    A <--> D["VPC D (10.3.0.0/16)"]
+    B <--> C
+    B <--> D
+    C <--> D
 ```
-FULL MESH TOPOLOGY (VPC PEERING)
-════════════════════════════════════════════════════════════════
 
-     ┌─────────┐       ┌─────────┐
-     │  VPC A  │───────│  VPC B  │
-     │ 10.0.0  │╲     ╱│ 10.1.0  │
-     └─────────┘ ╲   ╱ └─────────┘
-                  ╲ ╱
-                   ╳
-                  ╱ ╲
-     ┌─────────┐╱   ╲┌─────────┐
-     │  VPC C  │─────││  VPC D  │
-     │ 10.2.0  │     ││ 10.3.0  │
-     └─────────┘     └┘─────────┘
-
-     Connections needed: N * (N-1) / 2
-     4 VPCs = 6 connections
-     10 VPCs = 45 connections
-     25 VPCs = 300 connections
-     50 VPCs = 1,225 connections   <-- unmanageable
-```
+**Connections needed**: N * (N-1) / 2
+- 4 VPCs = 6 connections
+- 10 VPCs = 45 connections
+- 25 VPCs = 300 connections
+- 50 VPCs = 1,225 connections   <-- unmanageable
 
 **Pros**: Lowest latency (direct path), no single point of failure, no bandwidth bottleneck, no data processing charges (in AWS, VPC peering is free for same-region).
 
@@ -76,33 +69,26 @@ FULL MESH TOPOLOGY (VPC PEERING)
 
 A central hub routes traffic between all spokes. Spokes connect only to the hub.
 
-```
-HUB-AND-SPOKE TOPOLOGY (TRANSIT GATEWAY)
-════════════════════════════════════════════════════════════════
+```mermaid
+graph TD
+    Hub{"Transit Gateway<br/>(Hub)"}
+    A["VPC A<br/>Prod<br/>10.0.0.0/16"]
+    B["VPC B<br/>Staging<br/>10.1.0.0/16"]
+    C["VPC C<br/>Shared Svcs<br/>10.2.0.0/16"]
+    D["VPC D<br/>Dev<br/>10.3.0.0/16"]
+    E["VPC E<br/>On-prem<br/>VPN/DX"]
 
-                    ┌─────────────┐
-                    │   Transit   │
-          ┌────────│   Gateway   │────────┐
-          │        │   (Hub)     │        │
-          │        └──────┬──────┘        │
-          │               │               │
-    ┌─────┴───┐    ┌──────┴──────┐  ┌─────┴───┐
-    │  VPC A  │    │   VPC B     │  │  VPC C  │
-    │  Prod   │    │  Staging    │  │  Shared │
-    │ 10.0.0  │    │  10.1.0     │  │  Svcs   │
-    └─────────┘    └─────────────┘  └─────────┘
-          │                               │
-    ┌─────┴───┐                     ┌─────┴───┐
-    │  VPC D  │                     │  VPC E  │
-    │  Dev    │                     │  On-prem│
-    │ 10.3.0  │                     │  VPN/DX │
-    └─────────┘                     └─────────┘
-
-    Connections needed: N (one per spoke)
-    50 VPCs = 50 connections
-    Transitive routing: YES (A can reach D through the hub)
-    Centralized inspection: YES (route through firewall VPC)
+    A --- Hub
+    B --- Hub
+    C --- Hub
+    D --- Hub
+    E --- Hub
 ```
+
+**Connections needed**: N (one per spoke)
+- 50 VPCs = 50 connections
+- Transitive routing: YES (A can reach D through the hub)
+- Centralized inspection: YES (route through firewall VPC)
 
 **Pros**: Linear scaling. Centralized routing policy. Transitive routing. Single attachment point for on-premises connectivity. Centralized egress and security inspection.
 
@@ -114,27 +100,20 @@ HUB-AND-SPOKE TOPOLOGY (TRANSIT GATEWAY)
 
 Hub for most traffic, but direct peering for high-bandwidth or latency-sensitive flows.
 
-```
-HYBRID TOPOLOGY
-════════════════════════════════════════════════════════════════
+```mermaid
+graph TD
+    Hub{"Transit Gateway"}
+    A["VPC A<br/>Prod App"]
+    B["VPC B<br/>Data Lake<br/>(50TB/day)"]
+    C["VPC C<br/>Shared Svcs"]
 
-                    ┌─────────────┐
-                    │   Transit   │
-          ┌────────│   Gateway   │────────┐
-          │        └──────┬──────┘        │
-          │               │               │
-    ┌─────┴───┐    ┌──────┴──────┐  ┌─────┴───┐
-    │  VPC A  │    │   VPC B     │  │  VPC C  │
-    │  Prod   │════│  Data Lake  │  │  Shared │
-    │  App    │    │  (50TB/day) │  │  Svcs   │
-    └─────────┘    └─────────────┘  └─────────┘
-         ║
-    Direct VPC Peering (avoids $0.02/GB TGW charge)
-    50TB/day x $0.02/GB = $1,000/DAY saved
-
-    Rule of thumb: Direct peer when data transfer > 5TB/month
-    between two specific VPCs.
+    A --- Hub
+    B --- Hub
+    C --- Hub
+    A ===|Direct VPC Peering<br/>Avoids TGW charge| B
 ```
+
+Rule of thumb: Direct peer when data transfer > 5TB/month between two specific VPCs.
 
 > **Pause and predict**: You have 30 VPCs that all need to communicate. Why is VPC Peering impractical at this scale?
 >
@@ -151,34 +130,24 @@ AWS Transit Gateway (TGW) is the backbone of enterprise AWS networking. Think of
 
 ### Core Concepts
 
-```
-TRANSIT GATEWAY ARCHITECTURE
-════════════════════════════════════════════════════════════════
+```mermaid
+flowchart LR
+    TGW[Transit Gateway] --> RT[Route Tables]
+    TGW --> ATT[Attachments]
+    TGW --> Peer[Peering]
 
-Transit Gateway
-├── Route Tables (like virtual routers inside the TGW)
-│   ├── Production RT
-│   │   Routes: 10.0.0.0/16 -> VPC-A attachment
-│   │           10.1.0.0/16 -> VPC-B attachment
-│   │           0.0.0.0/0   -> Firewall VPC attachment
-│   │
-│   ├── Shared Services RT
-│   │   Routes: 10.0.0.0/8  -> All workload attachments
-│   │           0.0.0.0/0   -> NAT VPC attachment
-│   │
-│   └── Inspection RT
-│       Routes: 10.0.0.0/8  -> Firewall appliance ENI
-│
-├── Attachments (connections to the TGW)
-│   ├── VPC Attachment: vpc-prod-a
-│   ├── VPC Attachment: vpc-prod-b
-│   ├── VPC Attachment: vpc-shared-services
-│   ├── VPC Attachment: vpc-firewall-inspection
-│   ├── VPN Attachment: on-prem-vpn
-│   └── DX Attachment: direct-connect-gateway
-│
-└── Peering (cross-region or cross-account TGW connections)
-    └── TGW Peering: us-east-1 <-> eu-west-1
+    RT --> RT1["Production RT<br/>10.0.0.0/16 -> VPC-A<br/>10.1.0.0/16 -> VPC-B<br/>0.0.0.0/0 -> Firewall VPC"]
+    RT --> RT2["Shared Services RT<br/>10.0.0.0/8 -> All workloads<br/>0.0.0.0/0 -> NAT VPC"]
+    RT --> RT3["Inspection RT<br/>10.0.0.0/8 -> Firewall ENI"]
+
+    ATT --> A1["VPC Attachment: vpc-prod-a"]
+    ATT --> A2["VPC Attachment: vpc-prod-b"]
+    ATT --> A3["VPC Attachment: vpc-shared-services"]
+    ATT --> A4["VPC Attachment: vpc-firewall-inspection"]
+    ATT --> A5["VPN Attachment: on-prem-vpn"]
+    ATT --> A6["DX Attachment: direct-connect-gateway"]
+
+    Peer --> P1["TGW Peering: us-east-1 <--> eu-west-1"]
 ```
 
 ### Setting Up Transit Gateway with Terraform
@@ -262,31 +231,21 @@ resource "aws_ec2_transit_gateway_route_table_propagation" "prod_to_shared" {
 
 The most powerful TGW pattern is centralized inspection -- routing all east-west traffic through a firewall appliance before it reaches its destination.
 
+```mermaid
+flowchart LR
+    A["VPC-A (Prod)"] -- "(1)" --> TGW_Prod["TGW Prod RT<br/>0.0.0.0/0 -> FW"]
+    TGW_Prod -- "(2)" --> FW["Firewall VPC<br/>AWS Network Firewall<br/>(inspect)"]
+    FW -- "Allowed? YES (3)" --> TGW_Insp["TGW Inspect RT<br/>dst -> VPC-B"]
+    TGW_Insp -- "(4)" --> B["VPC-B (Staging)"]
+    FW -- "Allowed? NO" --> Drop["Drop"]
 ```
-CENTRALIZED INSPECTION PATTERN
-════════════════════════════════════════════════════════════════
 
-  VPC-A (Prod)              TGW                 Firewall VPC
-  ┌──────────┐         ┌──────────┐         ┌──────────────┐
-  │ Pod wants │   (1)   │          │   (2)   │              │
-  │ to reach  │────────▶│ Prod RT  │────────▶│  AWS Network │
-  │ VPC-B     │         │ 0.0.0.0/0│         │  Firewall    │
-  └──────────┘         │  -> FW   │         │  (inspect)   │
-                        │          │         │              │
-  VPC-B (Staging)       │          │   (3)   │  Allowed?    │
-  ┌──────────┐         │          │◀────────│  YES -> fwd  │
-  │           │   (4)   │ Inspect  │         │  NO -> drop  │
-  │  Traffic  │◀────────│ RT: dst  │         │              │
-  │  arrives  │         │ -> VPC-B │         └──────────────┘
-  └──────────┘         └──────────┘
+Flow: VPC-A -> TGW (Prod RT) -> Firewall VPC -> TGW (Inspect RT) -> VPC-B
 
-  Flow: VPC-A -> TGW (Prod RT) -> Firewall VPC -> TGW (Inspect RT) -> VPC-B
-
-  This adds ~1ms latency but gives you:
-  - IDS/IPS for east-west traffic
-  - Centralized logging of all inter-VPC flows
-  - Ability to block lateral movement (ransomware, compromised pods)
-```
+This adds ~1ms latency but gives you:
+- IDS/IPS for east-west traffic
+- Centralized logging of all inter-VPC flows
+- Ability to block lateral movement (ransomware, compromised pods)
 
 ```hcl
 # Route all traffic from production to the firewall
@@ -321,39 +280,30 @@ GCP takes a different approach to transit networking. Instead of a single transi
 
 In GCP, Shared VPC is the primary multi-project networking model. Rather than peering separate VPCs, you create one VPC in a host project and share subnets with service projects.
 
+```mermaid
+flowchart TD
+    subgraph Host["Host Project (Network Hub)"]
+        subgraph SVPC["Shared VPC: org-network"]
+            direction LR
+            S1["Subnet: prod<br/>10.0.0.0/20"]
+            S2["Subnet: stg<br/>10.1.0.0/20"]
+        end
+        FW["Firewall Rules (centrally managed)<br/>Cloud Router + Cloud NAT (centrally managed)"]
+    end
+
+    subgraph P1["Service Project A (Prod)"]
+        GKE1["GKE Cluster<br/>(uses prod subnet)<br/>Nodes: 10.0.0.x<br/>Pods: 10.10.0.0/16"]
+    end
+
+    subgraph P2["Service Project B (Prod)"]
+        GKE2["GKE Cluster<br/>(uses prod subnet)<br/>Nodes: 10.0.4.x<br/>Pods: 10.11.0.0/16"]
+    end
+
+    S1 --> GKE1
+    S1 --> GKE2
 ```
-GCP SHARED VPC MODEL
-════════════════════════════════════════════════════════════════
 
-  Host Project (Network Hub)
-  ┌─────────────────────────────────────────────────────┐
-  │  Shared VPC: org-network                            │
-  │                                                     │
-  │  ┌───────────────┐  ┌───────────────┐              │
-  │  │ Subnet: prod  │  │ Subnet: stg   │              │
-  │  │ 10.0.0.0/20   │  │ 10.1.0.0/20   │              │
-  │  │               │  │               │              │
-  │  │  Used by:     │  │  Used by:     │              │
-  │  │  proj-a-prod  │  │  proj-a-stg   │              │
-  │  │  proj-b-prod  │  │  proj-b-stg   │              │
-  │  └───────────────┘  └───────────────┘              │
-  │                                                     │
-  │  Firewall Rules (centrally managed)                 │
-  │  Cloud Router + Cloud NAT (centrally managed)       │
-  │  Private Service Connect endpoints                  │
-  └─────────────────────────────────────────────────────┘
-
-  Service Project A (Prod)     Service Project B (Prod)
-  ┌──────────────────────┐    ┌──────────────────────┐
-  │  GKE Cluster          │    │  GKE Cluster          │
-  │  (uses prod subnet)   │    │  (uses prod subnet)   │
-  │  Nodes: 10.0.0.x      │    │  Nodes: 10.0.4.x      │
-  │  Pods:  10.10.0.0/16  │    │  Pods:  10.11.0.0/16  │
-  └──────────────────────┘    └──────────────────────┘
-
-  Key difference from AWS: ONE VPC, shared across projects.
-  No peering needed. Firewall rules are centralized.
-```
+Key difference from AWS: ONE VPC, shared across projects. No peering needed. Firewall rules are centralized.
 
 ```bash
 # Enable Shared VPC on the host project
@@ -422,35 +372,32 @@ gcloud network-connectivity spokes create colo-spoke \
 
 Azure's approach to transit networking is Virtual WAN -- a managed hub that combines VPN, ExpressRoute, and VNet-to-VNet connectivity into a single service.
 
+```mermaid
+flowchart TD
+    VWAN{"Virtual WAN<br/>(Global resource)"}
+    
+    subgraph Hub1["Virtual Hub East US"]
+        V1["VNet Conn (5 VNets)"]
+        VPN1["S2S VPN (on-prem)"]
+    end
+    
+    subgraph Hub2["Virtual Hub West Europe"]
+        V2["VNet Conn (3 VNets)"]
+        ER2["ExpressRoute (on-prem)"]
+    end
+    
+    subgraph Hub3["Virtual Hub SE Asia"]
+        V3["VNet Conn (2 VNets)"]
+    end
+    
+    VWAN --- Hub1
+    VWAN --- Hub2
+    VWAN --- Hub3
 ```
-AZURE VIRTUAL WAN ARCHITECTURE
-════════════════════════════════════════════════════════════════
 
-                    ┌──────────────────────┐
-                    │   Virtual WAN         │
-                    │   (Global resource)   │
-                    └──────────┬───────────┘
-                               │
-              ┌────────────────┼────────────────┐
-              │                │                │
-     ┌────────┴──────┐  ┌─────┴───────┐  ┌─────┴───────┐
-     │  Virtual Hub  │  │ Virtual Hub │  │ Virtual Hub │
-     │  East US      │  │ West Europe │  │ SE Asia     │
-     │               │  │             │  │             │
-     │  ┌──────────┐ │  │ ┌─────────┐│  │ ┌─────────┐│
-     │  │VNet Conn │ │  │ │VNet Conn││  │ │VNet Conn││
-     │  │(5 VNets) │ │  │ │(3 VNets)││  │ │(2 VNets)││
-     │  └──────────┘ │  │ └─────────┘│  │ └─────────┘│
-     │  ┌──────────┐ │  │ ┌─────────┐│  │            │
-     │  │S2S VPN   │ │  │ │ExpressRt││  │            │
-     │  │(on-prem) │ │  │ │(on-prem)││  │            │
-     │  └──────────┘ │  │ └─────────┘│  │            │
-     └───────────────┘  └────────────┘  └────────────┘
-
-     Hub-to-hub: Automatic (any-to-any by default)
-     VNet-to-VNet via hub: Automatic routing
-     On-prem to VNet: Through hub VPN/ER gateway
-```
+- Hub-to-hub: Automatic (any-to-any by default)
+- VNet-to-VNet via hub: Automatic routing
+- On-prem to VNet: Through hub VPN/ER gateway
 
 ```bash
 # Create a Virtual WAN
@@ -493,26 +440,19 @@ This is the single most common networking mistake in multi-account architectures
 
 ### How It Happens
 
+```mermaid
+flowchart TD
+    A["Team A VPC<br/>CIDR: 10.0.0.0/16<br/>App: 10.0.1.50"]
+    B["Team B VPC<br/>CIDR: 10.0.0.0/16<br/>App: 10.0.1.50"]
+    TGW{"Transit Gateway"}
+    
+    A --- TGW
+    B --- TGW
+    
+    TGW -.- Q(("WHERE DOES<br/>10.0.1.50 GO?<br/>(ambiguous!)"))
 ```
-THE OVERLAPPING CIDR DISASTER
-════════════════════════════════════════════════════════════════
 
-  Team A VPC                          Team B VPC
-  ┌─────────────────────┐            ┌─────────────────────┐
-  │  CIDR: 10.0.0.0/16  │            │  CIDR: 10.0.0.0/16  │
-  │                      │            │                      │
-  │  App: 10.0.1.50      │            │  App: 10.0.1.50      │
-  └─────────────────────┘            └─────────────────────┘
-            │                                  │
-            └──────── Transit Gateway ─────────┘
-                            │
-                      WHERE DOES
-                    10.0.1.50 GO?
-                     (ambiguous!)
-
-  You CANNOT peer or transit-connect VPCs with overlapping CIDRs.
-  This is a hard constraint in all three clouds.
-```
+You CANNOT peer or transit-connect VPCs with overlapping CIDRs. This is a hard constraint in all three clouds.
 
 ### Prevention: IP Address Management (IPAM)
 
@@ -550,38 +490,22 @@ aws ec2 create-vpc \
 
 ### CIDR Allocation Strategy
 
-```
-RECOMMENDED CIDR ALLOCATION
-════════════════════════════════════════════════════════════════
+```mermaid
+flowchart LR
+    Org["10.0.0.0/8<br/>Organization Master Block"] --> Prod["10.0.0.0/12<br/>Production"]
+    Org --> Stg["10.16.0.0/12<br/>Staging"]
+    Org --> Dev["10.32.0.0/12<br/>Development"]
+    Org --> Sbx["10.48.0.0/12<br/>Sandbox"]
+    Org --> Shr["10.64.0.0/12<br/>Shared Services"]
+    Org --> TGW["10.100.0.0/16<br/>Transit/Hub networks"]
+    Org --> Rsv["10.200.0.0/13<br/>Reserved"]
 
-10.0.0.0/8 (Organization master block)
-│
-├── 10.0.0.0/12  Production (10.0.0.0 - 10.15.255.255)
-│   ├── 10.0.0.0/20   Team-A Prod VPC (4,094 IPs)
-│   ├── 10.0.16.0/20  Team-B Prod VPC
-│   ├── 10.0.32.0/20  Team-C Prod VPC
-│   └── ...            Room for 255 more /20 VPCs
-│
-├── 10.16.0.0/12 Staging (10.16.0.0 - 10.31.255.255)
-│   ├── 10.16.0.0/20  Team-A Staging VPC
-│   └── ...
-│
-├── 10.32.0.0/12 Development (10.32.0.0 - 10.47.255.255)
-│   └── ...
-│
-├── 10.48.0.0/12 Sandbox (10.48.0.0 - 10.63.255.255)
-│   └── ...
-│
-├── 10.64.0.0/12 Shared Services (10.64.0.0 - 10.79.255.255)
-│   └── ...
-│
-├── 10.100.0.0/16 Transit/Hub networks
-│
-└── 10.200.0.0/13 Reserved for future growth
-
-  GKE/EKS Pod CIDRs: Use 100.64.0.0/10 (Carrier-grade NAT range)
-  This avoids conflicts with VPC CIDRs entirely.
+    Prod --> P1["10.0.0.0/20<br/>Team-A Prod VPC"]
+    Prod --> P2["10.0.16.0/20<br/>Team-B Prod VPC"]
+    Prod --> P3["10.0.32.0/20<br/>Team-C Prod VPC"]
 ```
+
+GKE/EKS Pod CIDRs: Use `100.64.0.0/10` (Carrier-grade NAT range). This avoids conflicts with VPC CIDRs entirely.
 
 ---
 
@@ -591,34 +515,38 @@ Egress (outbound) traffic is where cloud networking gets expensive. AWS charges 
 
 ### Centralized Egress Pattern
 
+```mermaid
+flowchart LR
+    subgraph Workloads["Workload VPCs"]
+        direction TB
+        V1["VPC-A (Prod)<br/>0.0.0.0/0"]
+        V2["VPC-B (Stg)<br/>0.0.0.0/0"]
+        V3["VPC-C (Dev)<br/>0.0.0.0/0"]
+    end
+    
+    TGW{"Transit Gateway"}
+    
+    subgraph Egress["Egress VPC"]
+        direction TB
+        FW["AWS Network Firewall<br/>Rules:<br/>- Allow: apt repos<br/>- Allow: docker.io<br/>- Allow: github.com<br/>- Deny: everything"]
+        NAT["NAT Gateway<br/>(single exit point)<br/>Elastic IP: x.x.x.x"]
+    end
+    
+    Internet(("Internet"))
+    
+    V1 --> TGW
+    V2 --> TGW
+    V3 --> TGW
+    
+    TGW --> FW
+    FW --> NAT
+    NAT --> Internet
 ```
-CENTRALIZED EGRESS WITH FILTERING
-════════════════════════════════════════════════════════════════
 
-  Workload VPCs                 Egress VPC
-  ┌──────────────┐             ┌──────────────────────┐
-  │ VPC-A (Prod) │             │                      │
-  │  0.0.0.0/0 ──┼──┐         │  AWS Network Firewall│
-  └──────────────┘  │         │  (or 3rd party NVA)  │
-                     │    TGW  │                      │
-  ┌──────────────┐  ├────────▶│  Rules:              │
-  │ VPC-B (Stg)  │  │         │  - Allow: apt repos  │
-  │  0.0.0.0/0 ──┼──┤         │  - Allow: docker.io  │
-  └──────────────┘  │         │  - Allow: github.com │
-                     │         │  - Deny: everything  │
-  ┌──────────────┐  │         │                      │
-  │ VPC-C (Dev)  │  │         │  NAT Gateway         │
-  │  0.0.0.0/0 ──┼──┘         │  (single exit point) │
-  └──────────────┘             │  Elastic IP: x.x.x.x│
-                               └──────────┬───────────┘
-                                          │
-                                      Internet
-
-  Benefits:
-  - Single egress IP (easier firewall allowlisting by partners)
-  - Centralized filtering (block exfiltration attempts)
-  - Fewer NAT Gateways (cost savings: $32/month each + $0.045/GB)
-```
+Benefits:
+- Single egress IP (easier firewall allowlisting by partners)
+- Centralized filtering (block exfiltration attempts)
+- Fewer NAT Gateways (cost savings: $32/month each + $0.045/GB)
 
 ### AWS Network Firewall Rules
 
@@ -662,30 +590,32 @@ This is the cost surprise that catches most teams:
 
 The AWS cross-AZ charge is particularly insidious for Kubernetes. If your EKS cluster spans three AZs (as it should for HA), every pod-to-pod call that crosses an AZ boundary incurs $0.02/GB round-trip. For a chatty microservices architecture, this adds up fast.
 
+```mermaid
+flowchart LR
+    subgraph AZa["AZ-a"]
+        Front["Frontend Pod"]
+    end
+    subgraph AZb["AZ-b"]
+        API["API Server Pod"]
+    end
+    subgraph AZc["AZ-c"]
+        DB["Database Pod"]
+    end
+    
+    Front -- "req (2KB)" --> API
+    API -- "resp" --> Front
+    API -- "req (2KB)" --> DB
+    DB -- "resp" --> API
 ```
-CROSS-AZ COST EXAMPLE
-════════════════════════════════════════════════════════════════
 
-  EKS Cluster spanning 3 AZs
+**Cross-AZ Cost Example**:
+- Each request: ~2KB avg
+- Requests/second: 10,000
+- Cross-AZ hops per request: 2 (frontend->api, api->db)
+- Monthly cross-AZ traffic: 10,000 req/s x 2KB x 2 hops x 86,400s x 30 days = ~103 TB
+- Cost: 103 TB x $0.01/GB x 2 (both directions) = **$2,060/month**
 
-  AZ-a                    AZ-b                    AZ-c
-  ┌─────────────┐        ┌─────────────┐        ┌─────────────┐
-  │ Frontend    │──req──▶│ API Server  │──req──▶│ Database    │
-  │ Pod         │◀─resp──│ Pod         │◀─resp──│ Pod         │
-  └─────────────┘        └─────────────┘        └─────────────┘
-
-  Each request: ~2KB avg
-  Requests/second: 10,000
-  Cross-AZ hops per request: 2 (frontend->api, api->db)
-
-  Monthly cross-AZ traffic:
-  10,000 req/s x 2KB x 2 hops x 86,400s x 30 days = ~103 TB
-
-  Cost: 103 TB x $0.01/GB x 2 (both directions) = $2,060/month
-
-  Mitigation: Use topology-aware routing (k8s topologySpreadConstraints
-  + Service topology hints) to prefer same-AZ communication.
-```
+Mitigation: Use topology-aware routing to prefer same-AZ communication.
 
 ---
 
@@ -766,7 +696,7 @@ In AWS, Transit Gateway connects separate VPCs (each with its own CIDR, route ta
 <details>
 <summary>2. Your EKS cluster spans 3 AZs and generates 50TB of cross-AZ traffic monthly. What are two strategies to reduce this cost?</summary>
 
-Strategy 1: Enable topology-aware routing in Kubernetes. Configure Services with `internalTrafficPolicy: Local` where possible, and use topology hints (annotation `service.kubernetes.io/topology-mode: Auto`) so kube-proxy prefers endpoints in the same AZ. Strategy 2: Use pod topology spread constraints combined with service affinity to co-locate communicating services in the same AZ. For example, place the API server and its database cache in the same AZ. This requires understanding your service call graph. Together, these can reduce cross-AZ traffic by 40-70%, saving $500-$700/month on a 50TB workload.
+Strategy 1: Enable topology-aware routing in Kubernetes. Configure Services with `internalTrafficPolicy: Local` where possible, and use the `trafficDistribution: PreferClose` field in your Service spec so kube-proxy prefers endpoints in the same AZ. Strategy 2: Use pod topology spread constraints combined with service affinity to co-locate communicating services in the same AZ. For example, place the API server and its database cache in the same AZ. This requires understanding your service call graph. Together, these can reduce cross-AZ traffic by 40-70%, saving $500-$700/month on a 50TB workload.
 </details>
 
 <details>
@@ -802,7 +732,7 @@ Allocate non-overlapping CIDRs for all VPCs and the TGW hub.
 <details>
 <summary>Solution</summary>
 
-```
+```text
 CIDR Allocation Plan
 ════════════════════════════════════════
 
@@ -835,7 +765,7 @@ Create route table associations and propagations that enforce the requirement: i
 <details>
 <summary>Solution</summary>
 
-```
+```text
 TGW Route Tables:
 ═══════════════════════════════════════
 
