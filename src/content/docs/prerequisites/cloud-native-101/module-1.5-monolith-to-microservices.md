@@ -8,7 +8,7 @@ sidebar:
 >
 > **Time to Complete**: 30-35 minutes
 >
-> **Prerequisites**: Module 3 (What Is Kubernetes?)
+> **Prerequisites**: Module 1.3 (What Is Kubernetes?)
 
 ---
 
