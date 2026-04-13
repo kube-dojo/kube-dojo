@@ -119,16 +119,21 @@ Lambda functions do not run on their own. They are triggered by events from othe
 
 The caller waits for Lambda to finish and gets the response back. Errors are returned to the caller.
 
-```
-Synchronous Pattern:
-
-API Gateway --> Lambda --> Response --> API Gateway --> Client
-                  |
-                  v
-               DynamoDB
-
-Client waits for the entire chain to complete.
-Timeout: API Gateway has a 29-second limit.
+```mermaid
+sequenceDiagram
+    participant Client
+    participant APIGateway as API Gateway
+    participant Lambda
+    participant DynamoDB
+    
+    Client->>APIGateway: Request
+    APIGateway->>Lambda: Synchronous Invoke
+    Lambda->>DynamoDB: Read/Write
+    DynamoDB-->>Lambda: Result
+    Lambda-->>APIGateway: Response
+    APIGateway-->>Client: Response
+    
+    Note over Client,DynamoDB: Client waits for entire chain to complete<br/>API Gateway has a 29-second timeout limit.
 ```
 
 ```bash
@@ -156,17 +161,24 @@ cat response.json
 
 The caller sends the event and immediately gets a 202 (Accepted). Lambda processes it in the background with built-in retry logic (2 retries by default).
 
-```
-Asynchronous Pattern:
-
-S3 Event ------> Lambda Event Queue ------> Lambda
-(PutObject)      (managed by AWS)            (processes async)
-                                                |
-S3 gets 202      If Lambda fails:              v
-immediately      Retry 1 (after ~1 min)     Process image
-                 Retry 2 (after ~2 min)
-                 Then: send to DLQ or
-                 EventBridge destination
+```mermaid
+sequenceDiagram
+    participant S3
+    participant Queue as Lambda Event Queue<br/>(managed by AWS)
+    participant Lambda
+    participant DLQ as DLQ / EventBridge Destination
+    
+    S3->>Queue: PutObject Event
+    Queue-->>S3: 202 Accepted (Immediate)
+    Queue->>Lambda: Asynchronous Invoke
+    
+    alt Success
+        Lambda->>Lambda: Process Image
+    else Failure
+        Lambda--xQueue: Error
+        Note over Queue,Lambda: Retry 1 (after ~1 min)<br/>Retry 2 (after ~2 min)
+        Queue->>DLQ: Send to Destination
+    end
 ```
 
 ```bash
@@ -189,16 +201,13 @@ aws lambda put-function-event-invoke-config \
 
 Lambda polls a stream (Kinesis, DynamoDB Streams, SQS) and processes batches of records.
 
-```
-Stream Pattern:
-
-SQS Queue: [msg1] [msg2] [msg3] [msg4] [msg5] [msg6] ...
-                \___________/        \___________/
-                  Batch 1              Batch 2
-                    |                    |
-                    v                    v
-                Lambda A             Lambda B
-                (concurrent)         (concurrent)
+```mermaid
+graph TD
+    Queue[SQS Queue: msg1, msg2, msg3, msg4, msg5, msg6]
+    Queue --> B1[Batch 1: msg1, msg2, msg3]
+    Queue --> B2[Batch 2: msg4, msg5, msg6]
+    B1 --> LA[Lambda A<br/>concurrent]
+    B2 --> LB[Lambda B<br/>concurrent]
 ```
 
 ```bash
@@ -325,21 +334,19 @@ Provisioned concurrency costs extra (you pay for the warm environments even when
 
 Layers let you package shared dependencies separately from your function code. This reduces deployment package size and enables sharing common libraries across functions.
 
-```
-Lambda Layers:
-
-Function Code (your handler)        <- Deployed frequently (seconds)
-         |
-    +----+----+----+
-    |    |    |    |
-  Layer1  Layer2  Layer3             <- Deployed rarely (shared)
-  (boto3) (pandas) (custom-utils)
-
-Layers are extracted to /opt/ in the execution environment.
-Runtime-specific paths:
-  Python: /opt/python/
-  Node.js: /opt/nodejs/
-  Java: /opt/java/lib/
+```mermaid
+graph TD
+    FC[Function Code handler<br/>Deployed frequently]
+    
+    subgraph Execution Environment /opt/ directory
+        L1[Layer 1: boto3]
+        L2[Layer 2: pandas]
+        L3[Layer 3: custom-utils]
+    end
+    
+    FC --> L1
+    FC --> L2
+    FC --> L3
 ```
 
 ```bash
@@ -558,16 +565,11 @@ Lambda enables powerful event-driven patterns. Here are the three you will use m
 
 ### Pattern 1: S3 Event Processing
 
-```
-S3 Bucket                Lambda              Output Bucket
-+--------+    Event     +--------+   PUT    +--------+
-| Upload |----------->  | Process|--------> | Output |
-| image  |  PutObject   | resize |          | thumb  |
-+--------+              +--------+          +--------+
-                            |
-                            v
-                        DynamoDB
-                        (metadata)
+```mermaid
+graph LR
+    S3[S3 Bucket<br/>Upload image] -- PutObject Event --> L[Lambda<br/>Process resize]
+    L -- PUT --> Out[Output Bucket<br/>thumb]
+    L -- Write metadata --> DDB[(DynamoDB)]
 ```
 
 ```bash
@@ -603,24 +605,46 @@ aws s3api put-bucket-notification-configuration \
 
 ### Pattern 2: Fan-Out with SNS
 
-```
-                          +-> Lambda A (send email)
-                         /
-SNS Topic ---> Subscribe +-> Lambda B (update dashboard)
-                         \
-                          +-> SQS Queue -> Lambda C (async processing)
+```mermaid
+graph LR
+    SNS[SNS Topic] -- Subscribe --> LA[Lambda A<br/>send email]
+    SNS -- Subscribe --> LB[Lambda B<br/>update dashboard]
+    SNS -- Subscribe --> SQS[SQS Queue]
+    SQS --> LC[Lambda C<br/>async processing]
 ```
 
 ### Pattern 3: Event Bus with EventBridge
 
-```
-Source Service        EventBridge           Target Functions
-+-----------+    +------------------+
-| Order API | -> | Rule: order.*    | --> Lambda: process-order
-+-----------+    | Rule: order.paid | --> Lambda: send-receipt
-                 | Rule: order.ship | --> Lambda: notify-warehouse
-| Payment   | -> | Rule: payment.*  | --> Lambda: update-ledger
-+-----------+    +------------------+
+```mermaid
+graph LR
+    subgraph Source Services
+        Order[Order API]
+        Payment[Payment API]
+    end
+    
+    subgraph EventBridge
+        R1{Rule: order.*}
+        R2{Rule: order.paid}
+        R3{Rule: order.ship}
+        R4{Rule: payment.*}
+    end
+    
+    subgraph Target Functions
+        L1[Lambda: process-order]
+        L2[Lambda: send-receipt]
+        L3[Lambda: notify-warehouse]
+        L4[Lambda: update-ledger]
+    end
+    
+    Order --> R1
+    Order --> R2
+    Order --> R3
+    Payment --> R4
+    
+    R1 --> L1
+    R2 --> L2
+    R3 --> L3
+    R4 --> L4
 ```
 
 ```bash
@@ -678,21 +702,21 @@ aws events put-targets \
 > **Stop and think**: Take a moment to reflect on the core concepts covered in this module. Can you articulate the main benefits and challenges of serverless computing with AWS Lambda?
 
 <details>
-<summary>1. Why should you initialize database connections and SDK clients outside the Lambda handler function?</summary>
+<summary>1. You are reviewing a colleague's Lambda function that experiences 500ms of extra latency on every single invocation. You notice they are initializing their database connection inside the handler function. Why is this problematic, and what should they do instead?</summary>
 
 Lambda reuses execution environments across invocations. Code outside the handler runs once during the cold start (INIT phase) and persists in memory for subsequent invocations. If you create a database connection inside the handler, you create a new connection on every single invocation -- which is slow (adding 50-200ms per call), wasteful (opening and closing connections unnecessarily), and can exhaust database connection limits under high concurrency. By initializing outside the handler, the connection is created once and reused for the lifetime of the execution environment (typically 5-15 minutes of inactivity).
 </details>
 
 <details>
-<summary>2. A Lambda function processes SQS messages in batches of 10. One message in the batch causes an error. Without proper configuration, what happens to all 10 messages?</summary>
+<summary>2. Your e-commerce application uses a Lambda function to process SQS messages containing order details in batches of 10. During a deployment, a malformed order message causes the function to throw an exception. If you have not configured `ReportBatchItemFailures`, what happens to the other 9 perfectly valid orders in that batch?</summary>
 
-Without `ReportBatchItemFailures` configured, if your function throws an error while processing any message in the batch, Lambda considers the entire batch as failed. All 10 messages return to the queue and will be processed again -- including the 9 that succeeded. This causes duplicate processing of successful messages and keeps failing on the same bad message. The fix is to enable `ReportBatchItemFailures` in the event source mapping and have your function return a list of failed message IDs in the `batchItemFailures` response field. Lambda then only returns the specific failed messages to the queue while acknowledging the successful ones.
+Without `ReportBatchItemFailures` configured, if your function throws an error while processing any message in the batch, Lambda considers the entire batch as failed. All 10 messages return to the queue and will be processed again -- including the 9 that succeeded. This causes duplicate processing of successful messages and keeps failing on the same bad message, potentially leading to a poison pill scenario. The fix is to enable `ReportBatchItemFailures` in the event source mapping and have your function return a list of failed message IDs in the `batchItemFailures` response field. Lambda then only returns the specific failed messages to the queue while acknowledging the successful ones.
 </details>
 
 <details>
-<summary>3. Explain the difference between reserved concurrency and provisioned concurrency.</summary>
+<summary>3. Your company has a critical customer-facing API backed by Lambda that suffers from slow response times during unexpected traffic spikes due to cold starts. Meanwhile, a background reporting Lambda function occasionally consumes all available account concurrency, taking the API down completely. How can you use reserved concurrency and provisioned concurrency to solve both problems?</summary>
 
-Reserved concurrency sets a maximum limit on how many concurrent executions a function can have, carved out from the account-level pool. If you reserve 100 for a function, that function can never exceed 100 concurrent executions, and those 100 are guaranteed even if other functions are consuming the rest of the pool. Provisioned concurrency, on the other hand, keeps a specified number of execution environments pre-initialized and warm, eliminating cold starts. You pay for provisioned environments whether they are used or not. Reserved concurrency is about capacity management and isolation (free). Provisioned concurrency is about latency optimization (costs money). They serve different purposes and can be used together.
+Reserved concurrency sets a maximum limit on how many concurrent executions a function can have, carved out from the account-level pool. Applying reserved concurrency to the background reporting function will cap its usage and prevent it from starving the critical API. Provisioned concurrency, on the other hand, keeps a specified number of execution environments pre-initialized and warm, eliminating cold starts. You should configure provisioned concurrency for the customer-facing API to ensure immediate response times during traffic spikes. Reserved concurrency is about capacity management and isolation (which is free), while provisioned concurrency is about latency optimization (which costs money).
 </details>
 
 <details>
@@ -702,21 +726,21 @@ Lambda allocates CPU proportionally to memory. At 128 MB, you get a tiny fractio
 </details>
 
 <details>
-<summary>5. Why would you choose Step Functions over having one Lambda function invoke another Lambda function directly?</summary>
+<summary>5. You are designing an order fulfillment system where a Lambda function charges a credit card, and if successful, calls another Lambda function to update inventory, which then calls a third function to dispatch shipping. What are the architectural flaws in having these Lambda functions directly invoke each other, and what service should you use instead?</summary>
 
-Direct Lambda-to-Lambda invocation has several problems. The calling function must wait (and pay) while the called function runs. If the called function fails, you must implement retry logic manually in your code. If the calling function times out, the called function becomes an orphan with no coordination. There is no built-in visibility into the workflow state. Step Functions solves all of these: each Lambda runs independently (no waiting), retries are declarative (no code), error handling is standardized with catch/fallback states, execution history is visual and persisted for 90 days, and workflows can pause for up to a year waiting for external input. The trade-off is cost ($0.025 per 1,000 state transitions), but for any workflow with more than 2 steps, it pays for itself in reduced debugging time alone.
+Direct Lambda-to-Lambda invocation has several problems, primarily that the calling function must wait (and pay) while the called function runs. If the called function fails, you must implement complex retry and fallback logic manually in your code. Furthermore, if the calling function times out, the called function becomes an orphan with no coordination or visibility into the workflow state. Step Functions solves all of these issues: each Lambda runs independently without idle waiting, retries are declarative, and error handling is standardized with catch/fallback states. The visual execution history is persisted for 90 days, making debugging straightforward, and although it costs $0.025 per 1,000 state transitions, it pays for itself in reduced debugging time and robust error handling.
 </details>
 
 <details>
-<summary>6. What happens if your Lambda function writes to the same S3 bucket that triggers it?</summary>
+<summary>6. A developer on your team configures a Lambda function to trigger on `s3:ObjectCreated:*` events for a bucket named `company-images`. The function resizes the uploaded image and saves the new version back to the `company-images` bucket. What catastrophic failure will this cause, and how can it be prevented?</summary>
 
-This creates a recursive invocation loop. The function is triggered by an S3 PutObject event, processes the file, writes output to the same bucket, which triggers another invocation, which processes and writes again, ad infinitum. This can generate millions of invocations in minutes, resulting in massive costs and potential service disruption. AWS added recursive invocation detection in 2023, which automatically stops the function after detecting 16 recursive calls. However, you should prevent this by design: use separate input and output buckets, or configure S3 event filters with different prefixes (e.g., trigger on `uploads/` prefix, write to `processed/` prefix). Never rely on automatic detection as your primary defense.
+This configuration creates a recursive invocation loop, also known as an infinite loop. The function is triggered by an S3 PutObject event, processes the file, and writes the output to the same bucket, which immediately triggers another invocation, repeating ad infinitum. This can generate millions of invocations in minutes, resulting in massive AWS costs and potential service disruption due to concurrency exhaustion. AWS added recursive invocation detection in 2023, which automatically stops the function after detecting 16 recursive calls, but you should prevent this by design. Always use separate input and output buckets, or configure S3 event filters with different prefixes (e.g., trigger on `uploads/` prefix, write to `processed/` prefix) to ensure the output does not trigger a new execution.
 </details>
 
 <details>
-<summary>7. When should you use Lambda container images instead of zip packages?</summary>
+<summary>7. Your data science team has built a machine learning inference function using PyTorch and OpenCV. The resulting deployment package is 850 MB, which far exceeds the Lambda zip file limits. What alternative packaging method should you use, and what are the trade-offs?</summary>
 
-Use container images when your deployment package exceeds the 250 MB unzipped limit for zip packages, or when your function depends on large native binaries, ML models, or system libraries that are difficult to manage in zip format. Container images support up to 10 GB, giving you 40x more space. They also let you use your existing Docker build pipeline and test locally with `docker run`. The trade-off is slightly slower cold starts (500-5000ms vs 150-400ms for zip) because the image must be pulled and extracted. For functions with heavy dependencies (PyTorch, TensorFlow, OpenCV, Puppeteer), container images are the practical choice.
+You should package the function as a container image. Container images support up to 10 GB in size, giving you more than enough room for large dependencies like PyTorch, ML models, or custom system binaries that exceed the 250 MB unzipped limit for zip packages. They also let you use your existing Docker build pipeline and test locally with `docker run`. The main trade-off is slightly slower cold starts (typically 500-5000ms compared to 150-400ms for zip) because the container image must be pulled and extracted by the Firecracker microVM. However, for functions with heavy dependencies, container images are the most practical and supported choice.
 </details>
 
 ---
@@ -1097,4 +1121,3 @@ echo "Cleanup complete"
 ## Next Module
 
 Next up: **[Module 1.9: Secrets Manager](../module-1.9-secrets/)** -- Learn to manage sensitive configuration data (database credentials, API keys, certificates) securely with automatic rotation, cross-account sharing, and integration with Lambda, ECS, and EKS.
----
