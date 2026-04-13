@@ -33,16 +33,20 @@ Before diving into cloud services, let's establish the core messaging patterns t
 
 ### Point-to-Point vs Publish-Subscribe
 
-```
-Point-to-Point (Queue):
-  Producer --> [  Queue  ] --> Consumer
-  Each message delivered to exactly one consumer
-
-Pub/Sub (Topic + Subscriptions):
-  Producer --> [ Topic ] --+--> Subscription A --> Consumer Group 1
-                           |
-                           +--> Subscription B --> Consumer Group 2
-  Each message delivered to all subscriptions
+```mermaid
+graph TD
+    subgraph Point-to-Point
+        P1[Producer] --> Q1[(Queue)]
+        Q1 --> C1[Consumer]
+    end
+    
+    subgraph Pub/Sub
+        P2[Producer] --> T1((Topic))
+        T1 --> S1[Subscription A]
+        T1 --> S2[Subscription B]
+        S1 --> CG1[Consumer Group 1]
+        S2 --> CG2[Consumer Group 2]
+    end
 ```
 
 ### Delivery Guarantees
@@ -265,31 +269,11 @@ KEDA (Kubernetes Event-Driven Autoscaling) is the missing piece that makes messa
 
 ### How KEDA Works
 
-```
-                    +------------------+
-                    |   Cloud Queue    |
-                    | (depth: 1500)    |
-                    +--------+---------+
-                             |
-                             | poll metrics
-                             v
-                    +------------------+
-                    |  KEDA Operator   |
-                    | (ScaledObject)   |
-                    +--------+---------+
-                             |
-                             | scale to: ceil(1500/100) = 15 pods
-                             v
-                    +------------------+
-                    |    HPA           |
-                    | (managed by KEDA)|
-                    +--------+---------+
-                             |
-                             v
-                    +------------------+
-                    |   Deployment     |
-                    | (15 replicas)    |
-                    +------------------+
+```mermaid
+graph TD
+    CQ[(Cloud Queue<br>depth: 1500)] -->|poll metrics| KO[KEDA Operator<br>ScaledObject]
+    KO -->|scale to: ceil 1500/100 = 15| HPA[HPA<br>managed by KEDA]
+    HPA -->|updates| D[Deployment<br>15 replicas]
 ```
 
 ### Installing KEDA
@@ -408,16 +392,13 @@ A DLQ captures messages that fail processing repeatedly. Without a DLQ, poison m
 
 ### DLQ Architecture
 
-```
-Producer --> [ Main Queue ] --> Consumer
-                  |                |
-                  |    fails 3x    |
-                  |                v
-                  +-------> [ DLQ ] --> Alert
-                                        |
-                                        v
-                                   Manual Review
-                                   or Reprocessing
+```mermaid
+graph TD
+    P[Producer] --> MQ[(Main Queue)]
+    MQ --> C[Consumer]
+    C -->|fails 3x| DLQ[(DLQ)]
+    DLQ --> A[Alert]
+    A --> MR[Manual Review or Reprocessing]
 ```
 
 ### DLQ Consumer for Alerting
@@ -474,18 +455,20 @@ When multiple pods consume from the same queue, they are "competing consumers." 
 
 ### Multi-Consumer Architecture
 
-```
-                     order-events (SNS Topic / Pub/Sub Topic)
-                           |
-              +------------+-------------+
-              |                          |
-     order-processing           order-analytics
-     (SQS Queue / Sub)         (SQS Queue / Sub)
-         |                          |
-    +----+----+                +----+----+
-    |    |    |                |    |    |
-   Pod  Pod  Pod              Pod  Pod  Pod
-   (processors)               (analytics)
+```mermaid
+graph TD
+    T((order-events<br>SNS Topic / Pub/Sub Topic))
+    
+    T --> Q1[(order-processing<br>SQS Queue / Sub)]
+    T --> Q2[(order-analytics<br>SQS Queue / Sub)]
+    
+    Q1 --> P1[Pod<br>processors]
+    Q1 --> P2[Pod<br>processors]
+    Q1 --> P3[Pod<br>processors]
+    
+    Q2 --> P4[Pod<br>analytics]
+    Q2 --> P5[Pod<br>analytics]
+    Q2 --> P6[Pod<br>analytics]
 ```
 
 Each service gets its own subscription/queue. Messages fan out to all subscriptions, and within each subscription, competing consumers share the load.
@@ -531,14 +514,17 @@ For most Kubernetes workloads, **at-least-once with application-level idempotenc
 
 One of the most misunderstood concepts in queue-based systems is the visibility timeout (SQS) or ack deadline (Pub/Sub).
 
-```
-Timeline for a single message:
+```mermaid
+sequenceDiagram
+    participant Q as Queue
+    participant C1 as Consumer 1
+    participant C2 as Consumer 2
 
-  t=0     Message arrives in queue
-  t=1     Consumer receives message (visibility timeout starts)
-  t=1-59  Consumer processes message
-  t=60    If not deleted/acked, message becomes visible again
-          (another consumer will pick it up -- duplicate!)
+    Note over Q: t=0: Message arrives in queue
+    Q->>C1: t=1: Consumer receives message<br>(visibility timeout starts)
+    Note over C1: t=1-59: Consumer processes message
+    Note over Q: t=60: Timeout expires<br>(message not deleted/acked)
+    Q->>C2: t=61: Message becomes visible again<br>Another consumer picks it up (duplicate!)
 ```
 
 ### Setting the Right Timeout
