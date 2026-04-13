@@ -1173,6 +1173,9 @@ jobs:
           black --check src/
           ruff check src/
 EOF
+
+# Verify file creation
+ls -l .github/workflows/pr-check.yml
 ```
 </details>
 
@@ -1195,13 +1198,14 @@ def test_data_volume():
     assert simulated_row_count >= minimum_required, f"Data starvation: Only {simulated_row_count} rows available."
 EOF
 
-# Run it to observe the deliberate gate failure
+# Install pytest and run it to observe the deliberate gate failure
+pip install pytest
 pytest tests/data/test_data_gate.py
 ```
 </details>
 
-### Task 3: Trigger a Portable Dagger Build
-Install Dagger locally and initiate an isolated containerized test run, mimicking what a CI runner executes.
+### Task 3: Install and Verify Dagger
+Install Dagger locally to prepare for portable CI/CD execution.
 
 <details>
 <summary>Solution & Commands</summary>
@@ -1210,8 +1214,8 @@ Install Dagger locally and initiate an isolated containerized test run, mimickin
 # Install the Dagger CLI
 curl -L https://dl.dagger.io/dagger/install.sh | sh
 
-# In your project root, call a testing pipeline natively
-./bin/dagger call test --source=.
+# Verify installation
+./bin/dagger version
 ```
 </details>
 
@@ -1223,22 +1227,25 @@ Once your pipeline outputs an image, configure your cluster to update its active
 
 ```bash
 # Ensure you are on a v1.35 context
-kubectl version --short
+kubectl version
+
+# Create a simulated deployment first
+kubectl create deployment ml-inference-server --image=nginx:alpine
 
 # Apply the new artifact directly to the deployment
 kubectl set image deployment/ml-inference-server \
-  inference-container=myregistry/model:v2.0.1 \
+  nginx=myregistry/model:v2.0.1 \
   --record
   
-# Verify the rollout status
-kubectl rollout status deployment/ml-inference-server
+# Verify the rollout status (will timeout due to fake registry)
+kubectl rollout status deployment/ml-inference-server --timeout=10s || true
 ```
 </details>
 
 ### Success Checklist
 - [ ] You have a functional `.github/workflows` directory enforcing syntax limits.
 - [ ] You observed a `pytest` validation gate reject an under-sampled dataset.
-- [ ] You successfully utilized Dagger to orchestrate a containerized local build.
+- [ ] You successfully installed and verified the Dagger CLI.
 - [ ] You practiced a `kubectl set image` command suitable for a v1.35+ production environment.
 
 ---
