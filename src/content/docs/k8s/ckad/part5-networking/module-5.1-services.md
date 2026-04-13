@@ -348,10 +348,10 @@ k get endpoints NAME
 k get ep NAME
 
 # Debug DNS
-k run tmp --image=busybox --rm -it --restart=Never -- nslookup my-service
+k run tmp --image=busybox --rm -i --restart=Never -- nslookup my-service
 
 # Test connectivity
-k run tmp --image=busybox --rm -it --restart=Never -- wget -qO- my-service:80
+k run tmp --image=busybox --rm -i --restart=Never -- wget -qO- my-service:80
 ```
 
 ---
@@ -430,10 +430,10 @@ k expose deployment web --port=80 --target-port=80
 k get endpoints web
 
 # Test from within cluster
-k run test --image=busybox --rm -it --restart=Never -- wget -qO- web:80
+k run test --image=busybox --rm -i --restart=Never -- wget -qO- web:80
 
 # Check DNS
-k run test --image=busybox --rm -it --restart=Never -- nslookup web.default.svc.cluster.local
+k run test --image=busybox --rm -i --restart=Never -- nslookup web.default.svc.cluster.local
 ```
 
 **Part 2: NodePort Service**
@@ -517,7 +517,7 @@ k create deployment drill3 --image=nginx
 k expose deployment drill3 --port=80
 
 # Test DNS
-k run dns-test --image=busybox --rm -it --restart=Never -- nslookup drill3
+k run dns-test --image=busybox --rm -i --restart=Never -- nslookup drill3
 
 k delete deploy drill3 svc drill3
 ```
@@ -603,7 +603,7 @@ k create deployment drill6-app --image=nginx -n drill6
 k expose deployment drill6-app --port=80 -n drill6
 
 # Access from default namespace
-k run test --image=busybox --rm -it --restart=Never -- wget -qO- drill6-app.drill6:80
+k run test --image=busybox --rm -i --restart=Never -- wget -qO- drill6-app.drill6:80
 
 k delete ns drill6
 ```
