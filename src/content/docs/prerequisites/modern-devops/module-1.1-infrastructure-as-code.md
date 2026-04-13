@@ -264,7 +264,7 @@ spec:
     spec:
       containers:
       - name: nginx
-        image: nginx:1.26
+        image: nginx:1.28
 ```
 
 ```bash
@@ -275,7 +275,7 @@ kubectl apply -f deployment.yaml
 # This is IaC in action!
 ```
 
-> **Stop and think**: Notice how we don't tell Kubernetes *how* to run the container. We just state *what* we want (3 replicas of nginx:1.26), and Kubernetes figures out the rest.
+> **Stop and think**: Notice how we don't tell Kubernetes *how* to run the container. We just state *what* we want (3 replicas of nginx:1.28), and Kubernetes figures out the rest.
 
 The connection: **Kubernetes uses the same declarative, idempotent principles as Terraform and Ansible.**
 
@@ -288,6 +288,8 @@ While IaC is essential for modern engineering, it comes with specific trade-offs
 - **Speed vs. Structure**: Clicking through a cloud console (ClickOps) is much faster for a quick, one-off experiment. IaC requires writing code, planning, and applying, which introduces overhead for simple tasks.
 - **Learning Curve**: Teams cannot simply provision servers; they must learn domain-specific languages (like HCL for Terraform) and understand state management principles.
 - **State Management Complexity**: Tools like Terraform store the environment's state in a file (`terraform.tfstate`). Managing this state file securely (locking it to prevent concurrent runs, encrypting it to hide secrets) becomes a new operational burden.
+
+> **Stop and think**: Why might a startup choose to use ClickOps for their first prototype, even if they know IaC is the industry standard for production?
 
 ---
 
@@ -338,6 +340,8 @@ environments/
 └── prod/
     └── main.tf      # Large instances, high availability
 ```
+
+> **Pause and predict**: If you have separate environments like dev, staging, and prod, what is the danger of copying and pasting infrastructure code between them instead of using reusable modules?
 
 ### 4. Never Edit Manually
 
@@ -446,7 +450,7 @@ spec:
     spec:
       containers:
       - name: nginx
-        image: nginx:1.26
+        image: nginx:1.28
 EOF
 
 kubectl apply -f deployment.yaml
