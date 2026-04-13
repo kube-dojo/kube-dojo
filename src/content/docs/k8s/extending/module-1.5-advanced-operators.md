@@ -333,7 +333,7 @@ func (r *WebAppReconciler) updateConditions(ctx context.Context,
 
 ```bash
 # View conditions
-k get webapp my-app -o jsonpath='{range .status.conditions[*]}{.type}{"\t"}{.status}{"\t"}{.reason}{"\t"}{.message}{"\n"}{end}'
+kubectl get webapp my-app -o jsonpath='{range .status.conditions[*]}{.type}{"\t"}{.status}{"\t"}{.reason}{"\t"}{.message}{"\n"}{end}'
 
 # Example output:
 # DeploymentReady   True    Available       Deployment has 3/3 replicas ready
@@ -341,7 +341,7 @@ k get webapp my-app -o jsonpath='{range .status.conditions[*]}{.type}{"\t"}{.sta
 # Ready             True    Available       All components are ready
 
 # Check if ready using JSONPath
-k get webapp my-app -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+kubectl get webapp my-app -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
 ```
 
 ### 2.5 Condition Conventions
@@ -435,10 +435,10 @@ func (r *WebAppReconciler) reconcileNormal(ctx context.Context,
 
 ```bash
 # View events for a specific resource
-k describe webapp my-app | grep -A 20 "Events:"
+kubectl describe webapp my-app | grep -A 20 "Events:"
 
 # View all events sorted by time
-k get events --sort-by=.lastTimestamp --field-selector involvedObject.kind=WebApp
+kubectl get events --sort-by=.lastTimestamp --field-selector involvedObject.kind=WebApp
 ```
 
 ---
@@ -1083,7 +1083,7 @@ make install
 make run
 
 # In another terminal
-cat << 'EOF' | k apply -f -
+cat << 'EOF' | kubectl apply -f -
 apiVersion: apps.kubedojo.io/v1beta1
 kind: WebApp
 metadata:
@@ -1094,15 +1094,18 @@ spec:
   port: 80
 EOF
 
+# Checkpoint: Wait for the operator to successfully reconcile the resource
+kubectl wait --for=condition=Ready webapp/advanced-demo --timeout=60s
+
 # Check events
-k describe webapp advanced-demo
+kubectl describe webapp advanced-demo
 
 # Check conditions
-k get webapp advanced-demo -o jsonpath='{range .status.conditions[*]}{.type}: {.status} ({.reason}){"\n"}{end}'
+kubectl get webapp advanced-demo -o jsonpath='{range .status.conditions[*]}{.type}: {.status} ({.reason}){"\n"}{end}'
 
 # Delete and watch cleanup
-k delete webapp advanced-demo
-k get events --sort-by=.lastTimestamp | tail -10
+kubectl delete webapp advanced-demo
+kubectl get events --sort-by=.lastTimestamp | tail -10
 ```
 
 9. **Cleanup**:
