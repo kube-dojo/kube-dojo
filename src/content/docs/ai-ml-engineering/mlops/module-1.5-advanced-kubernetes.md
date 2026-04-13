@@ -872,11 +872,11 @@ curl -X POST ${SERVICE_URL}/v1/models/sklearn-iris:predict -d '{"instances": [[6
 
 ### Exercise 2: Create a Kubeflow Pipeline
 
-Build a simple two-step pipeline that adds numbers and multiplies the result. Compile it and view the DAG.
+Build a simple two-step pipeline that adds numbers and multiplies the result. Compile it to a YAML file that could be uploaded to a Kubeflow UI.
 
 ```bash
-# Install Kubeflow Pipelines SDK
-pip install kfp
+# Install Kubeflow Pipelines SDK (no running cluster required)
+pip install kfp --quiet
 ```
 
 ```python
@@ -896,9 +896,10 @@ def math_pipeline(x: float = 2.0, y: float = 3.0):
     multiply(a=sum_result.output, b=2.0)
 
 compiler.Compiler().compile(math_pipeline, "pipeline.yaml")
-
-# Note: To view the DAG, upload pipeline.yaml to the Kubeflow Pipelines UI in your browser.
+print("Pipeline compiled to pipeline.yaml")
 ```
+
+The `compiler.Compiler().compile()` step only requires the `kfp` SDK—no running Kubeflow instance is needed. The output `pipeline.yaml` is an Argo Workflows manifest. In a real environment with Kubeflow deployed, you would upload this file to the Kubeflow Pipelines UI (Pipelines → Upload pipeline) to visualize the DAG and run it against your cluster.
 
 ### Exercise 3: Deploy a Ray Cluster
 
