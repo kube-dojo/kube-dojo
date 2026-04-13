@@ -428,16 +428,19 @@ CMD ["python", "app.py"]
 
 ### One Process Per Container
 
-```
-# BAD: Multiple services in one container
-Container: nginx + python app + redis
+```mermaid
+flowchart TD
+    subgraph BAD [BAD: Multiple services in one container]
+        A[Container: nginx + python app + redis]
+    end
 
-# GOOD: Separate containers
-Container 1: nginx
-Container 2: python app
-Container 3: redis
-(Use Docker Compose or Kubernetes to orchestrate)
+    subgraph GOOD [GOOD: Separate containers]
+        B[Container 1: nginx]
+        C[Container 2: python app]
+        D[Container 3: redis]
+    end
 ```
+*(Use Docker Compose or Kubernetes to orchestrate)*
 
 ---
 
