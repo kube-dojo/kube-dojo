@@ -35,24 +35,29 @@ The single most consequential networking decision in AKS is which Container Netw
 
 Kubenet assigns pods IP addresses from a virtual network space that is separate from the Azure VNet. Each node gets a single IP address from the VNet subnet, and pods on that node receive addresses from a private 10.244.0.0/16 range managed by a local bridge. Traffic between pods on different nodes is routed through Azure UDRs.
 
-```text
-    Azure VNet: 10.1.0.0/16
-    ┌─────────────────────────────────────────────────────────────┐
-    │  Subnet: 10.1.1.0/24                                       │
-    │                                                             │
-    │  Node A (10.1.1.4)          Node B (10.1.1.5)               │
-    │  ┌─────────────────┐       ┌─────────────────┐              │
-    │  │ cbr0 bridge     │       │ cbr0 bridge     │              │
-    │  │ 10.244.0.0/24   │       │ 10.244.1.0/24   │              │
-    │  │                 │       │                 │              │
-    │  │ Pod: 10.244.0.5 │       │ Pod: 10.244.1.8 │              │
-    │  │ Pod: 10.244.0.6 │       │ Pod: 10.244.1.9 │              │
-    │  └────────┬────────┘       └────────┬────────┘              │
-    │           │                          │                       │
-    │           └──── UDR route table ─────┘                       │
-    │                 10.244.0.0/24 → 10.1.1.4                    │
-    │                 10.244.1.0/24 → 10.1.1.5                    │
-    └─────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph VNet ["Azure VNet: 10.1.0.0/16"]
+        subgraph Subnet ["Subnet: 10.1.1.0/24"]
+            subgraph NodeA ["Node A (10.1.1.4)"]
+                BridgeA["cbr0 bridge<br/>10.244.0.0/24"]
+                PodA1["Pod: 10.244.0.5"]
+                PodA2["Pod: 10.244.0.6"]
+                BridgeA --- PodA1
+                BridgeA --- PodA2
+            end
+            subgraph NodeB ["Node B (10.1.1.5)"]
+                BridgeB["cbr0 bridge<br/>10.244.1.0/24"]
+                PodB1["Pod: 10.244.1.8"]
+                PodB2["Pod: 10.244.1.9"]
+                BridgeB --- PodB1
+                BridgeB --- PodB2
+            end
+            UDR["UDR route table<br/>10.244.0.0/24 → 10.1.1.4<br/>10.244.1.0/24 → 10.1.1.5"]
+            BridgeA --- UDR
+            BridgeB --- UDR
+        end
+    end
 ```
 
 Kubenet conserves IP addresses---if you have 100 pods across 3 nodes, you only consume 3 VNet IPs. But the trade-offs are severe for production workloads:
@@ -68,22 +73,27 @@ Kubenet conserves IP addresses---if you have 100 pods across 3 nodes, you only c
 
 Azure CNI assigns every pod an IP address directly from the VNet subnet. Each pod is a first-class citizen on the Azure network---accessible by any Azure resource that can reach the VNet, without NAT or routing tricks.
 
-```text
-    Azure VNet: 10.1.0.0/16
-    ┌─────────────────────────────────────────────────────────────┐
-    │  Subnet: 10.1.1.0/22 (1,024 addresses - you need a lot!)  │
-    │                                                             │
-    │  Node A (10.1.1.4)          Node B (10.1.1.5)               │
-    │  ┌─────────────────┐       ┌─────────────────┐              │
-    │  │ Pod: 10.1.1.10  │       │ Pod: 10.1.1.40  │              │
-    │  │ Pod: 10.1.1.11  │       │ Pod: 10.1.1.41  │              │
-    │  │ Pod: 10.1.1.12  │       │ Pod: 10.1.1.42  │              │
-    │  │ ...              │       │ ...              │              │
-    │  │ Pod: 10.1.1.39  │       │ Pod: 10.1.1.69  │              │
-    │  └─────────────────┘       └─────────────────┘              │
-    │                                                             │
-    │  30 IPs reserved per node (even if only 5 pods running)     │
-    └─────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph VNet ["Azure VNet: 10.1.0.0/16"]
+        subgraph Subnet ["Subnet: 10.1.1.0/22 (1,024 addresses - you need a lot!)"]
+            subgraph NodeA ["Node A (10.1.1.4)"]
+                PodA1["Pod: 10.1.1.10"]
+                PodA2["Pod: 10.1.1.11"]
+                PodA3["Pod: 10.1.1.12"]
+                PodA4["..."]
+                PodA5["Pod: 10.1.1.39"]
+            end
+            subgraph NodeB ["Node B (10.1.1.5)"]
+                PodB1["Pod: 10.1.1.40"]
+                PodB2["Pod: 10.1.1.41"]
+                PodB3["Pod: 10.1.1.42"]
+                PodB4["..."]
+                PodB5["Pod: 10.1.1.69"]
+            end
+            Note["30 IPs reserved per node (even if only 5 pods running)"]
+        end
+    end
 ```
 
 The critical issue with Azure CNI is IP address consumption. By default, AKS pre-allocates IPs for the maximum number of pods each node can run (set by `--max-pods`, default 30). A 10-node cluster with the default setting consumes 300 VNet IPs plus 10 for the nodes themselves---310 total. If you have a /24 subnet (254 usable IPs), you cannot even run 10 nodes.
@@ -108,23 +118,27 @@ az aks create \
 
 CNI Overlay was introduced to solve the IP exhaustion problem while maintaining most of the benefits of Azure CNI. Nodes get IPs from the VNet subnet (just like Kubenet), but pods get IPs from a private overlay network (default 10.244.0.0/16). The magic is that pod-to-pod traffic uses an overlay tunnel, not UDRs, so you do not hit route table limits.
 
-```text
-    Azure VNet: 10.1.0.0/16
-    ┌─────────────────────────────────────────────────────────────┐
-    │  Node Subnet: 10.1.1.0/24 (only node IPs here)            │
-    │                                                             │
-    │  Node A (10.1.1.4)          Node B (10.1.1.5)               │
-    │  ┌─────────────────┐       ┌─────────────────┐              │
-    │  │ Overlay network  │       │ Overlay network  │              │
-    │  │ Pod: 10.244.0.5  │       │ Pod: 10.244.1.8  │              │
-    │  │ Pod: 10.244.0.6  │       │ Pod: 10.244.1.9  │              │
-    │  └────────┬────────┘       └────────┬────────┘              │
-    │           │    VXLAN/GENEVE tunnel    │                       │
-    │           └──────────────────────────┘                       │
-    │                                                             │
-    │  Pod IPs are NOT routable from outside the cluster           │
-    │  (use Services or Ingress to expose workloads)               │
-    └─────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph VNet ["Azure VNet: 10.1.0.0/16"]
+        subgraph Subnet ["Node Subnet: 10.1.1.0/24 (only node IPs here)"]
+            subgraph NodeA ["Node A (10.1.1.4)"]
+                subgraph OverlayA ["Overlay network"]
+                    PodA1["Pod: 10.244.0.5"]
+                    PodA2["Pod: 10.244.0.6"]
+                end
+            end
+            subgraph NodeB ["Node B (10.1.1.5)"]
+                subgraph OverlayB ["Overlay network"]
+                    PodB1["Pod: 10.244.1.8"]
+                    PodB2["Pod: 10.244.1.9"]
+                end
+            end
+            Tunnel["VXLAN/GENEVE tunnel"]
+            OverlayA <-->|Tunnel| OverlayB
+            Note["Pod IPs are NOT routable from outside the cluster<br/>(use Services or Ingress to expose workloads)"]
+        end
+    end
 ```
 
 The trade-off: pod IPs are not directly routable from the VNet. Azure services that rely on direct pod IP connectivity (like certain VNet service endpoint configurations) will not work. For most microservices architectures where external traffic enters through a load balancer or ingress controller, this is perfectly fine.
@@ -146,29 +160,25 @@ az aks create \
 
 CNI Powered by Cilium replaces the traditional Azure CNI dataplane with Cilium's eBPF-based dataplane. This gives you all the benefits of CNI Overlay (efficient IP usage) plus Cilium's advanced features: eBPF-based packet processing (no iptables), L7 network policies, transparent encryption, and DNS-aware egress filtering.
 
-```text
-    ┌─────────────────────────────────────────────────────────────┐
-    │  Traditional Networking Stack    vs.   Cilium eBPF Stack    │
-    │                                                             │
-    │  Application                          Application           │
-    │       │                                    │                │
-    │       ▼                                    ▼                │
-    │  Socket Layer                         Socket Layer          │
-    │       │                                    │                │
-    │       ▼                                    ▼                │
-    │  iptables rules (thousands!)          eBPF programs         │
-    │       │                               (compiled, fast)      │
-    │       ▼                                    │                │
-    │  Netfilter conntrack                       ▼                │
-    │       │                               Direct to NIC         │
-    │       ▼                               (bypass iptables      │
-    │  Network Interface                     entirely)            │
-    │                                                             │
-    │  O(n) rule evaluation                 O(1) hash lookups     │
-    └─────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph Traditional ["Traditional Networking Stack"]
+        App1["Application"] --> Sock1["Socket Layer"]
+        Sock1 --> iptables["iptables rules (thousands!)"]
+        iptables --> Netfilter["Netfilter conntrack"]
+        Netfilter --> NIC1["Network Interface"]
+        NIC1 -.-> Note1["O(n) rule evaluation"]
+    end
+    
+    subgraph Cilium ["Cilium eBPF Stack"]
+        App2["Application"] --> Sock2["Socket Layer"]
+        Sock2 --> eBPF["eBPF programs (compiled, fast)"]
+        eBPF --> NIC2["Direct to NIC (bypass iptables entirely)"]
+        NIC2 -.-> Note2["O(1) hash lookups"]
+    end
 ```
 
-This is the model Microsoft is actively investing in, and it is the recommended choice for new clusters as of 2025. The eBPF dataplane is not just faster---it fundamentally changes how packet processing scales. With iptables, adding more services linearly increases the number of rules every packet must traverse. With eBPF, lookups are hash-based and remain constant regardless of the number of services.
+This is the model Microsoft is actively investing in, and it is the recommended choice for new clusters as of 2026. The eBPF dataplane is not just faster---it fundamentally changes how packet processing scales. With iptables, adding more services linearly increases the number of rules every packet must traverse. With eBPF, lookups are hash-based and remain constant regardless of the number of services.
 
 ```bash
 # Create an AKS cluster with CNI Powered by Cilium
@@ -355,26 +365,14 @@ AKS supports two primary ingress controllers as managed add-ons: Application Gat
 
 AGIC uses Azure Application Gateway (a layer-7 load balancer) as the ingress controller. The controller runs inside your cluster, watches for Kubernetes Ingress resources, and configures the Application Gateway accordingly.
 
-```text
-    Internet
-        │
-        ▼
-    ┌──────────────────┐
-    │ Azure Application │     WAF protection, SSL termination,
-    │ Gateway (L7 LB)  │     path-based routing, autoscaling
-    └────────┬─────────┘
-             │
-             ▼
-    ┌──────────────────────────────────────┐
-    │          AKS Cluster                  │
-    │                                      │
-    │  ┌────────────┐  ┌────────────────┐  │
-    │  │  AGIC Pod   │  │  Backend Pods  │  │
-    │  │ (watches    │  │  (your apps)   │  │
-    │  │  Ingress    │  │                │  │
-    │  │  resources) │  │                │  │
-    │  └────────────┘  └────────────────┘  │
-    └──────────────────────────────────────┘
+```mermaid
+graph TD
+    Internet["Internet"] --> AppGw["Azure Application Gateway (L7 LB)<br/>WAF protection, SSL termination,<br/>path-based routing, autoscaling"]
+    
+    subgraph Cluster ["AKS Cluster"]
+        AppGw --> Backend["Backend Pods (your apps)"]
+        AGIC["AGIC Pod<br/>(watches Ingress resources)"] -.->|configures| AppGw
+    end
 ```
 
 AGIC shines when you need Web Application Firewall (WAF) protection, SSL offloading at scale, or native integration with Azure services like Azure Front Door. It does not run an in-cluster proxy---traffic goes directly from the Application Gateway to the backend pods (if using Azure CNI with direct pod routing) or through the node's IP.
@@ -452,25 +450,20 @@ By default, the AKS API server has a public endpoint. Anyone on the internet can
 
 A private AKS cluster moves the API server behind an Azure Private Endpoint. The API server gets a private IP address in your VNet, and the public endpoint is disabled entirely.
 
-```text
-    Internet                    Your Azure VNet: 10.1.0.0/16
-    ┌─────────┐                ┌─────────────────────────────────────┐
-    │         │     ╳ BLOCKED  │                                     │
-    │ Attacker│────────────╳   │  ┌──────────────────────────────┐   │
-    │         │                │  │ Private Endpoint: 10.1.3.4   │   │
-    └─────────┘                │  │ (AKS API Server)             │   │
-                               │  └──────────────┬───────────────┘   │
-    ┌─────────────────────┐    │                 │                   │
-    │ Azure DevOps /      │    │  ┌──────────────▼───────────────┐   │
-    │ GitHub Actions       │───┼─►│ Self-hosted build agent       │   │
-    │ (with private agent) │    │  │ (runs in VNet)               │   │
-    └─────────────────────┘    │  └──────────────────────────────┘   │
-                               │                                     │
-    ┌─────────────────────┐    │  ┌──────────────────────────────┐   │
-    │ Developer laptop    │    │  │ AKS Nodes                     │   │
-    │ (with VPN)          │────┼─►│ (communicate via private DNS) │   │
-    └─────────────────────┘    │  └──────────────────────────────┘   │
-                               └─────────────────────────────────────┘
+```mermaid
+graph LR
+    Attacker["Attacker<br/>(Internet)"] -.-x|BLOCKED| PE
+    
+    subgraph VNet ["Your Azure VNet: 10.1.0.0/16"]
+        PE["Private Endpoint: 10.1.3.4<br/>(AKS API Server)"]
+        Agent["Self-hosted build agent<br/>(runs in VNet)"]
+        Nodes["AKS Nodes<br/>(communicate via private DNS)"]
+    end
+    
+    DevOps["Azure DevOps / GitHub Actions<br/>(with private agent)"] --> Agent
+    Dev["Developer laptop<br/>(with VPN)"] --> PE
+    Agent --> PE
+    Nodes --> PE
 ```
 
 ```bash
@@ -682,14 +675,14 @@ az aks create \
 az aks get-credentials -g rg-aks-cilium -n aks-cilium-lab --overwrite-existing
 
 # Verify Cilium is running
-k get pods -n kube-system -l k8s-app=cilium -o wide
+kubectl get pods -n kube-system -l k8s-app=cilium -o wide
 
 # Verify kube-proxy is NOT running (Cilium replaces it)
-k get pods -n kube-system -l component=kube-proxy
+kubectl get pods -n kube-system -l component=kube-proxy
 # Expected: No resources found
 
 # Check Cilium status
-k exec -n kube-system -l k8s-app=cilium -- cilium status --brief
+kubectl exec -n kube-system -l k8s-app=cilium -- cilium status --brief
 ```
 
 </details>
@@ -703,11 +696,11 @@ Deploy a frontend and backend service with clearly defined communication require
 
 ```bash
 # Create namespaces
-k create namespace frontend
-k create namespace backend
+kubectl create namespace frontend
+kubectl create namespace backend
 
 # Deploy backend (payment service that needs to reach Stripe)
-k apply -f - <<'EOF'
+kubectl apply -f - <<'EOF'
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -746,7 +739,7 @@ spec:
 EOF
 
 # Deploy frontend (web app that calls the payment service)
-k apply -f - <<'EOF'
+kubectl apply -f - <<'EOF'
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -773,8 +766,8 @@ spec:
 EOF
 
 # Verify pods are running
-k get pods -n backend
-k get pods -n frontend
+kubectl get pods -n backend
+kubectl get pods -n frontend
 ```
 
 </details>
@@ -816,11 +809,11 @@ spec:
 
 ```bash
 # Apply the deny-all policies
-k apply -f default-deny.yaml
+kubectl apply -f default-deny.yaml
 
 # Verify that the payment service can no longer reach the internet
-PAYMENT_POD=$(k get pod -n backend -l app=payment-service -o jsonpath='{.items[0].metadata.name}')
-k exec -n backend "$PAYMENT_POD" -- curl -s --max-time 5 https://httpbin.org/get
+PAYMENT_POD=$(kubectl get pod -n backend -l app=payment-service -o jsonpath='{.items[0].metadata.name}')
+kubectl exec -n backend "$PAYMENT_POD" -- curl -s --max-time 5 https://httpbin.org/get
 # Expected: timeout (connection blocked)
 ```
 
@@ -876,18 +869,18 @@ spec:
 ```
 
 ```bash
-k apply -f payment-egress-policy.yaml
+kubectl apply -f payment-egress-policy.yaml
 
 # Test: payment service can reach httpbin.org (our stand-in for Stripe)
-k exec -n backend "$PAYMENT_POD" -- curl -s --max-time 10 https://httpbin.org/get | head -5
+kubectl exec -n backend "$PAYMENT_POD" -- curl -s --max-time 10 https://httpbin.org/get | head -5
 # Expected: success (JSON response)
 
 # Test: payment service CANNOT reach google.com
-k exec -n backend "$PAYMENT_POD" -- curl -s --max-time 5 https://www.google.com
+kubectl exec -n backend "$PAYMENT_POD" -- curl -s --max-time 5 https://www.google.com
 # Expected: timeout (domain not in allowlist)
 
 # Test: payment service CANNOT reach example.com
-k exec -n backend "$PAYMENT_POD" -- curl -s --max-time 5 https://example.com
+kubectl exec -n backend "$PAYMENT_POD" -- curl -s --max-time 5 https://example.com
 # Expected: timeout (domain not in allowlist)
 ```
 
@@ -954,13 +947,13 @@ spec:
 ```
 
 ```bash
-k apply -f frontend-to-backend.yaml
+kubectl apply -f frontend-to-backend.yaml
 
 # Verify the Cilium policies are loaded
-k get ciliumnetworkpolicies -A
+kubectl get ciliumnetworkpolicies -A
 
 # Check Cilium's policy enforcement status
-k exec -n kube-system -l k8s-app=cilium -- cilium endpoint list
+kubectl exec -n kube-system -l k8s-app=cilium -- cilium endpoint list
 ```
 
 </details>
@@ -973,23 +966,23 @@ Run a comprehensive test to confirm all policies are working as expected.
 <summary>Solution</summary>
 
 ```bash
-PAYMENT_POD=$(k get pod -n backend -l app=payment-service -o jsonpath='{.items[0].metadata.name}')
-FRONTEND_POD=$(k get pod -n frontend -l app=web-frontend -o jsonpath='{.items[0].metadata.name}')
+PAYMENT_POD=$(kubectl get pod -n backend -l app=payment-service -o jsonpath='{.items[0].metadata.name}')
+FRONTEND_POD=$(kubectl get pod -n frontend -l app=web-frontend -o jsonpath='{.items[0].metadata.name}')
 
 echo "=== Test 1: Payment service -> httpbin.org (should SUCCEED) ==="
-k exec -n backend "$PAYMENT_POD" -- curl -s --max-time 10 -o /dev/null -w "%{http_code}" https://httpbin.org/get
+kubectl exec -n backend "$PAYMENT_POD" -- curl -s --max-time 10 -o /dev/null -w "%{http_code}" https://httpbin.org/get
 
 echo ""
 echo "=== Test 2: Payment service -> google.com (should FAIL) ==="
-k exec -n backend "$PAYMENT_POD" -- curl -s --max-time 5 -o /dev/null -w "%{http_code}" https://www.google.com || echo "BLOCKED"
+kubectl exec -n backend "$PAYMENT_POD" -- curl -s --max-time 5 -o /dev/null -w "%{http_code}" https://www.google.com || echo "BLOCKED"
 
 echo ""
 echo "=== Test 3: Frontend -> internet (should FAIL) ==="
-k exec -n frontend "$FRONTEND_POD" -- curl -s --max-time 5 -o /dev/null -w "%{http_code}" https://httpbin.org/get || echo "BLOCKED"
+kubectl exec -n frontend "$FRONTEND_POD" -- curl -s --max-time 5 -o /dev/null -w "%{http_code}" https://httpbin.org/get || echo "BLOCKED"
 
 echo ""
 echo "=== Test 4: Cilium policy verdict log ==="
-k exec -n kube-system -l k8s-app=cilium -- cilium monitor --type policy-verdict --last 10
+kubectl exec -n kube-system -l k8s-app=cilium -- cilium monitor --type policy-verdict --last 10
 ```
 
 </details>
