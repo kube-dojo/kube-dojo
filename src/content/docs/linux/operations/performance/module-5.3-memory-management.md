@@ -64,30 +64,41 @@ Memory limits in Kubernetes are a kill switch, not a throttle.
 
 Every process has its own virtual address space, mapped to physical RAM by the kernel:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    VIRTUAL MEMORY                                │
-│                                                                  │
-│  Process View:                   Physical Reality:              │
-│  ┌─────────────────────┐        ┌─────────────────────┐        │
-│  │ 0xFFFF... (high)    │        │ Physical RAM        │        │
-│  │                     │        │ ┌─────┬─────┬─────┐ │        │
-│  │ Stack               │───────▶│ │P1   │P3   │Krnl │ │        │
-│  │ ▼                   │        │ ├─────┼─────┼─────┤ │        │
-│  │                     │        │ │P2   │Cache│P1   │ │        │
-│  │                     │        │ ├─────┼─────┼─────┤ │        │
-│  │ Heap (malloc)       │───────▶│ │Free │P2   │Cache│ │        │
-│  │ ▲                   │        │ └─────┴─────┴─────┘ │        │
-│  │                     │        │                     │        │
-│  │ BSS (uninitialized) │        │ Disk (Swap)         │        │
-│  │ Data (initialized)  │        │ ┌─────┬─────┐       │        │
-│  │ Text (code)         │        │ │P3   │Old  │       │        │
-│  │ 0x0000... (low)     │        │ └─────┴─────┘       │        │
-│  └─────────────────────┘        └─────────────────────┘        │
-│                                                                  │
-│  MMU translates virtual → physical addresses                    │
-│  Pages can be in RAM, on disk, or not yet allocated            │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph ProcessView["Process View (Virtual Memory)"]
+        direction TB
+        High["0xFFFF... (high)"]
+        Stack["Stack ▼"]
+        Gap["..."]
+        Heap["Heap (malloc) ▲"]
+        BSS["BSS (uninitialized)"]
+        Data["Data (initialized)"]
+        Text["Text (code)"]
+        Low["0x0000... (low)"]
+        High ~~~ Stack ~~~ Gap ~~~ Heap ~~~ BSS ~~~ Data ~~~ Text ~~~ Low
+    end
+
+    MMU{{"MMU<br>(Translates Virtual<br>to Physical)"}}
+
+    subgraph PhysicalReality["Physical Reality"]
+        direction TB
+        subgraph RAM["Physical RAM"]
+            direction TB
+            R1["P1 | P3 | Kernel"]
+            R2["P2 | Cache | P1"]
+            R3["Free | P2 | Cache"]
+            R1 ~~~ R2 ~~~ R3
+        end
+        subgraph Disk["Disk (Swap)"]
+            direction TB
+            D1["P3 | Old Pages"]
+        end
+    end
+
+    ProcessView --> MMU
+    MMU --> RAM
+    MMU -.-> Disk
 ```
 
 ### Memory Categories
@@ -208,27 +219,13 @@ cat /proc/1234/smaps_rollup
 
 When memory is exhausted and nothing can be reclaimed, the OOM killer terminates processes:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    OOM KILLER                                    │
-│                                                                  │
-│  Memory Exhausted                                                │
-│       │                                                          │
-│       ▼                                                          │
-│  Try to reclaim cache                                            │
-│       │                                                          │
-│       ▼ (failed)                                                 │
-│  Try to swap out                                                 │
-│       │                                                          │
-│       ▼ (failed or no swap)                                     │
-│  Calculate oom_score for each process                           │
-│       │                                                          │
-│       ▼                                                          │
-│  Kill highest scoring process                                    │
-│       │                                                          │
-│       ▼                                                          │
-│  Log: "Out of memory: Killed process 1234 (java)"               │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Start["Memory Exhausted"] --> Reclaim["Try to reclaim cache"]
+    Reclaim -- "Failed" --> Swap["Try to swap out"]
+    Swap -- "Failed or no swap" --> Calc["Calculate oom_score for each process"]
+    Calc --> Kill["Kill highest scoring process"]
+    Kill --> Log["Log: 'Out of memory: Killed process 1234 (java)'"]
 ```
 
 ### OOM Score
@@ -288,16 +285,14 @@ cat /proc/sys/vm/swappiness
 ### Swap and Containers
 
 ```bash
-# Kubernetes typically disables swap
-# Required for kubelet (pre-1.22)
-sudo swapoff -a
-
+# Kubernetes historically disabled swap
 # Check if swap is disabled
 free | grep Swap
 # Swap:            0           0           0
 
 # Swap can cause unpredictable latency
-# Better to OOM than to thrash
+# Even with modern Kubernetes swap support (GA in v1.30+),
+# it's often better to OOM than to thrash
 ```
 
 > **Pause and predict**: If a Kubernetes node has swap enabled and a pod starts leaking memory beyond its limit, what impact would this have on other perfectly healthy pods running on the same node?
@@ -331,21 +326,25 @@ resources:
     memory: "512Mi"   # OOM kill threshold
 ```
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    MEMORY LIMITS vs CPU LIMITS                   │
-│                                                                  │
-│  CPU Limits:                    Memory Limits:                  │
-│  ┌───────────────────────┐     ┌───────────────────────────┐   │
-│  │ Exceeded → Throttle   │     │ Exceeded → OOM Kill       │   │
-│  │ Process slows down    │     │ Process terminated        │   │
-│  │ Recoverable           │     │ FATAL                     │   │
-│  │ Latency impact        │     │ Container restart         │   │
-│  └───────────────────────┘     └───────────────────────────┘   │
-│                                                                  │
-│  Memory is a non-renewable resource per allocation              │
-│  You can't "wait" for more memory like you wait for CPU        │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph CPU["CPU Limits"]
+        direction TB
+        C1["Exceeded → Throttle"]
+        C2["Process slows down"]
+        C3["Recoverable"]
+        C4["Latency impact"]
+        C1 --> C2 --> C3 --> C4
+    end
+
+    subgraph MEM["Memory Limits"]
+        direction TB
+        M1["Exceeded → OOM Kill"]
+        M2["Process terminated"]
+        M3["FATAL"]
+        M4["Container restart"]
+        M1 --> M2 --> M3 --> M4
+    end
 ```
 
 ### QoS Classes and OOM
@@ -369,6 +368,8 @@ resources:
 # (no resources specified)
 ```
 
+> **Pause and predict**: When a BestEffort pod is using 100Mi of memory and a Guaranteed pod is using 10Gi, and the node runs out of memory, which pod will the OOM killer target first?
+
 ```bash
 # OOM score adjustment by QoS:
 # Guaranteed: -997
@@ -378,27 +379,28 @@ resources:
 # BestEffort pods die first under memory pressure
 ```
 
-### Container Memory Metrics
+### Container Memory Metrics (cgroup v2)
 
 ```bash
+# cgroup v2 is the standard for modern Kubernetes (v1.31+)
+
 # cgroup memory stats
-cat /sys/fs/cgroup/memory/kubepods/pod.../memory.stat
-# cache 104857600
-# rss 209715200
-# rss_huge 0
-# mapped_file 52428800
-# swap 0
-# pgfault 1000000
-# pgmajfault 100
+cat /sys/fs/cgroup/kubepods.slice/kubepods-pod...slice/memory.stat
+# anon 209715200       # Anonymous memory (heap, stack)
+# file 104857600       # Page cache
+# kernel_stack 36864
+# slab 165432
 
 # Current usage
-cat /sys/fs/cgroup/memory/kubepods/pod.../memory.usage_in_bytes
+cat /sys/fs/cgroup/kubepods.slice/kubepods-pod...slice/memory.current
 
 # Limit
-cat /sys/fs/cgroup/memory/kubepods/pod.../memory.limit_in_bytes
+cat /sys/fs/cgroup/kubepods.slice/kubepods-pod...slice/memory.max
 
 # OOM events
-cat /sys/fs/cgroup/memory/kubepods/pod.../memory.oom_control
+cat /sys/fs/cgroup/kubepods.slice/kubepods-pod...slice/memory.events
+# oom 1
+# oom_kill 1
 ```
 
 ---
@@ -523,7 +525,7 @@ A developer complains that since migrating their application to Kubernetes, it r
 <details>
 <summary>Show Answer</summary>
 
-The containerized application crashes because Kubernetes enforces strict memory limits using cgroups, which results in an immediate OOM (Out of Memory) kill when the limit is exceeded. On the traditional VM without strict cgroup limits, the kernel likely resorted to using swap space when memory was exhausted, which kept the application running but severely throttled its performance due to disk I/O latency. Because memory is a non-compressible resource, the kernel cannot simply "pause" a process to wait for more RAM to become available; it must either page out to disk or terminate the process. In a Kubernetes environment where swap is disabled, termination is the only option.
+The containerized application crashes because Kubernetes enforces strict memory limits using cgroups, which results in an immediate OOM (Out of Memory) kill when the limit is exceeded. On the traditional VM without strict cgroup limits, the kernel likely resorted to using swap space when memory was exhausted, which kept the application running but severely throttled its performance due to disk I/O latency. Because memory is a non-compressible resource, the kernel cannot simply "pause" a process to wait for more RAM to become available; it must either page out to disk or terminate the process. In a Kubernetes environment where strict cgroup limits are enforced, the kernel terminates the process once the limit is hit to prevent it from consuming node resources.
 
 </details>
 
@@ -553,7 +555,7 @@ A Java application pod is repeatedly getting OOMKilled by Kubernetes. The pod ha
 <details>
 <summary>Show Answer</summary>
 
-The discrepancy occurs because `kubectl top pod` typically reports the Resident Set Size (RSS), which only accounts for anonymous memory like the application's heap and stack. However, the cgroup memory limit enforced by the kernel applies to the total memory footprint, which also includes the page cache generated by file I/O and kernel memory structures like page tables. If the Java application writes heavily to logs or reads large files, that file cache counts against its 512Mi limit, pushing the total usage over the edge. To see the true usage that triggers the OOM killer, you must check `memory.usage_in_bytes` directly from the cgroup filesystem rather than relying on RSS-based metrics.
+The discrepancy occurs because `kubectl top pod` typically reports the Resident Set Size (RSS), which only accounts for anonymous memory like the application's heap and stack. However, the cgroup memory limit enforced by the kernel applies to the total memory footprint, which also includes the page cache generated by file I/O and kernel memory structures like page tables. If the Java application writes heavily to logs or reads large files, that file cache counts against its 512Mi limit, pushing the total usage over the edge. To see the true usage that triggers the OOM killer, you must check `memory.current` directly from the cgroup v2 filesystem rather than relying on RSS-based metrics.
 
 </details>
 
@@ -653,11 +655,11 @@ vmstat 1 10
 # 1. Run container with memory limit
 docker run -d --name mem-test --memory=100m nginx sleep 3600
 
-# 2. Check cgroup limit
-docker exec mem-test cat /sys/fs/cgroup/memory/memory.limit_in_bytes
+# 2. Check cgroup limit (cgroup v2 paths)
+docker exec mem-test cat /sys/fs/cgroup/memory.max
 
 # 3. Check current usage
-docker exec mem-test cat /sys/fs/cgroup/memory/memory.usage_in_bytes
+docker exec mem-test cat /sys/fs/cgroup/memory.current
 
 # 4. Check memory stats
 docker stats --no-stream mem-test
@@ -701,4 +703,4 @@ In **Module 5.4: I/O Performance**, you'll learn about disk I/O, storage bottlen
 - [Linux Memory Management](https://www.kernel.org/doc/html/latest/admin-guide/mm/index.html)
 - [OOM Killer Documentation](https://www.kernel.org/doc/gorman/html/understand/understand016.html)
 - [Kubernetes Memory Resources](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/)
-- [cgroup Memory Controller](https://www.kernel.org/doc/Documentation/cgroup-v1/memory.txt)
+- [cgroup Memory Controller (v2)](https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html#memory)
