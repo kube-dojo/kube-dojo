@@ -59,317 +59,259 @@ Cloud load balancers are deceptively simple to set up and deceptively complex to
 
 ## Part 1: L4 vs L7 Load Balancing
 
-### 1.1 Layer 4 Load Balancing
+> **Stop and think**: If an L4 load balancer only operates on TCP/UDP streams and never inspects the content, how does it consistently route packets belonging to the same connection to the exact same backend server?
 
-```
-LAYER 4 LOAD BALANCING (Transport Layer)
-═══════════════════════════════════════════════════════════════
+### 1.1 Layer 4 Load Balancing (Transport Layer)
 
 L4 load balancers operate on TCP/UDP connections.
 They see: Source IP, Source Port, Dest IP, Dest Port, Protocol.
 They DON'T see: HTTP headers, URLs, cookies, request body.
 
-HOW L4 LOAD BALANCING WORKS
-─────────────────────────────────────────────────────────────
+**How L4 Load Balancing Works**
 
-    Client 1.2.3.4:54321 → LB 10.0.0.1:443
+Client `1.2.3.4:54321` → LB `10.0.0.1:443`
+LB selects backend server (e.g., `10.0.1.5:443`)
 
-    LB selects backend server (e.g., 10.0.1.5:443)
+**Method 1: DSR (Direct Server Return)**
+LB rewrites destination MAC address. Packet goes to backend at L2.
+Backend responds DIRECTLY to client (bypasses LB).
 
-    Method 1: DSR (Direct Server Return)
-    ─────────────────────────────────────────────
-    LB rewrites destination MAC address.
-    Packet goes to backend at L2.
-    Backend responds DIRECTLY to client (bypasses LB).
-
-    Client → LB → Backend
-    Client ← ─ ─ ─ Backend  (response bypasses LB!)
-
-    ✓ Massive throughput (LB only handles inbound)
-    ✓ LB doesn't become bandwidth bottleneck
-    ✗ LB can't inspect or modify responses
-    ✗ Backend must be L2-adjacent to LB
-    ✗ Backend must be configured to accept traffic for LB's IP
-
-    Method 2: DNAT (Destination NAT)
-    ─────────────────────────────────────────────
-    LB rewrites destination IP to backend IP.
-    Backend responds to LB. LB rewrites source back.
-
-    Client → LB → Backend
-    Client ← LB ← Backend
-
-    ✓ Works across L3 networks
-    ✓ LB sees all traffic (can do health tracking)
-    ✗ LB handles both directions (bandwidth)
-    ✗ Must maintain connection tracking table
-
-    Method 3: Tunneling (IP-in-IP / GUE)
-    ─────────────────────────────────────────────
-    LB encapsulates packet in outer IP header.
-    Backend decapsulates and responds directly.
-    Used by Google Maglev, AWS NLB.
-
-    Client → LB → [Outer IP → Backend][Original Packet]
-    Client ← ─ ─ ─ Backend  (direct response)
-
-L4 LOAD BALANCING ALGORITHMS
-─────────────────────────────────────────────────────────────
-
-    Round Robin:
-        Server A → Server B → Server C → Server A → ...
-        Simple, even distribution. No awareness of server load.
-
-    Weighted Round Robin:
-        Server A (weight 3): gets 3x traffic
-        Server B (weight 1): gets 1x traffic
-        Useful when servers have different capacity.
-
-    Least Connections:
-        Route to server with fewest active connections.
-        Better than round robin when requests have varying duration.
-
-    Source IP Hash (Consistent Hashing):
-        hash(client_ip) % num_servers
-        Same client always goes to same server.
-        Used for basic session affinity at L4.
-
-    Maglev Hashing (Google):
-        Consistent hash with minimal disruption on server changes.
-        When one server is removed, only 1/N traffic shifts.
-        Used in Google Cloud Load Balancing.
-
-L4 CHARACTERISTICS
-─────────────────────────────────────────────────────────────
-    Throughput:       Millions of connections/second
-    Latency added:    <1ms (often microseconds)
-    TLS:              Pass-through (backend handles TLS)
-                      OR TLS termination (with SNI routing)
-    Protocols:        Any TCP or UDP protocol
-    Connection state: Tracked per 5-tuple
-    Use cases:        Database traffic, non-HTTP protocols,
-                      highest-performance requirements,
-                      upstream to L7 load balancers
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant L as LB
+    participant B as Backend
+    C->>L: Request
+    L->>B: Forward (Rewritten MAC)
+    B-->>C: Direct Response (Bypasses LB)
 ```
 
-### 1.2 Layer 7 Load Balancing
+- ✓ Massive throughput (LB only handles inbound)
+- ✓ LB doesn't become bandwidth bottleneck
+- ✗ LB can't inspect or modify responses
+- ✗ Backend must be L2-adjacent to LB
+- ✗ Backend must be configured to accept traffic for LB's IP
 
+**Method 2: DNAT (Destination NAT)**
+LB rewrites destination IP to backend IP.
+Backend responds to LB. LB rewrites source back.
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant L as LB
+    participant B as Backend
+    C->>L: Request
+    L->>B: Forward (DNAT)
+    B-->>L: Response
+    L-->>C: Forward (SNAT)
 ```
-LAYER 7 LOAD BALANCING (Application Layer)
-═══════════════════════════════════════════════════════════════
+
+- ✓ Works across L3 networks
+- ✓ LB sees all traffic (can do health tracking)
+- ✗ LB handles both directions (bandwidth)
+- ✗ Must maintain connection tracking table
+
+**Method 3: Tunneling (IP-in-IP / GUE)**
+LB encapsulates packet in outer IP header.
+Backend decapsulates and responds directly.
+Used by Google Maglev, AWS NLB.
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant L as LB
+    participant B as Backend
+    C->>L: Request
+    L->>B: Encapsulated [Outer IP [Original Packet]]
+    B-->>C: Direct Response
+```
+
+**L4 Load Balancing Algorithms**
+
+- **Round Robin**: Server A → Server B → Server C → Server A → ... Simple, even distribution. No awareness of server load.
+- **Weighted Round Robin**: Server A (weight 3): gets 3x traffic. Server B (weight 1): gets 1x traffic. Useful when servers have different capacity.
+- **Least Connections**: Route to server with fewest active connections. Better than round robin when requests have varying duration.
+- **Source IP Hash (Consistent Hashing)**: `hash(client_ip) % num_servers`. Same client always goes to same server. Used for basic session affinity at L4.
+- **Maglev Hashing (Google)**: Consistent hash with minimal disruption on server changes. When one server is removed, only 1/N traffic shifts. Used in Google Cloud Load Balancing.
+
+**L4 Characteristics**
+
+- **Throughput**: Millions of connections/second
+- **Latency added**: <1ms (often microseconds)
+- **TLS**: Pass-through (backend handles TLS) OR TLS termination (with SNI routing)
+- **Protocols**: Any TCP or UDP protocol
+- **Connection state**: Tracked per 5-tuple
+- **Use cases**: Database traffic, non-HTTP protocols, highest-performance requirements, upstream to L7 load balancers
+
+### 1.2 Layer 7 Load Balancing (Application Layer)
 
 L7 load balancers operate on HTTP/HTTPS.
 They see EVERYTHING: URL, headers, cookies, body, method.
 They must fully terminate the TCP and TLS connection.
 
-HOW L7 LOAD BALANCING WORKS
-─────────────────────────────────────────────────────────────
+**How L7 Load Balancing Works**
 
-    Client ──TLS──→ L7 LB ──new connection──→ Backend
+1. Client opens TCP connection to LB
+2. TLS handshake completes (LB terminates TLS)
+3. Client sends HTTP request
+4. LB parses the full HTTP request
+5. LB applies routing rules (path, headers, etc.)
+6. LB opens NEW connection to selected backend
+7. LB forwards request to backend
+8. Backend responds to LB
+9. LB forwards response to client
 
-    1. Client opens TCP connection to LB
-    2. TLS handshake completes (LB terminates TLS)
-    3. Client sends HTTP request
-    4. LB parses the full HTTP request
-    5. LB applies routing rules (path, headers, etc.)
-    6. LB opens NEW connection to selected backend
-    7. LB forwards request to backend
-    8. Backend responds to LB
-    9. LB forwards response to client
+These are two separate connections!
 
-    Two separate connections!
-    ─────────────────────────────────────────────
-    Client ←──Connection A──→ LB ←──Connection B──→ Backend
-
-    This is why L7 LBs are also called "reverse proxies."
-
-ROUTING CAPABILITIES
-─────────────────────────────────────────────────────────────
-
-    PATH-BASED ROUTING
-    ─────────────────────────────────────────────
-    /api/*        → api-service (port 8080)
-    /static/*     → cdn-origin (port 80)
-    /admin/*      → admin-service (port 8443)
-    /             → frontend (port 3000)
-
-    HOST-BASED ROUTING
-    ─────────────────────────────────────────────
-    app.example.com     → app-backend
-    api.example.com     → api-backend
-    admin.example.com   → admin-backend
-
-    HEADER-BASED ROUTING
-    ─────────────────────────────────────────────
-    X-Version: canary   → canary-backend (10% traffic)
-    X-Version: stable   → stable-backend (90% traffic)
-
-    COOKIE-BASED ROUTING
-    ─────────────────────────────────────────────
-    JSESSIONID=abc123   → server-A (session affinity)
-
-    WEIGHTED ROUTING
-    ─────────────────────────────────────────────
-    Backend-A: 90%  (current version)
-    Backend-B: 10%  (canary deployment)
-
-L7 CHARACTERISTICS
-─────────────────────────────────────────────────────────────
-    Throughput:       Tens of thousands of requests/second
-    Latency added:    1-5ms (TLS termination + parsing)
-    TLS:              TERMINATED at LB (can inspect traffic)
-    Protocols:        HTTP/1.1, HTTP/2, WebSocket, gRPC
-    Connection state: HTTP-level (request/response)
-    Use cases:        Web applications, microservices routing,
-                      TLS termination, request manipulation
+```mermaid
+flowchart LR
+    Client <-->|Connection A| LB
+    LB <-->|Connection B| Backend
 ```
+
+This is why L7 LBs are also called "reverse proxies."
+
+**Routing Capabilities**
+
+- **Path-Based Routing**
+  - `/api/*` → api-service (port 8080)
+  - `/static/*` → cdn-origin (port 80)
+  - `/admin/*` → admin-service (port 8443)
+  - `/` → frontend (port 3000)
+- **Host-Based Routing**
+  - `app.example.com` → app-backend
+  - `api.example.com` → api-backend
+- **Header-Based Routing**
+  - `X-Version: canary` → canary-backend (10% traffic)
+  - `X-Version: stable` → stable-backend (90% traffic)
+- **Cookie-Based Routing**
+  - `JSESSIONID=abc123` → server-A (session affinity)
+- **Weighted Routing**
+  - Backend-A: 90% (current version)
+  - Backend-B: 10% (canary deployment)
+
+**L7 Characteristics**
+
+- **Throughput**: Tens of thousands of requests/second
+- **Latency added**: 1-5ms (TLS termination + parsing)
+- **TLS**: TERMINATED at LB (can inspect traffic)
+- **Protocols**: HTTP/1.1, HTTP/2, WebSocket, gRPC
+- **Connection state**: HTTP-level (request/response)
+- **Use cases**: Web applications, microservices routing, TLS termination, request manipulation
 
 ### 1.3 L4 vs L7 Decision Matrix
 
+| Requirement | L4 | L7 |
+| :--- | :--- | :--- |
+| **Maximum throughput** | ✓ Best | ✗ Limited |
+| **Lowest latency** | ✓ <1ms | ✗ 1-5ms |
+| **HTTP path/header routing** | ✗ Can't see | ✓ Full control |
+| **TLS termination** | ✗ Pass-through | ✓ Terminates |
+| **WebSocket support** | ✓ Transparent | ✓ Managed |
+| **gRPC load balancing** | ✗ Per-connection | ✓ Per-request |
+| **Non-HTTP protocols (DB, SMTP)**| ✓ Any protocol | ✗ HTTP only |
+| **Request/response modification**| ✗ No access | ✓ Full access |
+| **Cookie-based session affinity**| ✗ No cookies | ✓ Cookie aware |
+| **Client certificate (mTLS)** | ✗ Pass-through | ✓ Validates |
+| **Health checks (HTTP)** | ✗ TCP only* | ✓ HTTP checks |
+| **Connection draining** | ✓ Timer-based | ✓ Request-aware |
+| **Cost** | ✓ Lower | ✗ Higher |
+
+*\* Some L4 LBs support limited HTTP health checks*
+
+**Common Architecture: L4 + L7 Together**
+
+Why use both?
+- NLB handles TLS passthrough and raw throughput
+- NLB preserves client IP via Proxy Protocol
+- Ingress Controller (nginx/envoy) handles HTTP routing
+- Best of both worlds: performance + routing flexibility
+
+```mermaid
+flowchart LR
+    Client -->|TCP| NLB["NLB (L4)"]
+    NLB -->|TCP + Proxy Protocol| Ingress["nginx Ingress (L7)"]
+    Ingress -->|HTTP + X-Forwarded-For| Pods["Pods"]
 ```
-WHEN TO USE L4 vs L7
-═══════════════════════════════════════════════════════════════
 
-REQUIREMENT                    L4              L7
-──────────────────────────── ──────────────── ───────────────
-Maximum throughput             ✓ Best          ✗ Limited
-Lowest latency                 ✓ <1ms          ✗ 1-5ms
-HTTP path/header routing       ✗ Can't see     ✓ Full control
-TLS termination                ✗ Pass-through  ✓ Terminates
-WebSocket support              ✓ Transparent   ✓ Managed
-gRPC load balancing            ✗ Per-connection ✓ Per-request
-Non-HTTP protocols (DB, SMTP)  ✓ Any protocol  ✗ HTTP only
-Request/response modification  ✗ No access     ✓ Full access
-Cookie-based session affinity  ✗ No cookies    ✓ Cookie aware
-Client certificate (mTLS)      ✗ Pass-through  ✓ Validates
-Health checks (HTTP)           ✗ TCP only*     ✓ HTTP checks
-Connection draining            ✓ Timer-based   ✓ Request-aware
-Cost                           ✓ Lower         ✗ Higher
-
-* Some L4 LBs support limited HTTP health checks
-
-COMMON ARCHITECTURE: L4 + L7 TOGETHER
-─────────────────────────────────────────────────────────────
-
-    Internet → L4 (NLB) → L7 (ALB or Ingress Controller) → Pods
-
-    Why both?
-    - NLB handles TLS passthrough and raw throughput
-    - NLB preserves client IP via Proxy Protocol
-    - Ingress Controller (nginx/envoy) handles HTTP routing
-    - Best of both worlds: performance + routing flexibility
-
-    ┌────────┐     ┌─────────┐     ┌──────────┐     ┌──────┐
-    │ Client │────→│  NLB    │────→│  nginx   │────→│ Pods │
-    │        │     │  (L4)   │     │ Ingress  │     │      │
-    │        │     │         │     │  (L7)    │     │      │
-    └────────┘     └─────────┘     └──────────┘     └──────┘
-
-    NLB adds:  Proxy Protocol header (client IP)
-    nginx reads: Proxy Protocol, routes by path/host
-    Pod sees:  X-Forwarded-For: original client IP
-```
+NLB adds the Proxy Protocol header (client IP). nginx reads Proxy Protocol, routes by path/host, and passes the IP. The Pod sees `X-Forwarded-For: original client IP`.
 
 ---
 
 ## Part 2: Connection Draining
 
+> **Pause and predict**: What happens to a 5-minute file upload if the backend server actively receiving the stream suddenly fails its load balancer health check and is removed from the target group?
+
 ### 2.1 The Problem: Killing Active Connections
 
+When a backend server is removed (health check failure, scaling down, deployment), what happens to active connections?
+
+**Without Connection Draining**
+
+- `t=0`: Server has 50 active connections
+- `t=0`: Health check fails → server marked unhealthy
+- `t=0`: LB immediately drops all 50 connections
+  - → 50 users see connection reset errors
+  - → In-flight API calls return with no response
+  - → File uploads are truncated
+  - → WebSocket connections are severed
+
+User experience: ERROR, ERROR, ERROR.
+
+**With Connection Draining (Deregistration Delay)**
+
+- `t=0`: Server has 50 active connections
+- `t=0`: Health check fails → server enters "draining" state
+- `t=0`: LB stops sending NEW connections to this server
+- `t=0`: Existing 50 connections continue normally
+- `t=10s`: 45 connections complete naturally
+- `t=30s`: 48 connections complete naturally
+- `t=60s`: 49 connections complete naturally
+- `t=300s`: Draining timeout reached → last connection closed (or all complete before timeout)
+
+User experience: Most requests complete successfully. Only extremely long requests (>5 min) might be dropped.
+
+**Draining State Diagram**
+
+```mermaid
+stateDiagram-v2
+    state "INITIAL\n(Just registered)" as INITIAL
+    state "HEALTHY\n(Receives new + existing traffic)" as HEALTHY
+    state "DRAINING\n(No new conns. Existing continue.)" as DRAINING
+    state "REMOVED\n(No more traffic)" as REMOVED
+
+    [*] --> INITIAL
+    INITIAL --> HEALTHY : Health check passes
+    HEALTHY --> DRAINING : Health check failure
+    DRAINING --> REMOVED : All connections complete OR timeout reached
 ```
-CONNECTION DRAINING — GRACEFUL SHUTDOWN
-═══════════════════════════════════════════════════════════════
 
-When a backend server is removed (health check failure,
-scaling down, deployment), what happens to active connections?
+**Kubernetes Graceful Shutdown**
 
-WITHOUT CONNECTION DRAINING
-─────────────────────────────────────────────────────────────
+Kubernetes pods have a similar concept:
+1. Pod enters "Terminating" state
+2. `preStop` hook runs (if configured)
+3. SIGTERM sent to container
+4. Container should: stop accepting new connections, complete in-flight requests, close gracefully.
+5. After `terminationGracePeriodSeconds` (default 30s): SIGKILL sent (forced kill).
 
-    t=0   Server has 50 active connections
-    t=0   Health check fails → server marked unhealthy
-    t=0   LB immediately drops all 50 connections
-          → 50 users see connection reset errors
-          → In-flight API calls return with no response
-          → File uploads are truncated
-          → WebSocket connections are severed
-
-    User experience: ERROR, ERROR, ERROR
-
-WITH CONNECTION DRAINING (Deregistration Delay)
-─────────────────────────────────────────────────────────────
-
-    t=0     Server has 50 active connections
-    t=0     Health check fails → server enters "draining" state
-    t=0     LB stops sending NEW connections to this server
-    t=0     Existing 50 connections continue normally
-    t=10s   45 connections complete naturally
-    t=30s   48 connections complete naturally
-    t=60s   49 connections complete naturally
-    t=300s  Draining timeout reached → last connection closed
-            (or all connections complete before timeout)
-
-    User experience: Most requests complete successfully.
-    Only extremely long requests (>5 min) might be dropped.
-
-DRAINING STATE DIAGRAM
-─────────────────────────────────────────────────────────────
-
-    ┌──────────┐                      ┌──────────┐
-    │ HEALTHY  │ ─── health check ──→ │ DRAINING │
-    │          │     failure           │          │
-    │ Receives │                      │ No new   │
-    │ new +    │                      │ conns.   │
-    │ existing │                      │ Existing │
-    │ traffic  │                      │ continue.│
-    └──────────┘                      └─────┬────┘
-         ▲                                  │
-         │                                  │ All connections
-         │     health check passes          │ complete OR
-         │                                  │ timeout reached
-         │                                  ▼
-    ┌────┴─────┐                      ┌──────────┐
-    │ INITIAL  │                      │ REMOVED  │
-    │          │                      │          │
-    │ Just     │                      │ No more  │
-    │ registered│                     │ traffic  │
-    └──────────┘                      └──────────┘
-
-KUBERNETES GRACEFUL SHUTDOWN
-─────────────────────────────────────────────────────────────
-
-    Kubernetes pods have a similar concept:
-
-    1. Pod enters "Terminating" state
-    2. preStop hook runs (if configured)
-    3. SIGTERM sent to container
-    4. Container should:
-       - Stop accepting new connections
-       - Complete in-flight requests
-       - Close gracefully
-    5. After terminationGracePeriodSeconds (default 30s):
-       SIGKILL sent (forced kill)
-
-    Common issue: Endpoint is removed from Service before
-    pod receives SIGTERM. Add a preStop sleep:
-
-    lifecycle:
-      preStop:
-        exec:
-          command: ["sh", "-c", "sleep 5"]
-
-    This gives kube-proxy time to remove the endpoint
-    before the pod starts shutting down.
-
-DRAINING TIMEOUT GUIDELINES
-─────────────────────────────────────────────────────────────
-    API endpoints (fast):       30 seconds
-    Web applications:           60 seconds
-    WebSocket connections:      300 seconds (5 min)
-    File upload endpoints:      600 seconds (10 min)
-    Long-running streams:       3600 seconds (1 hour)
-    Database connections:       60 seconds (with query timeout)
+*Common issue*: Endpoint is removed from Service before pod receives SIGTERM. Add a preStop sleep:
+```yaml
+lifecycle:
+  preStop:
+    exec:
+      command: ["sh", "-c", "sleep 5"]
 ```
+This gives kube-proxy time to remove the endpoint before the pod starts shutting down.
+
+**Draining Timeout Guidelines**
+- API endpoints (fast): 30 seconds
+- Web applications: 60 seconds
+- WebSocket connections: 300 seconds (5 min)
+- File upload endpoints: 600 seconds (10 min)
+- Long-running streams: 3600 seconds (1 hour)
+- Database connections: 60 seconds (with query timeout)
 
 ---
 
@@ -377,277 +319,137 @@ DRAINING TIMEOUT GUIDELINES
 
 ### 3.1 Types of Session Affinity
 
-```
-SESSION AFFINITY — KEEPING CLIENTS ON ONE SERVER
-═══════════════════════════════════════════════════════════════
+Session affinity ensures the same client always reaches the same backend server.
 
-Session affinity ensures the same client always reaches
-the same backend server. Several implementation methods:
+**Source IP Affinity (L4)**
+`hash(client_ip) % num_servers = selected_server`
+- Client 1.2.3.4 → always hits Server-A
+- Client 5.6.7.8 → always hits Server-B
+- ✓ Works at L4 (no HTTP inspection needed)
+- ✗ Breaks behind NAT (all users behind same IP → same server)
+- ✗ Uneven distribution, no affinity when servers are added/removed (rehashing)
 
-SOURCE IP AFFINITY (L4)
-─────────────────────────────────────────────────────────────
+**Cookie-Based Affinity (L7)**
+LB sets a cookie on first response (`Set-Cookie: AWSALB=server-a`). Subsequent requests include the cookie, and LB routes appropriately.
+- ✓ Precise per-user affinity, survives NAT/VPNs
+- ✗ Requires L7 inspection, adds byte overhead
 
-    hash(client_ip) % num_servers = selected_server
+**Application-Generated Affinity (L7)**
+Application sets its own session cookie (`Set-Cookie: JSESSIONID=abc123`). LB routes based on this value.
+- ✓ Application controls session semantics
+- ✗ Tighter coupling between app and LB config
 
-    Client 1.2.3.4 → always hits Server-A
-    Client 5.6.7.8 → always hits Server-B
+**Header-Based Affinity (L7)**
+Route based on a custom header (e.g., `X-User-ID: 12345`).
+- ✓ Works for API clients (no cookies)
+- ✗ Requires L7 inspection
 
-    ✓ Works at L4 (no HTTP inspection needed)
-    ✓ Zero overhead per request
-    ✗ Breaks behind NAT (all users behind same IP → same server)
-    ✗ Uneven distribution (some IPs generate more traffic)
-    ✗ No affinity when servers are added/removed (rehashing)
+**The Case Against Sticky Sessions**
 
-COOKIE-BASED AFFINITY (L7)
-─────────────────────────────────────────────────────────────
+Problems:
+1. **Uneven Load**: Popular users stuck on one server → that server overloaded while others are idle.
+2. **Cascading Failure**: Server dies → all its sticky users are redistributed → other servers overloaded → more servers die.
+3. **Scaling Difficulty**: Adding a server doesn't immediately help — existing users stay on old servers.
+4. **Deployment Complexity**: Rolling update means users must be drained from old servers to new ones.
 
-    LB sets a cookie on first response:
-    Set-Cookie: AWSALB=server-a; Path=/; HttpOnly
+**Better Alternative:**
+Store session state externally (Redis, Memcached, DynamoDB). Any server can handle any request. No affinity needed.
 
-    Subsequent requests include cookie:
-    Cookie: AWSALB=server-a
-
-    LB reads cookie → routes to server-a.
-
-    ✓ Precise per-user affinity
-    ✓ Survives NAT, proxies, VPNs
-    ✓ LB controls cookie (application-transparent)
-    ✗ Requires L7 (TLS termination)
-    ✗ Cookie adds bytes to every request
-    ✗ Doesn't work for non-browser clients without cookie support
-
-APPLICATION-GENERATED AFFINITY (L7)
-─────────────────────────────────────────────────────────────
-
-    Application sets its own session cookie:
-    Set-Cookie: JSESSIONID=abc123
-
-    LB is configured to route based on JSESSIONID value.
-
-    ✓ Application controls session semantics
-    ✓ Session can encode server identity
-    ✗ Application must generate appropriate cookie values
-    ✗ Tighter coupling between app and LB config
-
-HEADER-BASED AFFINITY (L7)
-─────────────────────────────────────────────────────────────
-
-    Route based on a custom header (e.g., user ID).
-
-    X-User-ID: 12345 → Server-A
-    X-User-ID: 67890 → Server-B
-
-    ✓ Works for API clients (no cookies)
-    ✓ Can use any consistent identifier
-    ✗ Client must send the header
-    ✗ Requires L7 inspection
-
-THE CASE AGAINST STICKY SESSIONS
-─────────────────────────────────────────────────────────────
-
-    Problems:
-    ─────────────────────────────────────────────
-    1. UNEVEN LOAD: Popular users stuck on one server
-       → that server overloaded while others are idle
-
-    2. CASCADING FAILURE: Server dies → all its sticky users
-       are redistributed → other servers overloaded
-       → more servers die → cascade
-
-    3. SCALING DIFFICULTY: Adding a server doesn't immediately
-       help — existing users stay on old servers
-
-    4. DEPLOYMENT COMPLEXITY: Rolling update means users
-       must be drained from old servers to new ones
-
-    Better alternative:
-    ─────────────────────────────────────────────
-    Store session state externally (Redis, Memcached, DynamoDB).
-    Any server can handle any request.
-    No affinity needed.
-
-    ┌────────┐     ┌──────┐     ┌──────────┐
-    │ Client │────→│  LB  │────→│ Server A │──→┐
-    │        │     │      │     │ Server B │──→├→ Redis
-    │        │     │      │     │ Server C │──→┘  (shared
-    └────────┘     └──────┘     └──────────┘      session)
+```mermaid
+flowchart LR
+    Client --> LB
+    LB --> ServerA["Server A"]
+    LB --> ServerB["Server B"]
+    LB --> ServerC["Server C"]
+    ServerA --> Redis[("Redis (shared session)")]
+    ServerB --> Redis
+    ServerC --> Redis
 ```
 
 ---
 
 ## Part 4: Proxy Protocol
 
+> **Stop and think**: If an L4 load balancer simply forwards TCP packets by rewriting destination IP addresses (DNAT), what happens to the source IP address by the time the packet reaches your backend application?
+
 ### 4.1 The Client IP Problem
 
+L7 load balancers can add `X-Forwarded-For` headers because they parse HTTP. L4 load balancers can't — they just forward TCP connections.
+
+**Without Proxy Protocol:**
+```mermaid
+flowchart LR
+    Client["Client\n203.0.113.5"] -- TCP --> NLB["NLB"]
+    NLB -- TCP --> Backend
 ```
-PROXY PROTOCOL — PRESERVING CLIENT IP THROUGH L4 PROXIES
-═══════════════════════════════════════════════════════════════
+The backend sees the source IP of the NLB internal IP (10.0.1.x). The client's real IP is LOST. This breaks access logging, geo-targeting, rate limiting, and compliance.
 
-THE PROBLEM
-─────────────────────────────────────────────────────────────
+**Proxy Protocol v1 (Text)**
+Prepends a single text line before the TCP data stream.
+Format: `PROXY <protocol> <src_ip> <dst_ip> <src_port> <dst_port>\r\n`
+Example: `PROXY TCP4 203.0.113.5 10.0.0.1 54321 443\r\n`
+- ✓ Human-readable, simple to implement
+- ✗ Text parsing overhead, limited data
 
-    L7 load balancers can add X-Forwarded-For headers because
-    they parse HTTP. L4 load balancers can't — they just
-    forward TCP connections.
+**Proxy Protocol v2 (Binary)**
+Binary format. More efficient, extensible with TLV fields.
+Can carry TLS version, cipher negotiated, client cert details, and AWS VPC endpoint IDs.
+- ✓ More efficient, extensible
+- ✗ Not human-readable, more complex
 
-    Without Proxy Protocol:
-    ┌────────────┐         ┌──────┐         ┌────────┐
-    │ Client     │ ──TCP──→│ NLB  │ ──TCP──→│Backend │
-    │ 203.0.113.5│         │      │         │        │
-    └────────────┘         └──────┘         └────────┘
+**How It Works In Practice**
 
-    Backend sees source IP of: NLB internal IP (10.0.1.x)
-    Client's real IP is LOST.
-
-    This breaks:
-    - Access logging (who made the request?)
-    - Geo-targeting (where is the user?)
-    - Rate limiting (by client IP)
-    - IP-based access control
-    - Fraud detection
-    - Compliance/audit trails
-
-PROXY PROTOCOL V1 (Text)
-─────────────────────────────────────────────────────────────
-
-    Prepends a single text line before the TCP data stream.
-
-    PROXY TCP4 203.0.113.5 10.0.0.1 54321 443\r\n
-    [original TCP data follows]
-
-    Format:
-    PROXY <protocol> <src_ip> <dst_ip> <src_port> <dst_port>\r\n
-
-    Examples:
-    PROXY TCP4 203.0.113.5 10.0.0.1 54321 443\r\n
-    PROXY TCP6 2001:db8::1 2001:db8::2 54321 443\r\n
-    PROXY UNKNOWN\r\n   (health check or internal connection)
-
-    ✓ Human-readable (easy to debug with tcpdump)
-    ✓ Simple to implement
-    ✗ Text parsing overhead
-    ✗ Limited to IP and port information
-
-PROXY PROTOCOL V2 (Binary)
-─────────────────────────────────────────────────────────────
-
-    Binary format. More efficient, extensible with TLV fields.
-
-    ┌─────────────┬──────┬────────┬──────────┬──────────────┐
-    │ Signature   │ Ver/ │ Length │ Addresses│ TLV          │
-    │ (12 bytes)  │ Cmd  │        │          │ Extensions   │
-    │ \r\n\r\n... │ \x21 │        │          │              │
-    └─────────────┴──────┴────────┴──────────┴──────────────┘
-
-    TLV (Type-Length-Value) extensions can carry:
-    - TLS version and cipher negotiated
-    - Client certificate details
-    - AWS VPC endpoint ID
-    - Custom application data
-
-    ✓ More efficient (binary parsing)
-    ✓ Extensible (TLV fields)
-    ✓ Carries TLS metadata
-    ✗ Not human-readable
-    ✗ More complex to implement
-
-HOW IT WORKS IN PRACTICE
-─────────────────────────────────────────────────────────────
-
-    ┌────────────┐      ┌──────────────┐      ┌───────────────┐
-    │ Client     │      │ NLB          │      │ nginx         │
-    │ 203.0.113.5│      │ (L4)         │      │ (Ingress)     │
-    │            │      │              │      │               │
-    │ Sends:     │──TCP─│ Prepends:    │──TCP─│ Reads PP      │
-    │ GET /api   │      │ PROXY TCP4   │      │ header first  │
-    │            │      │ 203.0.113.5  │      │               │
-    │            │      │ 10.0.0.1     │      │ Sets:         │
-    │            │      │ 54321 443    │      │ $remote_addr  │
-    │            │      │ \r\n         │      │ = 203.0.113.5 │
-    │            │      │ [GET /api]   │      │               │
-    └────────────┘      └──────────────┘      │ Adds header:  │
-                                              │ X-Forwarded-  │
-                                              │ For:          │
-                                              │ 203.0.113.5   │
-                                              └───────────────┘
-
-    Backend application sees:
-    - X-Forwarded-For: 203.0.113.5 (real client IP!)
-    - X-Real-IP: 203.0.113.5
+```mermaid
+sequenceDiagram
+    participant C as Client (203.0.113.5)
+    participant N as NLB (L4)
+    participant I as nginx (Ingress)
+    
+    C->>N: TCP (Sends: GET /api)
+    N->>I: TCP (Prepends: PROXY TCP4 203.0.113.5...)
+    Note over I: Reads PP header first<br>Sets: $remote_addr = 203.0.113.5<br>Adds header: X-Forwarded-For: 203.0.113.5
 ```
+Backend application sees `X-Forwarded-For: 203.0.113.5` (real client IP!).
 
 ### 4.2 Proxy Protocol Configuration
 
+⚠️ **CRITICAL**: Both sides must agree! If LB sends Proxy Protocol but backend doesn't expect it, backend sees "PROXY TCP4..." as garbage → connection fails.
+
+**NGINX Configuration (Receiving Proxy Protocol)**
+```nginx
+server {
+    # Enable Proxy Protocol on the listen directive
+    listen 443 ssl proxy_protocol;
+
+    # Use the real client IP from Proxy Protocol
+    set_real_ip_from 10.0.0.0/8;     # Trust NLB's IP range
+    real_ip_header proxy_protocol;   # Get IP from PP header
+
+    # Pass real IP to backend as header
+    proxy_set_header X-Real-IP       $proxy_protocol_addr;
+    proxy_set_header X-Forwarded-For $proxy_protocol_addr;
+}
 ```
-PROXY PROTOCOL CONFIGURATION
-═══════════════════════════════════════════════════════════════
 
-⚠️  CRITICAL: Both sides must agree!
-    If LB sends Proxy Protocol but backend doesn't expect it,
-    backend sees "PROXY TCP4..." as garbage → connection fails.
-    If backend expects Proxy Protocol but LB doesn't send it,
-    backend waits for PP header → timeout → connection fails.
+**HAProxy Configuration**
+```haproxy
+# Receiving Proxy Protocol
+frontend web
+    bind *:443 accept-proxy ssl crt /etc/ssl/cert.pem
 
-NGINX CONFIGURATION (Receiving Proxy Protocol)
-─────────────────────────────────────────────────────────────
-
-    server {
-        # Enable Proxy Protocol on the listen directive
-        listen 443 ssl proxy_protocol;
-
-        # Use the real client IP from Proxy Protocol
-        set_real_ip_from 10.0.0.0/8;     # Trust NLB's IP range
-        real_ip_header proxy_protocol;    # Get IP from PP header
-
-        # Pass real IP to backend as header
-        proxy_set_header X-Real-IP       $proxy_protocol_addr;
-        proxy_set_header X-Forwarded-For $proxy_protocol_addr;
-    }
-
-HAPROXY CONFIGURATION
-─────────────────────────────────────────────────────────────
-
-    # Receiving Proxy Protocol
-    frontend web
-        bind *:443 accept-proxy ssl crt /etc/ssl/cert.pem
-
-    # Sending Proxy Protocol to backend
-    backend servers
-        server s1 10.0.1.5:8080 send-proxy-v2
-
-ENVOY CONFIGURATION
-─────────────────────────────────────────────────────────────
-
-    # Listener receiving Proxy Protocol
-    listener_filters:
-      - name: envoy.filters.listener.proxy_protocol
-        typed_config:
-          "@type": type.googleapis.com/
-            envoy.extensions.filters.listener.proxy_protocol.v3.ProxyProtocol
-
-AWS NLB + PROXY PROTOCOL
-─────────────────────────────────────────────────────────────
-
-    Target Group settings:
-      Proxy Protocol v2: Enabled
-
-    ⚠️  NLB sends Proxy Protocol v2 (binary).
-    Your backend MUST support v2 (nginx, HAProxy, envoy do).
-
-COMMON GOTCHA: HEALTH CHECKS
-─────────────────────────────────────────────────────────────
-
-    NLB health checks do NOT send Proxy Protocol headers.
-    If your backend requires Proxy Protocol on ALL connections,
-    NLB health checks will fail.
-
-    Solution 1: Use a separate port for health checks
-                (without Proxy Protocol requirement)
-
-    Solution 2: Configure backend to accept connections
-                both with and without Proxy Protocol
-                (nginx: listen 443 ssl; on a separate server block)
+# Sending Proxy Protocol to backend
+backend servers
+    server s1 10.0.1.5:8080 send-proxy-v2
 ```
+
+**AWS NLB + Proxy Protocol**
+Target Group settings: Proxy Protocol v2 Enabled.
+⚠️ NLB sends Proxy Protocol v2 (binary). Your backend MUST support v2.
+
+**Common Gotcha: Health Checks**
+NLB health checks do NOT send Proxy Protocol headers. If your backend requires Proxy Protocol on ALL connections, NLB health checks will fail.
+*Solution 1*: Use a separate port for health checks.
+*Solution 2*: Configure backend to accept connections both with and without Proxy Protocol.
 
 ---
 
@@ -655,81 +457,67 @@ COMMON GOTCHA: HEALTH CHECKS
 
 ### 5.1 The Cross-Zone Problem
 
+Cloud load balancers span multiple Availability Zones. Cross-zone determines whether traffic can flow across zones.
+
+**Without Cross-Zone (Zone-Isolated)**
+Each AZ's LB node only sends to backends in its own AZ.
+
+```mermaid
+flowchart TD
+    subgraph AZA [AZ-A]
+        LBA["LB Node A (50% traffic)"]
+        T1["T-1 (25%)"]
+        T2["T-2 (25%)"]
+        LBA --> T1
+        LBA --> T2
+    end
+    subgraph AZB [AZ-B]
+        LBB["LB Node B (50% traffic)"]
+        T3["T-3 (6.25%)"]
+        T4["T-4 (6.25%)"]
+        T5["T-5 (6.25%)"]
+        T6["T-6 (6.25%)"]
+        T7["T-7 (6.25%)"]
+        T8["T-8 (6.25%)"]
+        T9["T-9 (6.25%)"]
+        T10["T-10 (6.25%)"]
+        LBB --> T3 & T4 & T5 & T6 & T7 & T8 & T9 & T10
+    end
 ```
-CROSS-ZONE LOAD BALANCING
-═══════════════════════════════════════════════════════════════
+Problem: AZ-A targets are 4x overloaded!
 
-Cloud load balancers span multiple Availability Zones.
-Cross-zone determines whether traffic can flow across zones.
+**With Cross-Zone (Default for ALB, optional for NLB)**
+Each LB node distributes evenly across ALL backends.
 
-WITHOUT CROSS-ZONE (Zone-Isolated)
-─────────────────────────────────────────────────────────────
-
-    Each AZ's LB node only sends to backends in its own AZ.
-
-    AZ-A (2 targets)          AZ-B (8 targets)
-    ┌─────────────────┐       ┌─────────────────┐
-    │  LB Node A      │       │  LB Node B      │
-    │  (50% traffic)  │       │  (50% traffic)  │
-    │       │         │       │       │         │
-    │    ┌──┴──┐      │       │  ┌────┼────┐    │
-    │    │     │      │       │  │ │  │  │ │    │
-    │   T-1   T-2    │       │ T-3 T-4 T-5 T-6│
-    │   25%   25%    │       │  T-7 T-8 T-9 T-10│
-    │                 │       │ 6.25% each      │
-    └─────────────────┘       └─────────────────┘
-
-    Problem: T-1 and T-2 each get 25% of total traffic
-             T-3 through T-10 each get 6.25%
-             AZ-A targets are 4x overloaded!
-
-WITH CROSS-ZONE (Default for ALB, optional for NLB)
-─────────────────────────────────────────────────────────────
-
-    Each LB node distributes evenly across ALL backends.
-
-    AZ-A (2 targets)          AZ-B (8 targets)
-    ┌─────────────────┐       ┌─────────────────┐
-    │  LB Node A      │       │  LB Node B      │
-    │       │         │       │       │         │
-    │    Sends to     │       │    Sends to     │
-    │    ALL 10       │       │    ALL 10       │
-    │    targets      │       │    targets      │
-    │    evenly       │       │    evenly       │
-    └─────────────────┘       └─────────────────┘
-
-    Each of the 10 targets gets exactly 10% of traffic.
-    Even distribution regardless of AZ placement.
-
-TRADE-OFFS
-─────────────────────────────────────────────────────────────
-
-    Cross-Zone ON:
-    ✓ Even distribution across all targets
-    ✓ Better utilization of all backends
-    ✗ Cross-AZ data transfer charges ($0.01/GB on AWS)
-    ✗ Slightly higher latency for cross-AZ traffic (~0.5-1ms)
-    ✗ AZ failure might affect traffic in other AZs
-
-    Cross-Zone OFF:
-    ✓ No cross-AZ data transfer charges
-    ✓ Failure domain isolation (AZ failure = AZ impact only)
-    ✓ Lower latency (all traffic stays in-zone)
-    ✗ Uneven distribution if target count differs per AZ
-    ✗ Must carefully balance target count across AZs
-
-AWS DEFAULTS
-─────────────────────────────────────────────────────────────
-    ALB: Cross-zone ON (always, can't disable per target group)
-    NLB: Cross-zone OFF (can enable per target group)
-    CLB: Cross-zone ON (default since 2014)
-
-    NLB cross-zone cost: $0.006/GB inter-AZ traffic
-
-    For high-traffic NLBs (>100 TB/month), cross-zone OFF
-    saves thousands of dollars. But you must ensure even
-    target distribution across AZs.
+```mermaid
+flowchart TD
+    subgraph AZA [AZ-A]
+        LBA["LB Node A"]
+        T1["T-1 (10%)"]
+        T2["T-2 (10%)"]
+    end
+    subgraph AZB [AZ-B]
+        LBB["LB Node B"]
+        T3["T-3 (10%)"]
+        T4["T-4 (10%)"]
+        T5["T-5 (10%)"]
+        T6["T-6 (10%)"]
+        T7["T-7 (10%)"]
+        T8["T-8 (10%)"]
+        T9["T-9 (10%)"]
+        T10["T-10 (10%)"]
+    end
+    LBA --> T1 & T2 & T3 & T4 & T5 & T6 & T7 & T8 & T9 & T10
+    LBB --> T1 & T2 & T3 & T4 & T5 & T6 & T7 & T8 & T9 & T10
 ```
+
+**Trade-Offs**
+- **Cross-Zone ON**: Even distribution, better utilization. *Drawbacks*: Cross-AZ data transfer charges, slightly higher latency, AZ failure might affect traffic in other AZs.
+- **Cross-Zone OFF**: No cross-AZ charges, isolation. *Drawbacks*: Uneven distribution if target count differs.
+
+**AWS Defaults**
+- ALB: Cross-zone ON (always)
+- NLB: Cross-zone OFF (can enable per target group, costs $0.006/GB inter-AZ)
 
 ---
 
@@ -737,211 +525,80 @@ AWS DEFAULTS
 
 ### 6.1 AWS Load Balancers
 
-```
-AWS LOAD BALANCER COMPARISON
-═══════════════════════════════════════════════════════════════
+**Network Load Balancer (NLB)**
+- **Layer**: 4 (TCP, UDP, TLS)
+- **Performance**: Millions of requests/sec, <100μs latency
+- **IPs**: Static (Elastic IP per AZ)
+- **Architecture**: Uses flow hash (5-tuple) for connection distribution. Backed by Hyperplane (distributed across all hosts in the AZ). No single point of failure.
 
-NETWORK LOAD BALANCER (NLB)
-─────────────────────────────────────────────────────────────
-    Layer:          4 (TCP, UDP, TLS)
-    Performance:    Millions of requests/sec, <100μs latency
-    IPs:            Static (Elastic IP per AZ)
-    Protocols:      TCP, UDP, TLS, TCP_UDP
-    Targets:        EC2, IP, ALB (!)
-    Proxy Protocol: v2 supported
-    TLS:            Terminates OR pass-through
-    Health checks:  TCP, HTTP, HTTPS
-    Pricing:        Per NLCU (capacity unit)
-    Cross-zone:     Off by default
+**Application Load Balancer (ALB)**
+- **Layer**: 7 (HTTP, HTTPS, gRPC)
+- **IPs**: Dynamic (DNS-based resolution)
+- **Advanced features**: Weighted routing, OIDC/Cognito auth, WAF integration, header modification.
 
-    Architecture:
-    ┌──────────────────────────────────────────────────┐
-    │  NLB uses flow hash for connection distribution   │
-    │  Hash: src_ip, src_port, dst_ip, dst_port, proto │
-    │  Same 5-tuple → same target (for connection life) │
-    │                                                  │
-    │  Internally: Hyperplane (software-defined LB)    │
-    │  Distributed across all hosts in the AZ          │
-    │  No single point of failure, scales elastically  │
-    └──────────────────────────────────────────────────┘
-
-APPLICATION LOAD BALANCER (ALB)
-─────────────────────────────────────────────────────────────
-    Layer:          7 (HTTP, HTTPS, gRPC)
-    Performance:    Thousands of new connections/sec
-    IPs:            Dynamic (DNS-based resolution)
-    Protocols:      HTTP/1.1, HTTP/2, gRPC, WebSocket
-    Targets:        EC2, IP, Lambda
-    Routing:        Path, host, header, query, source IP
-    TLS:            Terminates (required)
-    Health checks:  HTTP, HTTPS (with path/matcher)
-    Auth:           OIDC, Cognito integration
-    Pricing:        Per LCU (capacity unit)
-    Cross-zone:     Always on
-
-    Advanced features:
-    - Weighted target groups (canary deployments)
-    - Sticky sessions (cookie-based)
-    - Request/response header modification
-    - Redirect and fixed-response actions
-    - AWS WAF integration
-
-NLB + ALB PATTERN
-─────────────────────────────────────────────────────────────
-    NLB can target an ALB. This gives you:
-
-    Internet → NLB (static IPs, Proxy Protocol)
-             → ALB (HTTP routing, WAF, auth)
-             → Targets
-
-    Why: Some use cases need BOTH static IPs (firewall
-    allowlisting) AND L7 features (path routing).
-```
+**NLB + ALB Pattern**
+Internet → NLB (static IPs, Proxy Protocol) → ALB (HTTP routing, WAF, auth) → Targets.
+*Why*: Some use cases need BOTH static IPs (firewall allowlisting) AND L7 features (path routing).
 
 ### 6.2 Google Maglev
 
+Maglev is Google's custom software-defined L4 load balancer.
+
+**Architecture**
+
+```mermaid
+flowchart TD
+    subgraph EdgePoP [Google's Edge PoP]
+        subgraph Maglevs [Maglev Machines]
+            M1["Maglev-1 (ECMP)"]
+            M2["Maglev-2 (ECMP)"]
+            M3["Maglev-3 (ECMP)"]
+            MN["Maglev-N (ECMP)"]
+        end
+        Hash["Maglev Consistent Hashing<br>(Same flow -> Same backend)"]
+        M1 --> Hash
+        M2 --> Hash
+        M3 --> Hash
+        MN --> Hash
+    end
+    Hash -->|GRE/GUE encapsulation| BackendVMs["Backend VMs"]
 ```
-GOOGLE MAGLEV — SOFTWARE-DEFINED L4 LOAD BALANCING
-═══════════════════════════════════════════════════════════════
 
-Maglev is Google's custom L4 load balancer. It powers
-Google Cloud Load Balancing and all Google services.
-
-ARCHITECTURE
-─────────────────────────────────────────────────────────────
-
-    ┌──────────────────────────────────────────────────────┐
-    │  Google's Edge PoP                                   │
-    │                                                      │
-    │  ┌──────────────────────────────────────────────────┐│
-    │  │  Maglev Machines (commodity Linux servers)       ││
-    │  │                                                  ││
-    │  │  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐  ││
-    │  │  │Maglev-1│ │Maglev-2│ │Maglev-3│ │Maglev-N│  ││
-    │  │  │        │ │        │ │        │ │        │  ││
-    │  │  │ ECMP   │ │ ECMP   │ │ ECMP   │ │ ECMP   │  ││
-    │  │  │ (equal │ │        │ │        │ │        │  ││
-    │  │  │ share) │ │        │ │        │ │        │  ││
-    │  │  └───┬────┘ └───┬────┘ └───┬────┘ └───┬────┘  ││
-    │  │      │          │          │          │        ││
-    │  │      └──────────┼──────────┼──────────┘        ││
-    │  │                 │          │                    ││
-    │  │      All use Maglev consistent hashing          ││
-    │  │      Same flow → Same backend (regardless       ││
-    │  │      of which Maglev machine handles it)        ││
-    │  └──────────────────────────────────────────────────┘│
-    │                                                      │
-    │  GRE/GUE encapsulation → Backend VMs                │
-    └──────────────────────────────────────────────────────┘
-
-MAGLEV CONSISTENT HASHING
-─────────────────────────────────────────────────────────────
-
-    Problem with standard consistent hashing:
-    When a backend is removed, ~1/N flows are redistributed.
-    But which specific flows? Unpredictable.
-
-    Maglev hashing guarantees:
-    - Same 5-tuple always maps to same backend
-    - ANY Maglev machine produces the SAME mapping
-    - When a backend is removed, ONLY that backend's flows
-      are redistributed (minimal disruption)
-
-    This means multiple Maglev machines can handle traffic
-    via ECMP without coordination, and all agree on backend
-    selection. No shared state needed!
-
-    Lookup table size: 65,537 entries (prime number)
-    Lookup time: O(1) — single table access
-
-KEY PROPERTIES
-─────────────────────────────────────────────────────────────
-    Throughput:   ~10 Mpps per machine (10M packets/second)
-    Line rate:    Each machine saturates 10 Gbps
-    Scaling:      Add more machines, ECMP distributes
-    Failover:     Machine failure → ECMP re-distributes
-                  Backend failure → consistent hash re-maps
-    No state:     Each machine is independent (stateless*)
-
-    * Connection tracking table is local, not shared.
-      But consistent hashing means the SAME machine
-      naturally gets the same flow after ECMP reconvergence.
-```
+**Maglev Consistent Hashing**
+Guarantees:
+- Same 5-tuple always maps to same backend
+- ANY Maglev machine produces the SAME mapping
+- When a backend is removed, ONLY that backend's flows are redistributed
+- Stateless: Multiple machines can handle traffic via ECMP without coordination.
 
 ### 6.3 Kubernetes Load Balancing
 
+**ClusterIP (Internal L4)**
+Virtual IP via kube-proxy iptables or IPVS.
+IPVS mode is better for large clusters (O(1) connection forwarding).
+
+**NodePort**
+Opens a port (30000-32767) on every node.
+⚠️ **Double-hop problem**: Traffic hits Node A → Pod is on Node B. Extra hop, SNAT hides client IP.
+`externalTrafficPolicy: Local` preserves client IP (no SNAT), but if no pod is on that node, the connection is refused.
+
+**LoadBalancer**
+Cloud provider provisions external LB automatically.
+```yaml
+# AWS NLB
+service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+service.beta.kubernetes.io/aws-load-balancer-proxy-protocol: "*"
+service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+
+# Target type (instance vs ip)
+service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: "ip"
 ```
-KUBERNETES SERVICE LOAD BALANCING
-═══════════════════════════════════════════════════════════════
+- `instance` mode: NLB → NodePort → kube-proxy → Pod
+- `ip` mode: NLB → Pod directly (requires VPC CNI)
 
-CLUSTERIP (Internal L4)
-─────────────────────────────────────────────────────────────
-    Virtual IP (kube-proxy iptables or IPVS).
-    Round-robin across endpoints.
-
-    Service: 10.96.0.100:80
-    Endpoints: [10.244.1.5:8080, 10.244.2.8:8080]
-
-    iptables: DNAT 10.96.0.100 → random(10.244.1.5, 10.244.2.8)
-
-    IPVS mode (better for large clusters):
-    - Supports weighted round robin, least connections
-    - O(1) connection forwarding vs O(n) iptables chains
-    - Better performance with >1000 services
-
-NODEPORT
-─────────────────────────────────────────────────────────────
-    Opens a port (30000-32767) on every node.
-    External traffic → any Node IP:NodePort → Pod
-
-    ⚠️  Double-hop problem:
-    Traffic hits Node A → Pod is on Node B → forwarded to B
-    Return traffic goes from B → back through A → client
-    Extra hop, SNAT hides client IP.
-
-    externalTrafficPolicy: Local
-    - Only routes to pods on the receiving node
-    - Preserves client IP (no SNAT)
-    - But: if no pod on that node → connection refused
-
-LOADBALANCER
-─────────────────────────────────────────────────────────────
-    Cloud provider provisions external LB automatically.
-
-    AWS: NLB or CLB (configurable via annotation)
-    GCP: Network LB (regional) or HTTP(S) LB (global)
-    Azure: Azure Load Balancer (L4)
-
-    Annotations control behavior:
-    ─────────────────────────────────────────────
-    # AWS NLB
-    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
-    service.beta.kubernetes.io/aws-load-balancer-proxy-protocol: "*"
-    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
-
-    # Target type (instance vs IP)
-    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: "ip"
-
-    instance mode: NLB → NodePort → kube-proxy → Pod
-    ip mode:       NLB → Pod directly (requires VPC CNI)
-
-INGRESS (L7)
-─────────────────────────────────────────────────────────────
-    Ingress Controller (nginx, envoy, traefik) provides L7.
-    Typically behind a LoadBalancer Service.
-
-    Internet → Cloud LB → Ingress Controller → Services → Pods
-
-    Gateway API (newer, preferred):
-    ─────────────────────────────────────────────
-    GatewayClass → Gateway → HTTPRoute → Service → Pod
-
-    More expressive than Ingress:
-    - Header-based routing
-    - Traffic splitting (canary)
-    - Request/response modification
-    - TLS configuration per route
-```
+**Ingress (L7) & Gateway API**
+Ingress Controller (nginx, envoy) provides L7 behind a LoadBalancer Service.
+Gateway API is the modern standard, offering more expressive routing, Canary traffic splitting, and TLS per route.
 
 ---
 
@@ -973,140 +630,46 @@ INGRESS (L7)
 
 ## Quiz
 
-1. **Explain the fundamental difference between L4 and L7 load balancing. Why can't an L4 load balancer do path-based routing?**
+1. **You are designing an architecture for a new microservice that needs to route traffic based on the `/api/v2` URL path, but your team insists on using a high-throughput L4 load balancer to minimize latency. Why will this approach fail, and what is the fundamental architectural difference preventing it?**
    <details>
    <summary>Answer</summary>
 
-   L4 load balancers operate at the transport layer (TCP/UDP). They see the 5-tuple: source IP, source port, destination IP, destination port, and protocol. They make routing decisions based on these fields and forward raw TCP/UDP streams without understanding the content.
-
-   L7 load balancers operate at the application layer (HTTP). They terminate the client's TCP and TLS connections, parse the HTTP request, and then create a new connection to the selected backend. This means they can inspect URLs, headers, cookies, and even the request body.
-
-   An L4 load balancer cannot do path-based routing because the URL path is inside the HTTP request body, which is inside the TLS-encrypted TCP stream. The L4 LB only sees TCP headers — it never decrypts TLS or parses HTTP. The path `/api/users` is opaque data as far as L4 is concerned.
-
-   The one exception: L4 LBs can use TLS SNI (Server Name Indication) for host-based routing, because SNI is sent in cleartext during the TLS handshake. But this only gives you the hostname, not the path.
+   This approach will fail because an L4 load balancer operates exclusively at the transport layer (TCP/UDP) and cannot read or route based on HTTP paths. L4 balancers see only the 5-tuple (source IP, source port, destination IP, destination port, and protocol) and forward raw TCP streams without terminating the connection or decrypting TLS. In contrast, an L7 load balancer operates at the application layer, fully terminating the TCP and TLS connections to parse the HTTP request. Because the URL path `/api/v2` is encrypted inside the TLS payload of the HTTP request, an L4 load balancer simply cannot access this data to make routing decisions.
    </details>
 
-2. **What is connection draining and why is a 5-second draining timeout dangerous for a production application?**
+2. **During a routine midday deployment, your monitoring system alerts you that hundreds of users are receiving abrupt "connection reset" errors. You discover your load balancer's deregistration delay (connection draining) is set to 5 seconds. Why is this specific configuration causing the errors, and what is happening to the active connections?**
    <details>
    <summary>Answer</summary>
 
-   Connection draining is the process of gracefully removing a backend from a load balancer. When a backend enters the "draining" state, the LB stops sending new connections but allows existing in-flight connections to complete, up to a configured timeout.
-
-   A 5-second timeout is dangerous because:
-
-   1. **Long-running requests**: Any request that takes more than 5 seconds (large file upload, complex database query, report generation) will be forcibly terminated. The client receives a connection reset with no error message.
-
-   2. **WebSocket connections**: WebSockets are long-lived. A 5-second timeout kills every active WebSocket connection during any deployment or health check failure.
-
-   3. **Deployment frequency**: If you deploy multiple times per day, each deployment drains and replaces backends. Short timeouts mean frequent connection drops across the fleet.
-
-   4. **Cascading drain events**: If a health check flaps (passes, fails, passes), the backend enters and exits draining repeatedly. With a 5-second window, many requests are still in progress when the drain completes.
-
-   Recommended timeouts:
-   - API endpoints: 30-60 seconds
-   - WebSocket: 300+ seconds
-   - File upload endpoints: 600+ seconds
-   - Default for most applications: 300 seconds
+   The 5-second deregistration delay is causing these errors because it forces the load balancer to forcefully sever any connection that takes longer than 5 seconds to complete after a backend is marked for removal. During a deployment, older pods are removed from the load balancer and placed into a "draining" state, where they stop receiving new requests but are expected to finish existing ones. If a user is downloading a large file, executing a slow database query, or maintaining a long-lived WebSocket connection, 5 seconds is insufficient time for the request to naturally complete. Consequently, the load balancer abruptly drops these in-flight connections once the brief timeout is reached, resulting in the "connection reset" errors seen by the users.
    </details>
 
-3. **Why are sticky sessions (session affinity) considered an anti-pattern for stateless microservices? When are they still justified?**
+3. **Your team is migrating a legacy e-commerce application to Kubernetes and a senior engineer suggests enabling sticky sessions on the load balancer so users don't lose their shopping carts during pod restarts. Why is this considered a cloud-native anti-pattern, and what operational risks does it introduce during scaling events?**
    <details>
    <summary>Answer</summary>
 
-   Sticky sessions are considered an anti-pattern because they:
-
-   1. **Create uneven load**: Popular users or heavy sessions get stuck on one server, creating hotspots while other servers are underutilized.
-
-   2. **Complicate scaling**: Adding servers doesn't immediately help because existing sessions stay on old servers. Removing servers requires draining all their sticky sessions.
-
-   3. **Reduce resilience**: When a server fails, all its sticky sessions must be re-established elsewhere. Users lose their session state. If the replacement servers are already loaded, this can cascade.
-
-   4. **Conflict with deployment strategies**: Rolling deployments must migrate sticky sessions from old pods to new ones, adding complexity and risk.
-
-   **When still justified**:
-   - **Legacy applications** that store session state in-process and cannot be refactored to use external session storage
-   - **Connection-oriented protocols** (WebSocket, gRPC streaming) where the connection itself is stateful by nature
-   - **Caching optimization**: Routing the same user to the same server improves local cache hit rates (e.g., in-memory caches of user-specific data)
-   - **Licensing constraints**: Some enterprise software is licensed per-server and sessions must stay on one server
-
-   The better alternative is external session storage (Redis, DynamoDB) so any server can handle any request. This is the standard approach for cloud-native applications.
+   Sticky sessions are considered an anti-pattern in modern cloud-native architectures because they tightly couple a user's session state to a specific ephemeral pod, undermining the fundamental principle of statelessness. When scaling events occur, sticky sessions create severe operational risks such as uneven load distribution, where popular users become trapped on a single overloaded pod while newly provisioned pods sit idle. Furthermore, if a pod crashes or restarts, all users pinned to that pod immediately lose their session data (like their shopping carts) and must re-establish their connections on a new pod. A far more resilient and scalable approach is to store session state in an external, distributed datastore like Redis, enabling any backend pod to safely handle any user's request.
    </details>
 
-4. **You configure an NLB with Proxy Protocol v2 enabled, but your backend application shows the NLB's internal IP in access logs instead of the client IP. What are the three most likely causes?**
+4. **You configure an AWS Network Load Balancer (NLB) with Proxy Protocol v2 enabled, but your backend application shows the NLB's internal IP in access logs instead of the true client IP. What are the most likely causes of this discrepancy, and why does it happen?**
    <details>
    <summary>Answer</summary>
 
-   Three most likely causes:
-
-   1. **Backend not configured to read Proxy Protocol**: The backend web server (nginx, HAProxy, envoy) must be explicitly configured to expect and parse the Proxy Protocol header. Without this configuration, the binary PP v2 header is treated as garbage data (and possibly causes connection errors) while the backend reads the TCP source IP (NLB's IP).
-
-      Fix for nginx: Add `proxy_protocol` to the `listen` directive:
-      ```
-      listen 443 ssl proxy_protocol;
-      real_ip_header proxy_protocol;
-      set_real_ip_from 10.0.0.0/8;
-      ```
-
-   2. **Proxy Protocol enabled on NLB but not on the target group**: In AWS, Proxy Protocol v2 is configured per target group, not on the NLB itself. If the target group attribute `proxy_protocol_v2.enabled` is not set to `true`, the NLB does not prepend the PP header.
-
-   3. **Intermediate proxy stripping the information**: If there's a proxy between the NLB and the backend (e.g., a sidecar, a service mesh proxy, or kube-proxy in iptables mode), it may not pass through the Proxy Protocol header. Each proxy in the chain must either forward the PP header or translate it (e.g., to X-Forwarded-For).
-
-   Debugging approach: Use `tcpdump` on the backend to verify whether the Proxy Protocol header is present in the TCP stream.
+   The most likely cause is that the backend application (or an intermediate proxy like an ingress controller) has not been explicitly configured to expect and parse the Proxy Protocol header. Proxy Protocol v2 prepends a binary header to the beginning of the TCP stream, and if the backend does not decode this header, it will simply fall back to reading the TCP source IP, which belongs to the NLB. Another possible cause is that the Proxy Protocol setting was enabled on the NLB listener but not explicitly on the target group, preventing the NLB from injecting the header in the first place. Finally, an intermediate proxy (like kube-proxy in iptables mode) might be stripping the header before it reaches the application, meaning the entire chain must be configured to pass or translate the client IP.
    </details>
 
-5. **Explain the cross-zone load balancing problem. You have 2 targets in AZ-A and 6 targets in AZ-B. With cross-zone disabled, what percentage of total traffic does each target receive?**
+5. **You have deployed an application across two Availability Zones: 2 pods in AZ-A and 6 pods in AZ-B. Your Network Load Balancer has cross-zone load balancing disabled to save on data transfer costs. Suddenly, the pods in AZ-A start crashing from CPU exhaustion while AZ-B pods are mostly idle. What percentage of the total traffic is each pod receiving, and why did this configuration cause the outage?**
    <details>
    <summary>Answer</summary>
 
-   With cross-zone disabled, each AZ's LB node distributes traffic only to targets in its own AZ. DNS round-robin between the AZ endpoints means each AZ node receives 50% of total traffic.
-
-   **AZ-A (2 targets, 50% of traffic)**:
-   - Target 1: 50% / 2 = **25%** of total traffic
-   - Target 2: 50% / 2 = **25%** of total traffic
-
-   **AZ-B (6 targets, 50% of traffic)**:
-   - Each target: 50% / 6 = **~8.3%** of total traffic
-
-   AZ-A targets receive 3x more traffic than AZ-B targets (25% vs 8.3%). If all targets have the same capacity, AZ-A targets will be overloaded while AZ-B targets are underutilized.
-
-   With cross-zone enabled, all 8 targets receive equal traffic: 100% / 8 = **12.5% each**.
-
-   Solutions when cross-zone is disabled (to avoid inter-AZ charges):
-   - Maintain equal target counts per AZ (3 in A, 3 in B, or 4 in each)
-   - Use auto-scaling groups with per-AZ min/max settings
-   - Accept the uneven distribution and size AZ-A targets larger
+   With cross-zone load balancing disabled, the load balancer distributes incoming traffic evenly between the two Availability Zones at the DNS level, meaning AZ-A and AZ-B each receive 50% of the total traffic. Because there are only 2 pods in AZ-A, each of those pods must handle 25% of the overall traffic load. In contrast, the 6 pods in AZ-B share their 50% evenly, meaning each pod in AZ-B handles roughly 8.3% of the traffic. This immense imbalance forced the pods in AZ-A to process three times the traffic volume of their counterparts in AZ-B, rapidly exhausting their CPU resources and causing the cascading failure.
    </details>
 
-6. **In Kubernetes, what is the "double-hop" problem with NodePort services, and how does `externalTrafficPolicy: Local` solve it? What new problem does it introduce?**
+6. **You configure a NodePort service in your cluster to receive external traffic, but a security audit reveals that the application logs show all requests coming from internal node IPs rather than the actual external client IPs. You apply `externalTrafficPolicy: Local` to fix this, but now some connections are being completely refused. Explain the original "double-hop" mechanism that hid the IPs, how the new policy fixed it, and why connections are now failing.**
    <details>
    <summary>Answer</summary>
 
-   **The double-hop problem**:
-   When external traffic arrives at a node via NodePort, kube-proxy may forward it to a pod on a different node:
-
-   1. Traffic arrives at Node A (port 30080)
-   2. kube-proxy on Node A randomly selects a pod — Pod on Node B
-   3. Packet is SNAT'd (source NAT) to Node A's IP and forwarded to Node B
-   4. Pod on Node B processes the request, responds to Node A
-   5. Node A forwards response to client
-
-   Problems: Extra network hop (latency), client IP is lost (SNAT replaces it with Node A's IP).
-
-   **How `externalTrafficPolicy: Local` solves it**:
-   With this setting, kube-proxy only routes traffic to pods running on the same node where the traffic arrived. No SNAT, no extra hop.
-
-   1. Traffic arrives at Node A (port 30080)
-   2. kube-proxy routes to a pod on Node A only
-   3. Client IP is preserved (no SNAT needed)
-
-   **The new problem it introduces**:
-   If a node has no pods for the service, traffic arriving at that node is dropped (connection refused). The load balancer's health check must detect this and stop sending traffic to nodes without local pods.
-
-   This means:
-   - Uneven traffic distribution (nodes with more pods get more traffic)
-   - Nodes with zero pods are excluded, wasting capacity
-   - Must ensure pods are spread across all nodes (topology spread constraints)
-   - Health checks must target the NodePort's health check port (allocated automatically by Kubernetes)
+   The original "double-hop" issue occurred because kube-proxy randomly routes NodePort traffic to any pod in the cluster, meaning traffic hitting Node A might be forwarded to a pod on Node B. To ensure the response routes back properly, kube-proxy performs Source NAT (SNAT), replacing the client's external IP with Node A's internal IP. Applying `externalTrafficPolicy: Local` solves the SNAT problem by forcing kube-proxy to only route traffic to pods located on the same node that initially received the request, thereby preserving the original client IP. However, this introduces a new failure mode: if external traffic hits a node that happens to have zero instances of your application pod running locally, that node has nowhere to route the traffic and immediately drops or refuses the connection.
    </details>
 
 ---
