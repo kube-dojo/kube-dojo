@@ -49,6 +49,8 @@ But here's what made it possible: **independence**. The hydraulic systems didn't
 
 In software systems, the parallel is exact. Having two database replicas doesn't help if they're on the same physical server. Having three availability zones doesn't help if they share a power grid. Having ten microservice instances doesn't help if they all connect to the same overloaded dependency.
 
+> **Stop and think**: If your entire application is deployed in a single AWS Availability Zone with 50 pod replicas, do you have true redundancy against a network fiber cut or power failure in that specific data center?
+
 The question isn't "Do you have redundancy?" The question is: **"When component A fails, why is component B still working?"**
 
 ---
@@ -61,50 +63,38 @@ The answer is **redundancy**—having more than one of critical components so th
 
 This module teaches you to think about redundancy as an engineering discipline: when to use it, how to implement it, and the trade-offs involved.
 
-```
-THE REDUNDANCY PARADOX
-═══════════════════════════════════════════════════════════════════════════════
+### The Redundancy Paradox
 
-Many teams add redundancy and actually DECREASE reliability.
+Many teams add redundancy and actually **DECREASE** reliability. 
 
 How is this possible?
 
-SIMPLE SYSTEM (99% reliable)
-────────────────────────────────────────────────────────────────
-    [Component A] ───────────▶ Output
-
-    Reliability: 99%
-    Failure: 1 in 100 requests
-
-"LET'S ADD REDUNDANCY!"
-────────────────────────────────────────────────────────────────
-
-    [Component A] ──┐             ┌─────────────┐
-                    ├── Failover ─┤ Routing Logic├──▶ Output
-    [Component B] ──┘   Logic     │  (complex)  │
-                                  └─────────────┘
-
-    A reliability: 99%
-    B reliability: 99%
-    Failover logic: 90% (untested, has bugs)
-
-    Actual reliability = 99% + (1% × 90% × 99%) = 99.89%
-
-    Wait... that's barely better than before!
-
-    And if failover logic is only 50% reliable?
-
-    Actual reliability = 99% + (1% × 50% × 99%) = 99.49%
-
-    ⚠️  WORSE THAN NO REDUNDANCY!
-
-THE LESSON
-────────────────────────────────────────────────────────────────
-Redundancy only works if:
-1. Components fail INDEPENDENTLY
-2. Failover mechanism is TESTED
-3. Complexity doesn't outweigh benefit
+```mermaid
+flowchart LR
+    subgraph Simple System
+        A[Component A<br>99% reliable] --> Out1[Output]
+    end
+    
+    subgraph With Redundancy
+        C_A[Component A<br>99% reliable] --> FL{Failover<br>Logic}
+        C_B[Component B<br>99% reliable] --> FL
+        FL --> Out2[Output]
+    end
 ```
+
+**The Math of Failure:**
+- **Simple System**: Reliability is 99%. Failure happens 1 in 100 requests.
+- **Redundant System**: Component A and B are 99% reliable. But what if the Failover Logic is only 90% reliable (untested, has bugs)?
+- Actual reliability = `99% + (1% × 90% × 99%) = 99.89%` (Barely better than before!)
+- And if the failover logic is only 50% reliable?
+- Actual reliability = `99% + (1% × 50% × 99%) = 99.49%` 
+- **Result: WORSE THAN NO REDUNDANCY!**
+
+**The Lesson:**
+Redundancy only works if:
+1. Components fail INDEPENDENTLY.
+2. The failover mechanism is TESTED.
+3. The complexity doesn't outweigh the benefit.
 
 > **The Airplane Analogy**
 >
@@ -128,25 +118,17 @@ Redundancy only works if:
 
 **Redundancy** is having extra components beyond the minimum required for normal operation, so the system can continue if some components fail.
 
-```
-REDUNDANCY BASICS
-═══════════════════════════════════════════════════════════════
-
-NO REDUNDANCY (Single Point of Failure)
-────────────────────────────────────────
-    Request ──▶ [Service] ──▶ Response
-                    │
-                If fails → Outage
-
-WITH REDUNDANCY
-────────────────────────────────────────
-                ┌─────────┐
-    Request ──▶ │Service A│ ──▶ Response
-                └────┬────┘
-                     │ fails
-                ┌────▼────┐
-                │Service B│ ──▶ Response (continued)
-                └─────────┘
+```mermaid
+flowchart LR
+    subgraph No Redundancy
+        Req1[Request] --> S1[Service] --> Res1[Response]
+    end
+    
+    subgraph With Redundancy
+        Req2[Request] --> S_A[Service A] --> Res2[Response]
+        S_A -.fails.-> S_B[Service B]
+        S_B --> Res2
+    end
 ```
 
 ### 1.2 Types of Redundancy
@@ -160,129 +142,93 @@ WITH REDUNDANCY
 | **Temporal redundancy** | Retry over time | Automatic retry with backoff |
 | **Informational redundancy** | Extra data for validation | Checksums, parity bits |
 
+### The Six Types of Redundancy - Field Guide
+
+#### 1. Hardware Redundancy
+**What**: Multiple physical components
+**Where**: Disks, power supplies, network cards, servers
+```mermaid
+flowchart LR
+    PSU_A[PSU A] --> Comp[Server Components]
+    PSU_B[PSU B] --> Comp
 ```
-THE SIX TYPES OF REDUNDANCY - FIELD GUIDE
-═══════════════════════════════════════════════════════════════════════════════
+- **Cost**: $$$ (physical hardware)
+- **Complexity**: Low
+- **Common pitfall**: Same power circuit for both PSUs
 
-1. HARDWARE REDUNDANCY
-────────────────────────────────────────────────────────────────
-   What: Multiple physical components
-   Where: Disks, power supplies, network cards, servers
-
-   ┌─────────────────────────────────────────────────────────┐
-   │  Server with Dual Power Supplies                       │
-   │                                                        │
-   │    PSU A ──┬──▶ Components                            │
-   │            │                                           │
-   │    PSU B ──┘    (If PSU A fails, PSU B keeps running) │
-   │                                                        │
-   └─────────────────────────────────────────────────────────┘
-
-   Cost: $$$ (physical hardware)
-   Complexity: Low
-   Common pitfall: Same power circuit for both PSUs
-
-2. SOFTWARE REDUNDANCY
-────────────────────────────────────────────────────────────────
-   What: Multiple instances of the same service
-   Where: Web servers, API gateways, workers
-
-   ┌─────────────────────────────────────────────────────────┐
-   │                 Load Balancer                          │
-   │                      │                                 │
-   │         ┌────────────┼────────────┐                   │
-   │         ▼            ▼            ▼                   │
-   │    [Pod A]      [Pod B]      [Pod C]                  │
-   │                                                        │
-   │    Same code, same config, interchangeable            │
-   │                                                        │
-   └─────────────────────────────────────────────────────────┘
-
-   Cost: $$ (compute)
-   Complexity: Medium
-   Common pitfall: Shared downstream dependency (single DB)
-
-3. DATA REDUNDANCY
-────────────────────────────────────────────────────────────────
-   What: Multiple copies of the same data
-   Where: Databases, caches, object storage
-
-   ┌─────────────────────────────────────────────────────────┐
-   │                                                        │
-   │    [Primary DB] ──sync──▶ [Replica 1]                │
-   │         │                                              │
-   │         └─────sync──▶ [Replica 2]                    │
-   │                                                        │
-   │    Every write goes to 3 places                       │
-   │                                                        │
-   └─────────────────────────────────────────────────────────┘
-
-   Cost: $$$$ (3x storage, replication overhead)
-   Complexity: High
-   Common pitfall: Replication lag, split-brain
-
-4. GEOGRAPHIC REDUNDANCY
-────────────────────────────────────────────────────────────────
-   What: Same system in multiple physical locations
-   Where: Data centers, cloud regions
-
-   ┌─────────────────────────────────────────────────────────┐
-   │                                                        │
-   │      US-EAST              EU-WEST             AP-SOUTH │
-   │    ┌─────────┐         ┌─────────┐         ┌─────────┐│
-   │    │  App    │         │  App    │         │  App    ││
-   │    │  DB     │◀───────▶│  DB     │◀───────▶│  DB     ││
-   │    └─────────┘         └─────────┘         └─────────┘│
-   │                                                        │
-   │    Survive entire region failure                      │
-   │    Serve users from nearest location                  │
-   │                                                        │
-   └─────────────────────────────────────────────────────────┘
-
-   Cost: $$$$$ (3x infrastructure + cross-region traffic)
-   Complexity: Very High
-   Common pitfall: Latency, consistency, split-brain
-
-5. TEMPORAL REDUNDANCY
-────────────────────────────────────────────────────────────────
-   What: Retry failed operations over time
-   Where: Network calls, queue processing, batch jobs
-
-   ┌─────────────────────────────────────────────────────────┐
-   │                                                        │
-   │    Request ──▶ Fail                                   │
-   │           └──▶ Retry (100ms later) ──▶ Fail          │
-   │                         └──▶ Retry (200ms) ──▶ Success│
-   │                                                        │
-   │    The same operation, repeated until it works        │
-   │                                                        │
-   └─────────────────────────────────────────────────────────┘
-
-   Cost: $ (just time)
-   Complexity: Low
-   Common pitfall: Retry storms, idempotency issues
-
-6. INFORMATIONAL REDUNDANCY
-────────────────────────────────────────────────────────────────
-   What: Extra data to detect/correct errors
-   Where: Storage, network transmission
-
-   ┌─────────────────────────────────────────────────────────┐
-   │                                                        │
-   │    Original data:  [A B C D]                          │
-   │    With checksum:  [A B C D | CRC32]                  │
-   │                                                        │
-   │    If data corrupts, checksum won't match → detected  │
-   │                                                        │
-   │    With ECC:       [A B C D | parity bits]            │
-   │    Can actually CORRECT single bit errors             │
-   │                                                        │
-   └─────────────────────────────────────────────────────────┘
-
-   Cost: ~5-15% storage overhead
-   Complexity: Low (usually built into hardware/protocols)
-   Common pitfall: Silent data corruption (bit rot)
+#### 2. Software Redundancy
+**What**: Multiple instances of the same service
+**Where**: Web servers, API gateways, workers
+```mermaid
+flowchart TD
+    LB[Load Balancer] --> PodA[Pod A]
+    LB --> PodB[Pod B]
+    LB --> PodC[Pod C]
 ```
+- **Cost**: $$ (compute)
+- **Complexity**: Medium
+- **Common pitfall**: Shared downstream dependency (single DB)
+
+#### 3. Data Redundancy
+**What**: Multiple copies of the same data
+**Where**: Databases, caches, object storage
+```mermaid
+flowchart LR
+    Primary[Primary DB] -- sync --> Rep1[Replica 1]
+    Primary -- sync --> Rep2[Replica 2]
+```
+- **Cost**: $$$$ (3x storage, replication overhead)
+- **Complexity**: High
+- **Common pitfall**: Replication lag, split-brain
+
+#### 4. Geographic Redundancy
+**What**: Same system in multiple physical locations
+**Where**: Data centers, cloud regions
+```mermaid
+flowchart LR
+    subgraph US-EAST
+        App1[App]
+        DB1[(DB)]
+    end
+    subgraph EU-WEST
+        App2[App]
+        DB2[(DB)]
+    end
+    subgraph AP-SOUTH
+        App3[App]
+        DB3[(DB)]
+    end
+    DB1 <--> DB2
+    DB2 <--> DB3
+```
+- **Cost**: $$$$$ (3x infrastructure + cross-region traffic)
+- **Complexity**: Very High
+- **Common pitfall**: Latency, consistency, split-brain
+
+#### 5. Temporal Redundancy
+**What**: Retry failed operations over time
+**Where**: Network calls, queue processing, batch jobs
+```mermaid
+flowchart LR
+    Req[Request] --x Fail1[Fail]
+    Fail1 -. 100ms .-> Retry1[Retry] --x Fail2[Fail]
+    Fail2 -. 200ms .-> Retry2[Retry] --> Success[Success]
+```
+- **Cost**: $ (just time)
+- **Complexity**: Low
+- **Common pitfall**: Retry storms, idempotency issues
+
+#### 6. Informational Redundancy
+**What**: Extra data to detect/correct errors
+**Where**: Storage, network transmission
+```mermaid
+flowchart LR
+    A[Original: A B C D] --> B[With Checksum: A B C D | CRC32]
+    A --> C[With ECC: A B C D | parity bits]
+```
+- **Cost**: ~5-15% storage overhead
+- **Complexity**: Low (usually built into hardware/protocols)
+- **Common pitfall**: Silent data corruption (bit rot)
 
 ### 1.3 Redundancy Notation: N+M
 
@@ -290,91 +236,99 @@ Redundancy is often expressed as N+M:
 - **N** = minimum needed for normal operation
 - **M** = extra for failure tolerance
 
+#### N+0: No Redundancy (Single Point of Failure)
+```mermaid
+flowchart LR
+    A[Component A] --> Out[Output]
 ```
-REDUNDANCY NOTATION - THE COMPLETE GUIDE
-═══════════════════════════════════════════════════════════════════════════════
+- **If A fails**: Outage
+- **Survives**: 0 failures
+- **Use case**: Dev environment, non-critical batch jobs
 
-N+0: NO REDUNDANCY (Single Point of Failure)
-────────────────────────────────────────────────────────────────
-    [A] ───▶ Output
-
-    If A fails → OUTAGE
-    Survives: 0 failures
-    Use case: Dev environment, non-critical batch jobs
-
-N+1: ONE SPARE
-────────────────────────────────────────────────────────────────
-    [A] [B] ───▶ Output
-
-    Load: Either can handle 100% alone
-    If A fails → B takes over
-    Survives: 1 failure
-    Use case: Most production systems
-
-    ⚠️  DURING MAINTENANCE:
-    Take A down for patching → only B left (now N+0)
-    If B fails during maintenance → OUTAGE
-
-N+2: TWO SPARES (Maintenance + Failure)
-────────────────────────────────────────────────────────────────
-    [A] [B] [C] ───▶ Output
-
-    Load: Any two can handle 100%
-    If A fails → B and C continue
-    Survives: 2 failures OR 1 failure during maintenance
-    Use case: Critical production, financial services
-
-    ✓ DURING MAINTENANCE:
-    Take A down for patching → B and C remain (N+1)
-    If B fails during maintenance → C continues
-
-2N: FULL DUPLICATION
-────────────────────────────────────────────────────────────────
-    Site 1:  [A₁] [B₁] [C₁]     Active
-                   │
-                   │ replication
-                   │
-    Site 2:  [A₂] [B₂] [C₂]     Standby (or Active)
-
-    Complete mirror of entire system
-    Survives: Entire site failure
-    Use case: Disaster recovery, regulatory compliance
-
-2N+1: FULL DUPLICATION PLUS SPARE
-────────────────────────────────────────────────────────────────
-    Site 1:  [A₁] [B₁] [C₁]     Active
-                   │
-    Site 2:  [A₂] [B₂] [C₂]     Active
-                   │
-    Site 3:  [A₃]               Witness/Tiebreaker
-
-    Survives: Entire site failure + one more component
-    Use case: Mission-critical, global financial systems
-
-CAPACITY PLANNING REALITY CHECK
-────────────────────────────────────────────────────────────────
-
-    "We have 3 replicas for redundancy!"
-
-    But what's the LOAD on each replica?
-
-    3 replicas at 80% CPU each:
-    ┌────────────────────────────────────────────┐
-    │ [Pod A: 80%]  [Pod B: 80%]  [Pod C: 80%] │
-    └────────────────────────────────────────────┘
-
-    If Pod A fails, traffic redistributes:
-    ┌────────────────────────────────────────────┐
-    │     ✗        [Pod B: 120%] [Pod C: 120%] │
-    │              ↑ OVERLOADED! ↑              │
-    └────────────────────────────────────────────┘
-
-    For true N+1, each replica must handle 50% of total load
-    For true N+2, each replica must handle 33% of total load
-
-    FORMULA:
-    Max load per replica = Total Load ÷ (Number of replicas - tolerated failures)
+#### N+1: One Spare
+```mermaid
+flowchart LR
+    A[Component A] --> Out[Output]
+    B[Component B] --> Out
 ```
+- **Load**: Either can handle 100% alone
+- **If A fails**: B takes over
+- **Survives**: 1 failure
+- **Use case**: Most production systems
+- **During Maintenance**: Take A down for patching, only B left (now N+0). If B fails during maintenance, you get an outage.
+
+#### N+2: Two Spares (Maintenance + Failure)
+```mermaid
+flowchart LR
+    A[Component A] --> Out[Output]
+    B[Component B] --> Out
+    C[Component C] --> Out
+```
+- **Load**: Any two can handle 100%
+- **If A fails**: B and C continue
+- **Survives**: 2 failures OR 1 failure during maintenance
+- **Use case**: Critical production, financial services
+- **During Maintenance**: Take A down for patching, B and C remain (N+1). If B fails during maintenance, C continues.
+
+#### 2N: Full Duplication
+```mermaid
+flowchart TD
+    subgraph Site 1 Active
+        A1[A1] & B1[B1] & C1[C1]
+    end
+    subgraph Site 2 Standby
+        A2[A2] & B2[B2] & C2[C2]
+    end
+    Site1 -. replication .-> Site2
+```
+- **Survives**: Entire site failure
+- **Use case**: Disaster recovery, regulatory compliance
+
+#### 2N+1: Full Duplication Plus Spare
+```mermaid
+flowchart TD
+    subgraph Site 1 Active
+        A1[A1] & B1[B1] & C1[C1]
+    end
+    subgraph Site 2 Active
+        A2[A2] & B2[B2] & C2[C2]
+    end
+    subgraph Site 3 Witness
+        A3[Tiebreaker]
+    end
+    Site1 <--> Site2
+    Site1 <--> Site3
+    Site2 <--> Site3
+```
+- **Survives**: Entire site failure + one more component
+- **Use case**: Mission-critical, global financial systems
+
+#### Capacity Planning Reality Check
+
+"We have 3 replicas for redundancy!" But what's the LOAD on each replica?
+
+```mermaid
+flowchart LR
+    subgraph 3 Replicas at 80% CPU
+        A[Pod A: 80%]
+        B[Pod B: 80%]
+        C[Pod C: 80%]
+    end
+```
+If Pod A fails, traffic redistributes:
+```mermaid
+flowchart LR
+    subgraph After Failure
+        A[Pod A: FAILED]
+        B[Pod B: 120% CPU OVERLOADED]
+        C[Pod C: 120% CPU OVERLOADED]
+    end
+```
+
+For true N+1, each replica must handle 50% of total load.
+For true N+2, each replica must handle 33% of total load.
+
+**FORMULA:** `Max load per replica = Total Load / (Number of replicas - tolerated failures)`
 
 > **Gotcha: N+1 Isn't Always Enough**
 >
@@ -411,80 +365,45 @@ These terms are often used interchangeably, but they're fundamentally different 
 | Complexity | Moderate | High |
 | Use case | Most web services | Financial, medical, aviation |
 
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant HA as HA System
+    participant FT as FT System
+
+    Note over U, HA: High Availability (HA) Experience
+    U->>HA: Request 1 (Normal)
+    HA-->>U: Success
+    Note over HA: Primary server crashes
+    U->>HA: Request 2 (During detection)
+    HA--xU: Error / Connection Reset
+    Note over HA: Failover completes (seconds to mins)
+    U->>HA: Request 3 (Recovered)
+    HA-->>U: Success
+
+    Note over U, FT: Fault Tolerance (FT) Experience
+    U->>FT: Request 1 (Normal)
+    FT-->>U: Success
+    Note over FT: Primary server crashes
+    Note over FT: Secondary takes over INSTANTLY
+    U->>FT: Request 2 (During failure)
+    FT-->>U: Success (User unaware of crash)
 ```
-HIGH AVAILABILITY vs FAULT TOLERANCE - THE REAL DIFFERENCE
-═══════════════════════════════════════════════════════════════════════════════
 
-HIGH AVAILABILITY (HA)
-────────────────────────────────────────────────────────────────
-Time: ──────────────────────────────────────────────────────────────▶
+#### The Cost Difference
 
-      Normal Operation    Failure    Recovery    Normal Operation
-      ████████████████████ ▒▒▒▒▒▒▒▒ ███████████████████████████████
-                          ↑        ↑
-                          │        │
-                     Detection  Failover
-                     (seconds)  (seconds to minutes)
+**High Availability:**
+- **Infrastructure**: 2-3 servers, load balancers, health checks.
+- **Complexity**: Detect failure (seconds), route away, restart.
+- **Cost Multiplier**: 2-3×
 
-User Experience:
-  - 10:00:00 - Page loads fine
-  - 10:00:05 - Server crashes
-  - 10:00:07 - Health check fails (detection)
-  - 10:00:10 - Failover triggered
-  - 10:00:15 - New server ready
-  - 10:00:15 - "Please try again" message during 10-second window
-  - 10:00:16 - Page loads fine again
+**Fault Tolerance:**
+- **Infrastructure**: 2× everything (synchronized), specialized hardware, real-time replication.
+- **Complexity**: Continuous synchronization, lock-step execution, zero-switch-time handoff.
+- **Cost Multiplier**: 4-10×
+- **Why FT costs so much more**: Synchronous replication means every write waits for acknowledgment. It demands specialized hardware and near-zero network latency.
 
-What Happens to In-Flight Requests:
-  Request A: Started at 10:00:04, completed at 10:00:04 ✓
-  Request B: Started at 10:00:05, ERROR - connection reset ✗
-  Request C: Started at 10:00:15, completed at 10:00:15 ✓
-
-FAULT TOLERANCE (FT)
-────────────────────────────────────────────────────────────────
-Time: ──────────────────────────────────────────────────────────────▶
-
-      Normal Operation    Failure    (Seamless)   Normal Operation
-      █████████████████████████████████████████████████████████████
-                          ↑
-                          │
-                     Primary fails, secondary
-                     continues INSTANTLY
-
-User Experience:
-  - 10:00:00 - Page loads fine
-  - 10:00:05 - Primary server crashes (user doesn't know)
-  - 10:00:05 - Secondary server handles request (user doesn't know)
-  - 10:00:06 - Page loads fine (user never noticed)
-
-What Happens to In-Flight Requests:
-  Request A: Started at 10:00:04, completed at 10:00:04 ✓
-  Request B: Started at 10:00:05, handed off, completed at 10:00:06 ✓
-  Request C: Started at 10:00:06, completed at 10:00:06 ✓
-
-THE COST DIFFERENCE
-────────────────────────────────────────────────────────────────
-
-HIGH AVAILABILITY                    FAULT TOLERANCE
-
-Infrastructure:                      Infrastructure:
-  2-3 servers                          2× everything (synchronized)
-  Load balancer                        Specialized hardware
-  Health checks                        Real-time state replication
-
-Complexity:                          Complexity:
-  Detect failure (seconds)             Continuous synchronization
-  Route away from failed node          Lock-step execution
-  Restart/replace failed node          Zero-switch-time handoff
-
-Cost multiplier: 2-3×                Cost multiplier: 4-10×
-
-Why FT costs so much more:
-  - Synchronous replication (every write waits for acknowledgment)
-  - Specialized hardware (VMware FT, Stratus systems)
-  - Network latency budget (must be < switch time)
-  - Complex failure detection (can't be slow, can't be wrong)
-```
+> **Pause and predict**: If a payment gateway processes $1,000 per second and relies on an active-passive HA setup with a 30-second failover time, what is the minimum direct cost of a single primary node failure?
 
 ### 2.2 When to Use Which
 
@@ -500,53 +419,19 @@ Why FT costs so much more:
 - Legal/regulatory requirements
 - Lives depend on the system
 
-```
-THE HA vs FT DECISION FRAMEWORK
-═══════════════════════════════════════════════════════════════════════════════
-
-ASK THESE QUESTIONS:
-
-1. "Can the user retry?"
-   ├── YES → HA is probably fine
-   │         (Web pages, API calls, most interactions)
-   │
-   └── NO → Consider FT
-             (Wire transfers mid-transaction, surgical robots)
-
-2. "What's the cost of a 30-second outage?"
-   ├── Annoying → HA
-   │   (Blog down, users wait)
-   │
-   ├── Expensive → Strong HA
-   │   (E-commerce checkout, lost sales)
-   │
-   └── Catastrophic → FT
-       (Stock trading, medical devices)
-
-3. "Is there regulatory/compliance requirement?"
-   ├── NO → Design based on business needs
-   │
-   └── YES → Check specific requirements
-       - PCI-DSS doesn't mandate FT
-       - Aviation DO-178C does mandate FT
-       - Financial services vary by jurisdiction
-
-4. "What's your budget multiplier?"
-   ├── 2-3× acceptable → HA achievable
-   │
-   └── 4-10× acceptable → FT achievable
-
-DECISION MATRIX
-────────────────────────────────────────────────────────────────
-
-                        │ Retry OK │ Retry Not OK │
-────────────────────────┼──────────┼──────────────┤
-Low cost of outage      │   HA     │    HA        │
-────────────────────────┼──────────┼──────────────┤
-High cost of outage     │ Strong HA│    FT        │
-────────────────────────┼──────────┼──────────────┤
-Lives at stake          │   FT     │    FT        │
-────────────────────────┴──────────┴──────────────┘
+```mermaid
+flowchart TD
+    Q1{"Can the user retry?"}
+    Q1 -- YES --> HA1[HA is probably fine<br>Web pages, API calls]
+    Q1 -- NO --> Q2{"What's the cost of a<br>30-second outage?"}
+    
+    Q2 -- Annoying --> HA2[HA<br>Blog down, users wait]
+    Q2 -- Expensive --> SHA[Strong HA<br>E-commerce checkout]
+    Q2 -- Catastrophic --> FT1[FT<br>Stock trading, medical devices]
+    
+    Q3{"Regulatory/Compliance<br>requirement?"}
+    Q3 -- YES --> Check[Check specific requirements<br>e.g., Aviation DO-178C mandates FT]
+    Q3 -- NO --> Biz[Design based on business needs]
 ```
 
 > **Try This (2 minutes)**
@@ -582,27 +467,19 @@ Lives at stake          │   FT     │    FT        │
 
 One component handles traffic; others wait to take over.
 
+```mermaid
+flowchart LR
+    subgraph Normal Operation
+        T1[Traffic] --> P1[Active: Primary] --> R1[Response]
+        S1[Passive: Standby] -. idle/syncing .- P1
+    end
 ```
-ACTIVE-PASSIVE
-═══════════════════════════════════════════════════════════════
-
-NORMAL OPERATION
-┌─────────────────────────────────────────────────────────────┐
-│                                                             │
-│    Traffic ──▶ [Active: Primary] ──▶ Response              │
-│                                                             │
-│                [Passive: Standby] ← (idle, syncing)        │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-
-AFTER FAILOVER
-┌─────────────────────────────────────────────────────────────┐
-│                                                             │
-│                [Failed: Primary] ✗                         │
-│                                                             │
-│    Traffic ──▶ [Now Active: Standby] ──▶ Response          │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph After Failover
+        T2[Traffic] --> S2[Now Active: Standby] --> R2[Response]
+        P2[Failed: Primary]
+    end
 ```
 
 **Characteristics:**
@@ -620,31 +497,21 @@ AFTER FAILOVER
 
 All components handle traffic simultaneously.
 
+```mermaid
+flowchart LR
+    subgraph Normal Operation
+        T1[Traffic] --> LB1[Load Balancer]
+        LB1 --> N1A[Active: Node A] --> R1[Response]
+        LB1 --> N1B[Active: Node B] --> R1
+    end
 ```
-ACTIVE-ACTIVE
-═══════════════════════════════════════════════════════════════
-
-NORMAL OPERATION
-┌─────────────────────────────────────────────────────────────┐
-│                                                             │
-│                ┌──▶ [Active: Node A] ──┐                   │
-│                │                        │                   │
-│    Traffic ──▶ LB                       ├──▶ Response       │
-│                │                        │                   │
-│                └──▶ [Active: Node B] ──┘                   │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-
-AFTER NODE A FAILS
-┌─────────────────────────────────────────────────────────────┐
-│                                                             │
-│                     [Failed: Node A] ✗                     │
-│                                                             │
-│    Traffic ──▶ LB ──▶ [Active: Node B] ──▶ Response        │
-│                                                             │
-│    (All traffic now handled by B; may need to scale)       │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph After Failover
+        T2[Traffic] --> LB2[Load Balancer]
+        LB2 --> N2B[Active: Node B] --> R2[Response]
+        N2A[Failed: Node A]
+    end
 ```
 
 **Characteristics:**
@@ -679,63 +546,47 @@ AFTER NODE A FAILS
 
 ### 4.1 Database Replication
 
+```mermaid
+flowchart LR
+    subgraph Primary-Replica Read Scaling
+        W1[Writes] --> P1[(Primary)]
+        P1 -- sync --> R1A[(Replica 1)]
+        P1 -- sync --> R1B[(Replica 2)]
+        Read1[Reads] --> R1A
+        Read1 --> R1B
+    end
 ```
-DATABASE REPLICATION PATTERNS
-═══════════════════════════════════════════════════════════════
-
-PRIMARY-REPLICA (Read Scaling)
-┌─────────────────────────────────────────────────────────────┐
-│                                                             │
-│    Writes ──▶ [Primary] ──sync──▶ [Replica 1]              │
-│                   │                                         │
-│                   └───sync──▶ [Replica 2]                  │
-│                                                             │
-│    Reads ───▶ [Any Replica] ──▶ Response                   │
-│                                                             │
-│    + Read scalability                                       │
-│    - Single write point, replication lag                   │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-
-MULTI-PRIMARY (Write Scaling)
-┌─────────────────────────────────────────────────────────────┐
-│                                                             │
-│    Writes ──▶ [Primary A] ◀──sync──▶ [Primary B]           │
-│                                                             │
-│    + Write scalability                                      │
-│    - Conflict resolution complexity                        │
-│    - Harder to reason about consistency                    │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph Multi-Primary Write Scaling
+        W2[Writes] --> P2A[(Primary A)]
+        P2A <== sync ==> P2B[(Primary B)]
+    end
 ```
 
 ### 4.2 Kubernetes Redundancy
 
+```mermaid
+flowchart TD
+    T[Traffic] --> Svc[Service / LB]
+    subgraph Node 1
+        PodA[Pod A]
+    end
+    subgraph Node 2
+        PodB[Pod B]
+    end
+    subgraph Node 3
+        PodC[Pod C]
+    end
+    Svc --> PodA
+    Svc --> PodB
+    Svc --> PodC
 ```
-KUBERNETES POD REDUNDANCY
-═══════════════════════════════════════════════════════════════
-
-Deployment: replicas: 3
-
-┌──────────────────────────────────────────────────────────┐
-│  Node 1           Node 2           Node 3               │
-│  ┌─────────┐      ┌─────────┐      ┌─────────┐         │
-│  │  Pod A  │      │  Pod B  │      │  Pod C  │         │
-│  └─────────┘      └─────────┘      └─────────┘         │
-└──────────────────────────────────────────────────────────┘
-
-                          │
-                    Service (LB)
-                          │
-                     ┌────┴────┐
-                     │ Traffic │
-                     └─────────┘
 
 If Pod A fails:
 - Kubernetes detects via health check
 - Traffic routes to B and C
 - New pod scheduled automatically
-```
 
 ```yaml
 # Kubernetes deployment with redundancy
@@ -779,72 +630,53 @@ spec:
 
 ### 4.3 Multi-Region Redundancy
 
+```mermaid
+flowchart TD
+    DNS[Global DNS<br>Route53, Cloudflare]
+    subgraph Region A: US-East
+        AppA[App]
+        DBA[(DB Primary)]
+    end
+    subgraph Region B: EU-West
+        AppB[App]
+        DBB[(DB Replica)]
+    end
+    subgraph Region C: AP-SE
+        AppC[App]
+        DBC[(DB Replica)]
+    end
+    DNS --> AppA & AppB & AppC
+    DBA <--> DBB
+    DBA <--> DBC
 ```
-MULTI-REGION ARCHITECTURE
-═══════════════════════════════════════════════════════════════
 
-┌─────────────────────────────────────────────────────────────┐
-│                        Global DNS                           │
-│                    (Route53, CloudFlare)                    │
-│                           │                                 │
-│           ┌───────────────┼───────────────┐                │
-│           │               │               │                 │
-│           ▼               ▼               ▼                 │
-│    ┌──────────┐    ┌──────────┐    ┌──────────┐           │
-│    │ Region A │    │ Region B │    │ Region C │           │
-│    │ (US-East)│    │ (EU-West)│    │ (AP-SE)  │           │
-│    │          │    │          │    │          │           │
-│    │ [App]    │    │ [App]    │    │ [App]    │           │
-│    │ [DB Pri] │◀──▶│ [DB Rep] │◀──▶│ [DB Rep] │           │
-│    │          │    │          │    │          │           │
-│    └──────────┘    └──────────┘    └──────────┘           │
-│                                                             │
-│    Benefits:                                                │
-│    - Survive entire region failure                         │
-│    - Lower latency for global users                        │
-│    - Disaster recovery                                      │
-│                                                             │
-│    Challenges:                                              │
-│    - Cross-region data replication lag                     │
-│    - Complexity of distributed state                       │
-│    - Cost (3x infrastructure)                              │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
+**Benefits:**
+- Survive entire region failure
+- Lower latency for global users
+- Disaster recovery
+
+**Challenges:**
+- Cross-region data replication lag
+- Complexity of distributed state
+- Cost (3x infrastructure)
 
 ### 4.4 Circuit Breaker Pattern
 
 Not traditional redundancy, but enables graceful handling when redundancy fails:
 
+```mermaid
+stateDiagram-v2
+    [*] --> CLOSED : normal
+    CLOSED --> OPEN : failures > threshold
+    OPEN --> HALF_OPEN : timeout
+    HALF_OPEN --> CLOSED : success
+    HALF_OPEN --> OPEN : failure
 ```
-CIRCUIT BREAKER
-═══════════════════════════════════════════════════════════════
-
-States:
-┌─────────┐     failures > threshold     ┌─────────┐
-│ CLOSED  │ ─────────────────────────▶  │  OPEN   │
-│(normal) │                              │(failing)│
-└─────────┘                              └────┬────┘
-     ▲                                        │
-     │                                   timeout
-     │         ┌──────────┐                  │
-     └─────────│HALF-OPEN │◀─────────────────┘
-    success    │ (testing)│
-               └──────────┘
-                    │
-               failure → back to OPEN
-
-Implementation:
-┌─────────────────────────────────────────────────────────────┐
-│                                                             │
-│   Request ──▶ Circuit Breaker ──▶ Service                  │
-│                     │                                       │
-│               (if OPEN)                                     │
-│                     │                                       │
-│                     └──▶ Fallback Response                 │
-│                         (cached data, default, error)      │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    Req[Request] --> CB{Circuit Breaker}
+    CB -- CLOSED --> Svc[Service]
+    CB -- OPEN --> Fallback[Fallback Response<br>cached data, default error]
 ```
 
 > **Try This (3 minutes)**
@@ -861,31 +693,23 @@ Implementation:
 
 ### 5.1 Redundancy Isn't Free
 
-```
-THE COSTS OF REDUNDANCY
-═══════════════════════════════════════════════════════════════
-
-FINANCIAL COSTS
-─────────────────────────────────────────────────────────────
+**Financial Costs:**
 - 2x or 3x infrastructure costs
 - Cross-region data transfer fees
 - Additional monitoring/management tools
 - More complex debugging (more places to look)
 
-COMPLEXITY COSTS
-─────────────────────────────────────────────────────────────
+**Complexity Costs:**
 - More moving parts = more failure modes
 - State synchronization challenges
 - Split-brain scenarios
 - Harder to reason about behavior
 
-OPERATIONAL COSTS
-─────────────────────────────────────────────────────────────
+**Operational Costs:**
 - More deployments to manage
 - More configuration to keep in sync
 - More capacity planning complexity
 - Testing redundancy (does failover actually work?)
-```
 
 ### 5.2 Common Redundancy Failures
 
@@ -901,36 +725,26 @@ OPERATIONAL COSTS
 
 > **Did You Know?**
 >
-> Adding redundancy can sometimes *decrease* reliability. More components means more things that can fail. If the redundancy mechanism itself is complex, it adds failure modes. A 2013 study found that ~30% of failures at large internet companies involved failure of the failover mechanism itself.
+> Adding redundancy can sometimes *decrease* reliability. More components means more things that can fail. If the redundancy mechanism itself is complex, it adds failure modes. A study by Yuan et al. (2014) found that a significant percentage of critical failures at large internet companies involved a failure of the failover mechanism itself.
 
+```mermaid
+flowchart LR
+    subgraph Simple System
+        A[Component A<br>99% reliable] --> Out1[Output]
+    end
+    
+    subgraph With Redundancy
+        C_A[Component A<br>99% reliable] --> FL{Failover<br>Logic}
+        C_B[Component B<br>99% reliable] --> FL
+        FL --> Out2[Output]
+    end
 ```
-THE REDUNDANCY PARADOX
-═══════════════════════════════════════════════════════════════
 
-Simple system:
-    Component A ─── Reliability: 99%
+**System reliability formula:**
+`P(A works) + P(A fails) × P(failover works) × P(B works)`
 
-"More reliable" with redundancy:
-    Component A ───┐
-                   ├─── Failover Logic ─── Output
-    Component B ───┘
-
-    A reliability: 99%
-    B reliability: 99%
-    Failover reliability: 95%
-
-    System reliability = P(A works) + P(A fails) × P(failover works) × P(B works)
-                      = 0.99 + 0.01 × 0.95 × 0.99
-                      = 0.99 + 0.0094
-                      = 99.94%
-
-    But if failover has bugs...
-
-    Failover reliability: 50% (untested, has bugs)
-    System reliability = 0.99 + 0.01 × 0.50 × 0.99 = 99.49%
-
-    WORSE than no redundancy!
-```
+If failover logic is untested and has bugs (e.g., 50% reliable):
+`0.99 + 0.01 × 0.50 × 0.99 = 99.49%`
 
 **Lesson**: Redundancy only helps if the failover mechanism is reliable. Test it regularly.
 
@@ -944,129 +758,43 @@ Simple system:
 >
 > Now they run failover drills monthly. They verify replication lag every deploy. And someone actually reads the alerts.
 
+### War Story: The $8.6 Million Untested Failover
+
+**Architecture (looked great on paper):**
+```mermaid
+flowchart LR
+    subgraph us-east-1a
+        P[(Primary PostgreSQL)]
+    end
+    subgraph us-east-1b
+        S[(Standby PostgreSQL)]
+    end
+    P -- streaming replication --> S
 ```
-WAR STORY: THE $8.6 MILLION UNTESTED FAILOVER
-═══════════════════════════════════════════════════════════════════════════════
 
-TIMELINE OF DISASTER
-────────────────────────────────────────────────────────────────
+**Timeline of Disaster:**
+- **For 7 months**: Monitoring dashboards displayed a critical 6-hour replication lag, but alerts went to an unmonitored mailbox (`ops-alerts@company.com`).
+- **October 15th, 02:14 AM**: The primary database server's disk controller fails. All writes stop instantly. The application connection queue fills up.
+- **02:15 AM**: An on-call engineer is paged. They check the dead primary and trigger a manual failover.
+- **02:19 AM**: The standby is promoted to primary. The application reconnects. The engineer declares the incident resolved.
+- **02:47 AM**: Customer service begins receiving calls about missing transactions. Everything placed since 8:00 PM the previous night has vanished.
+- **02:52 AM**: The engineer finally checks and discovers the standby was 6 hours behind. The WAL files containing those transactions are trapped on the dead primary's disk controller.
 
-                ARCHITECTURE (looked great on paper)
-                ┌─────────────────────────────────────────────────┐
-                │                                                 │
-                │  [Primary PostgreSQL] ──streaming──▶ [Standby] │
-                │       us-east-1a              replication  1b   │
-                │                                                 │
-                │  "We're highly available!"                      │
-                │  "We have a replica!"                           │
-                │                                                 │
-                └─────────────────────────────────────────────────┘
+**Recovery (3 Painful Days):**
+- **Day 1**: Forensics. The dead server is sent to a data recovery specialist. The team begins planning a manual reconciliation.
+- **Day 2**: Reconstruction. Data recovery extracts the WAL files from the dead disk. Transactions are replayed, cross-referenced with payment processor logs, and 847 affected transactions are identified.
+- **Day 3**: Cleanup. Customers are notified, transactions are manually corrected, and mandatory regulatory notifications are filed.
 
-WHAT NOBODY NOTICED (for 7 months):
+**Financial Impact:**
+- **Direct costs**: Data recovery, customer compensation, consulting, and a $500,000 regulatory fine (Total: $761,000).
+- **Indirect costs**: Estimated brand damage, customer churn, increased insurance premiums, and delayed product launches (Total: $7,820,000).
+- **Total Impact**: **$8,581,000**
 
-  Monitoring Dashboard (ignored):
-  ┌────────────────────────────────────────────────────────────┐
-  │  Replication Lag: 6h 23m 17s  ← ⚠️  CRITICAL              │
-  │  Alert Status: Firing since March 15th                    │
-  │  Recipients: ops-alerts@company.com (unmonitored mailbox) │
-  └────────────────────────────────────────────────────────────┘
-
-THE DAY IT HAPPENED - October 15th:
-
-  02:14 AM  Primary database server: disk controller fails
-            └── All writes stop immediately
-            └── Connection queue fills in 3 seconds
-            └── Application errors cascade
-
-  02:15 AM  On-call engineer paged
-            └── "Database unreachable"
-            └── Checks primary: dead
-            └── Triggers manual failover to standby
-
-  02:19 AM  Standby promoted to primary
-            └── Application reconnects
-            └── Traffic flowing again
-            └── "Incident resolved" (narrator: it wasn't)
-
-  02:47 AM  Customer service: "Customers calling about missing transactions"
-            └── Order placed at 11:00 PM = gone
-            └── Payment at 8:00 PM = gone
-            └── Everything since 8 PM = gone
-
-  02:52 AM  Engineer checks: standby was 6 hours behind
-            └── 6 hours of transactions = lost
-            └── WAL files still on dead primary
-            └── Cannot access dead primary (disk controller dead)
-
-  03:00 AM  Executive escalation begins
-
-RECOVERY (3 painful days):
-
-  Day 1: Forensics
-    - Send dead server to data recovery specialist
-    - Find last good backup: 24 hours old
-    - Begin planning manual reconciliation
-
-  Day 2: Reconstruction
-    - Data recovery extracts WAL files from dead disk
-    - Replay transactions on backup
-    - Cross-reference with payment processor logs
-    - Identify 847 affected transactions
-
-  Day 3: Cleanup
-    - Customer notification (847 customers)
-    - Manual transaction correction
-    - Regulatory notification (required by law)
-    - Post-incident review begins
-
-FINANCIAL IMPACT
-────────────────────────────────────────────────────────────────
-
-  Direct costs:
-    Data recovery service:                    $45,000
-    Customer compensation:                   $127,000
-    Emergency consulting:                     $89,000
-    Regulatory fine:                         $500,000
-    ─────────────────────────────────────────────────
-    Direct total:                            $761,000
-
-  Indirect costs:
-    Customer churn (next quarter):         $2,100,000
-    Brand damage (estimated):              $3,200,000
-    Engineering time (post-incident):        $340,000
-    Insurance premium increase:              $180,000
-    Delayed product launch:                $2,000,000
-    ─────────────────────────────────────────────────
-    Indirect total:                        $7,820,000
-
-  TOTAL IMPACT:                            $8,581,000
-
-ROOT CAUSES
-────────────────────────────────────────────────────────────────
-
-  1. Never tested failover
-     └── Would have discovered lag immediately
-
-  2. Alerts to unmonitored mailbox
-     └── Classic "alert fatigue to alert ignore" pipeline
-
-  3. No replication lag SLO
-     └── "It's replicating" ≠ "It's usable for failover"
-
-  4. Manual failover process
-     └── Took 4 minutes instead of seconds
-     └── No automated verification before promotion
-
-WHAT THEY DO NOW
-────────────────────────────────────────────────────────────────
-
-  ✓ Monthly failover drills (automated)
-  ✓ Replication lag < 1 second SLO
-  ✓ Alerts page on-call (not email)
-  ✓ Pre-failover verification: "Is replica caught up?"
-  ✓ Synchronous replication for critical tables
-  ✓ Quarterly chaos engineering (kill primary in production)
-```
+**Root Causes:**
+1. **Never tested failover**: A single drill would have discovered the lag immediately.
+2. **Alert fatigue**: Critical alerts were routed to an unmonitored email list.
+3. **No replication lag SLO**: "It's replicating" does not mean "It's usable for failover."
+4. **Manual failover process**: Lacked automated verification of database state prior to promotion.
 
 ---
 
@@ -1097,138 +825,53 @@ WHAT THEY DO NOW
 
 ## Quiz
 
-1. **What does N+2 redundancy mean, and why might you choose it over N+1?**
+1. **Your team runs a critical authentication service on Kubernetes. The service requires 4 pods to handle peak traffic. An engineer suggests setting the HPA minimum to 5 pods to provide "N+1 redundancy." Another engineer argues for 6 pods (N+2). Under what specific real-world scenario would the 5-pod setup result in a customer-facing outage, proving the second engineer right?**
    <details>
    <summary>Answer</summary>
 
-   N+2 means having two spare components beyond the minimum needed for normal operation.
-
-   Why N+2 over N+1:
-   - **Maintenance**: With N+1, if you take one component down for maintenance, you're at N+0. Another failure causes an outage. N+2 allows maintenance + one unexpected failure.
-   - **Rolling updates**: During deployment, you temporarily have one fewer healthy component.
-   - **Concurrent failures**: While rare, two components can fail close together, especially if there's a common cause (bad deploy, correlated failure).
-
-   N+2 is common for critical systems where maintenance windows are frequent or where the cost of outage is high.
+   A customer-facing outage would occur if a node failure happens exactly during a scheduled maintenance window or deployment rollout. With an N+1 setup (5 pods for a 4-pod load), taking one pod down for a rolling update leaves exactly 4 pods running, reducing the system to N+0 redundancy. If a sudden node crash or network partition takes out one of those remaining 4 pods, the service drops to 3 pods, which cannot handle peak traffic, leading to dropped requests and degraded performance. Using an N+2 setup (6 pods) ensures that even while one pod is down for maintenance, the system retains an N+1 posture, safely absorbing an unexpected secondary failure without impacting users.
    </details>
 
-2. **What's the key difference between high availability and fault tolerance?**
+2. **A hospital is modernizing its IT infrastructure. They are migrating both the patient portal website (used for booking appointments) and the real-time telemetry system for robotic surgery arms to the cloud. The cloud provider offers an HA architecture (99.99% uptime, 10-second failover) and a much more expensive FT architecture (active state replication, zero failover time). Which architecture should be applied to each system, and what is the engineering justification?**
    <details>
    <summary>Answer</summary>
 
-   **High Availability (HA)**: System remains operational with minimal downtime. Brief interruptions during failure are acceptable. In-flight requests may fail but new requests succeed quickly.
-
-   **Fault Tolerance (FT)**: System continues operating without any interruption. No requests fail, even during component failure. Typically uses synchronous replication and instant failover.
-
-   HA is cheaper and simpler; FT is more expensive and complex. Most web services use HA because users can retry. Financial transactions, medical systems, and aviation control need FT because any failure can have serious consequences.
+   The patient portal should use the High Availability (HA) architecture, while the surgical telemetry system must use the Fault Tolerance (FT) architecture. The patient portal can tolerate a 10-second failover because the cost of failure is merely user annoyance; a patient can simply refresh their browser to retry booking an appointment. In contrast, the surgical telemetry system cannot afford even a single dropped packet or a 10-second interruption, as this could lead to catastrophic physical harm or death during an operation. Fault Tolerance is required for the robotics because the operations are not idempotent and cannot be retried by the user, justifying the massive cost premium of synchronous, lock-step execution.
    </details>
 
-3. **Why might active-active be preferred over active-passive for a web service?**
+3. **You are designing a global e-commerce API. In the proposed active-passive design, all traffic routes to the `us-east` region, while `eu-west` sits idle as a hot standby. A senior architect rejects this design in favor of an active-active setup where both regions serve traffic continuously. Beyond just saving the "wasted" compute costs of the standby, what operational risks of the active-passive design are mitigated by going active-active?**
    <details>
    <summary>Answer</summary>
 
-   Active-active advantages:
-   1. **No failover time**: Traffic immediately routes away from failed nodes
-   2. **Better resource utilization**: All capacity handles traffic (passive nodes are "wasted")
-   3. **No standby staleness**: All nodes are processing real traffic, so config and behavior are validated
-   4. **Horizontal scaling**: Easy to add more active nodes as load increases
-   5. **Geographic distribution**: Can serve users from nearest active node
-
-   Active-passive is simpler and may be preferred when:
-   - Traffic is low
-   - Stateful workloads are hard to distribute
-   - Cost of idle standby is acceptable
+   An active-active design fundamentally mitigates the risk of an untested, failing failover mechanism, as well as configuration drift between regions. In an active-passive setup, the standby region might not receive real-world traffic for months, meaning hidden bugs, stale firewall rules, or missing scaling limits could cause the standby to instantly crash when a failover finally shifts 100% of the load to it. By using an active-active architecture, both regions continuously serve live traffic, constantly validating their configuration, scaling behaviors, and health. This continuous validation ensures that if one region fails, the remaining region is already known to be fully operational and correctly configured to handle requests.
    </details>
 
-4. **How can adding redundancy actually decrease reliability?**
+4. **A startup's caching layer consists of a single Redis instance with 99.9% uptime. To "improve reliability," they add a secondary Redis instance and write a custom failover script in their application layer that pings the primary and switches connections if it fails. After a month, their cache uptime drops to 99.0%. How does the "Redundancy Paradox" explain this mathematical impossibility of adding components but losing uptime?**
    <details>
    <summary>Answer</summary>
 
-   Redundancy can decrease reliability when:
-
-   1. **Failover mechanism is unreliable**: If the code/process that detects failure and switches to backup is buggy or untested, it can fail to failover or failover incorrectly.
-
-   2. **Added complexity introduces bugs**: More components = more code = more potential bugs. The redundancy management layer itself can fail.
-
-   3. **Split-brain scenarios**: Both nodes think they're primary, causing data corruption or conflicts.
-
-   4. **Correlated failures**: If redundant components share a failure domain (same rack, same code bug, same config), they can fail together.
-
-   5. **Masking problems**: Redundancy can hide underlying issues until they affect enough components to cause an outage.
-
-   Prevention: Test failover regularly, keep redundancy mechanisms simple, use independent failure domains.
+   The redundancy paradox occurs because the custom failover script introduced a new, fragile point of failure that was less reliable than the underlying Redis instances. Even if both Redis instances had 99.9% uptime, the failover script might have contained bugs, aggressive timeout thresholds, or lacked proper state management, leading to false positives where it incorrectly triggered failovers during momentary network blips. Each unnecessary failover likely caused connection drops, split-brain scenarios, or cache stampedes, meaning the system's overall reliability became bottlenecked by the lower reliability of the poorly written failover logic. True redundancy only increases reliability when the failure detection and routing mechanisms are significantly more robust than the components they monitor.
    </details>
 
-5. **Your team has 3 pods running at 70% CPU each. They claim this is N+1 redundancy. Is it? Calculate what happens if one pod fails.**
+5. **Your manager proudly announces that a new microservice has "N+1 redundancy." You inspect the Kubernetes cluster and see 3 pods running. You check the monitoring dashboard and observe that each pod is consistently running at 75% CPU utilization. Why is your manager mathematically incorrect, and what will actually happen to the cluster if Node 1 (hosting Pod A) suddenly loses power?**
    <details>
    <summary>Answer</summary>
 
-   **No, this is NOT true N+1 redundancy.**
-
-   Calculation:
-   - Current total load: 3 pods × 70% = 210% of one pod's capacity
-   - If one pod fails, load redistributes to 2 pods
-   - Load per remaining pod: 210% ÷ 2 = 105% CPU
-
-   **Each pod would be overloaded (105% > 100%)**, leading to degraded performance or cascading failure.
-
-   For true N+1 with 3 pods:
-   - Two pods must handle total load alone
-   - Maximum load per pod = Total Load ÷ 2 = 50%
-   - At 70% each, this is actually N+0.5 (one partial failure away from degradation)
-
-   **Fix**: Either add a 4th pod (N+2) or reduce per-pod load to ~50%.
+   Your manager is incorrect because true N+1 redundancy requires that the remaining components can fully absorb the load of a failed component without exceeding their own capacity limits. Currently, the total system load requires 225% CPU (3 pods × 75%). If Node 1 dies and Pod A is lost, that entire 225% load must be distributed across the two remaining pods, resulting in each pod attempting to run at 112.5% CPU. Because this exceeds their maximum 100% capacity, both remaining pods will become overloaded, likely failing their health probes and causing a cascading total system failure rather than a graceful degradation.
    </details>
 
-6. **What is split-brain, and how does it occur in active-passive systems?**
+6. **Two database nodes (Node A and Node B) operate in an active-passive cluster across two different racks. A network switch fails, severing the connection between the racks, but both racks remain connected to the internet and the application servers. Describe the sequence of events that leads to a "split-brain" scenario, and explain the devastating impact this will have on user data once the switch is repaired.**
    <details>
    <summary>Answer</summary>
 
-   **Split-brain** occurs when both nodes in an active-passive cluster believe they are the active node, leading to two "primaries" operating simultaneously.
-
-   How it happens:
-   1. Network partition between primary and standby
-   2. Standby can't reach primary, assumes primary is dead
-   3. Standby promotes itself to primary
-   4. Original primary is still alive, still accepting writes
-   5. Two primaries accepting writes = data divergence
-
-   Consequences:
-   - Data corruption (conflicting writes)
-   - Data loss (when trying to reconcile)
-   - Application errors (inconsistent state)
-
-   Prevention:
-   - **Fencing**: Kill the old primary before promoting standby (STONITH - "Shoot The Other Node In The Head")
-   - **Quorum**: Require majority agreement before leadership changes
-   - **Witness nodes**: Third node breaks ties
-   - **Shared storage with locks**: Only one node can write at a time
+   When the network switch fails, Node B (the standby) loses its heartbeat connection to Node A (the primary) and incorrectly assumes Node A has crashed. Node B automatically promotes itself to primary to maintain availability, but Node A is still running and perfectly capable of receiving traffic from the application servers on its own rack. The application is now writing new user registrations to Node A and new orders to Node B, causing the two databases to wildly diverge in state. Once the switch is repaired and the nodes can communicate again, they will both possess conflicting, irreconcilable datasets (split-brain), requiring massive manual intervention, data loss, or application downtime to merge the conflicting transactions.
    </details>
 
-7. **Why is geographic redundancy more complex than single-region redundancy?**
+7. **A financial trading platform must survive a total loss of the AWS `us-east-1` region. They implement geographic redundancy by synchronously replicating all PostgreSQL database writes to `us-west-2` before acknowledging the transaction to the user. Shortly after deploying this architecture, they are flooded with customer complaints about the platform feeling sluggish and timing out. What fundamental law of distributed systems did they ignore, and why did it cause the timeouts?**
    <details>
    <summary>Answer</summary>
 
-   Geographic redundancy adds complexity in several dimensions:
-
-   1. **Latency**: Cross-region network calls are 50-200ms vs. 1-5ms within region. Synchronous replication becomes expensive.
-
-   2. **Consistency**: Either accept replication lag (eventual consistency) or pay latency penalty (strong consistency). CAP theorem applies.
-
-   3. **Data sovereignty**: Some data can't leave certain regions (GDPR, data residency laws).
-
-   4. **Network partitions**: Regions can become isolated from each other. Need to handle "split brain" at region level.
-
-   5. **Operational complexity**:
-      - Deploy to multiple regions
-      - Monitor multiple regions
-      - Incident response spans time zones
-      - Testing is harder
-
-   6. **Cost**: 2-3× infrastructure plus cross-region data transfer fees.
-
-   7. **DNS/Routing**: Need global load balancing, health checks across regions, failover routing.
-
-   Geographic redundancy is worth it for: disaster recovery, serving global users, regulatory compliance. Overkill for: single-market applications, cost-sensitive workloads.
+   The team ignored the physical limitations of network latency and the speed of light, which dictate that cross-country network trips take significantly longer than intra-region trips. By mandating synchronous replication to a region 3,000 miles away, every single database write was forced to wait for a 60-80 millisecond round-trip acknowledgment from `us-west-2` before the application could confirm the transaction. This massive increase in latency caused database transaction locks to be held longer, connection pools to exhaust rapidly, and web requests to hit their timeout thresholds, ultimately degrading the entire platform's performance. They should have used asynchronous replication or designed the application to handle eventual consistency across regions.
    </details>
 
 ---
@@ -1389,94 +1032,52 @@ kubectl delete namespace redundancy-lab
 
 ## Key Takeaways
 
-```
-REDUNDANCY AND FAULT TOLERANCE - WHAT TO REMEMBER
-═══════════════════════════════════════════════════════════════════════════════
-
-THE CORE PRINCIPLE
-────────────────────────────────────────────────────────────────
+**The Core Principle**
 Redundancy is about INDEPENDENCE, not DUPLICATION.
 
-    ✗ "We have two servers"
-    ✓ "We have two servers that fail independently"
+- "We have two servers" (Duplication)
+- "We have two servers that fail independently" (Redundancy)
 
-If the same event can take out both your primary and backup,
-you don't have redundancy—you have expensive duplication.
+If the same event can take out both your primary and backup, you don't have redundancy—you have expensive duplication.
 
-THE CHECKLIST
-────────────────────────────────────────────────────────────────
+**The Checklist**
 Before calling your system "redundant," verify:
+- [ ] Components are in different failure domains (Different racks? Different zones? Different regions?)
+- [ ] Failover mechanism is tested regularly (When did you last kill production to verify?)
+- [ ] Capacity math works out (N+1 means remaining components handle 100% load)
+- [ ] Replication lag is monitored and acceptable (Async replication = potential data loss in failover)
+- [ ] Health checks actually detect failures (Does "healthy" mean "can serve traffic"?)
+- [ ] Recovery is automated or has a runbook (Manual failover at 3 AM: how fast can you do it?)
 
-[ ] Components are in different failure domains
-    └── Different racks? Different zones? Different regions?
+**The Decision Framework**
+1. **HIGH AVAILABILITY (99.9%)**: Most applications. Brief interruption okay, users can retry, 2-3× cost multiplier.
+2. **FAULT TOLERANCE (99.999%)**: Critical systems only. Zero interruption, lives or major money at stake, 4-10× cost multiplier.
 
-[ ] Failover mechanism is tested regularly
-    └── When did you last kill production to verify?
+**The Redundancy Levels**
+- **N+0**: No redundancy (dev only)
+- **N+1**: Survive one failure (most production)
+- **N+2**: Survive maintenance + failure (critical production)
+- **2N**: Survive entire site failure (disaster recovery)
 
-[ ] Capacity math works out
-    └── N+1 means remaining components handle 100% load
+**The Architectures**
+- **ACTIVE-PASSIVE**: Simple, wasted capacity, failover delay
+- **ACTIVE-ACTIVE**: Complex, efficient, instant failover. Choose active-active when traffic justifies multiple instances, you need instant failover, and the workload can be distributed.
 
-[ ] Replication lag is monitored and acceptable
-    └── Async replication = potential data loss in failover
+**The Warning Signs**
+- "We've never tested failover" = It won't work when needed.
+- "Both replicas are in the same AZ" = Single failure domain.
+- "Each pod runs at 80% CPU" = No headroom for failover.
+- "Alerts go to an email list" = Nobody's watching.
+- "We have replication lag" = Potential data loss.
 
-[ ] Health checks actually detect failures
-    └── Does "healthy" mean "can serve traffic"?
-
-[ ] Recovery is automated or has runbook
-    └── Manual failover at 3 AM: how fast can you do it?
-
-THE DECISION FRAMEWORK
-────────────────────────────────────────────────────────────────
-
-1. HIGH AVAILABILITY (99.9%): Most applications
-   - Brief interruption okay
-   - Users can retry
-   - 2-3× cost multiplier
-
-2. FAULT TOLERANCE (99.999%): Critical systems only
-   - Zero interruption
-   - Lives or major money at stake
-   - 4-10× cost multiplier
-
-THE REDUNDANCY LEVELS
-────────────────────────────────────────────────────────────────
-
-N+0: No redundancy (dev only)
-N+1: Survive one failure (most production)
-N+2: Survive maintenance + failure (critical production)
-2N:  Survive entire site failure (disaster recovery)
-
-THE ARCHITECTURES
-────────────────────────────────────────────────────────────────
-
-ACTIVE-PASSIVE: Simple, wasted capacity, failover delay
-ACTIVE-ACTIVE: Complex, efficient, instant failover
-
-Choose active-active when:
-- Traffic justifies multiple instances
-- You need instant failover
-- Workload can be distributed
-
-THE WARNING SIGNS
-────────────────────────────────────────────────────────────────
-
-🚩 "We've never tested failover" = It won't work when needed
-🚩 "Both replicas are in the same AZ" = Single failure domain
-🚩 "Each pod runs at 80% CPU" = No headroom for failover
-🚩 "Alerts go to an email list" = Nobody's watching
-🚩 "We have replication lag" = Potential data loss
-
-THE PARADOX
-────────────────────────────────────────────────────────────────
-
+**The Paradox**
 Adding redundancy can DECREASE reliability if:
-- Failover mechanism is buggy or untested
-- Components share hidden dependencies
-- Complexity exceeds team's ability to understand
-- Split-brain scenarios aren't handled
+- Failover mechanism is buggy or untested.
+- Components share hidden dependencies.
+- Complexity exceeds the team's ability to understand.
+- Split-brain scenarios aren't handled.
 
-Simpler redundancy, tested regularly > Complex redundancy, never tested
-```
+*Simpler redundancy, tested regularly > Complex redundancy, never tested.*
 
 ---
 
