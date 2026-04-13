@@ -37,6 +37,8 @@ Now? Any developer with an AWS credential can spin up a $50,000/month machine le
 
 **FinOps bridges this gap.** It's a cultural practice that brings financial accountability to cloud spending — giving engineers the data they need to make smart tradeoffs, and giving finance the visibility they need to sleep at night.
 
+> **Stop and think**: If an engineering team provisions a cluster that costs twice as much but enables releasing features twice as fast, is that an optimization or a waste? FinOps provides the framework to answer this.
+
 Without FinOps:
 - Cloud bills grow 20-35% faster than revenue
 - Teams hoard resources "just in case"
@@ -71,18 +73,13 @@ The FinOps Foundation defines a lifecycle with three phases. Think of it as a co
 
 This is where most organizations start — and many never leave. Visibility is the foundation.
 
-```
-┌─────────────────────────────────────────────────┐
-│                    INFORM                        │
-│                                                  │
-│   ┌──────────┐  ┌──────────┐  ┌──────────┐     │
-│   │ Billing  │  │ Tagging  │  │  Reports │     │
-│   │  Data    │──│ Strategy │──│   and    │     │
-│   │          │  │          │  │ Dashboards│     │
-│   └──────────┘  └──────────┘  └──────────┘     │
-│                                                  │
-│   Key Question: "Where is our money going?"      │
-└─────────────────────────────────────────────────┘
+```mermaid
+graph LR
+    subgraph INFORM [Key Question: Where is our money going?]
+        direction LR
+        A[Billing Data] --> B[Tagging Strategy]
+        B --> C[Reports and Dashboards]
+    end
 ```
 
 Key activities in the Inform phase:
@@ -98,18 +95,13 @@ Key activities in the Inform phase:
 
 Once you can see where the money goes, you can start making it go further.
 
-```
-┌─────────────────────────────────────────────────┐
-│                   OPTIMIZE                       │
-│                                                  │
-│   ┌──────────┐  ┌──────────┐  ┌──────────┐     │
-│   │  Right-  │  │ Pricing  │  │ Arch.    │     │
-│   │  sizing  │──│  Model   │──│ Changes  │     │
-│   │          │  │ Selection│  │          │     │
-│   └──────────┘  └──────────┘  └──────────┘     │
-│                                                  │
-│   Key Question: "How can we spend less?"         │
-└─────────────────────────────────────────────────┘
+```mermaid
+graph LR
+    subgraph OPTIMIZE [Key Question: How can we spend less?]
+        direction LR
+        A[Right-sizing] --> B[Pricing Model Selection]
+        B --> C[Arch. Changes]
+    end
 ```
 
 Key activities in the Optimize phase:
@@ -124,18 +116,13 @@ Key activities in the Optimize phase:
 
 This is where FinOps becomes a *culture*, not just a project.
 
-```
-┌─────────────────────────────────────────────────┐
-│                   OPERATE                        │
-│                                                  │
-│   ┌──────────┐  ┌──────────┐  ┌──────────┐     │
-│   │  Policies│  │ Automation│  │ Governance│    │
-│   │  and     │──│   and    │──│   and    │     │
-│   │ Budgets  │  │  Alerts  │  │  Review  │     │
-│   └──────────┘  └──────────┘  └──────────┘     │
-│                                                  │
-│   Key Question: "How do we sustain this?"        │
-└─────────────────────────────────────────────────┘
+```mermaid
+graph LR
+    subgraph OPERATE [Key Question: How do we sustain this?]
+        direction LR
+        A[Policies and Budgets] --> B[Automation and Alerts]
+        B --> C[Governance and Review]
+    end
 ```
 
 Key activities in the Operate phase:
@@ -149,24 +136,11 @@ Key activities in the Operate phase:
 
 These phases aren't sequential. A mature FinOps practice runs all three simultaneously:
 
-```
-        ┌──────────┐
-        │  INFORM  │
-        │          │
-        └────┬─────┘
-             │
-    ┌────────▼────────┐
-    │    OPTIMIZE     │
-    │                 │
-    └────────┬────────┘
-             │
-        ┌────▼─────┐
-        │ OPERATE  │──────┐
-        │          │      │
-        └──────────┘      │
-             ▲            │
-             └────────────┘
-           Continuous Loop
+```mermaid
+graph TD
+    A[INFORM] --> B[OPTIMIZE]
+    B --> C[OPERATE]
+    C -->|Continuous Loop| A
 ```
 
 ---
@@ -191,18 +165,18 @@ Understanding these dimensions is the key to reading any cloud bill.
 
 The default. No commitment. Maximum flexibility. Maximum price.
 
-```
+```text
 On-Demand Pricing:
-┌────────────────────────────────────────┐
-│ m6i.xlarge (4 vCPU, 16 GB RAM)        │
-│                                        │
-│ Price: $0.192/hour                     │
-│ Monthly (730h): ~$140                  │
-│ Annual: ~$1,681                        │
-│                                        │
-│ Pros: No commitment, scale up/down     │
-│ Cons: Most expensive per hour          │
-└────────────────────────────────────────┘
+----------------------------------------
+m6i.xlarge (4 vCPU, 16 GB RAM)
+
+Price: $0.192/hour
+Monthly (730h): ~$140
+Annual: ~$1,681
+
+Pros: No commitment, scale up/down
+Cons: Most expensive per hour
+----------------------------------------
 ```
 
 **When to use**: Unpredictable workloads, short-term projects, development environments during business hours only.
@@ -211,19 +185,19 @@ On-Demand Pricing:
 
 Commit to 1 or 3 years of usage in exchange for a discount.
 
-```
+```text
 Reserved Instance Pricing (m6i.xlarge):
-┌────────────────────────────────────────┐
-│ Payment Options:                       │
-│                                        │
-│ 1-Year No Upfront:    $0.125/hr (35%)  │
-│ 1-Year All Upfront:   $0.114/hr (41%)  │
-│ 3-Year No Upfront:    $0.089/hr (54%)  │
-│ 3-Year All Upfront:   $0.072/hr (63%)  │
-│                                        │
-│ Savings vs On-Demand: 35-63%           │
-│ Risk: Pay even if unused               │
-└────────────────────────────────────────┘
+----------------------------------------
+Payment Options:
+
+1-Year No Upfront:    $0.125/hr (35%)
+1-Year All Upfront:   $0.114/hr (41%)
+3-Year No Upfront:    $0.089/hr (54%)
+3-Year All Upfront:   $0.072/hr (63%)
+
+Savings vs On-Demand: 35-63%
+Risk: Pay even if unused
+----------------------------------------
 ```
 
 **When to use**: Stable, predictable workloads that run 24/7 — databases, core application servers, baseline capacity.
@@ -232,21 +206,21 @@ Reserved Instance Pricing (m6i.xlarge):
 
 AWS-specific. Commit to a $/hour spend level, not specific instance types.
 
-```
+```text
 Savings Plans:
-┌────────────────────────────────────────┐
-│ Commit: $10/hour for 1 year            │
-│ Flexibility: Any instance family/size  │
-│ Discount: Up to 72% vs On-Demand      │
-│                                        │
-│ Compute SP: Any instance, any region   │
-│ EC2 SP: Specific family, any size      │
-│                                        │
-│ Better than RIs for:                   │
-│ - Teams that change instance types     │
-│ - Multi-region deployments             │
-│ - Workloads migrating to Graviton      │
-└────────────────────────────────────────┘
+----------------------------------------
+Commit: $10/hour for 1 year
+Flexibility: Any instance family/size
+Discount: Up to 72% vs On-Demand
+
+Compute SP: Any instance, any region
+EC2 SP: Specific family, any size
+
+Better than RIs for:
+- Teams that change instance types
+- Multi-region deployments
+- Workloads migrating to Graviton
+----------------------------------------
 ```
 
 **When to use**: When you want RI-like savings but need flexibility to change instance types, sizes, or regions.
@@ -255,20 +229,20 @@ Savings Plans:
 
 Use spare cloud capacity at up to 90% discount. The catch? The cloud provider can reclaim them with 2 minutes' notice.
 
-```
+```text
 Spot Instance Pricing (m6i.xlarge):
-┌────────────────────────────────────────┐
-│ On-Demand:  $0.192/hr                  │
-│ Spot:       $0.038/hr (80% savings)    │
-│                                        │
-│ ⚠ Interruption rate varies:            │
-│   m6i.xlarge: ~5% monthly              │
-│   c6i.2xlarge: ~3% monthly             │
-│   r5.large: ~8% monthly               │
-│                                        │
-│ Best for: Batch, CI/CD, stateless apps │
-│ Bad for: Databases, stateful workloads │
-└────────────────────────────────────────┘
+----------------------------------------
+On-Demand:  $0.192/hr
+Spot:       $0.038/hr (80% savings)
+
+Warning - Interruption rate varies:
+  m6i.xlarge: ~5% monthly
+  c6i.2xlarge: ~3% monthly
+  r5.large: ~8% monthly
+
+Best for: Batch, CI/CD, stateless apps
+Bad for: Databases, stateful workloads
+----------------------------------------
 ```
 
 **When to use**: Fault-tolerant, stateless workloads — batch processing, CI/CD, dev/test, data processing, machine learning training.
@@ -291,20 +265,20 @@ This isn't just an accounting detail. The CapEx-to-OpEx shift fundamentally chan
 
 ### Capital Expenditure (CapEx)
 
-```
+```text
 Traditional Data Center (CapEx):
-┌──────────────────────────────────────────────┐
-│ Year 0: Buy $500,000 of servers              │
-│ Year 1: Depreciate $100K, use 20% capacity   │
-│ Year 2: Depreciate $100K, use 45% capacity   │
-│ Year 3: Depreciate $100K, use 70% capacity   │
-│ Year 4: Depreciate $100K, use 90% capacity   │
-│ Year 5: Depreciate $100K, need more capacity │
-│                                              │
-│ Total Cost: $500K + maintenance + power      │
-│ Utilization: Averaged 53% over 5 years       │
-│ Wasted: 47% of capacity                      │
-└──────────────────────────────────────────────┘
+----------------------------------------------
+Year 0: Buy $500,000 of servers
+Year 1: Depreciate $100K, use 20% capacity
+Year 2: Depreciate $100K, use 45% capacity
+Year 3: Depreciate $100K, use 70% capacity
+Year 4: Depreciate $100K, use 90% capacity
+Year 5: Depreciate $100K, need more capacity
+
+Total Cost: $500K + maintenance + power
+Utilization: Averaged 53% over 5 years
+Wasted: 47% of capacity
+----------------------------------------------
 ```
 
 **Characteristics**:
@@ -316,20 +290,20 @@ Traditional Data Center (CapEx):
 
 ### Operational Expenditure (OpEx)
 
-```
+```text
 Cloud (OpEx):
-┌──────────────────────────────────────────────┐
-│ Month 1: $8,200  (launch, testing)           │
-│ Month 2: $11,400 (growing users)             │
-│ Month 3: $15,800 (marketing push)            │
-│ Month 4: $9,100  (optimized after review)    │
-│ Month 5: $12,600 (seasonal uptick)           │
-│ Month 6: $7,300  (rightsized instances)       │
-│                                              │
-│ Total: $64,400 for 6 months                  │
-│ Pay for what you use, when you use it        │
-│ Scale up for peaks, scale down for troughs   │
-└──────────────────────────────────────────────┘
+----------------------------------------------
+Month 1: $8,200  (launch, testing)
+Month 2: $11,400 (growing users)
+Month 3: $15,800 (marketing push)
+Month 4: $9,100  (optimized after review)
+Month 5: $12,600 (seasonal uptick)
+Month 6: $7,300  (rightsized instances)
+
+Total: $64,400 for 6 months
+Pay for what you use, when you use it
+Scale up for peaks, scale down for troughs
+----------------------------------------------
 ```
 
 **Characteristics**:
@@ -357,22 +331,18 @@ Cloud (OpEx):
 
 Tags are key-value pairs attached to cloud resources. Without tags, your bill is a single number. With tags, it's a detailed breakdown by team, project, environment, and business unit.
 
+> **Pause and predict**: If you enforce tagging starting today, what happens to the visibility of the infrastructure created yesterday?
+
 ### Why Tagging Fails (and How to Fix It)
 
 Most organizations start tagging and give up within 3 months. Here's why:
 
-```
-Tagging Failure Cycle:
-┌────────────┐    ┌──────────────┐    ┌────────────┐
-│ Management │    │ Engineers    │    │ Tags become│
-│ mandates   │───▶│ forget to   │───▶│ stale and  │
-│ tagging    │    │ tag resources│    │ unreliable │
-└────────────┘    └──────────────┘    └─────┬──────┘
-      ▲                                      │
-      │           ┌──────────────┐           │
-      └───────────│ Nobody trusts│◀──────────┘
-                  │ the data     │
-                  └──────────────┘
+```mermaid
+graph LR
+    A[Management mandates tagging] --> B[Engineers forget to tag resources]
+    B --> C[Tags become stale and unreliable]
+    C --> D[Nobody trusts the data]
+    D --> A
 ```
 
 ### A Tagging Strategy That Works
@@ -464,7 +434,7 @@ Raw cloud spend is meaningless without context. Spending $200,000/month on cloud
 
 ### Calculating Unit Economics
 
-```
+```text
 Step 1: Total cloud cost for the service
   → $42,000/month for the checkout service
 
@@ -502,12 +472,12 @@ Step 4: Track the trend
 ## Quiz
 
 ### Question 1
-What are the three phases of the FinOps lifecycle?
+Your organization has just migrated its main application to the cloud. The CFO is concerned about upcoming bills and wants to establish a FinOps practice. You are tasked with leading this initiative. What three continuous phases should you implement to ensure long-term cost efficiency?
 
 <details>
 <summary>Show Answer</summary>
 
-**Inform, Optimize, Operate.** Inform gives you visibility into spending. Optimize reduces waste and improves efficiency. Operate builds sustainable processes and governance. The three phases run continuously — not as a one-time sequence.
+**Inform, Optimize, Operate.** The Inform phase must be established first to give you visibility into spending across all your new cloud resources. Then, the Optimize phase allows you to systematically reduce waste and improve efficiency based on that data. Finally, the Operate phase builds sustainable processes, guardrails, and governance to maintain efficiency as the infrastructure grows. Crucially, these three phases run continuously as a never-ending cycle, not as a one-time implementation project.
 </details>
 
 ### Question 2
@@ -516,7 +486,7 @@ A workload runs 24/7 and has been stable for 8 months. It currently uses On-Dema
 <details>
 <summary>Show Answer</summary>
 
-**Reserved Instances or Savings Plans.** With 8 months of stable usage data, this workload is a strong candidate for commitment-based pricing. A 1-Year All Upfront RI could save ~41%, bringing the cost to ~$1,240/month (saving $860/month or $10,320/year). If the team might change instance types, a Compute Savings Plan offers similar savings with more flexibility.
+**Reserved Instances or Savings Plans.** With 8 months of stable usage data, this workload is a strong candidate for commitment-based pricing. A 1-Year All Upfront RI could save ~41%, bringing the cost down to ~$1,240/month, resulting in a direct savings of $860/month or $10,320/year. If the engineering team suspects they might need to change instance types or scale across regions in the future, a Compute Savings Plan offers a similar financial benefit while preserving architectural flexibility.
 </details>
 
 ### Question 3
@@ -525,25 +495,25 @@ Your company's cloud bill is $180,000/month, but only 62% of resources have prop
 <details>
 <summary>Show Answer</summary>
 
-Without tags on 38% of resources, you cannot attribute ~$68,400/month to any team or project. This makes cost optimization nearly impossible because you can't identify who owns the resources or whether they're needed. **Fix**: (1) Implement tag enforcement policies that block resource creation without mandatory tags, (2) Run a tagging remediation sprint for existing untagged resources, (3) Use AWS Cost Allocation Tags or GCP Labels to retroactively map resources, (4) Set a target of 95%+ tag compliance within 60 days.
+Without tags on 38% of resources, you cannot accurately attribute approximately $68,400/month to any specific team or project. This massive blind spot makes cost optimization nearly impossible because you cannot determine who owns the resources or whether they are actively needed for business value. To fix this, you must first implement tag enforcement policies that block the creation of new resources without mandatory tags. Then, you should organize a tagging remediation sprint to retroactively map existing untagged resources, aiming for a compliance target of 95% or higher within the next 60 days.
 </details>
 
 ### Question 4
-What is the difference between CapEx and OpEx, and why does the shift to cloud complicate financial planning?
+Your startup recently shifted its infrastructure from an on-premises data center to a public cloud provider. The finance director is struggling to forecast the quarterly budget using their traditional spreadsheet models. How does the transition from CapEx to OpEx explain this difficulty, and what must the finance team change?
 
 <details>
 <summary>Show Answer</summary>
 
-**CapEx** (Capital Expenditure) is a large upfront purchase depreciated over years — predictable and planned. **OpEx** (Operational Expenditure) is pay-as-you-go — variable and immediate. Cloud shifts IT from CapEx to OpEx, which complicates planning because: (1) costs are no longer predictable annual depreciation schedules, (2) any engineer can create expenses without procurement, (3) finance teams lose the long planning cycles they're accustomed to, and (4) budgeting becomes continuous forecasting rather than annual planning.
+**CapEx** (Capital Expenditure) involves a large upfront purchase that is depreciated over years, making it highly predictable and planned. **OpEx** (Operational Expenditure) is a pay-as-you-go model that is inherently variable and immediate. The shift to cloud moves IT spending entirely from CapEx to OpEx, which invalidates forecasting models built around predictable annual depreciation schedules. Furthermore, in the cloud, any engineer can provision resources and generate expenses on demand without going through a traditional procurement pipeline. Finance teams must therefore transition from static annual budgeting cycles to continuous, dynamic forecasting, working closely with engineering teams to understand real-time utilization trends.
 </details>
 
 ### Question 5
-Explain unit economics. Why is "we spent $300K on cloud last month" insufficient for decision-making?
+During a monthly review meeting, the VP of Engineering proudly announces that the cloud bill has remained steady at $300,000 per month for the past quarter. However, the FinOps practitioner argues that this number alone is insufficient to determine if the company is managing its cloud resources effectively. Why is raw spend inadequate for decision-making, and what framework should be used instead?
 
 <details>
 <summary>Show Answer</summary>
 
-**Unit economics** ties cloud spend to a business metric (cost per customer, cost per transaction, etc.). Raw spend ($300K) is meaningless without context — it could be excellent (if you serve 50M users) or terrible (if you serve 500). Unit economics tells you whether your infrastructure investment is *efficient*. If your cost per customer dropped from $0.85 to $0.60 while spend went from $200K to $300K, you actually *improved* — you grew customers faster than costs. Decisions should be based on efficiency trends, not total spend.
+Raw spend alone is completely inadequate because it lacks business context and fails to indicate whether the infrastructure investment is actually efficient. For example, a stable $300,000 bill could be excellent news if the user base doubled during that quarter, or terrible news if the company lost half of its active customers. Instead, the organization must adopt unit economics, which ties the cloud spend to a specific business metric such as cost per customer or cost per transaction. This framework reveals the true efficiency of the cloud usage. If the cost per transaction decreases over time while the total spend remains flat, the organization is successfully optimizing its operations and supporting sustainable growth.
 </details>
 
 ---
@@ -604,12 +574,12 @@ awk -F',' 'NR>1 {team[$2]+=$7} END {for(t in team) printf "%-12s $%9.2f\n", t, t
 ```
 
 Expected output (approximate):
-```
+```text
 data         $  1,242.24
+search       $  1,302.72
 payments     $    995.02
 untagged     $    731.42
 ml-team      $    725.06
-search       $  1,302.72
 platform     $    350.60
 ```
 
