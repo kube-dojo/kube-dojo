@@ -20,10 +20,10 @@ The CAPA (Certified Argo Project Associate) validates knowledge of the four Argo
 
 | Domain | Weight | KubeDojo Coverage |
 |--------|--------|-------------------|
-| Argo Workflows | 36% | Excellent (toolkit module + [Advanced Argo Workflows](module-1.1-advanced-argo-workflows/)) |
+| Argo Workflows | 36% | Excellent (toolkit module + [Module 1.1: Advanced Argo Workflows](module-1.1-advanced-argo-workflows/)) |
 | Argo CD | 34% | Excellent (1 toolkit + 6 discipline modules) |
 | Argo Rollouts | 18% | Excellent (1 dedicated toolkit module) |
-| Argo Events | 12% | Excellent ([Argo Events](module-1.2-argo-events/)) |
+| Argo Events | 12% | Excellent ([Module 1.2: Argo Events — Event-Driven Automation for Kubernetes](module-1.2-argo-events/)) |
 
 ---
 
@@ -33,8 +33,8 @@ These modules cover the areas between KubeDojo's existing Platform Engineering c
 
 | # | Module | Topic | Relevance |
 |---|--------|-------|-----------|
-| 1 | [Advanced Argo Workflows](module-1.1-advanced-argo-workflows/) | All 7 template types, artifacts, CronWorkflows, memoization, lifecycle hooks | Domain 1 (36%) |
-| 2 | [Argo Events](module-1.2-argo-events/) | EventSource, Sensor, Trigger, EventBus architecture, event-driven automation | Domain 4 (12%) |
+| 1 | [Module 1.1: Advanced Argo Workflows](module-1.1-advanced-argo-workflows/) | All 7 template types, artifacts, CronWorkflows, memoization, lifecycle hooks | Domain 1 (36%) |
+| 2 | [Module 1.2: Argo Events — Event-Driven Automation for Kubernetes](module-1.2-argo-events/) | EventSource, Sensor, Trigger, EventBus architecture, event-driven automation | Domain 4 (12%) |
 
 ---
 
@@ -55,7 +55,7 @@ These modules cover the areas between KubeDojo's existing Platform Engineering c
 | Module | Topic | Relevance |
 |--------|-------|-----------|
 | [Argo Workflows](../../platform/toolkits/cicd-delivery/ci-cd-pipelines/module-3.3-argo-workflows/) | Workflow CRD, DAG/steps, templates, parameters | Direct |
-| [Advanced Argo Workflows](module-1.1-advanced-argo-workflows/) | All 7 template types, artifacts, CronWorkflows, retries, memoization | Direct |
+| [Module 1.1: Advanced Argo Workflows](module-1.1-advanced-argo-workflows/) | All 7 template types, artifacts, CronWorkflows, retries, memoization | Direct |
 
 ### Supplementary Study Topics
 
@@ -229,7 +229,7 @@ With Istio/Nginx/ALB:   Fine-grained traffic percentage control
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [Argo Events](module-1.2-argo-events/) | EventSource, Sensor, EventBus, Trigger architecture, event-driven patterns | Direct |
+| [Module 1.2: Argo Events — Event-Driven Automation for Kubernetes](module-1.2-argo-events/) | EventSource, Sensor, EventBus, Trigger architecture, event-driven patterns | Direct |
 
 ### Study Resources
 
@@ -350,12 +350,12 @@ KubeDojo's existing modules plus the two dedicated CAPA modules now cover ~95% o
 
 | Topic | Domain | Weight Impact | Status | Notes |
 |-------|--------|---------------|--------|-------|
-| Argo Events | Domain 4 | 12% | Covered | [Argo Events](module-1.2-argo-events/) — EventSource, Sensor, EventBus, Triggers |
-| Argo Workflows template types (all 7) | Domain 1 | Part of 36% | Covered | [Advanced Argo Workflows](module-1.1-advanced-argo-workflows/) — all 7 template types |
-| Argo Workflows artifacts | Domain 1 | Part of 36% | Covered | [Advanced Argo Workflows](module-1.1-advanced-argo-workflows/) — S3/MinIO artifact configuration |
-| CronWorkflow | Domain 1 | Part of 36% | Covered | [Advanced Argo Workflows](module-1.1-advanced-argo-workflows/) — scheduling, concurrency policies |
-| Exit handlers / lifecycle hooks | Domain 1 | Part of 36% | Covered | [Advanced Argo Workflows](module-1.1-advanced-argo-workflows/) |
-| Synchronization / memoization | Domain 1 | Part of 36% | Covered | [Advanced Argo Workflows](module-1.1-advanced-argo-workflows/) |
+| Argo Events | Domain 4 | 12% | Covered | [Module 1.2: Argo Events — Event-Driven Automation for Kubernetes](module-1.2-argo-events/) — EventSource, Sensor, EventBus, Triggers |
+| Argo Workflows template types (all 7) | Domain 1 | Part of 36% | Covered | [Module 1.1: Advanced Argo Workflows](module-1.1-advanced-argo-workflows/) — all 7 template types |
+| Argo Workflows artifacts | Domain 1 | Part of 36% | Covered | [Module 1.1: Advanced Argo Workflows](module-1.1-advanced-argo-workflows/) — S3/MinIO artifact configuration |
+| CronWorkflow | Domain 1 | Part of 36% | Covered | [Module 1.1: Advanced Argo Workflows](module-1.1-advanced-argo-workflows/) — scheduling, concurrency policies |
+| Exit handlers / lifecycle hooks | Domain 1 | Part of 36% | Covered | [Module 1.1: Advanced Argo Workflows](module-1.1-advanced-argo-workflows/) |
+| Synchronization / memoization | Domain 1 | Part of 36% | Covered | [Module 1.1: Advanced Argo Workflows](module-1.1-advanced-argo-workflows/) |
 
 All four Argo domains are now fully covered by existing KubeDojo modules.
 
