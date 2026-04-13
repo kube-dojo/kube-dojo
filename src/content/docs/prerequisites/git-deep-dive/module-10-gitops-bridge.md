@@ -311,37 +311,51 @@ By implementing branch protection and signed commits, you ensure that every chan
 
 <details>
 <summary>1. A developer updates their application code, builds a new container image tagged `v3.0.0`, and pushes it to the registry. They are confused why the production cluster has not updated yet. In a strict GitOps architecture, what missing step must occur before the cluster recognizes the new image?</summary>
+
 The cluster operates strictly on the Pull model based on the infrastructure repository. Pushing a new image to a registry does not change the declarative state in Git. The missing step is that a commit must be made to the infrastructure repository updating the Kubernetes deployment manifest to reference the new `v3.0.0` image tag. Only once that commit is merged into the tracked branch (or a new release tag is cut) will the GitOps operator detect the intended change and pull the new image into the cluster.
+
 </details>
 
 <details>
 <summary>2. You receive an alert at 3:00 AM that a production NodePort service was accidentally exposed to the public internet. You quickly identify that a junior engineer ran a manual `kubectl expose` command directly against the cluster. Assuming a fully configured GitOps operator is running, what action do you need to take to restore the service to its secure state?</summary>
+
 You do not need to take any manual action. A core principle of GitOps is continuous reconciliation. The GitOps operator running in the cluster is continuously comparing the live state against the Git repository. When its next reconciliation loop runs (usually within minutes), it will detect that the manually created NodePort service does not exist in the Git repository. Because it is enforcing the declarative truth, the operator will automatically delete or revert the unauthorized service, self-healing the cluster.
+
 </details>
 
 <details>
 <summary>3. Your organization uses Kustomize to manage environments. You need to increase the memory limit for the `inventory-service` exclusively in the `staging` environment. The base deployment defines a memory limit of `512Mi`. Where and how do you implement this change?</summary>
+
 You should not touch the `base/deployment.yaml` file, as that would affect all environments. Instead, you must create a patch file in the `overlays/staging/` directory (e.g., `patch-memory.yaml`) that specifically targets the `inventory-service` Deployment and overrides the memory limit to the new value. You then reference this patch file in the `overlays/staging/kustomization.yaml` under the `patches` section. This ensures the change is isolated entirely to the staging environment, preserving the integrity of the base configuration for production. During reconciliation, Kustomize will merge this specific staging patch with the base configuration in memory before applying it to the cluster.
+
 </details>
 
 <details>
 <summary>4. Your team is migrating a legacy application to GitOps. The application requires a Kubernetes Secret containing a database password. An engineer suggests putting the plain YAML Secret directly into the infrastructure repository since Git is now the "single source of truth." Why is this a severe security violation, and what should be done instead?</summary>
+
 Git history is immutable and often widely accessible to many engineers in an organization. Committing plaintext secrets exposes them permanently, even if deleted in a later commit. While GitOps demands that all state be declarative, secrets must be handled differently to prevent credential theft. You should use a solution like Mozilla SOPS to encrypt the file before committing, or use the External Secrets Operator to declare a reference in Git that fetches the actual password from a secure vault (like AWS Secrets Manager) at runtime inside the cluster. This maintains the declarative nature of GitOps without compromising sensitive information.
+
 </details>
 
 <details>
 <summary>5. You are investigating a staging environment where an application fails to connect to its cache. A developer insists they merged the correct ConfigMap update to the `staging` overlay two hours ago. You query the live cluster and see the old values. Using a GitOps operator, what specific diagnostic steps must you take to determine why the reconciliation loop has failed to synchronize the cluster state?</summary>
+
 First, you must check the GitOps operator's application resource status (e.g., `kubectl describe application frontend-staging -n argocd`) to determine if its sync state is reporting as 'Degraded' or 'OutOfSync'. Next, you must inspect the operator's controller logs or the Application resource events to find the exact error halting the reconciliation. Most commonly, this reveals a schema validation error, a missing Kustomize base reference, or a syntax error in the recently merged YAML patch. Because the GitOps operator validates the entire declarative state before applying it, a single malformed manifest will cause the reconciliation loop to safely abort, preventing the drift correction from reaching the cluster. This fail-safe behavior ensures that broken configurations cannot corrupt the running state of the environment.
+
 </details>
 
 <details>
 <summary>6. During a massive marketing campaign, traffic spikes unpredictably. To handle the load, the Horizontal Pod Autoscaler (HPA) automatically scales the frontend deployment from 5 to 50 replicas. The Git repository, however, still specifies `replicas: 5` in the deployment manifest. Why doesn't the GitOps operator immediately scale the deployment back down to 5?</summary>
+
 A properly configured GitOps setup relies on ignoring specific fields that are expected to be mutated by other cluster controllers. In this case, the GitOps operator must be configured to ignore the `spec.replicas` field of the Deployment object when an HPA is present. If it were not configured to ignore this drift, the GitOps operator and the HPA would fight in an infinite loop: the HPA scaling up based on metrics, and the GitOps operator scaling down based on the Git manifest. This conflict would severely degrade cluster performance and prevent the application from scaling out during the traffic spike. By explicitly defining these exceptions, you allow autonomous Kubernetes controllers to manage dynamic runtime state while preserving Git as the source of truth for structural configuration.
+
 </details>
 
 <details>
 <summary>7. You are designing the release strategy for a highly regulated financial platform. Compliance requires that no single individual can push a change to production, and the exact state of production must be verifiable at any historical point in time. How do you configure the Git repository and the GitOps operator to satisfy these requirements?</summary>
+
 First, you must enforce strict branch protection rules on the infrastructure repository: require cryptographically signed commits to prove identity, and mandate at least one approving pull request review to prevent unilateral changes. Second, instead of having the production GitOps operator track a moving branch like `main`, you configure its `targetRevision` to track specific immutable Git tags (e.g., `v2.0.1`). To promote a change, engineers create a signed tag and update the operator's target, ensuring explicit, point-in-time traceability. This guarantees that production always matches an audited, approved version of the repository, meeting the compliance requirements. Because Git tags cannot be silently modified like branches, an auditor can trivially prove the exact configuration deployed to the cluster at any given second by inspecting the tagged commit history.
+
 </details>
 
 ## Hands-On Exercise
@@ -369,6 +383,7 @@ mkdir -p catalog-api/base
 mkdir -p catalog-api/overlays/staging
 mkdir -p catalog-api/overlays/prod
 ```
+
 </details>
 
 ### Task 2: Define the Common Base
@@ -409,6 +424,7 @@ kind: Kustomization
 resources:
   - deployment.yaml
 ```
+
 </details>
 
 ### Task 3: Create the Staging Overlay
@@ -443,6 +459,7 @@ resources:
 patches:
   - path: patch-env.yaml
 ```
+
 </details>
 
 ### Task 4: Create the Production Overlay
@@ -477,6 +494,7 @@ resources:
 patches:
   - path: patch-production.yaml
 ```
+
 </details>
 
 ### Task 5: Simulate the GitOps Operator (Validation)
@@ -495,6 +513,7 @@ kubectl kustomize catalog-api/overlays/staging
 kubectl kustomize catalog-api/overlays/prod
 ```
 If the output matches your expectations, your directory structure is mathematically sound and ready to be committed to a Git repository.
+
 </details>
 
 ### Success Criteria
