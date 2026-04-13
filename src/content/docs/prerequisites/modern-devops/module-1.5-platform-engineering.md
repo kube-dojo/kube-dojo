@@ -96,7 +96,7 @@ This requires treating the internal platform with the exact same rigor, user res
   - **Voluntary Adoption Rate:** What percentage of teams voluntarily use the platform? Mandated adoption obscures whether the platform is actually good.
   - **Time-to-First-Commit:** How long does it take a new hire to deploy a "Hello World" app to production?
   - **Lead Time for Changes:** The time from a committed code change to that change running successfully in production. *(This is a core DORA metric. Note: Industry sources sometimes conflict on whether DORA officially tracks exactly 4 or 5 key metrics as 'Reliability' and 'Rework Rate' have been introduced in recent years, but Lead Time remains fundamental).*
-  - **Developer Net Promoter Score (eNPS):** Are developers satisfied with the tooling? Do they recommend it to peers? Are they frustrated?
+  - **Developer Net Promoter Score (eNPS):** Are developers satisfied with the tooling? Do they recommend it to peers? Are frustrated?
 - **The Feedback Loop:** Conducting rigorous user interviews, observing developers "in the wild" as they struggle with deployments, creating frictionless onboarding experiences, and continuously iterating based on specific developer pain points.
 
 > **Analogy:** Think of the platform team as the city planners and the product developers as the citizens. The city planners build paved roads, traffic lights, and public transport (the platform). They don't tell the citizens exactly where to drive or what their destination should be, but they make it incredibly easy and safe to get to the most popular destinations. If a citizen wants to off-road through the wilderness, they can, but they shouldn't expect the city to dispatch a free tow truck if they get stuck in the mud.
@@ -288,7 +288,7 @@ spec:
     enabled: true
     retention_days: 30
   high_availability: false
-  version: "14.2"
+  version: "16.2"
   encryption: "kms-managed"
 ```
 
@@ -625,7 +625,7 @@ A product developer wants to provision a brand new PostgreSQL database for a fea
 **2. Platform Engineering Self-Service Workflow:**
 - The developer opens the Developer Portal (Backstage).
 - They navigate to "Self-Service Actions" -> "Provision Database".
-- They fill out a 3-field web form: `Size: Medium`, `Engine: PostgreSQL 14`, `Environment: Staging`.
+- They fill out a 3-field web form: `Size: Medium`, `Engine: PostgreSQL 16`, `Environment: Staging`.
 - They click "Submit".
 - Behind the scenes, the Platform Orchestrator immediately translates this abstract request into the complex, secure Terraform required, applying it via Crossplane.
 - 5 minutes later, the database is up.
