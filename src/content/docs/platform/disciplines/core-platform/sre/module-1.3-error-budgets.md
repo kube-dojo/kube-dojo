@@ -43,6 +43,8 @@ This module shows you how error budgets work and how to use them to make better 
 
 ## What Is an Error Budget?
 
+> **Stop and think**: If your product manager asks for 100% uptime, what are the actual engineering and business costs of trying to achieve that goal?
+
 An error budget is the inverse of your SLO — the amount of unreliability you're allowed.
 
 ```
@@ -77,6 +79,8 @@ Error budgets reframe the conversation:
 ---
 
 ## Error Budget Math
+
+> **Pause and predict**: Will a time-based budget or a request-based budget be more forgiving during a low-traffic period in the middle of the night?
 
 ### Time-Based Calculation
 
@@ -142,6 +146,8 @@ Budget remaining: ____%
 ## Error Budget Policies
 
 An error budget is useless without policies that define what happens when it's consumed.
+
+> **Stop and think**: If an error budget policy has no consequences for exhausting the budget, is it actually a policy or just a dashboard metric?
 
 ### The Standard Policy
 
@@ -221,27 +227,21 @@ Error budgets are a negotiation tool between development and operations.
 
 ### The Trade-Off Visualization
 
+```mermaid
+quadrantChart
+    title Reliability vs Velocity Trade-Off
+    x-axis "Low Velocity" --> "High Velocity"
+    y-axis "Low Reliability" --> "High Reliability"
+    quadrant-1 "Unicorn Zone (Hard to achieve)"
+    quadrant-2 "Ops Happy, Devs Frustrated"
+    quadrant-3 "Danger Zone (Worst case)"
+    quadrant-4 "Devs Happy, Ops Frustrated"
+    "Error Budget Sweet Spot": [0.7, 0.6]
 ```
-         RELIABILITY
-              ↑
-         High │    Slow releases
-              │    Happy ops
-              │    Frustrated devs
-              │
-              │
-              │                   × Sweet spot
-              │
-              │
-         Low  │    Fast releases
-              │    Happy devs
-              │    Frustrated ops
-              └────────────────────────→
-                                   VELOCITY
 
 Error budgets find the sweet spot where:
   - Users are happy enough (meeting SLO)
   - Development moves fast enough (spending budget)
-```
 
 ### Using Budget to Make Decisions
 
@@ -281,6 +281,8 @@ The question isn't "avoid spending budget" — it's "spend budget wisely."
 ---
 
 ## Did You Know?
+
+> **Pause and predict**: How might an 'error budget loan' affect the engineering team's workload in the following month?
 
 1. **Netflix's "Error Budget" approach is slightly different** — they focus on "disengagement" (when users leave due to problems) rather than pure availability, because some errors matter more than others.
 
@@ -349,46 +351,31 @@ If feature causes 20% budget spend:
 
 An error budget dashboard should show:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     Error Budget Dashboard                   │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  ┌─────────────────────────────────────────────────────────┐│
-│  │ Budget Remaining: [████████████░░░░░░░░] 62%            ││
-│  │                                                          ││
-│  │ Status: ✅ HEALTHY                                       ││
-│  └─────────────────────────────────────────────────────────┘│
-│                                                              │
-│  ┌──────────────────┐  ┌──────────────────┐                 │
-│  │ Time Budget      │  │ Request Budget   │                 │
-│  │ Allowed: 43.2min │  │ Allowed: 10,000  │                 │
-│  │ Used: 16.4min    │  │ Used: 3,800      │                 │
-│  │ Remaining: 26.8m │  │ Remaining: 6,200 │                 │
-│  └──────────────────┘  └──────────────────┘                 │
-│                                                              │
-│  ┌─────────────────────────────────────────────────────────┐│
-│  │ Budget Consumption Over Time                             ││
-│  │                                           _____          ││
-│  │                                     _____/               ││
-│  │                              ______/                     ││
-│  │                        _____/                            ││
-│  │ ──────────────────────/─────────────────────────────────││
-│  │ Day 1        Day 10       Day 20        Day 30          ││
-│  │                                                          ││
-│  │ Legend: ─── Actual consumption  --- Ideal (linear)      ││
-│  └─────────────────────────────────────────────────────────┘│
-│                                                              │
-│  ┌─────────────────────────────────────────────────────────┐│
-│  │ Budget Impact by Event                                   ││
-│  │                                                          ││
-│  │ Jan 5: Deploy v2.3.1         ████░░░░ -2.1%             ││
-│  │ Jan 8: Database migration    ██░░░░░░ -0.8%             ││
-│  │ Jan 12: Deploy v2.4.0        ██████░░ -3.5%             ││
-│  │ Jan 15: Network issue        ████████████ -8.2%         ││
-│  └─────────────────────────────────────────────────────────┘│
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph Dashboard["Error Budget Dashboard"]
+        Status["Budget Remaining: 62% (HEALTHY)"]
+        
+        subgraph Metrics["Current Cycle Metrics"]
+            Time["Time Budget<br>Allowed: 43.2min<br>Used: 16.4min<br>Remaining: 26.8min"]
+            Req["Request Budget<br>Allowed: 10,000<br>Used: 3,800<br>Remaining: 6,200"]
+        end
+        
+        subgraph Trend["Budget Consumption Over Time"]
+            D1["Day 1"] --> D10["Day 10"] --> D20["Day 20"] --> D30["Day 30"]
+        end
+        
+        subgraph Events["Recent Budget Impacts"]
+            E1["Jan 5: Deploy v2.3.1 (-2.1%)"]
+            E2["Jan 8: Database migration (-0.8%)"]
+            E3["Jan 12: Deploy v2.4.0 (-3.5%)"]
+            E4["Jan 15: Network issue (-8.2%)"]
+        end
+        
+        Status --> Metrics
+        Metrics --> Trend
+        Trend --> Events
+    end
 ```
 
 ### Key Metrics to Track
@@ -519,91 +506,42 @@ Recovery Timeline:
 ## Quiz: Check Your Understanding
 
 ### Question 1
-Your 99.9% SLO service handles 5 million requests per day over a 30-day window. How many failed requests are in your monthly error budget?
+Your team manages the checkout service, which processes 5 million requests per day. The business has agreed to a 99.9% SLO over a rolling 30-day window. During a recent deployment, you noticed a spike in errors. To understand if you are at risk of violating your agreement, calculate how many total failed requests your monthly error budget allows.
 
 <details>
 <summary>Show Answer</summary>
 
-```
-Monthly requests = 5,000,000 × 30 = 150,000,000
-Error budget = 150,000,000 × (1 - 0.999)
-            = 150,000,000 × 0.001
-            = 150,000 failed requests
-```
-
-You're allowed 150,000 failed requests per month, or about 5,000 per day.
+To determine the allowed failures, you first calculate the total requests in the window, which is 5 million requests multiplied by 30 days, equaling 150 million total requests. Your error budget is the inverse of your SLO (100% - 99.9% = 0.1%). By multiplying the total requests (150 million) by your error budget (0.001), you find that you are permitted 150,000 failed requests per month. This means you can tolerate roughly 5,000 failed requests per day without violating your SLO. Knowing this hard number allows your team to evaluate whether the recent deployment spike is a minor blip or a critical threat to your budget.
 
 </details>
 
 ### Question 2
-You're at 20% budget remaining with 10 days left in the month. Should you ship a medium-risk feature?
+It's the 20th of the month, and your team is preparing to release a highly anticipated, medium-risk feature. However, your error budget dashboard shows you only have 20% of your budget remaining due to a database outage earlier in the month. The product manager is pushing for the release to meet a marketing deadline. Should you proceed with the deployment?
 
 <details>
 <summary>Show Answer</summary>
 
-**Probably not**, but it depends on specifics.
-
-Analysis:
-- 20% remaining = "Critical" zone in most policies
-- 10 days left = limited recovery time
-- Medium risk = could consume significant budget
-
-Considerations:
-- What's the business value? Critical?
-- Can it wait 10 days for budget reset?
-- Can you reduce the risk (smaller scope, canary)?
-- What's your rollback capability?
-
-Default answer: Wait or reduce risk. But if business-critical and you can mitigate risk, it might be justified with approval.
+Under standard error budget policies, having only 20% budget remaining places you in the 'Critical' or 'Caution' zone, meaning you should likely halt or significantly de-risk the release. Proceeding with a medium-risk deployment could easily consume the remaining margin, pushing you into an SLO violation and breaching customer trust. Instead, you should consult your pre-defined policy exceptions to see if the business value outweighs the reliability risk, or explore mitigations like a small canary release. If the feature cannot be safely rolled out without threatening the remaining budget, the data dictates that the release must be delayed until the budget window resets. This removes the emotion from the decision and relies on the agreed-upon mathematical limits.
 
 </details>
 
 ### Question 3
-Why should you spend error budget instead of hoarding it?
+Your engineering team has consistently maintained a 100% error budget surplus for the past six months by over-provisioning infrastructure, enforcing multi-week QA cycles, and restricting deployments to once a month. The operations team is thrilled, but the product team is complaining that feature delivery is moving at a glacial pace. Why is hoarding the error budget in this manner actually a bad practice?
 
 <details>
 <summary>Show Answer</summary>
 
-Unused error budget means:
-
-1. **SLO is too loose**: You're over-investing in reliability users don't need
-2. **Missing opportunities**: You could ship faster, experiment more
-3. **Team stagnation**: No learning from controlled failures
-
-The goal isn't zero budget consumption — it's optimal consumption. Spend budget on valuable things (features, experiments, learning), not waste it on sloppiness.
-
-If you consistently have surplus budget, tighten your SLO.
+Hoarding your error budget indicates that your system is performing significantly higher than the reliability targets your users actually require. The error budget exists specifically to be spent on innovation, feature velocity, and measured risk-taking, all of which are being sacrificed in this scenario. By maintaining a 100% surplus, your team is over-investing in stability at the direct expense of delivering business value and learning from controlled failures. A consistent surplus is a clear signal that you should either increase your deployment frequency, loosen your testing bottlenecks, or renegotiate a tighter SLO that accurately reflects the effort required to maintain it.
 
 </details>
 
 ### Question 4
-A major incident consumed 30% of your error budget. What should happen next?
+A misconfigured Kubernetes deployment just caused a major incident that consumed 30% of your rolling 30-day error budget in a single afternoon. Your total remaining budget has now dropped from a comfortable 45% down to a precarious 15%. According to standard error budget practices, what actions should your team immediately take?
 
 <details>
 <summary>Show Answer</summary>
 
-Depending on remaining budget:
-
-**Immediate:**
-- Assess new budget level (status change?)
-- Invoke appropriate policy tier
-- Schedule postmortem
-
-**If budget critical (<25%):**
-- Restrict releases
-- Prioritize reliability work
-- Increased monitoring
-
-**If budget exhausted:**
-- Feature freeze
-- Focus entirely on reliability
-- Leadership updates
-
-**Always:**
-- Blameless postmortem
-- Identify prevention measures
-- Update runbooks
-- Track recovery to healthy budget
+The sudden drop to 15% remaining budget immediately shifts your service from a 'Healthy' state into a 'Critical' or 'Caution' state, triggering predefined policy responses. First, your team should restrict any upcoming feature releases and shift engineering focus toward reliability and technical debt to prevent further burn. Second, you must conduct a blameless postmortem to understand how the misconfiguration bypassed your CI/CD checks and implement automated safeguards against a recurrence. Finally, leadership must be notified of the budget state and the subsequent feature freeze, ensuring that everyone understands the data-driven rationale for pausing feature work until the budget recovers.
 
 </details>
 
