@@ -57,43 +57,37 @@ This module teaches you to install Chaos Mesh, understand its architecture, and 
 
 Chaos Mesh runs as a set of controllers and daemon pods inside your Kubernetes cluster:
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    Kubernetes Cluster                     │
-│                                                          │
-│  ┌─────────────────────────────────────────────────┐    │
-│  │            Chaos Mesh Control Plane              │    │
-│  │                                                   │    │
-│  │  ┌──────────────┐  ┌──────────────────────────┐  │    │
-│  │  │ chaos-        │  │ chaos-controller-manager │  │    │
-│  │  │ dashboard     │  │                          │  │    │
-│  │  │ (Web UI)      │  │  • Watches CRDs          │  │    │
-│  │  └──────────────┘  │  • Schedules experiments  │  │    │
-│  │                     │  • Manages lifecycle      │  │    │
-│  │                     └──────────────────────────┘  │    │
-│  └─────────────────────────────────────────────────┘    │
-│                                                          │
-│  ┌─────────────────────────────────────────────────┐    │
-│  │            Chaos Mesh Data Plane                  │    │
-│  │                                                   │    │
-│  │  Node 1           Node 2           Node 3        │    │
-│  │  ┌────────────┐  ┌────────────┐  ┌────────────┐ │    │
-│  │  │chaos-daemon│  │chaos-daemon│  │chaos-daemon│ │    │
-│  │  │            │  │            │  │            │ │    │
-│  │  │ • Injects  │  │ • Injects  │  │ • Injects  │ │    │
-│  │  │   faults   │  │   faults   │  │   faults   │ │    │
-│  │  │ • Uses     │  │ • Uses     │  │ • Uses     │ │    │
-│  │  │   nsenter  │  │   nsenter  │  │   nsenter  │ │    │
-│  │  └────────────┘  └────────────┘  └────────────┘ │    │
-│  └─────────────────────────────────────────────────┘    │
-│                                                          │
-│  ┌───────────────────────────────────────┐              │
-│  │  Your Application Pods (targets)      │              │
-│  │  ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐   │              │
-│  │  │Pod A│ │Pod B│ │Pod C│ │Pod D│   │              │
-│  │  └─────┘ └─────┘ └─────┘ └─────┘   │              │
-│  └───────────────────────────────────────┘              │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph Cluster["Kubernetes Cluster"]
+        direction TB
+        subgraph CP["Chaos Mesh Control Plane"]
+            direction LR
+            Dashboard["chaos-dashboard<br/>(Web UI)"]
+            CCM["chaos-controller-manager<br/>• Watches CRDs<br/>• Schedules experiments<br/>• Manages lifecycle"]
+        end
+
+        subgraph DP["Chaos Mesh Data Plane"]
+            direction LR
+            D1["chaos-daemon (Node 1)<br/>• Injects faults<br/>• Uses nsenter"]
+            D2["chaos-daemon (Node 2)<br/>• Injects faults<br/>• Uses nsenter"]
+            D3["chaos-daemon (Node 3)<br/>• Injects faults<br/>• Uses nsenter"]
+        end
+
+        subgraph Target["Your Application Pods (targets)"]
+            direction LR
+            PA["Pod A"]
+            PB["Pod B"]
+            PC["Pod C"]
+            PD["Pod D"]
+        end
+
+        CP -->|Reconciles & Schedules| DP
+        D1 -.->|Injects via kernel| PA
+        D1 -.->|Injects via kernel| PB
+        D2 -.->|Injects via kernel| PC
+        D3 -.->|Injects via kernel| PD
+    end
 ```
 
 **Key components:**
@@ -336,6 +330,8 @@ spec:
   gracePeriod: 0               # Immediate kill (like kill -9)
 ```
 
+> **Pause and predict**: What exact states will the targeted pod transition through immediately after this CRD is applied? How will the Service endpoint slice respond during this transition?
+
 ```bash
 # Record steady state
 kubectl get pods -n chaos-demo -l app=frontend -w &
@@ -414,6 +410,8 @@ The `mode` field controls how many pods are targeted:
 ## NetworkChaos: Network Fault Injection
 
 NetworkChaos injects network-level faults between pods. This is where Chaos Mesh really shines — network issues are the most common cause of distributed system failures.
+
+> **Stop and think**: If we add 150ms latency to the backend using NetworkChaos, but our frontend application code has a hard timeout of 50ms for all internal API calls, what HTTP status code will the end user ultimately receive when making a request?
 
 ### Network Latency
 
@@ -728,92 +726,57 @@ kubectl get podchaos -n chaos-demo --sort-by=.metadata.creationTimestamp
 
 ## Quiz
 
-### Question 1: What are the three main components of Chaos Mesh, and what does each do?
+### Question 1: You have just applied a PodChaos CRD to kill a frontend pod, but absolutely nothing happens. The pod remains running. Assuming your RBAC is correct, which Chaos Mesh component is most likely failing to process the request, and why?
 
 <details>
 <summary>Show Answer</summary>
 
-1. **chaos-controller-manager** (Deployment): Watches Chaos Mesh CRDs, reconciles desired chaos state, schedules experiments, and manages their lifecycle.
-2. **chaos-daemon** (DaemonSet): Runs on every node, enters target pod namespaces using `nsenter`, and injects the actual faults (tc rules, process kills, stress-ng, etc.).
-3. **chaos-dashboard** (Deployment): Web UI for creating, monitoring, and managing chaos experiments visually.
-
-The controller-manager is the brain, the daemon is the hands, and the dashboard is the eyes.
+If the CRD is successfully accepted by the Kubernetes API but no fault is actually injected, the issue most likely lies with the **chaos-daemon** running on the target node. The chaos-controller-manager has likely seen the CRD and scheduled the work, but the daemon is failing to execute the physical injection. This commonly happens if the daemon was installed with an incorrect container runtime configuration (e.g., pointing to Docker when the node uses containerd), leaving it unable to interface with the target pod's processes or network namespace.
 
 </details>
 
-### Question 2: What is the difference between `pod-kill` and `pod-failure` actions?
+### Question 2: Your team is debating whether to use `pod-kill` or `pod-failure` to test how your payment gateway handles an external banking API outage. The banking API has historically gone silent for minutes at a time without closing connections. Which action should you choose and why?
 
 <details>
 <summary>Show Answer</summary>
 
-**pod-kill** terminates the container process, causing Kubernetes to restart the pod. The pod goes through `Terminating` → `Pending` → `Running` states. This tests restart behavior, readiness probes, and how quickly the pod recovers.
-
-**pod-failure** makes the pod unavailable for the specified duration without killing it. The pod remains in a non-ready state. This tests how calling services handle an unavailable dependency for a sustained period, without testing Kubernetes restart mechanics.
-
-Use pod-kill to test recovery speed. Use pod-failure to test sustained unavailability handling.
+You should definitively choose **`pod-failure`** for this experiment. A `pod-kill` action violently terminates the process and relies on Kubernetes immediately attempting a restart, which effectively tests your infrastructure's recovery speed and readiness probes. Conversely, `pod-failure` places the pod in an unavailable, non-ready state for a sustained duration without restarting it, directly mimicking the real-world behavior of a dependency that has hung or gone completely silent. This allows you to verify if your payment gateway's internal circuit breakers and timeout configurations behave correctly when a connection is left open but unresponsive.
 
 </details>
 
-### Question 3: Why should you never use `mode: all` for your first production chaos experiment?
+### Question 3: A junior engineer proposes running a CPU Stress experiment on the `checkout` deployment using `mode: all` to "see if the autoscaler works." Why is this approach dangerous, and what configuration should they use instead to test the autoscaler safely?
 
 <details>
 <summary>Show Answer</summary>
 
-`mode: all` targets every pod matching the selector simultaneously. If your hypothesis is wrong and the service cannot tolerate the injected fault, `mode: all` guarantees a complete outage — every instance of the service is affected at once.
-
-This violates the core principle of **minimizing blast radius**. You should start with `mode: one` (a single pod), verify the system recovers gracefully, and only increase the scope in subsequent experiments. Even in mature chaos practices, `mode: all` is rarely used because it provides little additional learning over `mode: fixed-percent` with a high percentage.
+Using `mode: all` is extremely dangerous because it simultaneously targets every single pod within the deployment, violating the core principle of minimizing the blast radius. If the application cannot gracefully handle the injected resource starvation before the autoscaler reacts, this configuration practically guarantees a complete service outage. Instead, the engineer should use `mode: fixed-percent` (e.g., targeting 30% of pods) or `mode: one`. This safer approach simulates partial degradation, allowing the autoscaler to trigger based on average aggregate metrics while preserving enough healthy pods to serve live traffic during the experiment.
 
 </details>
 
-### Question 4: How does the `direction` field in NetworkChaos work, and what is the safest default?
+### Question 4: You are designing a NetworkChaos experiment to test how your backend handles a degraded database connection. You apply 200ms of latency with `direction: both`. During the test, external monitoring systems report that the backend is completely unreachable, even though the database test succeeded. What caused this unintended blast radius, and how do you fix the CRD?
 
 <details>
 <summary>Show Answer</summary>
 
-The `direction` field controls which traffic direction is affected:
-- `to`: Only traffic coming **into** the target pods is affected
-- `from`: Only traffic going **out of** the target pods is affected
-- `both`: Traffic in both directions is affected
-
-The safest default is `direction: to` because it only affects incoming requests to the target. This lets you test how the target handles degraded incoming traffic without also disrupting its outbound calls. Using `both` doubles the blast radius unnecessarily for most experiments.
+The unintended outage was caused by configuring `direction: both` without properly scoping the target. This setting forces Chaos Mesh to inject latency into all ingress and egress traffic for the backend pods, including critical internal cluster communications like Kubernetes readiness and liveness probes. Because the probes began failing due to the injected 200ms delay, Kubernetes marked the backend pods as unready and removed them from the Service endpoints, rendering the backend unreachable. To fix this, you must change the CRD to use `direction: to` and configure the `target` selector specifically for the database's namespace or labels, ensuring only the database communication path is affected.
 
 </details>
 
-### Question 5: You apply a NetworkChaos experiment with 150ms latency. After deleting the CRD, you notice latency is still elevated. What happened and how do you fix it?
+### Question 5: An incident occurs during a NetworkChaos experiment where 150ms of latency was injected. The SRE team deletes the NetworkChaos CRD to abort the experiment, but application metrics show the latency is still present 10 minutes later. What is the technical mechanism causing this lingering fault, and what are two ways to permanently resolve it?
 
 <details>
 <summary>Show Answer</summary>
 
-In rare cases, the chaos-daemon may fail to clean up the injected `tc` (traffic control) rules when the CRD is deleted. This can happen due to daemon restart, race conditions, or network issues between the controller and daemon.
-
-To diagnose, exec into the affected pod and check for lingering tc rules:
-```bash
-kubectl exec -it <pod-name> -n <namespace> -- tc qdisc show
-```
-
-To fix, you can either:
-1. Delete the pod so Kubernetes creates a fresh one (cleanest approach)
-2. Manually remove the tc rules: `kubectl exec -it <pod-name> -- tc qdisc del dev eth0 root`
-3. Restart the chaos-daemon on the affected node
-
-This is why you should always verify that deleting the CRD actually removes the fault, especially for network experiments.
+This lingering issue occurs when the `chaos-daemon` fails to clean up the injected `tc` (traffic control) rules inside the target pod's Linux network namespace after the CRD is deleted. This state mismatch typically happens due to network disruptions between the controller and the daemon, or if the daemon was restarted abruptly during the experiment's lifecycle. To permanently resolve the issue, you can either manually exec into the pod and delete the rogue tc rules (e.g., `tc qdisc del dev eth0 root`), or simply delete the affected application pod outright to force Kubernetes to schedule a completely fresh replica with a clean network namespace.
 
 </details>
 
-### Question 6: How would you prevent a team from accidentally running chaos experiments in the `production` namespace?
+### Question 6: Your organization is rolling out Chaos Mesh globally. Last night, an automated CI pipeline mistakenly applied a development PodChaos CRD to the `production` namespace, causing a brief outage. What are three distinct Kubernetes-native security controls you must implement to ensure this specific scenario cannot happen again?
 
 <details>
 <summary>Show Answer</summary>
 
-Three layers of protection:
-
-1. **Namespace annotation**: Add `chaos-mesh.org/inject: "disabled"` to the production namespace metadata. Chaos Mesh will refuse to inject faults into pods in annotated namespaces.
-
-2. **RBAC**: Do not grant `create` or `update` verbs on chaos-mesh.org resources in the production namespace. Use namespace-scoped Roles, not ClusterRoles, for chaos permissions.
-
-3. **Dashboard security mode**: Enable `securityMode=true` on the dashboard so users must authenticate with tokens that have limited RBAC scope.
-
-Defense in depth ensures that even if one layer is misconfigured, the others prevent accidental production chaos.
+To prevent automated chaos injection in sensitive environments, you must implement a defense-in-depth strategy. First, apply the `chaos-mesh.org/inject: "disabled"` annotation to the `production` namespace, which acts as a hard backstop instructing the Chaos Mesh webhook to reject any fault injections for that namespace. Second, tightly restrict RBAC by ensuring that CI/CD service accounts and standard users only hold RoleBindings for chaos CRDs in designated testing namespaces, explicitly denying cluster-wide `create` permissions. Finally, enforce `dashboard.securityMode=true` if using the Web UI, which requires operators to authenticate and binds their dashboard actions directly to their restricted Kubernetes RBAC tokens.
 
 </details>
 
