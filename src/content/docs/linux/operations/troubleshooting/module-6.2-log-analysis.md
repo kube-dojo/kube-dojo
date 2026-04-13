@@ -62,25 +62,40 @@ If you can't read logs effectively, you're debugging blind.
 
 ### System Logs
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    LOG SOURCES                                   │
-│                                                                  │
-│  Traditional (syslog)           Modern (journald)               │
-│  /var/log/syslog               journalctl                       │
-│  /var/log/messages             journalctl -u service            │
-│  /var/log/auth.log             journalctl _COMM=sshd            │
-│  /var/log/kern.log             journalctl -k                    │
-│                                                                  │
-│  Application-specific                                           │
-│  /var/log/nginx/access.log     Custom locations                 │
-│  /var/log/mysql/error.log      Check app documentation          │
-│  /var/log/apache2/error.log                                     │
-│                                                                  │
-│  Container logs                                                  │
-│  docker logs <container>       journalctl CONTAINER_NAME=...    │
-│  kubectl logs <pod>            Node: /var/log/pods/...          │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    classDef category fill:#f9f9f9,stroke:#333,stroke-width:2px;
+    classDef item fill:#fff,stroke:#666,stroke-width:1px;
+
+    ROOT[Log Sources]
+    
+    ROOT --> TRAD[Traditional syslog]
+    ROOT --> MOD[Modern journald]
+    ROOT --> APP[Application-specific]
+    ROOT --> CONT[Container logs]
+
+    TRAD --> T1["/var/log/syslog"]
+    TRAD --> T2["/var/log/messages"]
+    TRAD --> T3["/var/log/auth.log"]
+    TRAD --> T4["/var/log/kern.log"]
+
+    MOD --> M1["journalctl"]
+    MOD --> M2["journalctl -u service"]
+    MOD --> M3["journalctl _COMM=sshd"]
+    MOD --> M4["journalctl -k"]
+
+    APP --> A1["/var/log/nginx/access.log"]
+    APP --> A2["/var/log/mysql/error.log"]
+    APP --> A3["/var/log/apache2/error.log"]
+    APP --> A4["Custom locations"]
+
+    CONT --> C1["docker logs <container>"]
+    CONT --> C2["kubectl logs <pod>"]
+    CONT --> C3["journalctl CONTAINER_NAME=..."]
+    CONT --> C4["Node: /var/log/pods/..."]
+
+    class TRAD,MOD,APP,CONT category;
+    class T1,T2,T3,T4,M1,M2,M3,M4,A1,A2,A3,A4,C1,C2,C3,C4 item;
 ```
 
 ### Key Log Files
@@ -193,6 +208,8 @@ journalctl -o json-pretty -n 5
 ## Text Log Analysis
 
 ### Common Tools
+
+> **Stop and think**: If an application writes hundreds of log lines per second, why might using `grep -C 10` be misleading when trying to find the context of a specific error?
 
 ```bash
 # View file
@@ -315,6 +332,8 @@ journalctl -u nginx -u app -u database --since "10:23:00" --until "10:24:00"
 ## Kubernetes Logs
 
 ### Pod Logs
+
+> **Pause and predict**: If a pod has crashed and restarted, `kubectl logs pod-name` only shows the logs of the new, running container. Which flag do you need to view the logs of the container that actually crashed?
 
 ```bash
 # Current pod logs
@@ -447,7 +466,7 @@ A user reports that the web application started throwing 500 errors about 45 min
 journalctl -p err --since "1 hour ago"
 ```
 
-Filtering by priority is essential when a system is generating a massive volume of informational logs. By using the `-p err` flag, you instruct `journald` to only display messages with a severity of error (level 3) or higher, immediately cutting through the noise. The `--since "1 hour ago"` parameter scopes the search down to the relevant incident window, ensuring you don't waste time investigating old, unrelated issues. 
+Filtering by priority is essential when a system is generating a massive volume of informational logs that can bury the actual problem. By using the `-p err` flag, you instruct `journald` to only display messages with a severity of error (level 3) or higher, immediately cutting through the background noise. The `--since "1 hour ago"` parameter scopes the search down to the exact incident window, ensuring you don't waste time investigating old, unrelated issues. Combining both time and severity filters is the fastest way to surface actionable data during an active outage.
 
 For warnings and errors combined, you can widen the priority slightly:
 ```bash
@@ -466,13 +485,12 @@ Your Kubernetes node experienced a sudden kernel panic and automatically reboote
 journalctl -b -1
 ```
 
-By default, running `journalctl` without arguments shows logs from the current boot, which isn't helpful if you are investigating a crash that caused a restart. The `-b` flag targets a specific boot session, and appending `-1` explicitly requests the logs from the immediately preceding boot. This allows you to inspect the system's exact state and read the kernel messages that were recorded right before the panic occurred.
+By default, running `journalctl` without arguments shows logs from the current boot, which isn't helpful if you are investigating a crash that just caused a fresh restart. The `-b` flag targets a specific boot session, and appending `-1` explicitly requests the logs from the immediately preceding boot instead of the current one. This allows you to inspect the system's exact state and read the fatal kernel messages (like OOM kills or hardware faults) that were recorded right before the panic occurred. Without this flag, you are entirely blind to the events leading up to the node failure.
 
 To list all available boot sessions and their IDs, you can run:
 ```bash
 journalctl --list-boots
 ```
-This is particularly useful when a system has crashed and restarted multiple times, as you may need to go back further than just the previous boot (e.g., `-b -2`).
 
 </details>
 
@@ -484,16 +502,13 @@ You suspect a newly deployed microservice is occasionally failing to connect to 
 
 ```bash
 # Count occurrences
-grep -c "specific error message" /var/log/app.log
-
-# With journalctl
-journalctl -u service --no-pager | grep -c "error message"
+grep -c "database connection timeout" /var/log/app.log
 
 # Group by time
-grep "error" app.log | awk '{print $1}' | sort | uniq -c
+grep "database connection timeout" /var/log/app.log | awk '{print $1}' | sort | uniq -c
 ```
 
-Counting the raw number of errors helps establish the severity and frequency of an issue. Using the `-c` flag with `grep` is the most efficient way to get a total count because it avoids printing the matching lines to standard output, simply returning the integer tally. When you need to understand if the errors are a continuous stream or isolated spikes, piping the output to `awk`, `sort`, and `uniq -c` allows you to group the occurrences by timestamp, revealing the pattern of the failures over time.
+Counting the raw number of errors helps establish the severity and frequency of an issue rather than just confirming its existence. Using the `-c` flag with `grep` is the most efficient way to get a total count because it avoids printing the matching lines to standard output, simply returning the integer tally. When you need to understand if the errors are a continuous stream or isolated spikes, piping the output to `awk`, `sort`, and `uniq -c` allows you to group the occurrences by timestamp. This time-series approach reveals the pattern of the failures over time, which can point to underlying causes like cron jobs or traffic surges.
 
 </details>
 
@@ -505,17 +520,10 @@ You found a critical "Out of Memory" error in the `/var/log/app.log` file, but t
 
 ```bash
 # 5 lines before and after
-grep -C 5 "error message" /var/log/app.log
-
-# Or separately:
-grep -B 5 "error"  # 5 lines before
-grep -A 5 "error"  # 5 lines after
-
-# With journalctl, use time range around the event
-journalctl --since "10:23:40" --until "10:23:50"
+grep -C 5 "Out of Memory" /var/log/app.log
 ```
 
-An isolated error message rarely tells the full story of why a failure occurred. The context flags in `grep` (`-B` for before, `-A` for after, and `-C` for context in both directions) allow you to see the application's state leading up to the crash, such as the specific user request being processed. Alternatively, if you are using `journalctl`, extracting the exact timestamp of the error and querying a narrow time window around it lets you correlate events across multiple system services simultaneously.
+An isolated error message rarely tells the full story of why a failure occurred, especially in a busy application handling concurrent requests. The context flags in `grep` (`-B` for before, `-A` for after, and `-C` for context in both directions) allow you to see the application's state leading up to the crash, such as the specific user request being processed. By retrieving the preceding lines, you can identify the exact transaction or payload that triggered the "Out of Memory" condition. Alternatively, if you are using `journalctl`, extracting the exact timestamp of the error and querying a narrow time window around it lets you correlate events across multiple system services simultaneously.
 
 </details>
 
@@ -525,15 +533,7 @@ A developer asks for your help because their newly deployed application is faili
 <details>
 <summary>Show Answer</summary>
 
-When `kubectl logs` returns nothing, it generally means the container engine isn't capturing the application's standard output. The most common reason is that the application is hardcoded to write its logs directly to a file inside the container's filesystem (e.g., `/var/log/app.log`) instead of streaming to `stdout` and `stderr`. Furthermore, if the pod contains multiple containers, you might be querying a sidecar container that hasn't logged anything yet instead of the main application container.
-
-Several specific possibilities to investigate include:
-
-1. **Application writes to files, not stdout**: Container logs only capture stdout/stderr. Check if the app logs to a specific file inside the container.
-2. **Container restarted**: A new container starts with fresh logs. Use the `--previous` flag to view logs from the crashed instance.
-3. **Logging to wrong container**: In a multi-container pod, you must specify the target using `-c container-name`.
-4. **Application hasn't logged anything**: The application framework might be buffering logs in memory, or the log level might be set too high (e.g., only logging critical errors).
-5. **Log rotation**: If the application generates massive logs, old logs may have already been rotated out by system policies.
+When `kubectl logs` returns nothing, it generally means the container engine isn't capturing the application's standard output or standard error streams. The most common reason is that the application is hardcoded to write its logs directly to a file inside the container's ephemeral filesystem (e.g., `/var/log/app.log`) instead of streaming them to `stdout`. Furthermore, if the pod contains multiple containers (like an Istio sidecar), you might be accidentally querying a sidecar container that hasn't logged anything yet instead of the main application container. Finally, the application framework might be buffering logs in memory before flushing them, or its log level might be set too high to emit any startup messages.
 
 </details>
 
