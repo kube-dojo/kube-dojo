@@ -280,6 +280,8 @@ fi
 
 ### For Loops
 
+> **Pause and predict**: If you loop over `*.txt` in a directory with no text files, what is the value of the loop variable on the first iteration?
+
 ```bash
 # List iteration
 for fruit in apple banana cherry; do
@@ -416,6 +418,8 @@ name=$(get_name)
 ```
 
 ### Local Variables
+
+> **Stop and think**: What happens if you define a variable without the `local` keyword inside a function and then use a variable with the same name in your main script?
 
 ```bash
 # Without local - global scope
