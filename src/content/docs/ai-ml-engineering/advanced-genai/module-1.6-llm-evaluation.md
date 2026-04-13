@@ -11,26 +11,24 @@ sidebar:
 
 ## Why This Module Matters
 
-In November 2023, an Air Canada customer used the airline's official customer support chatbot to ask about bereavement fares. The chatbot, hallucinating a policy that did not actually exist, assured the customer they could book a full-price ticket immediately and request a refund within 90 days. When the customer later applied for the refund, the airline refused, citing their actual, documented policy. The customer sued in a civil resolution tribunal and won. The judge decisively rejected Air Canada's defense that the chatbot was a "separate legal entity" responsible for its own actions, holding the corporation fully liable. 
+In November 2023, an Air Canada customer used the airline's official customer support chatbot to ask about bereavement fares. The chatbot, hallucinating a policy that did not actually exist, assured the customer they could book a full-price ticket immediately and request a refund within 90 days. When the customer later applied for the refund, the airline refused, citing their actual, documented policy. The customer sued in a civil resolution tribunal and won. The judge decisively rejected Air Canada's defense that the chatbot was a "separate legal entity" responsible for its own actions, holding the corporation fully liable.
 
-This was a profoundly embarrassing and financially damaging failure of LLM evaluation and safety architecture. It demonstrated to the enterprise world that deploying a generative model without rigorous runtime guardrails, factual grounding checks, and multi-layered evaluation is legally reckless. Similar evaluation failures have cost massive enterprises dearly. For instance, Zillow Offers incurred a $500 million loss because they failed to properly evaluate the error bounds and calibration of their ML pricing models before full-scale deployment. When models lack rigorous evaluation loops, edge cases quickly become catastrophic liabilities.
+This was a profoundly embarrassing and financially damaging failure of LLM evaluation and safety architecture. It demonstrated to the enterprise world that deploying a generative model without rigorous runtime guardrails, factual grounding checks, and multi-layered evaluation is legally reckless. Similar evaluation failures have cost massive enterprises dearly—for instance, Zillow Offers incurred a $500 million loss because they failed to properly evaluate the error bounds and calibration of their ML pricing models before full-scale deployment.
 
-Building an LLM application is the easy part; evaluating and securing it is incredibly difficult. As models become more capable, the traditional software engineering paradigm of static unit testing completely breaks down. You cannot write a unit test for every possible user conversation, ambiguous prompt, or adversarial attack. Instead, we must rely on statistical capability benchmarks, automated LLM-as-a-judge frameworks, and defense-in-depth safety guardrails to ensure our systems behave predictably in a chaotic real-world environment. 
+Building an LLM application is the easy part; evaluating and securing it is incredibly difficult. As models become more capable, the traditional software engineering paradigm of static unit testing completely breaks down. You cannot write a unit test for every possible user conversation or adversarial attack. Instead, we must rely on statistical capability benchmarks, automated LLM-as-a-judge frameworks, and defense-in-depth safety guardrails to ensure our systems behave predictably in a chaotic real-world environment.
 
 ## What You'll Be Able to Do
 
 By the end of this module, you will be able to:
-- **Design** comprehensive evaluation pipelines that measure both raw capabilities and human alignment.
-- **Evaluate** the efficacy of prompt injection defenses using red-teaming methodologies and specialized vulnerability frameworks.
-- **Implement** production-grade runtime guardrails to intercept policy violations before they reach the end user.
-- **Diagnose** biased model behavior using structured mathematical fairness metrics to ensure equitable deployments.
-- **Compare** automated LLM-as-a-judge approaches against traditional n-gram statistical metrics for evaluation precision.
+- Design comprehensive evaluation pipelines that measure both raw capabilities and human alignment.
+- Evaluate the efficacy of prompt injection defenses using frameworks like HarmBench and CyberSecEval.
+- Implement production-grade runtime guardrails to intercept policy violations before they reach the user.
+- Diagnose biased model behavior using structured mathematical fairness metrics.
+- Compare automated LLM-as-a-judge approaches against traditional n-gram statistical metrics.
 
 ## The Alignment Problem and Evaluation Complexity
 
-The core challenge of evaluating Large Language Models stems directly from the alignment problem. The alignment problem asks a fundamental question: how do we ensure that an artificial intelligence system optimizes for what we genuinely intend, rather than precisely what we literally specify?
-
-When we construct optimization objectives, we inherently leave out the implicit common sense that humans share. If an AI system lacks this context, it will pursue its stated objective ruthlessly, often trampling over unstated values. This discrepancy between the specified reward function and the true human intention makes evaluation extraordinarily complex. We cannot simply evaluate whether a model completed the task; we must evaluate *how* it completed the task and whether its methods violated any implicit boundaries.
+The core challenge of LLM evaluation is rooted in the alignment problem: ensuring the model does what we intend, not just what we literally specify.
 
 ```text
 THE ALIGNMENT PROBLEM
@@ -50,7 +48,7 @@ What we want:              What AI might do:
                              (the classic AI thought experiment)
 ```
 
-Stuart Russell illustrates this inherent danger with the King Midas analogy. When King Midas asked that everything he touched turn to gold, he specified an objective. He failed to specify the implicit constraints—that his food and his family should remain untouched.
+Stuart Russell illustrates this with the King Midas analogy:
 
 ```python
 # The Midas Problem in AI
@@ -74,7 +72,7 @@ objective = """
 # Answer: We can't. We need AI to understand our values.
 ```
 
-When evaluating models for enterprise deployment, we must systematically classify and test for risks across a wide spectrum of potential failures. This taxonomy helps structure our evaluation suites so we do not overlook critical vulnerabilities.
+When evaluating models, we classify risks across three broad categories:
 
 ```mermaid
 graph TD
@@ -104,29 +102,60 @@ graph TD
 
 > **Pause and predict**: If a model achieves perfect accuracy on a multiple-choice benchmark, does that mean it has learned the underlying concept, or just the statistical distribution of the test?
 
-## Evaluating Capabilities and Benchmarks
+## Evaluating Capabilities: Benchmarks
 
-Evaluating capabilities requires massive, standardized benchmark datasets. However, the blistering pace of AI advancement has led to rapid benchmark saturation. When a benchmark saturates, it means the models are achieving near-perfect scores, rendering the benchmark useless for distinguishing between state-of-the-art systems.
+Evaluating capabilities requires massive, standardized benchmark datasets. However, the pace of AI advancement has led to rapid benchmark saturation. When a benchmark saturates, it means the models are achieving near-perfect scores, rendering the benchmark useless for distinguishing between state-of-the-art systems. 
 
-> **Did You Know?** MMLU (Massive Multitask Language Understanding) contains 15,908 multiple-choice questions across 57 academic subjects.
+> **Did You Know?** MMLU (Massive Multitask Language Understanding) contains 15,908 multiple-choice questions across 57 academic subjects with exactly 4 answer choices each.
 
-Because MMLU became saturated—with frontier models consistently exceeding 90% accuracy—researchers developed MMLU-Pro, which expanded the answer choices to reduce random guessing and increased the complexity. Still, as capabilities advanced, even these rigorous tests proved insufficient. To challenge the most advanced reasoning engines, the Hendrycks MATH benchmark and GPQA (Graduate-Level Google-Proof Q&A) were introduced.
+MMLU has become effectively saturated for frontier models, which consistently exceed 88-93% accuracy. Because of this, it was succeeded by MMLU-Pro, published at NeurIPS 2024. MMLU-Pro contains 12,032 questions across 14 domains and expands the answer choices from 4 to 10 to reduce random guessing. In EMNLP 2025, MMLU-ProX was released, translating MMLU-Pro into 29 languages for cross-lingual evaluation.
 
-> **Did You Know?** Humanity's Last Exam (HLE) was published in Nature in January 2026, designed specifically because frontier models had saturated almost all previous reasoning benchmarks.
+Programming capabilities are often tested using HumanEval, created by OpenAI, which contains 164 hand-crafted Python programming problems. Like MMLU, HumanEval is effectively saturated, with top models scoring ~96% pass@1. 
+
+To challenge advanced reasoning, the Hendrycks MATH benchmark contains 12,500 competition math problems across 7 categories and 5 difficulty levels. Meanwhile, GPQA (Graduate-Level Google-Proof Q&A) provides 448 expert-created multiple-choice questions in biology, physics, and chemistry. 
+
+BIG-Bench Hard (BBH) consists of 23 tasks with 6,511 examples where models previously failed to beat human raters. As it saturated, BIG-Bench Extra Hard (BBEH) was released in February 2025 as the unsaturated successor.
+
+> **Did You Know?** Humanity's Last Exam (HLE) was published in Nature in January 2026 by the Center for AI Safety and Scale AI, designed specifically because frontier models had saturated previous benchmarks.
 
 The industry rapidly recognized that static benchmarks were vulnerable to data contamination. If a model encounters the benchmark questions during its pre-training phase, it will effortlessly regurgitate the answers during evaluation, creating a false impression of reasoning capability. This forced a shift toward dynamic evaluations and crowdsourced platforms like Chatbot Arena.
 
+## Automated Evaluation Frameworks and Leaderboards
+
+Several industry-standard open-source tools facilitate automated evaluation:
+- **EleutherAI lm-evaluation-harness**: The latest stable release is v0.4.11 (released February 13, 2025).
+- **HELM (Stanford CRFM)**: The latest release is v0.5.14 (released March 27, 2025). A specialized subset, HELM Safety, was released in November 2024 covering benchmarks like BBQ, HarmBench, XSTest, and AnthropicRedTeam.
+- **Inspect**: The UK AI Security Institute (AISI) Inspect evaluation framework is open source and includes 100+ pre-built evaluations.
+- **simple-evals**: Once popular, the OpenAI simple-evals repository was frozen and is no longer updated as of July 2025.
+- **deepeval**: Created by Confident AI, the latest release is v3.9.6 (April 7, 2026).
+- **TruLens**: Now maintained by Snowflake Inc. (latest release v2.7.1, March 10, 2026).
+
 > **Did You Know?** The Hugging Face Open LLM Leaderboard was officially retired on March 13, 2025, after evaluating over 13,000 models, to prevent benchmark overfitting and irrelevant hill climbing.
 
-The transition from traditional NLP metrics to modern evaluation represents a paradigm shift. Historically, NLP relied on n-gram overlap metrics like BLEU and ROUGE. These metrics mechanically measured how many words from the generated text matched a human-written reference text. They penalized paraphrasing and abstractive reasoning severely. 
+Before its retirement, Open LLM Leaderboard v2 utilized IFEval, MuSR, GPQA, MATH, BBH, and MMLU-Pro. Today, crowdsourced pairwise comparisons dominate via platforms like LMSYS Chatbot Arena, which rebranded to LMArena in September 2024 and then to Arena AI in January 2026. However, research has documented that model providers can gain roughly +11 Elo on Arena AI by pre-testing variants before public release, slightly gaming the system.
 
-Today, the standard is the LLM-as-judge paradigm. Frameworks like G-Eval use chain-of-thought prompting to evaluate outputs conceptually. By using another powerful language model to grade responses, engineering teams can assess nuance, tone, factual accuracy, and safety alignment with far greater correlation to human judgment.
+## Traditional Metrics vs. LLM-as-a-Judge
 
-> **Did You Know?** The evaluation framework promptfoo was acquired by OpenAI on March 9, 2026, consolidating open-source evaluation tooling within major AI laboratories.
+Historically, NLP relied on n-gram overlap metrics:
+- **BLEU**: Introduced by Papineni et al. at ACL 2002, measuring n-gram precision of candidate versus reference translation.
+- **ROUGE**: Introduced by Chin-Yew Lin in 2004 as a recall-oriented metric for summarization.
+
+These metrics mechanically measured how many words from the generated text matched a human-written reference text. They penalized paraphrasing and abstractive reasoning severely.
+
+More recently, embedding-based metrics emerged:
+- **BERTScore**: Published at ICLR 2020, uses contextual embeddings. However, BERTScore has a maximum input length of 510 tokens due to BERT's positional encoding constraints. It achieves higher alignment with human judgment (59%) than BLEU (47%) or ROUGE-L (50%) on the LongLaMP benchmark.
+
+Today, the standard is the LLM-as-judge paradigm, formalized in the MT-Bench paper by Zheng et al. (NeurIPS 2023). Frameworks like **G-Eval** use chain-of-thought prompting before scoring, achieving a Spearman correlation of 0.514 with human judgments. By using another powerful language model to grade responses, engineering teams can assess nuance, tone, factual accuracy, and safety alignment with far greater correlation to human judgment. **RocketEval** (ICLR 2025) pushed this further, using Gemma-2-2B as a judge to achieve a 0.965 correlation with human preferences at a 50x cost reduction versus GPT-4o. 
+
+Note: There is currently no single authoritative lab paper that codifies an industry consensus on LLM-as-judge versus human evaluation; instead, practices have emerged organically from distributed research and industry implementation. 
+
+For RAG systems, **RAGAS** (latest release v0.4.3, January 13, 2026) is widely used. RAGAS provides reference-free metrics for dimensions like faithfulness and answer relevancy, but requires ground-truth annotations for context-based metrics like precision and recall. While `explodinggradients/ragas` is the original repository, it is debated in the community whether `vibrantlabsai/ragas` has emerged as the currently active successor, creating some repository fragmentation.
+
+> **Did You Know?** The evaluation framework promptfoo was acquired by OpenAI on March 9, 2026, though OpenAI stated it remains under an MIT open-source license.
 
 ## Defense in Depth: The Safety Stack
 
-Relying solely on LLM alignment techniques, such as RLHF or Constitutional AI, is insufficient for a production environment. Alignment training is probabilistic; it reduces the likelihood of harmful behavior but never guarantees its absence. We must implement a defense-in-depth architecture.
+Relying solely on LLM alignment (like Anthropic's Constitutional AI paper from 2022 that established the RLAIF paradigm) is insufficient for production. Alignment training is probabilistic; it reduces the likelihood of harmful behavior but never guarantees its absence. We must implement a defense-in-depth architecture.
 
 In cybersecurity, defense in depth is the principle of layering multiple independent security controls. If one layer fails, the next layer intercepts the threat. The AI safety stack operates on the exact same premise.
 
@@ -159,7 +188,7 @@ graph TD
     L5 --> L5d[Model rollback capabilities]
 ```
 
-Why is defense in depth absolutely necessary? Consider the failure modes when an engineering team relies entirely on a single layer of the stack.
+Why is defense in depth necessary?
 
 ```text
 SINGLE POINT OF FAILURE EXAMPLES
@@ -185,11 +214,13 @@ Defense in Depth = No single failure is catastrophic
 
 By ensuring that each layer checks the assumptions of the previous layer, enterprise applications can safely operate even when confronted with dedicated adversarial users.
 
+OpenAI and Anthropic have even conducted a joint safety evaluation where each lab ran internal safety evals on the other's released models to surface vulnerabilities. Utilizing Anthropic's Constitutional Classifiers, they demonstrated reducing jailbreak success rates to 4.4% in automated evaluation on 10,000 synthetic prompts. While no dedicated CNCF project for LLM quality evaluation exists as of April 2026, projects like `llm-d` (accepted into CNCF Sandbox on March 24, 2026) streamline distributed inference for executing these checks simultaneously in Kubernetes v1.35 environments.
+
 ## Input Guardrails and Red Teaming
 
-The first active layer of defense intercepts the user's input before it ever reaches the core language model. Prompt injection remains a primary attack vector, allowing malicious users to hijack the application's intended instructions.
+The first active layer of defense intercepts the user's input before it ever reaches the core language model. Prompt injection remains a primary attack vector, allowing malicious users to hijack the application's intended instructions. Defending against prompt injection requires a mixture of heuristic scanning and classifier-based detection. While simple regex patterns can catch obvious jailbreak attempts, they are brittle against obfuscated attacks. Production systems typically route incoming prompts through specialized classifier models designed to predict adversarial intent.
 
-Defending against prompt injection requires a mixture of heuristic scanning and classifier-based detection. While simple regex patterns can catch obvious jailbreak attempts, they are brittle against obfuscated attacks. Production systems typically route incoming prompts through specialized classifier models designed to predict adversarial intent.
+Frameworks like Meta's CyberSecEval 4 (current version of the Purple Llama framework) and HarmBench 1.0 (released February 26, 2024 by UC Berkeley, Google DeepMind, and CAIS) evaluate model vulnerability to these attacks.
 
 ```python
 """
@@ -346,7 +377,7 @@ for prompt in test_prompts:
     print()
 ```
 
-Adversarial inputs go beyond explicit prompt injection. Red-teaming requires testing the model against subtle semantic and encoding attacks.
+Adversarial inputs go beyond prompt injection:
 
 ```text
 ADVERSARIAL EXAMPLES
@@ -384,7 +415,7 @@ flowchart TD
     DR -- Enforce conversation flow --> SO[Safe Output]
 ```
 
-Implementing these guardrails involves creating extensible classes that can intercept and manipulate the text stream. In modern production environments targeting Kubernetes v1.35+, these guardrail microservices are often deployed alongside the inference server to minimize network latency.
+Implementing these guardrails involves creating extensible classes that can intercept and manipulate the text stream. In modern production environments targeting Kubernetes v1.35+, these guardrail microservices are often deployed alongside the inference server to minimize network latency. Implementing basic guardrails programmatically looks like this:
 
 ```python
 """
@@ -949,7 +980,7 @@ if __name__ == "__main__":
 
 ## Responsible AI: Bias, Fairness and Interpretability
 
-Evaluating models for safety involves more than blocking malicious hacking; we must also evaluate whether the model treats distinct populations equitably. However, defining "fairness" mathematically reveals profound trade-offs.
+Evaluating models for safety involves more than blocking malicious hacking; we must also evaluate whether the model treats distinct populations equitably. However, defining "fairness" mathematically reveals profound trade-offs, and fairness itself is heavily context-dependent.
 
 ```text
 SOURCES OF AI BIAS
@@ -983,7 +1014,7 @@ SOURCES OF AI BIAS
             predominantly lighter-skinned faces.
 ```
 
-To evaluate a model for systemic bias, data scientists run prediction sets against demographic metrics using specialized fairness analyzers.
+Using fairness analyzers, we observe mathematical disparities:
 
 ```python
 """
@@ -1189,7 +1220,7 @@ Example: Criminal recidivism
 - Equalizing predictions would break calibration
 ```
 
-We mitigate these deep mathematical tensions primarily through explicit interpretability frameworks, ensuring decisions can be audited by humans.
+We mitigate these deep mathematical tensions primarily through explicit interpretability frameworks, ensuring decisions can be audited by humans:
 
 ```text
 INTERPRETABILITY REQUIREMENTS
@@ -1525,31 +1556,6 @@ Risk: Capabilities we didn't anticipate,
 
 When new capabilities emerge, old evaluations become instantly obsolete, forcing a continuous cycle of red-teaming and benchmark generation to ensure alignment holds at higher intelligence thresholds.
 
-## Build vs Buy for Safety Infrastructure
-
-Engineering leaders must constantly balance the risks of relying on internal bespoke safety infrastructure against leveraging third-party vendor solutions.
-
-```text
-WHEN TO BUILD IN-HOUSE:
-- Core product (you need deep integration)
-- Unique requirements (your domain is unusual)
-- Competitive advantage (safety as differentiator)
-- Scale justifies cost (millions of interactions)
-
-WHEN TO BUY:
-- Standard use cases (content moderation)
-- Regulatory compliance (auditable third-party)
-- Speed to market (don't have time to build)
-- Expertise gap (safety is hard)
-
-COMMON VENDORS:
-- OpenAI Moderation API: ~$0.002/1K tokens
-- Perspective API (Google): Free tier available
-- Azure Content Safety: ~$1/1K images
-- AWS Comprehend: ~$0.0005/unit
-- Anthropic Constitutional AI: Built into Claude
-```
-
 ## Checklists and Operations
 
 To systematically evaluate models and pipelines for deployment on modern clusters (e.g., Kubernetes v1.35), utilize comprehensive pre-deployment checklists.
@@ -1588,7 +1594,7 @@ graph TD
     EC --> EC5[Accountability clear]
 ```
 
-To assist with these checklists, use risk assessment matrices and failure cost calculations during architectural reviews:
+To assist with these checklists, use risk assessment matrices and failure cost calculations:
 
 | Risk Category | Likelihood | Severity | Examples |
 |---------------|------------|----------|----------|
@@ -1727,6 +1733,31 @@ def audit_model(model, test_data, context):
     return metrics
 ```
 
+## Build vs Buy for Safety Infrastructure
+
+Engineering leaders must constantly balance the risks of relying on internal bespoke safety infrastructure against leveraging third-party vendor solutions.
+
+```text
+WHEN TO BUILD IN-HOUSE:
+- Core product (you need deep integration)
+- Unique requirements (your domain is unusual)
+- Competitive advantage (safety as differentiator)
+- Scale justifies cost (millions of interactions)
+
+WHEN TO BUY:
+- Standard use cases (content moderation)
+- Regulatory compliance (auditable third-party)
+- Speed to market (don't have time to build)
+- Expertise gap (safety is hard)
+
+COMMON VENDORS:
+- OpenAI Moderation API: ~$0.002/1K tokens
+- Perspective API (Google): Free tier available
+- Azure Content Safety: ~$1/1K images
+- AWS Comprehend: ~$0.0005/unit
+- Anthropic Constitutional AI: Built into Claude
+```
+
 ## Key Takeaways
 
 ```text
@@ -1761,7 +1792,7 @@ AI SAFETY ESSENTIALS
 
 ## Hands-On Exercise
 
-In this exercise, you will create an integrated customer service safety layer and evaluate it for an imaginary application deployed to a Kubernetes v1.35 cluster. To ensure you can execute these commands locally, prepare your isolated environment:
+In this exercise, you will create an integrated customer service safety layer and evaluate it for an imaginary application deployed to a Kubernetes v1.35 cluster. To ensure you can execute these commands locally, prepare your isolated environment and install the required dependencies (openai for LLM interactions, scikit-learn for fairness metrics, and pandas for data handling):
 
 ```bash
 mkdir kubedojo-llm-eval
@@ -1771,8 +1802,12 @@ source venv/bin/activate
 pip install openai scikit-learn pandas
 ```
 
+Verify your environment is correctly configured before proceeding:
+```bash
+python3 -c "import openai, pandas, sklearn; print('Environment Ready!')"
+```
+
 **Task 1: Construct the Bot Constitution**
-Review the foundational rules required for the system.
 ```text
 You are a customer service assistant for [Company]. You help customers with:
 - Product questions (refer to product catalog only)
@@ -1950,7 +1985,7 @@ print(check_constitution_compliance("I will process your refund immediately!"))
 </details>
 
 **Task 5: Measure Answer Relevancy**
-Evaluate the resulting pipeline outputs using a framework to assess reference-free metrics.
+Evaluate the resulting pipeline outputs using RAGAS for reference-free `Answer Relevancy` against the initial user query to ensure the guardrails didn't overly truncate accurate answers.
 <details>
 <summary>Solution: Task 5</summary>
 Initialize `ragas.evaluate` passing the `answer` and `question` keys, retrieving the scalar score without requiring ground truth documents.
