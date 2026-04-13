@@ -412,8 +412,9 @@ spec:
         memory: "100Mi"
 EOF
 
-# Watch it get OOMKilled
-k get pod memory-hog -w
+# Wait for it to get OOMKilled
+sleep 5
+k get pod memory-hog
 
 # Check reason
 k describe pod memory-hog | grep -A3 "Last State"
