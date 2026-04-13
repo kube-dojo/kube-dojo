@@ -35,29 +35,29 @@ Before choosing between Standard and Autopilot, you need to understand what GKE 
 
 Every GKE cluster consists of two layers: the **control plane** (managed entirely by Google) and the **nodes** (where your workloads run).
 
-```text
-  ┌─────────────────────────────────────────────────────────────┐
-  │                    Google-Managed                            │
-  │  ┌───────────────────────────────────────────────────────┐  │
-  │  │              GKE Control Plane                        │  │
-  │  │  ┌──────────┐  ┌──────────┐  ┌──────────────────┐   │  │
-  │  │  │ API      │  │ etcd     │  │ Controller       │   │  │
-  │  │  │ Server   │  │ (HA)     │  │ Manager +        │   │  │
-  │  │  │          │  │          │  │ Scheduler        │   │  │
-  │  │  └──────────┘  └──────────┘  └──────────────────┘   │  │
-  │  └───────────────────────────────────────────────────────┘  │
-  └──────────────────────────┬──────────────────────────────────┘
-                             │ Managed VPN / Private Endpoint
-  ┌──────────────────────────▼──────────────────────────────────┐
-  │                    Customer Project                          │
-  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-  │  │  Node Pool A  │  │  Node Pool B  │  │  Node Pool C  │     │
-  │  │  e2-standard-4│  │  n2-standard-8│  │  GPU (a2)     │     │
-  │  │  ┌────┐┌────┐│  │  ┌────┐┌────┐│  │  ┌────┐      │     │
-  │  │  │Pod ││Pod ││  │  │Pod ││Pod ││  │  │Pod │      │     │
-  │  │  └────┘└────┘│  │  └────┘└────┘│  │  └────┘      │     │
-  │  └──────────────┘  └──────────────┘  └──────────────┘     │
-  └─────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph Google["Google-Managed"]
+        subgraph CP["GKE Control Plane"]
+            API["API Server"]
+            ETCD["etcd (HA)"]
+            CM["Controller Manager + Scheduler"]
+        end
+    end
+    subgraph Customer["Customer Project"]
+        subgraph NP_A["Node Pool A (e2-standard-4)"]
+            P1["Pod"]
+            P2["Pod"]
+        end
+        subgraph NP_B["Node Pool B (n2-standard-8)"]
+            P3["Pod"]
+            P4["Pod"]
+        end
+        subgraph NP_C["Node Pool C (GPU a2)"]
+            P5["Pod"]
+        end
+    end
+    CP -- "Managed VPN / Private Endpoint" --> Customer
 ```
 
 Key facts about the GKE control plane:
@@ -190,20 +190,10 @@ Autopilot is GKE's fully managed mode, introduced in 2021. Google manages everyt
 
 ### How Autopilot Works
 
-```text
-  What You Define:              What Google Manages:
-  ┌──────────────┐             ┌──────────────────────────┐
-  │  Deployments │             │  Control plane            │
-  │  Services    │             │  Node provisioning        │
-  │  ConfigMaps  │             │  Node pool creation       │
-  │  Secrets     │             │  OS patching              │
-  │  CRDs        │             │  Security hardening       │
-  │  Pod specs   │             │  Cluster autoscaling      │
-  │              │             │  Resource optimization    │
-  │  (resource   │             │  Pod scheduling           │
-  │   requests   │             │  Bin-packing              │
-  │   REQUIRED)  │             │  Node upgrades            │
-  └──────────────┘             └──────────────────────────┘
+```mermaid
+graph LR
+    A["**What You Define:**<br/>Deployments<br/>Services<br/>ConfigMaps<br/>Secrets<br/>CRDs<br/>Pod specs<br/>*(resource requests REQUIRED)*"]
+    B["**What Google Manages:**<br/>Control plane<br/>Node provisioning<br/>Node pool creation<br/>OS patching<br/>Security hardening<br/>Cluster autoscaling<br/>Resource optimization<br/>Pod scheduling<br/>Bin-packing<br/>Node upgrades"]
 ```
 
 ```bash
@@ -300,30 +290,12 @@ This is the question every GKE user faces. Here is a decision framework based on
 
 ### Cost Comparison
 
-```text
-  Scenario: 10 microservices, each requesting 500m CPU / 1Gi memory
-
-  Standard Mode:
-  ┌─────────────────────────────────────────────────────┐
-  │  3 x e2-standard-4 nodes (4 vCPU, 16GB each)      │
-  │  Total: 12 vCPU, 48GB memory available              │
-  │  Actual usage: 5 vCPU, 10GB memory requested        │
-  │  Utilization: ~42% CPU, ~21% memory                 │
-  │  Cost: $0.134/hr x 3 = $0.402/hr = ~$293/month     │
-  └─────────────────────────────────────────────────────┘
-
-  Autopilot Mode:
-  ┌─────────────────────────────────────────────────────┐
-  │  Billed on pod requests only:                       │
-  │  10 pods x 500m CPU = 5 vCPU                        │
-  │  10 pods x 1Gi memory = 10Gi                        │
-  │  Cost: vCPU $0.0445/hr + mem $0.0049/hr/GB          │
-  │  = (5 x $0.0445) + (10 x $0.0049)                  │
-  │  = $0.2225 + $0.049 = $0.2715/hr = ~$198/month     │
-  └─────────────────────────────────────────────────────┘
-
-  In this scenario, Autopilot is ~32% cheaper because
-  Standard has idle capacity you still pay for.
+```mermaid
+graph TD
+    subgraph Scenario["Scenario: 10 microservices, each requesting 500m CPU / 1Gi memory"]
+        S["**Standard Mode**<br/>3 x e2-standard-4 nodes (4 vCPU, 16GB each)<br/>Total: 12 vCPU, 48GB memory available<br/>Actual usage: 5 vCPU, 10GB memory requested<br/>Utilization: ~42% CPU, ~21% memory<br/>Cost: $0.134/hr x 3 = $0.402/hr = ~$293/month"]
+        A["**Autopilot Mode**<br/>Billed on pod requests only:<br/>10 pods x 500m CPU = 5 vCPU<br/>10 pods x 1Gi memory = 10Gi<br/>Cost: vCPU $0.0445/hr + mem $0.0049/hr/GB<br/>= (5 x $0.0445) + (10 x $0.0049)<br/>= $0.2225 + $0.049 = $0.2715/hr = ~$198/month"]
+    end
 ```
 
 The math flips when utilization is high. If your Standard cluster runs at 85%+ utilization with well-tuned node pools and Spot instances, Standard can be cheaper than Autopilot.
@@ -365,20 +337,10 @@ gcloud container clusters describe conservative-cluster \
 
 When enrolled in a release channel, GKE automatically upgrades both the control plane and nodes.
 
-```text
-  Upgrade Flow:
-  ┌──────────┐     ┌──────────┐     ┌──────────┐
-  │ Control   │────>│ Default  │────>│ Other    │
-  │ Plane     │     │ Node Pool│     │ Node     │
-  │           │     │          │     │ Pools    │
-  └──────────┘     └──────────┘     └──────────┘
-       │                │                │
-       │   1-2 weeks    │   1-2 weeks    │
-       │   after CP     │   after default│
-       ▼                ▼                ▼
-  Automatic          Automatic        Automatic
-  (zero-downtime     (rolling)        (rolling)
-   for regional)
+```mermaid
+flowchart LR
+    CP["Control Plane<br/>(Automatic, zero-downtime<br/>for regional)"] -->|1-2 weeks<br/>after CP| DNP["Default Node Pool<br/>(Automatic, rolling)"]
+    DNP -->|1-2 weeks<br/>after default| ONP["Other Node Pools<br/>(Automatic, rolling)"]
 ```
 
 You can influence **when** upgrades happen with maintenance windows and exclusions:
@@ -452,19 +414,17 @@ gcloud container clusters create auto-range-cluster \
   --services-ipv4-cidr=/22
 ```
 
-```text
-  VPC-Native Cluster IP Architecture:
-  ┌──────────────────────────────────────────┐
-  │  Subnet: 10.0.0.0/24                    │
-  │  (Node IPs: 10.0.0.2, 10.0.0.3, ...)   │
-  │                                          │
-  │  Secondary Range "pods": 10.4.0.0/14    │
-  │  (Each node gets a /24 from this range) │
-  │  (Pod IPs: 10.4.0.2, 10.4.1.5, ...)    │
-  │                                          │
-  │  Secondary Range "services": 10.8.0.0/20│
-  │  (ClusterIP services: 10.8.0.1, ...)   │
-  └──────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph Subnet["Subnet: 10.0.0.0/24"]
+        N["Node IPs: 10.0.0.2, 10.0.0.3, ..."]
+    end
+    subgraph Pods["Secondary Range 'pods': 10.4.0.0/14"]
+        P["Each node gets a /24 from this range<br/>Pod IPs: 10.4.0.2, 10.4.1.5, ..."]
+    end
+    subgraph Services["Secondary Range 'services': 10.8.0.0/20"]
+        SVC["ClusterIP services: 10.8.0.1, ..."]
+    end
 ```
 
 ---
@@ -513,25 +473,25 @@ The engineer misunderstood how the `--num-nodes` flag behaves when creating a re
 <details>
 <summary>3. Your team is deploying a critical hotfix to production when GKE initiates an automatic control plane upgrade. Your production environment is a regional cluster, while your staging environment is a zonal cluster. You notice `kubectl` commands are failing in staging but succeeding in production. Why are the two environments behaving differently during the upgrade?</summary>
 
-The staging environment uses a zonal cluster, which has only a single control plane replica. During an upgrade, this single replica goes offline for 5-10 minutes, rendering the Kubernetes API unavailable and blocking any `kubectl` commands or new deployments, though existing pods continue to run. In contrast, the production environment is a regional cluster, which features a highly available control plane with three replicas spread across different zones. GKE upgrades these regional replicas one at a time in a rolling fashion, ensuring the Kubernetes API remains accessible and operations like your hotfix deployment can proceed without downtime.
+The staging environment uses a zonal cluster, which has only a single control plane replica. During an upgrade, this single replica goes offline for 5-10 minutes, rendering the Kubernetes API unavailable and blocking any `kubectl` commands or new deployments, though existing pods continue to run. In contrast, the production environment is a regional cluster, which features a highly available control plane with three replicas spread across different zones. GKE upgrades these regional replicas one at a time in a rolling fashion, ensuring the Kubernetes API remains accessible and operations like your hotfix deployment can proceed without downtime. This architectural difference underscores why zonal clusters should be avoided for production environments.
 </details>
 
 <details>
 <summary>4. A developer writes a Kubernetes Deployment manifest for a new Node.js microservice and applies it to a GKE Autopilot cluster. They omitted the `resources.requests` block because they were unsure how much memory the app would need. The pod starts, but the developer later notices their department's cloud bill is higher than expected, and the application seems to be running on very constrained hardware. Why did omitting the resource requests cause this outcome in Autopilot?</summary>
 
-In GKE Autopilot, resource requests are mandatory because they drive both the billing mechanism and the node provisioning logic. When the developer omitted the requests, Autopilot automatically applied default values (typically 500m CPU and 512Mi memory) to the pods. The department was billed based on these arbitrary defaults, which might have been higher than necessary, causing the bill spike. Furthermore, Autopilot used these defaults to provision the underlying nodes and schedule the pods; if the Node.js app actually required more memory than the default 512Mi, it would experience performance degradation or OOM kills because it was scheduled on a node sized only for the default constraints.
+In GKE Autopilot, resource requests are mandatory because they drive both the billing mechanism and the node provisioning logic. When the developer omitted the requests, Autopilot automatically applied default values (typically 500m CPU and 512Mi memory) to the pods. The department was billed based on these arbitrary defaults, which might have been higher than necessary, causing the bill spike. Furthermore, Autopilot used these defaults to provision the underlying nodes and schedule the pods; if the Node.js app actually required more memory than the default 512Mi, it would experience performance degradation or OOM kills because it was scheduled on a node sized only for the default constraints. To prevent this, always explicitly define both requests and limits based on observed application behavior.
 </details>
 
 <details>
 <summary>5. During a busy week, a background process running on a GKE node goes rogue and fills up the entire boot disk with log files, causing the node to become unresponsive. The next day, Google releases a new minor version of Kubernetes on the Regular channel. Which automated GKE systems will handle the unresponsive node and the new Kubernetes version, respectively, and how do their actions differ?</summary>
 
-The unresponsive node with the full boot disk will be handled by the auto-repair system, while the new Kubernetes version will be handled by the auto-upgrade system. Auto-repair constantly monitors node health to ensure workload reliability. When it detects the node has been `NotReady` for about 10 minutes due to the full disk, it deletes the broken node and provisions a fresh one from the node pool template to restore cluster capacity. Auto-upgrade, on the other hand, is responsible for lifecycle management; when the new K8s version becomes available in the Regular channel, it performs a rolling update of all nodes, draining them and recreating them with the new software version, regardless of their current health status.
+The unresponsive node with the full boot disk will be handled by the auto-repair system, while the new Kubernetes version will be handled by the auto-upgrade system. Auto-repair constantly monitors node health to ensure workload reliability. When it detects the node has been `NotReady` for about 10 minutes due to the full disk, it deletes the broken node and provisions a fresh one from the node pool template to restore cluster capacity. Auto-upgrade, on the other hand, is responsible for lifecycle management; when the new K8s version becomes available in the Regular channel, it performs a rolling update of all nodes, draining them and recreating them with the new software version, regardless of their current health status. Understanding these distinct mechanisms is crucial for distinguishing between temporary node failures and planned lifecycle events.
 </details>
 
 <details>
 <summary>6. A data science team shares a Standard mode GKE cluster for running ML training jobs. Some jobs require high-memory CPUs, others require T4 GPUs, and some require A100 GPUs. They currently have six different node pools configured with Cluster Autoscaler, but managing the minimums, maximums, and taints for all these pools is becoming an operational nightmare. How could they solve this scaling complexity?</summary>
 
-The team should enable Node Auto-Provisioning (NAP) to replace their complex web of static node pools. With standard Cluster Autoscaler, you must pre-create every specific machine type and configuration as a separate node pool before pods can request them. NAP eliminates this burden by dynamically creating entirely new node pools on the fly based on the specific resource requirements (like GPUs or high memory) of pending pods. Once the ML jobs finish and the dynamic node pools sit idle, NAP will automatically scale them down to zero and delete them, drastically reducing the team's operational overhead while ensuring jobs get exactly the hardware they need.
+The team should enable Node Auto-Provisioning (NAP) to replace their complex web of static node pools. With standard Cluster Autoscaler, you must pre-create every specific machine type and configuration as a separate node pool before pods can request them. NAP eliminates this burden by dynamically creating entirely new node pools on the fly based on the specific resource requirements (like GPUs or high memory) of pending pods. Once the ML jobs finish and the dynamic node pools sit idle, NAP will automatically scale them down to zero and delete them, drastically reducing the team's operational overhead while ensuring jobs get exactly the hardware they need. This approach transforms cluster scaling from a static, declarative burden into a dynamic, workload-driven process.
 </details>
 
 <details>
@@ -601,7 +561,7 @@ gcloud container clusters get-credentials standard-demo \
 kubectl get nodes -o wide
 
 # Check cluster version
-kubectl version --short 2>/dev/null || kubectl version
+kubectl version
 ```
 </details>
 
