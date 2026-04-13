@@ -412,7 +412,13 @@ In this exercise, you will simulate a real-world interruption using Kubernetes m
       name: fleet-api
     spec:
       replicas: 2
+      selector:
+        matchLabels:
+          app: fleet-api
       template:
+        metadata:
+          labels:
+            app: fleet-api
         spec:
           containers:
           - name: api
@@ -434,7 +440,13 @@ In this exercise, you will simulate a real-world interruption using Kubernetes m
       name: fleet-api
     spec:
       replicas: 2
+      selector:
+        matchLabels:
+          app: fleet-api
       template:
+        metadata:
+          labels:
+            app: fleet-api
         spec:
           containers:
           - name: api
