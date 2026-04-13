@@ -72,7 +72,7 @@ ESO is the most widely adopted solution for syncing secrets from cloud secret ma
 graph TD
     A[AWS Secrets Manager] --- B[External Secrets Operator]
     C[GCP Secret Manager] --- B
-    B -- Creates/Updates --> D[K8s Secret (managed by ESO)]
+    B -- Creates/Updates --> D[K8s Secret managed by ESO]
     D -- Volume mount / env var --> E[Application Pod]
 ```
 
@@ -228,9 +228,9 @@ The Secrets Store CSI Driver mounts secrets directly from a vault as files in a 
 
 ```mermaid
 graph TD
-    Vault_CSI(Vault) --> CSI_Driver(CSI Driver)
-    CSI_Driver --> Pod_Filesystem(Pod Filesystem)
-    Pod_Filesystem -- Mounted as files --> Pod_CSI(Application Pod)
+    Vault_CSI[Vault] --> CSI_Driver[CSI Driver]
+    CSI_Driver --> Pod_Filesystem[Pod Filesystem]
+    Pod_Filesystem -- Mounted as files --> Pod_CSI[Application Pod]
 ```
 
 > **Pause and predict**: If a secret never lands in etcd when using the CSI Driver, what are the primary security advantages and potential operational challenges compared to ESO? Consider auditability and secret rotation.
@@ -447,17 +447,15 @@ Sealed Secrets encrypts secrets so they can be safely stored in Git. Only the Se
 
 ### How It Works
 
-```
-Developer                    Git Repo                    Cluster
-    |                           |                          |
-    | 1. kubeseal encrypt       |                          |
-    |-------------------------->|                          |
-    |   (SealedSecret YAML)     |                          |
-    |                           | 2. GitOps sync           |
-    |                           |------------------------->|
-    |                           |   3. Controller decrypts  |
-    |                           |   4. Creates K8s Secret   |
-    |                           |                          |
+```mermaid
+sequenceDiagram
+    participant D as Developer
+    participant G as Git Repo
+    participant C as Cluster
+    D->>G: 1. kubeseal encrypt (SealedSecret YAML)
+    G->>C: 2. GitOps sync
+    Note over C: 3. Controller decrypts
+    Note over C: 4. Creates K8s Secret
 ```
 
 ### Installing Sealed Secrets
@@ -567,34 +565,13 @@ sops --encrypt secrets.yaml > secrets.enc.yaml
 
 ## Putting It All Together: A Complete Secrets Architecture
 
-```
-  +-------------------+
-  | Developers        |
-  | (kubeseal/sops)   |
-  +--------+----------+
-           |
-           | Encrypted secrets in Git
-           v
-  +-------------------+
-  | GitOps (Argo CD)  |
-  | - SealedSecrets   |
-  | - SOPS decrypt    |
-  +--------+----------+
-           |
-           | Sync to cluster
-           v
-  +-------------------+        +-------------------+
-  | ESO               |------->| AWS Secrets Mgr   |
-  | (dynamic refresh) |        | GCP Secret Mgr    |
-  +--------+----------+        | Azure Key Vault   |
-           |                   +-------------------+
-           | Creates K8s Secrets
-           v
-  +-------------------+        +-------------------+
-  | Application Pods  |------->| Vault (dynamic)   |
-  | - env vars        |        | - DB creds (1h)   |
-  | - volume mounts   |        | - PKI certs (24h) |
-  +-------------------+        +-------------------+
+```mermaid
+graph TD
+    Devs[Developers <br/> kubeseal/sops] -- Encrypted secrets in Git --> GitOps[GitOps Argo CD <br/> - SealedSecrets <br/> - SOPS decrypt]
+    GitOps -- Sync to cluster --> ESO[ESO <br/> dynamic refresh]
+    ESO -- Syncs from --> CloudMgrs[AWS Secrets Mgr <br/> GCP Secret Mgr <br/> Azure Key Vault]
+    ESO -- Creates K8s Secrets --> Pods[Application Pods <br/> - env vars <br/> - volume mounts]
+    Pods -- Requests from --> Vault[Vault dynamic <br/> - DB creds 1h <br/> - PKI certs 24h]
 ```
 
 | Layer | Tool | Purpose |
@@ -637,39 +614,39 @@ sops --encrypt secrets.yaml > secrets.enc.yaml
 ## Quiz
 
 <details>
-<summary>1. Why are Kubernetes Secrets not secure by default, and what minimum steps should you take?</summary>
+<summary>1. You are auditing a newly provisioned Kubernetes cluster and notice that the team is storing database passwords in standard Kubernetes Secret objects. The lead developer argues this is safe because the values are unreadable when viewed in the manifest. Why is this assumption dangerous, and what minimal configuration changes must you enforce to secure these secrets?</summary>
 
-Kubernetes Secrets are base64-encoded, not encrypted. Anyone with `kubectl get secret` permission can decode them instantly. They are stored in etcd, which by default does not encrypt data at rest. Minimum steps: (1) Enable etcd encryption at rest using an EncryptionConfiguration with AES-CBC or a KMS provider. (2) Restrict RBAC so only necessary ServiceAccounts and users can read secrets. (3) Enable Kubernetes audit logging to track who accesses secrets. (4) Use an external secrets manager (via ESO or CSI driver) so the source of truth is not in etcd. These steps bring Kubernetes secrets from "anyone can read them" to "audited, encrypted, access-controlled."
+The developer's assumption is dangerous because Kubernetes Secrets are merely base64-encoded, not encrypted, meaning anyone with `kubectl get secret` permissions can instantly decode them. Furthermore, these secrets are stored in plaintext within the etcd database by default. To secure these secrets minimally, you must enable etcd encryption at rest using an `EncryptionConfiguration` with AES-CBC or a KMS provider. You must also strictly restrict RBAC permissions to ensure only necessary ServiceAccounts and users can read the secrets, and enable Kubernetes API audit logging to track access. Finally, implementing an external secrets manager like ESO or the CSI driver ensures the true source of the secret is never natively housed in etcd.
 </details>
 
 <details>
-<summary>2. What is the key architectural difference between ESO and the Secrets Store CSI Driver?</summary>
+<summary>2. Your platform engineering team needs to integrate an external cloud vault with your Kubernetes cluster. One engineer suggests using the External Secrets Operator (ESO), while another insists on the Secrets Store CSI Driver to satisfy a strict "zero-trust" compliance requirement. What fundamental architectural difference between these two tools justifies the CSI Driver for zero-trust environments?</summary>
 
-ESO creates a Kubernetes Secret in etcd that pods reference via environment variables or volume mounts. The secret exists in the cluster's etcd store and is synced periodically from the external vault. The Secrets Store CSI Driver mounts secrets directly from the vault into the pod's filesystem as a volume. By default, no Kubernetes Secret is created -- the secret only exists in the vault and in the pod's ephemeral filesystem. CSI Driver provides a stricter security posture because secrets never touch etcd, but ESO is more flexible and easier to use with standard Kubernetes patterns.
+The fundamental architectural difference lies in how the secret data is surfaced to the application pod. The External Secrets Operator (ESO) fetches the secret from the external vault and creates a standard Kubernetes Secret object stored in the etcd database, which is then mounted or read by the pod. In contrast, the Secrets Store CSI Driver mounts the secret directly from the external vault into the pod's ephemeral filesystem, entirely bypassing the creation of a Kubernetes Secret. This satisfies the strict zero-trust requirement because the secret never lands in the cluster's etcd datastore, significantly reducing the attack surface and eliminating the risk of etcd compromise exposing the credentials.
 </details>
 
 <details>
-<summary>3. Explain dynamic secrets in Vault and why they are more secure than static secrets.</summary>
+<summary>3. A recent security breach occurred when a contractor's laptop was stolen, exposing a static database password that had been valid for 11 months. You are tasked with implementing a solution using HashiCorp Vault. How does Vault's dynamic secrets feature prevent this specific type of breach, and what happens automatically when the time-to-live (TTL) expires?</summary>
 
-Dynamic secrets are generated on-demand when a pod or application requests them. For example, when a pod needs database access, Vault creates a temporary database user with a specific TTL (e.g., 1 hour). When the TTL expires, Vault automatically revokes the user. This is more secure because: (1) there is no long-lived credential to steal, (2) each pod gets unique credentials so access can be traced, (3) if a credential leaks, the blast radius is limited to the TTL window, and (4) revocation is automatic -- no human needs to remember to rotate. Static secrets, by contrast, live indefinitely, are shared across many pods, and require manual rotation.
+Vault's dynamic secrets feature prevents this type of breach by generating temporary, on-demand credentials rather than relying on long-lived static passwords. When an application requests database access, Vault dynamically creates a unique database user with a strict time-to-live (TTL), such as one hour. If a laptop containing these credentials is stolen, the blast radius is severely limited because the credentials will expire shortly anyway. When the TTL expires, Vault automatically reaches out to the database and revokes the user, ensuring the credential is mathematically dead without requiring any human intervention to rotate it.
 </details>
 
 <details>
-<summary>4. When would you choose Sealed Secrets over SOPS, and vice versa?</summary>
+<summary>4. You are designing a GitOps pipeline for a multi-cloud environment spanning EKS, GKE, and AKS. You need to store encrypted secrets in a single Git repository and sync them across all clusters. A colleague suggests using Sealed Secrets, but you propose SOPS instead. Why is SOPS the better architectural choice for this specific multi-cluster scenario?</summary>
 
-Choose Sealed Secrets when you run a single Kubernetes cluster and want the simplest possible GitOps-safe encryption. Sealed Secrets requires no external KMS service -- the controller generates its own encryption keys. Choose SOPS when you have multiple clusters (same KMS key works everywhere), when you need to encrypt non-Kubernetes files, or when you want to edit encrypted files in place (`sops edit`). SOPS is also better for multi-cloud environments because it supports AWS KMS, GCP KMS, Azure Key Vault, PGP, and age as encryption backends. Sealed Secrets is simpler; SOPS is more flexible.
+SOPS is the better architectural choice for a multi-cloud, multi-cluster environment because it uses external Key Management Services (KMS) like AWS KMS, GCP KMS, or Azure Key Vault to encrypt files. This means a single encrypted file in Git can be decrypted by any cluster that has been granted access to the centralized KMS key. Sealed Secrets, on the other hand, relies on a cluster-specific RSA key pair generated by its internal controller. If you used Sealed Secrets, you would either have to encrypt the secret multiple times (once for each cluster's public key) or manually export and share the private sealing key across all clusters, which defeats its operational simplicity.
 </details>
 
 <details>
-<summary>5. Why should you set ESO's refreshInterval to 5-15 minutes instead of 30 seconds?</summary>
+<summary>5. A junior operator configures the External Secrets Operator (ESO) to sync credentials from AWS Secrets Manager with a `refreshInterval` of 30 seconds, arguing that faster synchronization improves security. Within a few hours, the cluster begins experiencing intermittent secret syncing failures and unexpected cloud billing charges. What is the root cause of this issue, and why is a longer interval recommended?</summary>
 
-Every refresh interval, ESO calls the cloud secret manager API to check for changes. At 30 seconds with 100 ExternalSecrets, that is 200 API calls per minute, or 288,000 per day. Cloud secret manager APIs charge per-request (AWS: $0.05 per 10,000 calls). More importantly, aggressive polling can hit rate limits, causing ESO to fail and secrets to become stale. A 5-15 minute interval is sufficient for most use cases because secret rotations are planned events, not emergencies. For immediate propagation after rotation, use push-based notification (CloudWatch Event triggering a webhook) rather than faster polling.
+The root cause of the syncing failures and billing charges is API rate limiting and per-request costs imposed by the cloud provider. At a 30-second interval, ESO continuously polls the AWS Secrets Manager API, generating thousands of unnecessary requests per hour which can quickly hit service quotas and incur significant usage fees. A longer interval of 5 to 15 minutes is recommended because secret rotation is typically a planned, infrequent operational event rather than an emergency. If immediate propagation is truly required after a rotation, you should implement a push-based notification system, such as a CloudWatch Event triggering a webhook, rather than relying on aggressive polling.
 </details>
 
 <details>
-<summary>6. A developer committed a database password to Git and then deleted it in the next commit. Is the secret safe?</summary>
+<summary>6. During a code review, you notice a developer accidentally committed an AWS access key in a `.env` file. Recognizing the mistake, the developer immediately creates a new commit that deletes the file and pushes the change to the central repository, claiming the issue is resolved. Is the secret now safe, and what mandatory incident response steps must you take?</summary>
 
-No. Git stores the complete history of every file change. The secret exists in the Git history and can be recovered by anyone with repository access using `git log --all --full-history` or tools like truffleHog and GitLeaks. The correct response is: (1) rotate the secret immediately -- generate a new password and update the database, (2) use `git-filter-repo` or BFG Repo Cleaner to purge the secret from history, (3) force-push the cleaned history, and (4) ensure all clones are updated. Prevention is better: use pre-commit hooks with detect-secrets or gitleaks to block secret commits before they happen.
+No, the secret is absolutely not safe because Git is a version control system designed to preserve the complete history of every file change. Even though the `.env` file was deleted in the latest commit, the AWS access key remains fully accessible in the repository's history and can be easily extracted by attackers or automated scanning tools. To respond to this incident, you must immediately assume the key is compromised and rotate it within AWS IAM to invalidate the exposed credential. Afterward, you must use tools like `git-filter-repo` or BFG Repo Cleaner to permanently purge the secret from the entire Git commit history, and ensure all developers force-pull the cleaned repository.
 </details>
 
 ---
