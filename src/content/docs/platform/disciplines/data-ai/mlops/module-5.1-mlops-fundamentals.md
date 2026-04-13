@@ -42,19 +42,17 @@ Companies that master MLOps ship models 10x faster and maintain them with far le
 
 MLOps (Machine Learning Operations) applies DevOps principles to machine learning systems. But ML systems are fundamentally different from traditional software:
 
-```
-TRADITIONAL SOFTWARE                ML SYSTEMS
-────────────────────────────────────────────────────────────────
+```mermaid
+graph TD
+    subgraph Traditional["Traditional Software"]
+        TS1[Code] --> TS2[Test] --> TS3[Deploy]
+        TS_Notes["• Fixed behavior<br>• Test coverage = confidence<br>• Version code<br>• Rollback = previous code"]
+    end
 
-Code ──▶ Test ──▶ Deploy           Code + Data + Model ──▶ Deploy
-                                              │
-Fixed behavior                     Behavior CHANGES with data
-                                              │
-Test coverage = confidence         Model performance DEGRADES
-                                              │
-Version code                       Version code + data + model
-                                              │
-Rollback = previous code           Rollback = retrain or old model
+    subgraph ML["ML Systems"]
+        ML1["Code + Data + Model"] --> ML2[Deploy]
+        ML_Notes["• Behavior CHANGES with data<br>• Model performance DEGRADES<br>• Version code + data + model<br>• Rollback = retrain or old model"]
+    end
 ```
 
 ### Why ML is Different
@@ -68,6 +66,8 @@ Rollback = previous code           Rollback = retrain or old model
 | **Debugging** | Stack traces | Data quality, drift, feature issues |
 | **Failure modes** | Crashes, errors | Silent degradation |
 
+> **Pause and predict**: If your model predicts perfectly today, why might it fail tomorrow without a single line of code changing?
+
 ### War Story: The Model That Worked Until It Didn't
 
 A team deployed a fraud detection model that performed brilliantly—96% accuracy in testing. Three months later, fraud losses tripled. The model was still running, still returning predictions, no errors in logs.
@@ -76,40 +76,20 @@ What happened? The fraud patterns changed. New attack vectors emerged. The model
 
 This is the core challenge MLOps addresses: **ML systems fail silently**.
 
+> **Stop and think**: Does an organization need to reach "Level 3: Full Automation" to see a return on investment for MLOps?
+
 ## MLOps Maturity Levels
 
 Organizations progress through maturity levels:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                   MLOPS MATURITY LEVELS                          │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  LEVEL 0: Manual                                                 │
-│  ├── Jupyter notebooks                                          │
-│  ├── Manual model training                                      │
-│  ├── Manual deployment (copy files)                             │
-│  └── No monitoring                                              │
-│                                                                  │
-│  LEVEL 1: ML Pipeline                                           │
-│  ├── Automated training pipeline                                │
-│  ├── Experiment tracking                                        │
-│  ├── Manual deployment trigger                                  │
-│  └── Basic monitoring                                           │
-│                                                                  │
-│  LEVEL 2: CI/CD for ML                                          │
-│  ├── Automated training + deployment                            │
-│  ├── Model registry with staging                                │
-│  ├── A/B testing capability                                     │
-│  └── Performance monitoring                                     │
-│                                                                  │
-│  LEVEL 3: Full Automation                                       │
-│  ├── Continuous training (data triggers)                        │
-│  ├── Automated retraining on drift                              │
-│  ├── Feature stores                                             │
-│  └── Full observability                                         │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    L0["<b>Level 0: Manual</b><br>• Jupyter notebooks<br>• Manual model training<br>• Manual deployment (copy files)<br>• No monitoring"]
+    L1["<b>Level 1: ML Pipeline</b><br>• Automated training pipeline<br>• Experiment tracking<br>• Manual deployment trigger<br>• Basic monitoring"]
+    L2["<b>Level 2: CI/CD for ML</b><br>• Automated training + deployment<br>• Model registry with staging<br>• A/B testing capability<br>• Performance monitoring"]
+    L3["<b>Level 3: Full Automation</b><br>• Continuous training (data triggers)<br>• Automated retraining on drift<br>• Feature stores<br>• Full observability"]
+
+    L0 --> L1 --> L2 --> L3
 ```
 
 **Most organizations are at Level 0 or 1.** Getting to Level 2 is the biggest leap in value.
@@ -118,27 +98,23 @@ Organizations progress through maturity levels:
 
 ### End-to-End Pipeline
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      ML LIFECYCLE                                │
-│                                                                  │
-│  DATA                 EXPERIMENTATION           PRODUCTION       │
-│  ┌──────────┐        ┌──────────┐            ┌──────────┐       │
-│  │  Data    │        │  Model   │            │  Model   │       │
-│  │ Ingestion│───────▶│ Training │────────────▶│ Serving  │       │
-│  └────┬─────┘        └────┬─────┘            └────┬─────┘       │
-│       │                   │                       │              │
-│  ┌────▼─────┐        ┌────▼─────┐            ┌────▼─────┐       │
-│  │  Data    │        │  Model   │            │  Model   │       │
-│  │Validation│        │Validation│            │Monitoring│       │
-│  └────┬─────┘        └────┬─────┘            └────┬─────┘       │
-│       │                   │                       │              │
-│  ┌────▼─────┐        ┌────▼─────┐            ┌────▼─────┐       │
-│  │ Feature  │        │  Model   │            │ Trigger  │       │
-│  │  Store   │        │ Registry │            │ Retrain  │◀──────┘
-│  └──────────┘        └──────────┘            └──────────┘       │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph DATA
+        DI[Data Ingestion] --> DV[Data Validation] --> FS[Feature Store]
+    end
+
+    subgraph EXPERIMENTATION
+        MT[Model Training] --> MV[Model Validation] --> MR[Model Registry]
+    end
+
+    subgraph PRODUCTION
+        MS[Model Serving] --> MM[Model Monitoring] --> TR[Trigger Retrain]
+    end
+
+    DI --> MT
+    MT --> MS
+    TR --> MT
 ```
 
 ### Pipeline Components
@@ -157,25 +133,31 @@ Organizations progress through maturity levels:
 
 While MLOps borrows heavily from DevOps, key differences exist:
 
+```mermaid
+flowchart LR
+    subgraph DevOps["DevOps Pipeline"]
+        direction LR
+        C[Code] --> B[Build] --> T[Test] --> D[Deploy] --> M[Monitor]
+        C -.-> Git[Git]
+        B -.-> CI[CI]
+        T -.-> QA[QA]
+        D -.-> CD[CD]
+        M -.-> APM[APM]
+    end
 ```
-DEVOPS PIPELINE
-─────────────────────────────────────────────────────────────────
 
-Code ──▶ Build ──▶ Test ──▶ Deploy ──▶ Monitor
-  │         │        │         │          │
-  └── Git   └── CI   └── QA    └── CD     └── APM
-
-
-MLOPS PIPELINE
-─────────────────────────────────────────────────────────────────
-
-Data ──┬──▶ Validate ──▶ Transform ──▶ Feature Store
-       │                                    │
-Code ──┼──▶ Train ──▶ Validate ──▶ Registry ──▶ Deploy ──▶ Monitor
-       │                                              │      │
-Params─┘                                              │      │
-                                                      │      │
-                              Retrain ◀───────────────┴──────┘
+```mermaid
+flowchart LR
+    subgraph MLOps["MLOps Pipeline"]
+        direction LR
+        Data --> ValidateData[Validate] --> Transform --> FS[Feature Store]
+        Code --> Train
+        Params --> Train
+        FS --> Train
+        Train --> ValidateModel[Validate] --> Registry --> Deploy --> Monitor
+        Monitor --> Retrain
+        Retrain --> Train
+    end
 ```
 
 ### Additional MLOps Concerns
@@ -244,23 +226,14 @@ jobs:
 
 ### 3. Versioning Everything
 
-```
-PROJECT VERSIONING
-─────────────────────────────────────────────────────────────────
+```mermaid
+flowchart TD
+    Code["<b>Code (Git)</b><br>commit: abc123<br>date: 2024-01-15<br>message: Fix feature bug"]
+    Data["<b>Data (DVC)</b><br>version: v2.3<br>hash: def456<br>files: train.csv, test.csv"]
+    Model["<b>Model (MLflow)</b><br>version: 3<br>metrics:<br>  accuracy: 0.94<br>  f1: 0.91<br>params:<br>  lr: 0.01<br>  epochs: 100<br>artifacts:<br>  model.pkl"]
 
-Code (Git)         Data (DVC)          Model (MLflow)
-───────────        ──────────          ──────────────
-commit: abc123     version: v2.3       version: 3
-date: 2024-01-15   hash: def456        metrics:
-message: "Fix      files:                accuracy: 0.94
-  feature bug"       train.csv           f1: 0.91
-                     test.csv          params:
-                                         lr: 0.01
-                                         epochs: 100
-                                       artifacts:
-                                         model.pkl
-
-LINEAGE: Model v3 = Code abc123 + Data v2.3
+    Code --> |"Lineage"| Model
+    Data --> |"Lineage"| Model
 ```
 
 ### 4. Continuous Monitoring
@@ -276,42 +249,42 @@ Monitor more than just uptime:
 
 ## The MLOps Tool Landscape
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    MLOPS TOOL LANDSCAPE                          │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  DATA LAYER                                                      │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐           │
-│  │   DVC    │ │  Delta   │ │   Feast  │ │  Great   │           │
-│  │ (version)│ │  Lake    │ │ (feature)│ │Expectat. │           │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────┘           │
-│                                                                  │
-│  EXPERIMENT & TRAINING                                           │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐           │
-│  │  MLflow  │ │   W&B    │ │ Kubeflow │ │  Katib   │           │
-│  │(tracking)│ │(tracking)│ │(pipeline)│ │  (HPO)   │           │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────┘           │
-│                                                                  │
-│  SERVING & DEPLOYMENT                                            │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐           │
-│  │  KServe  │ │  Seldon  │ │BentoML   │ │TorchServe│           │
-│  │(k8s serv)│ │  Core    │ │          │ │          │           │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────┘           │
-│                                                                  │
-│  MONITORING                                                      │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐           │
-│  │ Evidently│ │ WhyLabs  │ │  Arize   │ │  NannyML │           │
-│  │  (drift) │ │(observ.) │ │ (LLM ok) │ │(no label)│           │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────┘           │
-│                                                                  │
-│  PLATFORMS (End-to-End)                                          │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐           │
-│  │ Kubeflow │ │SageMaker │ │Vertex AI │ │Databricks│           │
-│  │ (K8s)    │ │  (AWS)   │ │  (GCP)   │ │ (Spark)  │           │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────┘           │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph DataLayer["DATA LAYER"]
+        DVC["DVC (version)"]
+        Delta["Delta Lake"]
+        Feast["Feast (feature)"]
+        GE["Great Expectations"]
+    end
+
+    subgraph Experiment["EXPERIMENT & TRAINING"]
+        MLflow["MLflow (tracking)"]
+        WB["W&B (tracking)"]
+        KFPipe["Kubeflow (pipeline)"]
+        Katib["Katib (HPO)"]
+    end
+
+    subgraph Serving["SERVING & DEPLOYMENT"]
+        KServe["KServe (k8s serv)"]
+        Seldon["Seldon Core"]
+        Bento["BentoML"]
+        Torch["TorchServe"]
+    end
+
+    subgraph Monitoring["MONITORING"]
+        Evidently["Evidently (drift)"]
+        WhyLabs["WhyLabs (observ.)"]
+        Arize["Arize (LLM ok)"]
+        Nanny["NannyML (no label)"]
+    end
+
+    subgraph Platforms["PLATFORMS (End-to-End)"]
+        KF["Kubeflow (K8s)"]
+        Sage["SageMaker (AWS)"]
+        Vertex["Vertex AI (GCP)"]
+        Databricks["Databricks (Spark)"]
+    end
 ```
 
 ## Common Mistakes
@@ -330,48 +303,27 @@ Monitor more than just uptime:
 Test your understanding:
 
 <details>
-<summary>1. Why do ML systems require different operational practices than traditional software?</summary>
+<summary>1. You are a platform engineer evaluating a new fraud detection model. The data science team hands you a Docker container with the model and says, "Just deploy it like our other microservices." What critical differences between this container and your standard microservices must you account for?</summary>
 
-**Answer**: ML systems have three key differences:
-1. **Multiple artifacts**: Code + data + model (not just code)
-2. **Probabilistic behavior**: Outputs are predictions, not deterministic results
-3. **Silent degradation**: Performance degrades as data drifts, without errors or crashes
-
-Traditional monitoring (uptime, errors) misses ML-specific failures.
+**Answer**: ML systems introduce probabilistic behavior and data dependencies that standard microservices lack. Unlike a traditional service where the logic is fixed in the code, the model's behavior is dictated by the data it was trained on and the data it receives in production. This means you must account for "silent degradation" where the service remains perfectly healthy from an infrastructure perspective (200 OKs, low latency) but the predictions become increasingly inaccurate over time due to data drift. Furthermore, rolling back a bad deployment isn't just about reverting code; it may require reverting to an older model artifact and the specific data version used to create it.
 </details>
 
 <details>
-<summary>2. What is "training/serving skew" and why is it dangerous?</summary>
+<summary>2. A recommendation engine showed a 15% revenue lift during offline testing. However, once deployed to the live website, revenue actually dropped by 2%. The engineering team confirms the deployed model file is identical to the tested one. What is the most likely cause of this discrepancy?</summary>
 
-**Answer**: Training/serving skew occurs when features are computed differently during training vs. inference. For example:
-- Training uses batch-computed features (correct)
-- Serving computes features differently (bugs, missing data)
-
-This causes models to perform well in testing but poorly in production. Feature stores solve this by ensuring identical feature computation.
+**Answer**: The most likely cause is training/serving skew. This occurs when the data pipeline used to generate features for offline model training differs from the real-time data pipeline used during production serving. For example, the training set might have relied on a batch job that aggregated user clicks over 24 hours, while the production system attempts to calculate this on-the-fly and misses recent events. The model performs exactly as it was mathematically optimized to, but it is being fed fundamentally different inputs in production, leading to terrible predictions. A feature store is typically implemented to solve this by ensuring a single source of truth for feature transformations across both environments.
 </details>
 
 <details>
-<summary>3. Why is Level 2 (CI/CD for ML) the biggest leap in MLOps maturity?</summary>
+<summary>3. Your organization currently runs scheduled scripts to train models, which data scientists then manually copy to a deployment bucket (Level 1 MLOps). Leadership wants to jump straight to Level 3 (Continuous Training on data drift). Why might this be a disastrous approach?</summary>
 
-**Answer**: Level 2 provides:
-- **Reproducibility**: Automated, versioned training
-- **Quality gates**: Models validated before deployment
-- **Speed**: Days to deploy vs. weeks
-- **Reliability**: Consistent deployment process
-
-Most organizations struggle to reach Level 2 but gain most value there. Level 3 optimizations provide incremental improvements.
+**Answer**: Jumping to Level 3 without mastering Level 2 (CI/CD for ML) removes human oversight before you have the automated quality gates necessary to prevent bad models from reaching production. Level 2 establishes the crucial foundation of reproducibility, automated testing, and a model registry with staging environments. If you automate retraining and deployment (Level 3) without these rigorous CI/CD checks, a sudden influx of corrupted data could automatically trigger a retrain and deploy a disastrously inaccurate model directly to your users. The leap to Level 2 is the most vital because it enforces safety and reliability; Level 3 merely adds speed and automation on top of that safety net.
 </details>
 
 <details>
-<summary>4. What makes ML monitoring different from traditional APM?</summary>
+<summary>4. At 3:00 AM, a data pipeline bug causes the "user_age" feature to be set to 0 for all incoming requests. The ML model continues to return predictions, and your standard APM dashboards (Datadog/New Relic) show green across the board. How should a proper MLOps monitoring setup have caught this?</summary>
 
-**Answer**: Traditional APM monitors infrastructure (latency, errors, uptime). ML monitoring adds:
-- **Data quality**: Schema changes, distribution shifts
-- **Model performance**: Accuracy, precision, recall
-- **Drift detection**: Feature and prediction distribution changes
-- **Business metrics**: Impact on actual outcomes
-
-A model can be "up" with good latency while making terrible predictions.
+**Answer**: A proper MLOps monitoring setup tracks data quality and feature distributions, not just infrastructure health. While traditional APM tools correctly reported that the server was up and processing requests without crashing, they lack the context to understand the payload's semantic meaning. ML monitoring would have detected an immediate and severe data drift—specifically, that the distribution of "user_age" had suddenly shifted entirely to 0, completely outside the expected training baseline. By monitoring the input feature distributions and alerting on this anomalous shift, the ML monitoring system would have flagged the silent failure before it resulted in thousands of incorrect business decisions.
 </details>
 
 ## Hands-On Exercise: Your First MLOps Pipeline
