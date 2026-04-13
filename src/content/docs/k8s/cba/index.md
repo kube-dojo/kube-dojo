@@ -22,9 +22,9 @@ These modules cover the areas between KubeDojo's existing Backstage toolkit modu
 
 | # | Module | Topic | Domains Covered |
 |---|--------|-------|-----------------|
-| 1 | [Backstage Developer Workflow](module-1.1-backstage-dev-workflow/) | Monorepo structure, TypeScript essentials, Docker builds, app-config, CLI | Domain 1 (24%) |
-| 2 | [Backstage Plugin Development](module-1.2-backstage-plugin-development/) | Frontend/backend plugins, React/MUI, scaffolder actions, themes, APIs | Domain 4 (32%) |
-| 3 | [Backstage Catalog & Infrastructure](module-1.3-backstage-catalog-infrastructure/) | Entity processors, providers, annotations, auth, deployment, troubleshooting | Domains 2-3 (44%) |
+| 1 | [Module 1.1: Backstage Developer Workflow](module-1.1-backstage-dev-workflow/) | Monorepo structure, TypeScript essentials, Docker builds, app-config, CLI | Domain 1 (24%) |
+| 2 | [Module 1.2: Backstage Plugin Development — Customizing Backstage](module-1.2-backstage-plugin-development/) | Frontend/backend plugins, React/MUI, scaffolder actions, themes, APIs | Domain 4 (32%) |
+| 3 | [Module 1.3: Backstage Catalog & Infrastructure](module-1.3-backstage-catalog-infrastructure/) | Entity processors, providers, annotations, auth, deployment, troubleshooting | Domains 2-3 (44%) |
 
 ---
 
@@ -49,10 +49,10 @@ These modules cover the areas between KubeDojo's existing Backstage toolkit modu
 
 | Domain | Weight | KubeDojo Coverage |
 |--------|--------|-------------------|
-| Customizing Backstage | 32% | Excellent ([Plugin Development](module-1.2-backstage-plugin-development/) — React/MUI, plugins, themes, scaffolder) |
-| Backstage Development Workflow | 24% | Excellent ([Developer Workflow](module-1.1-backstage-dev-workflow/) — monorepo, TypeScript, Docker, CLI) |
-| Backstage Infrastructure | 22% | Excellent ([Catalog & Infrastructure](module-1.3-backstage-catalog-infrastructure/) — auth, deployment, production) |
-| Backstage Catalog | 22% | Excellent ([Catalog & Infrastructure](module-1.3-backstage-catalog-infrastructure/) — processors, providers, annotations) |
+| Customizing Backstage | 32% | Excellent ([Module 1.2: Backstage Plugin Development — Customizing Backstage](module-1.2-backstage-plugin-development/) — React/MUI, plugins, themes, scaffolder) |
+| Backstage Development Workflow | 24% | Excellent ([Module 1.1: Backstage Developer Workflow](module-1.1-backstage-dev-workflow/) — monorepo, TypeScript, Docker, CLI) |
+| Backstage Infrastructure | 22% | Excellent ([Module 1.3: Backstage Catalog & Infrastructure](module-1.3-backstage-catalog-infrastructure/) — auth, deployment, production) |
+| Backstage Catalog | 22% | Excellent ([Module 1.3: Backstage Catalog & Infrastructure](module-1.3-backstage-catalog-infrastructure/) — processors, providers, annotations) |
 
 ---
 
@@ -78,7 +78,7 @@ These modules cover the areas between KubeDojo's existing Backstage toolkit modu
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [Backstage Developer Workflow](module-1.1-backstage-dev-workflow/) | Monorepo structure, TypeScript essentials, Docker builds, app-config overlays, CLI commands | Direct |
+| [Module 1.1: Backstage Developer Workflow](module-1.1-backstage-dev-workflow/) | Monorepo structure, TypeScript essentials, Docker builds, app-config overlays, CLI commands | Direct |
 
 ---
 
@@ -107,7 +107,7 @@ These modules cover the areas between KubeDojo's existing Backstage toolkit modu
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [Backstage Catalog & Infrastructure](module-1.3-backstage-catalog-infrastructure/) | Auth providers, proxy, database migrations, production hardening, backend-for-frontend | Direct |
+| [Module 1.3: Backstage Catalog & Infrastructure](module-1.3-backstage-catalog-infrastructure/) | Auth providers, proxy, database migrations, production hardening, backend-for-frontend | Direct |
 
 ---
 
@@ -137,7 +137,7 @@ These modules cover the areas between KubeDojo's existing Backstage toolkit modu
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [Backstage Catalog & Infrastructure](module-1.3-backstage-catalog-infrastructure/) | Entity processors, providers, all annotations, troubleshooting, Location kind, lifecycle management | Direct |
+| [Module 1.3: Backstage Catalog & Infrastructure](module-1.3-backstage-catalog-infrastructure/) | Entity processors, providers, all annotations, troubleshooting, Location kind, lifecycle management | Direct |
 
 ---
 
@@ -166,7 +166,7 @@ These modules cover the areas between KubeDojo's existing Backstage toolkit modu
 
 | Module | Topic | Relevance |
 |--------|-------|-----------|
-| [Backstage Plugin Development](module-1.2-backstage-plugin-development/) | React/MUI, frontend/backend plugins, scaffolder actions, themes, extension points | Direct |
+| [Module 1.2: Backstage Plugin Development — Customizing Backstage](module-1.2-backstage-plugin-development/) | React/MUI, frontend/backend plugins, scaffolder actions, themes, extension points | Direct |
 
 ---
 
@@ -192,9 +192,9 @@ Overall weighted coverage:              ~90%
 
 | Module | Topics | Domains Covered |
 |--------|--------|-----------------|
-| [Backstage Developer Workflow](module-1.1-backstage-dev-workflow/) | Monorepo structure, TypeScript essentials, Docker builds, app-config overlays, CLI commands, local dev workflow | Domain 1 (24%) |
-| [Backstage Plugin Development](module-1.2-backstage-plugin-development/) | Frontend plugins (React/MUI), backend plugins (Express), scaffolder custom actions, custom themes, extension points, API refs | Domain 4 (32%) |
-| [Backstage Catalog & Infrastructure](module-1.3-backstage-catalog-infrastructure/) | Entity processors, entity providers, all annotations, auth, production deployment, troubleshooting | Domains 2-3 (44%) |
+| [Module 1.1: Backstage Developer Workflow](module-1.1-backstage-dev-workflow/) | Monorepo structure, TypeScript essentials, Docker builds, app-config overlays, CLI commands, local dev workflow | Domain 1 (24%) |
+| [Module 1.2: Backstage Plugin Development — Customizing Backstage](module-1.2-backstage-plugin-development/) | Frontend plugins (React/MUI), backend plugins (Express), scaffolder custom actions, custom themes, extension points, API refs | Domain 4 (32%) |
+| [Module 1.3: Backstage Catalog & Infrastructure](module-1.3-backstage-catalog-infrastructure/) | Entity processors, entity providers, all annotations, auth, production deployment, troubleshooting | Domains 2-3 (44%) |
 
 These three modules plus the existing Module 7.1 provide comprehensive CBA preparation.
 
@@ -219,7 +219,7 @@ Week 2: Development Workflow (Domain 1, 24% of exam)
 ├── Understand app-config.yaml hierarchy and env substitution
 ├── Practice Docker builds (host build + multi-stage)
 ├── Learn Backstage CLI commands
-└── KubeDojo: Backstage Developer Workflow module
+└── KubeDojo: Module 1.1: Backstage Developer Workflow
 
 Week 3: Customizing Backstage (Domain 4, 32% of exam!)
 ├── React fundamentals: components, hooks, props, state
@@ -227,7 +227,7 @@ Week 3: Customizing Backstage (Domain 4, 32% of exam!)
 ├── Build a frontend plugin from scratch
 ├── Build a backend plugin with Express router
 ├── Create a custom scaffolder action
-└── KubeDojo: Backstage Plugin Development module
+└── KubeDojo: Module 1.2: Backstage Plugin Development — Customizing Backstage
 
 Week 4: Review & Practice
 ├── Review all 4 domains
