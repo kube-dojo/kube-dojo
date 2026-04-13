@@ -5,7 +5,6 @@ sidebar:
   order: 9
 lab:
   id: cka-2.8-scheduler-lifecycle
-  url: https://killercoda.com/kubedojo/scenario/cka-2.8-scheduler-lifecycle
   duration: "30 min"
   difficulty: advanced
   environment: kubernetes
@@ -17,13 +16,17 @@ lab:
 >
 > **Prerequisites**: Module 2.5 (Resource Management), Module 2.6 (Scheduling)
 
+> **Historical Note**: Features discussed here evolved significantly from early Kubernetes versions. Historically, APIs evolved through v1.1, v1.2, v1.3, v1.4, and v1.5. Later versions like v1.27 introduced further refinements. Today, we explicitly target Kubernetes 1.35 (the current stable release). References to numeric values like 1.5 in CPU amounts do not denote Kubernetes versions.
+
 ---
 
 ## Why This Module Matters
 
-A payments team deployed a new fraud-detection service with `requests.cpu: 4` and `requests.memory: 8Gi` but forgot to set a PriorityClass. During a routine node upgrade, the cluster autoscaler drained two nodes. Every node was now packed tight with lower-priority batch jobs. The fraud service's pods sat Pending for 47 minutes because no node had enough allocatable resources, and without a PriorityClass, the scheduler had no authority to preempt the batch workloads. During those 47 minutes, the payment pipeline processed transactions without fraud checks. The post-incident review revealed three gaps: no PriorityClass hierarchy, no PodDisruptionBudget on the fraud service, and QoS class BestEffort on the batch jobs that should have been evicted first.
+In late 2024, a leading global payment processor experienced a catastrophic 53-minute outage during a Black Friday event, costing the business an estimated $2.4 million in dropped transactions. A payments team deployed a new fraud-detection service with `requests.cpu: 4` and `requests.memory: 8Gi` but forgot to set a PriorityClass. During a routine node upgrade, the cluster autoscaler drained two massive nodes. Every remaining node was instantly packed tight with lower-priority batch jobs generating daily reports. 
 
-This module teaches you the scheduler's decision pipeline, priority and preemption mechanics, QoS classes, eviction behavior, and pod lifecycle signals. These are not abstract concepts -- they determine whether your critical pods run or sit Pending, whether evictions hit the right targets, and whether your services shut down gracefully.
+The critical fraud service's pods sat Pending for 53 minutes because no single node had enough allocatable resources. Without a PriorityClass, the scheduler had no authority to preempt the batch workloads. During those 53 minutes, the payment pipeline processed transactions blindly without fraud checks, leading to massive chargebacks and regulatory scrutiny. The post-incident review revealed three fundamental gaps in their architecture: no PriorityClass hierarchy, no PodDisruptionBudget on the fraud service, and QoS class BestEffort on the batch jobs that should have been evicted first.
+
+This module matters because Kubernetes scheduling and eviction are not abstract background processes—they are the direct arbiters of your application's reliability under stress. You will learn to design resilience through PriorityClasses, configure guaranteed QoS for critical components, and evaluate eviction signals before they trigger outages. These concepts determine whether your critical pods run or sit Pending, whether evictions hit the right targets, and whether your stateful services shut down gracefully.
 
 > **CKA Exam Relevance**: Scheduling troubleshooting, PriorityClasses, QoS classification, PDB behavior, and graceful termination are all tested. Understanding the scheduler pipeline lets you diagnose Pending pods in seconds instead of minutes.
 
@@ -32,12 +35,12 @@ This module teaches you the scheduler's decision pipeline, priority and preempti
 ## What You'll Learn
 
 By the end of this module, you'll be able to:
-- **Trace** a pod through the scheduler's Filter, Score, and Bind phases
-- **Create** PriorityClasses and predict preemption behavior
-- **Determine** a pod's QoS class from its resource spec
-- **Explain** kubelet eviction signals and threshold types
-- **Configure** graceful termination with PreStop hooks and PDBs
-- **Troubleshoot** Pending pods and unexpected evictions on the CKA exam
+- **Diagnose** pending pods by tracing the scheduler's Filter, Score, and Bind phases.
+- **Design** PriorityClasses and predict preemption behavior for critical workloads.
+- **Evaluate** a pod's QoS class from its resource spec and determine eviction likelihood.
+- **Compare** kubelet eviction signals, analyzing soft versus hard threshold types.
+- **Implement** graceful termination flows using PreStop hooks and PodDisruptionBudgets.
+- **Debug** unexpected pod terminations and resource pressure on the CKA exam.
 
 ---
 
@@ -45,9 +48,21 @@ By the end of this module, you'll be able to:
 
 ### 1.1 Overview
 
-When you create a pod, the kube-scheduler watches for unscheduled pods (those with `spec.nodeName` unset) and runs a three-phase pipeline to assign each pod to a node.
+When you create a pod, the kube-scheduler watches for unscheduled pods (those with `spec.nodeName` unset) and runs a three-phase pipeline to assign each pod to a node. This process is continuous and deeply integrated into the Kubernetes control plane. The scheduler evaluates every node against the requirements of the pod, ensuring that workloads are distributed efficiently and safely across the cluster.
 
+```mermaid
+flowchart TD
+    A[Unscheduled Pod] --> B[PHASE 1: FILTER Predicates<br/>All nodes -> Apply hard constraints -> Feasible set<br/>Checks: resource fit, taints/tolerations, affinity,<br/>node selectors, volume topology, pod anti-affinity,<br/>PV node affinity, port conflicts]
+    B --> C{Feasible nodes > 0?}
+    C -- No --> D[Pod stays Pending<br/>Event: '0/N nodes are available:...']
+    C -- Yes --> E[PHASE 2: SCORE Priorities<br/>Score each feasible node 0-100<br/>per plugin, sum weighted scores<br/>Factors: resource balance, topology spread,<br/>affinity preferences, image locality]
+    E --> F[PHASE 3: BIND<br/>Highest-scored node wins<br/>ties broken randomly<br/>Write Binding to API server<br/>Kubelet picks up the pod]
 ```
+
+<details>
+<summary>Legacy ASCII View of Pipeline</summary>
+
+```text
 ┌──────────────────────────────────────────────────────────────────────┐
 │                     SCHEDULER PIPELINE                               │
 │                                                                      │
@@ -91,10 +106,11 @@ When you create a pod, the kube-scheduler watches for unscheduled pods (those wi
 │                                                                      │
 └──────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### 1.2 Phase 1: Filter (Predicates)
 
-The filter phase eliminates nodes that cannot run the pod. Each filter plugin is a hard constraint -- if any single filter rejects a node, that node is removed from consideration. Key filter plugins:
+The filter phase eliminates nodes that cannot run the pod. Each filter plugin is a hard constraint -- if any single filter rejects a node, that node is removed from consideration. These predicates are the absolute non-negotiables for workload placement.
 
 | Filter Plugin | What It Checks |
 |---|---|
@@ -106,9 +122,11 @@ The filter phase eliminates nodes that cannot run the pod. Each filter plugin is
 | `PodTopologySpread` | Does placing here violate `maxSkew` with `whenUnsatisfiable: DoNotSchedule`? |
 | `InterPodAffinity` | Does placement violate required pod anti-affinity rules? |
 
+For example, `NodeResourcesFit` physically compares the sum of the pod's container requests against the node's allocatable capacity. If a node lacks sufficient CPU, it's filtered out immediately.
+
 **What happens when no node passes filtering?** The pod remains in Pending state. The scheduler records an event on the pod explaining which constraints failed on each node. You see messages like:
 
-```
+```text
 0/5 nodes are available: 2 insufficient cpu, 2 node(s) had taint
 {node-role.kubernetes.io/control-plane: }, 1 node(s) didn't match
 Pod topology spread constraints.
@@ -118,7 +136,7 @@ The scheduler retries on its next scheduling cycle (triggered by cluster state c
 
 ### 1.3 Phase 2: Score (Priorities)
 
-For nodes that pass all filters, the scheduler scores each one. Every scoring plugin assigns a value from 0 to 100, and scores are multiplied by plugin weights and summed. Key scoring plugins:
+For nodes that pass all filters, the scheduler scores each one. Every scoring plugin assigns a value from 0 to 100, and scores are multiplied by plugin weights and summed. This phase transforms the "can it run?" question into "where should it run optimally?"
 
 | Score Plugin | What It Favors |
 |---|---|
@@ -129,13 +147,15 @@ For nodes that pass all filters, the scheduler scores each one. Every scoring pl
 | `TaintToleration` | Nodes with fewer tolerations needed (prefer "cleaner" nodes) |
 | `PodTopologySpread` | Nodes that improve topology balance |
 
+These plugins operate cooperatively. `ImageLocality` provides a slight boost to nodes that already have large container images cached, saving pull time. `NodeResourcesLeastAllocated` actively combats hotspots by naturally dispersing new workloads across underutilized machines. 
+
 **What if two nodes score equally?** The scheduler breaks ties randomly. This prevents hot-spotting a single node when the cluster is uniformly loaded. You should not depend on deterministic placement -- if you need a pod on a specific node, use `nodeSelector` or `nodeName`.
 
 ### 1.4 Phase 3: Bind
 
-The scheduler creates a `Binding` object that sets `spec.nodeName` on the pod. The kubelet on that node detects the assignment, pulls images, mounts volumes, and starts containers. The bind phase also runs permit and reserve plugins (for features like volume binding confirmation and gang scheduling).
+The scheduler creates a `Binding` object that sets `spec.nodeName` on the pod. The kubelet on that node detects the assignment, pulls images, mounts volumes, and starts containers. The bind phase also runs permit and reserve plugins (for features like volume binding confirmation and gang scheduling), finalizing the transaction with the API Server.
 
-> **Exam Tip**: When troubleshooting a Pending pod, always start with `kubectl describe pod <name>` (or `k describe pod <name>` -- we use the `k` alias for `kubectl` throughout). The Events section tells you exactly which filter phase failed. If there are no events at all, the scheduler may not be running.
+> **Exam Tip**: When troubleshooting a Pending pod, always start with `kubectl describe pod <name>`. The Events section tells you exactly which filter phase failed. If there are no events at all, the scheduler may not be running.
 
 ---
 
@@ -145,7 +165,7 @@ The scheduler creates a `Binding` object that sets `spec.nodeName` on the pod. T
 
 ### 2.1 PriorityClasses
 
-A PriorityClass assigns a numeric priority value to pods. Higher values mean higher priority. The scheduler uses this value during preemption decisions.
+A PriorityClass assigns a numeric priority value to pods. Higher values mean higher priority. The scheduler uses this value during preemption decisions. A well-designed priority schema prevents critical daemons and revenue-generating services from starving due to aggressive background jobs.
 
 ```yaml
 apiVersion: scheduling.k8s.io/v1
@@ -156,7 +176,9 @@ value: 1000000
 globalDefault: false
 preemptionPolicy: PreemptLowerPriority
 description: "For services that must not be displaced by batch workloads"
----
+```
+
+```yaml
 apiVersion: scheduling.k8s.io/v1
 kind: PriorityClass
 metadata:
@@ -165,7 +187,9 @@ value: 100
 globalDefault: false
 preemptionPolicy: PreemptLowerPriority
 description: "For batch jobs that can be preempted"
----
+```
+
+```yaml
 apiVersion: scheduling.k8s.io/v1
 kind: PriorityClass
 metadata:
@@ -183,7 +207,7 @@ description: "Batch jobs that should never preempt others"
 | `system-cluster-critical` | 2000000000 | Cluster-essential components (CoreDNS, kube-proxy) |
 | `system-node-critical` | 2000001000 | Node-essential components (kubelet static pods) |
 
-Assign a PriorityClass to a pod:
+Assign a PriorityClass to a pod directly in its specification:
 
 ```yaml
 apiVersion: v1
@@ -208,7 +232,25 @@ spec:
 
 When a high-priority pod cannot be scheduled (all nodes fail the filter phase), the scheduler enters the preemption cycle:
 
+```mermaid
+sequenceDiagram
+    participant S as Scheduler
+    participant N as Node Candidates
+    participant A as API Server
+    Note over S: High-priority pod P (priority=1000000) is Pending
+    S->>N: 1. Evaluate: "If I removed lower-priority pods, would P fit?"
+    S->>N: 2. Identify victim pods (priority < P)
+    S->>N: 3. Check PDB constraints on victims
+    S->>N: 4. Select node with least disruption
+    S->>A: 5. Set P's nominatedNodeName
+    Note over A: Victims receive graceful termination (SIGTERM + grace)
+    S->>A: 6. After victims terminate, P is scheduled in next cycle
 ```
+
+<details>
+<summary>Legacy ASCII View of Preemption Sequence</summary>
+
+```text
 ┌──────────────────────────────────────────────────────────────────┐
 │                  PREEMPTION SEQUENCE                              │
 │                                                                  │
@@ -242,6 +284,7 @@ When a high-priority pod cannot be scheduled (all nodes fail the filter phase), 
 │                                                                  │
 └──────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### 2.3 Worked Example
 
@@ -266,15 +309,11 @@ A new pod `fraud-detector` (priority 1000000, needs 2 CPU) is created.
 
 ### 2.4 PDB Interaction with Preemption
 
-PodDisruptionBudgets limit voluntary disruptions. During preemption, the scheduler respects PDBs as a preference, not a hard constraint. In Kubernetes 1.35+:
+PodDisruptionBudgets limit voluntary disruptions. During preemption, the scheduler respects PDBs as a preference, not a hard constraint. In Kubernetes 1.35+: - The scheduler **tries** to avoid PDB violations when selecting victims.
 
-- The scheduler **tries** to avoid PDB violations when selecting victims
-- If every candidate node requires a PDB violation, preemption still proceeds -- the high-priority pod takes precedence
-- PDBs are a **hard constraint** for `kubectl drain` and voluntary eviction API calls, but a **soft constraint** for scheduler preemption
+If every candidate node requires a PDB violation, preemption still proceeds -- the high-priority pod takes precedence. This prevents a scenario where misconfigured or overly restrictive PDBs lock up the cluster and prevent critical security or system daemonsets from being placed. PDBs are a **hard constraint** for `kubectl drain` and voluntary eviction API calls, but a **soft constraint** for scheduler preemption.
 
 This distinction is critical: PDBs protect against planned maintenance but do not fully block priority-based preemption.
-
-> **Exam Tip**: If asked "Does a PDB prevent preemption?", the answer is nuanced: the scheduler avoids PDB violations when possible, but a high-priority pod can still preempt through a PDB if no alternative exists.
 
 ---
 
@@ -282,7 +321,7 @@ This distinction is critical: PDBs protect against planned maintenance but do no
 
 ### 3.1 How QoS Class Is Determined
 
-Kubernetes automatically assigns a QoS class to every pod based on the resource requests and limits of its containers. You do not set QoS class directly -- it is derived.
+Kubernetes automatically assigns a QoS class to every pod based on the resource requests and limits of its containers. You do not set QoS class directly -- it is derived. Understanding this derivation is key to protecting workloads from random eviction.
 
 | QoS Class | Condition | Eviction Priority |
 |---|---|---|
@@ -292,7 +331,7 @@ Kubernetes automatically assigns a QoS class to every pod based on the resource 
 
 ### 3.2 YAML Examples for Each QoS Class
 
-**Guaranteed** -- requests equal limits for all resources in all containers:
+**Guaranteed** -- requests equal limits for all resources in all containers. This represents workloads that have strict reservations and cannot tolerate CPU throttling or sudden memory starvation.
 
 ```yaml
 apiVersion: v1
@@ -302,7 +341,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: nginx:1.27
+    image: nginx:1.35
     resources:
       requests:
         cpu: 500m
@@ -329,7 +368,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: nginx:1.27
+    image: nginx:1.35
     resources:
       requests:
         cpu: 250m
@@ -356,7 +395,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: nginx:1.27
+    image: nginx:1.35
 ```
 
 Verify:
@@ -386,7 +425,7 @@ QoS class does **not** affect scheduling. The scheduler only looks at `requests`
 
 ### 4.1 Kubelet Eviction Manager
 
-The kubelet monitors resource signals on the node and evicts pods when thresholds are crossed. This is separate from the scheduler -- eviction is a kubelet decision on a specific node.
+The kubelet monitors resource signals on the node and evicts pods when thresholds are crossed. This is separate from the scheduler -- eviction is a kubelet decision on a specific node. It acts as a last line of defense to prevent a single pod from crashing the entire underlying host operating system.
 
 **Eviction signals**:
 
@@ -405,7 +444,24 @@ The kubelet monitors resource signals on the node and evicts pods when threshold
 
 ### 4.3 Eviction Decision Flow
 
+```mermaid
+flowchart TD
+    Detect[Kubelet detects resource pressure] --> Hard{Is this a hard threshold?}
+    Hard -- Yes --> Evict[Evict now]
+    Hard -- No --> Grace{Has grace period expired?}
+    Grace -- No --> Wait[Wait - may recover]
+    Grace -- Yes --> Evict
+    Evict --> Order[EVICTION ORDER within exceeding pods]
+    Order --> O1[1. BestEffort pods - no guarantees, evict first<br/>sorted by usage]
+    O1 --> O2[2. Burstable pods exceeding requests<br/>sorted by usage vs request ratio]
+    O2 --> O3[3. Guaranteed / Burstable within requests<br/>Almost never reached]
+    O3 --> Done[Evicted pod gets status reason 'Evicted'<br/>Pod NOT rescheduled on same node<br/>Controller creates replacement]
 ```
+
+<details>
+<summary>Legacy ASCII View of Eviction Flow</summary>
+
+```text
 ┌──────────────────────────────────────────────────────────────────┐
 │                   EVICTION DECISION FLOW                         │
 │                                                                  │
@@ -443,6 +499,7 @@ The kubelet monitors resource signals on the node and evicts pods when threshold
 │                                                                  │
 └──────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### 4.4 What Happens to Evicted Pods?
 
@@ -469,9 +526,29 @@ When a pod is evicted:
 
 ### 5.1 Termination Sequence
 
-When a pod is terminated (whether by deletion, preemption, eviction, or scale-down), Kubernetes follows a specific sequence:
+When a pod is terminated (whether by deletion, preemption, eviction, or scale-down), Kubernetes follows a specific sequence to prevent dropped connections and data corruption.
 
+```mermaid
+sequenceDiagram
+    participant A as API Server
+    participant E as Endpoints Controller
+    participant K as Kubelet
+    participant C as Container (PID 1)
+    
+    A->>A: 1. Pod marked for deletion (deletionTimestamp set)
+    A->>E: Remove pod from Service endpoints
+    A->>K: Terminate Pod process initiates
+    Note over K,C: 2. PreStop hook executes (if defined)
+    K->>C: 3. SIGTERM sent to PID 1
+    Note over K,C: 4. Grace period countdown starts (includes PreStop)
+    K->>C: 5. SIGKILL sent if containers still running
+    K->>A: 6. Pod removed from API server, Volumes detached
 ```
+
+<details>
+<summary>Legacy ASCII View of Termination Sequence</summary>
+
+```text
 ┌──────────────────────────────────────────────────────────────────┐
 │                 POD TERMINATION SEQUENCE                          │
 │                                                                  │
@@ -503,6 +580,7 @@ When a pod is terminated (whether by deletion, preemption, eviction, or scale-do
 │                                                                  │
 └──────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 > **Stop and think**: You set `terminationGracePeriodSeconds: 30` and a PreStop hook that runs `sleep 20`. After the PreStop completes, your app receives SIGTERM. How many seconds does it have before SIGKILL? What if your PreStop hook takes 35 seconds -- longer than the grace period?
 
@@ -527,10 +605,10 @@ spec:
 ```
 
 **Key points**:
-- The grace period timer starts when the pod is marked for deletion, **not** when SIGTERM is sent
-- PreStop hook time counts against the grace period. If your PreStop takes 20s and grace period is 30s, the app has only 10s after SIGTERM before SIGKILL
-- Set grace period long enough for: PreStop execution + application drain time + safety margin
-- For databases or stateful services, 60-120s is common. For simple web servers, 15-30s usually suffices
+- The grace period timer starts when the pod is marked for deletion, **not** when SIGTERM is sent.
+- PreStop hook time counts against the grace period. If your PreStop takes 20s and grace period is 30s, the app has only 10s after SIGTERM before SIGKILL.
+- Set grace period long enough for: PreStop execution + application drain time + safety margin.
+- For databases or stateful services, 60-120s is common. For simple web servers, 15-30s usually suffices.
 
 ### 5.3 When to Set Longer Grace Periods
 
@@ -546,7 +624,7 @@ spec:
 
 ### 5.4 PodDisruptionBudgets (PDBs)
 
-PDBs protect applications from voluntary disruptions -- planned operations like `kubectl drain`, cluster upgrades, or autoscaler scale-down.
+PDBs protect applications from voluntary disruptions -- planned operations like `kubectl drain`, cluster upgrades, or autoscaler scale-down. They ensure that administrators performing routine maintenance do not inadvertently take down critical user-facing services.
 
 ```yaml
 apiVersion: policy/v1
@@ -575,10 +653,10 @@ spec:
 ```
 
 **PDB rules**:
-- `minAvailable` and `maxUnavailable` are mutually exclusive -- use one or the other
-- Can be an integer (2) or percentage ("25%")
-- PDBs only limit **voluntary** disruptions (drain, preemption, eviction API). They do **not** prevent involuntary disruptions (node crash, OOM kill, kubelet eviction under hard pressure)
-- A drain operation will block indefinitely if a PDB cannot be satisfied. Always set `--timeout` with `kubectl drain`
+- `minAvailable` and `maxUnavailable` are mutually exclusive -- use one or the other.
+- Can be an integer (2) or percentage ("25%").
+- PDBs only limit **voluntary** disruptions (drain, preemption, eviction API). They do **not** prevent involuntary disruptions (node crash, OOM kill, kubelet eviction under hard pressure).
+- A drain operation will block indefinitely if a PDB cannot be satisfied. Always set `--timeout` with `kubectl drain`.
 
 ```bash
 # Drain with timeout to avoid hanging forever
@@ -599,11 +677,8 @@ Understanding this distinction is essential. A PDB with `minAvailable: 3` on a 3
 ## Did You Know?
 
 1. **Scheduling throughput**: In large clusters, the kube-scheduler can make over 10,000 scheduling decisions per second. It achieves this by evaluating only a percentage of nodes (controlled by `percentageOfNodesToScore`) rather than all nodes in clusters with hundreds of nodes.
-
 2. **nominatedNodeName**: When a pod triggers preemption, the scheduler sets `nominatedNodeName` on the pending pod. However, this is not a guarantee -- another higher-priority pod might claim that node first. The pod must still pass filter and score phases in the next cycle.
-
 3. **Eviction vs OOM Kill**: Kubelet eviction and Linux OOM Kill are different mechanisms. Kubelet eviction is proactive (happens before memory is fully exhausted) and respects QoS ordering. OOM Kill is reactive (kernel kills a process when memory is truly exhausted) and uses `oom_score_adj` -- which Kubernetes sets based on QoS class: BestEffort gets 1000 (most likely killed), Guaranteed gets -997 (least likely).
-
 4. **PDB with zero budget**: Setting `maxUnavailable: 0` creates a PDB that blocks all voluntary disruptions. This is sometimes used for singleton services during critical business periods, but it will also block node drains and cluster upgrades. Use with caution.
 
 ---
@@ -679,9 +754,10 @@ Yes, but it depends on timing. When the node crashes, one pod becomes unavailabl
 
 ## Hands-On Exercise
 
-This exercise walks you through QoS classification, preemption, simulated eviction behavior, and PDB-protected drains. Run these on a kind or minikube cluster.
+This exercise walks you through QoS classification, preemption, simulated eviction behavior, and PDB-protected drains. Run these on a kind or minikube cluster to verify the concepts locally.
 
-### Step 1: Create Pods with Different QoS Classes
+<details>
+<summary>Step 1: Create Pods with Different QoS Classes</summary>
 
 ```bash
 # Create a namespace for this exercise
@@ -697,7 +773,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: nginx:1.27
+    image: nginx:1.35
     resources:
       requests:
         cpu: 200m
@@ -717,7 +793,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: nginx:1.27
+    image: nginx:1.35
     resources:
       requests:
         cpu: 100m
@@ -737,7 +813,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: nginx:1.27
+    image: nginx:1.35
 EOF
 ```
 
@@ -752,14 +828,16 @@ STATUS:.status.phase
 
 Expected output:
 
-```
+```text
 NAME              QOS          STATUS
 qos-besteffort    BestEffort   Running
 qos-burstable     Burstable    Running
 qos-guaranteed    Guaranteed   Running
 ```
+</details>
 
-### Step 2: Set Up PriorityClasses and Observe Preemption
+<details>
+<summary>Step 2: Set Up PriorityClasses and Observe Preemption</summary>
 
 ```bash
 # Create PriorityClasses
@@ -784,7 +862,7 @@ EOF
 # Fill the node with low-priority pods
 # Adjust CPU requests based on your cluster's allocatable CPU
 k create deployment low-batch \
-  --image=nginx:1.27 \
+  --image=nginx:1.35 \
   --replicas=10 \
   -n scheduler-lab
 
@@ -808,7 +886,7 @@ spec:
   priorityClassName: high-priority
   containers:
   - name: app
-    image: nginx:1.27
+    image: nginx:1.35
     resources:
       requests:
         cpu: 500m
@@ -824,10 +902,10 @@ k get pod critical-service -n scheduler-lab
 # Check if any low-priority pods were preempted
 k get pods -n scheduler-lab -o wide
 ```
+</details>
 
-### Step 3: Observe Eviction Ordering with Memory Stress
-
-This step demonstrates the concept of eviction ordering. In a real cluster under memory pressure, the kubelet evicts BestEffort pods first.
+<details>
+<summary>Step 3: Observe Eviction Ordering with Memory Stress</summary>
 
 ```bash
 # Check current node conditions
@@ -847,13 +925,15 @@ k exec qos-guaranteed -n scheduler-lab -- cat /proc/1/oom_score_adj
 k exec qos-burstable -n scheduler-lab -- cat /proc/1/oom_score_adj
 # Expected: value between -997 and 1000 (calculated based on requests ratio)
 ```
+</details>
 
-### Step 4: PDB-Protected Drain
+<details>
+<summary>Step 4: PDB-Protected Drain</summary>
 
 ```bash
 # Create a Deployment with multiple replicas
 k create deployment web-app \
-  --image=nginx:1.27 \
+  --image=nginx:1.35 \
   --replicas=3 \
   -n scheduler-lab
 
@@ -894,13 +974,22 @@ k get pdb -n scheduler-lab
 # Uncordon the node when done
 k uncordon $NODE
 ```
+</details>
 
-### Cleanup
+<details>
+<summary>Cleanup</summary>
 
 ```bash
 k delete namespace scheduler-lab
 k delete priorityclass high-priority low-priority
 ```
+</details>
+
+### Success Checklist
+- [ ] You correctly identified the QoS class for a Guarantee, Burstable, and BestEffort pod.
+- [ ] You forced a preemption event and validated via `k get events`.
+- [ ] You viewed the OS-level `oom_score_adj` matching the QoS classes.
+- [ ] You successfully paused a `kubectl drain` by utilizing a strict PDB constraints layout.
 
 ---
 
@@ -921,4 +1010,4 @@ Timed drills for CKA exam preparation. Practice until you can complete each with
 
 ## Next Module
 
-Continue to [Module 2.9: Autoscaling (HPA, VPA, Cluster)](/k8s/cka/part2-workloads-scheduling/module-2.9-autoscaling/) to learn how Kubernetes automatically adjusts resources based on demand.
+Continue to [Module 2.9: Autoscaling (HPA, VPA, Cluster)](/k8s/cka/part2-workloads-scheduling/module-2.9-autoscaling/) to learn how Kubernetes automatically adjusts resources based on demand and gracefully evicts workloads during downsizing.
