@@ -31,6 +31,8 @@ You've learned reliability principles. Now you need a **framework** to apply the
 
 Site Reliability Engineering (SRE) is that framework. Invented at Google, adopted worldwide, SRE transforms reliability from "someone else's problem" to "everyone's measurable responsibility."
 
+> **Stop and think**: How is reliability currently handled in your organization? Is it a shared goal, or does it fall squarely on the shoulders of a single team when things break?
+
 **Here's the thing**: Without SRE, reliability is:
 - A vague goal ("make it more reliable")
 - Someone else's job ("ops will handle it")
@@ -101,6 +103,8 @@ The rest goes to engineering projects that:
 - Automate repetitive tasks
 - Build better tools
 
+> **Pause and predict**: What happens if an SRE team ignores the 50% rule and spends 90% of their time fighting fires? 
+
 If operational work exceeds 50%, something is wrong. Either:
 - The system is too unreliable (needs reliability work)
 - Too much toil exists (needs automation)
@@ -125,7 +129,7 @@ SRE embraces calculated risk through **error budgets** (more in Module 1.3).
 
 Think about your service's path to users:
 
-```
+```text
 Your Service (99.9%)
     → Load Balancer (99.95%)
     → Internet (99.9%)
@@ -189,24 +193,13 @@ Platform Engineering is **what you build**.
 
 ### The Overlap
 
-```
-┌─────────────────────────────────────────────────────┐
-│                     DevOps Culture                   │
-│  ┌───────────────────────────────────────────────┐  │
-│  │                                               │  │
-│  │    ┌─────────────────┐  ┌──────────────────┐ │  │
-│  │    │       SRE       │  │     Platform     │ │  │
-│  │    │   (Practice)    │──│   Engineering    │ │  │
-│  │    │                 │  │   (Approach)     │ │  │
-│  │    │ • SLOs          │  │ • IDPs           │ │  │
-│  │    │ • Error budgets │  │ • Golden paths   │ │  │
-│  │    │ • On-call       │  │ • Self-service   │ │  │
-│  │    │ • Postmortems   │  │ • Backstage      │ │  │
-│  │    └─────────────────┘  └──────────────────┘ │  │
-│  │                                               │  │
-│  └───────────────────────────────────────────────┘  │
-│                                                      │
-└─────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph DevOps["DevOps Culture"]
+        direction LR
+        SRE["SRE (Practice)<br/><br/>• SLOs<br/>• Error budgets<br/>• On-call<br/>• Postmortems"]
+        PE["Platform Engineering (Approach)<br/><br/>• IDPs<br/>• Golden paths<br/>• Self-service<br/>• Backstage"]
+    end
 ```
 
 You can do SRE without Platform Engineering. You can do Platform Engineering without dedicated SREs. But many organizations do both, and they complement each other well.
@@ -219,18 +212,15 @@ There's no single way to structure SRE. Here are common models:
 
 ### Model 1: Centralized SRE Team
 
-```
-┌─────────────────────────────────────────┐
-│            Central SRE Team              │
-│   (Owns reliability for all services)    │
-└─────────────────┬───────────────────────┘
-                  │
-    ┌─────────────┼─────────────┐
-    ▼             ▼             ▼
-┌───────┐    ┌───────┐    ┌───────┐
-│ Team A │    │ Team B │    │ Team C │
-│ (Dev)  │    │ (Dev)  │    │ (Dev)  │
-└───────┘    └───────┘    └───────┘
+```mermaid
+flowchart TD
+    Central["Central SRE Team<br/>(Owns reliability for all services)"]
+    TeamA["Team A (Dev)"]
+    TeamB["Team B (Dev)"]
+    TeamC["Team C (Dev)"]
+    Central --> TeamA
+    Central --> TeamB
+    Central --> TeamC
 ```
 
 **Pros**:
@@ -247,14 +237,17 @@ There's no single way to structure SRE. Here are common models:
 
 ### Model 2: Embedded SREs
 
-```
-┌───────────────────┐  ┌───────────────────┐  ┌───────────────────┐
-│     Team A        │  │     Team B        │  │     Team C        │
-│  ┌─────────────┐  │  │  ┌─────────────┐  │  │  ┌─────────────┐  │
-│  │ Developers  │  │  │  │ Developers  │  │  │  │ Developers  │  │
-│  │ + 1-2 SREs  │  │  │  │ + 1-2 SREs  │  │  │  │ + 1-2 SREs  │  │
-│  └─────────────┘  │  │  └─────────────┘  │  │  └─────────────┘  │
-└───────────────────┘  └───────────────────┘  └───────────────────┘
+```mermaid
+flowchart TD
+    subgraph TA["Team A"]
+        DevA["Developers<br/>+ 1-2 SREs"]
+    end
+    subgraph TB["Team B"]
+        DevB["Developers<br/>+ 1-2 SREs"]
+    end
+    subgraph TC["Team C"]
+        DevC["Developers<br/>+ 1-2 SREs"]
+    end
 ```
 
 **Pros**:
@@ -271,18 +264,15 @@ There's no single way to structure SRE. Here are common models:
 
 ### Model 3: Hybrid
 
-```
-┌─────────────────────────────────────────┐
-│          Central SRE Platform           │
-│    (Tooling, standards, knowledge)      │
-└─────────────────┬───────────────────────┘
-                  │
-    ┌─────────────┼─────────────┐
-    ▼             ▼             ▼
-┌─────────┐  ┌─────────┐  ┌─────────┐
-│ Team A  │  │ Team B  │  │ Team C  │
-│ + SRE   │  │ + SRE   │  │ + SRE   │
-└─────────┘  └─────────┘  └─────────┘
+```mermaid
+flowchart TD
+    Central["Central SRE Platform<br/>(Tooling, standards, knowledge)"]
+    TeamA["Team A<br/>+ SRE"]
+    TeamB["Team B<br/>+ SRE"]
+    TeamC["Team C<br/>+ SRE"]
+    Central --> TeamA
+    Central --> TeamB
+    Central --> TeamC
 ```
 
 **Pros**:
@@ -299,19 +289,15 @@ There's no single way to structure SRE. Here are common models:
 
 ### Model 4: You Build It, You Run It (No Dedicated SREs)
 
-```
-┌───────────────────┐  ┌───────────────────┐  ┌───────────────────┐
-│     Team A        │  │     Team B        │  │     Team C        │
-│  Develops AND     │  │  Develops AND     │  │  Develops AND     │
-│  Operates their   │  │  Operates their   │  │  Operates their   │
-│  services         │  │  services         │  │  services         │
-└───────────────────┘  └───────────────────┘  └───────────────────┘
-                              │
-                              ▼
-                    ┌──────────────────┐
-                    │ Enabling Team    │
-                    │ (Tooling, docs)  │
-                    └──────────────────┘
+```mermaid
+flowchart TD
+    TeamA["Team A<br/>Develops AND Operates their services"]
+    TeamB["Team B<br/>Develops AND Operates their services"]
+    TeamC["Team C<br/>Develops AND Operates their services"]
+    Enabling["Enabling Team<br/>(Tooling, docs)"]
+    TeamA --> Enabling
+    TeamB --> Enabling
+    TeamC --> Enabling
 ```
 
 **Pros**:
@@ -402,60 +388,42 @@ The shift wasn't hiring more people. It was **working differently**.
 ## Quiz: Check Your Understanding
 
 ### Question 1
-What distinguishes SRE from traditional operations?
+Your company is migrating from a traditional operations model to an SRE model. The VP of Engineering suggests that the new SRE team should handle all deployments and manual server patching to free up developers. Based on SRE principles, why is this approach problematic?
 
 <details>
 <summary>Show Answer</summary>
 
-**SRE treats operations as a software engineering problem**. Instead of doing operational work, SREs automate it. The 50% rule ensures SREs spend half their time on engineering projects that reduce future operational burden. SRE also brings engineering rigor through SLOs, error budgets, and blameless postmortems.
+This approach is problematic because it treats the SRE team as a traditional operations group focused on manual work rather than engineering solutions. In SRE, the primary goal is to treat operations as a software engineering problem. SREs should focus on automating deployments and reducing toil, governed by the 50% rule where no more than half their time is spent on operational tasks. By taking on all manual patching and deployments, the team would quickly exceed this limit and fail to build the scalable, automated systems that SRE is designed to create.
 
 </details>
 
 ### Question 2
-Why is "100% reliability" considered wrong in SRE?
+Your product manager insists that the new critical payment service must be built to achieve 100% reliability, arguing that "any downtime is unacceptable for payments." As an SRE, how would you address this requirement?
 
 <details>
 <summary>Show Answer</summary>
 
-Three reasons:
-
-1. **Users can't perceive it**: Other factors (ISP, device, network) dominate user experience
-2. **It's exponentially expensive**: Each additional 9 costs much more than the last
-3. **It slows development**: Extreme reliability requires extreme caution
-
-Instead, SRE embraces calculated risk through error budgets, targeting reliability levels that match user needs.
+Targeting 100% reliability is considered an anti-pattern in SRE because it is both practically impossible and misaligned with actual user experience. Even if your service never fails, users will still experience errors due to unstable internet connections, ISP outages, or device issues, making the extra effort invisible to them. Furthermore, achieving each additional "nine" of reliability costs exponentially more in engineering effort and severely throttles feature velocity. Instead, the SRE approach is to set a realistic Service Level Objective (SLO), such as 99.99%, and use the remaining error budget to safely deploy updates and balance reliability with innovation.
 
 </details>
 
 ### Question 3
-How do SRE, DevOps, and Platform Engineering relate?
+An executive at your company states, "We don't need to adopt DevOps because we're already building a Platform Engineering team, and we'll hire SREs to run it." How would you clarify the relationship between these three concepts to correct this misunderstanding?
 
 <details>
 <summary>Show Answer</summary>
 
-- **DevOps**: A cultural movement emphasizing collaboration, automation, and feedback (what you believe)
-- **SRE**: A specific implementation of DevOps principles with concrete practices like SLOs and error budgets (how you work)
-- **Platform Engineering**: Building internal platforms for self-service developer experience (what you build)
-
-As Seth Vargo put it: "Class SRE implements interface DevOps."
+It is crucial to clarify that DevOps, SRE, and Platform Engineering are complementary concepts, not mutually exclusive alternatives. DevOps is the foundational cultural movement that emphasizes collaboration, shared responsibility, and breaking down silos between development and operations. SRE is a specific, prescriptive implementation of those DevOps principles, providing concrete practices like Service Level Objectives (SLOs) and error budgets. Meanwhile, Platform Engineering focuses on building internal developer platforms to enable self-service and standardize workflows. You still need the DevOps culture and SRE practices to ensure the platform is reliable and aligns with your business goals.
 
 </details>
 
 ### Question 4
-What is the 50% rule and why does it matter?
+Six months into your SRE team's existence, you audit their time and find they are spending 75% of their week resolving tickets, responding to alerts, and manually scaling infrastructure. What SRE principle is being violated, and what should be the immediate course of action?
 
 <details>
 <summary>Show Answer</summary>
 
-The 50% rule states that **SREs should spend no more than 50% of their time on operational work**. The rest goes to engineering projects.
-
-It matters because:
-- Ensures SRE remains an engineering discipline
-- Forces automation investment
-- Prevents SREs from becoming glorified ops
-- Creates incentive to reduce toil
-
-If ops work exceeds 50%, it signals systemic problems that need addressing.
+This situation directly violates the 50% rule, which mandates that SREs must spend at least half of their time on project-based engineering work rather than reactive operations. When operational work (toil) exceeds 50%, it indicates that the system is either too unreliable, under-automated, or the team is understaffed. The immediate course of action should be to push back on operational duties, potentially routing excess tickets back to the development teams. The SRE team must then redirect their focus toward automating the manual scaling and addressing the root causes of the alerts to permanently reduce the operational burden.
 
 </details>
 
@@ -470,7 +438,7 @@ Assess your organization's SRE maturity:
 Rate each area from 1 (not at all) to 5 (fully implemented):
 
 **Reliability Measurement**
-```
+```text
 [ ] We have SLOs for our critical services
 [ ] We measure availability and latency
 [ ] We have dashboards showing reliability metrics
@@ -480,7 +448,7 @@ Score: ___/20
 ```
 
 **Operational Practices**
-```
+```text
 [ ] We have documented runbooks for common issues
 [ ] We do blameless postmortems after incidents
 [ ] We track and measure toil
@@ -490,7 +458,7 @@ Score: ___/20
 ```
 
 **Engineering Investment**
-```
+```text
 [ ] Developers participate in on-call
 [ ] We regularly invest in automation
 [ ] We have error budgets that gate releases
@@ -500,7 +468,7 @@ Score: ___/20
 ```
 
 **Culture**
-```
+```text
 [ ] Reliability is a product feature, not ops problem
 [ ] We learn from failures, not blame individuals
 [ ] Developers and operations collaborate closely
