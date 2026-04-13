@@ -437,6 +437,7 @@ spec:
           key: db-password
 EOF
 
+k wait --for=condition=Ready pod/secret-env --timeout=60s
 k logs secret-env
 ```
 
@@ -463,6 +464,7 @@ spec:
       defaultMode: 0400
 EOF
 
+k wait --for=condition=Ready pod/secret-vol --timeout=60s
 k logs secret-vol
 ```
 
@@ -526,6 +528,7 @@ spec:
           key: DB_PASS
 EOF
 
+k wait --for=condition=Ready pod/drill3 --timeout=60s
 k logs drill3
 k delete pod drill3 secret drill3
 ```
@@ -555,6 +558,7 @@ spec:
       secretName: drill4
 EOF
 
+k wait --for=condition=Ready pod/drill4 --timeout=60s
 k logs drill4
 k delete pod drill4 secret drill4
 ```
@@ -610,6 +614,7 @@ spec:
         name: drill6-db
 EOF
 
+k wait --for=condition=Ready pod/drill6 --timeout=60s
 k logs drill6
 k delete pod drill6 secret drill6-db
 ```
