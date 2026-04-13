@@ -344,37 +344,37 @@ sequenceDiagram
 1. **Scenario**: Your e-commerce site experiences a sudden 500% traffic spike. Your Docker-compose setup on a single massive EC2 instance maxes out its CPU and begins dropping connections. **Why is Kubernetes better suited to handle this specific situation?**
    <details>
    <summary>Answer</summary>
-   Kubernetes can automatically provision additional worker nodes and schedule new replica Pods to handle the increased load. Unlike a single-machine Docker setup which is constrained by the hard limits of that specific machine, Kubernetes distributes the workload across a scalable fleet of machines. Once the traffic spike subsides, Kubernetes can automatically scale back down to save infrastructure costs.
+   Kubernetes is designed to orchestrate containers across a distributed cluster, allowing it to automatically provision additional worker nodes and schedule new replica Pods to handle the increased load. Unlike a single-machine Docker setup, which is permanently constrained by the physical limits of that specific machine, Kubernetes distributes the workload dynamically across a scalable fleet. When the capacity of one node is exhausted, the control plane simply places new Pods on other available nodes. Furthermore, once the traffic spike subsides, Kubernetes can automatically scale the infrastructure back down to save costs.
    </details>
 
 2. **Scenario**: You are deploying a 3-tier web application to a Kubernetes cluster. You need to ensure that the frontend containers can always communicate with the backend containers, even if the backend containers crash and are recreated with entirely different IP addresses. **Which Kubernetes concept guarantees this stable communication?**
    <details>
    <summary>Answer</summary>
-   The Service concept provides stable networking for Pods. Because Pods are ephemeral and receive new IP addresses when they are recreated by a Deployment, relying on Pod IPs directly will inevitably cause communication failures. A Service provides a single, static IP address and DNS name that load balances traffic across all healthy Pods matching its selector, ensuring the frontend can always find the backend.
+   The Kubernetes Service concept provides the essential stable networking layer for your ephemeral Pods. Because Pods are constantly created and destroyed by the Deployment controller, they receive new, unpredictable IP addresses every time they start. Relying on direct Pod IP addresses for communication will inevitably cause connection failures as soon as a Pod cycles. By implementing a Service, you create a single, static IP address and reliable DNS name that intelligently load balances incoming traffic across all currently healthy Pods that match its label selector.
    </details>
 
 3. **Scenario**: A junior engineer accidentally deletes the only running Pod for your critical payment processing service. In a pure Docker environment, the service would be down until an engineer manually restarted it. **If this was managed by a Kubernetes Deployment, predict exactly what would happen next.**
    <details>
    <summary>Answer</summary>
-   The Kubernetes Controller Manager would immediately detect that the actual state of the cluster (0 Pods running) diverges from the desired state defined in the Deployment (1 Pod running). It would automatically instruct the API Server to create a new Pod to replace the deleted one. The Scheduler would then assign this new Pod to an available worker node, restoring the service rapidly with zero human intervention.
+   The Kubernetes Controller Manager continuously monitors the cluster to ensure the actual running state matches the desired state declared in your Deployment configuration. The moment the Pod is deleted, the control plane detects that the actual state (0 Pods) has diverged from your desired state (1 Pod). It immediately reacts by instructing the API Server to create a new replacement Pod. The Scheduler then detects this pending Pod and assigns it to an available worker node, automatically restoring your payment processing service without any human intervention.
    </details>
 
 4. **Scenario**: Your team is debating whether to build a self-managed Kubernetes cluster on virtual machines or use Amazon EKS. Your startup has only two DevOps engineers. **Based on typical production requirements, why is the managed service (EKS) the safer choice?**
    <details>
    <summary>Answer</summary>
-   EKS offloads the immense operational burden of managing the Kubernetes Control Plane components, like the API Server and the etcd database. Managing a highly available etcd cluster and performing zero-downtime upgrades requires specialized, full-time expertise. With only two engineers, a self-managed control plane introduces a massive single point of failure and operational risk, whereas EKS provides a resilient, managed control plane out of the box.
+   Amazon EKS strategically offloads the immense operational burden and risk of managing the critical Kubernetes Control Plane components, such as the API Server and the etcd database. Managing a highly available etcd cluster and performing zero-downtime control plane upgrades requires specialized, full-time distributed systems expertise. With a team of only two engineers, attempting to run a self-managed control plane introduces a massive single point of failure and unacceptable operational overhead. By choosing EKS, your small team benefits from a resilient, vendor-managed control plane out of the box, allowing them to focus entirely on deploying applications rather than maintaining infrastructure.
    </details>
 
 5. **Scenario**: A hardware failure causes Worker Node #3 to suddenly lose power. It was running 5 instances of your web application Pods. **Diagnose which control plane component is responsible for noticing this failure and taking action.**
    <details>
    <summary>Answer</summary>
-   The Controller Manager is responsible for noticing the failure and taking corrective action. Specifically, a sub-component called the Node Controller monitors the heartbeat of all nodes. When it detects that Worker Node #3 has stopped responding, it marks the node as unreachable. Other controllers then notice that the desired number of Pods is no longer met, triggering the creation of replacement Pods that the Scheduler will place on healthy nodes.
+   The Controller Manager is the specific control plane component responsible for continuously observing node health and taking corrective action when failures occur. Within the Controller Manager, the Node Controller sub-component constantly monitors the heartbeat signals emitted by the kubelet on every worker node. When Worker Node #3 stops sending heartbeats due to the power loss, the Node Controller marks it as unreachable. Consequently, the ReplicaSet controller notices that the desired number of running application Pods has dropped, immediately triggering the creation of five new replacement Pods that the Scheduler will place on the remaining healthy nodes.
    </details>
 
 6. **Scenario**: You run `kubectl apply -f my-app.yaml` to deploy a new feature, but the command times out and returns a "connection refused" error. However, your monitoring dashboards show that the worker nodes and existing applications are perfectly healthy. **Diagnose which specific control plane component is likely down.**
    <details>
    <summary>Answer</summary>
-   The API Server is almost certainly offline or unreachable. The API Server acts as the exclusive front door for all Kubernetes cluster operations; your `kubectl` tool communicates directly with it, not with the worker nodes or other control plane components. If the API Server is down, you cannot query the cluster state or deploy new resources, even though the existing running workloads on the worker nodes will continue to function normally.
+   The Kubernetes API Server is almost certainly offline, crashed, or otherwise unreachable from your network. The API Server functions as the exclusive gateway and central nervous system for all cluster management operations; your local `kubectl` utility communicates strictly with it, never directly with the worker nodes or other control plane components. When the API Server goes down, the control plane becomes unresponsive and cannot accept new configurations or query the current cluster state. However, the existing workloads on the worker nodes continue to function normally because the local kubelet processes simply keep running their last known assignments.
    </details>
 
 ---
