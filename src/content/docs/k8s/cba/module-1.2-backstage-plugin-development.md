@@ -18,24 +18,32 @@ sidebar:
 
 After completing this module, you will be able to:
 
-1. **Design** a Backstage frontend plugin with React components, Material UI theming, and route registration in the app shell.
-2. **Implement** a backend plugin with Express routes, database migrations, and secure service-to-service authentication.
-3. **Evaluate** Software Templates to scaffold new services using Nunjucks, robust CI/CD pipelines, and catalog registration logic.
-4. **Diagnose** common plugin communication failures, extension point misconfigurations, and authentication provider integration issues by analyzing Backstage TypeScript code.
+1. **Build** a Backstage frontend plugin with React components, Material UI theming, and route registration in the app shell
+2. **Build** a backend plugin with Express routes, database migrations, and service-to-service authentication
+3. **Create** Software Templates that scaffold new services with cookiecutter/Nunjucks, including CI/CD pipelines and catalog registration
+4. **Analyze** plugin extension points, composability APIs, and auth provider integration by reading Backstage TypeScript code
 
 ---
 
 ## Why This Module Matters
 
-This is the single most important module for the Certified Backstage Associate (CBA) exam. **Domain 4 is worth 32%** of your total score — meaning nearly one in three questions will rigorously test your understanding of plugin development, Material UI integration, Software Templates, theming, and authentication providers. Backstage without plugins is just an empty shell. The entire value proposition of a developer portal — the software catalog, TechDocs, CI/CD visibility, and automated scaffolding — is delivered exclusively through plugins. Understanding how plugins function architecturally is synonymous with understanding how Backstage itself operates.
+This is the single most important module for the CBA exam. **Domain 4 is worth 32%** — nearly one in three questions will test your understanding of plugin development, Material UI, Software Templates, theming, and auth providers.
+
+Backstage without plugins is an empty shell. The entire value proposition — the software catalog, TechDocs, CI/CD visibility, scaffolding — all of it is delivered through plugins. When Spotify built Backstage, they designed it as a plugin platform first and a portal second. Understanding how plugins work is understanding how Backstage works.
+
+This module is code-heavy by design. The exam shows you TypeScript and React snippets and asks what they do. You will not write code during the exam, but you absolutely need to *read* code fluently.
+
+> **The Restaurant Analogy**
+>
+> Backstage is a restaurant kitchen. The core framework is the building — walls, plumbing, electricity. Frontend plugins are the dishes on the menu. Backend plugins are the kitchen stations (grill, prep, dessert). Software Templates are the recipes that let line cooks produce consistent meals. Auth providers are the bouncers at the door. You do not run a restaurant by staring at the building — you run it by cooking.
+
+---
+
+## War Story: The Plugin That Broke Production
 
 In 2024, a major European financial institution experienced a severe, multi-day production incident tied directly to an improperly designed Backstage plugin. A platform team had built a custom frontend plugin that polled an internal Kubernetes cluster API directly from the browser to display real-time pod metrics. Because they did not route the request securely through a Backstage backend plugin, the frontend inadvertently exposed raw, long-lived cluster tokens to the client environment. A compromised third-party browser extension harvested these tokens, leading to an unauthorized lateral movement incident. The resulting breach cost the company millions in regulatory fines, mandatory security audits, and lost engineering velocity.
 
 The crucial lesson from this outage is that Backstage plugin development is not standard React development. It requires a deep, uncompromising understanding of the boundary between the browser and the server. You must know exactly where your code executes, how it authenticates, and how it handles resource limits. That architectural discipline is exactly what the CBA certification tests.
-
-> **The Restaurant Analogy**
->
-> Backstage is a restaurant kitchen. The core framework is the physical building — the walls, plumbing, and electricity. Frontend plugins are the distinct dishes on the menu that the customer interacts with. Backend plugins are the specialized kitchen stations (the grill, the prep line, the dessert station). Software Templates are the rigid recipes that allow line cooks to produce consistent meals at scale. Auth providers are the bouncers verifying identity at the door. You do not run a restaurant by staring at the building; you run it by cooking.
 
 ---
 
@@ -44,46 +52,42 @@ The crucial lesson from this outage is that Backstage plugin development is not 
 1. **Massive Ecosystem**: The Backstage community maintains a public directory at `backstage.io/plugins` and a dedicated `backstage/community-plugins` repository governed strictly under the Apache License 2.0.
 2. **Strict Release Cadence**: As a CNCF Incubating project, Backstage follows a monthly main release line (shipping the Tuesday before the third Wednesday of each month) and a weekly `next` release line for early access.
 3. **Runtime Support Windows**: Backstage strictly supports exactly two adjacent even-numbered Node.js LTS releases (e.g., Node.js 22 and 24) and the last three major TypeScript versions at any given time.
-4. **The New Default**: As of v1.49.0, newly created Backstage apps use the New Frontend System by default. The old `--next` CLI flag has been removed and replaced by a `--legacy` flag.
+4. **The New Default**: As of v1.49.0 (the latest confirmed stable release in early 2026), newly created Backstage apps use the New Frontend System by default. The old `--next` CLI flag has been removed and replaced by a `--legacy` flag.
 
 ---
 
 ## Part 1: Frontend vs Backend Plugin Architecture
 
-Before writing a single line of code, you must fundamentally understand where Backstage plugins execute. This architectural separation is one of the most frequently tested concepts on the CBA exam.
+Before writing any code, you need to understand where plugins run. This is one of the most commonly tested concepts on the CBA.
+
+> **Pause and predict**: If a frontend plugin makes a network request to an external SaaS API directly from the browser, what security vulnerabilities might this expose compared to routing the request through a backend plugin?
 
 ```mermaid
 flowchart TD
-    subgraph Browser ["Browser (User's machine) / packages/app/"]
-        SPA["React SPA (app)"]
-        FPA["Frontend Plugin A<br>(React component)"]
-        FPB["Frontend Plugin B<br>(React component)"]
-        Core["Backstage Core<br>(routing, theme)"]
-        SPA --- FPA
-        SPA --- FPB
-        SPA --- Core
+    subgraph Client ["Browser (User's machine)"]
+        subgraph App ["packages/app/ (built as static JS/CSS)"]
+            SPA["React SPA (app)"]
+            FPA["Frontend Plugin A<br/>(React component)"]
+            FPB["Frontend Plugin B<br/>(React component)"]
+            FCore["Backstage Core<br/>(routing, theme)"]
+        end
     end
 
-    subgraph Server ["Server (Node.js process) / packages/backend/"]
-        Backend["Express Backend"]
-        BPA["Backend Plugin A<br>(Express router)"]
-        BPB["Backend Plugin B<br>(Express router)"]
-        BCore["Catalog / Auth<br>Scaffolder / ..."]
-        Backend --- BPA
-        Backend --- BPB
-        Backend --- BCore
+    subgraph NodeServer ["Server (Node.js process)"]
+        subgraph Backend ["packages/backend/"]
+            BApp["Express Backend"]
+            BPA["Backend Plugin A<br/>(Express router)"]
+            BPB["Backend Plugin B<br/>(Express router)"]
+            BCore["Catalog / Auth<br/>Scaffolder / ..."]
+        end
     end
 
     DB[("PostgreSQL / SQLite")]
 
-    FPA -- "HTTP/REST" --> BPA
-    FPB -- "HTTP/REST" --> BPB
+    FPA -- "HTTP / REST" --> BPA
+    FPB -- "HTTP / REST" --> BPB
     BCore --> DB
-    BPA --> DB
-    BPB --> DB
 ```
-
-> **Pause and predict**: If a frontend plugin needs to read a configuration file from the server's local disk, how would you design the data flow? (Hint: The browser cannot read the server's disk directly.)
 
 ### Key Differences
 
@@ -101,11 +105,9 @@ flowchart TD
 
 ## Part 2: Frontend Plugin Development
 
-Backstage is actively transitioning between two frontend architectures. While the New Frontend System (utilizing `createFrontendPlugin`) is the default as of v1.49.0, the legacy system (`createPlugin` from `@backstage/core-plugin-api`) remains fully supported, heavily utilized in enterprise environments, and widely tested. We focus heavily on these foundational patterns.
-
 ### 2.1 Creating a Frontend Plugin
 
-Backstage provides a CLI command to scaffold a new plugin efficiently:
+Backstage provides a CLI command to scaffold a new plugin:
 
 ```bash
 # From the Backstage root directory
@@ -115,9 +117,9 @@ yarn new --select plugin
 # This creates: plugins/my-dashboard/
 ```
 
-The generated frontend plugin assumes a predictable, structured directory tree:
+The generated plugin structure:
 
-```text
+```
 plugins/my-dashboard/
 ├── src/
 │   ├── index.ts              # Public API exports
@@ -136,11 +138,9 @@ plugins/my-dashboard/
     └── index.tsx
 ```
 
-*Note: Plugin IDs heavily rely on kebab-case naming conventions, yielding package names like `@internal/plugin-my-dashboard`.*
-
 ### 2.2 The Plugin Definition — `createPlugin`
 
-Every frontend plugin requires a central identity definition. This defines how Backstage registers the plugin, maps its routes, and exposes its extensions.
+Every frontend plugin starts with `createPlugin`. This is the plugin's identity — it registers the plugin with Backstage and declares its routes, APIs, and extensions.
 
 ```typescript
 // plugins/my-dashboard/src/plugin.ts
@@ -168,9 +168,11 @@ export const MyDashboardPage = myDashboardPlugin.provide(
 ```
 
 What this code does, line by line:
-- `createPlugin({ id: 'my-dashboard' })` — Registers the plugin globally using a unique ID.
-- `routes: { root: rootRouteRef }` — Ties internal navigational routes to the plugin.
-- `createRoutableExtension()` — Wraps your React component so it can be safely mounted into the Backstage application shell. It utilizes dynamic `import()` statements for aggressive code splitting.
+
+- `createPlugin({ id: 'my-dashboard' })` — Registers a plugin with a unique ID. Backstage uses this ID for routing, configuration, and analytics.
+- `routes: { root: rootRouteRef }` — Associates named routes with the plugin. `rootRouteRef` is a reference created elsewhere (see below).
+- `createRoutableExtension()` — Creates a React component that Backstage can mount at a URL path. The `component` field uses dynamic `import()` for code splitting — the plugin code is only loaded when a user navigates to its page.
+- `mountPoint: rootRouteRef` — Ties this component to the route reference.
 
 ### 2.3 Route References
 
@@ -183,11 +185,11 @@ export const rootRouteRef = createRouteRef({
 });
 ```
 
-Route references represent abstract routing destinations. They do not dictate actual URL paths—those are assigned strictly when the plugin is mounted inside the main application.
+Route references are abstract — they do not contain actual URL paths. The path is assigned when the plugin is mounted in the app (see Section 2.5).
 
 ### 2.4 Writing a Frontend Plugin Page
 
-A Backstage frontend plugin page typically fetches data via the Backstage API layer and formats it using standard UI components.
+Here is a complete frontend plugin page that fetches data from a backend API and displays it using Backstage's built-in components:
 
 ```tsx
 // plugins/my-dashboard/src/components/MyDashboardPage/MyDashboardPage.tsx
@@ -306,7 +308,7 @@ export const MyDashboardPage = () => {
 
 ### 2.5 Mounting the Plugin in the App
 
-To make the plugin accessible, you must wire it into the core application router:
+After building the plugin, you wire it into the app:
 
 ```tsx
 // packages/app/src/App.tsx
@@ -316,7 +318,7 @@ import { MyDashboardPage } from '@internal/plugin-my-dashboard';
 <Route path="/my-dashboard" element={<MyDashboardPage />} />
 ```
 
-And finally, add a navigation entry to the sidebar:
+And add a sidebar entry:
 
 ```tsx
 // packages/app/src/components/Root/Root.tsx
@@ -330,8 +332,6 @@ import DashboardIcon from '@mui/icons-material/Dashboard';
 
 ## Part 3: Backend Plugin Development
 
-The New Backend System represents a massive leap forward in stability and composability, having reached stable 1.0 status. It completely replaces the older manual backend wiring with an elegant dependency injection system.
-
 ### 3.1 Creating a Backend Plugin
 
 ```bash
@@ -343,7 +343,7 @@ yarn new --select backend-plugin
 
 ### 3.2 Backend Plugin Structure (New Backend System)
 
-Here is the exact structure of a backend plugin leveraging the new architectural pattern:
+Backstage has migrated to a "new backend system" (introduced in Backstage 1.x). The exam tests the new pattern. Here is the full structure of a backend plugin:
 
 ```typescript
 // plugins/my-dashboard-backend/src/plugin.ts
@@ -380,13 +380,15 @@ export const myDashboardPlugin = createBackendPlugin({
 });
 ```
 
-Key technical concepts for the New Backend System:
-- **`createBackendPlugin`**: Declares a backend plugin mapped securely to `pluginId`.
-- **Dependency Injection**: Through `coreServices`, you implicitly request services. Backstage orchestrates injecting the logger, the specific isolated database client, and the properly scoped HTTP router automatically.
+Key concepts:
+
+- **`createBackendPlugin`** — Declares a backend plugin with a unique `pluginId`.
+- **`coreServices`** — Dependency injection. Instead of constructing dependencies yourself, you declare what you need and Backstage provides them.
+- **`coreServices.httpRouter`** — An Express router scoped to `/api/<pluginId>`.
+- **`coreServices.database`** — A Knex.js database client. Backstage manages the connection.
+- **`coreServices.logger`** — A Winston logger scoped to the plugin.
 
 ### 3.3 Writing an Express Router
-
-Backstage delegates complex logic to standard Express routers.
 
 ```typescript
 // plugins/my-dashboard-backend/src/router.ts
@@ -482,8 +484,6 @@ export async function createRouter(
 
 ### 3.4 Registering the Backend Plugin
 
-Thanks to the New Backend System, integrating this plugin takes precisely one line:
-
 ```typescript
 // packages/backend/src/index.ts
 import { myDashboardPlugin } from '@internal/plugin-my-dashboard-backend';
@@ -492,9 +492,11 @@ import { myDashboardPlugin } from '@internal/plugin-my-dashboard-backend';
 backend.add(myDashboardPlugin);
 ```
 
+That single line is all it takes. The new backend system handles dependency injection, router mounting, and lifecycle management automatically.
+
 ---
 
-## Part 4: Service-to-Service Authentication
+## Service-to-Service Authentication
 
 When operating in the Backstage backend ecosystem, your custom plugin will frequently need to communicate with *other* Backstage backend plugins—for example, verifying an entity's existence in the Catalog before taking action. Because these routes are strictly protected by Backstage's core authentication policies, you cannot simply make raw, unauthenticated HTTP calls.
 
@@ -540,13 +542,13 @@ async init({ logger, http, auth, httpAuth }) {
 
 > **Stop and think**: Why does Backstage require a distinct plugin token for backend-to-backend communication instead of directly reusing the user's initial session token? (Hint: Consider the security blast radius if a malicious plugin successfully intercepted a universal user session token).
 
----
+## Part 4: Material UI (MUI) and Theming
 
-## Part 5: Material UI (MUI) and Theming
+### 4.1 Backstage's Relationship with MUI
 
-### 5.1 Backstage's Relationship with MUI
+Backstage uses Material UI v5 (`@mui/material`) as its component library. Every visual element — buttons, cards, tables, dialogs — comes from MUI. The exam tests your ability to recognize MUI components and understand Backstage's theming system.
 
-Backstage relies heavily on Material UI v5 (`@mui/material`). The visual consistency across Backstage depends entirely on utilizing these primitives correctly. Ensure you do not accidentally use MUI v4 packages (`@material-ui/core`) when building new features. Backstage currently actively supports React 18, with React 19 currently under strict evaluation.
+Commonly tested MUI components in a Backstage context:
 
 | MUI Component | Backstage Usage |
 |---------------|-----------------|
@@ -560,9 +562,9 @@ Backstage relies heavily on Material UI v5 (`@mui/material`). The visual consist
 | `Chip` | Status badges, tags |
 | `Dialog` | Modal dialogs for confirmations |
 
-### 5.2 Custom Themes
+### 4.2 Custom Themes
 
-Backstage portals use `createUnifiedTheme` to unify MUI styling with Backstage-specific palettes.
+Backstage supports custom themes via `createUnifiedTheme`. This lets organizations brand the portal with their own colors, fonts, and component styles.
 
 ```typescript
 // packages/app/src/theme.ts
@@ -607,7 +609,7 @@ export const myCustomTheme = createUnifiedTheme({
 });
 ```
 
-Register the exact theme safely at the root level:
+Register the theme in the app:
 
 ```tsx
 // packages/app/src/App.tsx
@@ -622,9 +624,9 @@ import { UnifiedThemeProvider } from '@backstage/theme';
 </UnifiedThemeProvider>
 ```
 
-### 5.3 Using the `sx` Prop
+### 4.3 Using the `sx` prop
 
-MUI v5 aggressively uses the `sx` property for component-level styling logic. 
+MUI v5 uses the `sx` prop for one-off styling. You will see this pattern on the exam:
 
 ```tsx
 import { Box, Typography, Chip } from '@mui/material';
@@ -652,13 +654,13 @@ export const StatusBanner = ({ status }: { status: string }) => (
 
 ---
 
-## Part 6: Installing Existing Plugins
+## Part 5: Installing Existing Plugins
 
-You do not need to build everything natively. The Backstage ecosystem houses extensive open-source solutions.
+Not every plugin needs to be built from scratch. The Backstage plugin marketplace at [backstage.io/plugins](https://backstage.io/plugins) has 200+ community plugins.
 
-### 6.1 Installation Pattern
+### 5.1 Installation Pattern
 
-Installing a robust external plugin follows this strict workflow:
+Most plugins follow this pattern:
 
 ```bash
 # 1. Install the frontend package
@@ -668,8 +670,6 @@ yarn --cwd packages/app add @backstage/plugin-tech-radar
 yarn --cwd packages/backend add @backstage/plugin-tech-radar-backend
 ```
 
-Wire the frontend React elements:
-
 ```tsx
 // 3. Wire frontend into packages/app/src/App.tsx
 import { TechRadarPage } from '@backstage/plugin-tech-radar';
@@ -677,14 +677,10 @@ import { TechRadarPage } from '@backstage/plugin-tech-radar';
 <Route path="/tech-radar" element={<TechRadarPage />} />
 ```
 
-Bind the backend execution context:
-
 ```typescript
 // 4. Wire backend into packages/backend/src/index.ts
 backend.add(import('@backstage/plugin-tech-radar-backend'));
 ```
-
-Provide explicit configuration values:
 
 ```yaml
 # 5. Configure in app-config.yaml (if needed)
@@ -692,9 +688,9 @@ techRadar:
   url: https://your-org.com/tech-radar-data.json
 ```
 
-### 6.2 Overriding Plugin Components
+### 5.2 Overriding Plugin Components
 
-A critical customization strategy is overriding specific elements within an external plugin without resorting to forking the code:
+You can replace the default implementation of any plugin component. This is how you customize third-party plugins without forking them:
 
 ```tsx
 // packages/app/src/App.tsx
@@ -713,13 +709,13 @@ const app = createApp({
 
 ---
 
-## Part 7: Software Templates and Scaffolder
+## Part 6: Software Templates
 
-Software Templates enforce organizational golden paths. They are heavily tested on the exam.
+Software Templates are one of Backstage's most powerful features. They let platform teams define "golden paths" — standardized workflows for creating new services, libraries, or infrastructure.
 
-### 7.1 Template Structure
+### 6.1 Template Structure
 
-Templates are standard YAML definitions utilizing `kind: Template`:
+A Software Template is a YAML file registered in the catalog with `kind: Template`:
 
 ```yaml
 apiVersion: scaffolder.backstage.io/v1beta3
@@ -813,7 +809,7 @@ spec:
         entityRef: ${{ steps['register'].output.entityRef }}
 ```
 
-### 7.2 Built-in Template Actions
+### 6.2 Built-in Template Actions
 
 | Action | Purpose |
 |--------|---------|
@@ -826,9 +822,11 @@ spec:
 | `catalog:write` | Write a `catalog-info.yaml` file |
 | `debug:log` | Log a message (useful for debugging templates) |
 
-### 7.3 Writing a Custom Template Action
+### 6.3 Writing a Custom Template Action
 
-Custom template actions execute purely on the backend, allowing them to communicate securely with third-party systems like Jira.
+When built-in actions are not enough, you write custom actions. This is a heavily tested topic on the CBA.
+
+> **Pause and predict**: If a built-in scaffolder action fails, how does the Backstage UI communicate that failure to the user? What happens if your custom action throws an unhandled exception?
 
 ```typescript
 // plugins/scaffolder-backend-custom/src/actions/createJiraTicket.ts
@@ -937,12 +935,12 @@ export function createJiraTicketAction(options: { config: Config }) {
 }
 ```
 
-Wiring the action module into the New Backend System using dependency injection:
+Register the custom action:
 
 ```typescript
 // plugins/scaffolder-backend-custom/src/plugin.ts
 import { scaffolderActionsExtensionPoint } from '@backstage/plugin-scaffolder-node/alpha';
-import { createBackendModule } from '@backstage/backend-plugin-api';
+import { createBackendModule, coreServices } from '@backstage/backend-plugin-api';
 import { createJiraTicketAction } from './actions/createJiraTicket';
 
 export const scaffolderModuleJiraAction = createBackendModule({
@@ -962,7 +960,7 @@ export const scaffolderModuleJiraAction = createBackendModule({
 });
 ```
 
-Using the custom action seamlessly in YAML:
+Use it in a template:
 
 ```yaml
 steps:
@@ -979,11 +977,11 @@ steps:
 
 ---
 
-## Part 8: Auth Providers
+## Part 7: Auth Providers
 
-Authentication configuration heavily influences internal Backstage identity resolution.
+Backstage supports multiple authentication providers out of the box. The exam tests configuration patterns for the most common ones.
 
-### 8.1 GitHub App Auth
+### 7.1 GitHub App Auth
 
 ```yaml
 # app-config.yaml
@@ -999,7 +997,7 @@ auth:
             - resolver: usernameMatchingUserEntityName
 ```
 
-### 8.2 Okta / OIDC
+### 7.2 Okta / OIDC
 
 ```yaml
 # app-config.yaml
@@ -1016,9 +1014,9 @@ auth:
             - resolver: emailMatchingUserEntityProfileEmail
 ```
 
-### 8.3 Sign-in Resolvers
+### 7.3 Sign-in Resolvers
 
-Resolvers securely map an incoming external identity (GitHub payload, Okta token) directly to an internal Catalog User Entity.
+Sign-in resolvers map an external identity (GitHub user, Okta user) to a Backstage user entity in the catalog. The exam commonly tests these resolvers:
 
 | Resolver | What it does |
 |----------|-------------|
@@ -1026,7 +1024,7 @@ Resolvers securely map an incoming external identity (GitHub payload, Okta token
 | `emailMatchingUserEntityProfileEmail` | Matches the provider's email to `spec.profile.email` of a User entity |
 | `emailLocalPartMatchingUserEntityName` | Matches the part before `@` in the email to `metadata.name` |
 
-Custom backend modules allow overriding this behavior dynamically:
+Custom sign-in resolver:
 
 ```typescript
 // packages/backend/src/auth.ts
@@ -1074,11 +1072,11 @@ export const authModuleGithubCustom = createBackendModule({
 
 ---
 
-## Part 9: Testing Plugins
+## Part 8: Testing Plugins
 
-The Backstage framework utilizes `Jest` extensively for plugin testing validation routines.
+### 8.1 Frontend Plugin Tests
 
-### 9.1 Frontend Plugin Tests
+Backstage provides test utilities that wrap `@testing-library/react`:
 
 ```tsx
 // plugins/my-dashboard/src/components/MyDashboardPage/MyDashboardPage.test.tsx
@@ -1141,7 +1139,13 @@ describe('MyDashboardPage', () => {
 });
 ```
 
-### 9.2 Backend Plugin Tests
+Key testing patterns:
+
+- **`renderInTestApp`** — Wraps your component in the full Backstage app context (theme, API providers, routing). Always use this instead of plain `render` from `@testing-library/react`.
+- **MSW (Mock Service Worker)** — The standard way to mock backend API calls in Backstage frontend tests.
+- **`screen.findByText`** — Use `findBy*` (not `getBy*`) for async content that loads after a fetch.
+
+### 8.2 Backend Plugin Tests
 
 ```typescript
 // plugins/my-dashboard-backend/src/router.test.ts
@@ -1227,192 +1231,328 @@ describe('createRouter', () => {
 
 Test your understanding of deep plugin architecture. These scenario-based questions heavily mirror the difficulty and format of the actual CBA exam.
 
-**Q1**: Your team is migrating an older React application into Backstage. You need to register the new feature within the Backstage legacy frontend system so it can expose routes and APIs. What specific function do you invoke to establish this initial plugin definition?
+**Q1**: Scenario: Your team is rushing to deploy a new internal developer portal. A frontend engineer builds a highly interactive React component to display build metrics and wraps it using `createRoutableExtension`. They then import this extension and mount it directly inside the `<FlatRoutes>` block of `App.tsx`. When testing the deployment, the application crashes on load with obscure routing and analytics errors, complaining that the component is orphaned. What critical architectural pattern was violated, and how should it be corrected?
 
 <details>
 <summary>Answer</summary>
 
-`createPlugin()` from `@backstage/core-plugin-api`. It takes an object with `id`, `routes`, `apis`, and other configuration. It returns a plugin instance that can provide extensions via `.provide()`.
+The developer bypassed the strict plugin encapsulation boundary by failing to bind the extension to a registered plugin instance. In Backstage, extensions cannot exist in a vacuum; they must be provided by a plugin that defines a global identity. The engineer must first use `createPlugin()` from `@backstage/core-plugin-api` to establish the plugin's `id`, and then use that specific instance's `.provide()` method to wrap the routable extension. This ensures the core framework can correctly track analytics, resolve route references, and apply plugin-specific configuration.
 </details>
 
-**Q2**: A junior developer submits a PR for a new frontend plugin. In their component, they retrieve data using `const res = await window.fetch('http://localhost:7007/api/inventory/data');`. During code review, you explicitly reject this approach. How should the developer modify their code to correctly make authenticated requests to the backend plugin?
+**Q2**: Scenario: A junior developer submits a PR for a new frontend plugin. In their component, they retrieve data using `const res = await window.fetch('http://localhost:7007/api/inventory/data');`. During code review, you explicitly reject this approach. How should the developer modify their code to correctly make authenticated requests to the backend plugin?
 
 <details>
 <summary>Answer</summary>
 
-Use `useApi(fetchApiRef)` to get the Backstage fetch API, then call `fetchApi.fetch('/api/my-plugin/endpoint')`. This ensures the request includes proper auth headers and uses the correct base URL. Never use `window.fetch` or hardcode URLs.
+The developer must refactor the code to utilize the `useApi` hook in conjunction with `fetchApiRef` from `@backstage/core-plugin-api`. Calling `fetchApi.fetch('/api/my-plugin/endpoint')` allows the Backstage framework to intercept the request and inject the necessary authentication headers automatically. Furthermore, this approach abstracts away the base URL, preventing hardcoded references like `localhost:7007` from breaking when deployed to staging or production environments. Directly using `window.fetch` bypasses the entire Backstage network and security proxy layer.
 </details>
 
-**Q3**: You are designing a backend plugin for the New Backend System. You declare a dependency on `coreServices.httpRouter` in your plugin initialization. When you pass this service to your router factory, what exactly are you receiving and how is its routing path determined?
+**Q3**: Scenario: A backend engineer is migrating an external standalone Express application into a Backstage backend plugin (ID: `inventory`) utilizing the New Backend System. During the migration, they retain their original initialization logic inside the router factory, explicitly configuring Express to listen on port 7007 and hardcoding their route mounts to `/api/custom-inventory`. They submit the pull request stating that the plugin runs perfectly when tested locally. As the technical reviewer, you must reject this pull request immediately. What architectural violation occurred, and what is the correct approach?
 
 <details>
 <summary>Answer</summary>
 
-An Express router that is automatically mounted at `/api/<pluginId>`. Routes you add to this router are accessible at `/api/<pluginId>/your-route`. You do not need to manually configure the mount path.
+The pull request violates the core lifecycle and routing management principles of the New Backend System. In Backstage, individual plugins are not responsible for binding to ports or establishing their own standalone server instances. The framework orchestrates a single global Express application. The engineer must declare a dependency on `coreServices.httpRouter` within their plugin initialization, which automatically injects an Express router that is correctly scoped and mounted at `/api/inventory` based on the defined `pluginId`. This guarantees that all plugins share a unified server configuration, port, and middleware stack without port conflicts or inconsistent routing paths.
 </details>
 
-**Q4**: Your platform team maintains a Software Template that scaffolds a Java Spring Boot application. Developers report that the generated `.jar` wrapper files and certain Spring XML configurations are severely corrupted upon generation. What scaffolder action is likely causing this, and how should you adjust your template steps to resolve it?
+**Q4**: Scenario: Your platform team maintains a Software Template that scaffolds a Java Spring Boot application. Developers report that the generated `.jar` wrapper files and certain Spring XML configurations are severely corrupted upon generation. What scaffolder action is likely causing this, and how should you adjust your template steps to resolve it?
 
 <details>
 <summary>Answer</summary>
 
-`fetch:template` copies files and processes them through the Nunjucks templating engine, replacing `${{ values.name }}` placeholders with actual values. `fetch:plain` copies files as-is without any template processing. Use `fetch:plain` for binary files or when template syntax would conflict with the file content.
+The corruption is highly likely caused by the `fetch:template` action attempting to parse the binary `.jar` files and complex Spring XML configurations as Nunjucks templates. When the templating engine encounters syntax that inadvertently resembles its own tags, or attempts to read binary data as text, it mangles the output. To resolve this, the template steps should be bifurcated. The team must use the `fetch:plain` action specifically for the binary dependencies and static XML files to ensure they are copied exactly as-is without any processing, reserving `fetch:template` strictly for source code files requiring dynamic variable interpolation.
 </details>
 
-**Q5**: The design team provides a comprehensive Material UI theme configuration and instructs you to apply it to your Backstage portal. A developer attempts to integrate it using MUI's standard `createTheme` function, but notices that the sidebar navigation styling is broken and page backgrounds do not render correctly. What function must be used instead, and why?
+**Q5**: Scenario: The design team provides a comprehensive Material UI theme configuration and instructs you to apply it to your Backstage portal. A developer attempts to integrate it using MUI's standard `createTheme` function, but notices that the sidebar navigation styling is broken and page backgrounds do not render correctly. What function must be used instead, and why?
 
 <details>
 <summary>Answer</summary>
 
-`createUnifiedTheme` from `@backstage/theme`. This function extends MUI's theme with Backstage-specific features: page themes (`themeId`), navigation palette colors, and plugin-aware component overrides. Using MUI's `createTheme` directly will produce a theme that is missing Backstage-specific properties.
+The developer must replace the standard MUI `createTheme` function with `createUnifiedTheme` imported from `@backstage/theme`. Backstage relies on a heavily augmented theme object that includes specialized configurations such as `pageTheme` layouts, sidebar navigation palettes, and deeply integrated plugin component overrides. When `createTheme` is used in isolation, these custom properties are omitted from the context, causing specialized layout components to fall back to undefined or broken states. Utilizing `createUnifiedTheme` ensures that the standard Material UI foundational styling is properly merged with Backstage's extended architectural requirements.
 </details>
 
-**Q6**: You are implementing a custom scaffolder action that creates a PagerDuty project. A developer asks if they can use the browser's `localStorage` within the action handler to cache the PagerDuty API token to speed up subsequent template runs. How do you explain the execution environment of this action?
+**Q6**: Scenario: You are implementing a custom scaffolder action that creates a PagerDuty project. A developer asks if they can use the browser's `localStorage` within the action handler to cache the PagerDuty API token to speed up subsequent template runs. How do you explain the execution environment of this action?
 
 <details>
 <summary>Answer</summary>
 
-On the server (Node.js backend). All scaffolder actions run server-side in the backend scaffolder process. This is why they can access secrets from `app-config.yaml`, make authenticated API calls, and interact with the filesystem. The browser only collects form input and displays progress.
+You must clarify that all custom scaffolder actions execute exclusively on the server within the Node.js backend process, completely isolated from the user's browser. Because the execution environment is server-side, browser-native APIs such as `localStorage` or `sessionStorage` are fundamentally unavailable and will throw reference errors if invoked. The server-side execution model is what allows these actions to securely access sensitive credentials mapped in `app-config.yaml`, interact with the host filesystem, and execute trusted API calls without exposing tokens to the client. Any caching mechanisms must be implemented using backend memory or a dedicated caching service rather than client-side storage.
 </details>
 
-**Q7**: In your frontend plugin's test suite, you mock an API endpoint using MSW. You then render the component and assert `expect(screen.getByText('Service Analytics')).toBeInTheDocument();`. The test fails consistently, stating the element cannot be found, even though it appears correctly in the browser instance. How should you modify your assertion logic?
+**Q7**: Scenario: In your frontend plugin's test suite, you mock an API endpoint using MSW. You then render the component and assert `expect(screen.getByText('Service Analytics')).toBeInTheDocument();`. The test fails consistently, stating the element cannot be found, even though it appears correctly in the browser instance. How should you modify your assertion logic?
 
 <details>
 <summary>Answer</summary>
 
-Use `findByText('Loading...')` or more commonly `findByText('expected content after load')`. The `findBy*` queries from `@testing-library/react` retry until the element appears (with a default timeout). `getBy*` queries assert immediately and fail if the element is not in the DOM yet.
+The developer must refactor the assertion to utilize the asynchronous `findByText` query rather than the synchronous `getByText` query. Backstage frontend components that fetch data inherently render asynchronously, meaning the requested DOM elements do not exist at the exact moment the initial render cycle completes. The `getBy*` query evaluates the DOM instantly and throws an error if the element is absent. Conversely, the `findBy*` query automatically wraps the assertion in a localized retry loop, waiting for the component's internal state to resolve the API mock and paint the expected text to the screen before timing out.
 </details>
 
-**Q8**: Your organization has authored a custom template action to register infrastructure in ServiceNow. Under the New Backend System, how do you correctly inject this specific custom action into the existing scaffolder backend plugin so that templates can broadly reference it?
+**Q8**: Scenario: Your platform engineering team has developed a custom Software Template action to orchestrate complex infrastructure provisioning in ServiceNow. A developer integrates this action into the New Backend System by directly importing the core scaffolder plugin instance into `packages/backend/src/index.ts` and attempting to mutate its internal action array. Upon starting the backend process, the application immediately throws a fatal initialization error stating that the scaffolder plugin is already locked and cannot be modified. How should the developer refactor the code to correctly inject this custom action?
 
 <details>
 <summary>Answer</summary>
 
-Create a backend module using `createBackendModule` with `pluginId: 'scaffolder'`. In the module's `register` function, declare a dependency on `scaffolderActionsExtensionPoint` and call `scaffolder.addActions(yourCustomAction())` in the `init` function. Then add the module to the backend with `backend.add(yourModule)`. This pattern uses Backstage's dependency injection rather than manual wiring.
+The developer attempted to manually mutate a plugin instance after registration, which is strictly prohibited by the immutable lifecycle design of the New Backend System. All cross-plugin modifications must be handled through typed extension points rather than direct object mutation. The correct approach is to author a dedicated backend module using `createBackendModule`, setting the target `pluginId` to `'scaffolder'`. Within this module's initialization phase, the developer must declare a dependency on `scaffolderActionsExtensionPoint` and use its provided `addActions` method to safely register the ServiceNow integration without violating the framework's startup sequence.
 </details>
 
-**Q9**: During a hackathon, an engineer attempts to speed up development by directly querying the PostgreSQL catalog database from their frontend React component. They import `DatabaseService` from `@backstage/backend-plugin-api`. What will be the exact result of this architectural decision during the build phase and at runtime?
+**Q9**: Scenario: During a hackathon, an engineer attempts to speed up development by directly querying the PostgreSQL catalog database from their frontend React component. They import `DatabaseService` from `@backstage/backend-plugin-api`. What will be the exact result of this architectural decision during the build phase and at runtime?
 
 <details>
 <summary>Answer</summary>
 
-The build will likely succeed (TypeScript types are just types), but the plugin will fail at runtime. `DatabaseService` and other backend APIs have no implementation in the browser environment. Frontend plugins cannot access the database directly. The author needs to create a backend plugin that exposes the data over an HTTP API and have the frontend plugin call that API using `fetchApiRef`.
+During the TypeScript build phase, the compilation will likely succeed because the interfaces and type definitions are valid constructs. However, when the plugin is loaded in the browser at runtime, it will experience a catastrophic failure because backend primitives like `DatabaseService` rely on Node.js-specific modules (such as `fs` or `net`) that simply do not exist in a browser environment. This violates the fundamental security and architectural boundary separating the frontend SPA from the backend database. To achieve the desired functionality, the engineer must author a dedicated backend plugin to interface with PostgreSQL, expose the queried data via an Express route, and then securely consume that endpoint from the React component utilizing `fetchApiRef`.
 </details>
 
-**Q10**: A Software Template executes a `publish:gitlab` step (assigned the ID `create-repo`) which successfully returns the URL of the newly created repository. In the subsequent `catalog:register` step, how do you correctly pass this generated repository URL dynamically as the input parameter?
+**Q10**: Scenario: A developer's Software Template fails during the `catalog:register` step. The template successfully runs `publish:gitlab` (id: `create-repo`), but the register step uses `repoContentsUrl: ${{ parameters.repoUrl }}` and throws an error that the URL is invalid. The user did not input a URL; it was generated. What is the conceptual flaw in the template's variable referencing?
 
 <details>
 <summary>Answer</summary>
 
-Use the syntax `${{ steps['step-id'].output.outputName }}`. For example, if a `publish:github` step with `id: publish` outputs `remoteUrl`, you reference it as `${{ steps['publish'].output.remoteUrl }}`. Each action defines its own output schema, and outputs are set in the action handler via `ctx.output('key', value)`.
+The conceptual flaw lies in the template attempting to pull execution data directly from the user's initial input rather than the contextual output generated by a preceding step. The `parameters` object exclusively stores the static values collected from the initial UI form, which did not include the finalized URL. To correctly chain the actions together, the developer must alter the reference to point to `${{ steps['create-repo'].output.repoContentsUrl }}`. This ensures the registration step waits for the `publish:gitlab` action to successfully conclude and dynamically passes the newly created repository's location into the catalog registration payload.
 </details>
 
 ---
 
 ## Hands-On Exercise: Build a Full-Stack Backstage Plugin
 
-**Objective**: Build a robust "Team Links" plugin that displays and manages useful navigational links for specific teams. This comprehensive exercise covers frontend scaffolding, backend database routing, and component wiring.
+**Objective**: Build a robust "Team Links" plugin that displays and manages useful navigational links for specific teams. This comprehensive exercise covers frontend scaffolding, backend database routing, component wiring, and includes a bonus scaffolding challenge.
+
+> **Stop and think**: Before you begin, ensure you have a clean Backstage instance running. What two core Node.js versions are officially supported by Backstage right now? (Hint: check the *Did You Know?* section).
 
 ### Task 1: Scaffolding the Workspace Environment
 
-You cannot build plugins without a host application. Scaffold a fresh Backstage instance utilizing supported Node.js 22/24 environments.
+You cannot build plugins without a host application. Scaffold a fresh Backstage instance utilizing supported Node.js environments (v22 or v24).
 
-<details>
-<summary>Solution</summary>
-
+**Execution:**
 Open your terminal and bootstrap the central application:
 
 ```bash
-# Ensure you have a Backstage app (if not, create one)
+# Generate the core Backstage application
 npx @backstage/create-app@latest
-
+# When prompted, name the app "my-backstage-app" and select SQLite as the database.
 cd my-backstage-app
 ```
-</details>
+
+**Checkpoint Verification:**
+Ensure the base application starts successfully before proceeding.
+```bash
+yarn dev
+```
+*Verify that the Backstage frontend loads at `http://localhost:3000` and the backend is healthy at `http://localhost:7007`.*
 
 ### Task 2: Create the Backend Data Plugin
 
 Construct the backend plugin responsible for managing the link data securely.
 
-<details>
-<summary>Solution</summary>
-
+**Execution:**
 Use the built-in generator to construct the node package:
 
 ```bash
 yarn new --select backend-plugin
-# Name it: team-links
+# Name the plugin: team-links
 ```
 
-Navigate to `plugins/team-links-backend/src/router.ts`. The generator automatically creates the Express router wrapper and boilerplate health endpoint that you will expand upon.
-</details>
+The generator automatically creates the Express router wrapper. We need to implement the actual routing logic to serve link data. Open `plugins/team-links-backend/src/router.ts` and replace its entire contents with the following code:
+
+```typescript
+import { Router } from 'express';
+import { Logger } from 'winston';
+
+export interface RouterOptions {
+  logger: Logger;
+}
+
+const mockLinks = [
+  { team: 'platform', title: 'Platform Architecture Docs', url: 'https://docs.example.com/platform' },
+  { team: 'platform', title: 'Kubernetes Runbooks', url: 'https://docs.example.com/k8s' },
+  { team: 'frontend', title: 'Design System', url: 'https://docs.example.com/design' },
+];
+
+export async function createRouter(
+  options: RouterOptions,
+): Promise<Router> {
+  const { logger } = options;
+  const router = Router();
+
+  router.get('/health', (_, res) => {
+    res.json({ status: 'ok' });
+  });
+
+  router.get('/links/:teamName', (req, res) => {
+    const teamName = req.params.teamName;
+    logger.info(`Fetching links for team: ${teamName}`);
+    const teamLinks = mockLinks.filter(l => l.team === teamName);
+    res.json(teamLinks);
+  });
+
+  return router;
+}
+```
+
+Register the backend plugin by modifying `packages/backend/src/index.ts`. Add the following line to the backend builder sequence:
+
+```typescript
+backend.add(import('@internal/plugin-team-links-backend'));
+```
+
+**Checkpoint Verification:**
+Restart the backend server and verify the new API endpoint is operational.
+```bash
+curl http://localhost:7007/api/team-links/links/platform
+```
+*You should see a JSON array containing the 'Platform Architecture Docs' and 'Kubernetes Runbooks'.*
 
 ### Task 3: Create the Frontend Visual Plugin
 
 Scaffold the React user interface that users will interact with.
 
-<details>
-<summary>Solution</summary>
-
+**Execution:**
 Run the generator again, selecting the frontend option:
 
 ```bash
 yarn new --select plugin
-# Name it: team-links
+# Name the plugin: team-links
 ```
 
-Explore `plugins/team-links/src/components/ExampleComponent` to observe how Backstage automatically wires its testing libraries and base React components.
-</details>
-
-### Task 4: Implement Explicit Backend Routing
-
-Modify the scaffolded backend router to intercept HTTP requests, store data (using an in-memory mock for brevity), and return it.
-
-<details>
-<summary>Solution</summary>
-
-Open `plugins/team-links-backend/src/router.ts` and modify the Express router block to map a specific GET route returning a simulated array:
-
-```typescript
-const links = [{ team: 'platform', title: 'Platform Docs', url: 'https://docs.example.com' }];
-
-router.get('/links/:teamName', (req, res) => {
-  const teamLinks = links.filter(l => l.team === req.params.teamName);
-  res.json(teamLinks);
-});
-```
-</details>
-
-### Task 5: Connect the Frontend Interface via `fetchApiRef`
-
-Wire the frontend React element to securely poll the backend route you established in Task 4.
-
-<details>
-<summary>Solution</summary>
-
-Open `plugins/team-links/src/components/ExampleComponent/ExampleFetchComponent.tsx`. Locate the existing `useAsync` hook and adjust the fetch destination to point specifically to your new backend API namespace:
+Now, wire the frontend React element to securely poll the backend route you established in Task 2. Open `plugins/team-links/src/components/ExampleFetchComponent/ExampleFetchComponent.tsx` and replace its contents:
 
 ```tsx
-const { value, loading, error } = useAsync(async (): Promise<any> => {
-  const response = await fetchApi.fetch('/api/team-links/links/platform');
-  return await response.json();
-}, []);
+import React from 'react';
+import { Table, TableColumn, Progress, ResponseErrorPanel } from '@backstage/core-components';
+import useAsync from 'react-use/lib/useAsync';
+import { useApi, fetchApiRef } from '@backstage/core-plugin-api';
+
+interface TeamLink {
+  title: string;
+  url: string;
+}
+
+export const ExampleFetchComponent = () => {
+  const fetchApi = useApi(fetchApiRef);
+
+  const { value, loading, error } = useAsync(async (): Promise<TeamLink[]> => {
+    const response = await fetchApi.fetch('/api/team-links/links/platform');
+    if (!response.ok) {
+      throw new Error(`Failed to fetch links: ${response.statusText}`);
+    }
+    return await response.json();
+  }, []);
+
+  if (loading) {
+    return <Progress />;
+  } else if (error) {
+    return <ResponseErrorPanel error={error} />;
+  }
+
+  const columns: TableColumn[] = [
+    { title: 'Title', field: 'title' },
+    { title: 'URL', field: 'url' },
+  ];
+
+  return <Table title="Platform Team Links" options={{ search: false, paging: false }} columns={columns} data={value || []} />;
+};
 ```
-</details>
 
-### Success Checkpoint Criteria
+Register the frontend plugin in the main app routing table. Open `packages/app/src/App.tsx` and add the route:
 
-- [ ] `yarn dev` boots both the frontend static site and the node backend server without terminal compilation errors.
-- [ ] Navigating explicitly to `/team-links` securely displays the plugin page.
-- [ ] Links fetched from the backend API successfully populate the frontend table.
-- [ ] `yarn test` passes reliably for both `plugins/team-links` and `plugins/team-links-backend`.
-- [ ] Code review confirms absolutely zero direct `window.fetch` implementations — ensuring all networking routes through `fetchApiRef`.
+```tsx
+import { ExampleFetchComponent } from '@internal/plugin-team-links';
+
+// Inside <FlatRoutes>:
+<Route path="/team-links" element={<ExampleFetchComponent />} />
+```
+
+**Checkpoint Verification:**
+Restart the frontend development server and navigate to your new plugin.
+```bash
+yarn --cwd packages/app start
+```
+*Visit `http://localhost:3000/team-links`. The table should render with the two platform links fetched securely from your backend plugin.*
+
+### Task 4: Bonus Challenge — Custom Scaffolder Action (`team-links:seed`)
+
+Platform engineers frequently need to seed initial data when scaffolding new projects. Write a custom backend module that adds a `team-links:seed` action to the Backstage Scaffolder. This action will theoretically inject a new predefined link into your team's tracking database whenever a developer uses a Software Template to create a new service.
+
+**Execution:**
+
+1. Create a new backend module that extends the scaffolder.
+2. Define the custom action utilizing `createTemplateAction`.
+3. Register it to the `scaffolderActionsExtensionPoint`.
+
+Create a new file at `packages/backend/src/actions/teamLinksSeed.ts`:
+
+```typescript
+import { createTemplateAction } from '@backstage/plugin-scaffolder-node';
+
+export const createTeamLinksSeedAction = () => {
+  return createTemplateAction<{
+    team: string;
+    title: string;
+    url: string;
+  }>({
+    id: 'team-links:seed',
+    description: 'Seeds a new team link into the registry.',
+    schema: {
+      input: {
+        type: 'object',
+        required: ['team', 'title', 'url'],
+        properties: {
+          team: { type: 'string', title: 'Team Name' },
+          title: { type: 'string', title: 'Link Title' },
+          url: { type: 'string', title: 'Link URL' },
+        },
+      },
+    },
+    async handler(ctx) {
+      const { team, title, url } = ctx.input;
+      ctx.logger.info(`Seeding link for team ${team}: ${title} -> ${url}`);
+      
+      // In a real scenario, this would execute an INSERT against the database via coreServices.database
+      // For this lab, we mock the insertion.
+      
+      ctx.output('seededUrl', url);
+    },
+  });
+};
+```
+
+Register this action as a backend module in `packages/backend/src/index.ts`:
+
+```typescript
+import { createBackendModule } from '@backstage/backend-plugin-api';
+import { scaffolderActionsExtensionPoint } from '@backstage/plugin-scaffolder-node/alpha';
+import { createTeamLinksSeedAction } from './actions/teamLinksSeed';
+
+const teamLinksScaffolderModule = createBackendModule({
+  pluginId: 'scaffolder',
+  moduleId: 'team-links-seed',
+  register(env) {
+    env.registerInit({
+      deps: {
+        scaffolder: scaffolderActionsExtensionPoint,
+      },
+      async init({ scaffolder }) {
+        scaffolder.addActions(createTeamLinksSeedAction());
+      },
+    });
+  },
+});
+
+backend.add(teamLinksScaffolderModule);
+```
+
+**Checkpoint Verification:**
+Restart the backend process and verify that the Software Templates engine has loaded your custom action.
+```bash
+yarn --cwd packages/backend start
+```
+*Navigate to `http://localhost:3000/create/actions` (the installed actions documentation page). Search the page for `team-links:seed` to verify it has been successfully registered and its schema is displayed.*
 
 ---
 
 ## Summary
 
-This module thoroughly covered the core architectural primitives of CBA Domain 4 — the largest and most critical domain representing 32% of the total exam score.
+This module covered the core of CBA Domain 4 — the largest domain on the exam at 32%. Here is what you should be able to do:
 
 | Topic | Key Takeaway |
 |-------|-------------|
@@ -1430,6 +1570,6 @@ This module thoroughly covered the core architectural primitives of CBA Domain 4
 
 ## Next Steps
 
-- **Module 3**: [Backstage Catalog Deep Dive](../module-1.3-backstage-catalog-infrastructure/) — Explore entity processors, validation providers, structured annotations, and architectural troubleshooting (Domain 3, 22%).
-- **Module 1**: [Backstage Development Workflow](../module-1.1-backstage-dev-workflow/) — Review the monorepo structure, Docker orchestration builds, and CLI commands (Domain 1, 24%).
-- Examine the [Backstage Official Plugin Development Guide](https://backstage.io/docs/plugins/) to internalize complex edge-cases and routing patterns prior to the exam.
+- **Module 3**: [Backstage Catalog Deep Dive](../module-1.3-backstage-catalog-infrastructure/) — Entity processors, providers, annotations, and troubleshooting (Domain 3, 22%)
+- **Module 1**: [Backstage Development Workflow](../module-1.1-backstage-dev-workflow/) — Monorepo structure, Docker builds, CLI commands (Domain 1, 24%)
+- Review the [Backstage Official Plugin Development Guide](https://backstage.io/docs/plugins/) for additional depth
