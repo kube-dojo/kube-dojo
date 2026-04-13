@@ -197,6 +197,8 @@ Example with defaults:
 
 ### Combined Probes for Web App
 
+Using all three probes provides a robust lifecycle: the startup probe grants the app time to boot without being prematurely killed, the liveness probe ensures recovery from deadlocks, and the readiness probe guarantees traffic is only routed when the app is fully ready to serve requests.
+
 ```yaml
 apiVersion: v1
 kind: Pod
@@ -230,6 +232,8 @@ spec:
 
 ### Database Connection Check
 
+Using a database-specific command like `pg_isready` inside an exec probe is more reliable than a simple TCP socket check, as it verifies the database engine is actually ready to authenticate and accept queries.
+
 ```yaml
 livenessProbe:
   exec:
@@ -244,6 +248,8 @@ livenessProbe:
 > **Pause and predict**: For a Redis container, would you use an HTTP, TCP, or exec probe for liveness? Why might one be better than the others?
 
 ### gRPC Health Check
+
+Native gRPC probes allow Kubernetes to query the standard gRPC health checking protocol directly, eliminating the need to bundle external tools like `grpc_health_probe` inside your containers.
 
 ```yaml
 livenessProbe:
@@ -320,8 +326,8 @@ EOF
 # Check pod events for probe activity
 k describe pod webapp | grep -A 10 Events
 
-# Watch for restarts (liveness failures)
-k get pod webapp -w
+# Check for restarts (liveness failures)
+k get pod webapp
 
 # Check endpoint membership (readiness)
 k get endpoints myservice
@@ -422,8 +428,9 @@ EOF
 
 **Verify:**
 ```bash
-# Watch pod status
-k get pod probe-demo -w
+# Wait for pod to be ready
+k wait --for=condition=Ready pod/probe-demo --timeout=60s
+k get pod probe-demo
 
 # Check probe events
 k describe pod probe-demo | grep -A 15 Events
@@ -440,8 +447,9 @@ k get ep probe-demo
 # Make liveness fail - exec into pod and break nginx
 k exec probe-demo -- rm /usr/share/nginx/html/index.html
 
-# Watch restart happen
-k get pod probe-demo -w
+# Wait for liveness probe to fail and trigger restart (takes ~30s)
+sleep 35
+k get pod probe-demo
 ```
 
 **Cleanup:**
@@ -612,6 +620,9 @@ EOF
 # Create service
 k expose deploy drill4 --port=80
 
+# Wait for pods to be ready
+k rollout status deploy/drill4 --timeout=60s
+
 # Check endpoints (should have 2)
 k get endpoints drill4
 
@@ -672,10 +683,12 @@ k describe pod drill5 | grep -E "Liveness|Readiness|Startup"
 
 # Create service and verify endpoint
 k expose pod drill5 --port=80
+k wait --for=condition=Ready pod/drill5 --timeout=60s
 k get ep drill5
 
 # Cleanup
-k delete pod drill5 svc drill5
+k delete pod drill5
+k delete svc drill5
 ```
 </details>
 
@@ -717,8 +730,9 @@ spec:
       failureThreshold: 2
 EOF
 
-# Watch restarts
-k get pod drill6 -w
+# Wait for liveness probe to fail and trigger restart (takes ~15s)
+sleep 15
+k get pod drill6
 
 # After a few restarts, check events
 k describe pod drill6 | tail -20
@@ -741,6 +755,9 @@ spec:
       initialDelaySeconds: 5
       periodSeconds: 10
 EOF
+
+# Wait for pod to be ready
+k wait --for=condition=Ready pod/drill6 --timeout=60s
 
 # Verify fixed
 k get pod drill6
