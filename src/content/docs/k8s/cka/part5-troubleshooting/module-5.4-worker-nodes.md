@@ -18,15 +18,15 @@ lab:
 
 ## Why This Module Matters
 
-In 2018, a major online retailer experienced a catastrophic global outage during their peak holiday sales event. The root cause was not a complex network intrusion or a database corruption, but a simple memory leak in a third-party logging daemon deployed across their worker nodes. As the daemon consumed RAM, individual worker nodes sequentially exhausted their memory capacities. Each node hit `MemoryPressure`, stopped accepting new pods, and began aggressively evicting existing workloads. 
+In 2018, a major online retailer experienced a catastrophic global outage during their peak holiday sales event. The root cause was not a complex network intrusion, a massive denial-of-service attack, or database corruption. Instead, it was a simple, subtle memory leak in a third-party logging daemon deployed as a DaemonSet across all their worker nodes. As the daemon quietly consumed system memory over several days, individual worker nodes sequentially exhausted their physical capacities. Each node independently hit `MemoryPressure`, abruptly stopped accepting new pods, and began aggressively evicting existing production workloads to protect its own kernel integrity.
 
-Because the underlying issue was not immediately diagnosed, the Kubernetes scheduler desperately scrambled to place the newly evicted pods onto the remaining healthy nodes. This cascading failure created a massive "thundering herd" effect. The surviving worker nodes were instantaneously overwhelmed by the flood of rescheduled pods, causing them to run out of memory as well. Within minutes, the entire e-commerce platform collapsed, resulting in six hours of downtime and an estimated $15 million in lost revenue. This incident underscores a brutal truth in distributed systems: a localized node failure, if left unchecked, can quickly metastasize into a global cluster outage.
+Because the underlying issue was not immediately diagnosed or properly isolated by the operations team, the Kubernetes scheduler desperately scrambled to place the newly evicted pods onto the remaining "healthy" nodes. This cascading failure created a massive "thundering herd" effect across the infrastructure. The surviving worker nodes were instantaneously overwhelmed by the flood of rescheduled pods, causing them to rapidly run out of memory as well. Within minutes, the entire e-commerce platform collapsed, resulting in six hours of downtime and an estimated $15 million in lost revenue. This incident underscores a brutal truth in distributed systems: a localized node failure, if left unchecked and improperly managed, can quickly metastasize into a global cluster outage.
 
-Worker nodes are the fundamental workhorses of your Kubernetes cluster. They are where your applications actually execute. When a node fails, the applications running on it suffer immediately. Understanding how to definitively diagnose and fix worker node issues—whether it is a crashed kubelet agent, an unresponsive container runtime, or critical resource exhaustion—is essential for maintaining cluster health. This module prepares you to jump into a failing node, interpret the low-level system signals, and confidently restore service before the cascading effects take hold of your infrastructure.
+Worker nodes are the fundamental workhorses of your Kubernetes cluster. They provide the CPU, memory, and networking primitives where your applications actually execute. When a node fails, the applications running on it suffer immediately. Understanding how to definitively diagnose and fix worker node issues—whether it is a crashed kubelet agent, an unresponsive container runtime, or critical resource exhaustion—is essential for maintaining cluster health. This module prepares you to jump into a failing node, interpret the low-level system signals, and confidently restore service before the cascading effects take hold of your infrastructure.
 
 > **The Factory Floor Analogy**
 >
-> If the control plane is management, worker nodes are the factory floor. The kubelet is the floor supervisor - if they're out, nothing gets done. The container runtime is the machinery - if it breaks, production stops. Node resources (CPU, memory, disk) are the raw materials - run out, and the factory grinds to a halt.
+> If the control plane is management, worker nodes are the factory floor. The kubelet is the floor supervisor - if they are out, nothing gets done. The container runtime is the heavy machinery - if it breaks, production stops. Node resources (CPU, memory, disk) are the raw materials - run out, and the factory grinds to a halt.
 
 ## What You'll Learn
 
@@ -34,13 +34,7 @@ Worker nodes are the fundamental workhorses of your Kubernetes cluster. They are
 - **Evaluate** node resource pressure conditions and implement immediate remediation strategies to prevent cascading failures across the cluster.
 - **Debug** kubelet and container runtime integration failures by analyzing systemd service states, journalctl logs, and CRI socket configurations.
 - **Implement** safe node recovery and maintenance procedures, including cordoning, draining, and component restarts while respecting workload disruption budgets.
-
-## What You'll Be Able to Do
-
-- **Diagnose** worker node NotReady status by checking kubelet, container runtime, and network
-- **Fix** kubelet failures caused by configuration errors, certificate expiry, and resource pressure
-- **Recover** a node from disk pressure, memory pressure, and PID pressure conditions
-- **Drain** and cordon nodes safely during maintenance while respecting PodDisruptionBudgets
+- **Design** eviction strategies that account for taint-based eviction and node-pressure soft and hard thresholds.
 
 ## Did You Know?
 
@@ -55,25 +49,13 @@ Worker nodes are the fundamental workhorses of your Kubernetes cluster. They are
 
 Before diving into the command line, it is critical to understand how Kubernetes thinks about node health. The Kubernetes control plane does not actively poll the worker nodes; instead, it relies on a push-based mechanism. The `kubelet` agent running on each worker node is responsible for periodically evaluating the node's health and pushing a status update (a heartbeat) back to the API server. The Node Controller, running inside the `kube-controller-manager` on the control plane, monitors these heartbeats. If the heartbeats stop, or if the kubelet explicitly reports a problem, the Node Controller changes the node's status to reflect the failure.
 
-The node's status is expressed through a set of **Node Conditions**. These conditions are boolean flags that describe specific aspects of the node's health. 
+To diagnose a node, you must first interrogate the API server to see what it believes the node's state is. You can start with a broad overview and then drill down into the specific conditions of a problematic node.
 
-```text
-┌──────────────────────────────────────────────────────────────┐
-│                    NODE CONDITIONS                            │
-│                                                               │
-│   Condition          Healthy    Meaning                       │
-│   ─────────────────────────────────────────────────────────  │
-│   Ready              True       Node is healthy, can run pods │
-│   MemoryPressure     False      Memory is sufficient          │
-│   DiskPressure       False      Disk space is sufficient      │
-│   PIDPressure        False      Process IDs are available     │
-│   NetworkUnavailable False      Network is configured         │
-│                                                               │
-│   Any unhealthy condition → scheduling problems               │
-│   Ready=False or Unknown → node is NotReady                   │
-│                                                               │
-└──────────────────────────────────────────────────────────────┘
-```
+A Node is marked `Ready=True` when it is schedulable and fully functional. It is marked `Ready=False` when it is known to be unhealthy. However, if the node controller has not received a status update for the default node-monitor grace interval, the node is marked as `Ready=Unknown`.
+
+Under the hood, Kubernetes controller manager defaults include a `node-monitor-period` of 5s and a `node-monitor-grace-period` of 50s for node liveness tracking. This means the Node Controller checks the node's status every 5 seconds. If a node fails to report back within 50 seconds, its status automatically transitions to Unknown. After a node is unreachable for the default eviction timeout (which is 5 minutes), the node is treated as unhealthy long enough to start API-initiated pod eviction handling.
+
+The node's status is expressed through a set of boolean flags. A healthy node expects `Ready` to be `True`, while all pressure conditions (`MemoryPressure`, `DiskPressure`, `PIDPressure`) and `NetworkUnavailable` must be `False`. Any deviation indicates a degraded state.
 
 Architecturally, we can visualize the relationship between these conditions and the overall node readiness as follows:
 
@@ -93,7 +75,16 @@ graph TD
     I -.->|True| D
 ```
 
-To diagnose a node, you must first interrogate the API server to see what it believes the node's state is. You can start with a broad overview and then drill down into the specific conditions of a problematic node.
+When you query the node status, you will typically see one of the following states. Understanding the distinction between `NotReady` and `Unknown` is particularly important for troubleshooting.
+
+| Status | Meaning | Common Causes |
+|--------|---------|---------------|
+| Ready | Healthy and accepting pods | Normal operation |
+| NotReady | Unhealthy | kubelet down, network issues |
+| Unknown | No heartbeat received | Node unreachable, kubelet crashed |
+| SchedulingDisabled | Cordoned | Manual cordon or maintenance |
+
+Here are the primary commands for inspecting node status from the control plane perspective:
 
 ```bash
 # Quick status
@@ -109,45 +100,30 @@ k get nodes -o custom-columns='NAME:.metadata.name,READY:.status.conditions[?(@.
 k describe node <node-name> | grep -E "MemoryPressure|DiskPressure|PIDPressure"
 ```
 
-When you query the node status, you will typically see one of the following states. Understanding the distinction between `NotReady` and `Unknown` is particularly important for troubleshooting.
-
-| Status | Meaning | Common Causes |
-|--------|---------|---------------|
-| Ready | Healthy and accepting pods | Normal operation |
-| NotReady | Unhealthy | kubelet down, network issues |
-| Unknown | No heartbeat received | Node unreachable, kubelet crashed |
-| SchedulingDisabled | Cordoned | Manual cordon or maintenance |
-
 > **Stop and think**: If a node transitions to the `Unknown` state, does that mean the applications running on it have crashed? 
 > *Think about the separation of concerns between the control plane and the runtime before moving on.*
 
 ---
 
-## Part 2: kubelet Troubleshooting
+## Part 2: Taint-Based Evictions and Throttling
+
+When a node transitions to a not-ready or unreachable state, Kubernetes applies specific taints to the node object to drive scheduling and eviction behaviors. Specifically, when a node is not-ready or unreachable, Kubernetes applies taints `node.kubernetes.io/not-ready` and `node.kubernetes.io/unreachable` with `NoSchedule` and `NoExecute` effects for pod scheduling and eviction behavior. 
+
+To ensure pods are not immediately evicted during brief network partitions, Kubernetes adds default tolerations (without any user intent required) for these node failure taints with `tolerationSeconds: 300`. This aligns perfectly with the 5-minute eviction timeout. Only explicitly set toleration seconds on a pod specification will override that default.
+
+From Kubernetes v1.29 onward, taint-based eviction is handled entirely by the `taint-eviction-controller`. Cluster operators can disable this behavior by explicitly omitting it via the controller-manager `--controllers` flag, though this is rarely recommended for standard clusters.
+
+To prevent catastrophic cascading failures during massive network outages or data center partitions, the control plane employs strict eviction throttles. The default eviction throttles are configured as `node-eviction-rate=0.1` pods per second and `secondary-node-eviction-rate=0.01` pods per second. Furthermore, the controller protects the cluster using an `unhealthy-zone-threshold=0.55` and a `large-cluster-size-threshold=50`. If more than 55 percent of the nodes in a zone become unhealthy, and the cluster has more than 50 nodes, the eviction rate is aggressively reduced to the secondary rate to prevent overwhelming the remaining healthy nodes.
+
+Understanding these mechanics allows operators to correctly diagnose why pods are lingering on broken nodes instead of immediately failing over to healthy ones.
+
+---
+
+## Part 3: The kubelet and Container Runtime Integration
 
 The `kubelet` is the most critical Kubernetes component running on a worker node. It is the primary node agent, the direct representative of the control plane on the factory floor. If the kubelet is not functioning, the node is effectively severed from the cluster, regardless of whether the physical server is perfectly healthy.
 
-```text
-┌──────────────────────────────────────────────────────────────┐
-│                    KUBELET RESPONSIBILITIES                   │
-│                                                               │
-│   ┌──────────────────────────────────────────────────────┐   │
-│   │                      kubelet                          │   │
-│   │                                                       │   │
-│   │  • Registers node with API server                    │   │
-│   │  • Watches for pod assignments                       │   │
-│   │  • Manages container lifecycle (via runtime)         │   │
-│   │  • Reports node/pod status                           │   │
-│   │  • Handles probes (liveness, readiness)              │   │
-│   │  • Mounts volumes                                    │   │
-│   │  • Runs static pods                                  │   │
-│   │                                                       │   │
-│   └──────────────────────────────────────────────────────┘   │
-│                                                               │
-│   If kubelet fails → Node goes NotReady → Pods stop working  │
-│                                                               │
-└──────────────────────────────────────────────────────────────┘
-```
+The kubelet does not actually run containers itself; it delegates that responsibility to a Container Runtime via the Container Runtime Interface (CRI). If the container runtime crashes, hangs, or corrupts its local storage, the kubelet will be unable to spin up new pods or retrieve the status of existing ones. Note that the kubelet runs as a native systemd service directly on the host OS, while control plane components (API server, scheduler, etc.) typically run as static pods managed by the kubelet. If the kubelet crashes, the container runtime keeps the existing static pods running independently.
 
 Here is a structural view of the kubelet's responsibilities and the consequences of its failure:
 
@@ -219,6 +195,7 @@ cat /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
 # After fixing config, reload and restart
 sudo systemctl daemon-reload
 sudo systemctl restart kubelet
+sudo systemctl status kubelet  # Verify service started
 ```
 
 Another pernicious issue is certificate expiration. The kubelet authenticates to the API server using client certificates. If these expire (usually after one year in a kubeadm-provisioned cluster), the API server will reject the kubelet's heartbeats, and the node will drop offline silently.
@@ -235,33 +212,7 @@ ls -la /var/lib/kubelet/pki/
 # On worker: kubeadm reset && kubeadm join ...
 ```
 
----
-
-## Part 3: Container Runtime Troubleshooting
-
-The kubelet does not actually run containers itself; it delegates that responsibility to a Container Runtime via the Container Runtime Interface (CRI). If the container runtime crashes, hangs, or corrupts its local storage, the kubelet will be unable to spin up new pods or retrieve the status of existing ones.
-
-```text
-┌──────────────────────────────────────────────────────────────┐
-│                CONTAINER RUNTIME STACK                        │
-│                                                               │
-│   kubelet                                                     │
-│      │                                                        │
-│      │ CRI (Container Runtime Interface)                     │
-│      ▼                                                        │
-│   containerd (or docker, cri-o)                              │
-│      │                                                        │
-│      │ OCI (Open Container Initiative)                       │
-│      ▼                                                        │
-│   runc (low-level runtime)                                   │
-│      │                                                        │
-│      ▼                                                        │
-│   Linux kernel (cgroups, namespaces)                         │
-│                                                               │
-└──────────────────────────────────────────────────────────────┘
-```
-
-The flow of instructions down the stack looks like this:
+The flow of instructions down the container runtime stack looks like this:
 
 ```mermaid
 flowchart TD
@@ -337,29 +288,11 @@ sudo crictl inspect <container-id>
 
 Worker nodes possess finite physical resources. When a node begins to run out of memory, disk space, or process IDs, the kubelet detects this via `cAdvisor` (Container Advisor, which is embedded in the kubelet) and asserts a resource pressure condition.
 
-```text
-┌──────────────────────────────────────────────────────────────┐
-│                 RESOURCE PRESSURE TYPES                       │
-│                                                               │
-│   MEMORY PRESSURE                                             │
-│   • Available memory below threshold                          │
-│   • Triggers pod eviction                                     │
-│   • Check: free -m, cat /proc/meminfo                        │
-│                                                               │
-│   DISK PRESSURE                                               │
-│   • Disk usage above threshold                                │
-│   • Triggers image garbage collection                        │
-│   • Check: df -h                                              │
-│                                                               │
-│   PID PRESSURE                                                │
-│   • Process IDs exhausted                                     │
-│   • Can't fork new processes                                 │
-│   • Check: cat /proc/sys/kernel/pid_max                      │
-│                                                               │
-│   When any pressure is True, node may not accept new pods     │
-│                                                               │
-└──────────────────────────────────────────────────────────────┘
-```
+Default hard node-pressure eviction thresholds include `memory.available<100Mi || <5%`, `nodefs.available<10%`, `nodefs.inodesFree<5%`, and `imagefs.available<15% || imagefs.inodesFree<5%`. These thresholds define the critical red line; once crossed, the node acts defensively to prevent complete system lockup.
+
+Node pressure evictions are enforced directly by the kubelet. Crucially, because these evictions are local emergency measures to save the node from locking up, they bypass PodDisruptionBudgets entirely. Furthermore, in severe eviction situations, the kubelet can ignore the per-pod `terminationGracePeriodSeconds` to reclaim resources instantly. 
+
+To prevent the node from oscillating between healthy and pressured states—often referred to as flapping—node pressure eviction uses soft and hard thresholds combined with a default 5-minute `eviction-transition-period`. This period ensures the pressure signal is sustained before full eviction protocols are enacted. Note that as of Kubernetes v1.35, custom thresholds for the `containerfs.available` hard eviction threshold are not supported. Operators must rely on the default configurations or focus their custom thresholds on `nodefs` and `imagefs`.
 
 ```mermaid
 mindmap
@@ -405,7 +338,7 @@ evictionHard:
   memory.available: "100Mi"
   nodefs.available: "10%"
   nodefs.inodesFree: "5%"
-  imagefs.available: "15%
+  imagefs.available: "15%"
 ```
 
 When these thresholds are crossed, the kubelet acts defensively:
@@ -466,23 +399,6 @@ ps aux | awk '{print $1}' | sort | uniq -c | sort -rn | head
 
 Even if the kubelet is healthy and resources are abundant, a node must have robust network connectivity to function within the cluster. It must be able to reach the API server to send heartbeats, reach other nodes for overlay networking, and reach container registries to pull images.
 
-```text
-┌──────────────────────────────────────────────────────────────┐
-│                NODE NETWORK REQUIREMENTS                      │
-│                                                               │
-│   Node needs connectivity to:                                 │
-│   ┌─────────────────────────────────────────────────────┐    │
-│   │ API Server     (port 6443)    - Required            │    │
-│   │ Other nodes    (varies)       - For pod networking  │    │
-│   │ DNS servers    (port 53)      - For name resolution │    │
-│   │ Registry       (port 443)     - For pulling images  │    │
-│   └─────────────────────────────────────────────────────┘    │
-│                                                               │
-│   Network failures → Node NotReady or Unknown                │
-│                                                               │
-└──────────────────────────────────────────────────────────────┘
-```
-
 ```mermaid
 flowchart LR
     Node -->|port 6443| API[API Server]
@@ -537,34 +453,15 @@ Familiarize yourself with the default ports required for Kubernetes components t
 
 ---
 
-## Part 6: Node Recovery Procedures
+## Part 6: Node Shutdown and Recovery Procedures
 
 When you have exhausted your troubleshooting options and need to perform deep maintenance on a node, you must follow safe recovery procedures. A chaotic recovery approach causes more downtime than the initial failure.
 
-```text
-┌──────────────────────────────────────────────────────────────┐
-│                  NODE RECOVERY DECISION TREE                  │
-│                                                               │
-│   Node NotReady?                                              │
-│        │                                                      │
-│        ├── Can SSH to node?                                   │
-│        │        │                                             │
-│        │        ├── YES → Check kubelet, runtime, network     │
-│        │        │                                             │
-│        │        └── NO  → Check physical/VM, cloud console    │
-│        │                                                      │
-│        ├── kubelet running?                                   │
-│        │        │                                             │
-│        │        ├── YES → Check logs, certs, API connectivity │
-│        │        │                                             │
-│        │        └── NO  → Start kubelet                       │
-│        │                                                      │
-│        └── Still NotReady after fixes?                        │
-│                 │                                             │
-│                 └── Drain and rejoin node                     │
-│                                                               │
-└──────────────────────────────────────────────────────────────┘
-```
+Kubernetes recognizes that nodes must sometimes be rebooted or taken offline for maintenance. Graceful node shutdown is documented as a core feature, boasting Linux support from v1.21 and Windows support from v1.34. By default, the graceful-shutdown knobs are set to a zero-duration (`shutdownGracePeriod=0s` and `shutdownGracePeriodCriticalPods=0s`). When a node entering shutdown is detected, it is instantly marked `NotReady` with scheduling blocked for new pods.
+
+To provide more nuanced control, pod-priority-aware graceful shutdown allows critical workloads to terminate cleanly before best-effort pods. This priority-aware mechanism is a versioned feature path; it was introduced as alpha in v1.24 and has graduated to beta in v1.35, offering refined control over shutdown sequencing.
+
+However, system crashes do not always provide a warning. For non-graceful node shutdown, there is documented behavior to attach a `node.kubernetes.io/out-of-service` taint. When this taint is applied, the controller-manager can forcefully detach node volumes after the timeout window, bypassing normal safe-detach protocols, unless that timeout behavior is explicitly disabled.
 
 ```mermaid
 flowchart TD
@@ -578,7 +475,7 @@ flowchart TD
     G -->|Yes| H[Drain and rejoin node]
 ```
 
-Before rebooting a node or ripping out its configuration, you must safely remove the workloads it is hosting. The `cordon` command marks the node as unschedulable, and the `drain` command safely evicts all running pods (respecting PodDisruptionBudgets and graceful termination periods).
+Before rebooting a node or ripping out its configuration, you must safely remove the workloads it is hosting. The `cordon` command marks the node as unschedulable, and the `drain` command safely evicts all running pods (respecting PodDisruptionBudgets and graceful termination periods). You must include `--ignore-daemonsets` because DaemonSet pods cannot be evicted, and `--delete-emptydir-data` to authorize the loss of ephemeral local volumes.
 
 ```bash
 # Drain node (evicts pods safely)
@@ -595,7 +492,7 @@ If the node's local configuration is entirely corrupted (e.g., messed up certifi
 
 ```bash
 # On the worker node
-sudo kubeadm reset
+sudo kubeadm reset -f
 
 # On control plane - generate new join token
 kubeadm token create --print-join-command
@@ -612,9 +509,10 @@ k drain <node> --ignore-daemonsets --delete-emptydir-data
 
 # Delete node from cluster
 k delete node <node-name>
+k get nodes  # Verify node is removed
 
 # On the node itself
-sudo kubeadm reset
+sudo kubeadm reset -f
 ```
 
 ---
@@ -639,12 +537,12 @@ When troubleshooting worker nodes, panic often leads to rushed commands that exa
 ## Quiz
 
 ### Q1: Node Heartbeat
-You receive an alert that a production worker node has transitioned to the `Unknown` state. The node was perfectly healthy a minute ago. Based on the Kubernetes node controller architecture, how many consecutive seconds of missed heartbeats does this state represent, and what happens next?
+A worker node in your production cluster suffers a sudden, permanent network hardware failure. A junior engineer immediately checks the workloads and is confused why the pods on that node are still showing as `Running` rather than being instantly rescheduled. Walk through the exact timeline and control plane mechanisms that explain this delay.
 
 <details>
 <summary>Answer</summary>
 
-It represents **40 seconds** of missed heartbeats. The kubelet sends heartbeats to the API server every 10 seconds. After 4 missed heartbeats (40s), the node-controller marks the node as Unknown. After 5 minutes (by default) in this state, pods on that node are forcefully scheduled for eviction to ensure application availability.
+First, the API server must miss 4 consecutive kubelet heartbeats (10s each), taking **40 seconds** before the Node Controller marks the node as `Unknown`. Second, when the node becomes `Unknown`, Kubernetes applies a `node.kubernetes.io/unreachable` taint. Pods have a default toleration of **300 seconds** (5 minutes) for this taint. Therefore, the control plane will intentionally wait ~5 minutes and 40 seconds before initiating pod eviction to avoid unnecessary thrashing during transient network blips.
 
 </details>
 
@@ -689,12 +587,12 @@ The **cordon** command only marks the node as unschedulable (preventing new pods
 </details>
 
 ### Q6: Container Runtime Socket
-A worker node's kubelet fails to start, throwing errors in `journalctl` about missing files in `/run/containerd/`. You suspect the container runtime interface socket is unavailable. Where exactly should you look to verify the socket's existence?
+A worker node's kubelet fails to start. Reviewing the logs with `journalctl -u kubelet`, you see connection refused errors targeting `unix:///run/containerd/containerd.sock`. What is the most likely root cause, and how would you verify it before blindly restarting the kubelet?
 
 <details>
 <summary>Answer</summary>
 
-You should check for the socket at `/run/containerd/containerd.sock`. This Unix socket is created and listened on by the containerd systemd service. If it is missing, it typically means containerd has crashed or failed to start, which subsequently prevents the kubelet from initializing because it cannot connect via the CRI.
+The most likely root cause is that the **containerd** service has crashed or stopped, meaning the CRI socket (`/run/containerd/containerd.sock`) is no longer available for the kubelet to connect to. You should verify this by checking `systemctl status containerd` and running `ls -la /run/containerd/containerd.sock` before attempting to restart any services.
 
 </details>
 
@@ -826,6 +724,9 @@ k get pods test-pod -o wide  # Should NOT be on cordoned node
 
 # Uncordon
 k uncordon <node-name>
+
+# Verify node is schedulable again
+k get node <node-name>
 
 # Cleanup
 k delete pod test-pod
