@@ -60,45 +60,21 @@ When services don't work, pods can't communicate, or traffic doesn't flow as exp
 
 ### Packet Flow Through Netfilter
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    NETFILTER PACKET FLOW                         │
-│                                                                  │
-│                       Incoming Packet                            │
-│                            │                                     │
-│                            ▼                                     │
-│                     ┌──────────────┐                            │
-│                     │  PREROUTING  │  (raw, mangle, nat)        │
-│                     └──────┬───────┘                            │
-│                            │                                     │
-│               ┌────────────▼────────────┐                       │
-│               │    Routing Decision     │                       │
-│               └────────────┬────────────┘                       │
-│                    ┌───────┴───────┐                            │
-│                    ▼               ▼                            │
-│  ┌─────────────────────┐  ┌─────────────────────┐              │
-│  │      INPUT          │  │     FORWARD         │              │
-│  │  (for this host)    │  │  (for other host)   │              │
-│  └──────────┬──────────┘  └──────────┬──────────┘              │
-│             │                        │                          │
-│             ▼                        │                          │
-│     Local Process                    │                          │
-│             │                        │                          │
-│             ▼                        │                          │
-│  ┌─────────────────────┐            │                          │
-│  │      OUTPUT         │            │                          │
-│  │  (from this host)   │            │                          │
-│  └──────────┬──────────┘            │                          │
-│             │                        │                          │
-│             └────────────┬───────────┘                          │
-│                          ▼                                      │
-│                   ┌──────────────┐                              │
-│                   │ POSTROUTING  │  (mangle, nat)               │
-│                   └──────┬───────┘                              │
-│                          │                                      │
-│                          ▼                                      │
-│                    Outgoing Packet                              │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Incoming[Incoming Packet] --> Pre[PREROUTING<br/>raw, mangle, nat]
+    Pre --> Route{Routing Decision}
+    
+    Route -->|For this host| In[INPUT<br/>filter, mangle]
+    In --> Local[Local Process]
+    
+    Route -->|For other host| Fwd[FORWARD<br/>filter, mangle]
+    Fwd --> Post[POSTROUTING<br/>mangle, nat]
+    
+    Local --> OutChain[OUTPUT<br/>raw, mangle, nat, filter]
+    OutChain --> Post
+    
+    Post --> Outgoing[Outgoing Packet]
 ```
 
 ### The Five Chains
@@ -245,31 +221,24 @@ sudo iptables-restore < /etc/iptables/rules.v4
 
 kube-proxy creates iptables rules for Services.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│              KUBERNETES SERVICE IPTABLES                         │
-│                                                                  │
-│  Service: my-svc (ClusterIP: 10.96.0.100, Port: 80)            │
-│  Endpoints: 10.244.1.5:8080, 10.244.2.6:8080                   │
-│                                                                  │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │ KUBE-SERVICES chain:                                     │   │
-│  │   -d 10.96.0.100/32 -p tcp --dport 80 -j KUBE-SVC-XXX   │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                            │                                    │
-│                            ▼                                    │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │ KUBE-SVC-XXX chain (load balancing):                    │   │
-│  │   -m statistic --probability 0.5 -j KUBE-SEP-AAA        │   │
-│  │   -j KUBE-SEP-BBB                                        │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                    │                  │                         │
-│                    ▼                  ▼                         │
-│  ┌─────────────────────┐  ┌─────────────────────┐              │
-│  │ KUBE-SEP-AAA:       │  │ KUBE-SEP-BBB:       │              │
-│  │  DNAT to 10.244.1.5 │  │  DNAT to 10.244.2.6 │              │
-│  └─────────────────────┘  └─────────────────────┘              │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Service [Service: my-svc]
+        direction TB
+        Desc[ClusterIP: 10.96.0.100, Port: 80<br/>Endpoints: 10.244.1.5:8080, 10.244.2.6:8080]
+    end
+    
+    KubeSvc[KUBE-SERVICES chain<br/>-d 10.96.0.100/32 -p tcp --dport 80 -j KUBE-SVC-XXX]
+    Service --> KubeSvc
+    
+    KubeLb[KUBE-SVC-XXX chain<br/>-m statistic --probability 0.5 -j KUBE-SEP-AAA<br/>-j KUBE-SEP-BBB]
+    KubeSvc --> KubeLb
+    
+    SepA[KUBE-SEP-AAA<br/>DNAT to 10.244.1.5:8080]
+    SepB[KUBE-SEP-BBB<br/>DNAT to 10.244.2.6:8080]
+    
+    KubeLb -->|50% chance| SepA
+    KubeLb -->|Fallback| SepB
 ```
 
 > **Pause and predict**: If you list the nat table on a Kubernetes node running kube-proxy, what chains do you expect to see custom rules heavily populated in?
@@ -290,20 +259,12 @@ sudo iptables -t nat -L | wc -l
 
 ### NodePort Implementation
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                  NODEPORT IPTABLES                               │
-│                                                                  │
-│  Service: my-svc NodePort 30080                                 │
-│                                                                  │
-│  1. KUBE-NODEPORTS chain catches traffic to 30080              │
-│     -p tcp --dport 30080 -j KUBE-SVC-XXX                       │
-│                                                                  │
-│  2. KUBE-SVC-XXX forwards to endpoints (same as ClusterIP)     │
-│                                                                  │
-│  3. If externalTrafficPolicy: Local, only local endpoints      │
-│     KUBE-XLB-XXX chain filters                                  │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Start[Service: my-svc NodePort 30080] --> Step1
+    Step1[1. KUBE-NODEPORTS chain catches traffic to 30080<br/>-p tcp --dport 30080 -j KUBE-SVC-XXX] --> Step2
+    Step2[2. KUBE-SVC-XXX forwards to endpoints<br/>same as ClusterIP] --> Step3
+    Step3[3. If externalTrafficPolicy: Local<br/>KUBE-XLB-XXX chain filters for local endpoints only]
 ```
 
 ### Network Policies
@@ -337,7 +298,7 @@ sudo iptables -L cali-* -n 2>/dev/null | head -50
 ```
 Small cluster (< 100 services): iptables is fine
 Medium cluster (100-1000 services): Consider IPVS
-Large cluster (1000+ services): IPVS or eBPF
+Large cluster (1000+ services): nftables or eBPF (Cilium)
 Advanced features needed: eBPF (Cilium)
 ```
 
@@ -412,7 +373,7 @@ sudo iptables-save -c | grep -v "0:0"
 | Flushed rules remotely | Locked out | Use iptables-apply or console |
 | Missing FORWARD rules | Containers can't route | Enable and configure FORWARD |
 | NAT without forwarding | NAT doesn't work | Enable ip_forward sysctl |
-| Too many rules | Performance degradation | Consider IPVS |
+| Too many rules | Performance degradation | Consider nftables or eBPF |
 
 ---
 
@@ -447,7 +408,7 @@ Using the **statistic module** with probability:
 For 2 endpoints: 50% chance of first rule (endpoint A), otherwise falls through to endpoint B.
 For 3 endpoints: 33% first, 50% of remaining (33%) second, rest to third.
 
-Because iptables rules are processed in order, kube-proxy must use the `statistic` module to create a random chance of matching a specific endpoint's rule. If the first rule has a 33% probability and matches, traffic goes to the first Pod; if it doesn't match, the packet falls through to the next rule. The subsequent rules adjust their probabilities (e.g., 50% of the remaining 66%) so that mathematically, each of the three endpoints ends up receiving an equal 33% share of the overall traffic.
+Because iptables rules are processed in order, kube-proxy must use the `statistic` module to create a random chance of matching a specific endpoint's rule. If the first rule has a 33% probability and matches, traffic goes to the first Pod; if it doesn't match, the packet falls through to the next rule. The subsequent rules adjust their probabilities (e.g., 50% of the remaining 66%) so that mathematically, each of the three endpoints ends up receiving an equal 33% share of the overall traffic. This ensures an even distribution of requests across all available backends. Without the statistic module, iptables would deterministically send every single packet to the very first endpoint rule it encountered.
 
 </details>
 
@@ -462,7 +423,7 @@ The **nat** table. It has three chains:
 - **OUTPUT**: DNAT for locally-generated packets
 - **POSTROUTING**: SNAT/MASQUERADE (change source after routing)
 
-You must add the rule to the `nat` table because it is specifically designed and optimized by the kernel for translating source or destination IP addresses. Within the `nat` table, you must place the rule in the `POSTROUTING` chain. This is because Source NAT (modifying the packet's source IP to match the Node's IP) must happen after the kernel has already made the routing decision and determined which outbound network interface the packet will leave from.
+You must add the rule to the `nat` table because it is specifically designed and optimized by the kernel for translating source or destination IP addresses. Within the `nat` table, you must place the rule in the `POSTROUTING` chain. This is because Source NAT (modifying the packet's source IP to match the Node's IP) must happen after the kernel has already made the routing decision and determined which outbound network interface the packet will leave from. If you applied it in PREROUTING, the kernel wouldn't yet know the correct outbound interface. Therefore, POSTROUTING ensures the masquerade operation uses the correct public IP of the egress interface.
 
 </details>
 
@@ -477,11 +438,11 @@ iptables rule matching is **O(n)** — packets traverse rules sequentially until
 With 1000 services × ~5 rules each = 5000+ rules. Each packet potentially traverses thousands of rules.
 
 Solutions:
+- Use **nftables** (Recommended starting in 1.35)
 - Use **IPVS mode** (O(1) hash lookup)
 - Use **Cilium/eBPF** (kernel-level efficiency)
-- Reduce number of services
 
-The performance degradation occurs because iptables was originally designed as a simple firewall, evaluating rules linearly from top to bottom. In a cluster with 2,000 services, kube-proxy creates tens of thousands of iptables rules, meaning every new connection must sequentially check against a massive list until it finds a match. This O(n) linear lookup consumes significant kernel CPU time and introduces latency, whereas IPVS or eBPF use highly efficient O(1) hash tables that can instantly route packets regardless of how many services exist.
+The performance degradation occurs because iptables was originally designed as a simple firewall, evaluating rules linearly from top to bottom. In a cluster with 2,000 services, kube-proxy creates tens of thousands of iptables rules, meaning every new connection must sequentially check against a massive list until it finds a match. This O(n) linear lookup consumes significant kernel CPU time and introduces latency, whereas IPVS or eBPF use highly efficient O(1) hash tables that can instantly route packets regardless of how many services exist. As a result, modern large-scale clusters often deprecate iptables-based routing in favor of these more advanced data planes. For example, starting in Kubernetes 1.35, nftables or eBPF-based solutions are strongly recommended over the legacy iptables backend.
 
 </details>
 
@@ -498,7 +459,7 @@ Your developer team has deployed several containers on a custom Linux host using
 - `-o eth0`: Going out eth0
 - `-j MASQUERADE`: Replace source IP with eth0's IP
 
-The command fixed the issue by enabling Source NAT (Network Address Translation) for the containers. Internet routers do not know how to route traffic back to your internal private `10.0.0.0/24` subnet, so packets were being dropped. By appending a `MASQUERADE` rule to the `POSTROUTING` chain, the Linux host now dynamically rewrites the source IP of the outbound packets from the container's private IP to the host's public `eth0` IP before they leave the machine, allowing the return traffic to successfully find its way back.
+The command fixed the issue by enabling Source NAT (Network Address Translation) for the containers. Internet routers do not know how to route traffic back to your internal private `10.0.0.0/24` subnet, so packets were being dropped. By appending a `MASQUERADE` rule to the `POSTROUTING` chain, the Linux host now dynamically rewrites the source IP of the outbound packets from the container's private IP to the host's public `eth0` IP before they leave the machine, allowing the return traffic to successfully find its way back. When the response returns, the host automatically reverses the translation, forwarding the packets back to the original container. This technique is standard practice for allowing isolated bridge networks to communicate with the outside world.
 
 </details>
 
@@ -628,7 +589,7 @@ echo "mangle: $(sudo iptables -t mangle -L | wc -l)"
 
 4. **Rule order matters** — First match wins
 
-5. **Performance at scale** — Consider IPVS or eBPF for large clusters
+5. **Performance at scale** — Consider nftables or eBPF for large clusters
 
 ---
 
