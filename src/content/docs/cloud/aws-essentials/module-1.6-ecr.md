@@ -44,25 +44,22 @@ ECR is a fully managed Docker container registry. Unlike running your own regist
 
 ### Registries, Repositories, and Images
 
-```
-ECR Structure:
-
-AWS Account (123456789012)
-|
-+-- ECR Registry (one per account per region)
-    |   Registry URL: 123456789012.dkr.ecr.us-east-1.amazonaws.com
-    |
-    +-- Repository: myapp/api
-    |   +-- Image: sha256:abc123... (tag: v1.2.0)
-    |   +-- Image: sha256:def456... (tag: v1.2.1)
-    |   +-- Image: sha256:ghi789... (tag: v1.3.0, tag: latest)
-    |
-    +-- Repository: myapp/worker
-    |   +-- Image: sha256:jkl012... (tag: v2.0.0)
-    |   +-- Image: sha256:mno345... (tag: v2.1.0)
-    |
-    +-- Repository: shared/nginx-base
-        +-- Image: sha256:pqr678... (tag: 1.25-custom)
+```mermaid
+graph TD
+    Acc[AWS Account 123456789012] --> Reg[ECR Registry: 123456789012.dkr.ecr.us-east-1.amazonaws.com]
+    
+    Reg --> Repo1[Repository: myapp/api]
+    Reg --> Repo2[Repository: myapp/worker]
+    Reg --> Repo3[Repository: shared/nginx-base]
+    
+    Repo1 --> Img1[Image: sha256:abc123... | tag: v1.2.0]
+    Repo1 --> Img2[Image: sha256:def456... | tag: v1.2.1]
+    Repo1 --> Img3[Image: sha256:ghi789... | tag: v1.3.0, latest]
+    
+    Repo2 --> Img4[Image: sha256:jkl012... | tag: v2.0.0]
+    Repo2 --> Img5[Image: sha256:mno345... | tag: v2.1.0]
+    
+    Repo3 --> Img6[Image: sha256:pqr678... | tag: 1.25-custom]
 ```
 
 **Registry**: One per AWS account per region. The URL format is always `{account_id}.dkr.ecr.{region}.amazonaws.com`. You cannot change this URL.
@@ -457,25 +454,26 @@ aws ecr start-lifecycle-policy-preview \
 
 ECR evaluates lifecycle rules in a specific order. Understanding this prevents surprises:
 
+```mermaid
+flowchart TD
+    Start([Evaluate Image]) --> Sort[1. Sort Rules by Priority<br>Lowest number = highest priority]
+    Sort --> Eval[2. Evaluate Image against Rule]
+    Eval --> Match{3. Rule matches?}
+    Match -- No --> Next[Next Rule]
+    Next --> Eval
+    Match -- Yes --> Claim[4. Image Claimed by Rule<br>Later rules cannot affect it]
+    Claim --> Action[5. Apply Action<br>Expire or Keep]
 ```
-Rule Evaluation Flow:
 
-1. Rules are sorted by priority (lowest number = highest priority)
-2. Each image is evaluated against rules in priority order
-3. Once a rule matches an image, that image is "claimed" by that rule
-4. Later rules cannot affect images already claimed
-5. The action (expire or keep) is applied based on the matching rule
-
-Example with our policy:
-- Image tagged "v1.3.0" pushed 90 days ago
-  -> Matches Rule 1 (v-prefix, < 180 days) -> KEPT
-- Image tagged "v1.0.0" pushed 200 days ago
-  -> Matches Rule 1 (v-prefix, > 180 days) -> EXPIRED
-- Image tagged "feature-auth-fix" (6th feature image)
-  -> Matches Rule 2 (feature- prefix, > 5 count) -> EXPIRED
+**Example with our policy:**
+- Image tagged `v1.3.0` pushed 90 days ago
+  -> Matches Rule 1 (`v`-prefix, < 180 days) -> **KEPT**
+- Image tagged `v1.0.0` pushed 200 days ago
+  -> Matches Rule 1 (`v`-prefix, > 180 days) -> **EXPIRED**
+- Image tagged `feature-auth-fix` (6th feature image)
+  -> Matches Rule 2 (`feature-` prefix, > 5 count) -> **EXPIRED**
 - Untagged image pushed 2 days ago
-  -> Matches Rule 10 (untagged, > 1 day) -> EXPIRED
-```
+  -> Matches Rule 10 (untagged, > 1 day) -> **EXPIRED**
 
 ---
 
