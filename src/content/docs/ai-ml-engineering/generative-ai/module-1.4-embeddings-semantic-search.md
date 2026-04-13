@@ -1,6 +1,6 @@
 ---
 title: "Embeddings & Semantic Search"
-slug: ai-ml-engineering/generative-ai/module-2.4-embeddings-semantic-search
+slug: ai-ml-engineering/generative-ai/module-1.4-embeddings-semantic-search
 sidebar:
   order: 305
 ---
@@ -49,7 +49,7 @@ By the end of this module, you will:
 - Measure embedding quality and choose the right model for your use case
 - Build practical applications using embeddings (semantic search, recommendation engine)
 
-> ** Did You Know?**
+> **Did You Know?**
 >
 > The word "embedding" has a precise mathematical meaning: you're **embedding** one space into another. In our case, we're embedding the discrete space of words (where "cat" and "dog" are just different symbols) into a continuous vector space (where they're close together because they're both animals). This transformation is so powerful because continuous spaces support operations like addition, subtraction, and distance measurement—operations that don't make sense on raw text.
 
@@ -101,71 +101,13 @@ This transforms the search problem from **matching strings** to **measuring dist
 
 ---
 
-## STOP: Time to Practice!
-
-**You've learned the theory - now let's build with embeddings!**
-
-Embeddings are the foundation of modern AI applications. Theory alone won't give you intuition - you need to see how texts with similar meanings cluster together in vector space, and how dramatically better semantic search is compared to keyword matching.
-
-### Practice Path (~2.5-3 hours total)
-
-**1. [Embedding Basics](../../examples/module_09/01_embedding_basics.py)** - Generate and compare embeddings
-   -  Concept: Creating embeddings and measuring cosine similarity
-   - ⏱️ Time: 60-75 minutes
-   - Goal: Build intuition for how meaning becomes math
-   - What you'll learn: Similar texts = similar vectors!
-
-**2. [Semantic Applications](../../examples/module_09/02_semantic_applications.py)** - Build real-world systems
-   -  Concept: Search, clustering, recommendations, classification
-   - ⏱️ Time: 75-90 minutes
-   - Goal: Apply embeddings to 5 different use cases
-   - What you'll learn: One technology, infinite applications!
-
-### Deliverable: Semantic Search Engine
-
-**What**: Build a production-ready semantic search system for one of your projects
-**Time**: 4-5 hours
-**Portfolio Value**: Demonstrates end-to-end AI system building skills
-
-**Requirements**:
-1. Choose a data source from your projects:
-   - kaizen: Documentation search
-   - vibe: Course content recommendations
-   - contrarian: Financial news clustering
-   - Work: Infrastructure runbook search
-2. Implement complete system:
-   - Data ingestion and preprocessing
-   - Embedding generation (with caching!)
-   - Similarity search with ranking
-   - API endpoint or CLI interface
-   - Performance metrics (recall@k, latency)
-3. Compare 2+ embedding models:
-   - Measure quality (relevance) on test queries
-   - Measure cost and latency
-   - Document trade-offs
-4. Include examples:
-   - 5-10 example queries with results
-   - Show keyword search vs semantic search comparison
-5. Deploy or package for production use
-
-**Success Criteria**:
-- System handles 100+ documents
-- Sub-second query latency
-- Embeddings cached/persisted efficiently
-- Measurable improvement over keyword search
-- Production-ready code (error handling, logging)
-
-**Real-World Impact**: Semantic search is a fundamental capability in modern applications - this deliverable proves you can build it from scratch!
-
----
-
 ## Did You Know?
 
 The word "embedding" comes from mathematics: you're **embedding** a high-dimensional discrete space (words/texts) into a continuous vector space. It's like taking discrete cities and placing them on a continuous map where proximity represents similarity!
 
 ---
 
-##  What Are Embeddings?
+## What Are Embeddings?
 
 ### Definition
 
@@ -200,7 +142,7 @@ Think of each dimension as capturing one aspect of meaning:
 
 With 1536 dimensions, you can capture incredibly nuanced meaning!
 
-** See dimensionality in action: [01_embedding_basics.py](../../examples/module_09/01_embedding_basics.py) generates and visualizes embeddings!**
+> **Stop and think**: If each dimension encodes a different aspect of meaning, what happens when you average the embeddings of two documents that are about completely unrelated topics? What would the resulting vector represent?
 
 ---
 
@@ -258,7 +200,7 @@ text_3 = "Python is a programming language"
 
 **Result**: The model learns to encode meaning into vectors!
 
-> ** Did You Know?**
+> **Did You Know?**
 >
 > The contrastive learning approach has become so effective that modern embedding models can understand nuances that even humans sometimes miss. In 2023, researchers at Google discovered that their embedding model had learned to distinguish between different types of irony—sarcastic statements clustered separately from genuine statements, even when the words were nearly identical. The model had learned the "shape" of irony from patterns in billions of text examples. This emergent ability wasn't explicitly programmed; it arose naturally from the training process, suggesting that meaning has a geometric structure that neural networks can discover.
 
@@ -268,7 +210,7 @@ Modern embedding models are trained on staggering amounts of data. OpenAI's text
 
 ---
 
-## 🆚 Sparse vs Dense Embeddings
+## Sparse vs Dense Embeddings
 
 ### Sparse Embeddings (Traditional)
 
@@ -330,7 +272,7 @@ query = "How to fix a broken car?"
 
 ---
 
-##  Generating Embeddings
+## Generating Embeddings
 
 ### Option 1: OpenAI API (Most Popular)
 
@@ -431,10 +373,10 @@ for text, emb in zip(texts, embeddings):
 
 | Model | Dimensions | Speed | Quality | Use Case |
 |-------|-----------|-------|---------|----------|
-| `all-MiniLM-L6-v2` | 384 |  Fast | Good | General purpose |
-| `all-mpnet-base-v2` | 768 |  Medium | Better | Higher quality |
-| `all-distilroberta-v1` | 768 |  Medium | Better | Balanced |
-| `paraphrase-multilingual` | 768 |  Slow | Best | 50+ languages |
+| `all-MiniLM-L6-v2` | 384 | Fast | Good | General purpose |
+| `all-mpnet-base-v2` | 768 | Medium | Better | Higher quality |
+| `all-distilroberta-v1` | 768 | Medium | Better | Balanced |
+| `paraphrase-multilingual` | 768 | Slow | Best | 50+ languages |
 
 **Pros**:
 - FREE (no API costs)
@@ -449,7 +391,7 @@ for text, emb in zip(texts, embeddings):
 
 ---
 
-##  Measuring Similarity: Cosine Similarity
+## Measuring Similarity: Cosine Similarity
 
 Once you have embeddings, how do you measure how similar two texts are?
 
@@ -457,14 +399,10 @@ Once you have embeddings, how do you measure how similar two texts are?
 
 **Intuition**: Measure the angle between two vectors. Similar vectors point in similar directions!
 
-```
-      Vector A
-        ↗
-       /  ) θ (small angle)
-      /  ↗
-     / ↗ Vector B
-    /↗
-   ●────────────→
+```mermaid
+graph LR
+    O((Origin)) -->|Vector A| A[A]
+    O -->|Vector B| B[B]
 ```
 
 **Formula**:
@@ -527,7 +465,7 @@ ML vs Pizza: 0.214 (not similar)
 
 **Important**: These ranges are approximate and depend on the embedding model!
 
-### Why This Module Matters
+### Why Cosine and Not Euclidean Distance?
 
 **Why not Euclidean distance?**
 
@@ -546,7 +484,7 @@ cosine = cosine_similarity(vec_1, vec_2)  # → 1.0
 
 For text, **direction matters more than magnitude**. Two texts about the same topic (same direction) are similar even if one is more detailed (larger magnitude).
 
-** Compare similarity measures: [01_embedding_basics.py](../../examples/module_09/01_embedding_basics.py) shows cosine vs Euclidean!**
+> **Pause and predict**: If cosine similarity only measures direction and ignores magnitude, could two documents of wildly different lengths—say, a tweet and a research paper on the same topic—have a similarity of 0.9 or higher? Why or why not?
 
 ---
 
@@ -654,8 +592,6 @@ Cluster 1:
 
 **Perfect clustering!** Programming docs vs ML docs automatically separated.
 
-** Build all 5 use cases: [02_semantic_applications.py](../../examples/module_09/02_semantic_applications.py) implements search, clustering, recommendations, classification, and duplicates!**
-
 ### 3. Recommendation System
 
 **Problem**: Recommend similar items to users.
@@ -690,7 +626,7 @@ scores = [
 ]
 
 # Recommend top articles
-recommendations = sorted(scores, key=lambda x: x[1], reverse=True)
+recommendations = sorted(scores, key=lambda x: x[1], reverse=True)[1:4]  # Skip self
 
 print("Recommended for you:")
 for article, score in recommendations[:2]:
@@ -792,7 +728,7 @@ for doc1, doc2, sim in dupes:
 
 ---
 
-## ️ Common Pitfalls
+## Common Pitfalls
 
 ### Pitfall 1: Not Normalizing Text
 
@@ -811,9 +747,6 @@ emb_3 = get_embedding("hello    world")  # Extra spaces
 ```python
 def normalize_text(text: str) -> str:
     """Normalize text for consistent embeddings."""
-    # Lowercase (optional - models handle case well)
-    # text = text.lower()
-
     # Remove extra whitespace
     text = " ".join(text.split())
 
@@ -839,7 +772,6 @@ embedding = get_embedding(long_doc)  # Silently truncated!
 ```python
 def chunk_text(text: str, max_tokens: int = 500) -> list[str]:
     """Split text into chunks."""
-    # Simple chunking by sentences
     sentences = text.split(". ")
     chunks = []
     current_chunk = []
@@ -928,7 +860,7 @@ for model in models:
 
 ---
 
-##  Choosing the Right Embedding Model
+## Choosing the Right Embedding Model
 
 ### Decision Matrix
 
@@ -1081,7 +1013,7 @@ for path, score in results:
 
 ---
 
-##  Production War Stories
+## Production War Stories
 
 ### The E-commerce Search Disaster
 
@@ -1159,7 +1091,7 @@ The old system used rules: "If ticket contains 'billing', route to Finance." Thi
 
 ---
 
-##  Economics of Embeddings
+## Economics of Embeddings
 
 ### Cost Comparison: Build vs Buy
 
@@ -1209,7 +1141,7 @@ This is essentially free. Even at 100x the scale, you're looking at $13/month.
 
 ---
 
-##  Interview Preparation: Embeddings
+## Interview Preparation: Embeddings
 
 ### Common Interview Questions
 
@@ -1262,7 +1194,7 @@ This is essentially free. Even at 100x the scale, you're looking at $13/month.
 
 ---
 
-##  Key Takeaways
+## Key Takeaways
 
 1. **Embeddings capture meaning as geometry** - Similar texts become close vectors, enabling mathematical operations on semantic content.
 
@@ -1285,25 +1217,6 @@ This is essentially free. Even at 100x the scale, you're looking at $13/month.
 10. **This is foundation technology** - Every RAG system, recommendation engine, and semantic search uses embeddings. Master this, and everything else becomes easier.
 
 **Remember**: Tomáš Mikolov's accidental discovery in 2013 unlocked something profound—meaning has a geometry, and neural networks can discover it. Every time you use semantic search, get a recommendation, or interact with an AI system that "understands" you, you're benefiting from the vectors that encode meaning into math. The simple idea of representing text as numbers in a high-dimensional space has become one of the most impactful and transformative concepts in modern AI, enabling revolutionary applications that would have seemed like pure science fiction just a decade ago.
-
----
-
-##  Further Reading
-
-### Papers
-- **Sentence-BERT** (2019): [Paper](https://arxiv.org/abs/1908.10084) - Introduced sentence embeddings
-- **SimCSE** (2021): [Paper](https://arxiv.org/abs/2104.08821) - Contrastive learning for embeddings
-- **E5** (2022): [Paper](https://arxiv.org/abs/2212.03533) - Text embeddings by weak supervision
-
-### Documentation
-- [OpenAI Embeddings Guide](https://platform.openai.com/docs/guides/embeddings)
-- [Sentence Transformers Docs](https://www.sbert.net/)
-- [Voyage AI Docs](https://docs.voyageai.com/)
-
-### Tools
-- **MTEB Leaderboard**: Compare embedding models on 56 tasks
-- **txtai**: Semantic search framework built on embeddings
-- **Qdrant**: Vector database for embeddings (Module 14!)
 
 ---
 
@@ -1433,6 +1346,129 @@ In **2022**, the MTEB (Massive Text Embedding Benchmark) was released, ranking e
 
 ---
 
+## Hands-On Lab: Building a Semantic Search Engine
+
+**You've learned the theory - now let's build with embeddings!**
+
+Embeddings are the foundation of modern AI applications. Theory alone won't give you intuition - you need to see how texts with similar meanings cluster together in vector space.
+
+### Prerequisites and Setup
+
+Open your terminal and configure an isolated Python workspace.
+
+```bash
+mkdir semantic-search-lab && cd semantic-search-lab
+python3 -m venv .venv
+source .venv/bin/activate
+pip install sentence-transformers scikit-learn numpy
+```
+
+### Task 1: Generate Basic Embeddings
+
+Create a file named `embeddings.py` that loads a local model and generates embeddings for a set of phrases.
+
+<details>
+<summary><strong>Solution: embeddings.py</strong></summary>
+
+```python
+from sentence_transformers import SentenceTransformer
+import numpy as np
+
+# Initialize local model
+model = SentenceTransformer('all-MiniLM-L6-v2')
+
+documents = [
+    "How to restart a service",
+    "Service recovery procedures",
+    "Cooking pasta recipes"
+]
+
+# Generate embeddings
+embeddings = model.encode(documents)
+print(f"Generated {len(embeddings)} embeddings of dimension {len(embeddings[0])}")
+```
+*Verification*: Run `python3 embeddings.py`. It should output `Generated 3 embeddings of dimension 384`.
+</details>
+
+### Task 2: Compute Cosine Similarity
+
+Extend your script to calculate the cosine similarity between a user query and the documents.
+
+<details>
+<summary><strong>Solution: Cosine Similarity</strong></summary>
+
+Add this to `embeddings.py`:
+```python
+from numpy.linalg import norm
+
+def cosine_similarity(a, b):
+    return np.dot(a, b) / (norm(a) * norm(b))
+
+query = "fix a crashed daemon"
+query_emb = model.encode(query)
+
+print("\nQuery:", query)
+for doc, doc_emb in zip(documents, embeddings):
+    sim = cosine_similarity(query_emb, doc_emb)
+    print(f"{sim:.3f} - {doc}")
+```
+*Verification*: Run `python3 embeddings.py`. "How to restart a service" and "Service recovery procedures" should score significantly higher than "Cooking pasta recipes".
+</details>
+
+### Deliverable: Production Semantic Search
+
+**What**: Expand your script into a production-ready semantic search system.
+
+**Requirements**:
+1. Ingest a real data source (e.g., your project's markdown documentation).
+2. Implement a caching layer to save embeddings to disk (`np.save` / `np.load`) so you don't re-embed on every run.
+3. Add an interactive CLI to accept user queries and return the top 3 most relevant documents.
+
+**Success Criteria**:
+- System handles 100+ documents without memory issues.
+- The similarity search runs in sub-second latency because embeddings are pre-computed.
+- The CLI includes instructions for non-interactive automated testing (e.g., `python3 search.py --query "deployment" --json`).
+
+---
+
+## Further Reading
+
+### Papers
+- **Sentence-BERT** (2019): [Paper](https://arxiv.org/abs/1908.10084) - Introduced sentence embeddings
+- **SimCSE** (2021): [Paper](https://arxiv.org/abs/2104.08821) - Contrastive learning for embeddings
+- **E5** (2022): [Paper](https://arxiv.org/abs/2212.03533) - Text embeddings by weak supervision
+
+### Documentation
+- [OpenAI Embeddings Guide](https://platform.openai.com/docs/guides/embeddings)
+- [Sentence Transformers Docs](https://www.sbert.net/)
+- [Voyage AI Docs](https://docs.voyageai.com/)
+
+### Tools
+- **MTEB Leaderboard**: Compare embedding models on 56 tasks
+- **txtai**: Semantic search framework built on embeddings
+- **Qdrant**: Vector database for embeddings (Module 14!)
+
+---
+
+## Module Quiz
+
+<details>
+<summary><strong>Question 1: A legal team is migrating from a keyword-based e-discovery tool to a semantic search tool using dense embeddings. They notice that queries for "breach of contract" are returning documents about "contract negotiations" that don't actually mention a breach. Why might the embedding model return these as highly similar, and how should the system architecture address this?</strong></summary>
+Dense embeddings map text to continuous vector space based on semantic proximity, meaning terms related to contracts and legal scenarios cluster together. The model understands the domain but might not capture the precise logical negation or specific entity relationship of "breach." To address this, the architecture should use a hybrid approach: semantic search for initial retrieval (recall), followed by keyword filtering or a cross-encoder re-ranking step (precision) to enforce strict matching on critical terms like "breach."
+</details>
+
+<details>
+<summary><strong>Question 2: You are designing a recommendation engine for an e-commerce platform using embeddings. You average the embeddings of the last five items a user viewed to create their "user profile vector," then use cosine similarity to recommend new items. During testing, users who view both gardening tools and high-end electronics get recommendations for "smart sprinkler systems" rather than diverse items from both categories. What geometric property of embeddings causes this, and how do you fix it?</strong></summary>
+Averaging embeddings calculates the geometric centroid of the vectors. If a user views items in two distant clusters (gardening and electronics), the average vector falls in the middle of the space between them, potentially near items that blend both concepts (smart sprinklers) rather than recommending items from the actual clusters. To fix this, you should maintain multiple vectors per user or score recommendations against individual viewed items and aggregate the scores, rather than averaging the query vectors.
+</details>
+
+<details>
+<summary><strong>Question 3: An engineering team decides to chunk their 100-page internal documents by blindly splitting the text every 1,000 tokens before generating embeddings. In production, users report that search queries for specific technical workflows often return irrelevant chunks, even though the workflow is documented. What is the likely cause of this retrieval failure?</strong></summary>
+Blindly splitting by token count frequently cuts text in the middle of sentences, paragraphs, or related thoughts, severing the semantic context. If the explanation of a technical workflow is split across two chunks, neither chunk's embedding will contain the complete meaning required to match the user's query strongly. The solution is to use semantic chunking (e.g., splitting by paragraph or section headers) and to include an overlap window (e.g., 100 tokens) between consecutive chunks to preserve boundary context.
+</details>
+
+---
+
 ## Module Summary
 
 **What you learned**:
@@ -1463,9 +1499,9 @@ top_results = sorted(enumerate(scores), key=lambda x: x[1], reverse=True)[:k]
 
 ---
 
-## ️ Next Steps
+## Next Steps
 
-**Next module**: Module 10: Vector Spaces & Semantic Search 
+**Next module**: Module 10: Vector Spaces & Semantic Search
 
 In Module 10, you'll experience the **Heureka Moment**: understanding embeddings as coordinates in semantic space, where mathematical operations work on **meaning itself**!
 
@@ -1475,14 +1511,3 @@ You'll learn:
 - Building semantic search from scratch
 - Vector databases and indexing at scale
 - The geometry of meaning!
-
-**This is when everything clicks!** 
-
----
-
-** Neural Dojo - Master embeddings, unlock semantic understanding! **
-
----
-
-_Last updated: 2025-11-21_
-_Module 9: Embeddings & Semantic Similarity_
