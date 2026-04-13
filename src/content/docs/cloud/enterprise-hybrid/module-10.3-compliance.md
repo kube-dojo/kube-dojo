@@ -31,42 +31,39 @@ Continuous compliance flips this model. Instead of proving compliance once per y
 
 ### The Traditional Compliance Model (Broken)
 
-```text
-┌─────────────────────────────────────────────────────────┐
-│  TRADITIONAL COMPLIANCE TIMELINE                          │
-│                                                           │
-│  Jan ──────────── Jun ──────────── Dec ──────────── Jun  │
-│   │                │                 │                │   │
-│   ▼                ▼                 ▼                ▼   │
-│  Audit           Drift             Audit           Drift  │
-│  (compliant)     (unknown)         (scramble)      (...) │
-│                                                           │
-│  "Compliance Sprint": 6 weeks of panic before audit      │
-│  Reality: compliant ~2 months/year, non-compliant ~10    │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    Jan[Jan: Audit<br/>Compliant] --> Jun[Jun: Drift<br/>Unknown]
+    Jun --> Dec[Dec: Audit<br/>Scramble]
+    Dec --> Jun2[Jun: Drift<br/>...]
+    
+    classDef compliant fill:#d4edda,stroke:#28a745,stroke-width:2px,color:#000;
+    classDef drift fill:#f8d7da,stroke:#dc3545,stroke-width:2px,color:#000;
+    classDef scramble fill:#fff3cd,stroke:#ffc107,stroke-width:2px,color:#000;
+    
+    class Jan compliant
+    class Jun drift
+    class Dec scramble
+    class Jun2 drift
 ```
+
+**Reality Check:** 
+- **"Compliance Sprint"**: 6 weeks of panic before an audit.
+- **Actual Status**: Compliant ~2 months/year, non-compliant ~10 months.
 
 ### The Continuous Compliance Model (What You Want)
 
-```text
-┌─────────────────────────────────────────────────────────┐
-│  CONTINUOUS COMPLIANCE TIMELINE                           │
-│                                                           │
-│  Every minute:                                            │
-│  ┌──────────┐    ┌────────────┐    ┌──────────────┐     │
-│  │ Automated │───►│ Compliance │───►│ Auto-remediate│    │
-│  │ Scanning  │    │ Dashboard  │    │ or Alert     │     │
-│  └──────────┘    └────────────┘    └──────────────┘     │
-│       │                │                    │             │
-│       ▼                ▼                    ▼             │
-│  Evidence stored   Real-time score    Drift fixed in     │
-│  automatically     visible to all     minutes, not       │
-│                                       months             │
-│                                                           │
-│  Audit day: "Here is the dashboard. Every control has    │
-│  12 months of continuous evidence."                       │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Scan[Automated Scanning] --> Dash[Compliance Dashboard]
+    Dash --> Rem[Auto-remediate or Alert]
+    
+    Scan -.-> Ev[Evidence stored automatically]
+    Dash -.-> Score[Real-time score visible to all]
+    Rem -.-> Fix[Drift fixed in minutes, not months]
 ```
+
+**Audit Day Reality:** "Here is the dashboard. Every control has 12 months of continuous, immutable evidence."
 
 ---
 
@@ -199,27 +196,20 @@ The key to continuous compliance is automating evidence collection so that audit
 
 ### Building an Evidence Collection Pipeline
 
-```text
-┌─────────────────────────────────────────────────────────────┐
-│              AUTOMATED EVIDENCE PIPELINE                      │
-│                                                               │
-│  ┌───────────┐   ┌──────────────┐   ┌───────────────────┐  │
-│  │ Kubernetes │──►│ Evidence     │──►│ Evidence Store    │  │
-│  │ API Server │   │ Collector    │   │ (S3/GCS/Blob)    │  │
-│  │            │   │ (CronJob)    │   │                   │  │
-│  └───────────┘   └──────────────┘   │ Immutable, signed │  │
-│                                      │ Timestamped       │  │
-│  ┌───────────┐   ┌──────────────┐   │ Retained per      │  │
-│  │ Trivy     │──►│ Vuln Reports │──►│ compliance req    │  │
-│  │ Operator  │   │              │   │                   │  │
-│  └───────────┘   └──────────────┘   └───────────────────┘  │
-│                                              │               │
-│  ┌───────────┐   ┌──────────────┐   ┌────────▼──────────┐  │
-│  │ Falco     │──►│ Runtime      │──►│ Compliance        │  │
-│  │           │   │ Events       │   │ Dashboard         │  │
-│  └───────────┘   └──────────────┘   │ (Grafana/custom)  │  │
-│                                      └───────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph Kubernetes Cluster
+        direction TB
+        K8s[Kubernetes API Server] --> EC[Evidence Collector CronJob]
+        Trivy[Trivy Operator] --> VR[Vuln Reports]
+        Falco[Falco] --> RE[Runtime Events]
+    end
+    
+    EC --> ES[(Evidence Store<br/>S3/GCS/Blob<br/>Immutable, signed)]
+    VR --> ES
+    
+    ES --> Dash[Compliance Dashboard<br/>Grafana/custom]
+    RE --> Dash
 ```
 
 ### Evidence Collection CronJob
@@ -240,7 +230,7 @@ spec:
           serviceAccountName: evidence-collector
           containers:
             - name: collector
-              image: bitnami/kubectl:1.32
+              image: bitnami/kubectl:1.35
               command:
                 - /bin/bash
                 - -c
@@ -412,7 +402,7 @@ helm install trivy-operator aqua/trivy-operator \
   --set operator.rbacAssessmentEnabled=true
 
 # View vulnerability reports
-k get vulnerabilityreports -A \
+kubectl get vulnerabilityreports -A \
   -o custom-columns=\
 NAMESPACE:.metadata.namespace,\
 NAME:.metadata.name,\
@@ -421,10 +411,12 @@ HIGH:.report.summary.highCount,\
 MEDIUM:.report.summary.mediumCount
 
 # Get detailed CVEs for a specific workload
-k get vulnerabilityreport -n production \
+kubectl get vulnerabilityreport -n production \
   -l trivy-operator.resource.name=my-app \
   -o jsonpath='{range .items[*].report.vulnerabilities[?(@.severity=="CRITICAL")]}{.vulnerabilityID} {.title} {.fixedVersion}{"\n"}{end}'
 ```
+
+> **Stop and think**: Why export Trivy findings to a central security hub rather than just viewing them with `kubectl` natively inside the cluster?
 
 ### Integrating Trivy with Cloud Security Hubs
 
@@ -558,25 +550,19 @@ Falco detects runtime violations that no static scanner can catch -- like a cont
 
 A compliance dashboard brings together findings from all layers into a single view that auditors, security teams, and engineering leadership can use.
 
-```text
-┌────────────────────────────────────────────────────────────┐
-│  COMPLIANCE DASHBOARD (Grafana)                              │
-│                                                              │
-│  Overall Score: 94%  ████████████████████░░  [SOC2: 96%]    │
-│                                              [PCI:  91%]    │
-│                                              [HIPAA: 95%]   │
-│                                                              │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │ Cloud Layer   │  │ K8s Layer    │  │ Runtime Layer│      │
-│  │ 12/12 pass   │  │ 18/19 pass   │  │ 3 alerts     │      │
-│  │ 0 critical   │  │ 1 warning    │  │ 0 critical   │      │
-│  └──────────────┘  └──────────────┘  └──────────────┘      │
-│                                                              │
-│  Vulnerabilities:  Critical: 0  High: 12  Medium: 89        │
-│  Policy Violations (last 24h): 3 blocked, 0 bypassed        │
-│  Evidence Collection: Last run 2h ago, next in 4h           │
-│  Exceptions Active: 2 (1 expires in 8 days)                 │
-└────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph COMPLIANCE DASHBOARD
+        Score[Overall Score: 94% | SOC2: 96% | PCI: 91% | HIPAA: 95%]
+        
+        Score --> Cloud[Cloud Layer: 12/12 pass, 0 crit]
+        Score --> K8s[K8s Layer: 18/19 pass, 1 warn]
+        Score --> Runtime[Runtime Layer: 3 alerts, 0 crit]
+        
+        Cloud --> Stats[Vulnerabilities: 0 Crit, 12 High, 89 Med<br/>Policy Violations: 3 blocked, 0 bypassed<br/>Exceptions Active: 2]
+        K8s --> Stats
+        Runtime --> Stats
+    end
 ```
 
 ---
@@ -654,15 +640,15 @@ In this exercise, you will set up Trivy Operator for vulnerability scanning, cre
 
 **What you will build:**
 
-```text
-┌──────────────────────────────────────────┐
-│  Compliance Lab Cluster                    │
-│                                            │
-│  Trivy Operator → VulnerabilityReports    │
-│  Kyverno → PolicyReports                  │
-│  Evidence CronJob → Compliance Evidence   │
-│  Scoring Script → Compliance Score        │
-└──────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph Compliance Lab Cluster
+        direction TB
+        T[Trivy Operator] --> VR[VulnerabilityReports]
+        K[Kyverno] --> PR[PolicyReports]
+        EC[Evidence CronJob] --> CE[Compliance Evidence]
+        SS[Scoring Script] --> CS[Compliance Score]
+    end
 ```
 
 ### Task 1: Create the Lab Cluster with Compliance Tools
@@ -689,9 +675,9 @@ helm install trivy-operator aqua/trivy-operator \
 
 # Verify installations
 echo "=== Kyverno pods ==="
-k get pods -n kyverno
+kubectl get pods -n kyverno
 echo "=== Trivy Operator pods ==="
-k get pods -n trivy-system
+kubectl get pods -n trivy-system
 ```
 
 </details>
@@ -703,7 +689,7 @@ k get pods -n trivy-system
 
 ```bash
 # Deploy a comprehensive policy set
-cat <<'EOF' | k apply -f -
+cat <<'EOF' | kubectl apply -f -
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata:
@@ -800,7 +786,7 @@ spec:
 EOF
 
 echo "Compliance policies deployed:"
-k get clusterpolicy -o custom-columns=NAME:.metadata.name,FRAMEWORK:.metadata.annotations.compliance/framework,CONTROL:.metadata.annotations.compliance/control
+kubectl get clusterpolicy -o custom-columns=NAME:.metadata.name,FRAMEWORK:.metadata.annotations.compliance/framework,CONTROL:.metadata.annotations.compliance/control
 ```
 
 </details>
@@ -812,7 +798,7 @@ k get clusterpolicy -o custom-columns=NAME:.metadata.name,FRAMEWORK:.metadata.an
 
 ```bash
 # Create a compliant namespace
-cat <<'EOF' | k apply -f -
+cat <<'EOF' | kubectl apply -f -
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -823,7 +809,7 @@ metadata:
 EOF
 
 # Deploy a workload that Trivy Operator will scan
-cat <<'EOF' | k apply -f -
+cat <<'EOF' | kubectl apply -f -
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -861,11 +847,11 @@ sleep 30
 
 # Check for vulnerability reports
 echo "=== Vulnerability Reports ==="
-k get vulnerabilityreports -n production 2>/dev/null || echo "Reports still generating, try again in 30 seconds"
+kubectl get vulnerabilityreports -n production 2>/dev/null || echo "Reports still generating, try again in 30 seconds"
 
 # Check for config audit reports
 echo "=== Config Audit Reports ==="
-k get configauditreports -n production 2>/dev/null || echo "Reports still generating"
+kubectl get configauditreports -n production 2>/dev/null || echo "Reports still generating"
 ```
 
 </details>
@@ -994,7 +980,7 @@ bash /tmp/compliance-score.sh
 
 ```bash
 # Fix: Add NetworkPolicy to the production namespace
-cat <<'EOF' | k apply -f -
+cat <<'EOF' | kubectl apply -f -
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -1024,7 +1010,7 @@ spec:
 EOF
 
 echo "NetworkPolicies applied to production namespace"
-k get networkpolicy -n production
+kubectl get networkpolicy -n production
 
 # Re-run compliance score
 echo ""
