@@ -39,27 +39,29 @@ The foundation of any hybrid architecture is the network connection between your
 
 A site-to-site VPN creates an encrypted tunnel over the public internet between your on-premises network equipment and the cloud provider's VPN gateway.
 
-```text
-┌────────────────────┐          Internet          ┌────────────────────┐
-│   On-Premises DC   │         (encrypted)         │     AWS VPC        │
-│                    │                              │                    │
-│  ┌──────────────┐  │    ┌─────────────────┐      │  ┌──────────────┐  │
-│  │ VPN Gateway  │──┼────┤  IPsec Tunnel   ├──────┼──┤ Virtual      │  │
-│  │ (Customer    │  │    │  (2 tunnels for  │      │  │ Private      │  │
-│  │  Gateway)    │  │    │   HA per conn.)  │      │  │ Gateway      │  │
-│  └──────┬───────┘  │    └─────────────────┘      │  └──────┬───────┘  │
-│         │          │                              │         │          │
-│  ┌──────▼───────┐  │                              │  ┌──────▼───────┐  │
-│  │ K8s Nodes    │  │                              │  │ EKS Nodes    │  │
-│  │ 10.1.0.0/16  │  │                              │  │ 10.2.0.0/16  │  │
-│  └──────────────┘  │                              │  └──────────────┘  │
-└────────────────────┘                              └────────────────────┘
-
-Bandwidth: Up to 1.25 Gbps per tunnel (AWS)
-Latency: Variable (internet-dependent), typically 20-100ms
-Cost: ~$0.05/hr per VPN connection (~$36/month)
-Setup time: Hours
+```mermaid
+flowchart LR
+    subgraph OnPrem[On-Premises DC]
+        direction TB
+        K8s["K8s Nodes<br>10.1.0.0/16"]
+        CGW["VPN Gateway<br>(Customer Gateway)"]
+        K8s --- CGW
+    end
+    
+    subgraph Cloud[AWS VPC]
+        direction TB
+        VGW["Virtual Private Gateway"]
+        EKS["EKS Nodes<br>10.2.0.0/16"]
+        VGW --- EKS
+    end
+    
+    CGW <-->|"IPsec Tunnel<br>(2 tunnels for HA)"| VGW
 ```
+
+**Bandwidth**: Up to 1.25 Gbps per tunnel (AWS)
+**Latency**: Variable (internet-dependent), typically 20-100ms
+**Cost**: ~$0.05/hr per VPN connection (~$36/month)
+**Setup time**: Hours
 
 ```bash
 # AWS: Create a Site-to-Site VPN connection
@@ -96,26 +98,29 @@ aws ec2 describe-vpn-connections \
 
 Dedicated connections provide a private physical link between your data center and the cloud provider. The traffic never touches the public internet.
 
-```text
-┌────────────────────┐    Dedicated Fiber      ┌────────────────────┐
-│   On-Premises DC   │    (private, not         │  Cloud Provider    │
-│                    │     internet)             │  Edge Location     │
-│  ┌──────────────┐  │    ┌──────────────┐      │  ┌──────────────┐  │
-│  │ Cross-Connect│──┼────┤ Colocation   ├──────┼──┤ Provider     │  │
-│  │ (your cage)  │  │    │ Meet-me Room │      │  │ Router       │  │
-│  └──────┬───────┘  │    └──────────────┘      │  └──────┬───────┘  │
-│         │          │                           │         │          │
-│  ┌──────▼───────┐  │                           │  ┌──────▼───────┐  │
-│  │ K8s Nodes    │  │                           │  │ EKS/AKS/GKE │  │
-│  │ 10.1.0.0/16  │  │                           │  │ Nodes        │  │
-│  └──────────────┘  │                           │  └──────────────┘  │
-└────────────────────┘                           └────────────────────┘
-
-Bandwidth: 1 Gbps, 10 Gbps, or 100 Gbps
-Latency: Consistent, typically 1-5ms
-Cost: $0.30/hr for 1Gbps (AWS Direct Connect) + data transfer
-Setup time: 2-12 weeks (physical circuit provisioning)
+```mermaid
+flowchart LR
+    subgraph OnPrem[On-Premises DC]
+        direction TB
+        K8s["K8s Nodes<br>10.1.0.0/16"]
+        CC["Cross-Connect<br>(your cage)"]
+        K8s --- CC
+    end
+    
+    subgraph Cloud[Cloud Provider Edge Location]
+        direction TB
+        Router["Provider Router"]
+        EKS["EKS/AKS/GKE Nodes"]
+        Router --- EKS
+    end
+    
+    CC <-->|"Dedicated Fiber<br>(private, not internet)"| Router
 ```
+
+**Bandwidth**: 1 Gbps, 10 Gbps, or 100 Gbps
+**Latency**: Consistent, typically 1-5ms
+**Cost**: $0.30/hr for 1Gbps (AWS Direct Connect) + data transfer
+**Setup time**: 2-12 weeks (physical circuit provisioning)
 
 ### Comparison Matrix
 
@@ -134,29 +139,22 @@ Setup time: 2-12 weeks (physical circuit provisioning)
 
 For enterprises with multiple VPCs and on-premises connections, AWS Transit Gateway (or Azure Virtual WAN, GCP Network Connectivity Center) acts as a centralized hub.
 
-```text
-┌───────────────────────────────────────────────────────────────┐
-│                    TRANSIT GATEWAY HUB                          │
-│                                                                 │
-│           ┌───────────────────────────┐                        │
-│           │     Transit Gateway       │                        │
-│           │     (Central Hub)         │                        │
-│           └─────┬───┬───┬───┬────────┘                        │
-│                 │   │   │   │                                  │
-│        ┌────────┘   │   │   └──────────┐                      │
-│        │            │   │              │                       │
-│  ┌─────▼────┐ ┌─────▼──┐ ┌──▼──────┐ ┌──▼──────────┐        │
-│  │ VPC:     │ │ VPC:   │ │ VPC:    │ │ On-Premises  │        │
-│  │ EKS Prod │ │ EKS   │ │ Shared  │ │ via Direct   │        │
-│  │ Cluster  │ │ Dev    │ │ Services│ │ Connect      │        │
-│  │10.1.0/16 │ │10.2/16│ │10.3/16  │ │ 10.0.0.0/8   │        │
-│  └──────────┘ └───────┘ └─────────┘ └──────────────┘         │
-│                                                                 │
-│  Route Tables: Separate for prod, dev, shared, on-prem        │
-│  Pod CIDRs: Must be routable across TGW for cross-cluster     │
-│  communication                                                  │
-└───────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    TGW["Transit Gateway<br>(Central Hub)"]
+    
+    VPC1["VPC: EKS Prod Cluster<br>10.1.0.0/16"]
+    VPC2["VPC: EKS Dev<br>10.2.0.0/16"]
+    VPC3["VPC: Shared Services<br>10.3.0.0/16"]
+    OnPrem["On-Premises via Direct Connect<br>10.0.0.0/8"]
+    
+    TGW <--> VPC1
+    TGW <--> VPC2
+    TGW <--> VPC3
+    TGW <--> OnPrem
 ```
+
+*Note: Route Tables remain separate for prod, dev, shared, and on-prem. Pod CIDRs must be routable across TGW for cross-cluster communication.*
 
 ```bash
 # Create Transit Gateway
@@ -196,31 +194,20 @@ In a hybrid architecture, you need a single identity system that works across bo
 
 ### Identity Architecture Options
 
-```text
-┌──────────────────────────────────────────────────────────────┐
-│  HYBRID IDENTITY ARCHITECTURE                                  │
-│                                                                │
-│  ┌──────────────┐                                              │
-│  │  Identity     │  ← Central Source of Truth                  │
-│  │  Provider     │    (Azure AD, Okta, Google Workspace)       │
-│  │  (IdP)        │                                              │
-│  └──────┬────────┘                                              │
-│         │                                                       │
-│    OIDC │ Federation                                            │
-│         │                                                       │
-│  ┌──────┴──────────────────────────────────────────────┐       │
-│  │                                                       │       │
-│  │  ┌──────────┐    ┌──────────┐    ┌──────────────┐   │       │
-│  │  │ Cloud    │    │ Cloud    │    │ On-Prem      │   │       │
-│  │  │ EKS      │    │ AKS      │    │ K8s          │   │       │
-│  │  │          │    │          │    │              │   │       │
-│  │  │ OIDC via │    │ Azure AD │    │ OIDC via     │   │       │
-│  │  │ IdP      │    │ native   │    │ Dex/Pinniped│   │       │
-│  │  └──────────┘    └──────────┘    └──────────────┘   │       │
-│  │                                                       │       │
-│  │  Same user identity → Same RBAC → Consistent access  │       │
-│  └───────────────────────────────────────────────────────┘       │
-└──────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    IdP["Identity Provider (IdP)<br>Central Source of Truth<br>(Azure AD, Okta, Google Workspace)"]
+    
+    subgraph Federation[OIDC Federation]
+        direction LR
+        CloudEKS["Cloud EKS<br>OIDC via IdP"]
+        CloudAKS["Cloud AKS<br>Azure AD native"]
+        OnPrem["On-Prem K8s<br>OIDC via Dex/Pinniped"]
+    end
+    
+    IdP --> CloudEKS
+    IdP --> CloudAKS
+    IdP --> OnPrem
 ```
 
 ### Pinniped: Unified Kubernetes Authentication
@@ -462,29 +449,26 @@ spec:
 
 For HTTP/HTTPS workloads, a multi-cluster Ingress controller (like GKE Multi-Cluster Ingress or a globally distributed load balancer like AWS Global Accelerator) can distribute traffic across on-premises and cloud clusters.
 
-```text
-┌──────────────────────────────────────────────────────────────┐
-│  GLOBAL LOAD BALANCER                                          │
-│                                                                │
-│                   api.company.com (100% traffic)               │
-│                            │                                   │
-│            90% traffic     │      10% traffic                  │
-│            ┌───────────────┴───────────────┐                   │
-│            ▼                               ▼                   │
-│  ┌────────────────────┐          ┌────────────────────┐        │
-│  │   On-Premises      │          │    Cloud EKS       │        │
-│  │   Data Center      │          │    Cluster         │        │
-│  │                    │          │                    │        │
-│  │  ┌──────────────┐  │          │  ┌──────────────┐  │        │
-│  │  │ Ingress      │  │          │  │ Ingress      │  │        │
-│  │  │ Controller   │  │          │  │ Controller   │  │        │
-│  │  └──────┬───────┘  │          │  └──────┬───────┘  │        │
-│  │         │          │          │         │          │        │
-│  │  ┌──────▼───────┐  │          │  ┌──────▼───────┐  │        │
-│  │  │ API Pods     │  │          │  │ API Pods     │  │        │
-│  │  └──────────────┘  │          │  └──────────────┘  │        │
-│  └────────────────────┘          └────────────────────┘        │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    DNS["api.company.com<br>(100% traffic)"]
+    
+    subgraph OnPrem["On-Premises Data Center"]
+        direction TB
+        IngressOP["Ingress Controller"]
+        PodsOP["API Pods"]
+        IngressOP --> PodsOP
+    end
+    
+    subgraph Cloud["Cloud EKS Cluster"]
+        direction TB
+        IngressCloud["Ingress Controller"]
+        PodsCloud["API Pods"]
+        IngressCloud --> PodsCloud
+    end
+    
+    DNS -->|90% traffic| IngressOP
+    DNS -->|10% traffic| IngressCloud
 ```
 
 *Pros*: Immediate traffic shifting without DNS caching issues. Can route based on HTTP headers (e.g., routing internal test users to the cloud cluster first).
@@ -521,37 +505,21 @@ Several solutions exist for running cloud-managed Kubernetes on-premises. Each t
 
 > **Pause and predict**: If the EKS Anywhere Management Cluster loses connectivity to the Workload Cluster, do the applications on the Workload Cluster stop running? Why or why not?
 
-```text
-┌──────────────────────────────────────────────────────────────┐
-│  ON-PREMISES DATA CENTER                                       │
-│                                                                │
-│  ┌────────────────────────────────┐                           │
-│  │  Admin Machine                  │                           │
-│  │  - eksctl-anywhere CLI          │                           │
-│  │  - kubectl                      │                           │
-│  └──────────┬─────────────────────┘                           │
-│             │                                                  │
-│  ┌──────────▼─────────────────────┐                           │
-│  │  EKS Anywhere Management       │                           │
-│  │  Cluster                        │                           │
-│  │  ┌──────────────────────────┐  │                           │
-│  │  │ Cluster API (CAPI)       │  │                           │
-│  │  │ Flux (GitOps)            │  │                           │
-│  │  │ Curated Packages         │  │                           │
-│  │  └──────────────────────────┘  │                           │
-│  └──────────┬─────────────────────┘                           │
-│             │ manages                                          │
-│  ┌──────────▼─────────────────────┐                           │
-│  │  EKS Anywhere Workload Cluster │  ← Same K8s API as EKS   │
-│  │  ┌────┐ ┌────┐ ┌────┐ ┌────┐  │                           │
-│  │  │CP-1│ │CP-2│ │CP-3│ │Wrk │  │                           │
-│  │  └────┘ └────┘ └────┘ └────┘  │                           │
-│  │                                │                           │
-│  │  Running on: VMware/Bare Metal │                           │
-│  └────────────────────────────────┘                           │
-│                                                                │
-│  Optional: EKS Connector → Visible in AWS Console             │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Admin["Admin Machine<br>- eksctl-anywhere CLI<br>- kubectl"]
+    
+    subgraph DC["ON-PREMISES DATA CENTER"]
+        direction TB
+        Mgmt["EKS Anywhere Management Cluster<br>- Cluster API (CAPI)<br>- Flux (GitOps)<br>- Curated Packages"]
+        
+        Workload["EKS Anywhere Workload Cluster<br>- CP-1, CP-2, CP-3<br>- Worker Nodes<br>Running on: VMware/Bare Metal"]
+        
+        Mgmt -->|manages| Workload
+    end
+    
+    Admin --> Mgmt
+    Workload -.->|"Optional: EKS Connector"| AWS["Visible in AWS Console"]
 ```
 
 ```bash
@@ -587,7 +555,7 @@ spec:
   datacenterRef:
     kind: VSphereDatacenterConfig
     name: hybrid-prod-dc
-  kubernetesVersion: "1.32"
+  kubernetesVersion: "1.35"
   workerNodeGroupConfigurations:
     - count: 5
       machineGroupRef:
@@ -622,7 +590,7 @@ spec:
   numCPUs: 4
   osFamily: ubuntu
   resourcePool: /dc-frankfurt/host/cluster-1/Resources/k8s-pool
-  template: /dc-frankfurt/vm/templates/ubuntu-2204-k8s-1.32
+  template: /dc-frankfurt/vm/templates/ubuntu-2204-k8s-1.35
 ```
 
 ```bash
@@ -639,28 +607,22 @@ eksctl anywhere install package harbor \
   --config harbor-config.yaml
 ```
 
-### Latency Considerations for Hybrid Kubernetes
+### Latency Budget For Hybrid Operations
 
-```text
-┌──────────────────────────────────────────────────────────────┐
-│  LATENCY BUDGET FOR HYBRID OPERATIONS                         │
-│                                                                │
-│  Operation                          VPN        Direct Connect  │
-│  ─────────────────────────────      ─────      ───────────────│
-│  kubectl get pods                   50-150ms   5-15ms         │
-│  ArgoCD sync check                  50-150ms   5-15ms         │
-│  Cross-cluster service call         40-120ms   3-10ms         │
-│  Database replication (streaming)   40-120ms   3-10ms         │
-│  Prometheus remote write            50-150ms   5-15ms         │
-│  Container image pull (1GB)         8-25s      0.8-2s         │
-│  Velero backup (100GB)              13-40min   1.5-4min       │
-│                                                                │
-│  Rule of thumb:                                                │
-│  - Control plane operations: VPN is acceptable                 │
-│  - Data plane operations: Direct Connect strongly recommended  │
-│  - Real-time service calls: Direct Connect required           │
-└──────────────────────────────────────────────────────────────┘
-```
+| Operation | VPN | Direct Connect |
+| :--- | :--- | :--- |
+| **kubectl get pods** | 50-150ms | 5-15ms |
+| **ArgoCD sync check** | 50-150ms | 5-15ms |
+| **Cross-cluster service call** | 40-120ms | 3-10ms |
+| **Database replication (streaming)** | 40-120ms | 3-10ms |
+| **Prometheus remote write** | 50-150ms | 5-15ms |
+| **Container image pull (1GB)** | 8-25s | 0.8-2s |
+| **Velero backup (100GB)** | 13-40min | 1.5-4min |
+
+**Rule of thumb:**
+- **Control plane operations:** VPN is acceptable
+- **Data plane operations:** Direct Connect strongly recommended
+- **Real-time service calls:** Direct Connect required
 
 ---
 
@@ -672,31 +634,30 @@ The ultimate goal of hybrid architecture is a single pane of glass for managing 
 
 ### Pattern 1: Hub-Spoke with GitOps
 
-```text
-┌──────────────────────────────────────────────────────────────┐
-│  HUB CLUSTER (cloud)                                          │
-│  ┌────────────────────────────────────────────┐              │
-│  │  ArgoCD (centralized)                       │              │
-│  │  ├── ApplicationSet: on-prem clusters       │              │
-│  │  ├── ApplicationSet: cloud clusters         │              │
-│  │  └── App of Apps: platform services         │              │
-│  │                                              │              │
-│  │  Prometheus (federated)                      │              │
-│  │  ├── remote_read: on-prem prometheus        │              │
-│  │  └── remote_read: cloud prometheus          │              │
-│  └────────────────────────────────────────────┘              │
-│              │                    │                            │
-│     ┌────────┘                    └────────┐                  │
-│     ▼                                      ▼                  │
-│  ┌──────────────┐              ┌──────────────┐              │
-│  │  On-Prem     │              │  Cloud EKS   │              │
-│  │  Cluster     │              │  Cluster     │              │
-│  │  (Spoke)     │              │  (Spoke)     │              │
-│  │              │              │              │              │
-│  │  ArgoCD agent│              │  ArgoCD agent│              │
-│  │  Prometheus  │              │  Prometheus  │              │
-│  └──────────────┘              └──────────────┘              │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Hub["HUB CLUSTER (cloud)"]
+        direction TB
+        Argo["ArgoCD (centralized)<br>├── ApplicationSet: on-prem clusters<br>├── ApplicationSet: cloud clusters<br>└── App of Apps: platform services"]
+        Prom["Prometheus (federated)<br>├── remote_read: on-prem prometheus<br>└── remote_read: cloud prometheus"]
+    end
+    
+    subgraph Spoke1["On-Prem Cluster (Spoke)"]
+        direction TB
+        Agent1["ArgoCD agent"]
+        Prom1["Prometheus"]
+    end
+    
+    subgraph Spoke2["Cloud EKS Cluster (Spoke)"]
+        direction TB
+        Agent2["ArgoCD agent"]
+        Prom2["Prometheus"]
+    end
+    
+    Argo -->|syncs| Agent1
+    Argo -->|syncs| Agent2
+    Prom -->|reads| Prom1
+    Prom -->|reads| Prom2
 ```
 
 ```yaml
@@ -766,37 +727,37 @@ spec:
 <details>
 <summary>Question 1: Your on-premises Kubernetes cluster needs to pull container images from Amazon ECR. The cluster connects to AWS via a site-to-site VPN. Image pulls take 90 seconds for a 500MB image. How would you improve this?</summary>
 
-Several approaches: (1) **Deploy an on-premises registry mirror** (Harbor with proxy cache) that pulls images from ECR once and serves them locally. Subsequent pulls are local-speed. (2) **Pre-pull images** as part of the deployment pipeline -- before deploying a new version, a job pulls the image to all nodes. (3) **Use smaller images** -- 500MB is large; multi-stage builds and distroless base images often reduce this to 50-100MB. (4) **If budget allows, upgrade to Direct Connect** -- a 1Gbps link would pull 500MB in about 4 seconds versus 90 seconds over VPN. The most cost-effective solution for most organizations is the registry mirror, as it solves the problem without infrastructure changes.
+Several approaches can significantly improve this process. First, you should deploy an on-premises registry mirror (such as Harbor with a proxy cache) that pulls images from ECR once and serves them locally to all nodes. Subsequent pulls will happen at local-network speeds, eliminating the WAN latency. Second, you can implement an automated process to pre-pull images as part of the deployment pipeline, ensuring they are cached on the nodes before the new pods are scheduled. Third, consider optimizing the image size using multi-stage builds or distroless base images, which often reduce a 500MB footprint down to 50-100MB. Finally, if the business budget allows, upgrading to a Direct Connect circuit would drastically reduce the transfer time from 90 seconds to just a few seconds.
 </details>
 
 <details>
-<summary>Question 2: Explain why overlapping pod CIDR ranges are a bigger problem in hybrid architectures than in single-cloud deployments.</summary>
+<summary>Question 2: Your network engineering team is allocating IP ranges for a new hybrid cloud expansion. They suggest reusing the 10.244.0.0/16 range for pods in both the on-premises and AWS EKS clusters, arguing that the clusters are separate. Why will this cause a major outage when you deploy a multi-cluster service mesh?</summary>
 
-In a single-cloud deployment, pod CIDRs only need to be routable within the VPC (or between peered VPCs). If two clusters in different VPCs use the same pod CIDR and never communicate, there is no conflict. In a **hybrid architecture**, the Transit Gateway or VPN must route traffic between on-premises and cloud networks. If an on-prem cluster uses pod CIDR 10.244.0.0/16 and a cloud cluster uses the same range, the Transit Gateway cannot distinguish which cluster a packet should be routed to. Cross-cluster service calls, database connections from pods, and monitoring scrapes all break. The problem is worse with VPC CNI (EKS) where pods get real VPC IPs -- those IPs must be routable across the entire hybrid network. Centralized IPAM that assigns unique, non-overlapping CIDRs to every cluster (including pod and service ranges) is essential.
+In a single-cloud or fully isolated deployment, pod CIDRs only need to be routable within their local VPC or cluster network. However, in a hybrid architecture with a multi-cluster service mesh, traffic must be routed directly between pods across the transit gateway or VPN. If both the on-premises and cloud clusters use the exact same 10.244.0.0/16 pod CIDR, the underlying network routers will experience a conflict and cannot determine the correct destination for packets. Cross-cluster service calls, database connections initiated from pods, and centralized monitoring scrapes will all instantly fail. To prevent this, you must implement centralized IPAM that assigns unique, non-overlapping CIDR ranges to every cluster's pod and service networks.
 </details>
 
 <details>
-<summary>Question 3: A team wants to use EKS Anywhere for their on-premises clusters. What are the trade-offs compared to running vanilla upstream Kubernetes with kubeadm?</summary>
+<summary>Question 3: Your company's CTO has mandated a unified Kubernetes strategy across AWS and your VMware-based on-premises data centers. The platform team is debating between using `kubeadm` to build a custom distribution versus adopting EKS Anywhere. What are the operational trade-offs they must consider before making this decision?</summary>
 
-**EKS Anywhere advantages**: (1) Cluster API-based lifecycle management (create, upgrade, scale via declarative configs). (2) Curated, tested Kubernetes distributions that match EKS versions. (3) Built-in Flux for GitOps. (4) Curated packages (Harbor, Prometheus, cert-manager) tested together. (5) Optional EKS Connector for AWS Console visibility. (6) Enterprise support available ($24K/year/cluster). **Trade-offs**: (1) Vendor dependency on AWS's release cycle. (2) Limited infrastructure provider support (VMware, bare metal, Nutanix -- not KVM or Hyper-V). (3) The management cluster consumes resources and adds operational complexity. (4) If AWS deprioritizes EKS Anywhere (as they did with EKS Distro's standalone use case), you face migration risk. Kubeadm gives more flexibility but requires building all the lifecycle tooling, package curation, and GitOps yourself.
+Opting for EKS Anywhere provides significant operational advantages, including declarative lifecycle management via Cluster API and pre-integrated tools like Flux for GitOps. It also ensures strict version compatibility with cloud-based EKS and provides curated, heavily tested add-ons right out of the box. However, this convenience comes with strict trade-offs, primarily a deep vendor dependency on AWS's release cycles and limited support for underlying infrastructure (e.g., VMware or Bare Metal, but not Hyper-V). Conversely, using `kubeadm` offers complete architectural freedom and avoids vendor lock-in, but places the entire burden of engineering the cluster lifecycle, integrating add-ons, and building GitOps pipelines squarely on your platform team. Ultimately, the decision hinges on whether the organization prefers to buy a standardized operational model or build a highly customized one.
 </details>
 
 <details>
 <summary>Question 4: Your company has a Direct Connect to AWS and an ExpressRoute to Azure. You want unified monitoring across all clusters. What architecture would you recommend?</summary>
 
-Use a **federated Prometheus architecture** with a central aggregation layer. Deploy Prometheus on each cluster (on-prem, AWS, Azure) collecting local metrics. Use **Thanos** or **Prometheus remote_write** to ship metrics to a central store. The central store can be: (1) A Thanos cluster running in the primary cloud, with S3/GCS for long-term storage. (2) A managed service like Grafana Cloud or Amazon Managed Prometheus. The key architectural decision is where the central store lives -- place it in the cloud with the best connectivity to all other environments. Grafana connects to the central store for dashboards. Alertmanager runs centrally with routing rules per cluster. For the network path, metrics from on-prem flow via Direct Connect to AWS, and metrics from Azure flow via ExpressRoute + VPN or via the internet (Grafana Cloud). The total data volume per cluster is typically 1-5 GB/day for metrics.
+The most robust approach is to implement a federated Prometheus architecture with a highly available central aggregation layer. You should deploy a local Prometheus instance on each cluster (on-premises, AWS, and Azure) to collect metrics and provide short-term buffering during network partitions. Because you have high-bandwidth dedicated connections available, you can reliably use Thanos or Prometheus `remote_write` to ship these metrics to a central storage tier without saturating the network links. This central store, handling long-term retention and global querying, should be placed in the cloud environment with the most reliable connectivity or in a managed service like Grafana Cloud. This design guarantees that if a network link drops, local Prometheus nodes will buffer the metrics, seamlessly backfilling the central dashboard once connectivity is restored.
 </details>
 
 <details>
-<summary>Question 5: What is Pinniped and why is it necessary for hybrid Kubernetes identity?</summary>
+<summary>Question 5: You have successfully connected your on-premises data center to AWS via Direct Connect. However, developers complain that they use their corporate Okta single sign-on for the EKS clusters, but must use static `kubeconfig` files with client certificates for the on-premises clusters. How does a tool like Pinniped solve this specific pain point?</summary>
 
-**Pinniped** is a Kubernetes authentication project that provides a unified OIDC-based login experience across any Kubernetes cluster, regardless of where it runs. It has two components: the **Supervisor** (runs on a management cluster, acts as an OIDC provider that federates to your corporate IdP) and the **Concierge** (runs on each target cluster, validates tokens from the Supervisor). It is necessary for hybrid identity because: (1) Cloud-managed clusters (EKS, AKS, GKE) each have their own authentication mechanism. (2) On-premises clusters (kubeadm, EKS Anywhere) need manual OIDC configuration. (3) Without Pinniped, developers need different credentials and different login flows for each cluster type. Pinniped standardizes this: one `pinniped login` command works for every cluster, using the same corporate credentials through browser-based OIDC flow. The alternative is Dex, which provides similar functionality but requires more manual configuration per cluster.
+Pinniped acts as a unified identity federation bridge that standardizes the authentication flow across any type of Kubernetes cluster. It features a Supervisor component that integrates directly with your corporate Identity Provider (like Okta) and a Concierge component installed on every target cluster to validate the resulting tokens. Instead of managing static certificates or setting up separate OIDC integrations for each on-premises cluster, administrators configure a single identity source. Developers can then use a single `pinniped login` command that triggers a familiar browser-based OIDC login flow. Ultimately, this ensures that the same corporate credentials and RBAC policies govern access across the entire hybrid fleet, dramatically reducing administrative overhead and improving security.
 </details>
 
 <details>
-<summary>Question 6: When should you choose site-to-site VPN over Direct Connect for hybrid Kubernetes workloads?</summary>
+<summary>Question 6: Your startup is extending its on-premises development environment into the cloud to access specialized GPU nodes. The CTO wants to immediately order a 10Gbps Direct Connect circuit to link the environments. Under what specific conditions would you advise starting with a Site-to-Site VPN instead, and when would the Direct Connect become strictly necessary?</summary>
 
-Choose VPN when: (1) The workloads are **non-production** (dev, staging) where latency variability is acceptable. (2) **Bandwidth needs are low** -- under 500 Mbps sustained. (3) You need connectivity **quickly** -- VPN is operational in hours, Direct Connect takes weeks. (4) As a **failover path** when the Direct Connect circuit fails (always have VPN as backup). (5) **Cost sensitivity** is paramount -- VPN costs $36/month versus $1,600+/month for Direct Connect. Choose Direct Connect when: (1) **Production workloads** depend on consistent latency. (2) **Data replication** (database streaming, event streaming) crosses the boundary. (3) **Bandwidth exceeds 1 Gbps**. (4) **Container image pulls** from cloud registries are frequent and large. (5) **Cross-cluster service calls** need sub-10ms latency. Most enterprises use both: Direct Connect as the primary path and VPN as the backup.
+For an initial development environment expansion, a Site-to-Site VPN is generally the superior starting point because it can be provisioned in hours and costs a fraction of dedicated fiber. Because these are development workloads, occasional internet-induced latency spikes or minor packet loss will likely not cause business-impacting outages. You should advise starting with a VPN to rapidly unblock the engineering teams and validate the architectural patterns. A Direct Connect circuit becomes strictly necessary only when you transition to production workloads that require consistent single-digit millisecond latency, or when synchronous data replication and large-scale cross-cluster service mesh traffic saturate the VPN's bandwidth. Ultimately, most mature enterprises maintain both, using Direct Connect for heavy production data and keeping the VPN as an automatic failover path.
 </details>
 
 ---
@@ -807,15 +768,23 @@ In this exercise, you will simulate a hybrid environment using two kind clusters
 
 **What you will build:**
 
-```text
-┌──────────────────┐          ┌──────────────────┐
-│  "On-Premises"   │ ◄──────► │  "Cloud"         │
-│  kind cluster    │  Docker   │  kind cluster    │
-│                  │  network  │                  │
-│  - App backend   │          │  - App frontend  │
-│  - PostgreSQL    │          │  - ArgoCD (hub)  │
-│  - Prometheus    │          │  - Prometheus    │
-└──────────────────┘          └──────────────────┘
+```mermaid
+flowchart LR
+    subgraph OnPrem["On-Premises<br>kind cluster"]
+        direction TB
+        Backend["- App backend"]
+        PG["- PostgreSQL"]
+        PromOP["- Prometheus"]
+    end
+    
+    subgraph Cloud["Cloud<br>kind cluster"]
+        direction TB
+        Frontend["- App frontend"]
+        Argo["- ArgoCD (hub)"]
+        PromCloud["- Prometheus"]
+    end
+    
+    OnPrem <-->|"Docker<br>network"| Cloud
 ```
 
 ### Task 1: Create the Hybrid Clusters
