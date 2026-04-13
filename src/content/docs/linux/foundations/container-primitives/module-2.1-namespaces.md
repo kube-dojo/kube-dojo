@@ -58,22 +58,22 @@ A **namespace** wraps a global system resource in an abstraction that makes it a
 
 > **Pause and predict**: If a process is placed in a new network namespace, what network interfaces will it see by default?
 
-```
-┌────────────────────────────────────────────────────────────────┐
-│                         HOST SYSTEM                             │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │              Global Resource: Network Stack              │   │
-│  │         eth0 (192.168.1.100), routing tables            │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                              │                                  │
-│              ┌───────────────┴───────────────┐                 │
-│              ▼                               ▼                 │
-│  ┌──────────────────────┐     ┌──────────────────────┐        │
-│  │  Network Namespace 1 │     │  Network Namespace 2 │        │
-│  │  eth0 (10.0.0.1)     │     │  eth0 (10.0.0.2)     │        │
-│  │  Container A         │     │  Container B         │        │
-│  └──────────────────────┘     └──────────────────────┘        │
-└────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph "HOST SYSTEM"
+        Global["Global Resource: Network Stack\neth0 (192.168.1.100), routing tables"]
+        
+        subgraph "Network Namespace 1"
+            NS1["Container A\neth0 (10.0.0.1)"]
+        end
+        
+        subgraph "Network Namespace 2"
+            NS2["Container B\neth0 (10.0.0.2)"]
+        end
+        
+        Global --> NS1
+        Global --> NS2
+    end
 ```
 
 Each namespace type isolates a specific resource:
@@ -128,19 +128,24 @@ Makes processes see their own PID tree, with PID 1 as their init.
 
 ### Without PID Namespace
 
-```
-Host:
-PID 1 (systemd) ─┬─ PID 100 (sshd)
-                 ├─ PID 200 (containerd)
-                 └─ PID 300 (your_app)  ← sees all PIDs
+```mermaid
+flowchart LR
+    systemd["PID 1 (systemd)"] --> sshd["PID 100 (sshd)"]
+    systemd --> containerd["PID 200 (containerd)"]
+    systemd --> app["PID 300 (your_app)\n← sees all PIDs"]
 ```
 
 ### With PID Namespace
 
-```
-Host:                              Container view:
-PID 1 (systemd)                    PID 1 (your_app)  ← thinks it's PID 1!
-  └─ PID 300 (your_app)            (can't see host processes)
+```mermaid
+flowchart LR
+    subgraph "Host View"
+        systemd["PID 1 (systemd)"] --> app_host["PID 300 (your_app)"]
+    end
+    
+    subgraph "Container View"
+        app_cont["PID 1 (your_app)\n← thinks it's PID 1!\n(can't see host processes)"]
+    end
 ```
 
 ### Try This: Create PID Namespace
@@ -216,24 +221,28 @@ sudo ip netns delete test-ns
 
 ### How Containers Get Network Access
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                          HOST                                    │
-│                                                                  │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │                      docker0 bridge                       │   │
-│  │                       172.17.0.1                          │   │
-│  └────────────────┬─────────────────────┬───────────────────┘   │
-│                   │                     │                        │
-│              veth123                veth456                      │
-│                   │                     │                        │
-│  ┌────────────────┼─────┐ ┌─────────────┼────────────────┐      │
-│  │  Container A   │     │ │  Container B │               │      │
-│  │           eth0─┘     │ │         eth0─┘               │      │
-│  │         172.17.0.2   │ │       172.17.0.3             │      │
-│  │  (network namespace) │ │    (network namespace)       │      │
-│  └──────────────────────┘ └──────────────────────────────┘      │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph "HOST"
+        Bridge["docker0 bridge\n172.17.0.1"]
+        
+        veth123["veth123"]
+        veth456["veth456"]
+        
+        Bridge --- veth123
+        Bridge --- veth456
+        
+        subgraph "Container A"
+            ethA["eth0\n172.17.0.2\n(network namespace)"]
+        end
+        
+        subgraph "Container B"
+            ethB["eth0\n172.17.0.3\n(network namespace)"]
+        end
+        
+        veth123 --- ethA
+        veth456 --- ethB
+    end
 ```
 
 Virtual ethernet pairs (veth) connect container namespaces to host bridges.
@@ -282,6 +291,8 @@ By selectively entering specific namespaces, you effectively combine the contain
 ## Mount Namespace
 
 Isolates filesystem mount points—each namespace sees different mounts.
+
+> **Stop and think**: If you mount a new volume inside a container, will the host system automatically be able to access the contents of that mount?
 
 ### What's Isolated
 
@@ -352,6 +363,8 @@ This is how containers have their own hostnames without affecting the host.
 ## User Namespace
 
 Maps UIDs inside the namespace to different UIDs outside.
+
+> **Pause and predict**: If you run a rootless container and execute a process as UID 0 inside it, what UID will that process appear as if you inspect it from the host system?
 
 ### Why User Namespaces Matter
 
