@@ -55,33 +55,29 @@ This module teaches you to deploy Airflow on Kubernetes, write DAGs that orchest
 
 ### The Four Components
 
-```
-┌──────────────────────────────────────────────────────────┐
-│                    AIRFLOW ON KUBERNETES                  │
-│                                                          │
-│  ┌─────────────────┐     ┌──────────────────────┐       │
-│  │    Webserver     │     │     Scheduler        │       │
-│  │  (Flask UI)      │     │  (parses DAGs,       │       │
-│  │                  │     │   triggers tasks,    │       │
-│  │  DAG view        │     │   manages state)     │       │
-│  │  Task logs       │     │                      │       │
-│  │  Variables/       │     │  ┌────────────────┐ │       │
-│  │  Connections     │     │  │ DAG Processor  │ │       │
-│  └──────────────────┘     │  └────────────────┘ │       │
-│           │                └──────────┬───────────┘       │
-│           │                          │                    │
-│           ▼                          ▼                    │
-│  ┌──────────────────┐     ┌──────────────────────┐       │
-│  │   Metadata DB    │     │   Executor           │       │
-│  │  (PostgreSQL)    │◄────│                      │       │
-│  │                  │     │  KubernetesExecutor: │       │
-│  │  DAG state       │     │  Each task = 1 Pod   │       │
-│  │  Task history    │     │                      │       │
-│  │  Variables       │     │  ┌───┐ ┌───┐ ┌───┐ │       │
-│  │  Connections     │     │  │Pod│ │Pod│ │Pod│ │       │
-│  └──────────────────┘     │  └───┘ └───┘ └───┘ │       │
-│                           └──────────────────────┘       │
-└──────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph "Airflow on Kubernetes"
+        W["Webserver<br/>(Flask UI, DAG view, Task logs)"]
+        S["Scheduler<br/>(Parses DAGs, triggers tasks)"]
+        DP["DAG Processor"]
+        M[("Metadata DB<br/>(PostgreSQL)")]
+        E["Executor<br/>(KubernetesExecutor)"]
+        
+        S --> DP
+        W --> M
+        S --> M
+        S --> E
+        
+        subgraph "Task Execution"
+            P1["Pod"]
+            P2["Pod"]
+            P3["Pod"]
+        end
+        E --> P1
+        E --> P2
+        E --> P3
+    end
 ```
 
 **Webserver**: The Flask-based UI where you view DAGs, monitor task execution, check logs, manage variables and connections. Runs as a Deployment.
@@ -96,12 +92,15 @@ This module teaches you to deploy Airflow on Kubernetes, write DAGs that orchest
 
 A **DAG** (Directed Acyclic Graph) defines the workflow: what tasks to run and in what order.
 
-```python
-# Simple DAG structure:
-#
-#        ┌──→ transform_users ──→┐
-# extract ──→ transform_orders ──→ load ──→ notify
-#        └──→ transform_products─→┘
+```mermaid
+graph LR
+    E[extract] --> T1[transform_users]
+    E --> T2[transform_orders]
+    E --> T3[transform_products]
+    T1 --> L[load]
+    T2 --> L
+    T3 --> L
+    L --> N[notify]
 ```
 
 A **Task** is a single unit of work within a DAG. It could be running a SQL query, executing a Python function, triggering a Spark job, or calling an API.
@@ -122,21 +121,17 @@ An **Operator** defines what a task does:
 
 This is the most confusing part of Airflow on Kubernetes. Let me clear it up:
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│              EXECUTOR COMPARISON                             │
-├───────────────┬──────────────────┬───────────────────────────┤
-│               │ KubernetesExec.  │ CeleryExecutor            │
-├───────────────┼──────────────────┼───────────────────────────┤
-│ Workers       │ Ephemeral Pods   │ Long-running worker Pods  │
-│ Isolation     │ Per-task Pod     │ Shared worker process     │
-│ Startup time  │ 5-30 seconds     │ Instant (worker running)  │
-│ Resource use  │ Pay per task     │ Always-on workers         │
-│ Dependencies  │ Per-task image   │ Shared worker image       │
-│ Scaling       │ Infinite (K8s)   │ Fixed pool (+ autoscaler) │
-│ Best for      │ Varied workloads │ Homogeneous, fast tasks   │
-└───────────────┴──────────────────┴───────────────────────────┘
-```
+| Feature | KubernetesExecutor | CeleryExecutor |
+|---------|--------------------|----------------|
+| **Workers** | Ephemeral Pods | Long-running worker Pods |
+| **Isolation** | Per-task Pod | Shared worker process |
+| **Startup time** | 5-30 seconds | Instant (worker running) |
+| **Resource use** | Pay per task | Always-on workers |
+| **Dependencies** | Per-task image | Shared worker image |
+| **Scaling** | Infinite (K8s) | Fixed pool (+ autoscaler) |
+| **Best for** | Varied workloads | Homogeneous, fast tasks |
+
+> **Stop and think**: If your Airflow tasks have wildly different resource requirements—like a lightweight API caller and a heavy machine learning training job—how does the KubernetesExecutor's model provide an advantage over the CeleryExecutor?
 
 **KubernetesPodOperator** is different from the KubernetesExecutor. It is a specific operator that runs a task inside a custom Pod, regardless of which executor you use. You can use it with CeleryExecutor to run specific heavy tasks in isolated Pods while other tasks run on Celery workers.
 
@@ -635,6 +630,8 @@ def critical_pipeline():
         pass
 ```
 
+> **Pause and predict**: By default, Airflow tasks use the `ALL_SUCCESS` trigger rule. If a data validation task fails, what state will the downstream reporting task enter? Does it fail or does it get skipped?
+
 ### Handling Upstream Failures with Trigger Rules
 
 ```python
@@ -681,77 +678,44 @@ def alert_on_total_failure():
 
 ## Quiz
 
-**Question 1:** What is the difference between the KubernetesExecutor and the KubernetesPodOperator?
+**Question 1:** You are designing a pipeline where one task requires a specific legacy Python 2.7 environment, while the rest of the pipeline uses Python 3.11. A colleague suggests using `KubernetesExecutor` to solve this, but another suggests `KubernetesPodOperator`. Which should you choose and why?
 
 <details>
 <summary>Show Answer</summary>
 
-**KubernetesExecutor** is an executor type — it determines HOW tasks run. With KubernetesExecutor, every task in every DAG runs in its own isolated Kubernetes Pod. The executor creates and manages these Pods.
-
-**KubernetesPodOperator** is a specific operator — it determines WHAT a task does. It explicitly launches a specific container image in a Pod with custom configuration (resources, volumes, node selectors). It can be used with ANY executor (KubernetesExecutor, CeleryExecutor, LocalExecutor).
-
-They serve different purposes: KubernetesExecutor is about execution infrastructure; KubernetesPodOperator is about task definition. You can use both together — a DAG running on KubernetesExecutor can have some tasks as PythonOperators (running in the default worker image) and some as KubernetesPodOperators (running in custom images).
-
+**KubernetesPodOperator** is the correct choice for this specific task. The operator allows you to specify a custom container image (like Python 2.7) for a single task, isolating its environment completely from the rest of the Airflow workers. While `KubernetesExecutor` does launch a Pod for every task, it uses the default Airflow worker image unless configured otherwise, which would not contain the legacy dependencies. By using the `KubernetesPodOperator`, you maintain the modern Python 3.11 environment for your standard tasks while spinning up a specialized, isolated Pod solely for the legacy requirement. This prevents dependency conflicts and keeps the core Airflow image lightweight.
 </details>
 
-**Question 2:** Why should DAG files be kept simple and avoid heavy imports or computations at the module level?
+**Question 2:** Your team just added 50 new DAGs to the repository. Suddenly, the scheduler CPU usage spikes to 100%, and tasks are taking 5 minutes to get scheduled. Upon inspection, you notice the DAG files contain SQLAlchemy queries at the top level to fetch dynamic configurations. Why is this causing scheduler degradation?
 
 <details>
 <summary>Show Answer</summary>
 
-The Airflow scheduler parses **all** DAG files every 30 seconds (configurable via `dag_dir_list_interval`). During parsing, Python imports the file and executes all top-level code. If a DAG file has:
-- Heavy imports (pandas, tensorflow, pyspark)
-- Database queries
-- API calls
-- Complex computations
-
-...these execute on EVERY parse cycle, consuming scheduler resources and slowing down DAG discovery. This can cause the scheduler to fall behind, creating a cascade of delayed task executions.
-
-Best practice: Keep DAG files lightweight. Move heavy logic into separate modules, use lazy imports inside task functions, or use KubernetesPodOperator where the heavy code runs inside the task Pod, not during parsing.
-
+Top-level code in DAG files is executed every time the scheduler parses the file, which defaults to every 30 seconds. Because the SQLAlchemy queries were placed at the module level (outside of task definitions), the scheduler executes these queries sequentially across all 50 new files during every parsing loop. This constant database polling consumes massive amounts of scheduler CPU and blocks the parsing process, causing a massive delay in task scheduling. To fix this, the queries must be moved inside the execution context of the tasks themselves. This ensures they only run when the specific task is triggered, rather than during the scheduler's continuous DAG discovery phase.
 </details>
 
-**Question 3:** What does `catchup=False` do, and why is it usually set for production DAGs?
+**Question 3:** You deploy a new DAG to production on Friday afternoon with a `start_date` set to 6 months ago and a daily schedule. Within minutes, the Kubernetes cluster auto-scales to its maximum node limit and the database connections are exhausted. What configuration caused this incident, and how do you prevent it?
 
 <details>
 <summary>Show Answer</summary>
 
-When `catchup=True` (the default), Airflow creates a DAG run for every scheduled interval between `start_date` and the current time. If your DAG has `start_date=datetime(2025, 1, 1)` and `schedule="@daily"`, deploying it in March 2026 would trigger 449 backfill runs.
-
-`catchup=False` tells Airflow to only create runs from the current time forward, skipping all missed intervals. This is usually what you want in production because:
-1. Backfilling hundreds of runs unexpectedly can overwhelm your cluster
-2. Most pipelines process the latest data and do not need historical reruns
-3. If you DO need to backfill, you can trigger it explicitly with the CLI or UI
-
+The incident was caused by deploying the DAG with `catchup=True` (which is the default behavior in Airflow). When a DAG is enabled with `catchup`, the Airflow scheduler immediately attempts to execute all missed DAG runs between the `start_date` (6 months ago) and the current date. This resulted in roughly 180 concurrent DAG runs being triggered simultaneously, which exhausted the cluster's resources and overwhelmed the metadata database. To prevent this, you must explicitly set `catchup=False` in your DAG arguments. This instructs the scheduler to ignore historical intervals and only schedule runs from the current date forward.
 </details>
 
-**Question 4:** How does Airflow handle task retries, and what is the purpose of exponential backoff?
+**Question 4:** A task in your DAG queries an external API that has a strict rate limit of 100 requests per minute. Occasionally, the API returns a 429 Too Many Requests error. The task is configured with 3 retries and a fixed 1-minute retry delay, but it still frequently fails completely. How should you modify the retry strategy to handle this API rate limiting?
 
 <details>
 <summary>Show Answer</summary>
 
-When a task fails, Airflow marks it as `up_for_retry` and waits for `retry_delay` before attempting it again, up to `retries` times. After all retries are exhausted, the task is marked as `failed`.
-
-**Exponential backoff** (`retry_exponential_backoff=True`) increases the delay between retries: if `retry_delay=5m`, the first retry waits 5 minutes, the second waits 10 minutes, the third waits 20 minutes, and so on (capped by `max_retry_delay`).
-
-This is important because many failures are caused by transient issues (database overload, API rate limits, network partitions). Fixed-interval retries can compound the problem by hitting the failing resource at regular intervals. Exponential backoff gives the failing system progressively more time to recover, increasing the chance of success on later retries.
-
+You should implement an exponential backoff strategy by setting `retry_exponential_backoff=True` and increasing the `max_retry_delay`. A fixed 1-minute retry delay is problematic because if the API is overwhelmed, hitting it exactly 1 minute later repeatedly does not give the external service enough time to shed its load or reset the rate limit bucket. Exponential backoff progressively increases the wait time between each retry (e.g., 1 minute, 2 minutes, 4 minutes), giving the rate limit a realistic window to reset. This approach is fundamental in distributed systems for handling transient errors effectively. It prevents your pipeline from contributing to a "thundering herd" problem against the external API while increasing the ultimate chance of task success.
 </details>
 
-**Question 5:** What are XComs, and why should you avoid passing large datasets through them?
+**Question 5:** Your pipeline processes 10GB CSV files. A junior developer writes a task that reads the file into a Pandas DataFrame, serializes it to JSON, and returns it so the next task can pull it via XCom. The Airflow metadata database crashes shortly after the DAG runs. Why did this architectural choice cause an outage?
 
 <details>
 <summary>Show Answer</summary>
 
-**XComs** (Cross-Communications) are Airflow's mechanism for tasks to pass small pieces of data to downstream tasks. When a task returns a value or uses `xcom_push()`, the data is serialized and stored in the Airflow metadata database. Downstream tasks access it via `xcom_pull()`.
-
-You should avoid large datasets in XComs because:
-1. **Database bloat**: XCom data is stored in PostgreSQL/MySQL. Large values bloat the metadata DB and slow down queries.
-2. **Serialization overhead**: Large objects must be serialized/deserialized, adding latency.
-3. **Memory pressure**: The scheduler and webserver load XCom data when rendering UI pages.
-
-Best practice: Pass **references** (S3 URIs, database table names, file paths) through XComs, not actual data. Keep XCom values under 48 KB. For larger data exchange, write to shared storage (S3, GCS, NFS) and pass the path.
-
+This architectural choice caused an outage because XComs are stored directly in the Airflow metadata database (PostgreSQL or MySQL). When the task serialized the 10GB dataset into an XCom, it attempted to write a massive payload into a single database row. This saturated the database's memory, exhausted connection limits, and severely bloated the underlying storage volume. XComs are exclusively designed for passing small metadata—like a status string, a count, or a file path—with a strongly recommended limit of 48 KB. To fix this architecture, the first task should write the 10GB CSV to a persistent object store (like an S3 bucket) and only return the file's URI via XCom for the downstream task to pull.
 </details>
 
 ---
@@ -967,3 +931,4 @@ Continue to [Module 1.6: Building a Data Lakehouse on Kubernetes](../module-1.6-
 ---
 
 *"Airflow is not a data processing framework. It is a platform for programmatically authoring, scheduling, and monitoring workflows."* — Apache Airflow documentation
+---
