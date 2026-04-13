@@ -247,17 +247,17 @@ parameters:
 
 ```bash
 # Check snapshot status
-k get volumesnapshot postgres-data-snapshot -n databases
+kubectl get volumesnapshot postgres-data-snapshot -n databases
 # NAME                     READYTOUSE   RESTORESIZE   AGE
 # postgres-data-snapshot   true         100Gi         2m
 
 # The underlying cloud snapshot can be shared across accounts/regions
 # AWS: Copy EBS snapshot to another region
-SNAPSHOT_ID=$(k get volumesnapshot postgres-data-snapshot -n databases \
+SNAPSHOT_ID=$(kubectl get volumesnapshot postgres-data-snapshot -n databases \
   -o jsonpath='{.status.boundVolumeSnapshotContentName}')
 
 # Get the actual EBS snapshot ID
-EBS_SNAPSHOT=$(k get volumesnapshotcontent $SNAPSHOT_ID \
+EBS_SNAPSHOT=$(kubectl get volumesnapshotcontent $SNAPSHOT_ID \
   -o jsonpath='{.status.snapshotHandle}')
 
 # Copy to DR region
@@ -535,8 +535,8 @@ Every migration follows the same high-level pattern: replicate, verify, cutover,
 - [ ] Update documentation
 
 ```bash
-# Verification script: compare source and target
 #!/bin/bash
+# Verification script: compare source and target
 set -e
 
 SOURCE_HOST="source-db.internal"
