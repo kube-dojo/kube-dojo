@@ -72,13 +72,17 @@ DevOps was transformative — it broke down silos, accelerated delivery, and int
 
 In the 2000s, development and operations were separate silos:
 
-```
-┌─────────────────┐         ┌─────────────────┐
-│   Development   │  "Wall" │   Operations    │
-│                 │   of    │                 │
-│  Write code     │ ──────▶ │  Deploy & run   │
-│  Throw over     │ Blame   │  Fix problems   │
-└─────────────────┘         └─────────────────┘
+```mermaid
+flowchart LR
+    subgraph Dev[Development]
+        A[Write code]
+        B[Throw over]
+    end
+    subgraph Ops[Operations]
+        C[Deploy & run]
+        D[Fix problems]
+    end
+    Dev -- "Wall of Blame" --> Ops
 ```
 
 DevOps broke down this wall. Shared responsibility. Continuous delivery. Infrastructure as code. Teams owning their services end-to-end.
@@ -89,7 +93,7 @@ DevOps broke down this wall. Shared responsibility. Continuous delivery. Infrast
 
 Fast forward to 2020. DevOps succeeded—maybe too well:
 
-```
+```text
 Developer responsibilities (2010):
 - Write code
 - Write tests
@@ -111,6 +115,8 @@ Developer responsibilities (2020):
 
 **The cognitive load problem**: Developers became responsible for *everything*. The "full-stack" expanded to include infrastructure, security, observability, and more.
 
+> **Stop and think**: If developers are fully responsible for the entire stack from CSS to Kubernetes networking and incident response, when do they actually have time to write business features?
+
 ### The Breaking Point
 
 Research from the DORA team and others showed:
@@ -126,25 +132,25 @@ Something had to change.
 
 Around 2018-2020, a new pattern emerged. Instead of every team building their own tooling, dedicated teams would build **internal platforms**—curated, self-service capabilities that abstract away complexity.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Development Teams                         │
-│                                                              │
-│   "I need to deploy"     "I need a database"                │
-│         │                       │                            │
-└─────────┼───────────────────────┼────────────────────────────┘
-          │                       │
-          ▼                       ▼
-┌─────────────────────────────────────────────────────────────┐
-│                  Internal Developer Platform                 │
-│                                                              │
-│   ┌──────────────┐ ┌──────────────┐ ┌──────────────┐       │
-│   │ Deployment   │ │  Database    │ │ Monitoring   │       │
-│   │ Self-Service │ │ Self-Service │ │ Self-Service │ ...   │
-│   └──────────────┘ └──────────────┘ └──────────────┘       │
-│                                                              │
-│   Abstracts: Kubernetes, Terraform, networking, security    │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph DevTeams[Development Teams]
+        Req1["I need to deploy"]
+        Req2["I need a database"]
+    end
+
+    subgraph IDP[Internal Developer Platform]
+        Dep["Deployment<br/>Self-Service"]
+        DB["Database<br/>Self-Service"]
+        Mon["Monitoring<br/>Self-Service"]
+        Abstract["Abstracts: Kubernetes, Terraform, networking, security"]
+    end
+
+    Req1 --> Dep
+    Req2 --> DB
+    Dep ~~~ Abstract
+    DB ~~~ Abstract
+    Mon ~~~ Abstract
 ```
 
 **Platform Engineering** is the discipline of building these internal platforms.
@@ -155,7 +161,7 @@ Around 2018-2020, a new pattern emerged. Instead of every team building their ow
 
 Think about a recent project. List all the technologies and systems a developer had to understand:
 
-```
+```text
 Project: _________________
 
 Technologies/systems needed:
@@ -197,28 +203,23 @@ Platform teams operate as **product teams**:
 - Iterative development
 - Success = developer adoption and satisfaction
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│               Infrastructure Team Mindset                    │
-│                                                              │
-│  "We provide infrastructure. Developers submit tickets."    │
-│                                                              │
-│  Metrics: Uptime, cost, tickets closed                      │
-│  Success: Systems running                                   │
-│  Failure mode: Ticket backlog                               │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Infra[Infrastructure Team Mindset]
+        direction TB
+        I1["We provide infrastructure. Developers submit tickets."]
+        I2["Metrics: Uptime, cost, tickets closed"]
+        I3["Success: Systems running"]
+        I4["Failure mode: Ticket backlog"]
+    end
 
-vs
-
-┌─────────────────────────────────────────────────────────────┐
-│                Platform Team Mindset                         │
-│                                                              │
-│  "We build products for developers. They're our customers." │
-│                                                              │
-│  Metrics: Adoption, satisfaction, time-to-deploy            │
-│  Success: Developers choose our platform                    │
-│  Failure mode: Developers work around us                    │
-└─────────────────────────────────────────────────────────────┘
+    subgraph Platform[Platform Team Mindset]
+        direction TB
+        P1["We build products for developers. They're our customers."]
+        P2["Metrics: Adoption, satisfaction, time-to-deploy"]
+        P3["Success: Developers choose our platform"]
+        P4["Failure mode: Developers work around us"]
+    end
 ```
 
 ### What "Product" Means
@@ -226,7 +227,7 @@ vs
 Treating your platform as a product means:
 
 **1. Know Your Customers**
-```
+```text
 Who are your developers?
 - What do they need to accomplish?
 - What frustrates them?
@@ -235,25 +236,25 @@ Who are your developers?
 ```
 
 **2. Provide Self-Service**
-```
+```text
 Good: "Request a database in the UI, get it in 5 minutes"
 Bad: "Submit a ticket, wait 3 days, attend a meeting"
 ```
 
 **3. Maintain Clear Interfaces**
-```
+```text
 Good: "Here's our API/CLI/portal for deployments"
 Bad: "Read this 50-page wiki and figure it out"
 ```
 
 **4. Iterate Based on Feedback**
-```
+```text
 Good: Regular user research, usage analytics, feedback loops
 Bad: Build what you think is cool, hope developers use it
 ```
 
 **5. Market Internally**
-```
+```text
 Good: Documentation, onboarding, training, community
 Bad: "We built it, they should use it"
 ```
@@ -261,6 +262,8 @@ Bad: "We built it, they should use it"
 ### The Optional Platform
 
 Here's the controversial part: **Good platforms are optional.**
+
+> **Pause and predict**: If you force developers to use a new platform without them buying into the value, what will they naturally start doing to get their work done?
 
 If developers *have* to use your platform, you'll never know if it's actually good. They're forced customers, not happy customers.
 
@@ -303,7 +306,7 @@ A company I worked with decided they needed a platform. They were inspired by co
 - "This is how we do things now"
 
 **The Reality (3 months later):**
-```
+```text
 Platform adoption: 15%
 Developer satisfaction: Down 20%
 Deployment frequency: Down 30%
@@ -329,7 +332,7 @@ They scraped most of it and started over:
 5. **Tracked adoption organically**: Teams voluntarily migrated
 
 **Results (6 months later):**
-```
+```text
 Adoption: 80%
 Developer satisfaction: Up 35%
 Deployment frequency: Up 400%
@@ -350,7 +353,7 @@ These terms overlap and confuse. Here's how to think about them:
 **Output**: Compute, storage, networking, databases
 **Mindset**: Keep systems running
 
-```
+```text
 Infrastructure team owns:
 - VM provisioning
 - Network configuration
@@ -366,7 +369,7 @@ Infrastructure team owns:
 **Output**: Processes, automation, collaboration
 **Mindset**: Break down silos, accelerate delivery
 
-```
+```text
 DevOps practices include:
 - CI/CD pipelines
 - Infrastructure as Code
@@ -382,7 +385,7 @@ DevOps practices include:
 **Output**: Self-service capabilities, golden paths
 **Mindset**: Developer experience as product
 
-```
+```text
 Platform team owns:
 - Developer portal (Backstage)
 - Deployment self-service
@@ -393,27 +396,14 @@ Platform team owns:
 
 ### The Relationship
 
-```
-┌────────────────────────────────────────────────────────────────┐
-│                         DevOps                                  │
-│                    (Culture & Practices)                        │
-│                                                                 │
-│   ┌─────────────────────────────────────────────────────────┐  │
-│   │               Platform Engineering                       │  │
-│   │              (Developer Products)                        │  │
-│   │                                                          │  │
-│   │   ┌───────────────────────────────────────────────────┐ │  │
-│   │   │              Infrastructure                        │ │  │
-│   │   │         (Foundational Systems)                     │ │  │
-│   │   │                                                    │ │  │
-│   │   │   Compute | Storage | Network | Databases          │ │  │
-│   │   └───────────────────────────────────────────────────┘ │  │
-│   │                                                          │  │
-│   │   Self-Service | Golden Paths | Developer Portal        │  │
-│   └─────────────────────────────────────────────────────────┘  │
-│                                                                 │
-│   CI/CD | IaC | Observability | Collaboration                  │
-└────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart BT
+    Infra["Infrastructure (Foundational Systems)<br/>Compute, Storage, Network, Databases"]
+    Platform["Platform Engineering (Developer Products)<br/>Self-Service, Golden Paths, Developer Portal"]
+    DevOps["DevOps (Culture & Practices)<br/>CI/CD, IaC, Observability, Collaboration"]
+
+    Infra -->|Abstracted by| Platform
+    Platform -->|Enables| DevOps
 ```
 
 Platform Engineering *uses* DevOps practices and *builds on* infrastructure to create products for developers.
@@ -448,7 +438,7 @@ How should platform teams be structured? Team Topologies (Skelton & Pais) provid
 
 ### Platform Team Responsibilities
 
-```
+```text
 Platform Team Owns:
 ├── Developer Portal (service catalog, docs, templates)
 ├── Deployment Platform (CI/CD, GitOps, environments)
@@ -460,26 +450,17 @@ Platform Team Owns:
 
 ### Platform Team Interactions
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Stream-Aligned Team                       │
-│                                                              │
-│   Builds features, uses platform self-service               │
-│                                                              │
-│   Interaction: Self-service consumption                     │
-└───────────────────────────┬─────────────────────────────────┘
-                            │
-            ┌───────────────┼───────────────┐
-            │               │               │
-            ▼               ▼               ▼
-     ┌────────────┐  ┌────────────┐  ┌────────────┐
-     │  Platform  │  │  Enabling  │  │ Complicated│
-     │   Team     │  │   Team     │  │ Subsystem  │
-     │            │  │            │  │    Team    │
-     │ X-as-a-    │  │ Helps      │  │ Owns ML    │
-     │ Service    │  │ adopt new  │  │ platform   │
-     │            │  │ practices  │  │ internals  │
-     └────────────┘  └────────────┘  └────────────┘
+```mermaid
+flowchart TD
+    Stream["Stream-Aligned Team<br/>Builds features, uses platform self-service"]
+
+    Platform["Platform Team<br/>X-as-a-Service"]
+    Enabling["Enabling Team<br/>Helps adopt new practices"]
+    Subsystem["Complicated Subsystem Team<br/>Owns complex internals"]
+
+    Stream -- "Self-service consumption" --> Platform
+    Stream -- "Facilitation" --> Enabling
+    Stream -- "Collaboration" --> Subsystem
 ```
 
 ### Interaction Modes
@@ -517,116 +498,42 @@ Platform Team Owns:
 ## Quiz: Check Your Understanding
 
 ### Question 1
-What's the key difference between Platform Engineering and DevOps?
+You are hired as a new engineering director. The CEO tells you, "We just hired five DevOps engineers to build our developer portal and abstract away Kubernetes." Based on industry definitions, how should you clarify the roles of DevOps versus Platform Engineering to your CEO?
 
 <details>
 <summary>Show Answer</summary>
 
-**DevOps** is a culture and set of practices focused on breaking down silos between development and operations, emphasizing collaboration, automation, and continuous delivery.
-
-**Platform Engineering** is a discipline focused on building internal products (platforms) for developers, treating developer experience as a product problem.
-
-Key distinctions:
-- DevOps is about practices and culture; Platform Engineering is about building products
-- DevOps targets the organization; Platform Engineering targets developers as customers
-- DevOps enables everyone to do everything; Platform Engineering abstracts complexity so developers don't have to
-
-Platform Engineering uses DevOps practices but focuses specifically on the internal developer experience product.
+**DevOps** represents a culture and set of practices focused on breaking down silos between development and operations, while **Platform Engineering** is the specific discipline of building internal developer products. In the scenario, the CEO is conflating the two. You should explain that DevOps is the broader philosophy of shared responsibility and continuous delivery that the entire organization adopts. Platform Engineering, on the other hand, is the dedicated team applying product management principles to build self-service tools (like the developer portal). By clarifying this, you ensure the team focuses on treating developers as customers rather than just enforcing operations practices.
 
 </details>
 
 ### Question 2
-Why should a platform ideally be optional rather than mandated?
+The CTO at your company mandates that starting next month, all 50 engineering teams must use the new internal deployment platform, regardless of their current custom pipelines. As a platform product manager, why might you argue against this strict mandate?
 
 <details>
 <summary>Show Answer</summary>
 
-**Optional platforms drive quality through choice:**
-
-1. **Market validation**: If developers choose your platform, it's genuinely valuable. Forced adoption masks whether it's actually good.
-
-2. **Competition improves products**: When teams can opt out, you're motivated to build something better than alternatives.
-
-3. **Avoids resentment**: Mandates create compliance, not enthusiasm. Developers work around mandated tools they dislike.
-
-4. **Natural feedback**: Optional adoption provides organic feedback—declining adoption means something's wrong.
-
-5. **Gradual migration**: Teams can adopt at their pace, reducing risk and allowing iteration.
-
-**Caveats**: Some guardrails (security, compliance) must be mandated. The *platform* should be optional; the *outcomes* (security, reliability) should not be.
+Mandating a platform removes the critical feedback loop that tells you if you have actually built a valuable product. When a platform is optional, developers will only migrate if it genuinely reduces their cognitive load and solves their pain points faster than their custom solutions. A strict mandate often breeds resentment and leads to teams building shadow IT or workarounds to avoid a platform that doesn't fit their needs. By keeping it optional, the platform team is forced to treat developers as actual customers, using adoption rates as a true metric of success. If the platform is truly better, teams will adopt it voluntarily.
 
 </details>
 
 ### Question 3
-A platform team receives 50 tickets per week for environment provisioning. Is this a success or failure?
+Your platform team celebrates during sprint review because they successfully resolved 50 Jira tickets this week for provisioning new testing environments, hitting their SLA of 24 hours. From a Platform Engineering perspective, how should you evaluate this "success"?
 
 <details>
 <summary>Show Answer</summary>
 
-**This is likely a failure** from a Platform Engineering perspective.
-
-**Why it's problematic:**
-- 50 tickets = 50 instances of friction
-- Tickets indicate lack of self-service
-- Developer time waiting for tickets
-- Platform team time processing tickets
-- This is "infrastructure team" behavior, not "platform team"
-
-**What success looks like:**
-- Self-service: Developers provision environments themselves
-- No tickets: On-demand, automated, instant
-- Platform team focuses on improving the platform, not processing requests
-
-**Better metrics:**
-- Time-to-environment (should be minutes)
-- Self-service rate (should be near 100%)
-- Developer satisfaction with provisioning
-
-**The fix**: Build self-service environment provisioning, reduce tickets to zero for standard cases.
+This situation represents a fundamental failure of the Platform Engineering model, despite meeting the 24-hour SLA. True platform engineering aims to eliminate ticket-based workflows in favor of self-service capabilities. If the team is manually processing 50 tickets a week, it means they are operating as a traditional infrastructure service desk rather than building a scalable product. The goal should be to create an automated self-service portal where developers can provision testing environments instantly without human intervention. The team's celebration indicates they are measuring the wrong behavior (ticket closure) instead of the right outcome (frictionless developer autonomy).
 
 </details>
 
 ### Question 4
-How does "platform as a product" change what platform teams measure?
+Historically, your infrastructure team's primary KPIs were 99.99% uptime and keeping AWS costs under budget. Now that they are transitioning to a "Platform as a Product" model, what new metrics should they prioritize to gauge their success?
 
 <details>
 <summary>Show Answer</summary>
 
-**Traditional infrastructure metrics:**
-- Uptime / availability
-- Cost optimization
-- Tickets closed
-- SLA compliance
-- Capacity utilization
-
-**Platform-as-a-product metrics:**
-
-1. **Adoption**
-   - What % of teams use the platform?
-   - Are teams voluntarily migrating?
-
-2. **Developer Satisfaction**
-   - NPS or satisfaction scores
-   - Qualitative feedback
-
-3. **Time-to-X**
-   - Time to first deployment
-   - Time to provision environment
-   - Time from commit to production
-
-4. **Cognitive Load Reduction**
-   - How much complexity is abstracted?
-   - Developer surveys on ease of use
-
-5. **Self-Service Rate**
-   - % of operations done without tickets
-   - Automation coverage
-
-6. **Business Impact**
-   - Deployment frequency (enabled by platform)
-   - Time-to-market for features
-
-The shift: From "are systems running?" to "are developers productive and happy?"
+Treating the platform as a product means shifting focus from purely operational metrics to developer-centric outcomes. The team should now prioritize metrics like active adoption rate (what percentage of teams voluntarily use the platform) and developer satisfaction (often measured via Net Promoter Score or internal surveys). Additionally, they should track "Time-to-Value" metrics, such as how long it takes a new developer to deploy their first application or provision an environment. While uptime and cost are still important constraints, the primary measure of a platform's success is how effectively it reduces cognitive load and accelerates the stream-aligned teams.
 
 </details>
 
