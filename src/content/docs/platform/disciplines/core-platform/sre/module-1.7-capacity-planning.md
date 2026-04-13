@@ -59,48 +59,14 @@ It answers:
 
 ### The Capacity Planning Cycle
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                 CAPACITY PLANNING CYCLE                  │
-└─────────────────────────────────────────────────────────┘
-         │
-         ▼
-┌─────────────────┐
-│    FORECAST     │ ──▶ What demand do we expect?
-│    DEMAND       │     (Growth, events, seasonality)
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│    MEASURE      │ ──▶ What is current utilization?
-│    CURRENT      │     (CPU, memory, throughput)
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│    IDENTIFY     │ ──▶ Where are the constraints?
-│   BOTTLENECKS   │     (Which resource fails first?)
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│      PLAN       │ ──▶ What capacity do we need?
-│    CAPACITY     │     (With safety margin)
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│    PROVISION    │ ──▶ Add/remove resources
-│   RESOURCES     │     (Manual or auto-scaling)
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│    VALIDATE     │ ──▶ Load test, verify
-│     & TEST      │     (Does capacity meet demand?)
-└────────┬────────┘
-         │
-         └──────▶ REPEAT
+```mermaid
+flowchart TD
+    A[FORECAST DEMAND<br/>What demand do we expect?] --> B[MEASURE CURRENT<br/>What is current utilization?]
+    B --> C[IDENTIFY BOTTLENECKS<br/>Which resource fails first?]
+    C --> D[PLAN CAPACITY<br/>What capacity do we need?]
+    D --> E[PROVISION RESOURCES<br/>Add/remove resources]
+    E --> F[VALIDATE & TEST<br/>Does capacity meet demand?]
+    F --> A
 ```
 
 ---
@@ -108,6 +74,8 @@ It answers:
 ## Forecasting Demand
 
 You can't plan capacity without predicting demand.
+
+> **Stop and think**: Think about the most recent major traffic spike your service experienced. Was it predictable based on historical trends or business events, or was it a complete surprise?
 
 ### Types of Demand Growth
 
@@ -182,36 +150,31 @@ For 2M users (2x growth):
 
 ### Seasonality Patterns
 
-Most services have predictable patterns:
+Most services have predictable patterns. Account for these patterns when planning.
 
-```
-DAILY PATTERN
-    ▲
-    │     ╭────╮
-    │   ╭─╯    ╰─╮
-    │ ╭─╯        ╰─╮
-    │╯              ╰
-    └────────────────────────▶
-    12am  6am  12pm  6pm  12am
-
-WEEKLY PATTERN
-    ▲
-    │ ╭───╮     ╭───╮
-    │─╯   ╰─────╯   ╰─
-    │ M T W T F S S
-    └────────────────────────▶
-
-YEARLY PATTERN (E-Commerce)
-    ▲
-    │                    ╭─╮
-    │          ╭───╮     │ │
-    │──────────╯   ╰─────╯ ╰
-    │ J F M A M J J A S O N D
-    └────────────────────────▶
-         (Black Friday/Holiday spike)
+```mermaid
+xychart-beta
+    title "Daily Pattern"
+    x-axis ["12am", "6am", "12pm", "6pm", "12am"]
+    y-axis "Traffic" 0 --> 100
+    line [20, 30, 80, 90, 25]
 ```
 
-Account for these patterns when planning.
+```mermaid
+xychart-beta
+    title "Weekly Pattern"
+    x-axis ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    y-axis "Traffic" 0 --> 100
+    line [80, 85, 80, 85, 80, 30, 25]
+```
+
+```mermaid
+xychart-beta
+    title "Yearly Pattern (E-Commerce)"
+    x-axis ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    y-axis "Traffic" 0 --> 100
+    line [40, 35, 40, 45, 40, 45, 40, 45, 50, 60, 95, 80]
+```
 
 ---
 
@@ -257,33 +220,24 @@ Before planning, know where you are.
 
 ### The Utilization Sweet Spot
 
+```mermaid
+xychart-beta
+    title "Utilization vs Latency"
+    x-axis "Utilization (%)" ["0", "30", "50", "70", "85", "100"]
+    y-axis "Latency" 0 --> 100
+    line [10, 12, 15, 25, 60, 100]
 ```
-Utilization vs Performance
 
-Latency
-  ▲
-  │                        /
-  │                      /
-  │                    /
-  │                 ╱
-  │              ╱
-  │           ╱
-  │────────╱
-  │
-  └─────────────────────────────────▶
-  0%   30%   50%   70%   85%   100%
-                         ↑
-                    Danger zone
-
-Rule of thumb: Keep sustained utilization below 70%
-  - Room for spikes
-  - Time to scale before problems
-  - Better latency characteristics
-```
+**Rule of thumb**: Keep sustained utilization below 70%.
+- Room for spikes
+- Time to scale before problems
+- Better latency characteristics
 
 ### Finding Bottlenecks
 
 **The Bottleneck Question**: "Which resource fails first as load increases?"
+
+> **Pause and predict**: If your application is currently running at 80% CPU and your database is at 40% CPU, what will happen to the overall system throughput if you simply double the size of the database instance?
 
 ```
 System: Web App → Database → Cache
@@ -481,6 +435,8 @@ Sales up 40% from previous year
 
 You can't trust capacity you haven't tested.
 
+> **Stop and think**: When was the last time you tested your system to the point of complete failure? If you don't know exactly where your system breaks, you don't truly know its capacity limit.
+
 ### Types of Load Tests
 
 **Smoke Test**
@@ -583,20 +539,16 @@ Capacity planning isn't just about having enough — it's about not having too m
 
 ### The Cost-Reliability Trade-off
 
+```mermaid
+xychart-beta
+    title "Cost vs Reliability"
+    x-axis "Reliability (%)" ["0", "90", "95", "99", "99.9", "99.99"]
+    y-axis "Cost" 0 --> 100
+    line [10, 20, 30, 50, 80, 100]
 ```
-Cost
-  ▲
-  │         ╭───────────────────
-  │      ╭──╯
-  │   ╭──╯
-  │ ──╯
-  └─────────────────────────────▶
-    0%                         100%
-              Reliability
 
 More reliability = more cost (diminishing returns)
 The goal: Find the right balance for your business
-```
 
 ### Right-Sizing
 
@@ -694,107 +646,42 @@ Example:
 ## Quiz: Check Your Understanding
 
 ### Question 1
-Your service runs at 80% CPU utilization during peak hours. Is this a problem?
+You are monitoring a critical payment processing microservice during normal daily peak hours. You notice that the pods are sustaining 80% CPU utilization for several hours. The current response times are within SLO, but there are no major events planned today. Is this a problem, and what should be your immediate concern?
 
 <details>
 <summary>Show Answer</summary>
 
-**Yes, this is concerning.** 80% sustained CPU utilization:
-
-1. **No headroom**: Small traffic spike could cause problems
-2. **Degraded performance**: Latency typically increases above 70%
-3. **No room to scale**: If you need to add capacity, you're already behind
-
-**Recommendation:**
-- Scale up to bring utilization below 70%
-- Investigate why utilization is so high
-- Set up auto-scaling to add capacity automatically
-- Consider this a warning sign, not normal operation
+**Yes, this is highly concerning and indicates a significant risk to system stability.** Running at 80% sustained utilization leaves almost no headroom for unexpected traffic spikes or automated background tasks. In most systems, request latency begins to degrade exponentially once CPU utilization crosses the 70% threshold due to context switching and queueing delays. If a sudden surge in traffic occurs or a dependent service slows down, your pods will quickly hit 100% CPU, leading to dropped requests and a potential cascade of failures. You should immediately scale out the service to bring baseline utilization below 70% and investigate if an underlying issue is consuming extra CPU cycles.
 
 </details>
 
 ### Question 2
-You're planning capacity for Black Friday (expected 5x normal traffic). How much capacity should you provision?
+Your marketing team has confirmed a massive Black Friday campaign that is projected to drive exactly 5x your normal baseline traffic. Your current infrastructure comfortably handles the baseline load with 30% headroom. How much total capacity should you provision for the event, and how should you validate it?
 
 <details>
 <summary>Show Answer</summary>
 
-**Provision for 6-7x normal traffic.** Here's why:
-
-```
-Expected: 5x
-Safety margin: 20-30% above expected
-  5x × 1.3 = 6.5x
-
-Why the buffer?
-  - Forecasts are imperfect
-  - Better to over-provision than lose sales
-  - Unknown secondary effects (cache misses, etc.)
-  - Some headroom for even higher spikes
-```
-
-Also:
-- Load test to 8-10x to verify
-- Have auto-scaling ready for more
-- Monitor and be ready to scale manually
-- Cost of over-provisioning << cost of outage
+**You should provision for at least 6.5x to 7x your normal baseline capacity to ensure a safe buffer.** Traffic forecasts, especially for massive marketing events, are inherently imprecise and user behavior can cause unpredictable spikes that exceed averages. By adding a 20-30% safety margin on top of the 5x estimate, you protect the system against unexpected thundering herds or sudden bursts of concurrent checkouts. Furthermore, you must empirically validate this configuration by conducting a stress test at 8x or 10x simulated load in a staging environment. The cost of over-provisioning compute resources for a few days is drastically lower than the revenue lost and brand damage caused by an outage during your biggest sales event.
 
 </details>
 
 ### Question 3
-Your auto-scaling is configured to scale at 70% CPU. During a traffic spike, the system crashes at 95% CPU before scaling can help. What went wrong?
+Your Kubernetes Horizontal Pod Autoscaler (HPA) is configured to add replicas when average CPU utilization reaches 70%. During a recent viral social media mention, traffic doubled in less than a minute. The system crashed due to CPU starvation at 95% before any new pods could start serving traffic. What specific mechanism caused this failure?
 
 <details>
 <summary>Show Answer</summary>
 
-**The traffic spike was faster than scaling could respond.** Issues:
-
-1. **Scaling lag**: Auto-scaling isn't instant
-   - Time to detect (monitoring interval)
-   - Time to decide (stabilization window)
-   - Time to provision (instance startup)
-   - Total: Often 2-5 minutes
-
-2. **Traffic spiked faster than scaling could react**
-
-**Solutions:**
-- **Lower threshold**: Scale at 50-60% instead of 70%
-- **Predictive scaling**: Pre-scale based on patterns
-- **Over-provision baseline**: More minimum capacity
-- **Faster scaling**: Reduce stabilization window
-- **Pre-warmed capacity**: Keep scaled-down instances ready
-- **Graceful degradation**: Shed load under pressure
+**The system failed because the rate of traffic increase vastly outpaced the end-to-end response time of your reactive auto-scaling configuration.** Auto-scaling is not instantaneous; it requires time for metrics to be scraped, averages to be calculated over a stabilization window, and new pods to be scheduled and pass readiness probes. In this scenario, the total lag time for new pods to become active was longer than the time it took for the sudden traffic spike to consume all remaining CPU headroom. To prevent this, you should implement predictive pre-scaling for known events, maintain a larger baseline buffer by lowering the scale-up threshold to 50-60%, or reduce the application's startup time so new replicas can initialize faster under pressure.
 
 </details>
 
 ### Question 4
-How do you identify the bottleneck in a multi-tier system?
+Your multi-tier application (consisting of a React frontend, a Node.js API, a Redis cache, and a PostgreSQL database) is failing to scale beyond 2,000 requests per second. Adding more Node.js API replicas does not increase the total throughput, and latency continues to rise. How should you systematically identify the true bottleneck?
 
 <details>
 <summary>Show Answer</summary>
 
-**Load test while monitoring all tiers:**
-
-```
-1. Increase load gradually
-2. Monitor each component:
-   - Web servers
-   - Application servers
-   - Database
-   - Cache
-   - External dependencies
-
-3. The bottleneck is the component that:
-   - Hits resource limits first (CPU, memory, etc.)
-   - Shows increasing latency first
-   - Starts producing errors first
-
-4. Fix that bottleneck, then repeat
-   - A new bottleneck will emerge
-   - Continue until desired capacity achieved
-```
-
-Key insight: Scaling the wrong component won't help. A 100-node web cluster can't help if the database is the bottleneck.
+**You must conduct a structured load test while simultaneously monitoring the resource utilization and queue depths of every component in the stack.** By gradually increasing the simulated traffic, you can observe which specific resource—such as CPU on the database, memory in Redis, or network bandwidth—first reaches saturation or begins generating errors. In your scenario, the fact that adding API replicas did not improve throughput strongly indicates the bottleneck lies downstream, likely in the PostgreSQL database or the Redis cache. You must pinpoint the exact constraint (e.g., exhausted database connections or high disk I/O latency) and resolve it before scaling any other tier. Scaling the wrong component wastes money and adds complexity without solving the underlying capacity limit.
 
 </details>
 
