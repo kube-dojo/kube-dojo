@@ -5,6 +5,7 @@ sidebar:
   order: 4
 lab:
   id: cks-4.4-runtime-sandboxing
+  url: https://killercoda.com/kubedojo/scenario/cks-4.4-runtime-sandboxing
   duration: "30 min"
   difficulty: advanced
   environment: kubernetes

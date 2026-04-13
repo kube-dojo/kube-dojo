@@ -5,6 +5,7 @@ sidebar:
   order: 2
 lab:
   id: cks-6.2-falco
+  url: https://killercoda.com/kubedojo/scenario/cks-6.2-falco
   duration: "40 min"
   difficulty: advanced
   environment: kubernetes

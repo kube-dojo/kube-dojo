@@ -5,6 +5,7 @@ sidebar:
   order: 5
 lab:
   id: ckad-4.5-serviceaccounts
+  url: https://killercoda.com/kubedojo/scenario/ckad-4.5-serviceaccounts
   duration: "30 min"
   difficulty: intermediate
   environment: kubernetes
