@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import argparse
 import builtins
+import copy
 import fcntl
 import html as html_lib
 import json
@@ -76,6 +77,14 @@ DATA_CONFLICT_CONFLICT_THRESHOLD = 3
 DATA_CONFLICT_UNVERIFIED_THRESHOLD = 5
 LEGACY_SCORE_PASS_THRESHOLD = 4
 _LINK_CACHE_LOCK = threading.Lock()
+_PARALLEL_RUN_SECTION_LOCK = None
+INTEGRITY_WARNING_PREFIXES = (
+    "LINK_DEAD:",
+    "STALE_K8S_VERSION:",
+    "VERSION_MISMATCH_WARNING:",
+    "MISSING_SUPPORTED_CLAIM:",
+    "UNMAPPED_CLAIM:",
+)
 
 # ---------------------------------------------------------------------------
 # Timestamped logging — tee all print() to a log file
@@ -187,18 +196,49 @@ def load_state() -> dict:
     return {"modules": {}}
 
 
+def _with_parallel_run_section_lock(func, /, *args, **kwargs):
+    """Serialize writes/commits during parallel run-section mode."""
+    lock = _PARALLEL_RUN_SECTION_LOCK
+    if lock is None:
+        return func(*args, **kwargs)
+    with lock:
+        return func(*args, **kwargs)
+
+
 def save_state(state: dict) -> None:
     """Save state with file locking + atomic write to prevent corruption."""
-    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    lock_file = STATE_FILE.with_suffix(".lock")
-    tmp_file = STATE_FILE.with_suffix(".tmp")
-    with open(lock_file, "w") as lf:
-        fcntl.flock(lf, fcntl.LOCK_EX)
-        try:
-            tmp_file.write_text(yaml.dump(state, allow_unicode=True, sort_keys=False))
-            tmp_file.replace(STATE_FILE)  # atomic on POSIX
-        finally:
-            fcntl.flock(lf, fcntl.LOCK_UN)
+    def _write() -> None:
+        STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        lock_file = STATE_FILE.with_suffix(".lock")
+        tmp_file = STATE_FILE.with_suffix(".tmp")
+        with open(lock_file, "w") as lf:
+            fcntl.flock(lf, fcntl.LOCK_EX)
+            try:
+                tmp_file.write_text(yaml.dump(state, allow_unicode=True, sort_keys=False))
+                tmp_file.replace(STATE_FILE)  # atomic on POSIX
+            finally:
+                fcntl.flock(lf, fcntl.LOCK_UN)
+
+    _with_parallel_run_section_lock(_write)
+
+
+def _git_stage_and_commit(add_paths: list[str], commit_msg: str,
+                          timeout: int | None = None) -> tuple[subprocess.CompletedProcess,
+                                                               subprocess.CompletedProcess]:
+    """Run git add + git commit, serialized in parallel run-section mode."""
+    def _run() -> tuple[subprocess.CompletedProcess, subprocess.CompletedProcess]:
+        kwargs = {
+            "cwd": str(REPO_ROOT),
+            "capture_output": True,
+            "text": True,
+        }
+        if timeout is not None:
+            kwargs["timeout"] = timeout
+        add_result = subprocess.run(["git", "add", *add_paths], **kwargs)
+        commit_result = subprocess.run(["git", "commit", "-m", commit_msg], **kwargs)
+        return add_result, commit_result
+
+    return _with_parallel_run_section_lock(_run)
 
 
 def get_module_state(state: dict, module_key: str) -> dict:
@@ -590,7 +630,7 @@ def _merge_fact_ledgers(topic_ledger: dict | None, content_ledger: dict | None) 
         return content_ledger
 
     # Use content-aware claims as the base
-    merged_claims = list(content_ledger["claims"])
+    merged_claims = copy.deepcopy(content_ledger["claims"])
     content_texts = {c.get("claim", "").lower().strip() for c in merged_claims if isinstance(c, dict)}
 
     # Add non-overlapping topic claims
@@ -599,7 +639,7 @@ def _merge_fact_ledgers(topic_ledger: dict | None, content_ledger: dict | None) 
             continue
         claim_text = claim.get("claim", "").lower().strip()
         if claim_text and claim_text not in content_texts:
-            merged_claims.append(claim)
+            merged_claims.append(copy.deepcopy(claim))
 
     # Re-number
     for i, claim in enumerate(merged_claims, 1):
@@ -1315,7 +1355,18 @@ def _has_required_json_keys(obj: dict, required_keys: tuple[str, ...]) -> bool:
     if required_keys == ("verdict", "checks"):
         # Keep legacy `scores` acceptance so step_review can normalize v1/v2
         # reviewer payloads to v3 `checks`.
-        return "verdict" in obj and ("checks" in obj or "scores" in obj)
+        if "verdict" not in obj:
+            return False
+        if "checks" in obj:
+            checks = obj.get("checks")
+            return (
+                isinstance(checks, list)
+                and all(
+                    isinstance(check, dict) and isinstance(check.get("passed"), bool)
+                    for check in checks
+                )
+            )
+        return "scores" in obj
     return all(k in obj for k in required_keys)
 
 
@@ -1669,9 +1720,21 @@ def step_review(module_path: Path, improved: str, model: str = MODELS["review"],
                     f"(pass threshold {LEGACY_SCORE_PASS_THRESHOLD})"
                 ),
             })
-    if not isinstance(checks_raw, list):
-        checks_raw = []
-    checks = [c for c in checks_raw if isinstance(c, dict) and "id" in c]
+    if (
+        not isinstance(checks_raw, list)
+        or not all(
+            isinstance(check, dict) and isinstance(check.get("passed"), bool)
+            for check in checks_raw
+        )
+    ):
+        print("  ❌ REVIEW checks payload malformed")
+        return None
+    checks = []
+    for i, check in enumerate(checks_raw, 1):
+        normalized = dict(check)
+        if not str(normalized.get("id", "")).strip():
+            normalized["id"] = f"C{i}"
+        checks.append(normalized)
     edits = result.get("edits") or []
     if not isinstance(edits, list):
         edits = []
@@ -2135,6 +2198,9 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
     m = models or MODELS
     key = module_key_from_path(module_path)
     ms = get_module_state(state, key)
+    ms["errors"] = []
+    review_fact_ledger = ms.get("fact_ledger")
+    staging_path = module_path.with_suffix(".staging.md")
 
     print(f"\n{'='*60}")
     print(f"  PIPELINE: {key}{'  [DRY RUN]' if dry_run else ''}")
@@ -2170,7 +2236,6 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
     # and re-enters the write→review loop at the targeted-fix step (no
     # re-initial-write, no re-review).
     if ms["phase"] == "needs_targeted_fix":
-        staging_path = module_path.with_suffix(".staging.md")
         if staging_path.exists() and ms.get("plan"):
             print(f"  ↻ Resuming targeted fix from peak-hours pause")
             ms["phase"] = "write"
@@ -2180,6 +2245,7 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
             ms["phase"] = "pending"
             ms.pop("plan", None)
             ms.pop("targeted_fix", None)
+            ms.pop("paused_reason", None)
             save_state(state)
 
     # Phase 0: split-reviewer fact ledger (issue #225).
@@ -2226,6 +2292,7 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
             return False
 
         ms["fact_ledger"] = ledger_result
+        review_fact_ledger = ledger_result
         save_state(state)
 
         n_conflict = sum(
@@ -2255,6 +2322,10 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
         if dry_run:
             print(f"\n  [DRY RUN] Initial write plan: {plan}")
             return False
+        ms.pop("plan", None)
+        ms.pop("targeted_fix", None)
+        ms.pop("paused_reason", None)
+        staging_path.unlink(missing_ok=True)
         ms["severity"] = None
         ms["checks_failed"] = []
         ms["reviewer_schema_version"] = 3
@@ -2274,7 +2345,6 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
         # 2. Direct-review resume: review the current on-disk content.
         # 3. Generic resume (interrupted mid-loop in a non-Claude run):
         #    fall back to a generic "Resume improvement" plan.
-        staging_path = module_path.with_suffix(".staging.md")
         if ms.get("plan") and staging_path.exists():
             plan = ms["plan"]
             improved = staging_path.read_text()
@@ -2320,6 +2390,7 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
 
     for attempt in range(max_retries + 1):
         if ms["phase"] in ("write",):
+            review_fact_ledger = ms.get("fact_ledger")
             writer_model = m["write_targeted"] if targeted_fix else m["write"]
             try:
                 # knowledge_card is intentionally not passed to the writer:
@@ -2372,20 +2443,16 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
             # no review, no checks. Used for bulk content creation.
             if write_only:
                 _atomic_write_text(module_path, improved)
-                ms["phase"] = "write"  # keep at write so review pass picks it up
+                ms["phase"] = "review"
                 ms["last_run"] = datetime.now(UTC).isoformat()
                 save_state(state)
                 print(f"  ✓ WRITE-ONLY: {len(improved)} chars written to {module_path.name}")
                 # git commit the draft
                 try:
-                    subprocess.run(
-                        ["git", "add", str(module_path)],
-                        cwd=REPO_ROOT, capture_output=True, timeout=30,
-                    )
-                    subprocess.run(
-                        ["git", "commit", "-m",
-                         f"chore(content): write-only draft [{module_key_from_path(module_path)}]"],
-                        cwd=REPO_ROOT, capture_output=True, timeout=30,
+                    _git_stage_and_commit(
+                        [str(module_path)],
+                        f"chore(content): write-only draft [{module_key_from_path(module_path)}]",
+                        timeout=30,
                     )
                     print(f"  Committed draft")
                 except Exception:
@@ -2409,17 +2476,21 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                             module_path, improved, model=fallback_model
                         )
                 if content_ledger is not None:
-                    merged = _merge_fact_ledgers(ms.get("fact_ledger"), content_ledger)
-                    if merged:
-                        ms["fact_ledger"] = merged
-                        save_state(state)
+                    review_fact_ledger = (
+                        _merge_fact_ledgers(ms.get("fact_ledger"), content_ledger)
+                        or ms.get("fact_ledger")
+                    )
 
         if ms["phase"] == "review":
             content_for_integrity = improved or module_path.read_text()
             integrity_passed, integrity_messages = step_check_integrity(
-                content_for_integrity, ms.get("fact_ledger") or {}
+                content_for_integrity, review_fact_ledger or ms.get("fact_ledger") or {}
             )
             if not integrity_passed:
+                integrity_errors = [
+                    msg for msg in integrity_messages
+                    if not any(msg.startswith(prefix) for prefix in INTEGRITY_WARNING_PREFIXES)
+                ]
                 needs_rewrite = True
                 targeted_fix = False
                 plan = (
@@ -2427,17 +2498,17 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                     "structural review. Rewrite the module and resolve every "
                     "integrity error.\n\nIntegrity errors:\n"
                 )
-                for msg in integrity_messages:
+                for msg in integrity_errors:
                     plan += f"\n- {msg}"
                 ms["plan"] = plan
                 ms["targeted_fix"] = False
                 ms["severity"] = "severe"
-                ms["checks_failed"] = [{"id": "INTEGRITY", "evidence": msg} for msg in integrity_messages]
+                ms["checks_failed"] = [{"id": "INTEGRITY", "evidence": msg} for msg in integrity_errors]
                 ms["reviewer_schema_version"] = 3
                 ms.pop("scores", None)
                 ms.pop("sum", None)
+                ms.pop("sonnet_anchor_failures", None)
                 if improved is not None:
-                    staging_path = module_path.with_suffix(".staging.md")
                     _atomic_write_text(staging_path, improved)
                 ms["phase"] = "write"
                 save_state(state)
@@ -2452,7 +2523,7 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                 module_path,
                 improved or module_path.read_text(),
                 model=reviewer_model,
-                fact_ledger=ms.get("fact_ledger"),
+                fact_ledger=review_fact_ledger,
             )
 
             # Structural reviewer rate-limit degradation:
@@ -2463,30 +2534,31 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                 fallback_model = m.get("review_fallback", MODELS["review_fallback"])
                 primary_family = _model_family(reviewer_model)
                 fallback_family = _model_family(fallback_model)
+                fallback_allowed = True
                 if fallback_family == primary_family:
-                    print(f"  ⚠ Primary reviewer rate-limited and fallback is same family — aborting review")
-                    ms["errors"].append("Primary reviewer rate-limited, no alternative fallback")
-                    save_state(state)
-                    return False
-                if (not STRUCTURAL_REVIEW_INDEPENDENCE_RELAXED and
-                        fallback_family not in INDEPENDENT_REVIEWER_FAMILIES):
-                    print(f"  ⚠ Review fallback {fallback_model} is not in approved independent families — aborting review")
-                    ms["errors"].append("Configured review fallback is not an approved independent family")
-                    save_state(state)
-                    return False
+                    print(f"  ⚠ Primary reviewer rate-limited and fallback is same family — skipping to last resort")
+                    fallback_allowed = False
+                elif (not STRUCTURAL_REVIEW_INDEPENDENCE_RELAXED and
+                      fallback_family not in INDEPENDENT_REVIEWER_FAMILIES):
+                    print(f"  ⚠ Review fallback {fallback_model} is not in approved independent families — skipping to last resort")
+                    fallback_allowed = False
 
-                print(f"  ⚠ {reviewer_model} rate-limited — falling back to {fallback_model}")
-                review = step_review(
-                    module_path,
-                    improved or module_path.read_text(),
-                    model=fallback_model,
-                    fact_ledger=ms.get("fact_ledger"),
-                )
-                if review is None:
-                    ms["errors"].append("Fallback reviewer failed")
-                    save_state(state)
-                    return False
-                if isinstance(review, dict) and review.get("rate_limited"):
+                if fallback_allowed:
+                    print(f"  ⚠ {reviewer_model} rate-limited — falling back to {fallback_model}")
+                    review = step_review(
+                        module_path,
+                        improved or module_path.read_text(),
+                        model=fallback_model,
+                        fact_ledger=review_fact_ledger,
+                    )
+                    if review is None:
+                        ms["errors"].append("Fallback reviewer failed")
+                        save_state(state)
+                        return False
+                    if not isinstance(review, dict) or not review.get("rate_limited"):
+                        reviewer_model = fallback_model
+
+                if not fallback_allowed or (isinstance(review, dict) and review.get("rate_limited")):
                     last_resort_model = m["write"]
                     print(
                         f"  ⚠ {reviewer_model} and {fallback_model} unavailable — "
@@ -2497,7 +2569,7 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                         module_path,
                         improved or module_path.read_text(),
                         model=last_resort_model,
-                        fact_ledger=ms.get("fact_ledger"),
+                        fact_ledger=review_fact_ledger,
                     )
                     if review is None:
                         ms["errors"].append("Last-resort reviewer failed")
@@ -2508,8 +2580,6 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                         save_state(state)
                         return False
                     reviewer_model = last_resort_model
-                else:
-                    reviewer_model = fallback_model
                 ms["used_fallback_reviewer"] = True
 
             if review is None:
@@ -2533,6 +2603,7 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                 # binary-gate view, not the old [D1..D8] vector.
                 ms.pop("scores", None)
                 ms.pop("sum", None)
+                ms.pop("check_failures", None)
                 # Circuit breaker is a CONSECUTIVE counter — reset it on
                 # any path that re-establishes a good state (APPROVE or
                 # 100% deterministic apply). Without this reset, one past
@@ -2604,10 +2675,8 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                         print(f"  ✓ All {applied_count} edits applied cleanly — re-reviewing (no LLM writer call, staged to {staging_path.name})")
                         if attempt < max_retries:
                             continue
-                        else:
-                            print(f"  ❌ Max retries reached without APPROVE")
-                            ms["errors"].append(f"Review rejected {max_retries+1} times")
-                            return False
+                        print("  ⚠ Max retries reached with staged deterministic edits — leaving phase=review for resume")
+                        break
                     elif applied_count > 0 and failed_count > 0:
                         # Partial — apply what worked, fall back to Sonnet
                         # for the remaining edits.
@@ -2660,15 +2729,14 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                             print(f"  ⚠ Circuit breaker: {ms['sonnet_anchor_failures']} consecutive anchor failures — escalating to severe rewrite")
                             r_severity = "severe"
                             ms["severity"] = "severe"
+                            ms.pop("sonnet_anchor_failures", None)
                             # Fall through to the severe rewrite block below
                             # instead of looping the partial-apply path.
                         else:
                             if attempt < max_retries:
                                 continue
-                            else:
-                                print(f"  ❌ Max retries reached after partial deterministic apply")
-                                ms["errors"].append(f"Review rejected {max_retries+1} times")
-                                return False
+                            print("  ⚠ Max retries reached after partial deterministic apply — leaving phase=write for resume")
+                            break
                     else:
                         # 0/N — reviewer anchors don't match. Escalate to
                         # severe rewrite (a fresh reviewer pass should
@@ -2689,6 +2757,7 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                 elif r_severity == "severe":
                     needs_rewrite = True
                     targeted_fix = False
+                    ms.pop("sonnet_anchor_failures", None)
                     plan = (
                         f"SEVERE REWRITE REQUIRED. The binary quality gate flagged "
                         f"{len(failed_checks)} failed checks ({', '.join(failed_ids)}) and "
@@ -2758,6 +2827,8 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
         passed, results = step_check(improved, module_path)
         if not passed:
             ms["errors"].append("Deterministic checks failed after review")
+            ms["check_failures"] = ms.get("check_failures", 0) + 1
+            ms["targeted_fix"] = False
             save_state(state)
             # Keep staging file so we can resume after fixing thresholds
             print(f"  Staging file kept: {staging}")
@@ -2774,6 +2845,7 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
         backup.unlink(missing_ok=True)  # remove backup on success
         print(f"  ✓ File written: {module_path}")
 
+        ms.pop("check_failures", None)
         ms["phase"] = "score"
         save_state(state)
 
@@ -2823,21 +2895,13 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
             card_path = knowledge_card_path_for_key(key)
             if card_path.exists():
                 add_paths.append(str(card_path))
-            add_result = subprocess.run(
-                ["git", "add", *add_paths],
-                cwd=str(REPO_ROOT), capture_output=True, text=True,
-            )
-            if add_result.returncode != 0:
-                print(f"  ⚠ git add failed: {add_result.stderr[:200]}")
-
             commit_msg = (
                 f"chore(quality): v1 pipeline pass [{key}] "
                 f"({result_label} reviewer={reviewer}{pending_tag})"
             )
-            commit_result = subprocess.run(
-                ["git", "commit", "-m", commit_msg],
-                cwd=str(REPO_ROOT), capture_output=True, text=True,
-            )
+            add_result, commit_result = _git_stage_and_commit(add_paths, commit_msg)
+            if add_result.returncode != 0:
+                print(f"  ⚠ git add failed: {add_result.stderr[:200]}")
             if commit_result.returncode != 0:
                 print(f"  ⚠ git commit failed: {commit_result.stderr[:200]}")
             else:
@@ -3024,38 +3088,44 @@ def cmd_run_section(args):
             else:
                 failed += 1
     else:
-        with ThreadPoolExecutor(max_workers=workers) as executor:
-            futures = {
-                executor.submit(
-                    run_module,
-                    path,
-                    state,
-                    2,
-                    models,
-                    dry_run,
-                    getattr(args, "refresh_fact_ledger", False),
-                    write_only,
-                ): path
-                for path in modules
-            }
-            for future in as_completed(futures):
-                path = futures[future]
-                try:
-                    ok = future.result()
-                    if ok:
-                        passed += 1
-                    else:
+        global _PARALLEL_RUN_SECTION_LOCK
+        previous_lock = _PARALLEL_RUN_SECTION_LOCK
+        _PARALLEL_RUN_SECTION_LOCK = threading.Lock()
+        try:
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                futures = {
+                    executor.submit(
+                        run_module,
+                        path,
+                        state,
+                        2,
+                        models,
+                        dry_run,
+                        getattr(args, "refresh_fact_ledger", False),
+                        write_only,
+                    ): path
+                    for path in modules
+                }
+                for future in as_completed(futures):
+                    path = futures[future]
+                    try:
+                        ok = future.result()
+                        if ok:
+                            passed += 1
+                        else:
+                            failed += 1
+                    except Exception as e:
+                        print(f"  ❌ Exception processing {path}: {e}")
                         failed += 1
-                except Exception as e:
-                    print(f"  ❌ Exception processing {path}: {e}")
-                    failed += 1
+        finally:
+            _PARALLEL_RUN_SECTION_LOCK = previous_lock
 
     print(f"\n{'='*60}")
     if dry_run:
         print(f"  DRY RUN: {passed} already pass, {failed} need improvement out of {len(modules)}")
         # Show summary of weak dimensions across all audited modules
         all_scores = {k: v.get("scores") for k, v in state.get("modules", {}).items()
-                      if v.get("scores") and k.startswith(args.section.replace("/", "/")[:20])}
+                      if v.get("scores") and (k == args.section or k.startswith(f"{args.section}/"))}
         if all_scores:
             # 8-dimension rubric — keep this in sync with REVIEW_PROMPT_TEMPLATE.
             # Previously this array had 7 entries with stale names ("D2:Scaffold"
@@ -3562,6 +3632,52 @@ def cmd_resume(args):
             )
 
 
+def cmd_reset_stuck(args):
+    """Reset modules stuck in dead-end states so they can re-enter the pipeline."""
+    state = load_state()
+    modules = state.get("modules", {})
+
+    reset_count = 0
+    for key, ms in sorted(modules.items()):
+        was_stuck = False
+
+        # Deterministic check failures — route back to write
+        errors = ms.get("errors", [])
+        if any("Deterministic" in str(e) for e in errors):
+            ms["errors"] = [e for e in errors if "Deterministic" not in str(e)]
+            ms.pop("check_failures", None)
+            if ms.get("phase") == "check":
+                ms["phase"] = "write"
+            elif ms.get("phase") == "audit":
+                ms["phase"] = "pending"
+            was_stuck = True
+
+        # Integrity gate max retries — restart from pending
+        errors = ms.get("errors", [])
+        if any("Integrity gate failed" in str(e) for e in errors):
+            ms["errors"] = [e for e in errors if "Integrity" not in str(e)]
+            ms["phase"] = "pending"
+            was_stuck = True
+
+        # Review rejected max times — match any count
+        errors = ms.get("errors", [])
+        if any(re.match(r"Review rejected \d+ times", str(e)) for e in errors):
+            ms["errors"] = [e for e in errors if not re.match(r"Review rejected \d+ times", str(e))]
+            ms["phase"] = "pending"
+            was_stuck = True
+
+        if was_stuck:
+            reset_count += 1
+            print(f"  ↻ {key}: → phase={ms['phase']}")
+
+    if reset_count == 0:
+        print("  No stuck modules found.")
+        return
+
+    save_state(state)
+    print(f"\n  Reset {reset_count} stuck modules. Run 'e2e' or 'resume' to re-process them.")
+
+
 def cmd_e2e(args):
     """End-to-end pipeline: resume stuck modules, then process all sections."""
     global _quiet
@@ -3673,6 +3789,7 @@ def cmd_e2e(args):
         print(f"  PHASE 1: Resuming {len(incomplete)} stuck modules")
         print(f"{'='*60}")
         resumed = 0
+        phase1_failed_modules: set[str] = set()
         consecutive_failures = 0
         for key, ms in incomplete.items():
             path = find_module_path(key)
@@ -3688,12 +3805,15 @@ def cmd_e2e(args):
                     resumed += 1
                     consecutive_failures = 0
                 else:
+                    phase1_failed_modules.add(key)
                     consecutive_failures += 1
                 if consecutive_failures >= 5:
                     print(f"\n  CIRCUIT BREAKER: 5 consecutive resume failures — halting")
                     print(f"  Check logs: {LOG_FILE}")
                     break
         print(f"\n  Resumed: {resumed}/{len(incomplete)} completed")
+    else:
+        phase1_failed_modules = set()
 
     for section in sections_to_run:
         section_path = CONTENT_ROOT / section
@@ -3728,6 +3848,11 @@ def cmd_e2e(args):
 
             # Skip already done
             if ms.get("phase") == "done":
+                skipped += 1
+                continue
+            if key in phase1_failed_modules:
+                print(f"\n[{i}/{len(modules)}] {key}")
+                print("  SKIP: failed during phase-1 resume; leaving for next run")
                 skipped += 1
                 continue
 
@@ -3978,6 +4103,9 @@ examples:
     e2e_parser.add_argument("--refresh-fact-ledger", action="store_true",
                             help="Bypass fact-ledger cache and regenerate from upstream sources")
 
+    # reset-stuck
+    subparsers.add_parser("reset-stuck", help="Reset modules stuck in dead-end states (check failures, max retries)")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -3994,6 +4122,7 @@ examples:
         "status": cmd_status,
         "resume": cmd_resume,
         "e2e": cmd_e2e,
+        "reset-stuck": cmd_reset_stuck,
     }
 
     cmd_map[args.command](args)
