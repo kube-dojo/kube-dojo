@@ -65,33 +65,32 @@ For platform engineers, Zero Trust changes how you architect access to Kubernete
 
 ### 1.1 The Castle-and-Moat Problem
 
-```
+```text
 THE PERIMETER SECURITY MODEL
 ═══════════════════════════════════════════════════════════════
 
 Traditional model: Everything inside the firewall is trusted.
+```
 
-    ┌──────────── INTERNET (Untrusted) ──────────────┐
-    │                                                 │
-    │         ┌──────────── FIREWALL ──────────────┐  │
-    │         │                                    │  │
-    │         │    ┌────────────────────────────┐   │  │
-    │         │    │   CORPORATE NETWORK        │   │  │
-    │         │    │   (Trusted)                │   │  │
-    │         │    │                            │   │  │
-    │         │    │   Servers ←→ Databases     │   │  │
-    │         │    │      ↕          ↕          │   │  │
-    │         │    │   Laptops ←→ Printers      │   │  │
-    │         │    │                            │   │  │
-    │         │    │   Everything trusts        │   │  │
-    │         │    │   everything else.         │   │  │
-    │         │    └────────────────────────────┘   │  │
-    │         │                                    │  │
-    │         │  VPN tunnel for remote users ──────┤  │
-    │         │  (extends the "trusted" zone)      │  │
-    │         └────────────────────────────────────┘  │
-    └─────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Internet ["INTERNET (Untrusted)"]
+        RemoteUser["Remote Users (VPN)"]
+        subgraph Firewall ["FIREWALL"]
+            subgraph CorpNet ["CORPORATE NETWORK (Trusted)"]
+                direction TB
+                Servers <--> Databases
+                Servers <--> Laptops
+                Laptops <--> Printers
+                Databases <--> Printers
+                Note["Everything trusts everything else."]
+            end
+        end
+        RemoteUser -- "VPN tunnel extends trusted zone" --> Firewall
+    end
+```
 
+```text
 WHY THIS FAILS
 ─────────────────────────────────────────────────────────────
 
@@ -133,7 +132,7 @@ BREACHES CAUSED BY PERIMETER TRUST
 
 ### 1.2 Zero Trust Principles
 
-```
+```text
 ZERO TRUST PRINCIPLES
 ═══════════════════════════════════════════════════════════════
 
@@ -192,13 +191,15 @@ ZERO TRUST vs PERIMETER
     Monitoring          Perimeter logs     All access logged
 ```
 
+> **Stop and think**: Think about your own organization's current access model. Are there any internal systems that assume trust simply because you are connected to the corporate network or VPN? How would an attacker exploit that implicit trust?
+
 ---
 
 ## Part 2: BeyondCorp — Google's Zero Trust Implementation
 
 ### 2.1 The BeyondCorp Model
 
-```
+```text
 BEYONDCORP — ZERO TRUST AT GOOGLE SCALE
 ═══════════════════════════════════════════════════════════════
 
@@ -208,42 +209,23 @@ accessed through an identity-aware proxy.
 
 ARCHITECTURE
 ─────────────────────────────────────────────────────────────
+```
 
-    ┌────────────────────────────────────────────────────────┐
-    │                                                        │
-    │  Employee                                              │
-    │  (any network: home, coffee shop, office, airport)     │
-    │                                                        │
-    │  ┌───────────┐                                        │
-    │  │  Device   │                                        │
-    │  │  Agent    │ device cert + user identity             │
-    │  └─────┬─────┘                                        │
-    │        │                                              │
-    └────────┼──────────────────────────────────────────────┘
-             │
-             │  HTTPS (public internet)
-             │
-    ┌────────┼──────────────────────────────────────────────┐
-    │        ▼                                              │
-    │  ┌──────────────────────────────────────┐             │
-    │  │  Identity-Aware Proxy (IAP)          │             │
-    │  │                                      │             │
-    │  │  1. Authenticate user (SSO/MFA)      │             │
-    │  │  2. Verify device (cert, posture)    │             │
-    │  │  3. Check access policy              │             │
-    │  │  4. Proxy request to backend         │             │
-    │  └──────────────┬───────────────────────┘             │
-    │                 │                                     │
-    │     ┌───────────┼───────────┐                        │
-    │     ▼           ▼           ▼                        │
-    │  ┌──────┐  ┌──────┐  ┌──────┐                      │
-    │  │ Code │  │ Wiki │  │ Bug  │                      │
-    │  │Review│  │      │  │Track │  (internal apps)     │
-    │  └──────┘  └──────┘  └──────┘                      │
-    │                                                      │
-    │  Google Infrastructure                                │
-    └──────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Employee["Employee (any network)"]
+    Device["Device Agent<br/>(device cert + user identity)"]
+    Employee --> Device
+    Device -- "HTTPS (public internet)" --> IAP["Identity-Aware Proxy (IAP)<br/>1. Authenticate user (SSO/MFA)<br/>2. Verify device (cert, posture)<br/>3. Check access policy<br/>4. Proxy request to backend"]
+    
+    subgraph Google Infra
+        IAP --> Code["Code Review"]
+        IAP --> Wiki["Wiki"]
+        IAP --> Bug["Bug Track"]
+    end
+```
 
+```text
 KEY CONCEPTS
 ─────────────────────────────────────────────────────────────
 
@@ -284,7 +266,7 @@ IMPACT
 
 ### 3.1 How Identity-Aware Proxies Work
 
-```
+```text
 IDENTITY-AWARE PROXY (IAP) ARCHITECTURE
 ═══════════════════════════════════════════════════════════════
 
@@ -294,35 +276,27 @@ before proxying the request to the backend.
 
 REQUEST FLOW
 ─────────────────────────────────────────────────────────────
+```
 
-    ┌────────┐                     ┌──────────────────────┐
-    │ User   │──── HTTPS ────────→│ Identity-Aware Proxy │
-    │ Browser│                     │                      │
-    │        │                     │ 1. Has session?      │
-    │        │← Redirect to IdP ──│    No → Redirect     │
-    │        │                     │                      │
-    │        │── Auth at IdP ─────→│ 2. Auth callback     │
-    │        │                     │    Verify JWT/SAML   │
-    │        │                     │                      │
-    │        │                     │ 3. Check policy:     │
-    │        │                     │    User: jane@co.com │
-    │        │                     │    Groups: [eng]     │
-    │        │                     │    Device: managed   │
-    │        │                     │    App: k8s-dash     │
-    │        │                     │    → ALLOW ✓         │
-    │        │                     │                      │
-    │        │← App Response ─────│ 4. Proxy to backend  │
-    │        │                     │    Add headers:      │
-    │        │                     │    X-Auth-User: jane │
-    │        │                     │    X-Auth-Groups: eng│
-    └────────┘                     └──────────┬───────────┘
-                                              │
-                                   ┌──────────┴───────────┐
-                                   │  Backend Application │
-                                   │  (never exposed      │
-                                   │   directly to users) │
-                                   └──────────────────────┘
+```mermaid
+sequenceDiagram
+    participant User as User Browser
+    participant IAP as Identity-Aware Proxy
+    participant IdP as Identity Provider
+    participant Backend as Backend Application
 
+    User->>IAP: HTTPS Request
+    IAP-->>User: 1. Has session? No → Redirect
+    User->>IdP: Auth at IdP
+    IdP-->>User: Redirect back with token
+    User->>IAP: 2. Auth callback (Verify JWT/SAML)
+    Note over IAP: 3. Check policy:<br/>User: jane@co.com<br/>Groups: [eng]<br/>Device: managed<br/>App: k8s-dash<br/>→ ALLOW ✓
+    IAP->>Backend: 4. Proxy to backend<br/>Add headers:<br/>X-Auth-User: jane<br/>X-Auth-Groups: eng
+    Backend-->>IAP: Application Response
+    IAP-->>User: Application Response
+```
+
+```text
 POLICY ENGINE
 ─────────────────────────────────────────────────────────────
 
@@ -368,7 +342,7 @@ HEADERS PASSED TO BACKEND
 
 ### 3.2 Major IAP Solutions
 
-```
+```text
 IAP SOLUTIONS COMPARISON
 ═══════════════════════════════════════════════════════════════
 
@@ -411,11 +385,21 @@ CLOUDFLARE ACCESS (Managed)
 
     Your server has NO inbound ports open.
     Cloudflare handles TLS, auth, and proxying.
+```
 
-    User → Cloudflare Edge → Tunnel → Your Server
-                ↑
-         Auth/Policy here
+```mermaid
+flowchart LR
+    User["User"]
+    Edge["Cloudflare Edge<br/>(Auth/Policy here)"]
+    Tunnel["Tunnel<br/>(cloudflared)"]
+    Server["Your Server"]
 
+    User --> Edge
+    Edge --> Tunnel
+    Tunnel --> Server
+```
+
+```text
 TAILSCALE (WireGuard-Based)
 ─────────────────────────────────────────────────────────────
     Type:           Mesh VPN / overlay network
@@ -430,15 +414,20 @@ TAILSCALE (WireGuard-Based)
     Every device runs Tailscale agent.
     Devices connect peer-to-peer via WireGuard.
     Coordination server (hosted or self-hosted) manages keys.
+```
 
-    ┌──────────┐                    ┌──────────┐
-    │ Laptop   │──── WireGuard ────│ Server   │
-    │ Tailscale│    (direct P2P)   │ Tailscale│
-    └──────────┘                    └──────────┘
-          │                              │
-          └──── Coordination ────────────┘
-               (Tailscale control plane)
+```mermaid
+flowchart LR
+    Laptop["Laptop<br/>(Tailscale Agent)"]
+    Server["Server<br/>(Tailscale Agent)"]
+    Coord["Coordination<br/>(Tailscale control plane)"]
 
+    Laptop <-->|WireGuard direct P2P| Server
+    Laptop -.- Coord
+    Server -.- Coord
+```
+
+```text
     ACLs: Define who can reach what.
     {
       "acls": [
@@ -487,11 +476,13 @@ ZSCALER PRIVATE ACCESS (ZPA) — Enterprise
 
 ---
 
+> **Pause and predict**: If Identity-Aware Proxies handle user-to-service authentication, how do headless microservices authenticate with each other? Without user intervention, how can a backend API guarantee the request came from the legitimate frontend service and not a rogue container?
+
 ## Part 4: mTLS Beyond the Service Mesh
 
 ### 4.1 Machine-to-Machine Authentication
 
-```
+```text
 mTLS — MUTUAL TLS AUTHENTICATION
 ═══════════════════════════════════════════════════════════════
 
@@ -503,34 +494,45 @@ Server verifies client. Client verifies server.
 
 STANDARD TLS (One-Way)
 ─────────────────────────────────────────────────────────────
+```
 
-    Client                          Server
-    ──────                          ──────
-    "Hello"                    →
-                               ←    Certificate (server.crt)
-    Verify server cert
-    (Is it signed by trusted CA?)
-    Generate session key       →    Decrypt with private key
-    ─── Encrypted communication begins ───
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+    
+    Client->>Server: "Hello"
+    Server-->>Client: Certificate (server.crt)
+    Note over Client: Verify server cert<br/>(Is it signed by trusted CA?)
+    Client->>Server: Generate session key
+    Note over Server: Decrypt with private key
+    Note over Client,Server: ─── Encrypted communication begins ───
+```
 
+```text
     Client is NOT authenticated at the TLS level.
     Server doesn't know WHO the client is.
 
 MUTUAL TLS (Two-Way)
 ─────────────────────────────────────────────────────────────
+```
 
-    Client                          Server
-    ──────                          ──────
-    "Hello"                    →
-                               ←    Certificate (server.crt)
-                               ←    "Send YOUR certificate"
-    Verify server cert
-    Send client cert           →    client.crt
-    Prove key ownership        →    (signed challenge)
-                                    Verify client cert
-                                    (Is it signed by our CA?)
-    ─── Encrypted + mutually authenticated ───
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+    
+    Client->>Server: "Hello"
+    Server-->>Client: Certificate (server.crt)
+    Server-->>Client: "Send YOUR certificate"
+    Note over Client: Verify server cert
+    Client->>Server: Send client cert (client.crt)
+    Client->>Server: Prove key ownership (signed challenge)
+    Note over Server: Verify client cert<br/>(Is it signed by our CA?)
+    Note over Client,Server: ─── Encrypted + mutually authenticated ───
+```
 
+```text
     Both sides know WHO they're talking to.
 
 WHERE mTLS IS USED
@@ -612,7 +614,7 @@ CERTIFICATE MANAGEMENT AT SCALE
 
 ### 5.1 Device Trust Assessment
 
-```
+```text
 DEVICE POSTURE — IS THE DEVICE TRUSTWORTHY?
 ═══════════════════════════════════════════════════════════════
 
@@ -711,13 +713,15 @@ IMPLEMENTATION
     Reports to Tailscale/Pomerium for policy decisions.
 ```
 
+> **Stop and think**: How would a conditional access policy handle a scenario where an authorized user logs in from a known, managed device, but their IP address originates from a country where your company does no business?
+
 ---
 
 ## Part 6: Practical Zero Trust Patterns
 
 ### 6.1 Replacing VPN with Zero Trust
 
-```
+```text
 VPN REPLACEMENT PATTERNS
 ═══════════════════════════════════════════════════════════════
 
@@ -806,7 +810,7 @@ With:    Time-limited, app-specific access
 
 ### 6.2 Zero Trust Maturity Model
 
-```
+```text
 ZERO TRUST MATURITY — WHERE ARE YOU?
 ═══════════════════════════════════════════════════════════════
 
@@ -897,162 +901,39 @@ ASPIRATION: Level 4
 
 ## Quiz
 
-1. **Explain why a VPN is not Zero Trust, even if it requires MFA to connect.**
+1. **Scenario: Your company mandates that all remote employees use a VPN with multi-factor authentication (MFA) to access internal applications. The CISO argues that this satisfies the requirements for a Zero Trust architecture because users are strongly authenticated. Why is the CISO incorrect?**
    <details>
    <summary>Answer</summary>
 
-   A VPN with MFA still violates core Zero Trust principles:
-
-   1. **Network-level access**: VPN grants access to the entire network (or a large subnet), not individual applications. An authenticated user can reach databases, admin panels, file shares — everything routable. Zero Trust grants per-application access.
-
-   2. **Trust after authentication**: Once VPN connection is established, the user is implicitly trusted for the session duration. Zero Trust verifies every individual request, not just the initial connection.
-
-   3. **No device posture assessment**: VPN MFA verifies the user, not the device. A user could connect from a compromised, unpatched, unencrypted device. Zero Trust evaluates device health for every access decision.
-
-   4. **No application-level authorization**: VPN doesn't know or enforce which applications the user should access. It's a network pipe. Zero Trust makes per-application, per-action authorization decisions.
-
-   5. **Session persistence**: VPN sessions last hours or days. A stolen VPN session token provides extended access. Zero Trust uses short-lived sessions with continuous verification.
-
-   MFA on a VPN is better than no MFA, but it only adds one additional check to a fundamentally flawed model. The network is still the trust boundary, and once past that boundary, trust is implicit.
+   The CISO is incorrect because a VPN with MFA still relies on network-centric perimeter security rather than continuous, granular verification. While MFA strongly authenticates the user at the point of entry, the VPN subsequently grants broad, implicit trust to the user's network connection, often allowing lateral movement across the internal network. Zero Trust mandates per-application, context-aware authorization that evaluates not just the user's identity, but also device posture, location, and behavior on every single request. A compromised device or a stolen VPN session token would still allow an attacker to bypass the MFA check and gain extensive access, which directly violates the core Zero Trust principle of "assume breach" and "least privilege."
    </details>
 
-2. **How does an Identity-Aware Proxy (IAP) differ from a traditional reverse proxy with HTTP Basic Auth?**
+2. **Scenario: You are tasked with exposing a sensitive internal Kubernetes dashboard to developers working remotely. A team member suggests placing a traditional NGINX reverse proxy in front of it using HTTP Basic Auth to restrict access. You advocate for an Identity-Aware Proxy (IAP) instead. What are the critical security differences between these two approaches in this context?**
    <details>
    <summary>Answer</summary>
 
-   Key differences:
-
-   1. **Authentication quality**: HTTP Basic Auth transmits username/password with every request (base64, not encrypted without TLS). IAP uses SSO protocols (OIDC, SAML) with session tokens, MFA, and hardware key support.
-
-   2. **Identity provider integration**: IAP delegates authentication to an identity provider (Okta, Azure AD, Google). User credentials are managed centrally. Basic Auth has standalone credentials per proxy.
-
-   3. **Group-based authorization**: IAP checks group membership from the IdP (is this user in the "sre" group?). Basic Auth only knows username/password — no groups, no attributes.
-
-   4. **Device trust**: IAP can evaluate device posture (OS version, encryption, managed status). Basic Auth has no concept of the device.
-
-   5. **Session management**: IAP manages sessions with configurable lifetimes, re-authentication requirements, and revocation. Basic Auth has no sessions — credentials are sent per-request.
-
-   6. **Contextual access**: IAP can make different decisions based on time, location, device, and risk signals. Basic Auth is binary: correct password or not.
-
-   7. **Audit trail**: IAP logs every access decision with full context (user, device, app, policy matched). Basic Auth logs a username.
-
-   8. **User experience**: IAP redirects to SSO — one login for all applications. Basic Auth prompts per application with no SSO.
+   An Identity-Aware Proxy provides a significantly more robust, context-aware security model compared to the static nature of HTTP Basic Auth. Basic Auth relies solely on a static username and password transmitted with every request, completely lacking the ability to evaluate device posture, enforce multi-factor authentication, or integrate seamlessly with modern centralized Identity Providers (IdPs). Furthermore, an IAP can evaluate dynamic signals such as the user's group membership, location, and risk profile to make granular, policy-based access decisions. If an attacker compromises a Basic Auth password, they gain persistent access from any device or location, whereas an IAP would detect anomalies and could mandate short-lived session tokens, requiring continuous re-authentication under changing risk conditions.
    </details>
 
-3. **What is mTLS, and why is it important for Zero Trust service-to-service communication? How does SPIFFE help with certificate management?**
+3. **Scenario: Your platform team is migrating a monolithic application into microservices running on a Kubernetes cluster. Currently, the services communicate over standard HTTP, as the cluster is deployed within a private VPC. A security audit mandates the implementation of Mutual TLS (mTLS) for all service-to-service communication. Why is this necessary under Zero Trust, and how does a framework like SPIFFE solve the operational challenges of implementing it?**
    <details>
    <summary>Answer</summary>
 
-   **mTLS (Mutual TLS)** extends standard TLS so that both the client and server present certificates and verify each other's identity. In standard TLS, only the server is authenticated; the client is anonymous at the transport layer.
-
-   **Why mTLS matters for Zero Trust**:
-   In a perimeter model, services inside the network communicate over unencrypted, unauthenticated connections — they trust the network. In Zero Trust, we assume the network is hostile. mTLS ensures:
-   - Every service proves its identity cryptographically
-   - All communication is encrypted (even "internal" traffic)
-   - A compromised service cannot impersonate another
-   - Network-level attacks (ARP spoofing, DNS hijacking) cannot intercept traffic
-
-   **SPIFFE (Secure Production Identity Framework for Everyone)** solves the certificate management problem:
-
-   Without SPIFFE, you must manually provision, distribute, and rotate certificates for every service. With thousands of microservices, this is operationally impossible.
-
-   SPIFFE provides:
-   - **Standardized identity**: Each workload gets a SPIFFE ID (`spiffe://company.com/ns/prod/sa/api-server`)
-   - **Automatic certificate issuance**: SPIRE (the runtime) issues X.509 certificates to workloads based on attestation (proving the workload is what it claims)
-   - **Short-lived certificates**: Certificates are valid for hours, not years. Automatic rotation.
-   - **No secrets to manage**: Workloads don't store long-lived certificates; they request them at startup and renewal is automatic.
-   - **Platform-agnostic**: Works across Kubernetes, VMs, bare metal, and multiple clouds.
+   Under a Zero Trust architecture, no network segment is inherently trusted, even a private VPC or the internal network of a Kubernetes cluster. Standard HTTP or even one-way TLS only verifies the server's identity, leaving the system vulnerable to a compromised container impersonating a legitimate client service to access sensitive data. mTLS ensures that both the client and the server cryptographically prove their identities to each other before any communication occurs, effectively neutralizing network-level spoofing or lateral movement by an unauthorized pod. Managing the immense volume of certificates required for mTLS across dynamic microservices is operationally impossible manually; SPIFFE automates this by providing a standardized identity framework and a runtime (SPIRE) that automatically issues, securely distributes, and frequently rotates short-lived certificates for every authenticated workload.
    </details>
 
-4. **Compare Cloudflare Access and Tailscale as VPN replacements. When would you choose each?**
+4. **Scenario: A startup is evaluating VPN replacements to provide remote developers access to both internal web applications (like Jira and a custom CRM) and non-HTTP infrastructure (like SSH jump hosts and direct PostgreSQL database connections). They are deciding between Cloudflare Access and Tailscale. How should they evaluate these tools for their specific mix of resources?**
    <details>
    <summary>Answer</summary>
 
-   **Cloudflare Access**:
-   - Operates at the application layer (HTTP/S primarily)
-   - Cloud-managed (Cloudflare's infrastructure)
-   - Uses Cloudflare Tunnel for non-public services (no inbound ports)
-   - Authentication via browser redirect to IdP
-   - Works for web applications, SSH (via browser), RDP, TCP tunnels
-   - No agent required for web access (browser-based)
-   - Agent (WARP) optional for device posture and private networks
-
-   **Tailscale**:
-   - Operates at the network layer (WireGuard VPN)
-   - Peer-to-peer encrypted connections
-   - Requires agent on every device and server
-   - Authentication via SSO at agent startup
-   - Works for ANY protocol (TCP, UDP, anything IP-based)
-   - ACL-based access control (IP/port level)
-   - MagicDNS for hostname resolution
-
-   **Choose Cloudflare Access when**:
-   - Protecting web applications primarily
-   - You want zero infrastructure to manage
-   - Users need browser-based access (no agent install)
-   - You want integrated WAF, DDoS, and CDN
-   - Third-party contractors who cannot install agents
-
-   **Choose Tailscale when**:
-   - You need access to non-HTTP services (databases, Redis, custom protocols)
-   - Development environments where developers need direct connectivity
-   - IoT/edge devices that need mesh networking
-   - You want true peer-to-peer (traffic doesn't traverse a third party)
-   - Small to medium teams where agent installation is manageable
-
-   **Use both together**: Cloudflare Access for public-facing web apps and contractor access, Tailscale for internal developer tooling and database access.
+   Cloudflare Access and Tailscale approach Zero Trust from different fundamental paradigms, making them suited for different types of resources. Cloudflare Access operates primarily at the application layer, acting as an identity-aware proxy that is exceptional for web applications because it requires no client-side agent for HTTP traffic, seamlessly integrating with IdPs for browser-based access. However, Tailscale operates at the network layer using WireGuard to create a peer-to-peer encrypted mesh, which is vastly superior when developers need direct, native access to non-HTTP protocols like SSH or PostgreSQL databases without relying on complex tunneling proxies. Given the startup's requirement to support both web apps and direct database/SSH access, they might optimally deploy Cloudflare Access to provide frictionless, agentless access to Jira and the CRM for all employees, while mandating Tailscale for the engineering team to securely access backend infrastructure.
    </details>
 
-5. **Design a Zero Trust access policy for a Kubernetes cluster used by 3 teams: SRE (full admin), developers (namespace-scoped), and auditors (read-only). Include device posture requirements.**
+5. **Scenario: You are configuring access policies for a production Kubernetes API server protected by Pomerium (an IAP). You have three distinct user groups: SREs who need full administrative access, Developers who need namespace-scoped edit access, and external Auditors who require read-only access. Design a conditional access policy that enforces Least Privilege and incorporates device posture checks for each group.**
    <details>
    <summary>Answer</summary>
 
-   **Access Architecture**: Identity-Aware Proxy (Pomerium) in front of Kubernetes API server, integrated with corporate IdP (Okta/Azure AD).
-
-   **SRE Team — Full Admin**:
-   ```
-   Conditions:
-   - Group: sre-team
-   - MFA: Required (hardware key preferred)
-   - Device: Managed (MDM enrolled)
-   - Device posture: OS updated within 30 days,
-     disk encryption ON, firewall ON, EDR running
-   - Time: Any (on-call needs 24/7)
-
-   Access: cluster-admin ClusterRole
-   Session: 12 hours, re-auth for destructive ops
-   ```
-
-   **Developers — Namespace-Scoped**:
-   ```
-   Conditions:
-   - Group: engineering
-   - MFA: Required
-   - Device: Managed
-   - Device posture: OS updated within 60 days,
-     disk encryption ON
-
-   Access: edit Role in team's namespace only
-   (e.g., dev-team-a can access namespace team-a)
-   Session: 8 hours
-   ```
-
-   **Auditors — Read-Only**:
-   ```
-   Conditions:
-   - Group: audit-team
-   - MFA: Required
-   - Device: Managed OR personal (with MFA + posture check)
-   - Device posture: Disk encryption ON
-
-   Access: view ClusterRole (read-only, all namespaces)
-   Session: 4 hours
-   Additional: All kubectl commands logged to audit system
-   ```
-
-   **Denied by default**: Any user not matching the above policies is denied. No VPN fallback. No exceptions without policy change.
-
-   **Implementation**: Kubernetes RBAC bound to OIDC groups from IdP. IAP enforces device posture before proxying to API server. Audit logs from both IAP and Kubernetes API server.
+   For the SRE team, the policy must demand the highest level of assurance due to their broad administrative privileges. Access should be restricted to users in the 'sre-team' IdP group, require a hardware MFA key on every login, and mandate that the device is fully managed (MDM enrolled) with disk encryption and an active EDR agent, with sessions limited to 8 hours. The Developer team policy should be slightly less restrictive to reduce friction, allowing access to the 'engineering' group with standard MFA from a managed device, but authorization at the Kubernetes API level must be restricted via RBAC to only their specific namespaces. Finally, the Auditor team policy must accommodate potential external devices; they should be permitted read-only access via the 'audit-team' group using standard MFA, but if connecting from an unmanaged device, the policy should strictly enforce read-only RBAC and log all actions, perhaps imposing a shorter 4-hour session timeout to mitigate the increased risk profile.
    </details>
 
 ---
