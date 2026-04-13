@@ -525,3 +525,4 @@ If the output matches your expectations, your directory structure is mathematica
 
 ## Next Module
 [Philosophy and Design course](../../philosophy-design/) — Dive deeper into the architectural principles that govern robust, resilient platform engineering.
+---
