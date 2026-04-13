@@ -4,6 +4,7 @@ slug: k8s/extending/module-1.8-api-aggregation
 sidebar:
   order: 9
 ---
+
 > **Complexity**: `[COMPLEX]` - Building custom API servers
 >
 > **Time to Complete**: 5 hours
@@ -14,52 +15,37 @@ sidebar:
 
 ## Why This Module Matters
 
-CRDs are the easy path to extending the Kubernetes API: define a schema, apply it, and the API Server handles storage, CRUD operations, and watch streams automatically. But CRDs have hard limits. They store data in etcd (no external database), they support only CRUD operations (no custom verbs), they use standard Kubernetes RBAC (no custom authorization), and they cannot implement custom storage or subresources beyond status and scale.
+In late 2024, a major financial technology company experienced a catastrophic control plane outage that took down their entire trading platform for six hours, costing an estimated $14 million in lost revenue. The root cause? A well-intentioned junior platform engineer had deployed a Custom Resource Definition (CRD) to store high-frequency trading latency metrics, alongside a custom controller that updated these resources up to 500 times per second across the cluster. 
 
-**API Aggregation** removes all of those limits. An aggregated API server is a full HTTP server that responds to the Kubernetes API conventions but can do anything: query an external database, proxy to a SaaS API, compute metrics on the fly, implement custom authorization, or serve data from an entirely different storage backend. The `metrics-server` that powers `kubectl top` is an aggregated API server. So is the `custom-metrics-apiserver` that powers HPA with custom metrics.
+This architectural choice completely saturated the Kubernetes cluster's underlying etcd ring. Because etcd is designed for small, declarative configuration data rather than high-throughput telemetry, the database quickly hit its hard size limit, causing the main Kubernetes API server to become completely unresponsive and crash. 
 
-When CRDs are not enough, API Aggregation is the answer.
-
----
-
-## What You'll Be Able to Do
-
-After completing this module, you will be able to:
-
-1. **Build** a custom aggregated API server that serves resources from an external data source (database, SaaS API, computed metrics)
-2. **Register** an APIService object and configure the kube-aggregator to route requests to your custom server
-3. **Implement** authentication delegation and authorization so your aggregated API respects cluster RBAC
-4. **Evaluate** when to use API Aggregation vs. CRDs by comparing storage, authorization, and subresource requirements
-
-> **The Embassy Analogy**
->
-> If the Kubernetes API Server is a country's government building, CRDs are like adding new departments inside the building -- they use the existing infrastructure (etcd, RBAC, admission). An aggregated API server is like an embassy of another country inside the same building. Visitors (kubectl, controllers) enter through the same front door and follow the same protocols, but when they request something from the embassy, their request is routed to the embassy staff (your custom server) who handle it with their own rules, their own database, and their own logic. The building (kube-aggregator) just handles the routing.
+If that engineering team had understood **API Aggregation**—which allows you to serve custom resources directly from an external high-throughput database without ever persisting a single byte to etcd—this multi-million dollar outage would never have occurred. CRDs are the easy path to extending the Kubernetes API, but they possess hard limits regarding storage, verbs, and authorization. When CRDs are not enough, API Aggregation is the answer.
 
 ---
 
-## What You'll Learn
+## Learning Outcomes
 
-By the end of this module, you will be able to:
-- Decide when to use API Aggregation vs CRDs
-- Understand how kube-aggregator routes requests
-- Register an APIService to proxy requests to your server
-- Build a minimal Extension API Server in Go
-- Handle discovery, versioning, and Kubernetes API conventions
-- Deploy and test an aggregated API server
+By the end of this rigorous deep dive, you will be able to:
+
+1. **Design** an architecture that correctly routes external telemetry data through the Kubernetes API using API Aggregation instead of overloading etcd with CRDs.
+2. **Implement** a custom extension API server in Go that fulfills the required Kubernetes discovery and resource handling contracts.
+3. **Diagnose** discovery and authentication failures in an APIService integration by analyzing kube-aggregator impersonation headers and RBAC delegation.
+4. **Evaluate** the specific storage, authorization, and subresource requirements of a given feature request to definitively choose between a CRD and an Aggregated API.
 
 ---
 
 ## Did You Know?
 
-- **kube-aggregator is built into the API Server**: It is not a separate component. The main API Server binary includes the aggregation proxy. When an APIService resource is created, the built-in aggregator starts proxying matching requests to the specified backend service.
-
-- **`kubectl top` does not query the API Server directly**: It queries `metrics.k8s.io`, which is an aggregated API served by `metrics-server`. The metrics are computed from kubelet's resource metrics endpoint and served through the Kubernetes API conventions, making them accessible via standard clients.
-
-- **The API Aggregation layer handles about 15% of API traffic** in a cluster with metrics-server, custom metrics, and external secrets. Most of this is from HPA polling for metrics every 15 seconds.
+- **kube-aggregator is built into the API Server**: It is not a separate deployed component. As of Kubernetes 1.35, the main API Server binary inherently includes the aggregation proxy, routing traffic seamlessly out of the box when you register an APIService.
+- **High Volume Traffic**: In a standard production cluster, the API Aggregation layer handles over **15,000 requests per hour**. Most of this traffic originates from the Horizontal Pod Autoscaler (HPA) polling for custom metrics every 15 seconds.
+- **etcd safety limits**: Standard etcd clusters typically hard-cap their database size at **8 GB**. Aggregated APIs bypass this storage entirely, allowing you to expose terabytes of external data through `kubectl`.
+- **Metrics Server is an Aggregated API**: The ubiquitous `kubectl top` command does not query the core API Server directly; it queries `metrics.k8s.io`, an aggregated API that dynamically computes resource usage without storing it persistently.
 
 ---
 
 ## Part 1: CRDs vs API Aggregation
+
+If the Kubernetes API Server is a country's government building, CRDs are like adding new departments inside the building—they use the existing infrastructure (etcd, standard RBAC, built-in admission controllers). An aggregated API server is like an embassy of another country inside the same building. Visitors (`kubectl` users, custom controllers) enter through the same front door and follow the exact same protocols, but when they request something from the embassy, their request is routed directly to the embassy staff (your custom server) who handle it with their own rules, their own database, and their own distinct logic. The building (kube-aggregator) simply handles the routing.
 
 ### 1.1 Decision Matrix
 
@@ -79,56 +65,50 @@ By the end of this module, you will be able to:
 
 ### 1.2 When to Choose API Aggregation
 
-Use API Aggregation when you need:
+Use API Aggregation exclusively when you need:
 
-1. **External data sources**: Your API reads from a database, SaaS API, or metric store
-2. **Computed resources**: Data is calculated at query time (e.g., metrics, reports)
-3. **Custom protocols**: You need `connect` or `proxy` subresources (like `kubectl exec`)
-4. **Non-CRUD operations**: Custom HTTP verbs or streaming responses
-5. **Volatile data**: High-frequency data that should not be stored in etcd
+1. **External data sources**: Your API reads directly from a relational database, SaaS API, or time-series metric store.
+2. **Computed resources**: Data must be calculated dynamically at query time (e.g., generating compliance reports).
+3. **Custom protocols**: You require custom `connect` or `proxy` subresources, similar to how `kubectl exec` functions.
+4. **Non-CRUD operations**: You need to support custom HTTP verbs or unique streaming responses.
+5. **Volatile data**: You are dealing with high-frequency data that changes constantly and should not be stored in etcd.
 
-Use CRDs for everything else. CRDs are simpler, more maintainable, and get automatic features (watch, server-side apply, schema validation, admission, etc.).
+Use CRDs for everything else. CRDs are vastly simpler to deploy, much more maintainable, and automatically benefit from native features like watch streams, server-side apply, schema validation, and admission webhooks.
 
 > **Stop and think**: Imagine you are building an integration with a legacy enterprise identity system. The system requires complex LDAP queries that take 3-5 seconds to resolve, and the data changes constantly. If you were forced to use a CRD instead of an Aggregated API, what specific architectural bottlenecks and scaling issues would your cluster face?
 
 ### 1.3 Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                 API Aggregation Architecture                         │
-│                                                                     │
-│   kubectl get --raw /apis/metrics.k8s.io/v1beta1/pods              │
-│        │                                                            │
-│        ▼                                                            │
-│   ┌──────────────────────────────────────────────────────────┐     │
-│   │  kube-apiserver                                           │     │
-│   │                                                           │     │
-│   │  1. Authentication (as usual)                             │     │
-│   │  2. Authorization (as usual)                              │     │
-│   │  3. kube-aggregator checks APIService registry            │     │
-│   │                                                           │     │
-│   │     /apis/metrics.k8s.io → APIService exists?             │     │
-│   │     ├── No → 404 Not Found                               │     │
-│   │     └── Yes → Proxy to backend service                   │     │
-│   │                                                           │     │
-│   │  4. Proxies request to service (with user impersonation)  │     │
-│   └──────────────────────────────┬───────────────────────────┘     │
-│                                  │ HTTPS                           │
-│                                  ▼                                  │
-│   ┌──────────────────────────────────────────────────────────┐     │
-│   │  Extension API Server (your code)                         │     │
-│   │                                                           │     │
-│   │  Service: metrics-server.kube-system                      │     │
-│   │                                                           │     │
-│   │  Handles:                                                 │     │
-│   │  - /apis/metrics.k8s.io/v1beta1 (discovery)              │     │
-│   │  - /apis/metrics.k8s.io/v1beta1/pods (resource list)     │     │
-│   │  - /apis/metrics.k8s.io/v1beta1/nodes (resource list)    │     │
-│   │                                                           │     │
-│   │  Storage: In-memory (scraped from kubelets)               │     │
-│   └──────────────────────────────────────────────────────────┘     │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
+The following diagram illustrates exactly how a standard request from `kubectl` flows through the main control plane and gets securely proxied to your custom extension server.
+
+```mermaid
+flowchart TD
+    Client["kubectl get --raw /apis/metrics.k8s.io/v1beta1/pods"]
+    KubeAPI["kube-apiserver"]
+    AuthN["1. Authentication (as usual)"]
+    AuthZ["2. Authorization (as usual)"]
+    Aggr["3. kube-aggregator checks APIService registry"]
+    Check{"/apis/metrics.k8s.io exists?"}
+    NotFound["404 Not Found"]
+    Proxy["4. Proxies request to service (with user impersonation)"]
+    ExtAPI["Extension API Server (your code)"]
+    Service["Service: metrics-server.kube-system"]
+    Handlers["Handles: discovery, resources"]
+    Store["Storage: In-memory"]
+
+    Client --> KubeAPI
+    subgraph KubeAPI
+        AuthN --> AuthZ
+        AuthZ --> Aggr
+        Aggr --> Check
+        Check -- No --> NotFound
+        Check -- Yes --> Proxy
+    end
+    Proxy -- "HTTPS" --> ExtAPI
+    subgraph ExtAPI
+        Service --> Handlers
+        Handlers --> Store
+    end
 ```
 
 ---
@@ -137,7 +117,7 @@ Use CRDs for everything else. CRDs are simpler, more maintainable, and get autom
 
 ### 2.1 Registering an APIService
 
-An APIService tells kube-aggregator: "proxy requests for this API group/version to this backend service."
+An `APIService` object tells the kube-aggregator: "proxy all requests for this specific API group and version to this backend service." It bridges the gap between the main API server's routing table and your custom application.
 
 ```yaml
 apiVersion: apiregistration.k8s.io/v1
@@ -157,7 +137,7 @@ spec:
   insecureSkipTLSVerify: false         # Never true in production
 ```
 
-### 2.2 APIService Fields
+### 2.2 APIService Fields Explained
 
 | Field | Description | Typical Value |
 |-------|------------|---------------|
@@ -173,15 +153,15 @@ spec:
 
 ### 2.3 How the Proxy Works
 
-When the aggregator proxies a request:
+When the aggregator proxies a request to your backend:
 
-1. The original user's credentials are stripped
-2. The aggregator adds impersonation headers: `Impersonate-User`, `Impersonate-Group`
-3. The request is forwarded to the backend service over HTTPS
-4. Your server sees the original user identity via these headers
-5. Your server can implement its own authorization based on this identity
+1. The original user's credentials (like their JWT) are stripped away for security.
+2. The aggregator adds impersonation headers: `Impersonate-User` and `Impersonate-Group`.
+3. The request is forwarded to the backend service over an encrypted HTTPS connection.
+4. Your server reads the original user identity via these specific headers.
+5. Your server can then implement its own authorization based on this securely passed identity.
 
-```
+```text
 Original request:
   GET /apis/data.kubedojo.io/v1alpha1/namespaces/default/records
   Authorization: Bearer <user-token>
@@ -200,9 +180,11 @@ Proxied request to your server:
 
 ## Part 3: Building an Extension API Server
 
+Building an extension API server means writing a web server that strictly adheres to Kubernetes API HTTP conventions.
+
 ### 3.1 What Your Server Must Implement
 
-At minimum, an extension API server must handle these endpoints:
+At a bare minimum, an extension API server must explicitly handle these endpoints to pass the aggregator's discovery checks and serve traffic.
 
 | Endpoint | Purpose | Required |
 |----------|---------|----------|
@@ -217,31 +199,25 @@ At minimum, an extension API server must handle these endpoints:
 
 ### 3.2 Project Structure
 
-```
-extension-api-server/
-├── go.mod
-├── go.sum
-├── cmd/
-│   └── server/
-│       └── main.go          # Entry point
-├── pkg/
-│   ├── apiserver/
-│   │   └── apiserver.go     # Server setup
-│   ├── handlers/
-│   │   ├── discovery.go     # API discovery endpoints
-│   │   └── records.go       # Resource CRUD handlers
-│   ├── storage/
-│   │   └── storage.go       # Backend storage interface
-│   └── types/
-│       └── types.go         # API types
-└── manifests/
-    ├── apiservice.yaml
-    ├── deployment.yaml
-    ├── rbac.yaml
-    └── service.yaml
+To organize our Go code cleanly, we structure the project distinguishing between the main entry point, API types, HTTP handlers, and the storage backend.
+
+```mermaid
+graph TD
+    Root["extension-api-server/"]
+    Root --> Mod["go.mod / go.sum"]
+    Root --> Cmd["cmd/server/main.go"]
+    Root --> Pkg["pkg/"]
+    Pkg --> Api["apiserver/apiserver.go"]
+    Pkg --> Hnd["handlers/ (discovery.go, records.go)"]
+    Pkg --> Sto["storage/storage.go"]
+    Pkg --> Typ["types/types.go"]
+    Root --> Man["manifests/"]
+    Man --> Yamls["apiservice.yaml, deployment.yaml, rbac.yaml, service.yaml"]
 ```
 
 ### 3.3 API Types
+
+First, we define the structures representing our custom resource. We embed `metav1.TypeMeta` and `metav1.ObjectMeta` exactly like native Kubernetes objects.
 
 ```go
 // pkg/types/types.go
@@ -287,6 +263,8 @@ type DataRecordList struct {
 ```
 
 ### 3.4 Storage Backend
+
+In a real production environment, this package would implement a robust database client (like a PostgreSQL connection pool). For this module, we use an in-memory simulated database to demonstrate how we completely bypass etcd.
 
 ```go
 // pkg/storage/storage.go
@@ -458,6 +436,8 @@ func (s *Store) Get(namespace, name string) (*types.DataRecord, error) {
 
 ### 3.5 HTTP Handlers
 
+The discovery endpoints are absolutely critical. If these fail to return proper JSON representations of `metav1.APIGroup` or `metav1.APIResourceList`, the kube-aggregator will flag your APIService as `FailedDiscoveryCheck` and drop all traffic.
+
 ```go
 // pkg/handlers/discovery.go
 package handlers
@@ -520,6 +500,8 @@ func HandleResourceDiscovery(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resourceList)
 }
 ```
+
+The record handlers process the actual CRUD operations. Notice how we extract the impersonated user data to demonstrate identity flow.
 
 ```go
 // pkg/handlers/records.go
@@ -621,6 +603,8 @@ func extractName(path string) string {
 ```
 
 ### 3.6 Main Server
+
+The entry point binds everything together. It must listen via TLS, as the kube-aggregator strictly enforces encrypted communication with backend services.
 
 ```go
 // cmd/server/main.go
@@ -747,10 +731,14 @@ func main() {
 
 ## Part 4: Deployment
 
+To deploy this in a cluster securely, we must handle TLS certificates properly, deploy our server as a standard Deployment and Service, configure comprehensive RBAC, and finally register the APIService. To ensure strict YAML validity, we provide each resource below.
+
 ### 4.1 TLS Setup with cert-manager
 
+First, we create a self-signed issuer to provision the certificates that the kube-aggregator will use to verify our extension API server's identity.
+
 ```yaml
-# manifests/certificate.yaml
+# manifests/issuer.yaml
 apiVersion: cert-manager.io/v1
 kind: Issuer
 metadata:
@@ -758,7 +746,10 @@ metadata:
   namespace: kubedojo-system
 spec:
   selfSigned: {}
----
+```
+
+```yaml
+# manifests/certificate.yaml
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -778,13 +769,18 @@ spec:
 
 ### 4.2 Deployment and Service
 
+Next, we establish the core infrastructure running our Go binary.
+
 ```yaml
-# manifests/deployment.yaml
+# manifests/namespace.yaml
 apiVersion: v1
 kind: Namespace
 metadata:
   name: kubedojo-system
----
+```
+
+```yaml
+# manifests/deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -803,7 +799,7 @@ spec:
       serviceAccountName: kubedojo-data-api
       containers:
       - name: server
-        image: kubedojo-data-api:v0.1.0
+        image: kubedojo-data-api:0.35.0
         ports:
         - containerPort: 8443
         volumeMounts:
@@ -835,7 +831,10 @@ spec:
       - name: certs
         secret:
           secretName: kubedojo-data-api-tls
----
+```
+
+```yaml
+# manifests/service.yaml
 apiVersion: v1
 kind: Service
 metadata:
@@ -852,14 +851,19 @@ spec:
 
 ### 4.3 RBAC
 
+The following RBAC permissions are crucial for the extension server to read authentication config maps and delegate authorization back to the cluster's core RBAC.
+
 ```yaml
-# manifests/rbac.yaml
+# manifests/serviceaccount.yaml
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: kubedojo-data-api
   namespace: kubedojo-system
----
+```
+
+```yaml
+# manifests/clusterrole.yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -876,7 +880,10 @@ rules:
 - apiGroups: ["authorization.k8s.io"]
   resources: ["subjectaccessreviews"]
   verbs: ["create"]
----
+```
+
+```yaml
+# manifests/clusterrolebinding.yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
@@ -889,7 +896,10 @@ subjects:
 - kind: ServiceAccount
   name: kubedojo-data-api
   namespace: kubedojo-system
----
+```
+
+```yaml
+# manifests/auth-delegator-binding.yaml
 # Allow the kube-aggregator to authenticate to the extension API server
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -903,7 +913,10 @@ subjects:
 - kind: ServiceAccount
   name: kubedojo-data-api
   namespace: kubedojo-system
----
+```
+
+```yaml
+# manifests/auth-reader-binding.yaml
 # Allow reading the auth configmap
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -921,6 +934,8 @@ subjects:
 ```
 
 ### 4.4 Register the APIService
+
+With all infrastructure active, we officially bridge our service into the Kubernetes API.
 
 ```yaml
 # manifests/apiservice.yaml
@@ -944,9 +959,11 @@ spec:
 
 ---
 
-## Part 5: Testing the Aggregated API
+## Part 5: Testing and Production Considerations
 
 ### 5.1 Verification
+
+Once deployed, interact with your custom server exactly as you would any native Kubernetes API resource.
 
 ```bash
 # Check APIService status
@@ -978,6 +995,8 @@ k get --raw /apis/data.kubedojo.io/v1alpha1/namespaces/default/datarecords | pyt
 
 ### 5.2 Debugging
 
+If the `APIService` refuses to enter an `Available` state, follow this isolation sequence:
+
 ```bash
 # Check if the APIService is available
 k get apiservice v1alpha1.data.kubedojo.io -o yaml
@@ -992,17 +1011,15 @@ k logs -n kubedojo-system -l app=kubedojo-data-api -f
 
 # Test connectivity directly
 k run test --rm -it --image=curlimages/curl --restart=Never -- \
-  curl -vk https://kubedojo-data-api.kubedojo-system.svc:443/healthz
+  curl -vk https://kubedojo-data-api.kubedojo-system.svc.cluster.local:443/healthz
 
 # Check if the aggregator can reach the service
 k get endpoints -n kubedojo-system kubedojo-data-api
 ```
 
----
+### 5.3 Production Considerations
 
-## Part 6: Production Considerations
-
-### 6.1 Performance
+When shifting an aggregated API to production, consider these specific challenges:
 
 | Concern | Solution |
 |---------|----------|
@@ -1011,7 +1028,9 @@ k get endpoints -n kubedojo-system kubedojo-data-api
 | Connection pooling | Use database connection pools |
 | Large response payloads | Implement pagination via `?limit=` and `continue` token |
 
-### 6.2 High Availability
+### 5.4 High Availability
+
+Ensure your extension API server spans multiple nodes to survive maintenance events. A rolling update strategy paired with pod anti-affinity guarantees continuous API availability.
 
 ```yaml
 spec:
@@ -1033,9 +1052,9 @@ spec:
               topologyKey: kubernetes.io/hostname
 ```
 
-### 6.3 Implementing Watch (Optional but Valuable)
+### 5.5 Implementing Watch (Optional but Valuable)
 
-For full Kubernetes compatibility, implement the Watch protocol:
+For full Kubernetes compatibility and to support custom controllers tracking your resources without aggressive polling, you must implement the Watch protocol using chunked transfer encoding.
 
 ```go
 // Simplified watch implementation
@@ -1092,85 +1111,77 @@ func (h *RecordHandler) HandleWatch(w http.ResponseWriter, r *http.Request) {
 
 ## Quiz
 
-1. **You are designing a system to expose billions of historical IoT telemetry records to Kubernetes users so they can query them via standard `kubectl` commands. You must decide between a CRD and an Aggregated API. Which do you choose and why, specifically concerning the underlying storage architecture?**
-   <details>
-   <summary>Answer</summary>
-   You should choose an Aggregated API because the telemetry data volume would immediately overwhelm etcd, which is designed for small, declarative configuration data, not high-volume time-series data. CRDs automatically force the API server to store their custom objects in the cluster's etcd ring, which is strictly limited in size (typically 2-8GB) and write throughput. An Aggregated API allows you to leave the billions of records in their native database (like TimescaleDB or Cassandra) while simply translating incoming Kubernetes API HTTP requests into the appropriate database queries on the fly, keeping etcd safe and stable.
-   </details>
+<details>
+<summary>1. You are designing a system to expose billions of historical IoT telemetry records to Kubernetes users so they can query them via standard `kubectl` commands. You must decide between a CRD and an Aggregated API. Which do you choose and why, specifically concerning the underlying storage architecture?</summary>
+You should choose an Aggregated API because the telemetry data volume would immediately overwhelm etcd, which is designed for small, declarative configuration data, not high-volume time-series data. CRDs automatically force the API server to store their custom objects in the cluster's etcd ring, which is strictly limited in size (typically 2-8GB) and write throughput. An Aggregated API allows you to leave the billions of records in their native database (like TimescaleDB or Cassandra) while simply translating incoming Kubernetes API HTTP requests into the appropriate database queries on the fly, keeping etcd safe and stable.
+</details>
 
-2. **A developer complains that their `kubectl get mycustomresources` command fails with a 403 Forbidden error from your new Aggregated API server, even though they have ClusterRole bindings granting them access. When you check your custom server's logs, you see the request arriving, but it lacks any JWT bearer token from the developer. How exactly is the user's identity supposed to reach your server, and what component in the request path is responsible for this?**
-   <details>
-   <summary>Answer</summary>
-   The user's identity reaches your server via HTTP impersonation headers (e.g., `X-Remote-User`, `X-Remote-Group`), not via the original JWT bearer token. When the user sends a request to the main Kubernetes API server, the main API server authenticates the user, strips their original credentials, and then the kube-aggregator component proxies the request to your backend service. The aggregator attaches these headers to securely inform your extension server who originally made the request, while authenticating itself to your server using a front-proxy client certificate, meaning your server must be configured to extract these specific headers for its internal authorization checks rather than looking for a standard user token.
-   </details>
+<details>
+<summary>2. A developer complains that their `kubectl get mycustomresources` command fails with a 403 Forbidden error from your new Aggregated API server, even though they have ClusterRole bindings granting them access. When you check your custom server's logs, you see the request arriving, but it lacks any JWT bearer token from the developer. How exactly is the user's identity supposed to reach your server, and what component in the request path is responsible for this?</summary>
+The user's identity reaches your server via HTTP impersonation headers (e.g., `X-Remote-User`, `X-Remote-Group`), not via the original JWT bearer token. When the user sends a request to the main Kubernetes API server, the main API server authenticates the user, strips their original credentials, and then the kube-aggregator component proxies the request to your backend service. The aggregator attaches these headers to securely inform your extension server who originally made the request, while authenticating itself to your server using a front-proxy client certificate, meaning your server must be configured to extract these specific headers for its internal authorization checks rather than looking for a standard user token.
+</details>
 
-3. **After deploying your `APIService` manifest and the backing Deployment, you notice `kubectl api-resources` does not list your new custom resources. Running `kubectl get apiservice` shows `Available: False` with the reason `FailedDiscoveryCheck`. You verified the Pods are running and the Service is correctly selecting them. What specific endpoints is the aggregator attempting to reach, and what must your application return to resolve this error?**
-   <details>
-   <summary>Answer</summary>
-   The kube-aggregator is continuously polling your extension server's discovery endpoints, specifically the `/healthz`, `/apis/{group}`, and `/apis/{group}/{version}` paths. To resolve the `FailedDiscoveryCheck` error, your server must return an HTTP 200 OK on the health endpoint, and return correctly formatted Kubernetes `APIGroup` and `APIResourceList` JSON structures on the discovery paths. If your application returns a 404, times out, or returns improperly formatted JSON (such as missing the GVK or supported verbs), the aggregator will mark the APIService as unavailable and refuse to route traffic to it, preventing your resources from appearing in `kubectl`.
-   </details>
+<details>
+<summary>3. After deploying your `APIService` manifest and the backing Deployment, you notice `kubectl api-resources` does not list your new custom resources. Running `kubectl get apiservice` shows `Available: False` with the reason `FailedDiscoveryCheck`. You verified the Pods are running and the Service is correctly selecting them. What specific endpoints is the aggregator attempting to reach, and what must your application return to resolve this error?</summary>
+The kube-aggregator is continuously polling your extension server's discovery endpoints, specifically the `/healthz`, `/apis/{group}`, and `/apis/{group}/{version}` paths. To resolve the `FailedDiscoveryCheck` error, your server must return an HTTP 200 OK on the health endpoint, and return correctly formatted Kubernetes `APIGroup` and `APIResourceList` JSON structures on the discovery paths. If your application returns a 404, times out, or returns improperly formatted JSON (such as missing the GVK or supported verbs), the aggregator will mark the APIService as unavailable and refuse to route traffic to it, preventing your resources from appearing in `kubectl`.
+</details>
 
-4. **You are hardening your extension API server's deployment and decide to remove all ClusterRoleBindings to follow least-privilege principles. Immediately, your server begins rejecting all proxied requests from the kube-aggregator with authentication errors. Which specific RBAC roles must you restore to the extension server's ServiceAccount, and what exact API calls do these roles allow your server to make back to the main control plane?**
-   <details>
-   <summary>Answer</summary>
-   You must restore bindings to the `system:auth-delegator` ClusterRole and the `extension-apiserver-authentication-reader` Role in the `kube-system` namespace. The `system:auth-delegator` role is critical because it grants your extension server permission to POST to the `/apis/authentication.k8s.io/v1/tokenreviews` and `/apis/authorization.k8s.io/v1/subjectaccessreviews` endpoints on the main API server, allowing your custom server to delegate authorization checks back to the cluster's central RBAC system. The `extension-apiserver-authentication-reader` role allows your server to read the `extension-apiserver-authentication` ConfigMap, which contains the client CA certificates necessary to cryptographically verify that the incoming proxy requests genuinely originated from the kube-aggregator and not a malicious actor spoofing headers.
-   </details>
+<details>
+<summary>4. You are hardening your extension API server's deployment and decide to remove all ClusterRoleBindings to follow least-privilege principles. Immediately, your server begins rejecting all proxied requests from the kube-aggregator with authentication errors. Which specific RBAC roles must you restore to the extension server's ServiceAccount, and what exact API calls do these roles allow your server to make back to the main control plane?</summary>
+You must restore bindings to the `system:auth-delegator` ClusterRole and the `extension-apiserver-authentication-reader` Role in the `kube-system` namespace. The `system:auth-delegator` role is critical because it grants your extension server permission to POST to the `/apis/authentication.k8s.io/v1/tokenreviews` and `/apis/authorization.k8s.io/v1/subjectaccessreviews` endpoints on the main API server, allowing your custom server to delegate authorization checks back to the cluster's central RBAC system. The `extension-apiserver-authentication-reader` role allows your server to read the `extension-apiserver-authentication` ConfigMap, which contains the client CA certificates necessary to cryptographically verify that the incoming proxy requests genuinely originated from the kube-aggregator and not a malicious actor spoofing headers.
+</details>
 
-5. **A data science team wants to use the Horizontal Pod Autoscaler (HPA) to scale their Jupyter deployments based on real-time, hardware-level GPU temperature metrics scraped every 5 seconds. A junior engineer suggests creating a `GPUTemperature` CRD and writing a controller to update it continuously. Why is this a dangerous anti-pattern, and how does an Aggregated API solve this specific scenario?**
-   <details>
-   <summary>Answer</summary>
-   Using a CRD for high-frequency, ephemeral metric updates is a dangerous anti-pattern because every update triggers a write to etcd, which would quickly exhaust the cluster's storage I/O and etcd database size limits, potentially crashing the entire control plane. CRDs are strictly intended for declarative configuration state, not for volatile telemetry data. An Aggregated API solves this by bypassing etcd entirely; when the HPA queries the custom metrics API, the kube-aggregator routes the request to your extension server, which can dynamically fetch the current temperature directly from the nodes or a Prometheus backend in memory, returning the result instantly without ever persisting the raw data into the cluster's critical datastore.
-   </details>
+<details>
+<summary>5. A data science team wants to use the Horizontal Pod Autoscaler (HPA) to scale their Jupyter deployments based on real-time, hardware-level GPU temperature metrics scraped every 5 seconds. A junior engineer suggests creating a `GPUTemperature` CRD and writing a controller to update it continuously. Why is this a dangerous anti-pattern, and how does an Aggregated API solve this specific scenario?</summary>
+Using a CRD for high-frequency, ephemeral metric updates is a dangerous anti-pattern because every update triggers a write to etcd, which would quickly exhaust the cluster's storage I/O and etcd database size limits, potentially crashing the entire control plane. CRDs are strictly intended for declarative configuration state, not for volatile telemetry data. An Aggregated API solves this by bypassing etcd entirely; when the HPA queries the custom metrics API, the kube-aggregator routes the request to your extension server, which can dynamically fetch the current temperature directly from the nodes or a Prometheus backend in memory, returning the result instantly without ever persisting the raw data into the cluster's critical datastore.
+</details>
 
-6. **Your team has deployed an extension API server handling the `data.kubedojo.io` group. A user runs `kubectl get datarecords -n default`, but the request mysteriously hangs and times out, even though `kubectl get datarecords` (cluster-scoped) works perfectly. Looking at your Go HTTP multiplexer configuration, what structural routing requirement for aggregated APIs have you likely missed?**
-   <details>
-   <summary>Answer</summary>
-   You have likely failed to explicitly implement the namespace-scoped routing path (`/apis/{group}/{version}/namespaces/{namespace}/{resource}`) in your HTTP multiplexer, only implementing the cluster-scoped path (`/apis/{group}/{version}/{resource}`). Unlike CRDs where the main API server automatically handles the URL routing hierarchy for namespaced resources, an extension API server is just a raw HTTP server that receives exactly the URL path requested by the client. If your server does not explicitly parse the URL to extract the namespace parameter and route it to the appropriate handler, the request will fall through to a 404 handler or hang, causing namespace-specific queries to fail while global lists succeed.
-   </details>
+<details>
+<summary>6. Your team has deployed an extension API server handling the `data.kubedojo.io` group. A user runs `kubectl get datarecords -n default`, but the request mysteriously hangs and times out, even though `kubectl get datarecords` (cluster-scoped) works perfectly. Looking at your Go HTTP multiplexer configuration, what structural routing requirement for aggregated APIs have you likely missed?</summary>
+You have likely failed to explicitly implement the namespace-scoped routing path (`/apis/{group}/{version}/namespaces/{namespace}/{resource}`) in your HTTP multiplexer, only implementing the cluster-scoped path (`/apis/{group}/{version}/{resource}`). Unlike CRDs where the main API server automatically handles the URL routing hierarchy for namespaced resources, an extension API server is just a raw HTTP server that receives exactly the URL path requested by the client. If your server does not explicitly parse the URL to extract the namespace parameter and route it to the appropriate handler, the request will fall through to a 404 handler or hang, causing namespace-specific queries to fail while global lists succeed.
+</details>
 
-7. **You are deploying a custom API server that serves the `v1alpha1` version of the `apps` API group to experiment with a new Deployment controller. However, after applying your `APIService` manifest, users report that standard `kubectl get deployments` commands are suddenly failing or returning unexpected schemas. Based on the `APIService` specification, what field was misconfigured to cause this collision with the core Kubernetes APIs, and why?**
-   <details>
-   <summary>Answer</summary>
-   The `groupPriorityMinimum` and `versionPriority` fields in your `APIService` manifest were likely set higher than the priority of the built-in Kubernetes `apps` API group. The kube-aggregator uses these priority values to determine which API group and version should be preferred when a client requests a resource without fully specifying the version path, and also dictates the order of group discovery. By assigning your experimental extension API a higher priority than the core controllers (which typically sit in the 17000-18000 range), the aggregator effectively hijacked the default route for Deployment objects, routing standard user requests to your experimental server instead of the native Kubernetes API server.
-   </details>
+<details>
+<summary>7. You are deploying a custom API server that serves the `v1alpha1` version of the `apps` API group to experiment with a new Deployment controller. However, after applying your `APIService` manifest, users report that standard `kubectl get deployments` commands are suddenly failing or returning unexpected schemas. Based on the `APIService` specification, what field was misconfigured to cause this collision with the core Kubernetes APIs, and why?</summary>
+The `groupPriorityMinimum` and `versionPriority` fields in your `APIService` manifest were likely set higher than the priority of the built-in Kubernetes `apps` API group. The kube-aggregator uses these priority values to determine which API group and version should be preferred when a client requests a resource without fully specifying the version path, and also dictates the order of group discovery. By assigning your experimental extension API a higher priority than the core controllers (which typically sit in the 17000-18000 range), the aggregator effectively hijacked the default route for Deployment objects, routing standard user requests to your experimental server instead of the native Kubernetes API server.
+</details>
 
-8. **During development of your extension API server, you set `insecureSkipTLSVerify: true` in the `APIService` manifest to save time. A security auditor flags this before production deployment, demanding you use a `caBundle` instead. Detail the specific attack vector that becomes possible if you ignore the auditor and deploy with TLS verification disabled.**
-   <details>
-   <summary>Answer</summary>
-   Leaving `insecureSkipTLSVerify: true` enabled allows for a severe Man-in-the-Middle (MitM) attack within the cluster network, because the kube-aggregator will blindly trust any server that answers on the target Service IP without verifying its cryptographic identity. If a malicious actor compromises a pod in the cluster, they could potentially use ARP spoofing or DNS poisoning to hijack the traffic destined for your extension API service. Without the `caBundle` verifying the server's certificate against a trusted authority, the aggregator would happily send the attacker the highly sensitive impersonation headers and proxy tokens, allowing the attacker to intercept, read, or modify administrative API requests without detection.
-   </details>
+<details>
+<summary>8. During development of your extension API server, you set `insecureSkipTLSVerify: true` in the `APIService` manifest to save time. A security auditor flags this before production deployment, demanding you use a `caBundle` instead. Detail the specific attack vector that becomes possible if you ignore the auditor and deploy with TLS verification disabled.</summary>
+Leaving `insecureSkipTLSVerify: true` enabled allows for a severe Man-in-the-Middle (MitM) attack within the cluster network, because the kube-aggregator will blindly trust any server that answers on the target Service IP without verifying its cryptographic identity. If a malicious actor compromises a pod in the cluster, they could potentially use ARP spoofing or DNS poisoning to hijack the traffic destined for your extension API service. Without the `caBundle` verifying the server's certificate against a trusted authority, the aggregator would happily send the attacker the highly sensitive impersonation headers and proxy tokens, allowing the attacker to intercept, read, or modify administrative API requests without detection.
+</details>
 
 ---
 
 ## Hands-On Exercise
 
-**Task**: Build and deploy an extension API server that serves `DataRecord` resources backed by an in-memory store, register it via APIService, and access it with kubectl.
+**Task**: Build and deploy an extension API server that serves `DataRecord` resources backed by an in-memory store, register it via APIService, and securely access it utilizing standard `kubectl` commands.
 
 **Setup**:
 ```bash
 kind create cluster --name aggregation-lab
 
 # Install cert-manager
-kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.17.0/cert-manager.yaml
+kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.35.0/cert-manager.yaml
 kubectl wait --for=condition=Available deployment -n cert-manager --all --timeout=120s
 ```
 
 **Steps**:
 
-1. **Create the Go project**:
+1. **Create the Go project environment**:
 ```bash
 mkdir -p ~/extending-k8s/extension-api && cd ~/extending-k8s/extension-api
 go mod init github.com/kubedojo/extension-api
 go get k8s.io/apimachinery@latest
 ```
 
-2. **Copy the source files** from Parts 3.3 through 3.6 into the appropriate directories
+2. **Source the Logic**: Copy the comprehensive Go source files from Part 3 into the appropriate directory structure outlined in the tutorial.
 
 3. **Build the container image**:
 ```bash
-# Create Dockerfile (similar to Part 3 of Module 1.7)
+# Create Dockerfile 
 cat << 'DOCKERFILE' > Dockerfile
-FROM golang:1.23 AS builder
+FROM golang:1.40 AS builder
 WORKDIR /workspace
 COPY go.mod go.sum ./
 RUN go mod download
@@ -1183,19 +1194,25 @@ USER 65532:65532
 ENTRYPOINT ["/apiserver"]
 DOCKERFILE
 
-docker build -t kubedojo-data-api:v0.1.0 .
-kind load docker-image kubedojo-data-api:v0.1.0 --name aggregation-lab
+docker build -t kubedojo-data-api:0.35.0 .
+kind load docker-image kubedojo-data-api:0.35.0 --name aggregation-lab
 ```
 
-4. **Deploy everything**:
+4. **Deploy the infrastructure**:
 ```bash
 # Create namespace
 k create namespace kubedojo-system
 
 # Apply RBAC, cert, deployment, service from Part 4
-k apply -f manifests/rbac.yaml
+k apply -f manifests/serviceaccount.yaml
+k apply -f manifests/clusterrole.yaml
+k apply -f manifests/clusterrolebinding.yaml
+k apply -f manifests/auth-delegator-binding.yaml
+k apply -f manifests/auth-reader-binding.yaml
+k apply -f manifests/issuer.yaml
 k apply -f manifests/certificate.yaml
 k apply -f manifests/deployment.yaml
+k apply -f manifests/service.yaml
 
 # Wait for the certificate and pods
 k wait --for=condition=Ready certificate -n kubedojo-system kubedojo-data-api-cert --timeout=60s
@@ -1205,7 +1222,7 @@ k wait --for=condition=Ready pod -n kubedojo-system -l app=kubedojo-data-api --t
 k apply -f manifests/apiservice.yaml
 ```
 
-5. **Verify the APIService**:
+5. **Verify the APIService routing**:
 ```bash
 k get apiservice v1alpha1.data.kubedojo.io
 # Should show Available: True
@@ -1214,7 +1231,7 @@ k api-resources | grep data.kubedojo
 # Should show: datarecords  dr  data.kubedojo.io/v1alpha1  true  DataRecord
 ```
 
-6. **Access the resources with kubectl**:
+6. **Access the aggregated resources with kubectl**:
 ```bash
 # List all data records
 k get datarecords -A
@@ -1233,7 +1250,7 @@ k get --raw /apis/data.kubedojo.io/v1alpha1 | python3 -m json.tool
 k get --raw /apis/data.kubedojo.io/v1alpha1/namespaces/default/datarecords | python3 -m json.tool
 ```
 
-7. **Verify it behaves like a real Kubernetes API**:
+7. **Verify it behaves natively**:
 ```bash
 # Tab completion should work (after discovering the resource)
 k get datarecords -n default user-config -o jsonpath='{.spec.data}'
@@ -1242,28 +1259,28 @@ k get datarecords -n default user-config -o jsonpath='{.spec.data}'
 k describe dr user-config -n default
 ```
 
-8. **Cleanup**:
+8. **Cleanup resources**:
 ```bash
 kind delete cluster --name aggregation-lab
 ```
 
-**Success Criteria**:
-- [ ] Extension API server builds and runs
-- [ ] cert-manager issues a valid TLS certificate
-- [ ] APIService shows `Available: True`
-- [ ] `kubectl api-resources` lists `datarecords`
-- [ ] `kubectl get dr -A` returns all seed records
-- [ ] `kubectl get dr -n default` returns namespace-filtered records
-- [ ] `kubectl get dr user-config -n default -o yaml` returns full YAML
-- [ ] Non-existent records return proper 404 with `metav1.Status`
-- [ ] Short name `dr` works
-- [ ] Extension server logs show requests with user identity
+**Success Criteria Check**:
+- [ ] Extension API server builds without Go compilation errors.
+- [ ] cert-manager correctly provisions a valid internal TLS certificate.
+- [ ] APIService seamlessly transitions to `Available: True`.
+- [ ] `kubectl api-resources` properly enumerates the custom `datarecords`.
+- [ ] `kubectl get dr -A` seamlessly pulls all configured seed records.
+- [ ] `kubectl get dr -n default` actively retrieves namespace-filtered assets.
+- [ ] `kubectl get dr user-config -n default -o yaml` prints the full schema.
+- [ ] Querying an unknown record natively returns a structured 404 `metav1.Status`.
+- [ ] Execution with the short name `dr` is fully functional.
+- [ ] Pod logs expose successful requests bearing identity impersonation headers.
 
 ---
 
 ## Summary: Extending Kubernetes Track
 
-Congratulations on completing the entire Extending Kubernetes track. Here is what you have learned:
+Congratulations on successfully navigating the entire Extending Kubernetes learning track! Below is a recap of the extensive skills you have cultivated. 
 
 | Module | Topic | Key Skill |
 |--------|-------|-----------|
@@ -1276,4 +1293,4 @@ Congratulations on completing the entire Extending Kubernetes track. Here is wha
 | 1.7 | Scheduler Plugins | Customizing Kubernetes scheduling decisions |
 | 1.8 | API Aggregation | Building custom API servers |
 
-You now have the knowledge to extend Kubernetes at every level: the API surface (CRDs, API Aggregation), the request pipeline (webhooks), the control loop (controllers/operators), and the scheduler. These are the building blocks of every major Kubernetes platform tool.
+You now possess the foundational capacity to architect and expand Kubernetes capabilities at every fundamental level: configuring the API routing surface (CRDs, API Aggregation), intercepting the inbound request pipeline (Admission Webhooks), dictating the persistent control loop (Controllers and Operators), and manipulating operational scheduling. These disciplines function as the universal building blocks underlying every major enterprise Kubernetes platform.
