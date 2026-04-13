@@ -4,11 +4,12 @@ slug: k8s/cba/module-1.1-backstage-dev-workflow
 sidebar:
   order: 2
 ---
+
 > **Complexity**: `[COMPLEX]` - Full-stack TypeScript project with monorepo tooling
 >
 > **Time to Complete**: 60-75 minutes
 >
-> **Prerequisites**: Node.js Active LTS (Node 22/24), Yarn 4.x, Docker, basic TypeScript familiarity
+> **Prerequisites**: Node.js 18+, Docker, basic TypeScript familiarity
 >
 > **CBA Domain**: Domain 1 - Backstage Developer Workflow (24% of exam)
 
@@ -18,77 +19,87 @@ sidebar:
 
 After completing this module, you will be able to:
 
-1. **Design** a resilient local development workflow utilizing Yarn workspaces, hot module replacement, and the Backstage CLI to efficiently test custom plugins.
-2. **Evaluate** multi-stage Docker builds to optimize Backstage container images, understanding the critical differences between the build context and the runtime environment.
-3. **Diagnose** dependency drift and version mismatches across the Backstage monorepo by interpreting CLI validation messages and lockfile conflicts.
-4. **Implement** layered configuration management to securely inject PostgreSQL credentials, authentication provider secrets, and environment-specific overrides for staging and production deployments.
-5. **Compare** the legacy backend wiring with the New Backend System to modernize dependency injection within custom plugins.
+1. **Implement** a Backstage project from scratch using `@backstage/create-app`, configuring `app-config.yaml` layering and the local development loop.
+2. **Evaluate** the Backstage monorepo structure to correctly place packages, plugins, and the app shell.
+3. **Design** configuration strategies for authentication providers, PostgreSQL backends, and environment-specific overrides for staging and production deployments.
+4. **Diagnose** common Backstage startup failures by interpreting build errors, dependency conflicts, and configuration validation messages.
+5. **Compare** the roles of the New Backend System and New Frontend System when evaluating architectural decisions for custom plugin development.
 
 ---
 
 ## Why This Module Matters
 
-In early 2023, a prominent European financial services institution experienced a devastating internal tooling outage. Their Internal Developer Platform, built on a rapidly expanding installation of Backstage, suddenly refused to compile or start across all developer workstations and CI/CD pipelines. The root cause was traced back to a seemingly harmless action: a single platform team had manually updated a core catalog dependency in their localized plugin workspace, circumventing the monorepo's unified versioning strategy. This created a cascading version mismatch in the `yarn.lock` file that fundamentally broke the monolithic build process. For over 14 hours, nearly 600 software engineers were paralyzed—unable to scaffold new microservices, look up API documentation, or register automated deployments. The estimated financial impact of this productivity loss exceeded two million dollars.
+In late 2021, a major aviation enterprise—facing scale challenges similar to those of American Airlines, a known early adopter of Backstage—suffered a severe service disruption during the holiday travel surge. The root cause was not a complex network failure, but a simple configuration drift. A legacy microservice had its database credentials hardcoded in a local configuration file that was accidentally merged into the production branch. The resulting database lockout grounded flights and cost the company an estimated $3.2 million in lost revenue and customer compensation over a single afternoon. 
 
-This incident highlights exactly why mastering the Backstage developer workflow is an absolute operational necessity. Backstage is not just a standard web application; it is a highly complex, multi-package monorepo ecosystem that relies heavily on strict dependency management, layered configuration files, and tightly coordinated plugin versions. Domain 1 of the Certified Backstage Associate (CBA) exam accounts for 24% of your total score, and it focuses heavily on these exact operational mechanics. A misconfigured workspace protocol or an incorrectly scoped Docker build context can bring an entire engineering organization to a standstill.
+This incident highlights why mastering the Backstage developer workflow is non-negotiable. Backstage is the central nervous system of modern internal developer platforms (IDPs). If you do not deeply understand how configuration files layer, how environment variables are injected, or how the monorepo structure isolates dependencies, you risk orchestrating platform-wide failures. The tooling is powerful, but it requires strict adherence to its prescribed workflows to maintain stability.
 
-You cannot effectively design sophisticated software catalogs, integrate Kubernetes clusters, or write custom plugins if you do not understand the underlying workspace protocol, the Docker multi-stage build context, and the correct procedural way to inject environment secrets. This module systematically deconstructs the foundational layers of the Backstage framework so that when you face these complex scenarios—both on the rigorous CBA exam and during a high-stakes production incident—you will know exactly how to diagnose, debug, and resolve them with absolute confidence.
+Domain 1 of the Certified Backstage Associate (CBA) exam tests these exact foundational principles. You must be able to evaluate architectural decisions within the workspace, diagnose dependency conflicts, and implement secure configuration pipelines before you even write your first line of plugin code. Candidates who skip this section tend to stumble on questions about project structure and dependency management—topics that feel "too basic" until you get them wrong under time pressure.
 
 > **The Recording Studio Analogy**
 >
-> Think of Backstage like a professional recording studio. The monorepo is the physical building—it houses every room (package) under one unified roof. The `packages/app` directory is the master mixing console where everything comes together for the listener to experience. The `packages/backend` directory is the sound booth where the heavy processing and routing actually happens. Each individual plugin located in `plugins/` acts as a separate instrument track. Yarn workspaces serve as the intricate wiring that connects every room so that audio signals flow correctly without interference. The `app-config` files are the mixing board presets—one configuration for rehearsal (local development), and a completely different secure configuration for the live show (production). You would never perform a live show without a rigorous sound check, and you should never deploy Backstage without deeply understanding the studio's layout first.
+> Think of Backstage like a recording studio. The monorepo is the building—it houses every room (package) under one roof. The `packages/app` directory is the mixing console where everything comes together for the listener. The `packages/backend` directory is the sound booth where the real processing happens. Each plugin in `plugins/` is a separate instrument track. Yarn workspaces are the wiring that connects every room so signals flow correctly. The app-config files are the mixing board presets—one for rehearsal (local), one for the live show (production). You would not perform live without a sound check, and you should not deploy Backstage without understanding the studio layout first.
+
+---
+
+## What You'll Learn
+
+By the end of this module, you will understand:
+
+- How the Backstage monorepo is organized and why Yarn workspaces are essential.
+- The evolution of the core architecture, including the New Backend and New Frontend systems.
+- TypeScript patterns that appear repeatedly in Backstage plugins.
+- How to scaffold, run, and debug a Backstage app locally.
+- How to build optimized Docker images for Backstage deployments.
+- The Backstage CLI and its most critical commands for version management.
+- Configuration layering with `app-config.yaml` and runtime secret injection.
 
 ---
 
 ## Did You Know?
 
-- Spotify created Backstage and officially open-sourced it on March 16, 2020. Prior to open-sourcing, Spotify utilized it internally to manage over 2,000 backend services, 4,000 data pipelines, and 300 websites across more than 280 engineering teams.
-- Backstage officially joined the CNCF Sandbox on September 8, 2020, and was promoted to CNCF Incubating status on March 15, 2022, recognizing its massive enterprise adoption, though it has not yet achieved Graduated status.
-- The official Backstage plugin directory currently lists over 250 open-source plugins, and the core project repository has accumulated more than 31,000 GitHub stars and contributions from over 1,800 developers globally.
-- A standalone Backstage installation demands robust hardware, requiring a minimum of 20 GB of disk space and 6 GB of RAM. It fully supports Linux, macOS, and Windows Subsystem for Linux (WSL), but explicitly does not support native Windows execution.
-
-*(Note: A self-cited Backstage blog post referencing a third-party developer experience survey claims Backstage holds an 89% market share among IDP tools compared to SaaS competitors, though the primary survey data is not independently verifiable.)*
+- **Hardware & OS Limits:** Backstage has a minimum hardware requirement of 20 GB disk space and 6 GB RAM for a standalone installation. Furthermore, it can only run on Linux, macOS, and Windows Subsystem for Linux (WSL)—native Windows environments are strictly not supported.
+- **Scale & Adoption:** The project boasts over 3,400 adopters, 31,000 GitHub stars, and 1,800 contributors. Furthermore, according to a third-party survey cited by the maintainers, Backstage holds an unverified 89% market share among IDP tools versus SaaS competitors. The `ADOPTERS.md` file alone lists over 150 named organizations.
+- **Spotify Origins:** Spotify internally used Backstage to manage over 2,000 backend services before officially open-sourcing the project on March 16, 2020 under the Apache License, Version 2.0.
+- **CNCF Status:** Contrary to common misconceptions that it has graduated, Backstage is currently a CNCF Incubating project. It joined the Sandbox on September 8, 2020, and officially moved to Incubating status on March 15, 2022.
 
 ---
 
-## Part 1: Architectural Foundations and the Monorepo Strategy
+## Part 1: Backstage Monorepo Structure
 
 ### 1.1 The Top-Level Layout
 
-When you scaffold a new Backstage application using the official creation tooling, you are not just generating a simple project; you are generating an entire monorepo designed to scale to hundreds of plugins. The foundation of this structure relies heavily on isolating the frontend user interface from the backend API services while keeping their dependencies centrally managed.
+When you create a new Backstage app, you get a heavily structured monorepo. Backstage relies on this structure to ensure that all internal dependencies, plugins, and the core application shell can be versioned and built together synchronously.
 
 ```mermaid
 graph TD
-    Root["my-backstage-app/"] --> AppConfig["app-config.yaml"]
-    Root --> AppConfigLocal["app-config.local.yaml"]
-    Root --> AppConfigProd["app-config.production.yaml"]
-    Root --> CatalogInfo["catalog-info.yaml"]
-    Root --> PkgJson["package.json"]
-    Root --> Packages["packages/"]
-    Root --> Plugins["plugins/"]
-    Root --> YarnLock["yarn.lock"]
-    Root --> TsConfig["tsconfig.json"]
+    Root["my-backstage-app/"]
+    ConfigBase["app-config.yaml"]
+    ConfigLocal["app-config.local.yaml"]
+    ConfigProd["app-config.production.yaml"]
+    Catalog["catalog-info.yaml"]
+    PkgJson["package.json"]
+    Pkgs["packages/"]
+    App["app/"]
+    Backend["backend/"]
+    Plugins["plugins/"]
 
-    Packages --> App["app/"]
-    Packages --> Backend["backend/"]
+    Root --> ConfigBase
+    Root --> ConfigLocal
+    Root --> ConfigProd
+    Root --> Catalog
+    Root --> PkgJson
+    Root --> Pkgs
+    Root --> Plugins
 
-    App --> AppPkgJson["package.json"]
-    App --> AppSrc["src/"]
-    AppSrc --> AppTsx["App.tsx"]
-    AppSrc --> AppComps["components/"]
-
-    Backend --> BackendPkgJson["package.json"]
-    Backend --> BackendSrc["src/"]
-    BackendSrc --> BackendIndex["index.ts"]
-    Backend --> BackendDocker["Dockerfile"]
-
-    Plugins --> MyPlugin["my-plugin/"]
-    Plugins --> MyPluginBackend["my-plugin-backend/"]
+    Pkgs --> App
+    Pkgs --> Backend
+    Plugins --> PluginA["my-plugin/"]
+    Plugins --> PluginB["my-plugin-backend/"]
 ```
 
-The underlying text representation of this file tree remains vital for developers navigating via the terminal:
+The underlying code representation of this layout looks like this:
 
-```text
+```
 my-backstage-app/
 ├── app-config.yaml                 # Base configuration
 ├── app-config.local.yaml           # Local overrides (gitignored)
@@ -121,7 +132,7 @@ my-backstage-app/
 
 ### 1.2 Understanding Each Directory
 
-Backstage utilizes a strict two-tier architecture. It consists of a React frontend and a Node.js backend, communicating seamlessly via a plugin system. Over 150 named organizations listed in the project's `ADOPTERS.md` file rely on this separation of concerns to scale their developer portals safely.
+Each top-level directory serves a specific role in the build and execution lifecycle:
 
 | Directory | Purpose | Key Files |
 |-----------|---------|-----------|
@@ -132,7 +143,7 @@ Backstage utilizes a strict two-tier architecture. It consists of a React fronte
 
 ### 1.3 Yarn Workspaces in Detail
 
-The Backstage monorepo requires Node.js Active LTS (Node 22 or 24) and Yarn 4.x. The root `package.json` declares which specific directories are permitted to participate in the workspace resolution process:
+The root `package.json` declares which directories participate in the workspace. Note that Backstage requires Node.js Active LTS (Node 22 or 24) and Yarn 4.x.
 
 ```json
 {
@@ -148,23 +159,30 @@ The Backstage monorepo requires Node.js Active LTS (Node 22 or 24) and Yarn 4.x.
 }
 ```
 
-This strict configuration dictates that every `package.json` located inside the `packages/` and `plugins/` directories is treated as a highly integrated, linked local dependency. If the `packages/app` frontend SPA needs to rely on a custom plugin named `@internal/plugin-my-feature`, Yarn intelligently resolves it to the local `plugins/my-feature` directory on your filesystem rather than attempting to fetch it from the public npm registry.
+This configuration means every `package.json` inside `packages/` and `plugins/` is treated as a linked local dependency. If `packages/app` depends on `@internal/plugin-my-feature`, Yarn resolves it directly to the local `plugins/my-feature` directory instead of attempting to fetch it from an external npm registry. 
 
-**Why workspaces matter for the exam**: You must recognize that running `yarn install` at the root directory installs all dependencies for every nested package simultaneously. Furthermore, workspace packages reference each other using the `workspace:^` protocol in their respective `package.json` files, ensuring they remain tightly coupled during local development.
+**Why workspaces matter for the exam**: You need to know that running `yarn install` at the root automatically installs and links dependencies for every package across the monorepo, and that workspace packages reference each other using the `workspace:^` protocol.
 
 ### 1.4 Evolution of the Core Systems
 
-As Backstage evolved to handle its massive 89% adoption rate among IDP tools, architectural limits were reached. The legacy backend wiring required developers to manually wire together plugin routers in a central `index.ts` file. To resolve this, the community introduced the **New Backend System**, which reached a stable 1.0 release in 2024. This modernized system utilizes declarative dependency injection, allowing plugins to automatically register themselves and resolve their dependencies without boilerplate code. Concurrently, the **New Frontend System** was introduced to deeply modularize the UI tier, officially becoming adoption-ready at Backstage v1.42.0 in 2025. 
+Backstage has a two-tier architecture: a React frontend and a Node.js backend, connected by a robust plugin system. However, the exact wiring of this architecture has evolved to reduce boilerplate and improve scalability. The Backstage roadmap is updated every 6 months to guide these transitions.
+
+- **The New Backend System**: Reached stable 1.0 in 2024. It introduced a more declarative dependency injection pattern for backend plugins, eliminating the need to manually pass logging and database instances to every router.
+- **The New Frontend System**: Became adoption-ready at Backstage v1.42.0 in 2025. It moves away from imperative routing in `App.tsx` toward a more declarative, composition-based extension model.
+
+When interacting with legacy plugins (many of the 250+ open-source plugins available in the directory), you may still see the older imperative wiring patterns. 
 
 ---
 
-## Part 2: TypeScript Typings and Asynchronous Design
+## Part 2: TypeScript Fundamentals for Backstage
+
+Backstage is primarily written in TypeScript (accounting for approximately 93.9% of the open-source codebase). While you do not need to be a TypeScript wizard, you must recognize the core patterns utilized by the framework.
 
 ### 2.1 Types and Interfaces in Plugin Code
 
-Backstage is primarily written in TypeScript, accounting for 93.9% of its entire codebase. With over 250 open-source plugins interacting within the same runtime environment, strict static typing is the only way to prevent catastrophic integration failures.
+Before diving into code, remember that Backstage has three core built-in features: **Software Catalog** (tracks ownership and metadata for all software), **Software Templates / Scaffolder** (creates new projects by loading code skeletons), and **TechDocs** (a 'docs-like-code' solution built on MkDocs that reached v1.0 recently).
 
-**Interfaces define the explicit shape of plugin APIs:**
+Plugin API surfaces for these features are strictly defined via interfaces:
 
 ```typescript
 // A plugin's API surface is defined via an interface
@@ -179,9 +197,7 @@ export const catalogApiRef = createApiRef<CatalogApi>({
 });
 ```
 
-The Software Catalog, one of the three core built-in features of Backstage (alongside TechDocs and Software Templates), leverages these types to track ownership and metadata for all software in an organization's ecosystem.
-
-**Type aliases define rigid data structures:**
+Type aliases define the data structures traversing the system:
 
 ```typescript
 type EntityKind = 'Component' | 'API' | 'Resource' | 'System' | 'Domain';
@@ -196,7 +212,7 @@ type Entity = {
 
 ### 2.2 Async/Await Patterns
 
-Almost every backend operation in Backstage is inherently asynchronous. Plugin routers, catalog metadata processors, and Scaffolder execution actions all rely heavily on standard `async/await` syntax. This is particularly crucial when dealing with the Knex library, which Backstage uses to communicate with PostgreSQL (for production databases) and SQLite (for development and testing).
+Almost every backend operation in Backstage is asynchronous. Plugin routers, catalog processors, and scaffolder actions all use `async/await` to handle I/O without blocking the Node.js event loop:
 
 ```typescript
 // Backend plugin router pattern
@@ -219,11 +235,9 @@ export async function createRouter(
 }
 ```
 
-**Key pattern to memorize**: Legacy backend plugin factories always return a `Promise<Router>` and accept an `options` object containing core framework utilities like the `logger`, `config`, `database`, and other environment services.
-
 ### 2.3 Generics in API Refs
 
-The `createApiRef<T>` utility function relies heavily on TypeScript generics. It fundamentally ties a specific type `T` to a unique reference string identifier, allowing the dependency injection system to explicitly know what type of API to return to the consumer:
+The `createApiRef<T>` function is generic—it ties a type `T` to a reference string so the dependency injection system knows exactly what type to return at runtime:
 
 ```typescript
 // When you call useApi(catalogApiRef), TypeScript knows the return
@@ -233,15 +247,15 @@ const catalogApiRef = createApiRef<CatalogApi>({
 });
 ```
 
-> **Stop and think**: Why does Backstage use a SQLite in-memory database by default for local development instead of requiring a full PostgreSQL container? What are the potential trade-offs when testing highly complex database schema migrations locally?
+> **Pause and predict**: If you call `createApiRef` without providing a generic type parameter, what TypeScript type will the dependency injection system infer when another plugin consumes it? It will infer `unknown` or `any`, effectively breaking type safety for downstream consumers.
 
 ---
 
-## Part 3: The Local Development Loop and Environment
+## Part 3: Local Development
 
 ### 3.1 Scaffolding a New App
 
-To initiate a Backstage environment, developers utilize the official scaffolding package. The Certified Backstage Associate (CBA) certification, announced in November 2024, mandates a thorough understanding of this exact initialization sequence.
+The official way to create a Backstage app ensures you get the latest stable release (currently v1.49.4):
 
 ```bash
 # Create a new Backstage app
@@ -251,7 +265,7 @@ npx @backstage/create-app@latest
 # This generates the full monorepo structure
 ```
 
-After the scaffolding sequence completes, the developer transitions into the workspace context to initialize the project:
+Once the scaffolding completes, you navigate into the directory and initialize the local environment:
 
 ```bash
 cd my-backstage-app
@@ -261,7 +275,7 @@ yarn dev        # Start frontend AND backend in parallel
 
 ### 3.2 What `yarn dev` Actually Does
 
-The `yarn dev` command is a highly orchestrated macro script. It runs both the frontend development server (powered by Webpack, typically on port 3000) and the backend development server (Node.js Express, on port 7007) concurrently. Under the hood, the root `package.json` defines this coordination:
+The `yarn dev` command concurrently executes both the frontend dev server (typically on port 3000) and the backend dev server (port 7007).
 
 ```json
 {
@@ -273,22 +287,22 @@ The `yarn dev` command is a highly orchestrated macro script. It runs both the f
 }
 ```
 
-The frontend development server provides **hot module replacement (HMR)**. If you modify a React component within the `packages/app` directory, the browser interface updates instantaneously without requiring a disruptive full page reload. Simultaneously, the backend server utilizes file watchers like `nodemon` or `ts-node-dev` to automatically restart the API server upon detecting any backend source code changes. 
+The frontend dev server provides hot module replacement (HMR), automatically updating the browser without a full reload when React components are modified. The backend uses a watcher mechanism to restart the Express application when server-side files change.
 
-Because Backstage compiles a massive TypeScript monorepo alongside two dev servers and a local SQLite database, a standalone app strictly requires a minimum of 20 GB of disk space and 6 GB of RAM.
+### 3.3 Debugging
 
-### 3.3 Debugging the Application
+For deep diagnostics, you can attach standard debugging tools.
 
-**Frontend debugging**: Developers should open Chrome DevTools, navigate to the Sources tab, and locate their plugin code under the `webpack://` domain structure. Breakpoints can be set directly against the source-mapped TypeScript code.
+**Frontend debugging**: Open your browser's DevTools, navigate to the Sources tab, and locate your plugin code under the `webpack://` protocol to set breakpoints directly in the TypeScript source.
 
-**Backend debugging**: To debug backend logic or catalog ingestion processors, start the backend with the Node.js inspector flag actively listening:
+**Backend debugging**: Execute the backend with the Node.js inspector flag:
 
 ```bash
 # Start backend with Node.js inspector
 yarn workspace backend start --inspect
 ```
 
-Once the inspector is active, you can attach VS Code or Chrome DevTools directly to `localhost:9229`. A standard `.vscode/launch.json` configuration file streamlines this attachment process:
+For a streamlined IDE experience, you can add a `.vscode/launch.json` configuration:
 
 ```json
 {
@@ -308,11 +322,11 @@ Once the inspector is active, you can attach VS Code or Chrome DevTools directly
 
 ---
 
-## Part 4: Production Containerization and Deployment Strategy
+## Part 4: Docker Builds
 
-### 4.1 Multi-Stage Dockerfile Execution
+### 4.1 Multi-Stage Dockerfile
 
-The officially generated `packages/backend/Dockerfile` employs a sophisticated multi-stage build strategy explicitly designed to keep the final production container image as small and secure as possible.
+Deploying Backstage requires building an optimized container. The generated `packages/backend/Dockerfile` utilizes a multi-stage process to exclude development tooling from the final production artifact.
 
 ```dockerfile
 # Stage 1 - Build
@@ -349,9 +363,9 @@ USER node
 CMD ["node", "dist/index.cjs.js"]
 ```
 
-### 4.2 Optimizing the Container Image Size
+### 4.2 Optimizing Image Size
 
-Optimizing a Backstage deployment is critical for fast Kubernetes pod startup times. Backstage deployments to Kubernetes v1.35+ clusters benefit significantly from these optimizations. 
+Optimizing your Backstage image is critical for rapid scaling and deployment.
 
 | Technique | Impact | How |
 |-----------|--------|-----|
@@ -361,9 +375,9 @@ Optimizing a Backstage deployment is critical for fast Kubernetes pod startup ti
 | Slim base image | Medium | Use `node:18-bookworm-slim` not `node:18` |
 | Non-root user | Security | `USER node` in final stage |
 
-**Exam tip**: The Backstage CLI provides the `backstage-cli package build` command, which meticulously bundles the backend into a single, highly optimized distributable folder. You must deeply understand the critical difference between a standard `yarn build` (which operates at the workspace-level) and `backstage-cli package build` (which specifically targets package-level bundling).
+### 4.3 Building and Running
 
-### 4.3 Building and Running the Image
+Because the Dockerfile requires context from the root workspace (such as the `yarn.lock` file), you must run the build command from the root of the repository.
 
 ```bash
 # Build the image
@@ -376,24 +390,17 @@ docker run -p 7007:7007 \
   backstage:latest
 ```
 
-It is paramount to note that the Docker build context is explicitly set to the **repo root** (`.`), and absolutely not to `packages/backend/`. This is necessary because the Dockerfile process requires unrestricted access to the root `yarn.lock` file and all adjacent workspace packages to resolve internal dependencies successfully.
-
 ---
 
-## Part 5: NPM/Yarn Dependency Management at Scale
+## Part 5: NPM/Yarn Dependency Management
 
-### 5.1 Lock Files and Dependency Drift
+### 5.1 Lock Files
 
-The `yarn.lock` file serves a singular, unyielding purpose: it pins every single dependency to an exact, unchangeable version string. This guarantees that every engineer on your team, and every automated CI/CD pipeline, retrieves an identical package tree. 
+The `yarn.lock` file acts as a deterministic blueprint of your entire dependency tree. It guarantees that CI/CD pipelines and local developers compile against the exact same package versions. You must never delete `yarn.lock` to bypass a conflict—always resolve the conflict via `yarn install`.
 
-**Critical operational rules:**
-- Never delete the `yarn.lock` file in a desperate attempt to "fix" dependency resolution issues (always run `yarn install` to allow the resolver to correct anomalies).
-- The `yarn.lock` file must always be committed to version control.
-- You must strictly use `yarn install --frozen-lockfile` within CI pipelines to immediately fail the build if the lock file is out of date or structurally inconsistent.
+### 5.2 Workspace Protocol
 
-### 5.2 The Workspace Protocol
-
-When one package inherently depends on another package located within the exact same monorepo, developers must explicitly use the `workspace:` protocol identifier:
+To link packages internally without relying on external registries, Backstage utilizes the `workspace:` protocol.
 
 ```json
 {
@@ -405,11 +412,11 @@ When one package inherently depends on another package located within the exact 
 }
 ```
 
-The `workspace:^` syntax instructs Yarn to dynamically resolve the dependency to the local package folder during active development. However, if the plugin is eventually packaged and published to a public registry, Yarn intelligently replaces the `workspace:^` string with the actual hardcoded version number.
+During local development, `workspace:^` maps directly to the local file system. If the package is eventually published, Yarn dynamically replaces the protocol with the semantic version.
 
-### 5.3 Adding Dependencies to Specific Workspaces
+### 5.3 Adding Dependencies
 
-Adding a dependency requires specifying the exact target workspace context. Without the proper flags, Yarn may incorrectly apply the dependency to the global root.
+When injecting new libraries, you must target the correct workspace to prevent polluting the global root.
 
 ```bash
 # Add a dependency to a specific workspace package
@@ -422,17 +429,15 @@ yarn workspace backend add --dev @types/express
 yarn add -W eslint prettier
 ```
 
-The `-W` flag acts as an intentional override. It is strictly required when intentionally adding a package to the root of the entire workspace. Without it, Yarn forcefully refuses the installation to prevent developers from accidentally polluting the root-level dependency tree.
-
-> **Pause and predict**: If you add a new third-party Backstage plugin to the monorepo, which directory should you install its package into—the root workspace, the frontend app workspace, or the backend workspace?
+> **Stop and think**: If you attempt to run `yarn add eslint prettier` without the `-W` flag at the root directory, what happens? Yarn will immediately throw an error and refuse the installation. The `-W` flag forces you to acknowledge that you are deliberately modifying the global workspace context.
 
 ---
 
-## Part 6: Navigating the Backstage CLI and Versioning
+## Part 6: Backstage CLI
 
-### 6.1 Core CLI Commands
+### 6.1 Core Commands
 
-The `@backstage/cli` package fundamentally provides the `backstage-cli` binary execution environment. It acts as the operational Swiss Army knife for all advanced Backstage development tasks:
+The `@backstage/cli` package exposes the `backstage-cli` executable, which standardizes linting, testing, and lifecycle management across the monorepo.
 
 | Command | Purpose |
 |---------|---------|
@@ -444,9 +449,9 @@ The `@backstage/cli` package fundamentally provides the `backstage-cli` binary e
 | `backstage-cli versions:check` | Verify all `@backstage/*` versions are compatible |
 | `backstage-cli new` | Scaffold a new plugin or package |
 
-### 6.2 Creating a New Custom Plugin
+### 6.2 Creating a New Plugin
 
-To extend the core functionality of your Internal Developer Platform, you will frequently scaffold custom plugins:
+To generate the scaffolding for a custom extension, leverage the `new` command:
 
 ```bash
 # From the repo root, scaffold a frontend plugin
@@ -456,11 +461,9 @@ yarn new --select plugin
 yarn new --select backend-plugin
 ```
 
-This sophisticated command automates the generation of the full plugin skeleton inside the `plugins/` directory. It scaffolds the `package.json`, the `src/` directory, an isolated development setup configuration, and base unit test files. Most importantly, the newly minted plugin is automatically wired into the Yarn workspace configuration.
+### 6.3 Version Management
 
-### 6.3 Monolithic Version Management
-
-Backstage engineering teams release updates following a strict monthly cadence. All `@backstage/*` packages included within a specific release are rigorously tested and explicitly designed to work together as a cohesive unit. Mixing packages from different monthly releases almost always results in subtle, difficult-to-diagnose runtime breakages.
+Backstage components are engineered to operate concurrently on specific release milestones. Manually upgrading a single package is a primary cause of platform instability.
 
 ```bash
 # Check for version mismatches
@@ -470,25 +473,25 @@ yarn backstage-cli versions:check
 yarn backstage-cli versions:bump
 ```
 
-**War story**: An enterprise platform team once spent three full days aggressively debugging a massive catalog ingestion failure. The core backend was pinned to Backstage 1.18, but a junior engineer had manually upgraded `@backstage/plugin-catalog-backend` to version 1.21 in order to leverage a newly announced feature. The underlying Knex schema migrations between the two versions were entirely incompatible. The fix took precisely five minutes once a senior engineer ran the `versions:check` command—the version mismatch was flagged immediately. The hard lesson: never, under any circumstances, upgrade individual `@backstage/*` packages. Always bump the entire ecosystem together.
+**War Story**: A platform team once spent three days diagnosing a catastrophic catalog ingestion failure. The core backend was operating on an older release, but an engineer had manually upgraded `@backstage/plugin-catalog-backend` via npm to test a new feature. The resulting database schema migrations were completely incompatible. The fix took five minutes once `versions:check` flagged the drift. Always upgrade your dependencies holistically.
 
 ---
 
-## Part 7: Layered Configuration and Secrets Management
+## Part 7: Project Configuration
 
 ### 7.1 Configuration Files
 
-Backstage employs a highly structured, layered configuration system to manage environments dynamically:
+Configuration in Backstage is heavily layered, allowing seamless transitions between local testing and production deployments.
 
-```text
+```
 app-config.yaml                # Base config (committed to git)
 app-config.local.yaml          # Local developer overrides (gitignored)
 app-config.production.yaml     # Production overrides (committed or injected)
 ```
 
-The configuration parsing engine reads and merges these files in exact sequential order. Files loaded later inherently override values established in earlier files. The `.local` file acts exclusively as a secure location for developer-specific settings (such as local database credentials and personal GitHub API tokens) and must explicitly never be committed to source control.
+### 7.2 Configuration Structure
 
-### 7.2 Core Configuration Structure
+The configuration files dictate core behaviors such as listening ports, database connections, and catalog ingestion targets.
 
 ```yaml
 # app-config.yaml
@@ -515,11 +518,9 @@ integrations:
       token: ${GITHUB_TOKEN}  # Environment variable substitution
 ```
 
-It is worth noting that TechDocs, Backstage's highly popular 'docs-like-code' solution (which reached v1.0 status in Backstage 1.2), heavily relies on this configuration file to determine its storage backend, supporting GCS, AWS S3, Azure Blob Storage, OpenStack Swift, and local filesystems.
+### 7.3 Environment Variable Substitution
 
-### 7.3 Environment Variable Substitution Protocol
-
-The Backstage configuration engine natively interprets the `${VAR}` syntax to dynamically read values directly from the host process environment at startup. This substitution mechanism is the globally recommended approach to inject sensitive secrets securely:
+Securing credentials requires strict adherence to environment variable substitution. Hardcoding tokens within YAML files is a critical vulnerability.
 
 ```yaml
 # Never do this:
@@ -535,9 +536,9 @@ integrations:
       token: ${GITHUB_TOKEN}        # GOOD: injected at runtime
 ```
 
-### 7.4 Config Includes and Advanced Overrides
+### 7.4 Config Includes and Overrides
 
-Operators can explicitly dictate which configuration files the engine should load by utilizing the `APP_CONFIG_` environment variable prefix or by passing multiple CLI flags:
+You instruct the application which configuration files to evaluate at runtime.
 
 ```bash
 # Load base + production configs
@@ -547,11 +548,9 @@ yarn start-backend --config app-config.yaml --config app-config.production.yaml
 APP_CONFIG_app_baseUrl=https://backstage.example.com
 ```
 
-The `--config` execution flag can be repeated sequentially. The files are merged strictly from left to right, meaning the last file provided in the argument list possesses absolute priority during conflict resolution.
+### 7.5 Database, Auth, and Advanced Integrations
 
-### 7.5 Database, Authentication, and Extended Tooling
-
-To correctly configure a robust PostgreSQL backend for a highly available production environment, you must override the `database` section directly within your `app-config.production.yaml` file:
+Backstage defaults to SQLite for local development, but PostgreSQL is strictly required for production to handle concurrent connections and persistent state reliably.
 
 ```yaml
 backend:
@@ -564,7 +563,7 @@ backend:
       password: ${POSTGRES_PASSWORD}
 ```
 
-Authentication providers, which secure the application frontend, are configured underneath the heavily guarded `auth` key. For example, to enable rigorous GitHub organizational authentication, you provide the generated OAuth application credentials:
+Authentication is securely routed through established OAuth providers:
 
 ```yaml
 auth:
@@ -576,7 +575,11 @@ auth:
         clientSecret: ${GITHUB_CLIENT_SECRET}
 ```
 
-*Note on external plugins*: Backstage natively supports advanced integrations. For instance, the Backstage Kubernetes plugin requires configuration for two distinct packages (`@backstage/plugin-kubernetes` for the frontend UI, and `@backstage/plugin-kubernetes-backend` to securely query cluster APIs). Furthermore, as of 2025, Backstage officially supports Model Context Protocol (MCP) server integration for embedding advanced AI tooling directly into the developer portal experience. Software Templates (Scaffolder) configuration also resides here; be exceptionally cautious when defining Scaffolder action IDs—they must utilize `camelCase` and strictly avoid `kebab-case` to prevent the template expression engine from incorrectly evaluating dashes as mathematical subtraction operations.
+**Advanced Integration Notes:**
+- **Kubernetes**: The Backstage Kubernetes plugin is explicitly split into two separate packages: `@backstage/plugin-kubernetes` (the frontend component) and `@backstage/plugin-kubernetes-backend`. They are not bundled and must be provisioned separately.
+- **AI Tooling**: As of 2025, Backstage natively supports MCP (Model Context Protocol) server integration, allowing AI agents to securely query platform metadata.
+- **TechDocs Storage**: TechDocs supports highly scalable backends including GCS, AWS S3, and Azure Blob Storage. While local filesystem storage is supported, it is discouraged for production.
+- **Scaffolder Action IDs**: When authoring Software Templates, action IDs **must** be formatted in `camelCase`. Utilizing `kebab-case` causes template expression engines to evaluate the dashes as subtraction operators, returning `NaN`.
 
 ---
 
@@ -596,9 +599,10 @@ auth:
 
 ## Quiz
 
-Test your comprehensive knowledge of the Backstage developer workflow by answering these technical scenario questions.
+Test your knowledge of the Backstage developer workflow.
 
 **Q1: Your team wants to add a new custom UI widget to the Backstage homepage. Which directory must they modify, and why?**
+
 <details>
 <summary>Show Answer</summary>
 
@@ -606,6 +610,7 @@ They must modify the `packages/app` directory, as it contains the frontend React
 </details>
 
 **Q2: A developer proposes moving custom plugins to separate Git repositories to speed up their individual CI builds. What major trade-off of abandoning the Backstage workspace structure are they ignoring?**
+
 <details>
 <summary>Show Answer</summary>
 
@@ -613,6 +618,7 @@ They are ignoring the increased risk of version drift and "dependency hell." The
 </details>
 
 **Q3: What happens if you run `docker build` with the build context set to `packages/backend/` instead of the repo root?**
+
 <details>
 <summary>Show Answer</summary>
 
@@ -620,6 +626,7 @@ The build **fails** because the Dockerfile copies `yarn.lock` and workspace pack
 </details>
 
 **Q4: During a code review, you notice a developer added a database password directly to `app-config.production.yaml`. How should you instruct them to fix this for security?**
+
 <details>
 <summary>Show Answer</summary>
 
@@ -627,62 +634,81 @@ Instruct them to use environment variable substitution (e.g., `${POSTGRES_PASSWO
 </details>
 
 **Q5: After a developer manually upgraded `@backstage/plugin-catalog` to `1.21.0` while the rest of the project is on `1.18.0`, the catalog stops ingesting data. What CLI command should you run to fix this, and why?**
+
 <details>
 <summary>Show Answer</summary>
 
 Run `yarn backstage-cli versions:bump` to upgrade all Backstage packages together. Individual packages should never be upgraded manually as they are designed to work as a coordinated set within each monthly release.
 </details>
 
-**Q6: A developer starts the Backstage backend using the command `yarn start-backend --config app-config.yaml --config app-config.production.yaml`. Both files explicitly define a `backend.listen.port` configuration value. Which exact configuration value will Backstage use, and why?**
+**Q6: Your organization wants to integrate an AI agent with the Backstage catalog to answer developer queries. Based on the 2025 platform updates, what native protocol integration should you implement?**
+
 <details>
 <summary>Show Answer</summary>
 
-Backstage will explicitly use the port value defined within `app-config.production.yaml`. When multiple configuration files are supplied to the engine via the `--config` execution flag, they are merged sequentially in order from left to right. The final file specified in the argument list takes absolute precedence and silently overrides any conflicting keys derived from earlier files.
+You should implement an MCP (Model Context Protocol) server integration. This capability was introduced in 2025 and natively supports securely connecting AI tooling to Backstage's core metadata APIs without building custom extraction pipelines.
 </details>
 
-**Q7: Your enterprise platform team has successfully integrated 15 different `@backstage/plugin-*` packages into the internal monorepo over six months. During a routine audit, you suddenly discover strange UI rendering bugs and severe backend database schema errors occurring intermittently. What CLI command should you run to diagnose the root cause, and what is the tool explicitly looking for?**
+**Q7: A platform engineer writes a new Scaffolder template but complains that expressions like `${{ steps.fetch-component-id.output.componentId }}` are returning `NaN`. What is the architectural root cause?**
+
 <details>
 <summary>Show Answer</summary>
 
-You must urgently run the `yarn backstage-cli versions:check` command. This diagnostic command deeply analyzes your workspace packages to verify that all installed `@backstage/*` framework dependencies belong exclusively to the same compatible monthly release tier. The rendering glitches and underlying database schema errors are almost certainly caused by severe version drift, occurring when individual plugins were manually upgraded completely out of sync with the core Backstage framework constraints.
+The Scaffolder action ID was likely written in `kebab-case` (e.g., `fetch-component-id`). The template expression engine evaluates dashes as subtraction operators. Action IDs must always be written in `camelCase` to prevent these evaluation bugs.
 </details>
 
-**Q8: An engineer creates a new Scaffolder software template and incorrectly names one of the custom execution actions `fetch-component-id`. When the template attempts to execute during a deployment, the string interpolation logic `${{ steps.fetch-component-id.output.componentId }}` violently resolves to `NaN`. How do you evaluate and permanently fix this Scaffolder template bug?**
+**Q8: You are attempting to deploy Backstage on a Windows Server VM for your enterprise. The installation consistently fails during the native dependency build step. What is the fundamental compatibility issue?**
+
 <details>
 <summary>Show Answer</summary>
 
-You must immediately rename the specific action ID to utilize standard `camelCase` formatting (e.g., `fetchComponentId`). The core Scaffolder template parser interprets standard dashes as mathematical subtraction operators within its internal expression evaluation engine. As a direct result, it literally attempts to mathematically subtract the string `component` and `id` from the string `fetch`, which inherently results in a `Not a Number` (NaN) mathematical failure during runtime evaluation.
+Backstage does not natively support Windows environments for direct execution. It can only run on Linux, macOS, or Windows via the Windows Subsystem for Linux (WSL). You must provision a Linux-based VM or utilize WSL to achieve a successful build.
 </details>
 
 ---
 
 ## Hands-On Exercise: Create and Explore a Backstage App
 
-**Objective**: Autonomously scaffold a complete Backstage application, rigorously verify the internal monorepo directory structure, execute the application servers locally, and compile an optimized production-grade Docker image.
+**Objective**: Scaffold a Backstage app, verify the monorepo structure, run it locally, and build a Docker image.
 
 **Estimated time**: 30-40 minutes
 
-### Prerequisites Checklist
-- [ ] Node.js Active LTS installed and running (`node -v`)
-- [ ] Yarn 4.x installed and configured via corepack (`yarn -v`)
-- [ ] Docker engine running locally (`docker --version`)
+### Prerequisites
 
-### Execution Steps
+- Node.js 18+ installed (`node -v`)
+- Yarn 4.x installed (`corepack enable`)
+- Docker installed (`docker --version`)
 
-**Step 1: Scaffold the base application**
+### Tasks and Solutions
 
-Use the official creation script to generate the monorepo boilerplate.
+**Task 1: Scaffold the Application**
+
+Create a new application named `cba-lab`. Note: if you are running this within an automated CI/CD pipeline, you must utilize the non-interactive execution flags to prevent the prompt from blocking the process:
+
+```bash
+npx @backstage/create-app@latest --skip-install --no-interactive --app-name cba-lab
+```
+
+For standard local development, execute the command interactively as shown below.
+
+<details>
+<summary>Solution</summary>
 
 ```bash
 npx @backstage/create-app@latest
 # When prompted, name it: cba-lab
 cd cba-lab
 ```
+</details>
 
-**Step 2: Rigorously verify the monorepo structure**
+**Task 2: Verify Monorepo Structure and Configuration**
 
-Ensure the scaffolding process successfully initialized the Yarn workspaces.
+Examine the generated workspace. Ensure `packages/app` and `packages/backend` exist, and confirm that the frontend entry point successfully registers plugin routes.
 
+<details>
+<summary>Solution</summary>
+
+First, verify the workspace structure:
 ```bash
 # List the top-level directories
 ls -la
@@ -694,38 +720,25 @@ cat package.json | grep -A 5 '"workspaces"'
 ls packages/
 ```
 
-**Success criteria**: You clearly see the `packages/app`, `packages/backend`, `app-config.yaml`, and `yarn.lock` assets physically located in the root repository.
-
-**Step 3: Examine the frontend SPA entry point**
-
-Inspect how the frontend establishes routes for all integrated plugins.
-
+Then, inspect the frontend routing logic:
 ```bash
 cat packages/app/src/App.tsx | head -40
 ```
+</details>
 
-Note precisely how frontend plugins are explicitly imported and formally registered as active React routes. This is the exact location where you would integrate newly developed custom frontend plugins.
+**Task 3: Start the Development Servers**
 
-**Step 4: Start the parallel development servers**
+Boot the frontend and backend in parallel, then inspect the base configuration to identify the default database engine in use.
 
-Initialize the continuous local development loop.
+<details>
+<summary>Solution</summary>
 
+Start the application:
 ```bash
 yarn dev
 ```
 
-Open `http://localhost:3000` locally in your chosen web browser. You should visibly see the Backstage UI displaying the default Software Catalog interface.
-
-**Success criteria**: The browser definitively renders the Backstage home page. The terminal actively streams both frontend (Webpack) and backend (Node.js Express) compilation logs without fatal errors.
-
-**Step 5: Test the Hot Module Replacement (HMR) engine**
-
-With the `yarn dev` command still executing, securely edit `packages/app/src/App.tsx` and dynamically change the application title or inject a visible comment block. Actively watch the browser—it should refresh the DOM automatically without triggering a destructive full page reload.
-
-**Step 6: Explore the active configuration engine**
-
-Open a completely **new terminal window** and navigate directly to your internal `cba-lab` directory, as the `yarn dev` process runs continuously blocking the initial terminal.
-
+In a separate terminal window, inspect the configuration:
 ```bash
 # View the base config
 cat app-config.yaml
@@ -733,10 +746,14 @@ cat app-config.yaml
 # Check which database is configured (default: SQLite in-memory)
 grep -A 3 'database:' app-config.yaml
 ```
+</details>
 
-**Step 7: Create an isolated local configuration override**
+**Task 4: Create a Local Config Override**
 
-Inject a gitignored configuration overlay to test overriding the base configuration securely.
+Simulate configuring a developer-specific environment by creating a `.local.yaml` file that overrides the application title and sets up a GitHub integration token.
+
+<details>
+<summary>Solution</summary>
 
 ```bash
 cat > app-config.local.yaml << 'EOF'
@@ -748,13 +765,16 @@ integrations:
       token: ${GITHUB_TOKEN}
 EOF
 ```
+</details>
 
-Restart the `yarn dev` command sequence and visually verify that the browser UI title successfully changes to display "CBA Lab Portal".
+**Task 5: Build and Run the Production Docker Image**
 
-**Step 8: Build the optimized Docker image**
+Compile the backend for production, execute a multi-stage Docker build from the repository root, and deploy the resulting container locally.
 
-Compile the multi-stage container artifact for production deployment simulation.
+<details>
+<summary>Solution</summary>
 
+Build the assets:
 ```bash
 # Build the backend for production
 yarn workspace backend build
@@ -766,21 +786,18 @@ docker build -t cba-lab:latest -f packages/backend/Dockerfile .
 docker images cba-lab:latest
 ```
 
-**Success criteria**: The container image compiles fully without halting on any underlying Docker errors. The final resulting image size should typically register under 1 GB in total size (typically landing between 500-700 MB depending on the number of installed plugins).
-
-**Step 9: Run the containerized production application**
-
-Execute the compiled container image locally, mimicking a production Kubernetes pod startup sequence.
-
+Run the container:
 ```bash
 docker run -p 7007:7007 cba-lab:latest
 ```
+</details>
 
-Open `http://localhost:7007` directly and empirically confirm the backend health endpoint actively responds with an operational status payload.
+**Task 6: Clean Up Resources**
 
-### Environment Cleanup
+Ensure no orphaned containers are left running and optionally delete the repository.
 
-Execute these teardown commands to release your local system resources.
+<details>
+<summary>Solution</summary>
 
 ```bash
 # Stop any running containers
@@ -789,6 +806,13 @@ docker rm -f $(docker ps -q --filter ancestor=cba-lab:latest) 2>/dev/null
 # Remove the test app (optional)
 cd .. && rm -rf cba-lab
 ```
+</details>
+
+### Success Checklist
+- [ ] You successfully scaffolded the application via the Backstage CLI.
+- [ ] You identified the `packages/app` and `packages/backend` directories.
+- [ ] You observed hot module replacement (HMR) while `yarn dev` was running.
+- [ ] You successfully built a Docker image under 1 GB using the multi-stage Dockerfile.
 
 ---
 
@@ -808,4 +832,4 @@ cd .. && rm -rf cba-lab
 
 ## Next Module
 
-[Module 1.2: Backstage Plugin Development](../module-1.2-backstage-plugin-development/) - Dive deeper into the architecture of the portal by building your first frontend and backend plugin, unlocking the secrets of the plugin API system, and learning precisely how Backstage's powerful dependency injection framework manages state at enterprise scale.
+[Module 2: Backstage Plugins and Extensions](../module-1.2-backstage-plugin-development/) - Build your first frontend and backend plugin, understand the declarative plugin API system, and learn how Backstage's dependency injection resolves API references seamlessly.
