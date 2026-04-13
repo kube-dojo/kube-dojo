@@ -671,42 +671,39 @@ Migrating workloads between different CPU vendors introduces subtle architectura
 
 ## Hands-On Exercise: Plan a Hardware Expansion
 
-**Task**: Design a capacity expansion plan for adding a new rack of servers to an existing cluster.
+### The Scenario
+You manage a 60-node bare metal Kubernetes cluster spread across 3 racks (20 nodes each). The cluster is currently running at 65% CPU utilization. The business is forecasting a 40% growth in traffic next quarter, so you have just racked and powered on 20 new servers (a newer hardware generation) in a 4th rack. The new servers have a Passmark score 44% higher per core than the old servers.
 
-### Scenario
+### The Objective
+Design a safe capacity expansion and decommission plan that successfully integrates the new hardware, spreads workloads across all 4 racks, and safely retires 10 of the oldest nodes without exceeding an 80% cluster-wide utilization ceiling.
 
-You have a 60-node cluster across 3 racks (20 nodes each) running at 65% CPU utilization. You need to add 20 new nodes in a 4th rack to support a 40% growth forecast.
+### The Challenge
+Use your understanding of Kubernetes scheduling, topology spread constraints, and normalized CPU capacity to document the necessary node labels, workload constraints, and the mathematical justification for your decommission strategy. Do not rely on naive core counts.
 
-### Steps
+### Tiered Hints
+<details>
+<summary>Hint 1: The Concept</summary>
+Because the new servers are 44% faster per core, a simple sum of CPU cores will underestimate your new total capacity. You need to calculate "performance-adjusted units" to accurately predict post-expansion and post-decommission utilization.
+</details>
 
-1. **Document current state:**
-   ```bash
-   kubectl get nodes -o custom-columns=\
-     NAME:.metadata.name,\
-     CPU:.status.allocatable.cpu,\
-     MEM:.status.allocatable.memory,\
-     RACK:.metadata.labels.kubedojo\\.io/rack,\
-     GEN:.metadata.labels.kubedojo\\.io/hardware-gen
-   ```
+<details>
+<summary>Hint 2: The Component</summary>
+To ensure high availability across the heterogeneous hardware, your workloads need `topologySpreadConstraints`. Since you are adding a 4th rack that starts empty, remember how `maxSkew: 1` behaves when a new topology domain is introduced.
+</details>
 
-2. **Calculate post-expansion capacity:**
-   - Current: 60 nodes x 32 cores = 1,920 cores at 65% = 1,248 cores used
-   - After: 80 nodes x average cores = ? cores
-   - Target utilization: < 60% (headroom for spikes)
+<details>
+<summary>Hint 3: The Command</summary>
+When decommissioning the 10 oldest nodes, use `kubectl drain <node> --ignore-daemonsets --delete-emptydir-data --timeout=600s`. Before running this, you must calculate: (Current Requested CPU) / (Total CPU - Removed Node CPU) using weighted capacity to ensure it stays below 80%.
+</details>
 
-3. **Design the node labeling scheme** for the new rack (rack, generation, performance tier)
+### Verification
+Review your expansion plan against these checks:
+1. Did you define specific labels for hardware generation and performance tier?
+2. Did you include `matchLabelKeys: ["pod-template-hash"]` in your topology spread constraints to allow pods to schedule on the new rack?
+3. Does your decommission math prove that removing 10 old nodes will leave the cluster below 80% utilization?
 
-4. **Write topology spread constraints** that span all 4 racks
-
-5. **Create a decommission plan** for 10 oldest nodes (to happen 3 months after new rack is stable)
-
-### Success Criteria
-
-- [ ] Calculated current and projected utilization accurately
-- [ ] Defined label taxonomy for mixed hardware
-- [ ] Topology spread constraints cover rack and generation dimensions
-- [ ] Decommission plan respects 80% utilization ceiling
-- [ ] Monitoring plan includes new rack in all dashboards and alerts
+### Reflection
+Why is it dangerous to treat all CPU cores as identical when combining servers from 2019 and 2024 in the same cluster? How would naive pod scheduling impact latency-sensitive microservices?
 
 ---
 
