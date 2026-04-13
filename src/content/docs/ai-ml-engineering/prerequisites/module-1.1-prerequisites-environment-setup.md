@@ -1,6 +1,6 @@
 ---
 title: "Prerequisites & Environment Setup"
-slug: ai-ml-engineering/prerequisites/module-0.0-prerequisites-environment-setup
+slug: ai-ml-engineering/prerequisites/module-1.1-prerequisites-environment-setup
 sidebar:
   order: 101
 ---
@@ -263,19 +263,19 @@ python3.13 --version
 - Ubuntu/Debian:
   ```bash
   sudo apt update
-  sudo apt install python3.12 python3.12-venv python3-pip
+  sudo apt install -y python3.12 python3.12-venv python3-pip
   python3.12 --version
   ```
 - Fedora:
   ```bash
-  sudo dnf install python3.12
+  sudo dnf install -y python3.12
   python3.12 --version
   ```
 - If 3.12 not available in repos, use deadsnakes PPA (Ubuntu):
   ```bash
-  sudo add-apt-repository ppa:deadsnakes/ppa
+  sudo add-apt-repository -y ppa:deadsnakes/ppa
   sudo apt update
-  sudo apt install python3.12 python3.12-venv
+  sudo apt install -y python3.12 python3.12-venv
   ```
 
 ---
