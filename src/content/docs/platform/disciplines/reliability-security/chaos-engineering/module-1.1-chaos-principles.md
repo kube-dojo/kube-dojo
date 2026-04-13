@@ -57,7 +57,7 @@ This module teaches you the philosophy, scientific method, and safety practices 
 
 Let's kill the biggest misconception immediately: Chaos Engineering is **not** about randomly breaking things and seeing what happens. That's vandalism, not engineering.
 
-Chaos Engineering is a **disciplined investigation**. You form a hypothesis, design a controlled experiment, execute it with safety measures, observe the results, and draw conclusions. It follows the scientific method as rigorously as any laboratory experiment.
+Chaos Engineering is a **disciplined investigation**. You form a hypothesis, design a controlled experiment, execute it with safety measures, observe results, and draw conclusions. It follows the scientific method as rigorously as any laboratory experiment.
 
 Think of it this way:
 
@@ -75,6 +75,8 @@ Every distributed system has **emergent behaviors** — behaviors that arise fro
 
 Consider a microservices application with 20 services. Each service has been unit tested, integration tested, and load tested. Every individual component works correctly. But when Service A retries failed calls to Service B, and Service B is slow because Service C's database is under load, those retries amplify the load on Service B, which cascades into Service D, which has a 30-second timeout that blocks threads, which... you get the picture.
 
+> **Stop and think**: Can you recall a time when two healthy systems combined to create an outage in your environment? What was the emergent behavior?
+
 No amount of unit testing or code review would catch this. The failure only emerges from the **interaction** of components under specific conditions. Chaos Engineering is designed to surface exactly these emergent failures.
 
 ### Resilience vs. Robustness
@@ -87,13 +89,11 @@ These terms are often confused, but the distinction matters enormously:
 
 Chaos Engineering builds **resilience** — the ability to withstand and recover from failures you haven't explicitly planned for.
 
-```
-Robustness spectrum:
-
-Fragile ─────── Robust ─────── Resilient ─────── Antifragile
- Breaks          Handles         Handles            Gets
- easily          known           unknown            stronger
-                 failures        failures           from stress
+```mermaid
+flowchart LR
+    A["Fragile<br/>Breaks easily"] --> B["Robust<br/>Handles known failures"]
+    B --> C["Resilient<br/>Handles unknown failures"]
+    C --> D["Antifragile<br/>Gets stronger from stress"]
 ```
 
 The ultimate goal is **antifragility** — systems that actually improve when stressed. Netflix achieved this: every time Chaos Monkey killed an instance, engineers improved their services, making the entire platform stronger over time.
@@ -106,28 +106,16 @@ The ultimate goal is **antifragility** — systems that actually improve when st
 
 Every chaos experiment follows a strict cycle. Skipping steps is how you turn engineering into vandalism.
 
-```
-┌──────────────────────────────────────────────────┐
-│                 CHAOS CYCLE                       │
-│                                                   │
-│   1. Define Steady State                          │
-│        ↓                                          │
-│   2. Form Hypothesis                              │
-│        ↓                                          │
-│   3. Design Experiment                            │
-│        ↓                                          │
-│   4. Define Blast Radius & Abort Conditions       │
-│        ↓                                          │
-│   5. Run Experiment                               │
-│        ↓                                          │
-│   6. Observe & Measure                            │
-│        ↓                                          │
-│   7. Analyze Results                              │
-│        ↓                                          │
-│   8. Document & Share Findings                    │
-│        ↓                                          │
-│   (loop back to 1)                                │
-└──────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A[1. Define Steady State] --> B[2. Form Hypothesis]
+    B --> C[3. Design Experiment]
+    C --> D[4. Define Blast Radius & Abort Conditions]
+    D --> E[5. Run Experiment]
+    E --> F[6. Observe & Measure]
+    F --> G[7. Analyze Results]
+    G --> H[8. Document & Share Findings]
+    H --> A
 ```
 
 Let's examine each step in detail.
@@ -243,16 +231,14 @@ experiment:
 
 **Blast radius** is the potential impact zone of your experiment. Always start small.
 
-```
-Blast Radius Progression:
-
-Level 1: Single pod in staging          ← Start here
-Level 2: Single pod in production
-Level 3: Multiple pods in production
-Level 4: Entire service in production
-Level 5: Cross-service failure          ← Work up to here
-Level 6: Availability zone failure
-Level 7: Region failure                 ← Only for mature orgs
+```mermaid
+flowchart TD
+    L1["Level 1: Single pod in staging<br/>(Start here)"] --> L2["Level 2: Single pod in production"]
+    L2 --> L3["Level 3: Multiple pods in production"]
+    L3 --> L4["Level 4: Entire service in production"]
+    L4 --> L5["Level 5: Cross-service failure<br/>(Work up to here)"]
+    L5 --> L6["Level 6: Availability zone failure"]
+    L6 --> L7["Level 7: Region failure<br/>(Only for mature orgs)"]
 ```
 
 **Abort conditions** are your emergency brake. They must be:
@@ -260,6 +246,8 @@ Level 7: Region failure                 ← Only for mature orgs
 - **Measurable**: Based on metrics, not feelings
 - **Preset**: Decided before the experiment, not during
 - **Tested**: Verify the abort mechanism actually works before running chaos
+
+> **Pause and predict**: If you run a chaos experiment and your automated abort condition fires within 10 seconds, was the experiment a failure or a success?
 
 ```yaml
 # Example abort configuration (Chaos Mesh style)
@@ -343,18 +331,13 @@ Continuous chaos runs automated experiments on a schedule — hourly, daily, or 
 
 **Maturity Model:**
 
-```
-Level 0: No chaos practices
-           ↓
-Level 1: Ad-hoc manual testing ("let's kill a pod and see what happens")
-           ↓
-Level 2: Structured Game Days (quarterly, documented, with hypotheses)
-           ↓
-Level 3: Automated chaos in staging (continuous, CI/CD integrated)
-           ↓
-Level 4: Automated chaos in production (with automated abort)
-           ↓
-Level 5: Chaos as culture (every team runs experiments, findings shared org-wide)
+```mermaid
+flowchart TD
+    L0["Level 0: No chaos practices"] --> L1["Level 1: Ad-hoc manual testing"]
+    L1 --> L2["Level 2: Structured Game Days"]
+    L2 --> L3["Level 3: Automated chaos in staging"]
+    L3 --> L4["Level 4: Automated chaos in production"]
+    L4 --> L5["Level 5: Chaos as culture"]
 ```
 
 Most organizations are between Level 0 and Level 1. Getting to Level 2 is a massive improvement. Don't rush to Level 4 — premature continuous chaos in production causes the outages it's supposed to prevent.
@@ -422,70 +405,69 @@ When proposing chaos engineering to your organization, frame it correctly:
 
 Test your understanding of Chaos Engineering principles:
 
-### Question 1: What distinguishes Chaos Engineering from random failure testing?
+### Question 1: Random Vandalism vs. Engineering
+
+> A junior engineer logs into the staging cluster, runs `kubectl delete pods --all`, and watches the monitoring dashboards to see what happens. When asked, they say they are practicing Chaos Engineering. Why is this engineer incorrect?
 
 <details>
 <summary>Show Answer</summary>
 
-Chaos Engineering follows the **scientific method**: it starts with a hypothesis about system behavior, defines steady state, designs controlled experiments with abort conditions, and analyzes results to draw conclusions. Random failure testing has no hypothesis, no measurement plan, and no structured learning process. The key difference is **discipline and rigor** — Chaos Engineering is an engineering practice, not ad-hoc destruction.
+The engineer's actions represent random destruction, not Chaos Engineering, because they completely ignored the scientific method. Chaos Engineering requires starting with a specific hypothesis about system behavior, defining a measurable steady state, and establishing automated abort conditions before any failure is injected. By blindly deleting all pods without a hypothesis or controlled blast radius, the engineer cannot learn anything specific about the system's resilience mechanisms. True Chaos Engineering emphasizes rigor and safety, treating failure injection as a highly controlled measurement rather than an ad-hoc disruption.
 
 </details>
 
-### Question 2: Why should steady state include business metrics, not just infrastructure metrics?
+### Question 2: The Right Way to Measure Steady State
+
+> You are designing an experiment for a checkout service. Your steady-state definition checks that CPU usage remains below 60% and memory below 512MB. During the experiment, pod metrics stay well within these limits, but the customer support desk receives 500 calls about failed payments. What fundamental mistake was made in the steady-state definition?
 
 <details>
 <summary>Show Answer</summary>
 
-Infrastructure metrics (CPU, memory, pod status) can all be "green" while the system is failing users. For example, all pods may be running, latency may be normal, but a logic bug introduced by a failure could cause orders to be silently dropped. **Business metrics** like order completion rate, checkout success rate, or user session count directly measure what matters to customers. If you only monitor infrastructure, you may miss failures that affect users but don't affect servers.
+The team defined their steady state entirely around infrastructure metrics while completely ignoring the actual business purpose of the service. Infrastructure metrics like CPU and memory can remain perfectly healthy even if the application logic is trapped in a retry loop or failing to process transactions. A valid steady-state definition must include business metrics, such as checkout success rate or orders processed per minute, because these are the ultimate indicators of system health. Without tracking business metrics, you cannot accurately determine if a failure injection is impacting the user experience.
 
 </details>
 
-### Question 3: What is blast radius, and why does it matter?
+### Question 3: Controlling the Blast Radius
+
+> A team's first-ever chaos experiment involves simulating a region-wide database failover in production to prove their new multi-region architecture works. The CTO halts the experiment before it begins, citing an "unacceptable blast radius." What principle of blast radius did the team violate?
 
 <details>
 <summary>Show Answer</summary>
 
-Blast radius is the **potential impact zone** of a chaos experiment — how many services, users, or transactions could be affected if the experiment reveals a real weakness. It matters because chaos experiments can cause real damage if the system isn't as resilient as hypothesized. By starting with a small blast radius (one pod in staging) and gradually increasing it, you limit the potential damage while still gaining valuable insights. A blast radius that is too large too soon turns an experiment into an outage.
+The team violated the core principle of starting with the smallest possible blast radius to learn safely. By immediately targeting a massive, complex failure in production (a region-wide failover) for their very first experiment, they risked causing a catastrophic outage for all customers if their assumptions were wrong. Chaos experiments should always begin small—such as killing a single pod in a staging environment—and only increase in scope once smaller experiments have proven successful. This incremental approach builds confidence and bounds the potential damage of discovering an unexpected weakness.
 
 </details>
 
-### Question 4: Why is "100% availability" a poor goal, and how does Chaos Engineering relate to this?
+### Question 4: Chaos Engineering and Availability Goals
+
+> A product manager demands that the engineering team guarantee 100% availability for a new microservice and refuses to authorize any chaos experiments because they "might cause downtime." How should you explain the relationship between availability goals and chaos engineering to this manager?
 
 <details>
 <summary>Show Answer</summary>
 
-100% availability is impossible in distributed systems and pursuing it leads to extremely conservative operations that slow development to a crawl. Instead, systems should target a realistic SLO (like 99.95%) and use the remaining error budget for improvements, including chaos experiments. Chaos Engineering **consumes error budget** by deliberately injecting failures, but the insights gained make the system more resilient, which **preserves error budget** during real incidents. It's an investment: spend a small amount of error budget now to avoid spending a large amount during an uncontrolled failure later.
+First, you must explain that 100% availability is mathematically and practically impossible in distributed systems, and attempting to achieve it results in extreme risk aversion that halts innovation. Instead, teams should target a realistic Service Level Objective (SLO), such as 99.9%, and use the remaining error budget for engineering improvements. Chaos Engineering deliberately consumes a tiny fraction of this error budget in a controlled manner to discover hidden flaws on the team's terms. By spending this budget proactively on chaos experiments, the team prevents massive, uncontrolled outages later, ultimately protecting the service's long-term availability.
 
 </details>
 
-### Question 5: A team wants to start chaos engineering. They have monitoring, CI/CD, and management approval. What should their first experiment look like?
+### Question 5: Designing the First Experiment
+
+> Your team has robust monitoring, CI/CD pipelines, and explicit management approval to begin chaos engineering. You are tasked with designing the team's very first experiment. Describe the environment, scope, and specific failure you would choose, and explain why.
 
 <details>
 <summary>Show Answer</summary>
 
-Their first experiment should be:
-- **In staging**, not production
-- **Single pod kill** of a stateless service with multiple replicas
-- **Well-defined hypothesis**: "We believe Service X will continue serving requests when 1 of 3 pods is killed, because Kubernetes will restart it within 30 seconds and the load balancer will route traffic to healthy pods"
-- **Clear abort conditions**: Automated, based on metrics
-- **Short duration**: 5-10 minutes
-- **Full team present**: Everyone watching dashboards, ready to intervene
-- **Documented**: Written experiment plan shared in advance, results documented after
-
-The goal of the first experiment is as much about **building the muscle** of running experiments as it is about the technical findings.
+The first experiment should take place in a staging environment, target a single pod of a stateless service, and have clearly defined, automated abort conditions. It should test a very simple, well-understood hypothesis, such as verifying that Kubernetes successfully restarts a killed pod within a specified time frame without impacting the service's overall error rate. This approach is critical because the goal of a first experiment is not just to test the system, but to validate the team's chaos processes, monitoring tools, and abort mechanisms. Starting small minimizes risk while building the team's "muscle memory" for conducting rigorous, scientific failure testing.
 
 </details>
 
-### Question 6: What is the difference between a Game Day and continuous chaos, and when should each be used?
+### Question 6: Maturing the Practice
+
+> A mature SRE team wants to ensure their auto-scaling policies continue to work across all 50 microservices as new code is deployed daily. They propose scheduling a 4-hour Game Day once a quarter to manually test this. Why might this approach be suboptimal, and what practice should they adopt instead?
 
 <details>
 <summary>Show Answer</summary>
 
-A **Game Day** is a scheduled, focused event where the team runs multiple chaos experiments with the full team present, observing, and debriefing. It's best for first-time experiments, complex multi-service scenarios, training, and building organizational confidence.
-
-**Continuous chaos** runs automated experiments on a schedule or triggered by deployments, without human supervision (but with automated abort conditions). It's best for well-understood failure modes, preventing resilience regression, and validating that auto-healing works consistently.
-
-Organizations should **start with Game Days** and graduate to continuous chaos only after they've validated their resilience and abort mechanisms through multiple successful Game Days. Running continuous chaos before you've mastered Game Days is like running a marathon before you can jog a mile.
+Relying solely on quarterly Game Days is suboptimal because it leaves the system highly vulnerable to regressions introduced by daily deployments over the intervening three months. Once a system's resilience to a specific failure mode (like auto-scaling under load) has been proven and validated during a Game Day, that failure mode should be transitioned to continuous chaos. Continuous chaos automatically and frequently injects these understood failures—often triggered by CI/CD pipelines—to ensure the system remains resilient as the codebase rapidly evolves. Game Days should primarily be reserved for exploring new, unknown failure modes rather than regression-testing known ones.
 
 </details>
 
@@ -501,25 +483,15 @@ Create a complete Chaos Experiment Document for a realistic Kubernetes applicati
 
 You are an SRE for an e-commerce platform running on Kubernetes. The platform has these services:
 
-```
-                    ┌──────────┐
-                    │  Ingress │
-                    └────┬─────┘
-                         │
-                    ┌────▼─────┐
-                    │   API    │  (3 replicas)
-                    │ Gateway  │
-                    └────┬─────┘
-                   ┌─────┼──────┐
-              ┌────▼──┐ ┌▼────┐ ┌▼─────┐
-              │Product│ │Cart │ │Order │  (2-3 replicas each)
-              │Service│ │Svc  │ │Svc   │
-              └───┬───┘ └──┬──┘ └──┬───┘
-                  │        │       │
-              ┌───▼───┐ ┌──▼──┐ ┌─▼──────┐
-              │Catalog│ │Redis│ │Payment │  (external API)
-              │  DB   │ │     │ │Gateway │
-              └───────┘ └─────┘ └────────┘
+```mermaid
+flowchart TD
+    I[Ingress] --> AG["API Gateway<br/>(3 replicas)"]
+    AG --> P["Product Service<br/>(2-3 replicas)"]
+    AG --> C["Cart Svc<br/>(2-3 replicas)"]
+    AG --> O["Order Svc<br/>(2-3 replicas)"]
+    P --> DB[("Catalog DB")]
+    C --> R[("Redis")]
+    O --> PG["Payment Gateway<br/>(External API)"]
 ```
 
 ### Tasks
