@@ -68,29 +68,31 @@ The **kernel** is the core of the operating system. It's the software that:
 
 Think of it as the **supreme manager** of your computer. Every program runs with the kernel's permission and under its supervision.
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    User Applications                     │
-│         (bash, nginx, kubectl, your programs)            │
-├─────────────────────────────────────────────────────────┤
-│                    System Libraries                      │
-│                (glibc, libssl, libcurl)                  │
-├─────────────────────────────────────────────────────────┤
-│                      System Calls                        │
-│            (the interface to the kernel)                 │
-├─────────────────────────────────────────────────────────┤
-│                     LINUX KERNEL                         │
-│   ┌──────────┬──────────┬──────────┬──────────────┐     │
-│   │ Process  │  Memory  │   File   │   Network    │     │
-│   │ Scheduler│ Manager  │  System  │    Stack     │     │
-│   └──────────┴──────────┴──────────┴──────────────┘     │
-│   ┌──────────────────────────────────────────────┐      │
-│   │           Device Drivers                     │      │
-│   └──────────────────────────────────────────────┘      │
-├─────────────────────────────────────────────────────────┤
-│                       HARDWARE                           │
-│              (CPU, RAM, Disk, Network)                   │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Apps["User Applications<br/>(bash, nginx, kubectl, your programs)"]
+    Libs["System Libraries<br/>(glibc, libssl, libcurl)"]
+    Syscalls{"System Calls<br/>(the interface to the kernel)"}
+    
+    subgraph Kernel ["LINUX KERNEL"]
+        direction TB
+        subgraph Subsystems ["Core Subsystems"]
+            direction LR
+            PS["Process<br/>Scheduler"]
+            MM["Memory<br/>Manager"]
+            FS["File<br/>System"]
+            NS["Network<br/>Stack"]
+        end
+        Drivers["Device Drivers"]
+        Subsystems --- Drivers
+    end
+    
+    HW["HARDWARE<br/>(CPU, RAM, Disk, Network)"]
+
+    Apps --- Libs
+    Libs --- Syscalls
+    Syscalls --- Kernel
+    Kernel --- HW
 ```
 
 ---
@@ -124,16 +126,16 @@ The separation ensures:
 
 Modern CPUs have **privilege rings** (x86) or **exception levels** (ARM):
 
-```
-┌─────────────────────────────────────────┐
-│              Ring 3 (User)              │  ← Applications run here
-├─────────────────────────────────────────┤
-│              Ring 2 (unused)            │
-├─────────────────────────────────────────┤
-│              Ring 1 (unused)            │
-├─────────────────────────────────────────┤
-│            Ring 0 (Kernel)              │  ← Kernel runs here
-└─────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    R3["Ring 3 (User)<br/>Applications run here"]
+    R2["Ring 2<br/>(unused)"]
+    R1["Ring 1<br/>(unused)"]
+    R0["Ring 0 (Kernel)<br/>Kernel runs here"]
+
+    R3 --- R2
+    R2 --- R1
+    R1 --- R0
 ```
 
 Linux uses only Ring 0 (kernel) and Ring 3 (user). When a process tries to execute a privileged instruction from Ring 3, the CPU generates an exception.
@@ -158,25 +160,21 @@ If user space can't access hardware, how does anything work?
 
 ### How a System Call Works
 
-```
-User Space                         Kernel Space
-    │                                   │
-    │  1. Program calls read()          │
-    │  ─────────────────────────────►   │
-    │                                   │
-    │  2. Library prepares syscall      │
-    │     (put args in registers)       │
-    │                                   │
-    │  3. Execute SYSCALL instruction   │
-    │  ══════════════════════════════►  │ ← Mode switch!
-    │                                   │
-    │                    4. Kernel validates args
-    │                    5. Kernel reads from disk
-    │                    6. Kernel copies data to user buffer
-    │                                   │
-    │  ◄══════════════════════════════  │ ← Mode switch back
-    │  7. Return to user space          │
-    │                                   │
+```mermaid
+sequenceDiagram
+    participant U as User Space
+    participant K as Kernel Space
+    
+    U->>U: 1. Program calls read()
+    U->>U: 2. Library prepares syscall<br/>(put args in registers)
+    Note over U,K: Mode switch!
+    U->>K: 3. Execute SYSCALL instruction
+    K->>K: 4. Kernel validates args
+    K->>K: 5. Kernel reads from disk
+    K->>K: 6. Kernel copies data to user buffer
+    Note over U,K: Mode switch back!
+    K-->>U: Return to user space
+    U->>U: 7. Application continues
 ```
 
 > **Pause and predict**: If an application enters an infinite loop performing mathematical calculations on data already in memory, without reading files or sending network packets, will it generate any system calls during that loop?
@@ -263,21 +261,25 @@ Now for the crucial insight: **containers share the host kernel**.
 
 ### What This Means
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                         HOST SYSTEM                          │
-├─────────────────────────────────────────────────────────────┤
-│  Container A        Container B        Container C          │
-│  ┌───────────┐     ┌───────────┐      ┌───────────┐        │
-│  │ App + Libs│     │ App + Libs│      │ App + Libs│        │
-│  │ (Alpine)  │     │ (Ubuntu)  │      │ (RHEL)    │        │
-│  └───────────┘     └───────────┘      └───────────┘        │
-├─────────────────────────────────────────────────────────────┤
-│                     SHARED HOST KERNEL                       │
-│                    (e.g., Linux 5.15)                        │
-├─────────────────────────────────────────────────────────────┤
-│                         HARDWARE                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Host ["HOST SYSTEM"]
+        direction TB
+        
+        subgraph Containers ["Containers"]
+            direction LR
+            C1["Container A<br/>App + Libs<br/>(Alpine)"]
+            C2["Container B<br/>App + Libs<br/>(Ubuntu)"]
+            C3["Container C<br/>App + Libs<br/>(RHEL)"]
+        end
+        
+        Kernel["SHARED HOST KERNEL<br/>(e.g., Linux 6.8)"]
+        
+        Containers --- Kernel
+    end
+    
+    HW["HARDWARE"]
+    Host --- HW
 ```
 
 Each container has its own filesystem and libraries, but they all use **the same kernel**.
@@ -291,19 +293,19 @@ Each container has its own filesystem and libraries, but they all use **the same
 | **Compatibility** | Container must be compatible with host kernel |
 | **Features** | Container can only use host kernel's capabilities |
 
-> **Stop and think**: If a newly released container image relies on a system call that was introduced in Linux kernel 6.0, what happens when you attempt to run this container on a host running Ubuntu with kernel 5.15?
+> **Stop and think**: If a newly released container image relies on a system call that was introduced in Linux kernel 6.8, what happens when you attempt to run this container on a host running Ubuntu with kernel 5.15?
 
 ### Try This: Same Kernel, Different "OS"
 
 ```bash
 # On your host
-uname -r  # Shows: 5.15.0-generic (example)
+uname -r  # Shows: 6.8.0-generic (example)
 
 # Inside an Alpine container
-docker run --rm alpine uname -r  # Shows: 5.15.0-generic (SAME!)
+docker run --rm alpine uname -r  # Shows: 6.8.0-generic (SAME!)
 
 # Inside an Ubuntu container
-docker run --rm ubuntu uname -r  # Shows: 5.15.0-generic (SAME!)
+docker run --rm ubuntu uname -r  # Shows: 6.8.0-generic (SAME!)
 ```
 
 The "OS" in container images is just **userspace tools and libraries**. The kernel is always from the host.
@@ -312,12 +314,17 @@ The "OS" in container images is just **userspace tools and libraries**. The kern
 
 A kernel exploit affects EVERYTHING:
 
-```
-Vulnerability in kernel 5.15
-         │
-         ├── Affects host system
-         ├── Affects ALL containers on that host
-         └── Affects ALL Kubernetes pods on that node
+```mermaid
+flowchart TD
+    Vuln["Vulnerability in Shared Kernel"]
+    
+    Host["Affects host system"]
+    Containers["Affects ALL containers on that host"]
+    Pods["Affects ALL Kubernetes pods on that node"]
+    
+    Vuln --> Host
+    Vuln --> Containers
+    Vuln --> Pods
 ```
 
 This is why:
@@ -334,11 +341,11 @@ This is why:
 
 ```bash
 uname -r
-# Output: 5.15.0-generic
+# Output: 6.8.0-generic
 
-# Breaking down: 5.15.0-generic
-# 5      = Major version
-# 15     = Minor version (features added)
+# Breaking down: 6.8.0-generic
+# 6      = Major version
+# 8      = Minor version (features added)
 # 0      = Patch level (bug fixes)
 # generic = Distribution-specific suffix
 ```
@@ -408,7 +415,7 @@ Test your understanding:
 </details>
 
 ### Question 2
-**Scenario**: You are migrating a legacy application running on an old CentOS 7 virtual machine to a container. The application team insists they need a specific old kernel version (3.10) for their app to work. You deploy the CentOS 7 container image onto your modern Kubernetes cluster running Ubuntu 22.04. When the app checks the kernel version, it crashes. Why did the container fail to provide the requested kernel?
+**Scenario**: You are migrating a legacy application running on an old CentOS 7 virtual machine to a container. The application team insists they need a specific old kernel version (3.10) for their app to work. You deploy the CentOS 7 container image onto your modern Kubernetes cluster running Ubuntu 24.04. When the app checks the kernel version, it crashes. Why did the container fail to provide the requested kernel?
 
 <details>
 <summary>Show Answer</summary>
