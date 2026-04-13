@@ -372,6 +372,9 @@ EOF
 
 Azure uses Entra ID (formerly Azure AD) as the central identity provider, with Workload Identity Federation for Kubernetes pods.
 
+> **Pause and predict**: Why do we specify the audience as `api://AzureADTokenExchange` when creating the federated credential?
+> *This audience restricts the token usage specifically to the Azure AD token exchange process. If a token were intercepted, it couldn't be used to directly access other Azure APIs like ARM or Key Vault, limiting the impact of token theft to just the identity federation endpoint.*
+
 ```bash
 # Step 1: Enable OIDC issuer and workload identity on AKS
 az aks update \
@@ -503,6 +506,9 @@ gcloud projects add-iam-policy-binding team-a-prod \
 When identities span multiple cloud accounts and Kubernetes clusters, distributed logging becomes a major blind spot. If an attacker assumes a role in Account A, pivoting to a cluster in Account B, you cannot piece together the attack timeline if logs are siloed in individual accounts. 
 
 You must aggregate identity events into a centralized, immutable security account (often integrated with a SIEM like Splunk or Datadog).
+
+> **Stop and think**: Why is S3 Object Lock (WORM) critical for the central logging bucket, even if only security admins have access to it?
+> *If an attacker manages to compromise a security admin's identity or assumes a role with broad permissions in the security account, they would typically try to delete the logs to cover their tracks. Object Lock enforces immutability at the storage layer, meaning that even a root user or an administrator cannot delete or modify the logs until the retention period expires.*
 
 ```mermaid
 flowchart LR
