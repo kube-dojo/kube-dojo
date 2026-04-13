@@ -265,27 +265,25 @@ ps aux
 # I  Idle kernel thread
 ```
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    PROCESS STATES                                │
-│                                                                  │
-│  ┌──────────┐     schedule      ┌──────────┐                    │
-│  │ RUNNING  │◄──────────────────│ RUNNABLE │                    │
-│  │   (R)    │                   │   (R)    │                    │
-│  └────┬─────┘                   └────▲─────┘                    │
-│       │                              │                          │
-│       │ wait for event               │ event occurred           │
-│       ▼                              │                          │
-│  ┌──────────┐                   ┌────┴─────┐                    │
-│  │ SLEEPING │──────────────────▶│ WAKING   │                    │
-│  │   (S)    │                   │          │                    │
-│  └──────────┘                   └──────────┘                    │
-│                                                                  │
-│  Special states:                                                 │
-│  D = Uninterruptible (can't be killed, waiting for I/O)        │
-│  Z = Zombie (exited but parent hasn't called wait())           │
-│  T = Stopped (SIGSTOP or debugger)                             │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+stateDiagram-v2
+    direction TB
+    state "RUNNABLE (R)" as Runnable
+    state "RUNNING (R)" as Running
+    state "SLEEPING (S)" as Sleeping
+    state "WAKING" as Waking
+
+    Runnable --> Running : schedule
+    Running --> Sleeping : wait for event
+    Sleeping --> Waking : event occurred
+    Waking --> Runnable
+    
+    note right of Sleeping
+        Special states:
+        D = Uninterruptible (can't be killed, waiting for I/O)
+        Z = Zombie (exited but parent hasn't called wait())
+        T = Stopped (SIGSTOP or debugger)
+    end note
 ```
 
 ### Finding Problem States
