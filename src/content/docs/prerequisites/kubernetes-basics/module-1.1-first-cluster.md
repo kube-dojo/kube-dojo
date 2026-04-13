@@ -39,7 +39,7 @@ Furthermore, cloud provisioning is inherently slow. Bootstrapping a managed clus
 
 This module provides exactly the solution to that problem. You will learn to provision and manage a local Kubernetes cluster entirely on your workstation. This is the absolute foundational skill for everything that follows in your Kubernetes journey. By running a cluster locally, you isolate your learning environment, completely eliminate cloud costs, and gain the freedom to intentionally destroy and restore your infrastructure to deeply understand how it behaves under duress. You will transition from theoretical knowledge to practical, hands-on control of a distributed system.
 
-> **Active Learning:** Reflect on a time you or a colleague accidentally broke a shared staging environment. How much time was wasted coordinating with other developers who were blocked by your mistake? How would an isolated, local replica of the environment have changed the outcome?
+> **Stop and think**: Reflect on a time you or a colleague accidentally broke a shared staging environment. How much time was wasted coordinating with other developers who were blocked by your mistake? How would an isolated, local replica of the environment have changed the outcome?
 
 ## Section 1: Anatomy of a Kubernetes Cluster
 
@@ -49,45 +49,59 @@ Consider a symphony orchestra as an analogy. The orchestra consists of dozens of
 
 Alternatively, imagine a massive global shipping port. The container ships and the dockworkers physically moving cargo represent the Worker Nodes. But the Port Authority—the central office making decisions about which ship docks at which pier, tracking the ledger of all manifests, and monitoring the weather—represents the Control Plane. 
 
-Here is a static architectural view mapping the components of a standard Kubernetes cluster:
+Here is an architectural view mapping the components of a standard Kubernetes cluster:
 
-```text
-+-------------------------------------------------------------------+
-|                        KUBERNETES CLUSTER                         |
-|                                                                   |
-|   +-----------------------------------------------------------+   |
-|   |                       CONTROL PLANE                       |   |
-|   |                                                           |   |
-|   |  +-------------+  +-------------+  +-------------------+  |   |
-|   |  | API Server  |  |  Scheduler  |  | Controller Manager|  |   |
-|   |  +------+------+  +------+------+  +---------+---------+  |   |
-|   |         |                |                   |            |   |
-|   |         +----------------+-------------------+            |   |
-|   |                          |                                |   |
-|   |                   +------+------+                         |   |
-|   |                   |    etcd     |                         |   |
-|   |                   +-------------+                         |   |
-|   +--------------------------+--------------------------------+   |
-|                              |                                    |
-|                              | (Network / gRPC API Calls)         |
-|                              |                                    |
-|   +--------------------------+--------------------------------+   |
-|   |                        WORKER NODES                       |   |
-|   |                                                           |   |
-|   |  +--------------------+         +--------------------+    |   |
-|   |  |       NODE 1       |         |       NODE 2       |    |   |
-|   |  | +-------+ +------+ |         | +-------+ +------+ |    |   |
-|   |  | |Kubelet| |Proxy | |         | |Kubelet| |Proxy | |    |   |
-|   |  | +---+---+ +---+--+ |         | +---+---+ +---+--+ |    |   |
-|   |  |     |         |    |         |     |         |    |    |   |
-|   |  | +---+---------+--+ |         | +---+---------+--+ |    |   |
-|   |  | |Container Engine| |         | |Container Engine| |    |   |
-|   |  | +-------+--------+ |         | +-------+--------+ |    |   |
-|   |  |         |          |         |         |          |    |   |
-|   |  |  [POD] [POD]       |         |  [POD] [POD]       |    |   |
-|   |  +--------------------+         +--------------------+    |   |
-|   +-----------------------------------------------------------+   |
-+-------------------------------------------------------------------+
+```mermaid
+flowchart TD
+    subgraph KUBERNETES_CLUSTER [KUBERNETES CLUSTER]
+        direction TB
+        
+        subgraph CONTROL_PLANE [CONTROL PLANE]
+            direction TB
+            API[API Server]
+            SCHED[Scheduler]
+            CM[Controller Manager]
+            ETCD[etcd]
+            
+            API --- SCHED
+            API --- CM
+            API --- ETCD
+        end
+        
+        subgraph WORKER_NODES [WORKER NODES]
+            direction LR
+            
+            subgraph NODE_1 [NODE 1]
+                direction TB
+                K1[Kubelet]
+                P1[Proxy]
+                CE1[Container Engine]
+                POD1A[POD]
+                POD1B[POD]
+                
+                K1 --- CE1
+                P1 --- CE1
+                CE1 --- POD1A
+                CE1 --- POD1B
+            end
+            
+            subgraph NODE_2 [NODE 2]
+                direction TB
+                K2[Kubelet]
+                P2[Proxy]
+                CE2[Container Engine]
+                POD2A[POD]
+                POD2B[POD]
+                
+                K2 --- CE2
+                P2 --- CE2
+                CE2 --- POD2A
+                CE2 --- POD2B
+            end
+        end
+        
+        CONTROL_PLANE -. "Network / gRPC API Calls" .-> WORKER_NODES
+    end
 ```
 
 ### The Control Plane Components
@@ -133,7 +147,7 @@ While not a standalone daemon, the CRI is a critical architectural boundary. Ori
 #### 5. Container Network Interface (CNI)
 Similar to the CRI, the CNI is a standardized interface, but specifically for network plugins. Kubernetes itself does not know how to assign IP addresses to Pods or route traffic between different physical nodes. It delegates this entirely to a CNI plugin (such as Calico, Flannel, or Cilium). When a Pod starts, the kubelet calls the CNI plugin to configure the virtual network interfaces and assign the IP.
 
-> **Pause and predict:** What do you think happens if the `kube-scheduler` process crashes, but all other components remain healthy? If you attempt to deploy a new application while the scheduler is down, what exact state will that application be stuck in?
+> **Pause and predict**: What do you think happens if the `kube-scheduler` process crashes, but all other components remain healthy? If you attempt to deploy a new application while the scheduler is down, what exact state will that application be stuck in?
 > <details>
 > <summary>Reveal Answer</summary>
 > The API Server will accept the pod creation, but it will remain in a `Pending` state indefinitely because no process will ever assign it to a node.
@@ -200,7 +214,7 @@ flowchart TD
     Node2 -.-> PodA
 ```
 
-> **Active Learning:** If a `kind` worker node is fundamentally just a Docker container running on your host machine, what happens if you restart the Docker daemon on your host? Will the Kubernetes cluster survive?
+> **Pause and predict**: If a `kind` worker node is fundamentally just a Docker container running on your host machine, what happens if you restart the Docker daemon on your host? Will the Kubernetes cluster survive?
 > <details>
 > <summary>Reveal Answer</summary>
 > No. When the Docker daemon restarts, it stops all running containers, effectively destroying the active state of your `kind` nodes.
@@ -279,13 +293,13 @@ You can even instruct `kubectl` to merge multiple files in memory simultaneously
 export KUBECONFIG=~/.kube/config:/path/to/another/config.yaml
 ```
 
-> **Active Learning:** If you possess a `kubeconfig` file containing administrative credentials for a production cluster, what are the security implications of accidentally committing that file to a public GitHub repository?
+> **Pause and predict**: If you possess a `kubeconfig` file containing administrative credentials for a production cluster, what are the security implications of accidentally committing that file to a public GitHub repository?
 > <details>
 > <summary>Reveal Answer</summary>
 > Total cluster compromise. Attackers scan public repos for kubeconfigs continuously and can instantly hijack your API Server, deploy cryptominers, or steal secrets.
 > </details>
 
-> **Try this now:** Run `kubectl config get-contexts` in your terminal. Examine the output and locate the context with a `*` next to it, which indicates your currently active cluster connection.
+> **Stop and think**: Run `kubectl config get-contexts` in your terminal. Examine the output and locate the context with a `*` next to it, which indicates your currently active cluster connection.
 
 ## Section 4: Bootstrapping Your First Cluster with kind
 
@@ -343,9 +357,9 @@ k get pods --namespace kube-system
 
 You will see pods listed for `etcd`, `kube-apiserver`, `kube-controller-manager`, and `kube-scheduler`. If these pods are reporting a `Running` state, your cluster is mathematically healthy and ready to accept custom workloads.
 
-> **Active Learning:** Before running `docker ps` on your host machine, what exact output do you expect to see based on the architecture discussed? How many containers will the Docker daemon report are actively running to support this single-node cluster?
+> **Pause and predict**: Before running `docker ps` on your host machine, what exact output do you expect to see based on the architecture discussed? How many containers will the Docker daemon report are actively running to support this single-node cluster?
 
-> **Try this now:** Run `docker ps` on your host machine. Count the number of containers running for your `dojo-basics` cluster. You should see exactly one container running the `kindest/node` image, acting as your entire single-node cluster.
+> **Stop and think**: Run `docker ps` on your host machine. Count the number of containers running for your `dojo-basics` cluster. You should see exactly one container running the `kindest/node` image, acting as your entire single-node cluster.
 
 ## Section 5: Understanding kind Networking
 
@@ -361,7 +375,7 @@ If you deploy a web application and want to view it in your browser, you cannot 
 2. **NodePorts with kind config:** You can pre-configure `kind` to map specific host ports directly to NodePorts during cluster creation.
 3. **Ingress Controllers:** You can deploy an NGINX Ingress controller and configure `kind` to map host port 80 and 443 to the Ingress controller pods.
 
-> **Active Learning:** If you run `kubectl port-forward`, and then close your terminal window, what happens to the network tunnel?
+> **Pause and predict**: If you run `kubectl port-forward`, and then close your terminal window, what happens to the network tunnel?
 > <details>
 > <summary>Reveal Answer</summary>
 > The tunnel process is terminated immediately, and access to the pod is cut off.
@@ -421,9 +435,9 @@ dojo-multi-worker2          Ready    <none>          1m58s   v1.35.0
 
 Notice closely that the worker nodes do not have a defined role in the output column; this is standard, expected Kubernetes behavior. A missing role indicates they are standard nodes completely available for generic workload scheduling. You now possess a fully functional distributed orchestration system running entirely within the memory space of your local workstation.
 
-> **Active Learning:** Which node approach would you choose when testing a DaemonSet configuration (a workload that must run exactly one replica on every node), and why? A single-node cluster or a multi-node cluster?
+> **Stop and think**: Which node approach would you choose when testing a DaemonSet configuration (a workload that must run exactly one replica on every node), and why? A single-node cluster or a multi-node cluster?
 
-> **Try this now:** Run `kubectl get nodes -o wide` in your newly created `dojo-multi` cluster. Observe the `INTERNAL-IP` column. Notice how each node (which is actually a Docker container) has been assigned a distinct IP address on the virtual bridge network.
+> **Stop and think**: Run `kubectl get nodes -o wide` in your newly created `dojo-multi` cluster. Observe the `INTERNAL-IP` column. Notice how each node (which is actually a Docker container) has been assigned a distinct IP address on the virtual bridge network.
 
 ## Section 7: Best Practices for Local Development
 
@@ -457,7 +471,7 @@ You will likely discover an `OOMKilled` (Out Of Memory) event injected by the Li
 
 ### Scenario 3: The API Negotiation Failure (Version Skew)
 **Symptom:** The cluster bootstraps perfectly. However, when you type `kubectl get pods`, you receive bizarre errors like `the server could not find the requested resource` or completely silent formatting failures.
-**Diagnosis:** You have a severe version skew between your `kubectl` client binary and the cluster's API Server version. Kubernetes officially supports a version skew of exactly +/- 1 minor version (e.g., client v1.30 can talk to server v1.29, v1.30, or v1.31). If your local client is v1.25 and `kind` just booted a v1.32 cluster, the API schemas are fundamentally incompatible.
+**Diagnosis:** You have a severe version skew between your `kubectl` client binary and the cluster's API Server version. Kubernetes officially supports a version skew of exactly +/- 1 minor version (e.g., client v1.34 can talk to server v1.33, v1.34, or v1.35). If your local client is v1.30 and `kind` just booted a v1.35 cluster, the API schemas are fundamentally incompatible.
 **Action:** Check your skew by running `kubectl version`. Utilize a strict version manager like `asdf`, `mise`, or `brew` to ensure your local `kubectl` binary is upgraded to match your cluster version.
 
 ### Scenario 4: The Daemon Disconnect
@@ -491,7 +505,7 @@ Understanding how developers commonly misconfigure or misunderstand their local 
 
 ### Mistake 1: Exhausting Host Disk Space
 **Symptom:** Your computer runs extremely slowly. `kind` suddenly fails to pull new node images. Your terminal warns "No space left on device."
-**Root Cause:** Docker node images are enormous. A single `kindest/node:v1.30.0` image can be upwards of 1.5GB. Over time, as you test different versions of Kubernetes to reproduce bugs, these massive images silently fill up your hard drive, leading to an eventual complete lack of space.
+**Root Cause:** Docker node images are enormous. A single `kindest/node:v1.35.0` image can be upwards of 1.5GB. Over time, as you test different versions of Kubernetes to reproduce bugs, these massive images silently fill up your hard drive, leading to an eventual complete lack of space.
 **Resolution:** Run `docker system prune -a --volumes` periodically. This clears unused images, dangling volumes, and stopped containers. Ensure you always maintain at least 20GB of free space for local cloud native development.
 
 ### Mistake 2: Forgetting to Delete Idle Clusters
@@ -538,32 +552,32 @@ The `etcd` datastore daemon must be fully operational and possess quorum. The AP
 
 <details>
 <summary><strong>[Tests LO2: Compare local Kubernetes provisioning tools]</strong> Your team is building a new logging microservice that needs to write heavily to the local disk of the node it executes on. During local testing, a developer complains that when they test with `kind`, their laptop's entire hard drive fills up and crashes, but when using `minikube` (with VirtualBox), it does not. What fundamental architectural difference causes this behavior?</summary>
-Because `kind` leverages Docker containers to simulate entire physical nodes, any raw data written to the "node's" local disk by a pod is actually being written directly into the underlying Docker container's writable layer on your host filesystem. If the container grows indefinitely, it consumes the host's physical disk space. `minikube` traditionally utilizes a hardware Virtual Machine, which possesses a pre-allocated, fixed-size virtual disk block. The VM physically cannot consume more space on your host than its allocated block size.
+Because `kind` leverages Docker containers to simulate entire physical nodes, any raw data written to the "node's" local disk by a pod is actually being written directly into the underlying Docker container's writable layer on your host filesystem. If the container grows indefinitely, it consumes the host's physical disk space. `minikube` traditionally utilizes a hardware Virtual Machine, which possesses a pre-allocated, fixed-size virtual disk block. The VM physically cannot consume more space on your host than its allocated block size, thus protecting the broader host operating system from catastrophic disk exhaustion.
 </details>
 
 <details>
-<summary><strong>[Tests LO1: Construct a local Kubernetes cluster]</strong> You are strictly required to test a third-party custom operator that explicitly mandates Kubernetes version 1.30. Your currently running local `kind` cluster is operating on version 1.34. What is the safest, most deterministic, and fastest method to acquire a local 1.30 environment?</summary>
-You must completely bypass the upgrade process and create an entirely new, parallel cluster by explicitly specifying the node image version tag during the creation command. You execute `kind create cluster --name test-130 --image kindest/node:v1.30.0`. Unlike attempting to upgrade or downgrade a complex production cluster in place (which is inherently risky and error-prone), local clusters are strictly ephemeral. It is fundamentally safer and significantly faster to provision a fresh cluster with the exact version required, execute your tests, and subsequently destroy the cluster.
+<summary><strong>[Tests LO1: Construct a local Kubernetes cluster]</strong> You are strictly required to test a third-party custom operator that explicitly mandates Kubernetes version 1.33. Your currently running local `kind` cluster is operating on version 1.35. What is the safest, most deterministic, and fastest method to acquire a local 1.33 environment?</summary>
+You must completely bypass the upgrade or downgrade process and create an entirely new, parallel cluster by explicitly specifying the node image version tag during the creation command. You execute `kind create cluster --name test-133 --image kindest/node:v1.33.0`. Unlike attempting to upgrade or downgrade a complex production cluster in place (which is inherently risky and error-prone), local clusters are strictly ephemeral. It is fundamentally safer and significantly faster to provision a fresh cluster with the exact version required, execute your tests, and subsequently destroy the cluster when finished.
 </details>
 
 <details>
 <summary><strong>[Tests LO4: Design a multi-node local cluster configuration]</strong> You are tasked with reproducing a complex production bug that only manifests when network latency between a web frontend pod and a backend database pod consistently exceeds 50ms. Which local cluster architecture would you design to test this hypothesis, and why?</summary>
-You must design and provision a multi-node cluster configuration utilizing `kind`. You require a minimum of two worker nodes. By explicitly scheduling the web application on worker node 1 and the database on worker node 2 using node selectors, you force the network traffic to traverse the virtualized network bridge between the distinct nodes. You can then utilize standard Linux traffic control utilities (`tc`) executing inside one of the worker node containers to artificially inject exactly 50ms of latency on its virtual network interface, accurately and deterministically simulating the production network partition.
+You must design and provision a multi-node cluster configuration utilizing `kind` with a minimum of two separate worker nodes. By explicitly scheduling the web application on worker node 1 and the database on worker node 2 using node selectors, you force the network traffic to traverse the virtualized network bridge between the distinct nodes. You can then utilize standard Linux traffic control utilities (`tc`) executing inside one of the worker node containers to artificially inject exactly 50ms of latency on its virtual network interface. This accurately and deterministically simulates the production network partition without requiring complex cloud infrastructure.
 </details>
 
 <details>
 <summary><strong>[Tests LO7: Formulate a strict local development strategy]</strong> You successfully provision a local `kind` cluster. You then run `kubectl port-forward svc/my-web-app 8080:80` to access a web server pod. You open a browser and the site loads perfectly. You then press `Ctrl+C` in your terminal to stop the command, and refresh the browser. What happens and why?</summary>
-The browser will return a "Connection Refused" or "Site cannot be reached" error. `kubectl port-forward` creates an active, foreground proxy tunnel between your local workstation and the API Server, which then tunnels to the specific pod. When you terminate the process (`Ctrl+C`), the tunnel is immediately destroyed, severing the network path. It is not a permanent configuration; it is an ephemeral debugging utility.
+The browser will immediately return a "Connection Refused" or "Site cannot be reached" error. `kubectl port-forward` creates an active, foreground proxy tunnel between your local workstation and the API Server, which then tunnels directly to the specific pod network namespace. When you terminate the process (`Ctrl+C`), the tunnel is immediately destroyed, completely severing the network path. It is not a permanent routing configuration or a load balancer; it is strictly an ephemeral debugging utility that relies on the foreground process remaining active.
 </details>
 
 <details>
 <summary><strong>[Tests LO3: Diagnose cluster failures]</strong> A junior engineer executes `kind create cluster`, but the command immediately fails, throwing an error stating "failed to pull image". The engineer verifies their internet connection is functioning perfectly. What is the most probable root cause, and how do you explicitly diagnose it?</summary>
-The most probable root cause is that the underlying Docker daemon is either not running, has crashed, or the executing user lacks the necessary permission socket to communicate with it. `kind` relies entirely on the local Docker socket to communicate the instruction to pull the node images. You diagnose this by running a simple daemon command like `docker ps`. If that command hangs indefinitely or returns a explicit "cannot connect to the Docker daemon" error, the issue is isolated to the host's container runtime setup, not the external network or the Kubernetes binary.
+The most probable root cause is that the underlying Docker daemon is either not running, has crashed, or the executing user lacks the necessary permission to communicate with the Unix socket. `kind` relies entirely on the local Docker socket to communicate the instruction to pull the node images and bootstrap the containers. You diagnose this by running a simple daemon command like `docker ps`. If that command hangs indefinitely or returns an explicit "cannot connect to the Docker daemon" error, the issue is isolated to the host's container runtime setup, not the external network or the Kubernetes binary itself.
 </details>
 
 <details>
-<summary><strong>[Tests LO3: Diagnose cluster failures]</strong> You run `kubectl get pods`, and you receive an error: `the server could not find the requested resource`. You check `docker ps` and see the control plane container is running perfectly. What is the likely mismatch occurring here?</summary>
-This is the classic symptom of severe Version Skew. The `kubectl` binary you are using on your host machine is too far out of date (or too far ahead) compared to the Kubernetes version running inside the `kind` cluster API Server. The API endpoints have changed, and the client no longer knows how to correctly parse the response. You must upgrade (or downgrade) your `kubectl` binary to be within +/- 1 minor version of the cluster.
+<summary><strong>[Tests LO3: Diagnose cluster failures]</strong> You run `kubectl get pods`, and you immediately receive an error: `the server could not find the requested resource`. You check `docker ps` and see the control plane container is running perfectly. What is the likely mismatch occurring here?</summary>
+This is the classic symptom of severe Version Skew between your client and the server. The `kubectl` binary you are using on your host machine is too far out of date (or too far ahead) compared to the Kubernetes version running inside the `kind` cluster API Server. The API schemas and endpoints have fundamentally changed between those versions, and the client no longer knows how to correctly construct or parse the REST requests. To resolve this, you must upgrade (or downgrade) your `kubectl` binary to ensure it is within the officially supported +/- 1 minor version window of the cluster.
 </details>
 
 ## Hands-On Exercise
@@ -577,7 +591,7 @@ Ensure the Docker daemon is installed and actively running on your host machine.
 
 1. **The Baseline Cluster Initialization:** Create a standard single-node cluster named `primary-dojo`. Verify the cluster is fully running, and utilize command-line tools to determine the exact IP address and port the control plane API server is bound to on your host machine's network interface.
 2. **The Kubeconfig Deep Dive:** Without using the `kubectl config view` command, directly open your `~/.kube/config` file utilizing a terminal text editor (like `cat`, `less`, or `vim`). Locate the precise Cluster, User, and Context blocks that `kind` just injected for your `primary-dojo` cluster.
-3. **Strict Version Pinning:** Create a second, completely simultaneous cluster named `legacy-dojo`. This cluster must rigidly enforce running an older version of Kubernetes, specifically v1.30.0 (utilizing the specific image tag `kindest/node:v1.30.0`).
+3. **Strict Version Pinning:** Create a second, completely simultaneous cluster named `legacy-dojo`. This cluster must rigidly enforce running an older version of Kubernetes, specifically v1.33.0 (utilizing the specific image tag `kindest/node:v1.33.0`).
 4. **Context Switching Mastery:** Utilize `kubectl` to seamlessly switch your authentication context back and forth between `primary-dojo` and `legacy-dojo`. Execute a version command against each to mathematically prove you are communicating with two distinctly different API Server versions.
 5. **Topology Engineering and Declaration:** Create a declarative YAML configuration file designed to deploy a third cluster named `ha-dojo`. This cluster must artificially simulate a highly available control plane architecture by provisioning exactly three control-plane nodes and zero worker nodes. 
 6. **Simulated Catastrophic Failure:** Delete all currently running clusters to reclaim resources. Create a fresh cluster named `broken-dojo`. Locate the underlying Docker container running the control plane daemon. Utilize a raw Docker command to forcibly terminate (kill) the container without graceful shutdown. Immediately observe and document how `kubectl` behaves when the control plane is suddenly annihilated.
@@ -629,9 +643,9 @@ We can run multiple `kind` clusters simultaneously on the same machine, as long 
 
 ```bash
 # Provision the version-pinned cluster in parallel
-kind create cluster --name legacy-dojo --image kindest/node:v1.30.0
+kind create cluster --name legacy-dojo --image kindest/node:v1.33.0
 ```
-This command will take a moment as it must download the 1.5GB+ Docker image for version 1.30.0.
+This command will take a moment as it must download the 1.5GB+ Docker image for version 1.33.0.
 </details>
 
 <details>
@@ -648,13 +662,13 @@ kubectl config get-contexts
 kubectl config use-context kind-primary-dojo
 
 # Verify the server version matches the latest default
-kubectl version --short
+kubectl version
 
 # Explicitly switch the active context to the legacy cluster
 kubectl config use-context kind-legacy-dojo
 
-# Verify the server version matches exactly v1.30.0
-kubectl version --short
+# Verify the server version matches exactly v1.33.0
+kubectl version
 ```
 </details>
 
@@ -730,4 +744,4 @@ Before you conclude this module, ensure you have established these local tools f
 6. **A robust terminal multiplexer:** Tools like `tmux`, `zellij`, or `iTerm2` are invaluable when you need to watch logs in one pane while executing commands in another.
 7. **Lens (Alternative):** A graphical IDE for Kubernetes. While `k9s` keeps you close to the terminal, Lens provides a full desktop experience for cluster management.
 
-> **Active Learning:** Install `k9s` today and run it against your `dojo-multi` cluster. How does the experience of navigating pods compare to typing raw `kubectl get pods` commands?
+> **Stop and think**: Install `k9s` today and run it against your `dojo-multi` cluster. How does the experience of navigating pods compare to typing raw `kubectl get pods` commands?
