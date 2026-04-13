@@ -194,7 +194,7 @@ metadata:
 spec:
   containers:
   - name: nginx
-    image: nginx:1.25
+    image: nginx:1.27
 ```
 
 ### Deployments
@@ -218,7 +218,7 @@ spec:
     spec:
       containers:
       - name: nginx
-        image: nginx:1.25
+        image: nginx:1.27
 ```
 
 > **Pause and predict**: If a Deployment ensures 3 Pods are always running, but those Pods are frequently destroyed and recreated with new IP addresses, how will your users ever reliably connect to the app?
