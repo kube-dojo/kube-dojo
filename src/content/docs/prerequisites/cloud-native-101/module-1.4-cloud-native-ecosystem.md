@@ -33,6 +33,8 @@ Kubernetes doesn't exist in isolation. It's the center of a vast ecosystem of pr
 
 You won't learn these tools here—just know they exist and what they're for.
 
+> **Pause and predict**: Before diving in, what categories of tools do you think are absolutely mandatory to run a production cluster, and which do you suspect are optional add-ons?
+
 ---
 
 ## War Story: The Resume-Driven Development Disaster
@@ -144,6 +146,8 @@ flowchart TD
 
 ### 6. Security
 
+> **Stop and think**: Notice how security isn't just one tool in one layer. How many different places in the stack might require distinct security tools (like image scanning vs. runtime policy enforcement vs. network encryption)?
+
 | Tool | What It Does |
 |------|--------------|
 | **Falco** | Runtime security monitoring |
@@ -172,6 +176,8 @@ Imagine you are hired as the first DevOps engineer at a startup. They have a bas
 5. **Security**: Trivy automatically scanning images in GitHub Actions before they are pushed to the registry.
 
 *Notice what is missing:* No complex service mesh, no distributed tracing, no custom storage orchestrator. You kept it simple, focusing entirely on reliable delivery and basic visibility.
+
+> **Pause and predict**: What happens if the team suddenly decides they need to seamlessly encrypt all traffic between internal microservices? Which category of tool would they need to introduce to this basic stack?
 
 ---
 
