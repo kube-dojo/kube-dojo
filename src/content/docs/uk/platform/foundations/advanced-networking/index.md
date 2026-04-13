@@ -1,12 +1,15 @@
 ---
 title: "Просунуті мережі"
+slug: "uk/platform/foundations/advanced-networking/index"
 sidebar:
-  order: 1
+  order: 0
   label: "Просунуті мережі"
+en_commit: "47bf257c3ec7632099185c630faf64d73e48caea"
+en_file: "src/content/docs/platform/foundations/advanced-networking/index.md"
 ---
-**Мережа за межами Kubernetes — що відбувається, коли трафік потрапляє в реальний світ.**
+**Мережі поза межами Kubernetes — що відбувається, коли трафік потрапляє у реальний світ.**
 
-Мережа Kubernetes забезпечує взаємодію між подами. Але в реальних умовах трафік проходить крізь DNS-резолвери, CDN, правила WAF, точки пірингу BGP та балансувальники навантаження, перш ніж він потрапить у ваш кластер. Ці модулі охоплюють інфраструктуру, яка з'єднує ваші кластери з Інтернетом.
+Мережі Kubernetes забезпечують зв'язок між подами (pod-to-pod communication). Проте у продакшені трафік проходить крізь DNS-резолвери, вузли CDN, правила WAF, точки BGP-пірингу та балансувальники навантаження ще до того, як потрапить у ваш кластер. Ці модулі охоплюють інфраструктуру, яка з'єднує ваші кластери з інтернетом.
 
 ---
 
@@ -14,19 +17,19 @@ sidebar:
 
 | # | Модуль | Час | Що ви вивчите |
 |---|--------|------|-------------------|
-| 1.1 | [DNS у масштабі та глобальний трафік](/uk/prerequisites/kubernetes-basics/module-1.1-first-cluster/) | 3 год | Anycast, GeoDNS, DNSSEC, маршрутизація за затримкою |
-| 1.2 | [CDN та Edge Computing](/uk/cloud/aws-essentials/module-1.2-vpc/) | 2.5 год | Архітектура PoP, інвалідація кешу, edge-функції |
-| 1.3 | [WAF та захист від DDoS](module-1.3-waf-ddos/) | 2.5 год | Правила OWASP, обмеження частоти запитів, бот-менеджмент |
-| 1.4 | [BGP та основна маршрутизація](/uk/cloud/aks-deep-dive/module-7.4-aks-production/) | 3.5 год | Піринг AS, вибір шляху, Direct Connect |
-| 1.5 | [Глибоке занурення в хмарне балансування](module-1.5-load-balancing/) | 3 год | L4/L7, Proxy Protocol, session affinity |
-| 1.6 | [Zero Trust та альтернативи VPN](/uk/cloud/enterprise-hybrid/module-10.9-zero-trust/) | 2.5 год | BeyondCorp, IAP, Tailscale, mTLS |
+| 1.1 | [Масштабований DNS та глобальне керування трафіком](module-1.1-dns-at-scale/) | 3 год | Anycast, GeoDNS, DNSSEC, маршрутизація за затримками |
+| 1.2 | [CDN та межові обчислення (Edge Computing)](module-1.2-cdn-edge/) | 2.5 год | Архітектура PoP, інвалідація кешу, edge-функції |
+| 1.3 | [WAF та протидія DDoS-атакам](module-1.3-waf-ddos/) | 2.5 год | Правила OWASP, rate limiting, керування ботами |
+| 1.4 | [BGP та магістральна маршрутизація](module-1.4-bgp-routing/) | 3.5 год | AS-піринг, вибір шляху, Direct Connect |
+| 1.5 | [Глибоке занурення у хмарне балансування](module-1.5-load-balancing/) | 3 год | L4/L7, Proxy Protocol, session affinity |
+| 1.6 | [Мережі Zero Trust та альтернативи VPN](module-1.6-zero-trust/) | 2.5 год | BeyondCorp, IAP, Tailscale, mTLS |
 
 **Загальний час**: ~17 годин
 
 ---
 
-## Передумови
+## Попередні вимоги
 
 - Базові знання DNS та HTTP
-- Kubernetes Ingress/Services (з CKA або Fundamentals)
-- Основи мереж Linux (з Linux Deep Dive)
+- Kubernetes Ingress/Services (з курсу CKA або «Основи»)
+- Основи мереж Linux (з курсу Linux Deep Dive)

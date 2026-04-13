@@ -477,9 +477,10 @@ stages:
 # Run the full pipeline
 $ dvc repro
 
-# DVC is smart: it only re-runs stages whose dependencies changed
-# Changed training config? Only re-runs train and evaluate
-# Changed preprocessing? Re-runs everything
+# DVC relies on cryptographic hashes of files explicitly listed in 'deps'.
+# It skips stages if these declared dependencies haven't changed.
+# Changed training config? Only re-runs train and evaluate.
+# Changed raw data but forgot to list it in 'deps'? DVC will incorrectly skip the stage.
 
 # Compare metrics across experiments
 $ dvc metrics diff
@@ -874,7 +875,9 @@ class TestModelQuality:
     def test_fairness_demographic_parity(self, model_and_data):
         """Model should have similar outcomes across demographic groups.
 
-        Required for compliance in many regulated industries.
+        Required for compliance. Failures often stem from imbalanced
+        training data or feature engineering transformations that
+        inadvertently proxy for sensitive attributes (like zip codes).
         """
         model, X_test, y_test = model_and_data
         sensitive_features = X_test["gender"]
@@ -1454,12 +1457,23 @@ graph TD
 
 ---
 
+## Kubernetes-Based Pipeline Execution
+
+While local unit tests provide rapid feedback, diagnosing pipeline failures and running distributed training requires executing workloads in an environment that mirrors production. This is where Kubernetes becomes essential for ML DevOps.
+
+A common mistake engineers make when migrating ML pipelines to Kubernetes is utilizing standard `Deployment` resources. A `Deployment` is designed inherently for long-running, stateless services (like a web API) and will continually restart the container if the process exits. Machine Learning pipelines—whether they are data validation tests, model training, or batch evaluations—are finite, batch-oriented computational tasks. They must run to completion and then terminate.
+
+To execute these pipelines, you must use a Kubernetes `Job` resource. A `Job` correctly handles run-to-completion semantics, tracks the final success or failure state of the execution, and avoids infinite restart loops when a training script successfully finishes. By encapsulating deterministic experiment tracking scripts within a Kubernetes `Job`, you guarantee the pipeline executes with the exact hardware and environmental parity of production, making silent failures trivial to diagnose.
+
+---
+
 ## Common Mistakes
 
 | Mistake | Why It Is Dangerous | How To Fix It |
 |---|---|---|
-| **Committing model binaries to Git** | Bloats the repository size, eventually breaking repository cloning and CI/CD pipelines entirely. | Track large artifacts using DVC and only commit the lightweight `.dvc` pointer files to Git. |
+| **Committing model binaries to Git** | Bloats the repository size, eventually breaking cloning. Rewriting history with `git filter-branch` is highly destructive and breaks collaborators' local repositories. | Use `git rm --cached <file>` to remove it from Git without deleting the local file, track it with DVC, and use pre-commit hooks to block future binaries. |
 | **Hardcoding hyperparameters** | Makes reproducing past experiments impossible and pollutes the code history with trivial constant changes. | Store all model hyperparameters and arguments in strict, versioned YAML configuration files. |
+| **Changing multiple variables simultaneously** | Violates the scientific method by making it impossible to empirically attribute any performance gains or regressions to a specific change (e.g., updating architecture and learning rate at once). | Strictly isolate experiments to modify exactly one fundamental variable per branch. |
 | **Ignoring random seeds** | Prevents deterministic training and evaluation, leading to unexplainable variations in model performance across identical runs. | Centralize seed initialization for Python, NumPy, and your ML framework at the very start of your orchestration scripts. |
 | **Squashing experiment branches blindly** | Destroys the invaluable historical context of what hypotheses were tested and what exact metrics they produced. | Include comprehensive metrics, hypothesis data, and firm conclusions in the commit message before merging. |
 | **Evaluating on training data** | Introduces massive data leakage, resulting in falsely high accuracy that immediately collapses upon production deployment. | Strictly isolate the validation/test sets before any feature engineering, balancing, or normalization steps occur. |
