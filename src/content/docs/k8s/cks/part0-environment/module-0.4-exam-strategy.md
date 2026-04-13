@@ -488,4 +488,4 @@ You've finished the **Environment Setup** section. You now have:
 - Proficiency with Trivy, Falco, kube-bench
 - Exam strategy for security tasks
 
-**Next Part**: [Part 1: Cluster Setup](../part1-cluster-setup/module-1.1-network-policies/) - Deep dive into network security.
+**Next Part**: [Part 1: Cluster Setup](/k8s/cks/part1-cluster-setup/module-1.1-network-policies/) - Deep dive into network security.
