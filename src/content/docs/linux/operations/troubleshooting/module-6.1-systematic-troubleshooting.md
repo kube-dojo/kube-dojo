@@ -62,29 +62,14 @@ The best troubleshooters aren't luckier—they're more methodical.
 
 ### The Scientific Method
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    SCIENTIFIC METHOD                             │
-│                                                                  │
-│  1. OBSERVE                                                      │
-│     │  What are the symptoms? What's the actual behavior?       │
-│     ▼                                                            │
-│  2. HYPOTHESIZE                                                  │
-│     │  What could cause this? List possibilities.               │
-│     ▼                                                            │
-│  3. PREDICT                                                      │
-│     │  If hypothesis X is true, what else should we see?        │
-│     ▼                                                            │
-│  4. TEST                                                         │
-│     │  Check the prediction. Does it match?                     │
-│     ▼                                                            │
-│  5. CONCLUDE                                                     │
-│     │  Hypothesis confirmed? Fix it.                            │
-│     │  Hypothesis rejected? Next hypothesis.                    │
-│     ▼                                                            │
-│  6. ITERATE                                                      │
-│        Back to step 2 with new information                      │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A[1. OBSERVE<br/>What are the symptoms? What is the actual behavior?] --> B[2. HYPOTHESIZE<br/>What could cause this? List possibilities.]
+    B --> C[3. PREDICT<br/>If hypothesis is true, what else should we see?]
+    C --> D[4. TEST<br/>Check the prediction. Does it match?]
+    D --> E[5. CONCLUDE<br/>Hypothesis confirmed? Fix it.<br/>Hypothesis rejected? Next hypothesis.]
+    E --> F[6. ITERATE<br/>Back to step 2 with new information]
+    F -.-> B
 ```
 
 > **Stop and think**: You get an alert that users cannot check out their shopping carts. You observe that the checkout service is returning 500 errors. Before randomly restarting the service, what are two distinct hypotheses you could form based on the architecture of a typical web application?
@@ -201,25 +186,12 @@ WHAT changed?
 
 ### Reproduce vs Observe
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    REPRODUCTION                                  │
-│                                                                  │
-│  Can you reproduce?                                             │
-│       │                                                          │
-│       ├── YES → Great! You can test hypotheses directly        │
-│       │                                                          │
-│       └── NO → Work with what you have:                        │
-│                  - Logs from incident time                      │
-│                  - Metrics history                              │
-│                  - User reports                                 │
-│                  - Correlation with other events                │
-│                                                                  │
-│  Intermittent issues:                                           │
-│  - Increase logging                                             │
-│  - Add monitoring                                               │
-│  - Wait for next occurrence with better visibility             │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A{Can you reproduce?}
+    A -->|YES| B[Great! You can test hypotheses directly]
+    A -->|NO| C[Work with what you have:<br/>- Logs from incident time<br/>- Metrics history<br/>- User reports<br/>- Correlation with other events]
+    C --> D[Intermittent issues:<br/>- Increase logging<br/>- Add monitoring<br/>- Wait for next occurrence with better visibility]
 ```
 
 ---
@@ -239,7 +211,7 @@ find /etc -mtime -1 -type f 2>/dev/null
 
 # 3. Recent deployments
 kubectl get deployments -A -o json | \
-  jq -r '.items[] | select(.metadata.creationTimestamp > "2024-01-01") | .metadata.name'
+  jq -r '.items[] | select(.metadata.creationTimestamp > "2026-01-01") | .metadata.name'
 
 # 4. Cron jobs that ran
 grep CRON /var/log/syslog | tail -20
@@ -248,6 +220,8 @@ grep CRON /var/log/syslog | tail -20
 cat /var/log/apt/history.log | tail -50  # Debian
 cat /var/log/dnf.log | tail -50           # RHEL
 ```
+
+> **Stop and think**: If a service fails immediately after a minor package update, but rolling back the package does not fix the issue, what other system changes or dependencies should you investigate to uncover the root cause?
 
 ### "It Works On My Machine"
 
