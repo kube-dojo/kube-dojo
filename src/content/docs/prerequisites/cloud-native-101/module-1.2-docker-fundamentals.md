@@ -390,12 +390,15 @@ Choosing the right base image is critical for security and size:
 
 ### Image Size
 
+> **Pause and predict**: If you use a full OS image like `ubuntu:24.04` just to run a simple Python application, what are two major downsides? You will experience significantly slower image pull times due to the large file size, and you will expose a dramatically larger attack surface for potential security vulnerabilities.
+
 ```dockerfile
 # BAD: Full OS, huge image
 FROM ubuntu:24.04
 RUN apt-get update && apt-get install -y python3 python3-pip
 COPY . .
-RUN pip3 install -r requirements.txt
+# Note: In Ubuntu 24.04, system-wide pip installs require --break-system-packages
+RUN pip3 install --break-system-packages -r requirements.txt
 
 # GOOD: Slim base, smaller image
 FROM python:3.12-slim
@@ -409,6 +412,8 @@ FROM python:3.12-alpine
 ```
 
 ### Security
+
+> **Pause and predict**: What happens if an attacker finds a remote code execution vulnerability in your application and your container is running as root? They will immediately gain root privileges inside the container, making it substantially easier to escape the container environment and compromise the underlying host node.
 
 ```dockerfile
 # BAD: Running as root
