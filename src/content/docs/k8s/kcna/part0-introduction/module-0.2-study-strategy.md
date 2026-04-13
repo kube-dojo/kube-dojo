@@ -431,4 +431,4 @@ You now understand:
 - How to study for multiple choice
 - Strategies for exam day
 
-**Next Part**: [Part 1: Kubernetes Fundamentals](../part1-kubernetes-fundamentals/module-1.1-what-is-kubernetes/) - The core 46% of your exam.
+**Next Part**: [Part 1: Kubernetes Fundamentals](/k8s/kcna/part1-kubernetes-fundamentals/module-1.1-what-is-kubernetes/) - The core 46% of your exam.
