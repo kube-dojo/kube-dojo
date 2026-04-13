@@ -44,35 +44,30 @@ This module teaches you the tools and techniques to cut GPU costs by 50-80% with
 
 ## The Cost Anatomy of AI Workloads
 
+> **Stop and think**: Before looking at the breakdown below, what percentage of your organization's GPU spend do you estimate is actively performing computations versus sitting idle?
+
 ### Where Money Goes
 
 Break down a typical AI team's GPU spending:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              Monthly GPU Spend: $150,000                     │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  Training (batch):        45%  ($67,500)                    │
-│  ├── Active training:     60% of training time              │
-│  ├── Idle between jobs:   25% (waiting for next job)        │
-│  └── Failed/restarted:    15% (wasted on crashes/errors)    │
-│                                                              │
-│  Inference (serving):     35%  ($52,500)                    │
-│  ├── Handling requests:   40% of GPU capacity               │
-│  ├── Idle (off-peak):     45% (GPUs running, no traffic)    │
-│  └── Over-provisioned:    15% (more replicas than needed)   │
-│                                                              │
-│  Development (notebooks): 20%  ($30,000)                    │
-│  ├── Active development:  10% of time                       │
-│  ├── Idle (user away):    80% (GPU allocated but unused)    │
-│  └── Forgotten pods:      10% (stale notebooks nobody uses) │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
-│                                                              │
-│  Effective utilization: ~35%                                │
-│  Estimated waste:       ~$97,000/month                      │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    Total["Monthly GPU Spend: $150,000<br/>Effective utilization: ~35%<br/>Estimated waste: ~$97,000/month"]
+    Total --> Training["Training (batch): 45% ($67,500)"]
+    Total --> Inference["Inference (serving): 35% ($52,500)"]
+    Total --> Dev["Development (notebooks): 20% ($30,000)"]
+
+    Training --> T1["Active training: 60% of training time"]
+    Training --> T2["Idle between jobs: 25% (waiting for next job)"]
+    Training --> T3["Failed/restarted: 15% (wasted on crashes/errors)"]
+
+    Inference --> I1["Handling requests: 40% of GPU capacity"]
+    Inference --> I2["Idle (off-peak): 45% (GPUs running, no traffic)"]
+    Inference --> I3["Over-provisioned: 15% (more replicas than needed)"]
+
+    Dev --> D1["Active development: 10% of time"]
+    Dev --> D2["Idle (user away): 80% (GPU allocated but unused)"]
+    Dev --> D3["Forgotten pods: 10% (stale notebooks nobody uses)"]
 ```
 
 ### Cost Per Unit of Work
@@ -92,9 +87,11 @@ Track these metrics in dashboards. When a scientist says "I need 16 GPUs for a w
 
 ## Spot Instances for Interruptible Workloads
 
+> **Pause and predict**: If spot instances can be terminated with only a 30-120 second warning, what specific application architecture pattern is required to train a deep learning model over several days on spot capacity?
+
 ### The Opportunity
 
-Cloud providers sell excess GPU capacity at 60-90% discount as "spot" (AWS), "preemptible" (GCP), or "spot" (Azure) instances. The catch: they can be reclaimed with 30-120 seconds notice.
+Cloud providers sell excess GPU capacity at 60-90% discount as "spot" (AWS), "preemptible" (GCP), or "spot" (Azure). The catch: they can be reclaimed with 30-120 seconds notice.
 
 | Provider | GPU Instance | On-Demand | Spot Price | Savings |
 |----------|-------------|-----------|------------|---------|
@@ -158,6 +155,8 @@ helm install aws-node-termination-handler eks/aws-node-termination-handler \
 
 ## Karpenter: Intelligent GPU Node Provisioning
 
+> **Stop and think**: The traditional Cluster Autoscaler scales predefined node groups. Why would relying on fixed node groups be particularly inefficient and costly when managing a diverse fleet of expensive GPU instances?
+
 ### Why Karpenter Over Cluster Autoscaler
 
 The Cluster Autoscaler (CA) scales **node groups** — predefined pools of identical instances. This works poorly for GPUs because:
@@ -171,21 +170,23 @@ Karpenter provisions **individual nodes** based on Pod requirements, choosing th
 
 ### Karpenter Architecture for GPU
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     Karpenter Controller                     │
-│                                                              │
-│  1. Watches for unschedulable Pods                          │
-│  2. Evaluates Pod requirements (GPU count, type, memory)    │
-│  3. Selects optimal instance type from NodePool constraints │
-│  4. Launches the node                                       │
-│  5. Binds Pods to the new node                              │
-│                                                              │
-│  Optimizations:                                              │
-│  - Consolidation: replaces underutilized nodes              │
-│  - Spot interruption: proactively replaces interrupted nodes│
-│  - Drift detection: replaces outdated AMIs/configs          │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph Karpenter Controller
+        Step1["1. Watches for unschedulable Pods"]
+        Step2["2. Evaluates Pod requirements (GPU count, type, memory)"]
+        Step3["3. Selects optimal instance type from NodePool constraints"]
+        Step4["4. Launches the node"]
+        Step5["5. Binds Pods to the new node"]
+        
+        Step1 --> Step2 --> Step3 --> Step4 --> Step5
+        
+        subgraph Optimizations
+            Opt1["Consolidation: replaces underutilized nodes"]
+            Opt2["Spot interruption: proactively replaces interrupted nodes"]
+            Opt3["Drift detection: replaces outdated AMIs/configs"]
+        end
+    end
 ```
 
 ### NodePool for GPU Spot Instances
@@ -410,6 +411,8 @@ spec:
 
 ## Kueue: Batch Job Queuing and Scheduling
 
+> **Stop and think**: If a high-priority production job needs GPUs but the cluster is full of low-priority experiments, how should the system decide which experiments to terminate while ensuring resources are allocated fairly among different research teams?
+
 ### Why Kueue
 
 Kubernetes schedulers are designed for **services** (run forever, maintain N replicas). AI training jobs are **batch** workloads that need:
@@ -424,23 +427,19 @@ Kueue (Kubernetes Queue) provides all of this.
 
 ### Kueue Architecture
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                         Kueue                                 │
-│                                                               │
-│  ┌─────────────┐    ┌──────────────┐    ┌────────────────┐  │
-│  │ ClusterQueue │    │ LocalQueue   │    │   Workload     │  │
-│  │             │    │   (per team) │    │  (submitted    │  │
-│  │ Defines GPU │◄───│              │◄───│   Job/Pod)     │  │
-│  │ capacity +  │    │ Team A queue │    │                │  │
-│  │ fair share  │    │ Team B queue │    │ Pending →      │  │
-│  │ policies    │    │ Team C queue │    │ Admitted →     │  │
-│  │             │    │              │    │ Running        │  │
-│  └─────────────┘    └──────────────┘    └────────────────┘  │
-│                                                               │
-│  ResourceFlavors: Define GPU types (A100, T4, spot, etc.)   │
-│  Cohorts: Groups of ClusterQueues that can borrow            │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph Kueue Architecture
+        Workload["Workload<br/>(submitted Job/Pod)<br/>Pending → Admitted → Running"]
+        LocalQueue["LocalQueue<br/>(per team)<br/>Team A queue<br/>Team B queue<br/>Team C queue"]
+        ClusterQueue["ClusterQueue<br/>Defines GPU capacity +<br/>fair share policies"]
+        
+        Workload --> LocalQueue
+        LocalQueue --> ClusterQueue
+    end
+    
+    ResourceFlavors["ResourceFlavors: Define GPU types (A100, T4, spot, etc.)"]
+    Cohorts["Cohorts: Groups of ClusterQueues that can borrow"]
 ```
 
 ### Installing Kueue
@@ -567,7 +566,7 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: training-run-47
+  name: training-run-82
   namespace: ml-research
   labels:
     kueue.x-k8s.io/queue-name: ml-research-queue    # Which queue
@@ -605,8 +604,8 @@ kubectl get clusterqueue gpu-cluster-queue -o wide
 kubectl -n ml-research get workloads
 
 # NAME                 QUEUE              ADMITTED  FINISHED  AGE
-# training-run-47      ml-research-queue  True                2h
-# training-run-48      ml-research-queue  True                1h
+# training-run-82      ml-research-queue  True                2h
+# training-run-83      ml-research-queue  True                1h
 # experiment-99        ml-research-queue  False               10m  ← queued
 ```
 
@@ -842,122 +841,48 @@ The ML team did not change a single line of training code. Every optimization wa
 ## Quiz: Check Your Understanding
 
 ### Question 1
-A training job checkpoints every 30 minutes. On spot instances, it costs $12/hr. On on-demand, it costs $32/hr. The average spot interruption rate is once every 3 hours. What is the effective hourly cost including wasted work?
+You are architecting a training pipeline for a new LLM. The data science team has implemented checkpointing every 30 minutes. The finance team points out that spot instances cost $12/hr compared to the $32/hr on-demand price, but the data scientists are worried about lost work since spot interruptions occur on average once every 3 hours. How do you calculate the effective hourly cost to prove to the data science team that spot instances are still the right choice?
 
 <details>
 <summary>Show Answer</summary>
 
-**Spot cost analysis:**
-- Base cost: $12/hr
-- Interruptions per hour: 1/3
-- Average work lost per interruption: 15 minutes (half a checkpoint interval, since an interruption is equally likely at any point within the 30-minute window)
-- Cost of lost work: 15 min × $12/hr = $3 per interruption
-- Interruption cost per hour: $3 × (1/3) = $1/hr
-- **Effective cost: $12 + $1 = $13/hr**
-
-**On-demand cost: $32/hr**
-
-**Savings with spot: ($32 - $13) / $32 = 59% savings**
-
-Even accounting for lost work from interruptions, spot is dramatically cheaper. The savings would be even higher with more frequent checkpointing (e.g., every 15 minutes reduces average lost-work cost to $0.50/hr).
+The effective hourly cost is calculated by adding the base spot price to the cost of wasted compute time. Since the spot instance costs $12/hr and interruptions occur on average every 3 hours, you can expect one interruption per 3-hour window. With a 30-minute checkpoint interval, an interruption will destroy an average of 15 minutes of work (half the interval). This 15 minutes of lost work costs $3 ($12/hr × 0.25 hrs), which amortizes to a waste cost of $1/hr over the 3-hour period. Therefore, the effective cost is $13/hr, which still yields a massive 59% savings compared to the $32/hr on-demand price, definitively proving that spot instances are the more economical choice despite the interruptions.
 </details>
 
 ### Question 2
-Explain how Kueue's preemption differs from Kubernetes native preemption for GPU workloads.
+Your organization currently relies on native Kubernetes PriorityClasses to ensure production inference services preempt batch experiments. However, the machine learning researchers complain that when preemption happens, their jobs fail completely and their quotas get messed up. You are proposing Kueue to solve this. How would you explain the operational difference between Kueue's preemption and native Kubernetes preemption to the research team?
 
 <details>
 <summary>Show Answer</summary>
 
-**Kubernetes native preemption** (PriorityClass-based):
-- Triggered by the scheduler when a high-priority Pod cannot be placed
-- Evicts lower-priority Pods to make room
-- No concept of queuing — evicted Pods go back to Pending with no ordering
-- No fair sharing — one team's high-priority job can evict all of another team's work
-- No borrowing — unused capacity in one quota cannot be used by another
-
-**Kueue preemption**:
-- Triggered by Kueue's admission controller, not the scheduler
-- Respects cohort borrowing policies — only preempts when borrowing limits are reached
-- Evicted workloads return to a queue with ordering (FIFO or priority-based)
-- Fair sharing ensures teams get their guaranteed quota before borrowing
-- Supports `reclaimWithinCohort` — reclaim borrowed resources before preempting own quota
-- Workloads are fully suspended (not just evicted), preserving their queue position
-
-In practice: Kubernetes native preemption is a blunt instrument. Kueue preemption is a sophisticated batch scheduling system designed for multi-tenant GPU sharing.
+Native Kubernetes preemption is a blunt tool operated by the scheduler that simply evicts lower-priority pods to make room, forcing them back into a pending state with no queuing order or quota awareness. In contrast, Kueue's preemption is managed by a sophisticated admission controller designed for multi-tenant batch workloads. Kueue respects fair sharing and cohort borrowing policies, ensuring that one team's high-priority job cannot aggressively evict workloads from another team's guaranteed quota unless borrowing limits are exceeded. When Kueue preempts a workload, it suspends it and returns it to an ordered queue, preserving its position so it can seamlessly resume once capacity frees up. This makes Kueue significantly safer and fairer for research teams sharing a cluster.
 </details>
 
 ### Question 3
-Your cluster has 32 A100 GPUs. Team A has a quota of 16, Team B has 16. Team A is only using 8 GPUs. How does Kueue allow Team B to use Team A's idle GPUs without permanently taking them?
+The computer vision team (Team A) and the NLP team (Team B) each have a strict quota of 16 A100 GPUs in your 32-GPU cluster. The vision team is currently only running experiments that use 8 GPUs. The NLP team has a massive backlog and needs 24 GPUs to meet a deadline. Using Kueue, how can you configure the system so the NLP team can utilize the vision team's idle GPUs without permanently depriving the vision team of their guaranteed capacity when they need it back?
 
 <details>
 <summary>Show Answer</summary>
 
-Kueue uses **cohorts and borrowing**:
-
-1. Both teams' ClusterQueues are in the same **cohort** (e.g., `ai-platform`)
-2. Team A's queue has `nominalQuota: 16` with a `borrowingLimit` set
-3. Team B's queue has `nominalQuota: 16` with a `borrowingLimit: 8`
-
-When Team A uses only 8 of its 16 GPUs, Team B can **borrow** up to 8 of Team A's idle GPUs (subject to borrowingLimit). Team B now runs on 24 GPUs (16 own + 8 borrowed).
-
-When Team A submits a new job that needs its GPUs back:
-1. Kueue's `reclaimWithinCohort: Any` policy activates
-2. Kueue identifies Team B's workloads running on borrowed resources
-3. Kueue preempts Team B's lowest-priority borrowed workloads (using `borrowWithinCohort.policy: LowerPriority`)
-4. Team A's job is admitted on the reclaimed GPUs
-5. Team B's preempted workloads return to their queue and wait for capacity
-
-The key: borrowing is **temporary and reclaimable**. Team A always gets its guaranteed 16 GPUs when needed.
+Kueue solves this resource-sharing challenge through the use of cohorts and temporary borrowing. By placing both the computer vision and NLP teams' ClusterQueues into the same cohort, you establish a shared resource pool. You would configure the NLP team's queue with a `nominalQuota` of 16 and a `borrowingLimit` of at least 8, allowing them to dynamically borrow the vision team's unused GPUs and scale up to 24 GPUs. Crucially, because the vision team's queue maintains its `nominalQuota` of 16 and Kueue is configured with `reclaimWithinCohort: Any`, Kueue will gracefully preempt the NLP team's lowest-priority borrowed workloads the moment the vision team submits new jobs. This guarantees the vision team immediate access to their dedicated capacity while maximizing overall cluster utilization.
 </details>
 
 ### Question 4
-Why is `consolidationPolicy: WhenEmpty` recommended for GPU NodePools in Karpenter, rather than `WhenEmptyOrUnderutilized`?
+You are configuring Karpenter NodePools for a new GPU training cluster. A junior platform engineer suggests using `consolidationPolicy: WhenEmptyOrUnderutilized` to maximize cost savings by packing pods tightly and terminating underutilized nodes. You know this is a bad idea for GPU training workloads. How do you explain to the engineer why `WhenEmpty` is the safer and more appropriate choice?
 
 <details>
 <summary>Show Answer</summary>
 
-`WhenEmptyOrUnderutilized` triggers consolidation when a node is underutilized — Karpenter would try to repack pods onto fewer nodes. For GPU workloads, this is problematic because:
-
-1. **GPU workloads are not easily migrated**: Moving a training Pod means interrupting training, losing work since the last checkpoint, and waiting for the new Pod to start (model loading takes minutes).
-
-2. **GPU memory is not over-committable**: A node with 1 GPU Pod using 1 of 4 GPUs looks "underutilized" to Karpenter, but the remaining 3 GPUs might be needed in minutes for the next batch of workers.
-
-3. **Startup cost**: Migrating a GPU Pod means 1-7 minutes of cold-start (model loading), which is expensive in GPU-hours.
-
-`WhenEmpty` only removes nodes that have zero GPU pods, which is safe — it just means "scale in when nobody needs this node anymore." This avoids disruptive migrations while still enabling scale-to-zero.
-
-For **inference** NodePools, `WhenEmptyOrUnderutilized` may be acceptable because inference pods are stateless and fast to restart.
+Using the `WhenEmptyOrUnderutilized` policy on GPU nodes is highly disruptive because moving a running GPU training pod involves terminating it, losing uncheckpointed progress, and enduring a lengthy cold-start process to reload large model weights. Furthermore, Karpenter's utilization metrics might interpret a node as "underutilized" if only 1 out of 4 GPUs is active, even though the remaining GPUs might be required momentarily for the next phase of a distributed training job. `WhenEmpty` is the much safer alternative because it only terminates a node when zero GPU pods are running on it. This configuration entirely avoids the risk of destructive mid-training migrations while still aggressively scaling the cluster down to zero when the nodes are genuinely idle, perfectly balancing cost savings with workload stability.
 </details>
 
 ### Question 5
-Calculate the monthly cost savings of implementing time-slicing + Kueue + spot for this scenario: 40 inference pods each requesting 1 GPU (15% avg utilization), 20 training jobs/day each using 4 GPUs for 2 hours, 25 always-on Jupyter notebooks with 1 GPU each. Current: all on-demand, no sharing. A100 at $3/hr.
+You have been hired as a FinOps consultant for a startup struggling with a $156,750/month AWS bill for AI workloads. They currently run 40 inference pods (1 GPU each, 15% avg utilization), 20 daily training jobs (4 GPUs for 2 hours each), and 25 always-on Jupyter notebooks (1 GPU each). Everything runs on on-demand A100s at $3/hr without sharing. You plan to implement time-slicing (4 pods/GPU) for inference, Kueue with spot instances ($1.17/hr) for training, and Karpenter scale-to-zero (active 10% of time) for notebooks. Calculate the projected monthly savings and explain how these three mechanisms achieve the reduction.
 
 <details>
 <summary>Show Answer</summary>
 
-**Current cost (no optimization):**
-- Inference: 40 GPUs × $3/hr × 730hr = $87,600/month
-- Training: 20 jobs × 4 GPUs × 2hr × $3/hr × 30 days = $14,400/month
-- Notebooks: 25 GPUs × $3/hr × 730hr = $54,750/month
-- **Total: $156,750/month**
-
-**Optimized cost:**
-
-*Inference with time-slicing (4x):*
-40 pods at 15% utilization → 4 pods per GPU → 10 GPUs
-10 GPUs × $3/hr × 730hr = $21,900/month (on-demand for SLA)
-
-*Training on spot with Kueue:*
-Same workload but spot pricing at $1.17/hr (62% discount)
-20 jobs × 4 GPUs × 2hr × $1.17/hr × 30 days = $5,616/month
-Kueue ensures fair queuing — no idle waiting
-
-*Notebooks scale-to-zero (active 10% of time):*
-25 notebooks × 1 GPU × 730hr × 10% active × $1.17/hr (spot) = $2,136/month
-
-**Optimized total: $21,900 + $5,616 + $2,136 = $29,652/month**
-
-**Savings: $156,750 - $29,652 = $127,098/month (81%)**
+The optimized monthly cost will be $29,652, resulting in a dramatic savings of $127,098 (an 81% reduction) compared to the original $156,750 bill. Time-slicing achieves the first major reduction by packing four 15%-utilized inference pods onto a single GPU, dropping the required always-on inference GPUs from 40 down to just 10. For training, transitioning to spot instances slashes the compute rate by 62%, while Kueue ensures these batch jobs execute efficiently without idle wait times or quota conflicts. Finally, applying Karpenter's scale-to-zero capabilities to the Jupyter notebooks eliminates the massive waste of 24/7 on-demand allocation, ensuring the cluster only spins up spot GPUs for the 10% of the time the data scientists are actively running code.
 </details>
 
 ---
