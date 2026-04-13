@@ -31,6 +31,8 @@ You've built a great CI/CD pipeline. Code gets tested, images get built, deploym
 
 Then someone runs `kubectl apply` directly in production. Your Git repo and production are now out of sync. Which one is "right"?
 
+> **Stop and think**: If someone modifies a deployment directly in production to fix a bug, and later a CI pipeline deploys an unrelated update, what happens to that bug fix? In a traditional push model, it likely gets silently overwritten.
+
 **This is the problem GitOps solves.**
 
 GitOps makes Git the single source of truth for your infrastructure. Not your CI/CD tool. Not someone's terminal. Git.
@@ -142,17 +144,10 @@ commit jkl012: Rollback to v1.2.3  ← Easy!
 - Continuous reconciliation
 - Cluster pulls what it needs
 
-```
-┌─────────────┐         ┌─────────────┐
-│    Git      │ ◀────── │   Agent     │
-│  (Source)   │  pulls  │ (in cluster)│
-└─────────────┘         └─────────────┘
-                              │
-                              ▼
-                        ┌─────────────┐
-                        │  Cluster    │
-                        │  Resources  │
-                        └─────────────┘
+```mermaid
+graph LR
+    Git[Git Source] -->|pulls from| Agent[Agent in cluster]
+    Agent -->|applies| Cluster[Cluster Resources]
 ```
 
 ### Principle 4: Continuously Reconciled
@@ -165,23 +160,13 @@ commit jkl012: Rollback to v1.2.3  ← Easy!
 - Self-healing: drift is automatically corrected
 - Constant loop, not one-time action
 
-```
-         ┌──────────────────────────────────┐
-         │                                  │
-         ▼                                  │
-   ┌──────────┐    Compare    ┌──────────┐  │
-   │ Desired  │ ────────────▶ │  Actual  │  │
-   │  State   │               │  State   │  │
-   │  (Git)   │               │(Cluster) │  │
-   └──────────┘               └──────────┘  │
-                                   │        │
-                         If different       │
-                                   │        │
-                                   ▼        │
-                            ┌──────────┐    │
-                            │  Apply   │ ───┘
-                            │  Changes │
-                            └──────────┘
+```mermaid
+graph TD
+    Compare{Compare}
+    Git[Desired State in Git] --> Compare
+    Cluster[Actual State in Cluster] --> Compare
+    Compare -->|If different| Apply[Apply Changes]
+    Apply --> Cluster
 ```
 
 ---
@@ -215,16 +200,15 @@ GitOps answers should be: Git repo, Agent recreates it, Check Git repo.
 
 ## Pull vs Push: The Key Difference
 
+> **Pause and predict**: If the CD system lives outside your network and needs to push to your Kubernetes cluster, what firewall rules and credential management challenges does that create?
+
 ### Traditional CI/CD (Push Model)
 
-```
-┌──────┐    ┌────────┐    ┌─────────┐    ┌─────────┐
-│ Dev  │───▶│   CI   │───▶│   CD    │───▶│ Cluster │
-│      │    │ Build  │    │ Deploy  │    │         │
-└──────┘    └────────┘    └─────────┘    └─────────┘
-                               │
-                          Has creds
-                          to push
+```mermaid
+graph LR
+    Dev[Dev] --> CI[CI Build]
+    CI --> CD[CD Deploy]
+    CD -->|Has creds to push| Cluster[Cluster]
 ```
 
 **How it works:**
@@ -241,26 +225,12 @@ GitOps answers should be: Git repo, Agent recreates it, Check Git repo.
 
 ### GitOps (Pull Model)
 
-```
-┌──────┐    ┌────────┐    ┌─────────┐
-│ Dev  │───▶│   CI   │───▶│   Git   │
-│      │    │ Build  │    │  Repo   │
-└──────┘    └────────┘    └────┬────┘
-                               │
-                          Is pulled by
-                               │
-                               ▼
-                         ┌─────────┐
-                         │  Agent  │
-                         │(in-cluster)│
-                         └────┬────┘
-                              │
-                         Applies to
-                              │
-                              ▼
-                         ┌─────────┐
-                         │ Cluster │
-                         └─────────┘
+```mermaid
+graph TD
+    Dev[Dev] --> CI[CI Build]
+    CI --> Git[Git Repo]
+    Agent[Agent in-cluster] -->|pulls from| Git
+    Agent -->|Applies to| Cluster[Cluster]
 ```
 
 **How it works:**
@@ -352,20 +322,18 @@ GitOps and CI/CD aren't opposites — they're complementary.
 
 ### The Combined Model
 
-```
-┌───────────────────────────────────────────────────────┐
-│                         CI                             │
-│  Code → Build → Test → Image → Push to Registry        │
-└───────────────────────────┬───────────────────────────┘
-                            │
-                            ▼
-                    Update image tag in Git
-                            │
-                            ▼
-┌───────────────────────────────────────────────────────┐
-│                       GitOps                           │
-│  Git Repo ← Agent → Reconcile → Cluster                │
-└───────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph CI [CI Phase]
+        direction LR
+        Code --> Build --> Test --> Image --> Registry[Push to Registry]
+    end
+    Registry -->|Update image tag in Git| Git[Git Repo]
+
+    subgraph GitOps [GitOps Phase]
+        Agent[Agent in-cluster] -->|pulls from| Git
+        Agent -->|Reconciles to| Cluster[Cluster]
+    end
 ```
 
 CI builds. GitOps deploys.
@@ -454,91 +422,42 @@ We'll explore specific tools in the [GitOps Tools Toolkit](/platform/toolkits/ci
 ## Quiz: Check Your Understanding
 
 ### Question 1
-What makes GitOps different from traditional CI/CD deployment?
+Scenario: Your team is debating moving from a Jenkins pipeline that runs `kubectl apply` to a Flux-based workflow. A junior engineer asks, "Isn't Flux just doing the same thing Jenkins did, but inside the cluster?" How do you explain the fundamental architectural difference?
 
 <details>
 <summary>Show Answer</summary>
 
-Key differences:
-
-1. **Pull vs Push**: GitOps agents pull from Git; traditional CD pushes to cluster
-2. **Continuous reconciliation**: GitOps constantly syncs, not just at deploy time
-3. **Self-healing**: Drift is automatically corrected
-4. **Credentials location**: Agent in cluster vs CD system outside cluster
-
-Traditional CI/CD can be part of GitOps (for building), but deployment works differently.
+While both approaches automate deployments, they operate on completely different models of control and state management. Jenkins relies on a "push" model where an external system executes a one-time deployment command and then forgets about it until the next pipeline run. If configuration drifts after that push, Jenkins has no way of knowing or fixing it. Flux, however, uses a "pull" model with a continuous reconciliation loop that constantly compares the cluster's actual state to the desired state in Git. This means Flux doesn't just deploy the application once; it actively maintains that state, automatically correcting any unauthorized changes to ensure Git always reflects reality.
 
 </details>
 
 ### Question 2
-Someone manually runs `kubectl delete pod my-app-xyz` in a GitOps-managed cluster. What should happen?
+Scenario: It's 3 AM. A critical application is crash-looping. A panicked on-call engineer runs `kubectl scale deployment payment-api --replicas=10` directly against the production cluster to handle the load, bypassing Git entirely. In a cluster managed strictly by Argo CD with auto-sync enabled, what happens next?
 
 <details>
 <summary>Show Answer</summary>
 
-1. **Kubernetes recreates the pod** (from the Deployment controller)
-2. **GitOps agent detects this is consistent** with desired state (still 3 replicas)
-3. **No action needed** — the Deployment still matches Git
-
-However, if someone ran `kubectl scale deployment my-app --replicas=10`:
-1. Kubernetes would scale to 10
-2. GitOps agent would detect drift (Git says 3, cluster has 10)
-3. Agent would scale back to 3
-4. Alert would fire (drift detected)
-
-GitOps manages the Deployment spec, not individual pods.
+The GitOps agent (Argo CD) will almost immediately detect that the actual state of the cluster (10 replicas) no longer matches the desired state declared in Git (e.g., 3 replicas). Because the system is designed for continuous reconciliation, it will treat this manual scaling as configuration drift. Argo CD will automatically issue a scaling command to revert the deployment back to 3 replicas to match the Git repository. To properly scale the application in a GitOps environment, the engineer must commit the replica change to the Git repository, which the agent will then pull and apply. This enforces the principle that Git is the absolute single source of truth, even during emergencies.
 
 </details>
 
 ### Question 3
-Why is "Git as source of truth" valuable for disaster recovery?
+Scenario: A rogue script accidentally deletes your entire production Kubernetes cluster. You have a new, empty cluster provisioned. Your applications and infrastructure were entirely managed via GitOps. Describe the exact steps required to restore production services, and contrast this with a traditional CI/CD disaster recovery.
 
 <details>
 <summary>Show Answer</summary>
 
-If you lose a cluster entirely:
-
-1. **Spin up new cluster**
-2. **Install GitOps agent**
-3. **Point agent at Git repo**
-4. **Agent recreates everything**
-
-No need to:
-- Remember what was deployed
-- Find old CI/CD logs
-- Hope someone documented it
-- Restore from cluster backups
-
-The entire desired state is in Git. The agent rebuilds the cluster to match.
-
-This also works for:
-- Cluster migrations
-- Multi-region deployments
-- Compliance audits (prove what's deployed)
+In a GitOps environment, disaster recovery is vastly simplified because the entire desired state of your infrastructure and applications is stored declaratively in a versioned Git repository. To restore the cluster, you simply install your GitOps agent (like Flux or Argo CD) on the new cluster and provide it with read access to your Git repository. The agent will methodically pull all configurations and apply them, rebuilding the cluster's state exactly as it was before the disaster. In contrast, traditional CI/CD disaster recovery often involves manually triggering dozens of historical pipelines in a specific order, hunting down lost deployment scripts, or relying on outdated cluster backups. GitOps eliminates this guesswork by ensuring that your Git repository is a complete, executable blueprint of your production environment.
 
 </details>
 
 ### Question 4
-Which GitOps principle addresses security concerns about deployment credentials?
+Scenario: Your CISO mandates that no external system, including your SaaS CI provider, is allowed to hold administrative credentials to the production Kubernetes cluster. How does a GitOps architecture satisfy this compliance requirement without breaking automated deployments?
 
 <details>
 <summary>Show Answer</summary>
 
-**Principle 3: Pulled Automatically**
-
-"Software agents automatically pull the desired state declarations from the source."
-
-This means:
-- The agent lives **inside** the cluster
-- The agent only needs **read access** to Git
-- No external system has **write access** to the cluster
-- Cluster credentials stay inside the cluster
-
-Compare to traditional CD:
-- CD system **outside** cluster
-- CD needs **write credentials** to cluster
-- Credentials stored in CI/CD platform
-- Larger attack surface
+GitOps fundamentally shifts the deployment paradigm from a "push" model to a "pull" model, which neatly solves this security challenge. In a traditional setup, the external CI/CD pipeline needs administrative credentials to authenticate with the cluster's API server and push changes. With GitOps, the deployment agent lives completely inside the secure boundary of the Kubernetes cluster. The cluster reaches out to read the Git repository, meaning no external system ever needs inbound access or administrative credentials to your cluster. This drastically reduces your attack surface and fully satisfies the CISO's mandate while still enabling fully automated, continuous deployments.
 
 </details>
 
