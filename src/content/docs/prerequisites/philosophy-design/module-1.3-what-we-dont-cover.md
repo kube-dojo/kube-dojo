@@ -72,7 +72,7 @@ We don't try to cover everything. We cover what matters for passing.
 
 | Topic | Why We Skip | Where to Learn |
 |-------|-------------|----------------|
-| BGP configuration | CKA touches basics only | Network engineering resources |
+| BGP configuration | Beyond certification scope | Network engineering resources |
 | Service mesh internals | Istio/Linkerd are separate domains | Project documentation |
 | eBPF/Cilium internals | Advanced networking topic | Cilium documentation |
 | Custom CNI development | Developer topic, not admin | CNI specification |
@@ -256,7 +256,7 @@ Our curriculum matches official exam objectives. If something appears on the exa
 | **Memorizing YAML syntax** | Fear of a blank screen during the exam. | Master `kubectl run` and `kubectl create` with the `--dry-run=client -o yaml` flags to generate templates. |
 | **Studying cloud-specific IAM** | Your company uses AWS IRSA or EKS Pod Identity, so you think it's core K8s. | Focus on pure Kubernetes RBAC (Roles, RoleBindings, ServiceAccounts). The exam is vanilla K8s. |
 | **Building a Raspberry Pi cluster** | You want "hands-on" experience building from scratch. | Use kind, minikube, or a managed cloud VM. The exam tests *using* K8s, not overcoming ARM architecture quirks. |
-| **Over-indexing on Helm/Helmfiles** | It's how you deploy apps at work every day. | *Note on Exam Changes:* Historical advice claimed Helm barely touched the CKA and was heavily tested in CKS. The official Linux Foundation curricula completely contradicts this today. As of the current exam curricula, Helm and Kustomize are explicitly tested in the CKA (25% weight domain) and CKAD, but Helm does *not* appear in the official CKS curriculum. Focus on standard Helm commands for CKA/CKAD, and skip it for CKS. |
+| **Over-indexing on Helm/Helmfiles** | It's how you deploy apps at work every day. | *Note on Exam Changes:* As of the current exam curricula, Helm is explicitly tested in the CKAD, but it does *not* appear in the official CKA or CKS curriculum. Focus on standard Helm commands for the CKAD, and skip it when studying for the CKA or CKS. |
 | **Studying GitOps (ArgoCD/Flux)** | It's the modern standard for K8s deployments. | ArgoCD is not on the exam. Understand the *concept* of declarative state, but don't learn the tool for the test. |
 | **Trying to master etcd operations** | etcd is the brain of the cluster, so it seems critical. | You only need to know how to snapshot and restore etcd using the official `etcdctl` tool. Leave cluster defragmentation to the experts. |
 
