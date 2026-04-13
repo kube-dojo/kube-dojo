@@ -472,7 +472,7 @@ Platform teams that treat their IDP as a product achieve **higher voluntary adop
 <details>
 <summary>5. Your team has just deployed a new payment processing microservice. How does the Backstage catalog integration process actively prevent the "Ticket-Driven Operations" anti-pattern when onboarding this new service into the developer portal?</summary>
 
-**Answer**: It prevents the ticket-driven anti-pattern by utilizing a decentralized, GitOps-driven discovery mechanism via a `catalog-info.yaml` file placed in the repository root. Instead of a developer opening a Jira ticket for an operations team to manually add the service to a central registry, Backstage automatically ingests the metadata directly from the source code repository. This self-service approach completely eliminates the human bottleneck for service registration while instantly providing critical context such as team ownership, system dependencies, and operational dashboards.
+**Answer**: It prevents the ticket-driven anti-pattern by utilizing a decentralized, GitOps-driven discovery mechanism via a `catalog-info.yaml` file placed in the repository root. Instead of a developer opening a Jira ticket for an operations team to manually add the service to a central registry, Backstage automatically ingests the metadata directly from the source code repository. This self-service approach completely eliminates the human bottleneck for service registration while instantly providing critical context such as team ownership, system dependencies, and operational dashboards. This ensures that the catalog remains perfectly synchronized with the actual state of the codebase without requiring continuous manual curation by the platform team.
 </details>
 
 <details>
