@@ -166,6 +166,8 @@ iptables-save > /etc/iptables/rules.v4
 
 ### DaemonSet for iptables Rules
 
+This DaemonSet uses `hostNetwork: true` and `NET_ADMIN` privileges so it can modify the node's actual iptables rules rather than the pod's isolated network namespace.
+
 ```yaml
 apiVersion: apps/v1
 kind: DaemonSet
@@ -259,7 +261,7 @@ curl -H "Metadata:true" \
 
 ```bash
 # Create test pod
-kubectl run test-pod --image=curlimages/curl --rm -it --restart=Never -- \
+kubectl run test-pod --image=curlimages/curl --rm -i --restart=Never -- \
   curl -s --connect-timeout 2 http://169.254.169.254/latest/meta-data/
 
 # Expected: Connection timeout or refused
@@ -352,7 +354,7 @@ kubectl get networkpolicy block-cloud-metadata -n production
 
 ```bash
 # Create test pod
-kubectl run metadata-test --image=curlimages/curl -n production --rm -it --restart=Never -- \
+kubectl run metadata-test --image=curlimages/curl -n production --rm -i --restart=Never -- \
   curl -s --connect-timeout 3 http://169.254.169.254/latest/meta-data/ || echo "BLOCKED (expected)"
 ```
 
@@ -471,7 +473,7 @@ spec:
 kubectl create namespace metadata-test
 
 # Step 1: Verify metadata is accessible (before protection)
-kubectl run check-before --image=curlimages/curl -n metadata-test --rm -it --restart=Never -- \
+kubectl run check-before --image=curlimages/curl -n metadata-test --rm -i --restart=Never -- \
   curl -s --connect-timeout 3 http://169.254.169.254/ && echo "ACCESSIBLE" || echo "BLOCKED"
 
 # Note: In non-cloud environments, you'll see "BLOCKED" already
@@ -489,8 +491,7 @@ spec:
   - Egress
   egress:
   # Allow DNS
-  - to: []
-    ports:
+  - ports:
     - port: 53
       protocol: UDP
   # Allow all except metadata
@@ -506,11 +507,11 @@ kubectl get networkpolicy -n metadata-test
 kubectl describe networkpolicy block-metadata -n metadata-test
 
 # Step 4: Test metadata is blocked
-kubectl run check-after --image=curlimages/curl -n metadata-test --rm -it --restart=Never -- \
+kubectl run check-after --image=curlimages/curl -n metadata-test --rm -i --restart=Never -- \
   curl -s --connect-timeout 3 http://169.254.169.254/ && echo "ACCESSIBLE" || echo "BLOCKED"
 
 # Step 5: Verify other egress still works
-kubectl run check-external --image=curlimages/curl -n metadata-test --rm -it --restart=Never -- \
+kubectl run check-external --image=curlimages/curl -n metadata-test --rm -i --restart=Never -- \
   curl -s --connect-timeout 3 https://kubernetes.io -o /dev/null -w "%{http_code}" && echo " OK"
 
 # Cleanup
