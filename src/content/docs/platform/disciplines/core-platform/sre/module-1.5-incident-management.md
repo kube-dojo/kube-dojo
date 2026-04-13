@@ -67,30 +67,29 @@ Not all incidents are equal. Severity levels help you respond appropriately.
 
 ### Standard Severity Framework
 
-```
-SEV-1 (Critical)
-  ├── User impact: Total outage, major feature broken
-  ├── Scope: All users affected
-  ├── Response: All hands, leadership notified
-  └── Example: Complete site down
-
-SEV-2 (High)
-  ├── User impact: Significant degradation
-  ├── Scope: Many users affected
-  ├── Response: On-call team plus escalations
-  └── Example: Checkout failing for 50% of users
-
-SEV-3 (Medium)
-  ├── User impact: Minor degradation
-  ├── Scope: Some users affected
-  ├── Response: On-call team handles
-  └── Example: Search results slow
-
-SEV-4 (Low)
-  ├── User impact: Minimal
-  ├── Scope: Few users affected
-  ├── Response: Handle during business hours
-  └── Example: Admin dashboard unavailable
+```mermaid
+mindmap
+  root((Severity Levels))
+    SEV-1 Critical
+      User impact: Total outage
+      Scope: All users affected
+      Response: All hands
+      Example: Complete site down
+    SEV-2 High
+      User impact: Significant degradation
+      Scope: Many users affected
+      Response: On-call plus escalations
+      Example: Checkout failing for 50%
+    SEV-3 Medium
+      User impact: Minor degradation
+      Scope: Some users affected
+      Response: On-call team handles
+      Example: Search results slow
+    SEV-4 Low
+      User impact: Minimal
+      Scope: Few users affected
+      Response: Handle during business hours
+      Example: Admin dashboard unavailable
 ```
 
 ### Severity by SLO Impact
@@ -101,6 +100,8 @@ SEV-4 (Low)
 | SEV-2 | Consuming 10-100x normal rate | On-call + escalations |
 | SEV-3 | Consuming 2-10x normal rate | On-call investigates |
 | SEV-4 | Normal to 2x normal rate | Track, fix when possible |
+
+> **Pause and predict**: If you page five engineers simultaneously for a SEV-3 issue, what will happen to their responsiveness during the next SEV-1?
 
 ### Don't Over-Classify
 
@@ -119,27 +120,19 @@ Clear roles prevent chaos. Everyone knows their job.
 
 ### The Core Roles
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                 INCIDENT RESPONSE TEAM                   │
-├─────────────────────────────────────────────────────────┤
-│                                                          │
-│    ┌─────────────────────────────────────────────┐      │
-│    │          INCIDENT COMMANDER (IC)            │      │
-│    │  • Owns overall incident response           │      │
-│    │  • Makes decisions, coordinates work        │      │
-│    │  • Declares incident resolved               │      │
-│    └────────────────────┬────────────────────────┘      │
-│                         │                                │
-│         ┌───────────────┼───────────────┐               │
-│         ▼               ▼               ▼               │
-│    ┌─────────┐    ┌─────────┐    ┌─────────┐           │
-│    │  COMMS  │    │ TECH    │    │ SUBJECT │           │
-│    │  LEAD   │    │ LEAD    │    │ MATTER  │           │
-│    │         │    │         │    │ EXPERTS │           │
-│    └─────────┘    └─────────┘    └─────────┘           │
-│                                                          │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    classDef ic fill:#2d3748,stroke:#63b3ed,stroke-width:2px,color:#fff;
+    classDef role fill:#2d3748,stroke:#cbd5e0,stroke-width:1px,color:#fff;
+    
+    IC["Incident Commander (IC)<br/>• Owns overall incident response<br/>• Makes decisions, coordinates work<br/>• Declares incident resolved"]:::ic
+    Comms["Communications Lead (Comms)<br/>• External & internal updates"]:::role
+    Tech["Tech Lead<br/>• Drives technical investigation"]:::role
+    SME["Subject Matter Experts (SMEs)<br/>• Deep system expertise"]:::role
+    
+    IC --> Comms
+    IC --> Tech
+    IC --> SME
 ```
 
 ### Role Definitions
@@ -150,6 +143,8 @@ Clear roles prevent chaos. Everyone knows their job.
 - Makes decisions when needed
 - Communicates status to stakeholders
 - Declares incident open/closed
+
+> **Stop and think**: If you are the IC and you start reading application logs to find the bug, who is managing the incident?
 
 **Communications Lead (Comms)**
 - External communication (status page, social media)
@@ -205,23 +200,12 @@ Practice:
 
 Every incident follows a lifecycle:
 
-```
-    ┌─────────┐     ┌─────────┐     ┌─────────┐     ┌─────────┐
-    │ DETECT  │ ──▶ │ TRIAGE  │ ──▶ │ RESPOND │ ──▶ │ RESOLVE │
-    └─────────┘     └─────────┘     └─────────┘     └─────────┘
-         │               │               │               │
-         ▼               ▼               ▼               ▼
-    Monitoring       Severity        Fix/mitigate    Verify
-    alerts           assignment      Communication   fixed
-    User reports     Role            Coordination    Close
-                     assignment                      incident
-
-                               │
-                               ▼
-                        ┌─────────────┐
-                        │  LEARN      │
-                        │  (postmortem)│
-                        └─────────────┘
+```mermaid
+flowchart TD
+    Detect[DETECT<br/>Monitoring alerts, User reports] --> Triage[TRIAGE<br/>Severity & Role assignment]
+    Triage --> Respond[RESPOND<br/>Fix/mitigate, Communication, Coordination]
+    Respond --> Resolve[RESOLVE<br/>Verify fixed, Close incident]
+    Resolve --> Learn[LEARN<br/>Postmortem, Action items]
 ```
 
 ### Phase 1: Detection
@@ -282,21 +266,14 @@ Being on-call is central to incident management.
 
 ### On-Call Structure
 
-```
-Primary On-Call
-  └── First responder
-  └── Available 24/7 during rotation
-  └── Handles or escalates all alerts
-
-Secondary On-Call
-  └── Backup to primary
-  └── Available if primary overwhelmed
-  └── Steps in during handoffs
-
-Escalation Path
-  └── Manager → Director → VP
-  └── For severity or business decisions
-  └── Not for technical debugging
+```mermaid
+graph TD
+    POC["Primary On-Call<br/>• First responder<br/>• Available 24/7 during rotation<br/>• Handles or escalates all alerts"]
+    SOC["Secondary On-Call<br/>• Backup to primary<br/>• Available if primary overwhelmed<br/>• Steps in during handoffs"]
+    ESC["Escalation Path<br/>• Manager → Director → VP<br/>• For severity or business decisions<br/>• Not for technical debugging"]
+    
+    POC -->|Escalates if overwhelmed| SOC
+    SOC -->|Escalates for business/severity| ESC
 ```
 
 ### Sustainable On-Call
@@ -649,90 +626,44 @@ Both are valuable. Runbooks for common issues, playbooks for novel situations.
 ## Quiz: Check Your Understanding
 
 ### Question 1
-You receive an alert that API error rate is at 3% (normally 0.1%). How do you triage this?
+You are the primary on-call engineer for an e-commerce platform. At 2:00 PM on a busy Tuesday, PagerDuty alerts you that the checkout API error rate has spiked from a baseline of 0.1% to 3%. How do you triage this to determine the correct severity and next steps?
 
 <details>
 <summary>Show Answer</summary>
 
 **Triage Steps:**
 
-1. **Check impact scope**: How many users affected?
-2. **Check trend**: Is it getting worse?
-3. **Check error types**: 4xx vs 5xx matters
-4. **Check dependencies**: Are upstream/downstream services healthy?
-
-**Severity assessment**:
-- If 3% and stable, many users affected → SEV-2 or SEV-3
-- If 3% and climbing rapidly → SEV-2, may escalate to SEV-1
-- If mostly 4xx (client errors) → Maybe SEV-3 or SEV-4
-- If mostly 5xx (server errors) → More serious
-
-**Decision**: Classify severity, assign roles if SEV-2+, start investigation.
+You must first evaluate the actual user impact and the trajectory of the issue. A 3% error rate on a critical path like checkout means real customers are actively failing to give you money, which immediately elevates the urgency. You should check if the error rate is stable at 3% or climbing rapidly; a climbing rate suggests a cascading failure that might quickly become a SEV-1. Additionally, you need to look at the nature of the errors—if they are 5xx server errors, your backend is failing, whereas 4xx errors might indicate a bad client release. Depending on these factors, you would likely classify this as a SEV-2, declare an incident, page a secondary responder to act as the Incident Commander while you take the Tech Lead role, and begin investigating upstream dependencies like the payment gateway.
 
 </details>
 
 ### Question 2
-What's the IC's main job during an incident?
+During a massive SEV-1 database outage, the Tech Lead is struggling to find the root cause, and the CEO is demanding answers in the Slack channel. As the designated Incident Commander (IC), what is your primary focus, and what actions should you avoid taking yourself?
 
 <details>
 <summary>Show Answer</summary>
 
-The IC's main jobs are:
-
-1. **Coordinate**: Ensure roles are assigned and working together
-2. **Decide**: Make calls when team is stuck or needs direction
-3. **Communicate**: Keep stakeholders informed
-4. **Manage scope**: Keep team focused on resolution
-
-What the IC should NOT do:
-- Personal debugging (that's Tech Lead)
-- External communication (that's Comms)
-- Get lost in technical details
-
-The IC is the conductor, not the musician.
+Your primary focus as the Incident Commander is to maintain situational awareness, coordinate the response, and protect the responders from external distractions. You must immediately intercept the CEO's inquiries, direct them to the Communications Lead, and establish a regular cadence for status updates so the CEO stops interrupting the engineers. Crucially, you must explicitly avoid opening terminal windows or trying to debug the database yourself, no matter how much technical expertise you have. If the IC gets tunnel vision on a technical problem, the entire incident response loses its coordination, communication breaks down, and the overall resolution time will increase. Your job is to facilitate the Tech Lead's work, ask clarifying questions, and ensure they have the resources or additional SMEs they need.
 
 </details>
 
 ### Question 3
-An incident is taking longer than expected. When should you escalate?
+You are the Tech Lead for a SEV-2 incident where a Kubernetes deployment is crash-looping. You've been investigating for 45 minutes but haven't found the root cause. The runbook suggests escalating after 30 minutes, but you feel like you are "just 5 minutes away" from finding the fix. What should you do and why?
 
 <details>
 <summary>Show Answer</summary>
 
-Escalate when:
-
-1. **Time thresholds exceeded**: As defined in runbook (e.g., 30 min for SEV-1)
-2. **Expertise needed**: Current team lacks skills
-3. **Business decisions required**: Need authority to approve risky fix
-4. **Scope expansion**: Incident affecting more than originally thought
-5. **Customer impact increasing**: Despite mitigation efforts
-
-How to escalate well:
-- Summarize situation clearly
-- State what you need from escalation
-- Don't wait too long (bias toward early escalation)
+You should immediately escalate the incident and request additional Subject Matter Experts (SMEs), despite your feeling that a fix is imminent. The "just 5 more minutes" mindset is a well-known cognitive trap in incident response that leads to prolonged outages and responder exhaustion. The 30-minute escalation threshold exists specifically to override this psychological bias and bring fresh eyes to a problem before the current responders become fatigued or stuck in a single line of thinking. By escalating, you aren't admitting defeat; you are following the agreed-upon process to minimize the mean time to resolution (MTTR) and protect the business. Furthermore, bringing in a fresh perspective often instantly breaks the tunnel vision, leading to the rapid discovery of the root cause.
 
 </details>
 
 ### Question 4
-How often should you update the status page during an incident?
+Your team is 20 minutes into a SEV-1 outage affecting all user logins. The Tech Lead has found nothing new in the last 15 minutes and is still reading logs. The last status page update was sent 15 minutes ago stating "Investigating." Should you post another update even though there is no new technical information?
 
 <details>
 <summary>Show Answer</summary>
 
-**Recommended cadence:**
-
-- **During active incident**: Every 15-30 minutes
-- **When status changes**: Immediately (investigating → identified → fix deployed)
-- **At resolution**: Clear resolution message
-
-**Key principles**:
-- Regular updates even if no change ("still investigating")
-- Honest about what you know and don't know
-- Give ETAs when you can (but don't overpromise)
-- Acknowledge customer impact
-
-Silence is worse than "we're still working on it."
+Yes, you absolutely must post another update to the status page, even if the only message is that you are still actively investigating. During a major outage, external silence breeds anxiety, frustration, and a surge of duplicate support tickets from users who think you might not be aware the system is still broken. A predictable communication cadence reassures stakeholders and customers that the incident is being actively managed and hasn't been forgotten. By stating "We are continuing to investigate the root cause of the login failures and will provide another update in 15 minutes," you maintain trust and transparency. Managing the perception of the incident through consistent communication is often just as important to customer retention as fixing the underlying technical issue.
 
 </details>
 
