@@ -234,7 +234,7 @@ brew install velero
 # Install Velero in the cluster (AWS example with EBS snapshots)
 velero install \
   --provider aws \
-  --plugins velero/velero-plugin-for-aws:v1.10.0 \
+  --plugins velero/velero-plugin-for-aws:v1.12.0 \
   --bucket velero-backups-prod \
   --backup-location-config region=us-east-1 \
   --snapshot-location-config region=us-east-1 \
@@ -732,7 +732,7 @@ EOF
 # Install Velero
 velero install \
   --provider aws \
-  --plugins velero/velero-plugin-for-aws:v1.10.0 \
+  --plugins velero/velero-plugin-for-aws:v1.12.0 \
   --bucket velero-backups \
   --secret-file /tmp/velero-creds \
   --use-volume-snapshots=false \
