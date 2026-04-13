@@ -9,7 +9,7 @@ sidebar:
 >
 > **Time to Complete**: 35-40 minutes
 >
-> **Prerequisites**: Module 3 (Pods)
+> **Prerequisites**: Module 1.3 (Pods)
 
 In late 2016, a catastrophic failure in secret management cost rideshare giant Uber a staggering $148 million in regulatory fines, alongside immeasurable reputational damage. The breach did not stem from a sophisticated zero-day exploit or a nation-state hacking syndicate. Instead, attackers compromised a private GitHub repository used by Uber's engineering team. Inside the repository's source code, the attackers discovered hardcoded AWS credentials—plaintext keys that granted broad access to the company's cloud infrastructure. With these credentials, the intruders accessed an Amazon S3 datastore containing the personal information of 57 million riders and drivers.
 
