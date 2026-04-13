@@ -197,9 +197,9 @@ spec:
 ### 2.3 Examples
 
 ```bash
-# Run 10 tasks, 3 at a time
-kubectl create job batch --image=busybox -- sh -c "echo done; sleep 2"
-kubectl patch job batch -p '{"spec":{"completions":10,"parallelism":3}}'
+# Scale parallelism of an existing job (completions is immutable)
+kubectl create job batch --image=busybox -- sh -c "echo done; sleep 30"
+kubectl patch job batch -p '{"spec":{"parallelism":3}}'
 
 # Or create with YAML
 cat << 'EOF' | kubectl apply -f -
@@ -576,6 +576,7 @@ kubectl create cronjob backup --image=busybox --schedule="0 0 * * *" -- echo "ba
 # Trigger manually
 kubectl create job --from=cronjob/backup backup-now
 kubectl get jobs
+kubectl wait --for=condition=complete job/backup-now --timeout=60s
 kubectl logs job/backup-now
 
 kubectl delete cronjob backup
@@ -683,7 +684,7 @@ kubectl get cronjob every-minute
 sleep 70
 
 # Check jobs created
-kubectl get jobs -l job-name
+kubectl get jobs
 
 # Cleanup
 kubectl delete cronjob every-minute
@@ -700,6 +701,7 @@ kubectl create job --from=cronjob/daily daily-manual-run
 
 # Check
 kubectl get jobs
+kubectl wait --for=condition=complete job/daily-manual-run --timeout=60s
 kubectl logs job/daily-manual-run
 
 # Cleanup
