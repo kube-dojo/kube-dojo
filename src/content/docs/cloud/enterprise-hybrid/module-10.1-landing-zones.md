@@ -182,7 +182,7 @@ terraform apply -auto-approve \
   -var="account_id=${ACCOUNT_ID}" \
   -var="vpc_cidr=${VPC_CIDR}" \
   -var="cluster_name=eks-${ACCOUNT_ID}-prod" \
-  -var="cluster_version=1.32"
+  -var="cluster_version=1.35"
 
 # Step 3: Register cluster in Backstage catalog
 CLUSTER_ENDPOINT=$(aws eks describe-cluster \
@@ -291,7 +291,7 @@ module aks 'modules/aks-baseline.bicep' = if (provisionAKS) {
   scope: subscription
   params: {
     clusterName: 'aks-${teamName}-${environment}'
-    kubernetesVersion: '1.32'
+    kubernetesVersion: '1.35'
     subnetId: networking.outputs.aksSubnetId
     aadAdminGroupId: '${teamName}-k8s-admins'  // Azure AD group
     enableDefender: environment == 'production'
@@ -764,9 +764,9 @@ kind create cluster --config /tmp/mgmt-cluster.yaml
 # Verify the cluster is running
 k get nodes
 # NAME                               STATUS   ROLES           AGE   VERSION
-# landing-zone-mgmt-control-plane    Ready    control-plane   45s   v1.32.0
-# landing-zone-mgmt-worker           Ready    <none>          30s   v1.32.0
-# landing-zone-mgmt-worker2          Ready    <none>          30s   v1.32.0
+# landing-zone-mgmt-control-plane    Ready    control-plane   45s   v1.35.0
+# landing-zone-mgmt-worker           Ready    <none>          30s   v1.35.0
+# landing-zone-mgmt-worker2          Ready    <none>          30s   v1.35.0
 ```
 
 </details>
