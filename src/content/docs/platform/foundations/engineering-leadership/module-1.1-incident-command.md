@@ -31,6 +31,8 @@ The technology that failed Sarah's company that night was not the database. It w
 
 This module teaches you that structure. By the end, you will know how to walk into chaos, establish order, and lead a team through the worst night of their operational lives. You will know when to escalate, how to communicate, and — critically — when to stop trying to fix and start trying to stabilize. These are not theoretical skills. They are the difference between a 20-minute incident and a 4-hour catastrophe.
 
+> **Stop and think**: Think about the worst incident you have been involved in. Was the bottleneck a lack of technical knowledge, or a lack of coordination and communication?
+
 ---
 
 ## The Incident Command System: From Wildfires to Web Services
@@ -68,24 +70,16 @@ The key insight from ICS is this: **in a crisis, process is not bureaucracy. Pro
 
 There are four critical roles in a software incident. In a small team, one person might wear multiple hats. In a large organization, each role is a separate person. But every role must be filled, even if implicitly.
 
-```
-                    ┌─────────────────────┐
-                    │  INCIDENT COMMANDER │
-                    │  (Owns the incident)│
-                    └─────────┬───────────┘
-                              │
-           ┌──────────────────┼──────────────────┐
-           │                  │                  │
-  ┌────────▼─────────┐ ┌─────▼──────────┐ ┌────▼───────────────┐
-  │  COMMUNICATIONS  │ │  OPERATIONS    │ │  SUBJECT MATTER    │
-  │  LEAD            │ │  LEAD          │ │  EXPERTS (SMEs)    │
-  │                  │ │                │ │                    │
-  │ - Status updates │ │ - Hands on     │ │ - Database         │
-  │ - Stakeholders   │ │   keyboard     │ │ - Networking       │
-  │ - Status page    │ │ - Executing    │ │ - Application      │
-  │ - Customer comms │ │   fixes        │ │ - Security         │
-  └──────────────────┘ │ - Monitoring   │ │ - Infrastructure   │
-                       └────────────────┘ └────────────────────┘
+```mermaid
+graph TD
+    IC["INCIDENT COMMANDER<br>(Owns the incident)"]
+    CL["COMMUNICATIONS LEAD<br>- Status updates<br>- Stakeholders<br>- Status page<br>- Customer comms"]
+    OL["OPERATIONS LEAD<br>- Hands on keyboard<br>- Executing fixes<br>- Monitoring"]
+    SME["SUBJECT MATTER EXPERTS (SMEs)<br>- Database<br>- Networking<br>- Application<br>- Security<br>- Infrastructure"]
+
+    IC --> CL
+    IC --> OL
+    IC --> SME
 ```
 
 ### Role 1: Incident Commander (IC)
@@ -150,7 +144,7 @@ The Operations Lead is the person (or people) with hands on the keyboard, actual
 
 **Critical rule:** The Operations Lead proposes actions. The IC approves them. This prevents well-meaning engineers from making unilateral changes to production during a crisis.
 
-```
+```text
   Ops Lead: "I want to failover to the secondary database cluster."
   IC:       "What's the risk?"
   Ops Lead: "We'll lose about 30 seconds of writes during the switchover.
@@ -194,7 +188,7 @@ A war room is a dedicated space (physical or virtual) where incident responders 
 
 For any Sev-1 or Sev-2 incident, create a dedicated Slack channel immediately:
 
-```
+```text
 #incident-2026-03-24-db-outage
 ```
 
@@ -202,7 +196,7 @@ For any Sev-1 or Sev-2 incident, create a dedicated Slack channel immediately:
 
 Pin the following message at the top of the channel:
 
-```
+```text
 INCIDENT: Primary database cluster write failure
 SEVERITY: Sev-1
 IC: @sarah
@@ -227,7 +221,7 @@ Last update: 02:55 UTC — Replica lag increasing. Investigating primary node di
 
 During an active incident, the Comms Lead posts a structured update every 15 minutes, whether or not there is news. This is non-negotiable. Silence during an incident is terrifying for stakeholders and leadership.
 
-```
+```text
 UPDATE — 03:15 UTC (30 min into incident)
 Status: Mitigating
 What we know: Primary DB disk I/O saturated at 100%. Cause under investigation.
@@ -261,7 +255,7 @@ Do not write customer communications from scratch during a crisis. Use templates
 
 **Initial acknowledgment (post within 5 minutes):**
 
-```
+```text
 We are aware of an issue affecting [service/feature]. Our team is actively
 investigating. We will provide updates every [15/30] minutes.
 
@@ -270,7 +264,7 @@ Current impact: [brief description of what customers are experiencing]
 
 **Update during investigation:**
 
-```
+```text
 We continue to investigate the issue affecting [service/feature].
 We have identified [what you know] and are working on [what you're doing].
 
@@ -280,7 +274,7 @@ Next update: [time]
 
 **Mitigation in progress:**
 
-```
+```text
 We have identified the cause of the issue affecting [service/feature]
 and are implementing a fix. Some customers may see improvement shortly.
 
@@ -290,7 +284,7 @@ Expected resolution: [time estimate, if known, or "we will update when available
 
 **Resolved:**
 
-```
+```text
 The issue affecting [service/feature] has been resolved. All systems are
 operating normally. The incident lasted approximately [duration].
 
@@ -314,32 +308,14 @@ Severity levels are not subjective opinions. They are predefined criteria that d
 
 ### Severity Definitions
 
-```
-┌───────────────────────────────────────────────────────────────────────────┐
-│                        SEVERITY LEVEL MATRIX                            │
-├───────┬──────────────────┬──────────────────┬──────────────────────────┤
-│ Level │ Customer Impact   │ Revenue Impact    │ Response                 │
-├───────┼──────────────────┼──────────────────┼──────────────────────────┤
-│ SEV-1 │ All/most users    │ Revenue stopped   │ All-hands, 24/7          │
-│       │ cannot use core   │ or major loss     │ IC + full team           │
-│       │ functionality     │ per minute        │ Exec notification        │
-│       │                  │                  │ 15-min update cadence    │
-├───────┼──────────────────┼──────────────────┼──────────────────────────┤
-│ SEV-2 │ Large subset of   │ Significant       │ Dedicated responders     │
-│       │ users affected    │ revenue impact    │ IC assigned              │
-│       │ or core feature   │                  │ 30-min update cadence    │
-│       │ degraded          │                  │ Business hours + on-call │
-├───────┼──────────────────┼──────────────────┼──────────────────────────┤
-│ SEV-3 │ Small subset of   │ Minor or no       │ On-call investigates     │
-│       │ users affected    │ direct revenue    │ during business hours    │
-│       │ Non-critical      │ impact            │ 2-hour update cadence    │
-│       │ feature broken    │                  │                          │
-├───────┼──────────────────┼──────────────────┼──────────────────────────┤
-│ SEV-4 │ Internal only or  │ None              │ Ticket created           │
-│       │ cosmetic issue    │                  │ Fixed in normal sprint   │
-│       │                  │                  │ No active incident mgmt  │
-└───────┴──────────────────┴──────────────────┴──────────────────────────┘
-```
+| Level | Customer Impact | Revenue Impact | Response |
+|---|---|---|---|
+| **SEV-1** | All/most users cannot use core functionality | Revenue stopped or major loss per minute | All-hands, 24/7. IC + full team. Exec notification. 15-min update cadence. |
+| **SEV-2** | Large subset of users affected or core feature degraded | Significant revenue impact | Dedicated responders. IC assigned. 30-min update cadence. Business hours + on-call. |
+| **SEV-3** | Small subset of users affected. Non-critical feature broken. | Minor or no direct revenue impact | On-call investigates during business hours. 2-hour update cadence. |
+| **SEV-4** | Internal only or cosmetic issue | None | Ticket created. Fixed in normal sprint. No active incident mgmt. |
+
+> **Pause and predict**: If a non-critical internal tool used by the HR team goes down on a Saturday, what severity level would you assign it? Why?
 
 ### Real-World Severity Examples
 
@@ -371,30 +347,28 @@ When you get paged at 3 AM, you need to determine severity in the first 5 minute
 
 ### The 5-Minute Triage Checklist
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    5-MINUTE TRIAGE FLOW                         │
-│                                                                 │
-│  1. Are customers affected RIGHT NOW?                           │
-│     ├─ YES ──► Check error rates, status codes, latency         │
-│     └─ NO ───► Likely Sev-3 or Sev-4. Investigate in morning.  │
-│                                                                 │
-│  2. What percentage of customers are affected?                  │
-│     ├─ >50% ──► Likely Sev-1                                   │
-│     ├─ 10-50% ─► Likely Sev-2                                  │
-│     └─ <10% ──► Likely Sev-3                                   │
-│                                                                 │
-│  3. Is a core revenue function impacted?                        │
-│     ├─ YES ──► Bump severity by one level                      │
-│     └─ NO ───► Keep current assessment                         │
-│                                                                 │
-│  4. Is the issue getting worse?                                 │
-│     ├─ YES ──► Bump severity by one level                      │
-│     └─ NO ───► Keep current assessment                         │
-│                                                                 │
-│  5. Declare severity and begin incident process.                │
-│     Do NOT spend more than 5 minutes triaging.                 │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Start("5-MINUTE TRIAGE FLOW") --> Q1{"1. Are customers<br>affected RIGHT NOW?"}
+    Q1 -- YES --> Action1["Check error rates, status codes, latency"]
+    Q1 -- NO --> End1["Likely Sev-3 or Sev-4.<br>Investigate in morning."]
+    Action1 --> Q2{"2. What percentage of<br>customers are affected?"}
+    Q2 -- ">50%" --> S1["Likely Sev-1"]
+    Q2 -- "10-50%" --> S2["Likely Sev-2"]
+    Q2 -- "<10%" --> S3["Likely Sev-3"]
+    S1 --> Q3
+    S2 --> Q3
+    S3 --> Q3
+    Q3{"3. Is a core revenue<br>function impacted?"}
+    Q3 -- YES --> Bump1["Bump severity by one level"]
+    Q3 -- NO --> Keep1["Keep current assessment"]
+    Bump1 --> Q4
+    Keep1 --> Q4
+    Q4{"4. Is the issue<br>getting worse?"}
+    Q4 -- YES --> Bump2["Bump severity by one level"]
+    Q4 -- NO --> Keep2["Keep current assessment"]
+    Bump2 --> Final["5. Declare severity and begin incident process.<br>Do NOT spend more than 5 minutes triaging."]
+    Keep2 --> Final
 ```
 
 **Critical mindset:** It is always better to over-classify and downgrade than to under-classify and scramble to catch up. Declaring a Sev-1 that turns out to be a Sev-3 wastes a few hours of people's time. Treating a Sev-1 as a Sev-3 can cost millions.
@@ -409,19 +383,17 @@ This is the single most important concept in incident management, and the one th
 
 **Resolution** means fixing the root cause so the problem does not recur.
 
+```mermaid
+flowchart LR
+    A[Detection] --> B[Triage]
+    B --> C[MITIGATION]
+    C --> D[Stabilization]
+    D --> E[Root Cause Analysis]
+    
+    C -.- F("Customer impact ENDS here<br>(not at root cause fix)")
 ```
-┌────────────────────────────────────────────────────────────────────┐
-│                                                                    │
-│  TIMELINE OF AN INCIDENT                                           │
-│                                                                    │
-│  Detection ──► Triage ──► MITIGATION ──► Stabilization ──► Root    │
-│                               │            Cause Analysis          │
-│                               │                                    │
-│                    Customer impact ENDS here                       │
-│                    (not at root cause fix)                          │
-│                                                                    │
-└────────────────────────────────────────────────────────────────────┘
-```
+
+> **Stop and think**: Can you recall an incident in your own career where the team spent hours trying to find a root cause while customers were suffering, when a simple rollback could have restored service immediately?
 
 ### Mitigation Examples
 
@@ -438,7 +410,7 @@ This is the single most important concept in incident management, and the one th
 
 Engineers are problem solvers. When they see a bug, their instinct is to find and fix it. This is a virtue in normal operations and a liability during an incident. Here is what happens:
 
-```
+```text
 BAD (Resolution-first thinking):
   03:00 - Alert fires. Database writes failing.
   03:05 - Engineer starts reading database logs.
@@ -472,7 +444,7 @@ The same engineers. The same problem. The same root cause. But one team had a 14
 
 ### A Well-Managed Sev-1
 
-```
+```text
 TIME     EVENT                                          WHO
 ──────── ────────────────────────────────────────────── ──────────
 02:47    Alerts fire: DB write errors > 1000/min        Monitoring
@@ -505,7 +477,7 @@ TIME     EVENT                                          WHO
 
 ### A Poorly Managed Sev-1
 
-```
+```text
 TIME     EVENT                                          WHO
 ──────── ────────────────────────────────────────────── ──────────
 02:47    Alerts fire: DB write errors > 1000/min        Monitoring
@@ -707,7 +679,7 @@ Based on the alerts, answer these questions:
 - Casey should be notified but NOT in the war room. Send Casey to standby: "We have a Sev-1 impacting the transactions API. I will update you every 15 minutes. Prepare to communicate with [enterprise client] if needed."
 
 **Incident channel message:**
-```
+```text
 INCIDENT DECLARED — Sev-1
 Issue: PostgreSQL replication lag + API errors on /api/v2/transactions
 IC: [You]
