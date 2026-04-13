@@ -61,56 +61,60 @@ When `curl` hangs, when packets disappear, when latency spikes—you need TCP/IP
 
 ### OSI Model vs TCP/IP Model
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│           OSI Model          │         TCP/IP Model            │
-├─────────────────────────────────────────────────────────────────┤
-│  7. Application              │                                 │
-│  6. Presentation             │  Application                    │
-│  5. Session                  │  (HTTP, DNS, SSH)               │
-├─────────────────────────────────────────────────────────────────┤
-│  4. Transport                │  Transport                      │
-│     (TCP, UDP)               │  (TCP, UDP)                     │
-├─────────────────────────────────────────────────────────────────┤
-│  3. Network                  │  Internet                       │
-│     (IP)                     │  (IP)                           │
-├─────────────────────────────────────────────────────────────────┤
-│  2. Data Link                │                                 │
-│  1. Physical                 │  Network Access                 │
-│     (Ethernet, WiFi)         │  (Ethernet)                     │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+graph LR
+    subgraph OSI Model
+        direction TB
+        O7["7. Application"]
+        O6["6. Presentation"]
+        O5["5. Session"]
+        O4["4. Transport (TCP, UDP)"]
+        O3["3. Network (IP)"]
+        O2["2. Data Link"]
+        O1["1. Physical (Ethernet, WiFi)"]
+    end
+    
+    subgraph TCP/IP Model
+        direction TB
+        T4["Application (HTTP, DNS, SSH)"]
+        T3["Transport (TCP, UDP)"]
+        T2["Internet (IP)"]
+        T1["Network Access (Ethernet)"]
+    end
+
+    O7 ~~~ T4
+    O6 ~~~ T4
+    O5 ~~~ T4
+    O4 ~~~ T3
+    O3 ~~~ T2
+    O2 ~~~ T1
+    O1 ~~~ T1
 ```
 
 ### How Data Flows
 
-```
-Application: "GET /index.html HTTP/1.1"
-       │
-       ▼
-┌──────────────────────────────────────────────────────────────┐
-│ Transport Layer (TCP)                                         │
-│ + Source Port: 54321                                         │
-│ + Dest Port: 80                                              │
-│ + Sequence Number, ACK, Flags                                │
-└──────────────────────────────────────────────────────────────┘
-       │
-       ▼
-┌──────────────────────────────────────────────────────────────┐
-│ Network Layer (IP)                                           │
-│ + Source IP: 192.168.1.100                                   │
-│ + Dest IP: 10.0.0.50                                        │
-│ + TTL, Protocol                                              │
-└──────────────────────────────────────────────────────────────┘
-       │
-       ▼
-┌──────────────────────────────────────────────────────────────┐
-│ Data Link Layer (Ethernet)                                   │
-│ + Source MAC: aa:bb:cc:dd:ee:ff                             │
-│ + Dest MAC: 11:22:33:44:55:66                               │
-└──────────────────────────────────────────────────────────────┘
-       │
-       ▼
-     Wire / Radio / Fiber
+```mermaid
+graph TD
+    App["Application: GET /index.html HTTP/1.1"]
+    
+    subgraph Transport["Transport Layer (TCP)"]
+        T_Details["Source Port: 54321<br/>Dest Port: 80<br/>Sequence Number, ACK, Flags"]
+    end
+    
+    subgraph Network["Network Layer (IP)"]
+        N_Details["Source IP: 192.168.1.100<br/>Dest IP: 10.0.0.50<br/>TTL, Protocol"]
+    end
+    
+    subgraph DataLink["Data Link Layer (Ethernet)"]
+        D_Details["Source MAC: aa:bb:cc:dd:ee:ff<br/>Dest MAC: 11:22:33:44:55:66"]
+    end
+    
+    Wire["Wire / Radio / Fiber"]
+    
+    App --> Transport
+    Transport --> Network
+    Network --> DataLink
+    DataLink --> Wire
 ```
 
 ---
@@ -119,7 +123,7 @@ Application: "GET /index.html HTTP/1.1"
 
 ### IPv4 Address Structure
 
-```
+```text
 IP Address: 192.168.1.100
 Binary:     11000000.10101000.00000001.01100100
 
@@ -152,18 +156,14 @@ Broadcast:   192.168.1.255 (all host bits = 1)
 
 ### Kubernetes IP Ranges
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    KUBERNETES NETWORKING                         │
-│                                                                  │
-│  Pod Network:       10.244.0.0/16                               │
-│  Service Network:   10.96.0.0/12                                │
-│  Node Network:      192.168.1.0/24                              │
-│                                                                  │
-│  Pod on Node 1:     10.244.1.15/24                             │
-│  Pod on Node 2:     10.244.2.23/24                             │
-│  ClusterIP Service: 10.96.0.1                                   │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph K8s["Kubernetes Networking"]
+        direction TB
+        Nets["Pod Network: 10.244.0.0/16<br/>Service Network: 10.96.0.0/12<br/>Node Network: 192.168.1.0/24"]
+        Exs["Pod on Node 1: 10.244.1.15/24<br/>Pod on Node 2: 10.244.2.23/24<br/>ClusterIP Service: 10.96.0.1"]
+        Nets ~~~ Exs
+    end
 ```
 
 ### Viewing IP Configuration
@@ -193,27 +193,20 @@ ip -br addr
 
 ### TCP: Reliable, Ordered
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                    TCP 3-WAY HANDSHAKE                           │
-│                                                                  │
-│    Client                                         Server         │
-│      │                                              │            │
-│      │────────── SYN (seq=100) ────────────────────▶│            │
-│      │                                              │            │
-│      │◀───────── SYN-ACK (seq=300, ack=101) ───────│            │
-│      │                                              │            │
-│      │────────── ACK (seq=101, ack=301) ───────────▶│            │
-│      │                                              │            │
-│      │         Connection Established               │            │
-│      │                                              │            │
-│      │◀═══════════ Data Transfer ═══════════════════│            │
-│      │                                              │            │
-│      │────────── FIN ──────────────────────────────▶│            │
-│      │◀───────── FIN-ACK ───────────────────────────│            │
-│      │────────── ACK ──────────────────────────────▶│            │
-│      │                                              │            │
-└──────────────────────────────────────────────────────────────────┘
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+
+    Client->>Server: SYN (seq=100)
+    Server->>Client: SYN-ACK (seq=300, ack=101)
+    Client->>Server: ACK (seq=101, ack=301)
+    Note over Client,Server: Connection Established
+    Client->>Server: Data Transfer
+    Server->>Client: Data Transfer
+    Client->>Server: FIN
+    Server->>Client: FIN-ACK
+    Client->>Server: ACK
 ```
 
 TCP Features:
@@ -225,18 +218,15 @@ TCP Features:
 
 ### UDP: Fast, Simple
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                         UDP                                       │
-│                                                                   │
-│    Client                                         Server          │
-│      │                                              │             │
-│      │────────── Data ─────────────────────────────▶│             │
-│      │────────── Data ─────────────────────────────▶│             │
-│      │────────── Data ─────────────────────────────▶│             │
-│      │                                              │             │
-│    No handshake, no acknowledgments, no guarantees               │
-└──────────────────────────────────────────────────────────────────┘
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+
+    Client->>Server: Data
+    Client->>Server: Data
+    Client->>Server: Data
+    Note over Client,Server: No handshake, no acknowledgments, no guarantees
 ```
 
 UDP Features:
@@ -264,23 +254,21 @@ UDP Features:
 
 ### How Routing Works
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      ROUTING DECISION                            │
-│                                                                  │
-│  Packet destined for: 10.0.0.50                                 │
-│                                                                  │
-│  Routing Table:                                                 │
-│  ┌────────────────────────────────────────────────────────┐     │
-│  │ Destination     Gateway         Interface    Metric    │     │
-│  ├────────────────────────────────────────────────────────┤     │
-│  │ 192.168.1.0/24  0.0.0.0         eth0         0        │     │
-│  │ 10.0.0.0/8      192.168.1.1     eth0         100      │ ←   │
-│  │ 0.0.0.0/0       192.168.1.1     eth0         0        │     │
-│  └────────────────────────────────────────────────────────┘     │
-│                                                                  │
-│  Match: 10.0.0.0/8 → Send to gateway 192.168.1.1 via eth0       │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    Packet["Packet destined for: 10.0.0.50"]
+    
+    subgraph RoutingTable["Routing Table"]
+        direction TB
+        R1["192.168.1.0/24 via 0.0.0.0 (eth0, metric 0)"]
+        R2["10.0.0.0/8 via 192.168.1.1 (eth0, metric 100)"]
+        R3["0.0.0.0/0 via 192.168.1.1 (eth0, metric 0)"]
+    end
+    
+    Match["Match: 10.0.0.0/8<br/>Send to gateway 192.168.1.1 via eth0"]
+    
+    Packet --> RoutingTable
+    R2 ==> Match
 ```
 
 ### Viewing Routes
