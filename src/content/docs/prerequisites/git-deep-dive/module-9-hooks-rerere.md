@@ -216,7 +216,7 @@ spec:
     spec:
       containers:
       - name: app
-        image: nginx:1.24
+        image: nginx:1.26
         env:
         - name: DATABASE_PASSWORD
           value: "super_secret_production_123!" # FATAL ERROR: Hardcoded secret exposed
