@@ -330,18 +330,21 @@ k get pods -n web
 
 ```bash
 # Check current release
-helm list
-helm get values my-nginx
+helm list -n web
+helm get values my-nginx -n web
 
 # Upgrade
-helm upgrade my-nginx bitnami/nginx --set replicaCount=3
+helm upgrade my-nginx bitnami/nginx --set replicaCount=3 -n web
+
+# Verify upgrade
+helm history my-nginx -n web
+k get pods -n web
 
 # Something goes wrong - rollback
-helm history my-nginx
-helm rollback my-nginx 1
+helm rollback my-nginx 1 -n web
 
 # Verify
-helm list
+helm list -n web
 ```
 
 ### Scenario 3: Inspect Before Install
@@ -351,10 +354,10 @@ helm list
 helm show values bitnami/nginx | head -50
 
 # Dry run to see generated manifests
-helm install test bitnami/nginx --dry-run | less
+helm install test bitnami/nginx --dry-run | head -n 50
 
 # Then install
-helm install my-nginx bitnami/nginx
+helm install test-nginx bitnami/nginx
 ```
 
 ---
@@ -418,6 +421,8 @@ helm get notes my-release
 
 - **Helm 3 removed Tiller.** Helm 2 required a server-side component (Tiller) with cluster-admin privileges. Helm 3 runs entirely client-side, using your kubeconfig permissions.
 
+- **Helm 4 is the Current Major Version.** Released in 2025, Helm 4 defaults to server-side apply for installs and renamed flags (e.g., `--atomic` to `--rollback-on-failure`), while maintaining backward compatibility with Helm 3 charts.
+
 - **`helm upgrade --install`** is idempotent—it installs if the release doesn't exist, or upgrades if it does. Great for CI/CD pipelines.
 
 - **Helm stores release data as Secrets** (default) or ConfigMaps. Each revision is a separate Secret, enabling rollback to any previous state.
@@ -441,7 +446,7 @@ helm get notes my-release
 1. **Your CI/CD pipeline needs to deploy a chart that may or may not already be installed in the cluster. It should install on first run and upgrade on subsequent runs, without error. What single Helm command handles both cases?**
    <details>
    <summary>Answer</summary>
-   Use `helm upgrade --install my-release bitnami/nginx`. The `--install` flag makes the command idempotent -- it installs if the release doesn't exist and upgrades if it does. This is the standard pattern for CI/CD pipelines because it eliminates the need for conditional logic to check whether a release exists. Add `--atomic` to automatically roll back if the upgrade fails, ensuring the pipeline never leaves a broken release behind.
+   Use `helm upgrade --install my-release bitnami/nginx`. The `--install` flag makes the command idempotent -- it installs if the release doesn't exist and upgrades if it does. This is the standard pattern for CI/CD pipelines because it eliminates the need for conditional logic to check whether a release exists. Add `--rollback-on-failure` (formerly `--atomic` in Helm 3) to automatically roll back if the upgrade fails, ensuring the pipeline never leaves a broken release behind.
    </details>
 
 2. **A teammate upgraded a Helm release with `helm upgrade my-app bitnami/nginx --set replicaCount=5` but now reports that the `service.type` they set during initial install has reverted to the chart default `LoadBalancer` instead of their custom `ClusterIP`. What happened and how do they fix future upgrades?**
@@ -579,6 +584,9 @@ helm uninstall drill3
 # Install
 helm install drill4 bitnami/nginx --set replicaCount=1
 
+# Verify install
+helm status drill4
+
 # Upgrade
 helm upgrade drill4 bitnami/nginx --set replicaCount=3
 
@@ -616,6 +624,8 @@ k delete ns helm-test
 
 **Scenario**: Deploy a production-ready nginx.
 
+To make the deployment production-ready, we increase replicas for high availability, use a NodePort to ensure external connectivity, and apply strict resource limits to prevent the application from consuming excess cluster capacity.
+
 ```bash
 # 1. Create values file
 cat << 'EOF' > /tmp/prod-values.yaml
@@ -646,6 +656,10 @@ k get pods -l app.kubernetes.io/instance=prod-web
 
 # 5. Upgrade with more replicas
 helm upgrade prod-web bitnami/nginx -f /tmp/prod-values.yaml --set replicaCount=5
+
+# Verify upgrade
+helm status prod-web
+k get pods -l app.kubernetes.io/instance=prod-web
 
 # 6. Something wrong - rollback
 helm rollback prod-web 1
