@@ -62,13 +62,13 @@ flowchart TD
 
 ### What Production Needs
 
-- ✅ Run containers across multiple machines
-- ✅ Automatic restart when containers crash
-- ✅ Automatic placement (which machine has capacity?)
-- ✅ Load balancing between containers
-- ✅ Rolling updates without downtime
-- ✅ Scaling up/down based on demand
-- ✅ Self-healing when things break
+- Run containers across multiple machines
+- Automatic restart when containers crash
+- Automatic placement (which machine has capacity?)
+- Load balancing between containers
+- Rolling updates without downtime
+- Scaling up/down based on demand
+- Self-healing when things break
 
 This is **container orchestration**, and Kubernetes is the industry standard.
 
@@ -247,13 +247,13 @@ spec:
 
 | Feature | Docker (single host) | Kubernetes |
 |---------|---------------------|------------|
-| Multi-node | ❌ | ✅ |
-| Auto-scaling | ❌ | ✅ |
-| Self-healing | ❌ | ✅ |
-| Rolling updates | Manual | ✅ Automatic |
-| Load balancing | Manual | ✅ Built-in |
-| Service discovery | Manual | ✅ Built-in |
-| Secrets management | ❌ | ✅ |
+| Multi-node | No | Yes |
+| Auto-scaling | No | Yes |
+| Self-healing | No | Yes |
+| Rolling updates | Manual | Automatic |
+| Load balancing | Manual | Built-in |
+| Service discovery | Manual | Built-in |
+| Secrets management | No | Yes |
 | Resource limits | Per container | Cluster-wide |
 
 Docker is for running containers. Kubernetes is for operating containers at scale.
