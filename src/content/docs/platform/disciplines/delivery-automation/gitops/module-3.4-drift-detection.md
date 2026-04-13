@@ -28,6 +28,8 @@ After completing this module, you will be able to:
 
 GitOps principle #4: "Continuously reconciled."
 
+> **Stop and think**: If Git is the single source of truth, what happens if a cluster admin runs `kubectl edit deployment` during a critical production incident? Which state should ultimately win?
+
 But what happens when someone runs `kubectl edit` directly? Or when a Kubernetes controller modifies a resource? Or when network issues prevent syncing?
 
 **Drift** occurs when the cluster state doesn't match Git.
@@ -46,24 +48,23 @@ This module teaches you to detect drift, understand why it happens, and decide w
 
 Drift is the difference between desired state (Git) and actual state (cluster).
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     Desired State (Git)                      │
-│                                                              │
-│    replicas: 3                                               │
-│    image: my-app:v1.2.3                                      │
-│    memory: 512Mi                                             │
-└─────────────────────────────────────────────────────────────┘
-                              ≠
-┌─────────────────────────────────────────────────────────────┐
-│                   Actual State (Cluster)                     │
-│                                                              │
-│    replicas: 5        ← Someone scaled manually              │
-│    image: my-app:v1.2.3                                      │
-│    memory: 512Mi                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+graph LR
+    subgraph Git["Desired State (Git)"]
+        direction TB
+        G1["replicas: 3"]
+        G2["image: my-app:v1.2.3"]
+        G3["memory: 512Mi"]
+    end
 
-                        DRIFT DETECTED
+    subgraph Cluster["Actual State (Cluster)"]
+        direction TB
+        C1["replicas: 5 (Someone scaled manually)"]
+        C2["image: my-app:v1.2.3"]
+        C3["memory: 512Mi"]
+    end
+
+    Git -. "≠ DRIFT DETECTED" .-> Cluster
 ```
 
 ### Types of Drift
@@ -144,13 +145,9 @@ metadata:
 
 ### 4. Network/Sync Issues
 
-```
-GitOps Agent ──✕──> Git Repository
-              ^
-              │
-         Network failure
-
-Agent can't sync, cluster drifts over time
+```mermaid
+graph LR
+    Agent["GitOps Agent"] -- "✕ (Network failure)" --> Git["Git Repository"]
 ```
 
 **Why it happens:**
@@ -188,21 +185,18 @@ diff <(yq 'del(.metadata.uid, .metadata.resourceVersion,
 
 ArgoCD shows drift as "OutOfSync":
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    ArgoCD Application                        │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  Application: my-app                                         │
-│  Sync Status: OutOfSync  ⚠️                                  │
-│  Health: Healthy                                             │
-│                                                              │
-│  Diff:                                                       │
-│  - spec.replicas: 3                                          │
-│  + spec.replicas: 5                                          │
-│                                                              │
-│  [Sync] [Refresh] [History]                                  │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph ArgoCD["ArgoCD Application"]
+        direction TB
+        App["Application: my-app"]
+        Status["Sync Status: OutOfSync"]
+        Health["Health: Healthy"]
+        Diff["Diff:<br>- spec.replicas: 3<br>+ spec.replicas: 5"]
+        App --- Status
+        Status --- Health
+        Health --- Diff
+    end
 ```
 
 **ArgoCD CLI:**
@@ -314,7 +308,7 @@ Fast forward: staging was deployed fresh from Git (512Mi). Production had the ma
 
 When they finally noticed the ArgoCD "OutOfSync" status:
 - Production had been drifted for 3 months
-- 47 resources were out of sync
+- 35 resources were out of sync
 - Nobody knew what the "real" config was
 
 **The Fix:**
@@ -331,6 +325,8 @@ When they finally noticed the ArgoCD "OutOfSync" status:
 ## Auto-Heal vs Alert
 
 When drift is detected, you have two choices:
+
+> **Pause and predict**: If you enable strict auto-healing on a deployment managed by an HPA, and you don't configure any ignore rules, what will happen during a sudden traffic spike?
 
 ### Option 1: Auto-Heal (Self-Healing)
 
@@ -521,23 +517,13 @@ kubectl get events --field-selector involvedObject.name=my-app
 
 ### Decision Framework
 
-```
-Drift Detected
-     │
-     ▼
-Was it intentional?
-     │
-  ┌──┴──┐
-  │     │
- Yes    No
-  │     │
-  ▼     ▼
-Is it   Revert to Git
-correct?
-  │
-  ▼
-Update Git
-to match
+```mermaid
+flowchart TD
+    A[Drift Detected] --> B{Was it intentional?}
+    B -- Yes --> C{Is it correct?}
+    B -- No --> D[Revert to Git]
+    C -- Yes --> E[Update Git to match]
+    C -- No --> D
 ```
 
 ---
@@ -558,22 +544,17 @@ to match
 ## Quiz: Check Your Understanding
 
 ### Question 1
-Your deployment has 10 replicas but Git says 3. HPA is configured with min=3, max=20. Is this drift?
+You are investigating a pager alert for high traffic on the `payment-processing` service. When you check the cluster, the deployment is running 12 replicas, but the Git repository strictly defines `replicas: 3`. You also notice an active HorizontalPodAutoscaler (HPA) configured for this deployment with a minimum of 3 and a maximum of 20 replicas. Is this considered a drift violation that requires immediate remediation?
 
 <details>
 <summary>Show Answer</summary>
 
-**It depends on your definition, but typically: No, this is not problematic drift.**
+**No, this is not a problematic drift violation that requires remediation.** 
 
-The HPA is legitimately managing replica count based on load. This is expected behavior.
-
-**Best practice:**
-- Ignore `/spec/replicas` in drift detection for HPA-managed deployments
-- Monitor that HPA exists and is configured correctly
-- Git defines the HPA policy, HPA controls the replicas
+The HPA is actively managing the replica count based on the current load metrics, which is its exact designed behavior in Kubernetes. GitOps tools like ArgoCD or Flux should be configured to ignore the `spec.replicas` field for this specific deployment to prevent false positive sync errors. If the GitOps agent forcefully reverted the replicas back to 3 during high traffic, it would cause an immediate outage by overriding the autoscaler.
 
 ```yaml
-# ArgoCD ignore
+# ArgoCD ignore example
 ignoreDifferences:
   - group: apps
     kind: Deployment
@@ -581,123 +562,43 @@ ignoreDifferences:
       - /spec/replicas
 ```
 
-If HPA didn't exist, then yes, this would be drift to investigate.
+If the HPA didn't exist, then yes, this would be drift to investigate immediately.
 
 </details>
 
 ### Question 2
-You find drift that's been present for 2 months. How do you decide whether to revert to Git or update Git?
+During a routine audit, you discover that the resource requests and limits for your core `inventory-api` have been out of sync for over two months. The cluster is running with 4Gi of memory limits, while Git still specifies 1Gi. The service has been stable this entire time. A junior engineer suggests clicking the "Sync" button in ArgoCD to enforce the Git state. How should you proceed?
 
 <details>
 <summary>Show Answer</summary>
 
-**Investigation questions:**
+**You should absolutely not blindly sync to the Git state without investigating first, as doing so might cause an immediate production outage.**
 
-1. **Why does drift exist?**
-   - Manual hotfix? → Probably should be in Git
-   - Controller change? → Configure ignore rules
-   - Bug in GitOps? → Fix the tooling
-
-2. **Which state is correct?**
-   - Does the cluster version work? → It's validated
-   - Does Git version work? → Test in staging first
-   - Neither? → Debug both
-
-3. **What's the risk of each option?**
-   - Reverting to Git: May break production
-   - Updating Git: May lose intended config
-
-**Safe approach for long-standing drift:**
-
-1. Don't auto-revert immediately
-2. Deploy Git version to staging
-3. Test thoroughly
-4. If staging works, then sync production
-5. If staging fails, update Git to match cluster
-
-**Document the decision** — future you will want to know why.
+Since the cluster has been running stably with 4Gi for two months, it is highly likely this was an emergency manual fix for an Out Of Memory (OOM) issue that was never backported to Git. Reverting to 1Gi would likely trigger OOM kills and bring down the `inventory-api`. Instead, you should verify the historical performance, test the 1Gi limit in a staging environment to confirm if it crashes, and if the 4Gi limit is actually required, you must update the Git repository to match the cluster's reality. Documenting this decision is crucial so your team understands why Git was updated.
 
 </details>
 
 ### Question 3
-How do you prevent manual kubectl changes from causing drift?
+Your organization recently adopted GitOps, but developers are still routinely using `kubectl edit` and `kubectl scale` against the production cluster to bypass the CI/CD pipeline when they are in a hurry. This is causing constant drift alerts and making the Git repository untrustworthy. What technical and procedural steps should you implement to enforce the GitOps workflow?
 
 <details>
 <summary>Show Answer</summary>
 
-**Technical controls:**
+**To stop this behavior, you must implement strict technical controls coupled with process improvements.**
 
-1. **RBAC**: Restrict kubectl write access
-   ```yaml
-   # Read-only role for most users
-   rules:
-     - apiGroups: ["*"]
-       resources: ["*"]
-       verbs: ["get", "list", "watch"]
-   ```
-
-2. **Admission webhooks**: Block manual changes
-   ```yaml
-   # OPA/Gatekeeper policy
-   deny manual changes to GitOps-managed resources
-   ```
-
-3. **Auto-sync with self-heal**: Revert changes immediately
-   ```yaml
-   syncPolicy:
-     automated:
-       selfHeal: true
-   ```
-
-4. **Alerting**: Notify on drift
-   ```yaml
-   Alert when OutOfSync for > 5 minutes
-   ```
-
-**Process controls:**
-
-1. **Culture**: "All changes through Git"
-2. **Training**: Teach GitOps workflow
-3. **Runbooks**: Document how to make emergency changes through Git
-4. **Postmortems**: Treat manual changes as incidents to learn from
+First, you should update Role-Based Access Control (RBAC) to strip write permissions from developer accounts in the production environment, granting only `get`, `list`, and `watch` verbs. Second, you can configure your GitOps agent (like ArgoCD or Flux) to use aggressive auto-healing, which will immediately revert any manual changes back to the Git state, rendering `kubectl edit` useless. Finally, you need to establish a clear procedural runbook for emergency changes through Git, ensuring developers have a fast, approved path for hotfixes so they don't feel forced to bypass the system.
 
 </details>
 
 ### Question 4
-ArgoCD shows "OutOfSync" but the diff is just metadata fields. What should you do?
+You deploy a new instance of a third-party operator via ArgoCD. Immediately after the initial sync, ArgoCD reports the application as "OutOfSync". When you inspect the diff, the only differences are several `metadata.annotations` that the operator's admission webhook injected into the resources during creation, and some `status` fields. How do you resolve this continuous out-of-sync state?
 
 <details>
 <summary>Show Answer</summary>
 
-**Configure ignore rules for expected metadata:**
+**You need to configure your GitOps tool to intentionally ignore these specific metadata and status fields during its state comparison.**
 
-```yaml
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: my-app
-spec:
-  ignoreDifferences:
-    # Kubernetes-added metadata
-    - group: "*"
-      kind: "*"
-      jsonPointers:
-        - /metadata/annotations/kubectl.kubernetes.io/last-applied-configuration
-
-    # Controller-added annotations
-    - group: apps
-      kind: Deployment
-      jsonPointers:
-        - /metadata/annotations/deployment.kubernetes.io/revision
-
-    # Status fields (shouldn't be in manifests anyway)
-    - group: "*"
-      kind: "*"
-      managedFieldsManagers:
-        - kube-controller-manager
-```
-
-**Or use JQ expressions:**
+Admission webhooks, controllers, and Kubernetes itself frequently inject runtime data, annotations (like `kubectl.kubernetes.io/last-applied-configuration`), or default values into resources, which will inherently never exist in your static Git manifests. By explicitly defining `ignoreDifferences` rules for these paths, you instruct the GitOps agent that this variance is expected operational behavior. If you do not ignore them, the agent will enter an endless loop of attempting to strip the annotations, only for the webhook to immediately re-apply them.
 
 ```yaml
 ignoreDifferences:
@@ -706,8 +607,6 @@ ignoreDifferences:
     jqPathExpressions:
       - .metadata.annotations | select(. != null) | with_entries(select(.key | startswith("kubectl")))
 ```
-
-**Prevention**: Don't include these fields in your Git manifests in the first place. Use `kubectl apply --dry-run=client -o yaml` to see clean output.
 
 </details>
 
