@@ -682,6 +682,9 @@ spec:
         ports:
         - containerPort: 80
 EOF
+
+# Wait for deployment to be ready
+k -n service-lab wait --for=condition=Available deployment/web --timeout=60s
 ```
 
 ### Task 1: Create and Test ClusterIP Service
@@ -692,6 +695,9 @@ k -n service-lab expose deployment web --port=80
 
 # Create test pod
 k -n service-lab run client --image=busybox:1.36 --command -- sleep 3600
+
+# Wait for client pod to be ready
+k -n service-lab wait --for=condition=Ready pod/client --timeout=60s
 
 # Test connectivity
 k -n service-lab exec client -- wget -qO- http://web
