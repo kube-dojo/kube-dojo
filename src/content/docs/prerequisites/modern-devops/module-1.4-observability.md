@@ -497,7 +497,7 @@ This approach relies on unstructured logging, which is fundamentally unsuited fo
 
 ```bash
 # 1. Deploy a sample application
-kubectl create deployment web --image=nginx:1.25 --replicas=3
+kubectl create deployment web --image=nginx:1.28 --replicas=3
 kubectl expose deployment web --port=80
 ```
 </details>
