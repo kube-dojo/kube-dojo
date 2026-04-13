@@ -93,6 +93,15 @@ TASK: Write a complete KubeDojo educational module.
 - Integrate labels directly into diagrams (no separate legends)
 - Active learning must be distributed throughout, not just at the end
 
+**SECRETS & CREDENTIALS IN EXAMPLES**:
+- NEVER use realistic-looking secrets, tokens, or webhook URLs in code examples
+- Slack webhooks: use `https://hooks.slack.com/services/YOUR/WEBHOOK/HERE` (not `T00000000/B00000000/XXX`)
+- AWS keys: use `AKIAIOSFODNN7EXAMPLE` (the official AWS example key)
+- API tokens: use `your-api-token-here` or `<TOKEN>`
+- URLs with auth: use `https://example.com/webhook` or `https://httpbin.org/post`
+- GitHub tokens: use `ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+- Any value that matches a known secret pattern (Slack, AWS, GitHub, GCP, Azure) WILL be blocked by GitHub push protection
+
 **WHAT TO AVOID**:
 - Do NOT repeat the number 47 in timestamps, durations, or counts (this is a known LLM pattern — vary your numbers)
 - Do NOT use generic corporate examples — use realistic engineering scenarios

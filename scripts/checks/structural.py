@@ -194,6 +194,39 @@ def check_k8s_versions(content: str) -> list[CheckResult]:
     return results
 
 
+def check_leaked_secrets(content: str) -> list[CheckResult]:
+    """Detect realistic-looking secrets that would trigger GitHub push protection."""
+    # Strip fenced code blocks — we still check them because GitHub scans everything
+    patterns = [
+        (r"https://hooks\.slack\.com/services/T[A-Z0-9]{8,}/B[A-Z0-9]{8,}/[A-Za-z0-9]{20,}",
+         "Slack webhook URL (use https://hooks.slack.com/services/YOUR/WEBHOOK/HERE)"),
+        (r"xox[bpors]-[0-9]{10,}-[0-9]{10,}-[A-Za-z0-9]{20,}",
+         "Slack API token (use xoxb-your-token-here)"),
+        (r"AKIA[0-9A-Z]{16}",
+         "AWS access key (use AKIAIOSFODNN7EXAMPLE)"),
+        (r"ghp_[A-Za-z0-9]{36}",
+         "GitHub personal access token (use ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx)"),
+        (r"gho_[A-Za-z0-9]{36}",
+         "GitHub OAuth token"),
+        (r"github_pat_[A-Za-z0-9]{22}_[A-Za-z0-9]{59}",
+         "GitHub fine-grained PAT"),
+        (r"sk-[A-Za-z0-9]{48}",
+         "OpenAI API key (use sk-your-key-here)"),
+        (r"AIza[0-9A-Za-z_-]{35}",
+         "Google API key (use AIzaSyYOUR_KEY_HERE)"),
+    ]
+
+    results = []
+    for pattern, msg in patterns:
+        matches = re.findall(pattern, content)
+        if matches:
+            results.append(CheckResult("LEAKED_SECRET", False,
+                                       f"Potential secret detected: {msg}"))
+    if not results:
+        results.append(CheckResult("LEAKED_SECRET", True, "No leaked secrets detected"))
+    return results
+
+
 def run_all(content: str, path: Path) -> list[CheckResult]:
     """Run all structural checks."""
     results = []
@@ -203,4 +236,5 @@ def run_all(content: str, path: Path) -> list[CheckResult]:
     results.extend(check_code_blocks(content))
     results.extend(check_no_emojis(content))
     results.extend(check_k8s_versions(content))
+    results.extend(check_leaked_secrets(content))
     return results
