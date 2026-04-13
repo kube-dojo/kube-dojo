@@ -359,42 +359,37 @@ She deletes the worktree. She returns to her original terminal. Her 15 modified 
 <details>
 <summary>Question 1: You are deep into modifying a complex Helm chart for a new microservice. PagerDuty alerts you to a Sev-1 incident requiring a one-line configuration change on the `production` branch. Which command is the safest and most efficient way to isolate your current work while you handle the emergency?</summary>
 
-**Answer:** `git worktree add ../incident-response production`. 
-A worktree provides perfect isolation without the overhead of a full clone. It guarantees that your half-written Helm templates won't bleed into the production hotfix, and you won't have to deal with stash conflicts when you return to your feature. Because the working directory is entirely separate, you can freely modify files and run tests without affecting your primary development environment. Once the hotfix is complete, you simply delete the worktree and resume your previous task exactly where you left off.
+**Answer:** Use `git worktree add ../incident-response production`. A worktree provides perfect isolation without the overhead of a full clone. It guarantees that your half-written Helm templates won't bleed into the production hotfix, and you won't have to deal with stash conflicts when you return to your feature. Because the working directory is entirely separate, you can freely modify files and run tests without affecting your primary development environment. Once the hotfix is complete, you simply delete the worktree and resume your previous task exactly where you left off.
 </details>
 
 <details>
 <summary>Question 2: You ran `git stash` before switching branches to help a colleague debug an issue. Two days later, you return to your branch, run `git stash pop`, and are hit with massive merge conflicts because your colleague merged a major refactor in the meantime. What command could have saved you from manually resolving these immediate working directory conflicts?</summary>
 
-**Answer:** `git stash branch new-recovery-branch`. 
-If you suspect conflicts or if `apply` fails catastrophically, creating a branch directly from the stash isolates the changes into a clean commit history based on the exact point in time you created the stash. This bypasses the immediate conflict with the current state of the branch. You can then rebase or merge that new branch systematically, resolving conflicts one commit at a time using standard Git merge tools rather than dealing with a massive working directory conflict.
+**Answer:** The command `git stash branch new-recovery-branch` could have saved you. If you suspect conflicts or if apply fails catastrophically, creating a branch directly from the stash isolates the changes into a clean commit history based on the exact point in time you created the stash. This bypasses the immediate conflict with the current state of the branch. You can then rebase or merge that new branch systematically, resolving conflicts one commit at a time using standard Git merge tools rather than dealing with a massive working directory conflict.
 </details>
 
 <details>
 <summary>Question 3: You used `rm -rf ../testing-env` to delete a worktree directory you were using to test a Kubernetes deployment. Now, when you try to checkout the `test-deployment` branch in your main directory, Git complains that the branch is already checked out. How do you resolve this?</summary>
 
-**Answer:** Run `git worktree prune` in the main repository. 
-Bypassing Git and deleting the directory via the file system leaves the internal `.git/worktrees/` metadata orphaned. Git still believes the worktree exists because the reference files within the main `.git` directory were not removed. The `prune` command tells Git to verify the existence of all worktrees on disk and safely remove the internal records for any that are missing, which then unlocks the branch for use elsewhere.
+**Answer:** Run `git worktree prune` in the main repository. Bypassing Git and deleting the directory via the file system leaves the internal `.git/worktrees/` metadata orphaned. Git still believes the worktree exists because the reference files within the main `.git` directory were not removed. The `prune` command tells Git to verify the existence of all worktrees on disk and safely remove the internal records for any that are missing, which then unlocks the branch for use elsewhere.
 </details>
 
 <details>
 <summary>Question 4: You are writing a new Python script to automate cluster scaling. You haven't run `git add` on the new script yet. You receive an urgent request to review a PR, so you run `git stash`, checkout the PR branch, and suddenly your new Python script is sitting in the directory of the PR branch. Why did this happen?</summary>
 
-**Answer:** `git stash` ignores untracked files by default. 
-Because the new Python script had never been added to the index, Git did not consider it part of the dirty state to be stashed. When you switched branches, the file simply remained in the working directory because it did not conflict with any tracked files on the target branch. To include it in the stash, you must explicitly tell Git to capture untracked files using the `-u` or `--include-untracked` flag: `git stash push -u -m "saving new script"`.
+**Answer:** This happened because `git stash` ignores untracked files by default. Because the new Python script had never been added to the index, Git did not consider it part of the dirty state to be stashed. When you switched branches, the file simply remained in the working directory because it did not conflict with any tracked files on the target branch. To include it in the stash, you must explicitly tell Git to capture untracked files using the `-u` or `--include-untracked` flag: `git stash push -u -m "saving new script"`.
 </details>
 
 <details>
 <summary>Question 5: You need to test a database migration script locally, but you don't want to disrupt your current environment. You are debating whether to run `git clone` into a new directory or use `git worktree add`. What is the fundamental architectural difference on disk between these two approaches?</summary>
 
-**Answer:** A second `git clone` duplicates the entire object database (history, commits, blobs) creating an entirely independent `.git` directory, which consumes significant disk space and requires its own network operations. `git worktree add` creates a new working directory but uses a tiny `.git` file to point back to the *original* repository's object database. It prevents synchronization drift between the two environments, as any fetch in one is immediately reflected in the other. This means it shares the complete commit history and network state with your main repository while conserving disk space, making it a much more efficient choice for local testing.
+**Answer:** A second `git clone` duplicates the entire object database (history, commits, blobs) creating an entirely independent `.git` directory, which consumes significant disk space and requires its own network operations. In contrast, `git worktree add` creates a new working directory but uses a tiny `.git` file to point back to the original repository's object database. It prevents synchronization drift between the two environments, as any fetch in one is immediately reflected in the other. This means it shares the complete commit history and network state with your main repository while conserving disk space, making it a much more efficient choice for local testing.
 </details>
 
 <details>
 <summary>Question 6: You are returning to work after a long weekend and find three stashes in your stack. You think `stash@{1}` contains the database configuration changes you need, but you want to be absolutely sure before applying it to your current working directory. What command should you use to verify the contents?</summary>
 
-**Answer:** `git stash show -p stash@{1}`. 
-This command acts like `git diff`, displaying the patch format of the changes stored in that specific stash. By reviewing the raw diff output, you can safely verify exactly which files were modified and what lines were changed without altering your current working directory. This prevents accidental application of the wrong stash and avoids potential merge conflicts if the stash contains unexpected changes.
+**Answer:** You should use `git stash show -p stash@{1}`. This command acts like `git diff`, displaying the patch format of the changes stored in that specific stash. By reviewing the raw diff output, you can safely verify exactly which files were modified and what lines were changed without altering your current working directory. This prevents accidental application of the wrong stash and avoids potential merge conflicts if the stash contains unexpected changes.
 </details>
 
 ## Hands-On Exercise: The Mid-Flight Hotfix
