@@ -73,37 +73,39 @@ Answer: "Um... the current one? Maybe?"
 | Lost institutional knowledge | New team members start from scratch |
 | Debugging in production | "Which experiment is deployed?" |
 
+> **Stop and think**: Imagine you just got paged because the new model version is classifying 90% of transactions as fraud. How long would it take your current team to pinpoint exactly which dataset and hyperparameters were used to train that specific artifact?
+
 ## Experiment Tracking with MLflow
 
 MLflow is the most popular open-source experiment tracking tool. It tracks:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    MLFLOW TRACKING                               │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  EXPERIMENT: fraud-detection                                     │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │ RUN: abc123                                                │  │
-│  │ ┌─────────────┐ ┌─────────────┐ ┌─────────────────────┐   │  │
-│  │ │ PARAMETERS  │ │   METRICS   │ │     ARTIFACTS       │   │  │
-│  │ ├─────────────┤ ├─────────────┤ ├─────────────────────┤   │  │
-│  │ │ lr: 0.01    │ │ accuracy:   │ │ model.pkl           │   │  │
-│  │ │ epochs: 100 │ │   0.95      │ │ confusion_matrix.png│   │  │
-│  │ │ batch: 32   │ │ f1: 0.93    │ │ feature_importance  │   │  │
-│  │ │ model: RF   │ │ auc: 0.97   │ │   .csv              │   │  │
-│  │ │ seed: 42    │ │ loss: 0.12  │ │ requirements.txt    │   │  │
-│  │ └─────────────┘ └─────────────┘ └─────────────────────┘   │  │
-│  │                                                            │  │
-│  │ TAGS: production-candidate, team-fraud                     │  │
-│  │ GIT: commit abc123, branch main                            │  │
-│  │ STARTED: 2024-01-15 10:30:00                               │  │
-│  │ DURATION: 45 minutes                                       │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                  │
-│  RUN: def456 │ RUN: ghi789 │ RUN: jkl012 │ ...                  │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph MLflow ["MLflow Tracking: fraud-detection"]
+        direction TB
+        
+        subgraph Run1 ["RUN: abc123"]
+            direction LR
+            Params["Parameters:\n- lr: 0.01\n- epochs: 100\n- batch: 32\n- model: RF\n- seed: 42"]
+            Metrics["Metrics:\n- accuracy: 0.95\n- f1: 0.93\n- auc: 0.97\n- loss: 0.12"]
+            Artifacts["Artifacts:\n- model.pkl\n- confusion_matrix.png\n- feature_importance.csv\n- requirements.txt"]
+            Meta["Metadata:\n- Tags: production-candidate, team-fraud\n- Git: commit abc123, branch main\n- Duration: 45 minutes"]
+            
+            Params ~~~ Metrics ~~~ Artifacts
+            Metrics ~~~ Meta
+        end
+        
+        Run2["RUN: def456"]
+        Run3["RUN: ghi789"]
+        Run4["RUN: jkl012"]
+        
+        Run1 ~~~ Run2 ~~~ Run3 ~~~ Run4
+    end
+    
+    style Params text-align:left
+    style Metrics text-align:left
+    style Artifacts text-align:left
+    style Meta text-align:left
 ```
 
 ### War Story: The Vanishing Model
@@ -207,33 +209,29 @@ The UI provides:
 - Artifact browsing
 - Run diff comparison
 
+> **Pause and predict**: We've tracked our experiments and found the best model. But how do we communicate to the serving infrastructure *which* model to load without hardcoding paths or risking typos?
+
 ## Model Registry
 
 The Model Registry manages model versions and lifecycle stages:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    MODEL REGISTRY                                │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  MODEL: fraud-detector                                          │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │                                                           │  │
-│  │  Version 1        Version 2        Version 3              │  │
-│  │  ┌──────────┐    ┌──────────┐    ┌──────────┐            │  │
-│  │  │ Archived │    │Production│    │ Staging  │            │  │
-│  │  │          │    │          │    │          │            │  │
-│  │  │ F1: 0.89 │    │ F1: 0.93 │    │ F1: 0.95 │            │  │
-│  │  │ Date:    │    │ Date:    │    │ Date:    │            │  │
-│  │  │ Jan 1    │    │ Feb 1    │    │ Mar 1    │            │  │
-│  │  └──────────┘    └──────────┘    └──────────┘            │  │
-│  │                        │              │                   │  │
-│  │                        ▼              ▼                   │  │
-│  │                   Live traffic    Shadow traffic          │  │
-│  │                                                           │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Registry ["Model Registry: fraud-detector"]
+        V1["Version 1\nStage: Archived\nF1: 0.89\nDate: Jan 1"]
+        V2["Version 2\nStage: Production\nF1: 0.93\nDate: Feb 1"]
+        V3["Version 3\nStage: Staging\nF1: 0.95\nDate: Mar 1"]
+        
+        Live["Live traffic"]
+        Shadow["Shadow traffic"]
+        
+        V2 --> Live
+        V3 --> Shadow
+    end
+    
+    style V1 fill:#f9f9f9,stroke:#999,stroke-dasharray: 5 5
+    style V2 fill:#d4edda,stroke:#28a745,stroke-width:2px
+    style V3 fill:#fff3cd,stroke:#ffc107,stroke-width:2px
 ```
 
 ### Model Stages
@@ -298,31 +296,17 @@ Random Search: 50 random combinations = 4 hours
   → Often finds near-optimal in ~60 iterations
 ```
 
+> **Stop and think**: If adding a new hyperparameter to tune doubles the number of grid search combinations, what happens to your compute budget when you need to tune 10 parameters at once?
+
 ### Grid vs. Random vs. Bayesian
 
-```
-SEARCH STRATEGIES
-─────────────────────────────────────────────────────────────────
-
-GRID SEARCH                    RANDOM SEARCH
-┌─────────────────────┐        ┌─────────────────────┐
-│  ●  ●  ●  ●  ●  ●  │        │  ●        ●        │
-│  ●  ●  ●  ●  ●  ●  │        │     ●           ●  │
-│  ●  ●  ●  ●  ●  ●  │        │        ●     ●     │
-│  ●  ●  ●  ●  ●  ●  │        │  ●              ●  │
-│  ●  ●  ●  ●  ●  ●  │        │        ●  ●       │
-└─────────────────────┘        └─────────────────────┘
-Exhaustive but slow            Better coverage, faster
-
-BAYESIAN OPTIMIZATION
-┌─────────────────────┐
-│  ●        ●     ●  │  Points cluster around
-│     ●●●●           │  promising regions
-│  ●●●●●●●  ●        │  based on prior results
-│     ●●●●           │
-│  ●                 │
-└─────────────────────┘
-Intelligent exploration
+```mermaid
+flowchart TD
+    subgraph Search Strategies
+        Grid["Grid Search"] -->|Exhaustively tests every predefined combination| GridResult["Slow and scales poorly across many dimensions"]
+        Random["Random Search"] -->|Samples randomly across all dimensions simultaneously| RandomResult["Faster discovery and better parameter coverage"]
+        Bayesian["Bayesian Optimization"] -->|Learns from past evaluations to choose next parameters| BayesianResult["Intelligent exploration clustering near optimal regions"]
+    end
 ```
 
 ### Optuna for HPO
@@ -494,54 +478,27 @@ mlflow.log_param("data_version", "abc123")  # DVC hash
 Test your understanding:
 
 <details>
-<summary>1. Why is experiment tracking essential for ML teams?</summary>
+<summary>1. Your team lead asks you to reproduce the model deployed to production last year because a new regulation requires an audit of its training data and parameters. You find a `model_final_v2.pkl` file and a Jupyter notebook named `training_final_USE_THIS.ipynb`. The notebook has been modified since the file creation date. Why is this situation a major compliance risk, and what exact tracking mechanisms would have prevented it?</summary>
 
-**Answer**: Experiment tracking enables:
-1. **Reproducibility**: Know exactly what produced each result
-2. **Comparison**: Objectively compare approaches
-3. **Knowledge preservation**: New team members learn from history
-4. **Debugging**: Trace production models to training runs
-5. **Compliance**: Audit trail for regulated industries
-
-Without tracking, most experiments are lost, leading to repeated work and inability to reproduce successful models.
+**Answer**: This situation is a major compliance risk because there is no cryptographically secure or immutable link between the deployed artifact and the code/data that produced it. The modified notebook means the exact training procedure is lost, making it impossible to definitively prove to auditors how the model learned its behavior or what data it saw. A proper experiment tracking system would have recorded an immutable snapshot. This includes the exact Git commit hash of the code, a DVC hash of the training data, and the precise hyperparameters used, all tied directly to the specific run ID that produced the `model_final_v2.pkl` artifact.
 </details>
 
 <details>
-<summary>2. What's the difference between parameters, metrics, and artifacts in MLflow?</summary>
+<summary>2. You are setting up MLflow for a new deep learning project. You need to log the learning rate, the validation loss at each epoch, and the final trained model weights. A junior engineer suggests logging the validation loss as an "artifact" and the model weights as a "parameter". Why is this conceptually incorrect, and how should they be categorized to leverage MLflow's UI effectively?</summary>
 
-**Answer**:
-- **Parameters**: Inputs to the training process (learning_rate, epochs, batch_size). Set once, don't change during training.
-- **Metrics**: Outputs measuring model performance (accuracy, F1, loss). Can be logged multiple times to track progress.
-- **Artifacts**: Files generated during training (model files, plots, reports, config files). Stored for later reference.
+**Answer**: This approach fundamentally misunderstands how experiment tracking tools index and query data. Parameters are static inputs defined *before* training begins (like the learning rate), which allows you to filter and group runs based on configuration. Metrics are dynamic numeric outputs evaluated *during* or *after* training (like validation loss), which MLflow stores as time-series data so you can plot learning curves and compare convergence across runs. Artifacts are bulk files generated by the run (like model weights or plots) stored in blob storage. If you log loss as an artifact, you cannot visualize it in the UI; if you log weights as a parameter, you exceed string limits and cannot download the model for deployment.
 </details>
 
 <details>
-<summary>3. Why does random search often beat grid search?</summary>
+<summary>3. You have a compute budget of exactly 100 training runs to tune a Random Forest model with 4 hyperparameters. Your colleague insists on setting up a grid search with 3 values for each parameter (3 × 3 × 3 × 3 = 81 runs), leaving 19 runs unused. You propose using random search for all 100 runs instead. Why is your random search approach likely to yield a better-performing model despite seeming less systematic?</summary>
 
-**Answer**: Grid search is exhaustive but inefficient:
-- Wastes time on unimportant parameter dimensions
-- May miss optimal regions between grid points
-
-Random search:
-- Better coverage of the search space
-- More likely to sample near-optimal regions
-- With the same budget, explores more diverse combinations
-- Research shows it finds good hyperparameters in ~60 random iterations for most problems
+**Answer**: Your random search approach is likely to win because hyperparameter importance is rarely uniform; typically, only one or two parameters strongly influence the model's performance, while others have minimal impact. In your colleague's grid search, even though 81 runs are executed, each individual parameter is only tested at exactly 3 distinct values. With 100 random search runs, every parameter is evaluated at 100 distinct, unique values. This provides vastly superior coverage along the most critical parameter dimensions, allowing the search to discover fine-grained optimal values that fall into the gaps between the predefined steps of a rigid grid.
 </details>
 
 <details>
-<summary>4. What makes a training run reproducible?</summary>
+<summary>4. A researcher publishes a paper claiming state-of-the-art results. They provide the exact model architecture, the dataset URL, the precise hyperparameter values (learning rate, batch size), and the random seed (`42`). When you run their code on your Kubernetes cluster, you get an accuracy 5% lower than published. Assuming no code bugs, what un-tracked environmental factors are most likely preventing exact reproducibility in this scenario?</summary>
 
-**Answer**: Reproducibility requires tracking:
-1. **Code version**: Git commit hash
-2. **Data version**: DVC hash or data registry
-3. **Dependencies**: requirements.txt, Dockerfile
-4. **Hyperparameters**: All model configuration
-5. **Random seeds**: For all randomness sources
-6. **Hardware**: GPU type, CUDA version
-7. **Environment**: OS, Python version
-
-Missing any of these can make reproduction impossible.
+**Answer**: Exact reproducibility is fragile and depends on the entire hardware and software execution environment, not just the code and data. The most likely culprit is a difference in library versions (e.g., PyTorch, CUDA, or underlying linear algebra libraries like cuDNN), which can change the order of floating-point operations and lead to divergence. Furthermore, depending on the framework, setting the random seed `42` in Python might not make GPU operations deterministic unless specific backend flags (like `cudnn.deterministic = True` and `cudnn.benchmark = False`) are also enforced. Without containerizing the exact environment and hardware specifications, implicit differences will easily derail exact reproduction.
 </details>
 
 ## Hands-On Exercise: Complete Experiment Pipeline
