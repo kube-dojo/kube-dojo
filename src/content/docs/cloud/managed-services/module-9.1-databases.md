@@ -33,18 +33,22 @@ The first rule of database connectivity from Kubernetes: **never expose your dat
 
 ### Architecture: VPC-Native Connectivity
 
-```
-+---------------------------+          +---------------------------+
-|   Kubernetes VPC          |          |   Database Service        |
-|                           |          |                           |
-|  +------+   +------+     |          |   +------------------+    |
-|  | Pod A |   | Pod B |    |   VPC    |   |  Primary (AZ-a)  |    |
-|  +---+---+   +---+---+    | Peering/ |   +------------------+    |
-|      |           |        | Private  |                           |
-|  +---+-----------+---+    | Endpoint |   +------------------+    |
-|  | ClusterIP Service |----+----------+-->|  Replica (AZ-b)  |    |
-|  +-------------------+    |          |   +------------------+    |
-+---------------------------+          +---------------------------+
+```mermaid
+flowchart LR
+    subgraph K8sVPC [Kubernetes VPC]
+        PodA[Pod A]
+        PodB[Pod B]
+        Svc[ClusterIP Service]
+        PodA --> Svc
+        PodB --> Svc
+    end
+    
+    subgraph DBSvc [Database Service]
+        Primary[Primary AZ-a]
+        Replica[Replica AZ-b]
+    end
+    
+    Svc -- VPC Peering/Private Endpoint ---> Primary
 ```
 
 > **Stop and think**: If your pod in `us-east-1a` queries a database in `us-east-1b`, the traffic is private and secure. However, what other consequence does crossing an Availability Zone boundary have? (Hint: Think about your cloud provider's monthly billing statement).
@@ -359,7 +363,7 @@ When the secret rotates in Secrets Manager (via an AWS Lambda rotation function 
 
 The safest rotation pattern uses two database users, alternating between them:
 
-```
+```text
 Time 0:  user_a (active)    user_b (standby)
 Time 1:  Rotate user_b password in Secrets Manager
 Time 2:  Update K8s Secret to point to user_b
@@ -403,25 +407,17 @@ Running `ALTER TABLE` in production is nerve-wracking enough. Doing it automatic
 
 Never make breaking schema changes in a single step. Instead:
 
-```
+```text
 Phase 1: EXPAND   - Add new column (nullable or with default)
 Phase 2: MIGRATE  - Application writes to both old and new columns
 Phase 3: CONTRACT - Remove old column after all pods use new schema
 ```
 
-```text
-+-------------------+------------------------------------------+-----------------------+
-| Phase             | Database Schema                          | Application Behavior  |
-+-------------------+------------------------------------------+-----------------------+
-| 1: EXPAND         | [ id | name | email (NEW, nullable) ]    | App v1: Writes [name] |
-+-------------------+------------------------------------------+-----------------------+
-| 2: MIGRATE        | [ id | name | email ]                    | App v2: Writes both   |
-|                   | (Backfill script populates email)        |         Reads [email] |
-+-------------------+------------------------------------------+-----------------------+
-| 3: CONTRACT       | [ id | email ]                           | App v3: Writes [email]|
-|                   | (name column dropped)                    |                       |
-+-------------------+------------------------------------------+-----------------------+
-```
+| Phase | Database Schema | Application Behavior |
+| :--- | :--- | :--- |
+| **1: EXPAND** | `[ id | name | email ]` (email is NEW, nullable) | App v1: Writes `[name]` |
+| **2: MIGRATE** | `[ id | name | email ]`<br>*(Backfill script populates email)* | App v2: Writes both<br>Reads `[email]` |
+| **3: CONTRACT**| `[ id | email ]`<br>*(name column dropped)* | App v3: Writes `[email]` |
 
 ### Kubernetes Job for Migrations
 
