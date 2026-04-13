@@ -320,11 +320,11 @@ In `vmstat`, the `r` column shows the number of runnable processes (those waitin
 
 ## Kubernetes CPU Management: Requests, Limits, and Throttling
 
-Kubernetes, leveraging Linux cgroups, provides powerful mechanisms to manage CPU resources for pods and containers. However, these mechanisms, particularly CPU limits, come with nuances that are critical to understand for optimal performance.
+Kubernetes, leveraging Linux cgroups, provides powerful mechanisms to manage CPU resources for pods and containers. However, these mechanisms, particularly CPU limits, come with nuances that are critical to understand for optimal performance. Note that modern Kubernetes environments (v1.30+) exclusively utilize **cgroups v2** (the unified hierarchy), replacing the legacy v1 paths. 
 
 ### How CPU Requests and Limits Work
 
-In Kubernetes, you define CPU resources using `requests` and `limits` in your pod specifications. These translate directly into Linux cgroup parameters.
+In Kubernetes, you define CPU resources using `requests` and `limits` in your pod specifications. These translate directly into Linux cgroup parameters on the underlying node.
 
 ```yaml
 resources:
@@ -334,8 +334,8 @@ resources:
     cpu: "500m"     # Maximum allowed
 ```
 
--   **CPU Requests (`cpu: "100m"`)**: This is a *guaranteed minimum* amount of CPU that the scheduler uses to place your pod on a node. It translates to `cpu.shares` in cgroups. `cpu.shares` is a relative weight; it determines the proportion of CPU your container gets *when there is contention* for CPU resources.
--   **CPU Limits (`cpu: "500m"`)**: This is a *hard maximum* amount of CPU your container can consume. It translates to `cpu.cfs_quota_us` and `cpu.cfs_period_us` in cgroups. This mechanism *always* enforces a cap, even if the node has abundant idle CPU.
+-   **CPU Requests (`cpu: "100m"`)**: This is a *guaranteed minimum* amount of CPU that the scheduler uses to place your pod on a node. It translates to `cpu.weight` in modern cgroups v2 (or `cpu.shares` in older v1 systems). `cpu.weight` is a relative priority; it determines the proportion of CPU your container gets *when there is contention* for CPU resources.
+-   **CPU Limits (`cpu: "500m"`)**: This is a *hard maximum* amount of CPU your container can consume. It translates to `cpu.max` in cgroups v2 (which replaced `cpu.cfs_quota_us` and `cpu.cfs_period_us`). This mechanism *always* enforces a cap, even if the node has abundant idle CPU.
 
 ```mermaid
 graph LR
@@ -346,11 +346,11 @@ graph LR
         K8s_2CPU["'2 CPU'"]
     end
 
-    subgraph Linux cgroups
-        CG_shares["cpu.shares = 102 (1024 * 0.1 = ~102) --> Relative weight for scheduling"]
-        CG_quota50k["cpu.cfs_quota_us = 50000 / cpu.cfs_period_us = 100000 --> 50ms of every 100ms period"]
-        CG_quota100k["cpu.cfs_quota_us = 100000 --> Full period allowed"]
-        CG_quota200k["cpu.cfs_quota_us = 200000 --> Can use 2 cores simultaneously"]
+    subgraph Linux cgroups v2
+        CG_shares["cpu.weight = 4 (Relative weight for scheduling)"]
+        CG_quota50k["cpu.max = '50000 100000' (50ms of every 100ms period)"]
+        CG_quota100k["cpu.max = '100000 100000' (Full period allowed)"]
+        CG_quota200k["cpu.max = '200000 100000' (Can use 2 cores simultaneously)"]
     end
 
     K8s_100m --> CG_shares
@@ -359,49 +359,52 @@ graph LR
     K8s_2CPU --> CG_quota200k
 ```
 
+> **Stop and think**: If CPU limits cause throttling and latency, why might a platform engineering team still choose to enforce them across a multi-tenant cluster?
+
 ### The Problem with CPU Throttling
 
 CPU limits, while seemingly beneficial for resource isolation, can introduce significant and often subtle performance problems through **throttling**. When a container reaches its CPU limit, the kernel temporarily pauses its execution until the next scheduling period begins.
 
 ```bash
-# Check container throttling
-cat /sys/fs/cgroup/cpu/docker/<container-id>/cpu.stat
+# Check container throttling (cgroups v2 example)
+cat /sys/fs/cgroup/system.slice/container-id.scope/cpu.stat
+# usage_usec 123456
 # nr_periods 1000
 # nr_throttled 150
-# throttled_time 30000000000
+# throttled_usec 30000000
 
 # Interpretation:
 # 1000 periods (100ms each = 100 seconds)
 # 150 throttled (15% of periods had throttling)
-# 30 billion nanoseconds = 30 seconds throttled
+# 30,000,000 microseconds = 30 seconds throttled
 ```
 
 -   `nr_periods`: The number of 100ms enforcement periods that have elapsed.
 -   `nr_throttled`: The number of periods where the container was throttled.
--   `throttled_time`: The total time (in nanoseconds) that the container was throttled.
+-   `throttled_usec`: The total time (in microseconds) that the container was throttled.
 
-A high `nr_throttled` count or `throttled_time` indicates that your application is frequently being paused, leading to latency spikes and degraded performance, even if average CPU utilization appears low.
+A high `nr_throttled` count or `throttled_usec` indicates that your application is frequently being paused, leading to latency spikes and degraded performance, even if average CPU utilization appears low.
 
-### CPU Shares vs. Quotas: A Critical Distinction
+### CPU Requests vs. Quotas: A Critical Distinction
 
-It's vital to understand the different implications of CPU requests (which lead to `cpu.shares`) and CPU limits (which lead to `cpu.cfs_quota_us`).
+It's vital to understand the different implications of CPU requests (which lead to `cpu.weight`) and CPU limits (which lead to `cpu.max`).
 
 | Mechanism | Effect | When Applied |
 |-----------|--------|--------------|
-| **Shares** (requests) | Relative weight | Only under contention |
-| **Quotas** (limits) | Hard cap | Always enforced |
+| **Requests** (`cpu.weight`) | Relative weight | Only under contention |
+| **Limits** (`cpu.max`) | Hard cap | Always enforced |
 
 ```mermaid
 graph TD
-    subgraph CPU SHARES
-        A[Pod A: 100m request = 102 shares]
-        B[Pod B: 200m request = 205 shares]
+    subgraph CPU REQUESTS (Weight)
+        A[Pod A: 100m request]
+        B[Pod B: 200m request]
         A --- B
         A_contention{"When both compete for CPU"}
-        A_gets["Pod A gets: 102/(102+205) = 33%"]
-        B_gets["Pod B gets: 205/(102+205) = 67%"]
+        A_gets["Pod A gets: ~33% CPU"]
+        B_gets["Pod B gets: ~67% CPU"]
         A_alone{"When only Pod A runs"}
-        A_can_use["Pod A can use 100% (Shares only matter during contention)"]
+        A_can_use["Pod A can burst to 100% (Weight only matters during contention)"]
         A --> A_contention
         B --> A_contention
         A_contention --> A_gets
@@ -410,7 +413,7 @@ graph TD
         A_alone --> A_can_use
     end
 
-    subgraph CPU QUOTAS
+    subgraph CPU LIMITS (Max)
         C[Pod A: 500m limit = 50ms per 100ms]
         D["Even if CPU is idle, Pod A is capped at 50%"]
         E["This causes throttling (latency spikes)"]
@@ -419,7 +422,7 @@ graph TD
     end
 ```
 
-**CPU shares** provide a proportional guarantee. If two pods on a node have requests of `100m` and `200m` respectively, and the node is saturated, they will get approximately 1/3 and 2/3 of the available CPU. However, if one pod is idle, the other can burst and use 100% of the CPU if needed. **CPU quotas** (`cpu.cfs_quota_us`) impose a strict ceiling. A container with a `500m` limit will *never* use more than 50% of a single CPU core, regardless of how much idle capacity is available on the node. This hard cap is what causes throttling.
+**CPU requests** provide a proportional guarantee. If two pods on a node have requests of `100m` and `200m` respectively, and the node is saturated, they will get roughly 1/3 and 2/3 of the available CPU time. However, if one pod is idle, the other can burst and use 100% of the CPU if needed. **CPU limits** impose a strict ceiling. A container with a `500m` limit will *never* use more than 50% of a single CPU core, regardless of how much idle capacity is available on the node. This hard cap is what causes throttling.
 
 ### Viewing Container CPU Metrics
 
@@ -432,11 +435,9 @@ kubectl top pod
 # Detailed metrics (if metrics-server installed)
 kubectl get --raw /apis/metrics.k8s.io/v1beta1/pods
 
-# cgroup files for a container
-# Find container ID first
-crictl ps
-crictl inspect <container-id> | grep cgroupsPath
-cat /sys/fs/cgroup/cpu/<path>/cpu.stat
+# Viewing direct cgroup v2 stats for a container via the filesystem
+# Since container runtimes map paths differently, searching is reliable:
+find /sys/fs/cgroup -name cpu.stat -exec awk '/nr_throttled/ {if ($2 > 0) print FILENAME ": " $2}' {} +
 ```
 
 `kubectl top pod` provides a quick overview of current CPU and memory usage. For more detailed insights, especially into throttling, directly inspecting the cgroup `cpu.stat` file for a specific container is the most accurate method.
@@ -462,9 +463,6 @@ vmstat 1
 # 2. What's using CPU?
 top -bn1 | head -15
 ps aux --sort=-%cpu | head -10
-
-# 3. Check for throttling
-cat /sys/fs/cgroup/cpu/*/cpu.stat | grep throttled
 ```
 
 -   **`vmstat`**: Observe the `r` (run queue) and `b` (blocked for I/O) columns. A high `r` indicates CPU contention, while a high `b` points to I/O bottlenecks.
@@ -475,20 +473,7 @@ cat /sys/fs/cgroup/cpu/*/cpu.stat | grep throttled
 
 If your containerized applications are experiencing unexplained latency or degraded performance, especially under moderate load, CPU throttling is a prime suspect.
 
-```bash
-# Find throttled containers
-for cg in /sys/fs/cgroup/cpu/kubepods/*/pod*/; do
-  throttled=$(cat $cg/cpu.stat 2>/dev/null | grep nr_throttled | awk '{print $2}')
-  if [ "$throttled" -gt 0 ] 2>/dev/null; then
-    echo "$cg: $throttled throttled periods"
-  fi
-done
-
-# Solution: Increase CPU limit or remove limit
-# Note: Some orgs remove CPU limits entirely
-```
-
-The script above directly queries cgroup statistics to identify any containers currently experiencing throttling. If throttling is detected, the immediate solutions are to either increase the CPU `limit` for the affected pod or, in some cases, remove the CPU `limit` entirely to allow the pod to burst. Many organizations have moved towards removing CPU limits, relying instead on horizontal pod autoscaling and node autoscaling to manage demand, arguing that throttling causes more problems than it solves.
+The immediate solutions for CPU throttling are to either increase the CPU `limit` for the affected pod or, in some cases, remove the CPU `limit` entirely to allow the pod to burst freely. Many organizations have moved towards removing CPU limits entirely for latency-sensitive workloads, relying instead on horizontal pod autoscaling and node autoscaling to manage demand, arguing that throttling causes more problems than it solves.
 
 ### Visualizing Throttling Latency
 
@@ -515,8 +500,8 @@ This diagram illustrates how a container, limited to `100m` (10ms of CPU per 100
 ## Did You Know?
 
 -   **Linux uses the Completely Fair Scheduler (CFS) since 2007** — It replaced the O(1) scheduler and uses red-black trees to ensure every process gets a fair share of CPU time, revolutionizing Linux's ability to handle diverse workloads efficiently.
--   **CPU "millicores" are a Kubernetes abstraction** — Linux doesn't natively understand `100m`. Kubernetes translates this into cgroup `cpu.shares` (for requests) and `cpu.cfs_quota_us` / `cpu.cfs_period_us` (for limits), demonstrating the sophisticated layer of resource management Kubernetes builds on top of Linux primitives.
--   **Throttling happens in 100ms periods by default** — The `cpu.cfs_period_us` cgroup parameter defaults to 100,000 microseconds (100ms). This means that a container's CPU quota is enforced over these 100ms intervals, leading to the discrete "pauses" that define throttling.
+-   **CPU "millicores" are a Kubernetes abstraction** — Linux doesn't natively understand `100m`. Kubernetes translates this into cgroup limits demonstrating the sophisticated layer of resource management Kubernetes builds on top of Linux primitives.
+-   **Throttling happens in 100ms periods by default** — The cgroup quota period defaults to 100,000 microseconds (100ms). This means that a container's CPU quota is enforced over these 100ms intervals, leading to the discrete "pauses" that define throttling.
 -   **Nice values range from -20 (highest priority) to 19 (lowest priority)** — While the default is 0, only processes running as root can set negative nice values, giving them elevated priority. A difference of one nice unit can correspond to approximately a 10% change in CPU allocation during contention.
 
 ---
@@ -529,7 +514,7 @@ This diagram illustrates how a container, limited to `100m` (10ms of CPU per 100
 | Confusing requests and limits | Leads to either overcommitment (no limits, high contention) or wasted resources (high limits, underutilized) or unnecessary throttling. | Use requests for guaranteed baseline and scheduling. Use limits for safety nets, or remove them for burstable workloads. |
 | Ignoring `iowait` (`wa%`) in `top` | Blaming CPU for performance issues when the true bottleneck is disk or network I/O. | Always check `wa%` in `top` or `vmstat`. A high value indicates I/O is the problem, not CPU saturation. |
 | Not checking per-CPU statistics | Average CPU utilization can hide a single saturated core, leading to bottlenecks for single-threaded applications. | Use `mpstat -P ALL` to inspect individual CPU core utilization. |
-| Assuming `nice` values matter in containers | `nice` values are overridden or irrelevant when cgroups are actively managing CPU resources. | In Kubernetes, rely on CPU requests (which map to `cpu.shares`) for relative priority among containers. |
+| Assuming `nice` values matter in containers | `nice` values are overridden or irrelevant when cgroups are actively managing CPU resources. | In Kubernetes, rely on CPU requests (which map to `cpu.weight`) for relative priority among containers. |
 | High context switches without clear cause | Excessive context switching indicates processes are frequently yielding or being preempted, potentially due to too many active threads or CPU contention. | Analyze `voluntary` vs. `nonvoluntary` context switches via `/proc/<PID>/status`. Reduce thread count if necessary or investigate CPU contention. |
 
 ---
@@ -542,9 +527,7 @@ Explain why this might be happening and what metric you would check first to con
 
 <details>
 <summary>Show Answer</summary>
-This scenario strongly suggests **CPU throttling**. Even though the node's overall CPU utilization is low, the pod's `500m` CPU limit means it cannot use more than 50% of a single CPU core. If the application within the pod has bursty CPU requirements, it will quickly hit this hard limit and be paused by the kernel until the next cgroup period. This forced waiting introduces latency, making the application feel slow despite available node resources.
-
-To confirm this, you should check the **`cpu.stat` file within the container's cgroup** for `nr_throttled` and `throttled_time`. A high number of throttled periods and significant throttled time would validate the hypothesis.
+This scenario strongly suggests the application is suffering from CPU throttling. Even though the node's overall CPU utilization is relatively low at 40%, the pod's `500m` CPU limit imposes a strict quota, preventing it from using more than 50% of a single CPU core. If the application handles requests with bursty CPU requirements, it will rapidly exhaust this hard quota and be forcibly paused by the Linux kernel until the next cgroup accounting period begins. This forced waiting introduces significant artificial latency, making the application feel extremely slow to end users despite the abundance of available node resources. To definitively confirm this, you should check the `cpu.stat` file within the container's cgroup specifically looking at `nr_throttled` and `throttled_time` (or `throttled_usec`).
 </details>
 
 ### Question 2: Scenario-Based
@@ -553,9 +536,7 @@ Describe the current state of the system and its trend, and what you would look 
 
 <details>
 <summary>Show Answer</summary>
-The system is currently **overloaded**, as the 1-minute load average (10.0) is greater than the number of CPU cores (8). This indicates that, on average, 2 processes are waiting in the run queue for CPU time. The trend (10.0 -> 8.0 -> 6.0) suggests that the load has been decreasing over the last 15 minutes and is slowly returning to a state of full utilization (8.0 on an 8-core system) or even slight underutilization.
-
-Next, using `vmstat`, I would examine the `r` (run queue) and `b` (blocked for I/O) columns. A high `r` value (greater than 8) would confirm CPU contention, while a high `b` value would shift the diagnosis towards an I/O bottleneck, even with a high load average. I would also look at `wa` (I/O wait) in `top` output.
+The system is currently overloaded, which is evident because the 1-minute load average of 10.0 exceeds the total number of available CPU cores (8). This metric indicates that, on average, two active processes are stuck waiting in the run queue for CPU time they cannot immediately get. However, the historical trend (from 10.0 down to 8.0 and then 6.0 over 15 minutes) suggests that the intense load spiked recently but is actively decreasing, slowly returning the system to a state of full utilization or slight underutilization. To diagnose the root cause, you should use `vmstat` to examine the `r` (run queue) and `b` (blocked for I/O) columns. A high `r` value would confirm pure CPU contention, while a spike in the `b` column would indicate that the processes are actually bottlenecked by disk or network I/O rather than raw compute availability.
 </details>
 
 ### Question 3: Scenario-Based
@@ -564,38 +545,31 @@ Based on your understanding of CPU limits and Java applications, what is a likel
 
 <details>
 <summary>Show Answer</summary>
-The likely explanation is that the Java application is **sensitive to CPU throttling due to its garbage collection (GC) mechanisms**. Modern JVMs attempt to optimize GC by performing bursty, CPU-intensive work. If the CPU limit is set too low (e.g., 1.5 CPUs), these GC bursts will be throttled. This means the GC process takes longer to complete, leading to increased GC pauses, which directly impact application latency and throughput. The average CPU usage might be low, but the peak demands of GC are being constrained by the Kubernetes CPU limit, causing performance issues.
+The most likely explanation is that the Java application is highly sensitive to CPU throttling due to its internal garbage collection (GC) mechanisms. Modern Java Virtual Machines (JVMs) attempt to optimize GC by performing bursty, highly concurrent, and CPU-intensive work during collection phases. If the CPU limit is set too low (e.g., restricted to 1.5 CPUs), these aggressive GC bursts will quickly hit the cgroup quota and be severely throttled by the kernel. Because the GC process is artificially stretched out over multiple enforcement periods, the application experiences prolonged "stop-the-world" pauses. This directly impacts application latency and throughput, proving that average CPU usage often masks the brief, high-intensity compute spikes required by runtime environments like the JVM.
 </details>
 
-### Question 4: Conceptual
-Explain the primary difference in how `cpu.shares` (influenced by Kubernetes CPU requests) and `cpu.cfs_quota_us` (influenced by Kubernetes CPU limits) affect a container's CPU allocation when a node has abundant idle CPU resources.
+### Question 4: Scenario-Based
+You are tasked with deploying a batch processing workload and a web server on a shared Kubernetes node that frequently has ample idle CPU. You configure the batch workload with requests only, and the web server with both requests and strict limits. During an off-peak period where the node is 80% idle, the web server experiences a sudden traffic spike. How will the Linux scheduler treat the CPU allocation for these two pods differently under these idle conditions, and why?
 
 <details>
 <summary>Show Answer</summary>
-When a node has abundant idle CPU resources:
-
--   **`cpu.shares` (requests)**: These have **no effect** on a container's maximum CPU allocation. Shares only determine the *proportional* CPU allocation during *contention*. If no other processes are competing for CPU, a container with even a tiny request can burst and use all available CPU on a core.
-
--   **`cpu.cfs_quota_us` (limits)**: These will **always enforce a hard cap** on the container's CPU usage. Even if the entire node is idle, a container with a `500m` limit will be throttled once it tries to consume more than 50% of a single CPU core within the `cfs_period`. This hard limit can introduce throttling latency even when resources are plentiful.
+Under these idle conditions, the Linux scheduler will treat the two pods very differently due to how requests and limits are implemented at the cgroup level. The batch workload, relying only on CPU requests, has no upper bound and can freely burst to consume all available idle CPU cycles on the node to finish its tasks faster. Conversely, the web server, which has strict CPU limits, is bound by a hard execution cap regardless of the node's 80% idle state. If the web server's traffic spike requires more compute than its defined limit, the kernel will forcefully throttle its containers, introducing latency despite the abundance of free resources. This illustrates that limits enforce a strict ceiling at all times, whereas requests simply guarantee a proportional minimum during times of active contention.
 </details>
 
-### Question 5: Tool Usage
-You suspect a specific process (PID 12345) on a Linux server is causing excessive CPU contention. You want to confirm this by looking at how frequently it's being preempted by the scheduler.
-Which specific file and entry would you inspect to gather this information, and what would a high value indicate?
+### Question 5: Scenario-Based
+Users are complaining about intermittent latency in a monolithic backend service running directly on a VM. Upon initial investigation, the overall CPU usage appears moderate, but you suspect the specific application process (PID 54321) is suffering from severe CPU contention with a noisy neighbor process. To prove this hypothesis without installing external profiling tools, which specific system file and metric would you inspect for this process, and how would you interpret the findings?
 
 <details>
 <summary>Show Answer</summary>
-You would inspect the `/proc/12345/status` file and look for the `nonvoluntary_ctxt_switches` entry.
-
-A high value for `nonvoluntary_ctxt_switches` indicates that the process is frequently being preempted by the scheduler because its CPU time slice has expired or a higher-priority task became runnable. This is a strong indicator of CPU contention, meaning there are more processes wanting to run than available CPU resources, forcing the scheduler to frequently interrupt processes.
+To prove that the specific process is suffering from CPU contention, you should inspect the `/proc/54321/status` file and look specifically at the `nonvoluntary_ctxt_switches` metric. This counter tracks how many times the Linux scheduler forcibly preempted the process because its time slice expired or a higher-priority task became runnable. A rapidly increasing or unusually high value for this metric strongly indicates that the application is competing heavily for processor time and losing out to other processes. If the value of `voluntary_ctxt_switches` is low while `nonvoluntary_ctxt_switches` is high, it definitively confirms the process wants to compute but is being starved of CPU cycles by the noisy neighbor.
 </details>
 
-### Question 6: Best Practice
-Why is checking per-CPU statistics with `mpstat -P ALL` often more informative than just looking at the overall `%Cpu(s)` from `top` when diagnosing CPU bottlenecks?
+### Question 6: Scenario-Based
+A critical single-threaded Node.js application is failing to process its message queue quickly enough, causing a severe backlog. When the operations team checks the monitoring dashboard for the 8-core host machine, they see a comfortable overall CPU utilization of just 12.5%. They are confused why the application is bottlenecking when the system appears mostly idle. What specific tool and flag should they use to uncover the true nature of this performance issue, and what are they likely to find?
 
 <details>
 <summary>Show Answer</summary>
-Checking per-CPU statistics with `mpstat -P ALL` is more informative because **overall CPU averages can mask uneven load distribution across cores**. A system might report a low average CPU utilization (e.g., 25% on a 4-core system), but `mpstat` could reveal that one core is 100% utilized while the others are idle. For single-threaded applications or workloads that are not efficiently parallelized, saturating a single core will create a bottleneck, even if the system as a whole appears to have ample capacity. This granular view helps pinpoint specific resource contention issues that averages obscure.
+The operations team should immediately use the `mpstat -P ALL` command (or press '1' while inside the `top` utility) to break down the CPU utilization on a per-core basis. Overall CPU averages can easily mask extreme uneven load distribution across multiple cores, which is especially problematic for single-threaded applications. Because a single-threaded Node.js process can only execute on one CPU core at a time, it will max out its assigned core (reaching 100% utilization for that specific core) while the other seven cores remain completely idle. This creates a severe performance bottleneck for the application, even though the aggregate system load mathematically averages out to a seemingly safe 12.5%.
 </details>
 
 ---
@@ -604,7 +578,7 @@ Checking per-CPU statistics with `mpstat -P ALL` is more informative because **o
 
 **Objective**: Gain practical experience observing CPU scheduling, priority, and throttling behavior using common Linux tools and container runtimes.
 
-**Environment**: A Linux system (VM, cloud instance, or local machine) with `stress` and `docker` (or `podman`) installed. Root access may be required for some steps.
+**Environment**: A Linux system (VM, cloud instance, or local machine) running a modern distribution with `stress` and `docker` (or `podman`) installed. Root access may be required for some steps.
 
 ### Part 1: Initial CPU System Metrics
 
@@ -701,65 +675,62 @@ watch -n 1 uptime
 
 ### Part 4: Investigating cgroup CPU Quotas (Native Linux)
 
-This part uses raw cgroup v1 to demonstrate CPU quotas directly on a Linux system. This is what Kubernetes uses under the hood.
+This part uses the modern cgroups v2 unified hierarchy to demonstrate CPU quotas directly on a Linux system. This is the exact mechanism Kubernetes uses under the hood.
 
 ```bash
-# 1. Create a new CPU cgroup.
+# 1. Create a new CPU cgroup (cgroups v2).
 #    Requires root privileges.
-sudo mkdir /sys/fs/cgroup/cpu/test
+sudo mkdir /sys/fs/cgroup/test
 
 # 2. Set a CPU quota for this cgroup (e.g., 10% of a CPU core).
-#    `cpu.cfs_quota_us`: 10,000 microseconds (10ms)
-#    `cpu.cfs_period_us`: 100,000 microseconds (100ms)
-#    This limits processes in this cgroup to 10% of one CPU.
-echo 10000 | sudo tee /sys/fs/cgroup/cpu/test/cpu.cfs_quota_us
-echo 100000 | sudo tee /sys/fs/cgroup/cpu/test/cpu.cfs_period_us
+#    `cpu.max`: format is "quota period".
+#    "10000 100000" means 10,000us quota per 100,000us period (10% limit).
+echo "10000 100000" | sudo tee /sys/fs/cgroup/test/cpu.max
 
 # 3. Run a CPU-intensive process within this cgroup.
-#    The `$$` expands to the current shell's PID, which we'll move into the cgroup.
+#    The `$$` expands to the current shell's PID, moving it into the cgroup.
 #    Then, `sha256sum /dev/zero` will run under the imposed limit.
-echo $$ | sudo tee /sys/fs/cgroup/cpu/test/cgroup.procs
+echo $$ | sudo tee /sys/fs/cgroup/test/cgroup.procs
 sha256sum /dev/zero &
 PID=$! # Store the PID of the background process
 
-# 4. Check for throttling: Observe `nr_throttled` and `throttled_time`.
+# 4. Check for throttling: Observe `nr_throttled` and `throttled_usec`.
 #    You should see these values incrementing, indicating active throttling.
 sleep 5
-cat /sys/fs/cgroup/cpu/test/cpu.stat
+cat /sys/fs/cgroup/test/cpu.stat
 
 # 5. Clean up: Terminate the process and remove the cgroup.
 kill $PID
-echo $$ | sudo tee /sys/fs/cgroup/cpu/cgroup.procs # Move shell back to root cgroup
-sudo rmdir /sys/fs/cgroup/cpu/test
+echo $$ | sudo tee /sys/fs/cgroup/cgroup.procs # Move shell back to root cgroup
+sudo rmdir /sys/fs/cgroup/test
 ```
 
 <details>
 <summary>Expected Output and Analysis</summary>
-After a few seconds of `sha256sum` running, `cat /sys/fs/cgroup/cpu/test/cpu.stat` will show `nr_throttled` and `throttled_time` values greater than zero. This directly demonstrates that the process, despite being CPU-bound, is being actively throttled to adhere to the 10% CPU quota imposed by the cgroup. This is the underlying mechanism for Kubernetes CPU limits.
+After a few seconds of `sha256sum` running, `cat /sys/fs/cgroup/test/cpu.stat` will show `nr_throttled` and `throttled_usec` values greater than zero. This directly demonstrates that the process, despite being CPU-bound, is being actively throttled to adhere to the 10% CPU quota imposed by the cgroup. This is the underlying mechanism for Kubernetes CPU limits.
 </details>
 
 ### Part 5: Container CPU Limits and Throttling (Docker/Podman)
 
-This section extends the cgroup understanding to container runtimes, showing how `docker` (or `podman`) applies CPU limits and how to observe their effect.
+This section extends the cgroup understanding to container runtimes, showing how `docker` (or `podman`) applies CPU limits and how to observe their effect via modern cgroups v2.
 
 ```bash
-# 1. Run a container with a CPU limit (e.g., 0.5 CPUs, or 500m).
-#    The `--cpus` flag directly translates to cgroup CPU quotas.
+# 1. Run a container with a CPU limit (e.g., 0.5 CPUs).
+#    The `--cpus` flag directly translates to cgroup CPU max quotas.
 docker run -d --name cpu-test --cpus="0.5" nginx sleep 3600
 
 # 2. Inspect the cgroup settings applied to the container.
-#    These should reflect the `0.5` CPU limit (i.e., 50,000 quota for a 100,000 period).
-docker exec cpu-test cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us
-docker exec cpu-test cat /sys/fs/cgroup/cpu/cpu.cfs_period_us
+#    These should reflect the `0.5` CPU limit (i.e., 50000 quota for a 100000 period).
+docker exec cpu-test cat /sys/fs/cgroup/cpu.max
 
 # 3. Generate CPU load inside the container.
 #    This will push the container against its defined CPU limit.
 docker exec cpu-test sh -c "sha256sum /dev/zero &"
 
 # 4. Check for throttling after a minute or so.
-#    Observe the `nr_throttled` and `throttled_time` entries.
+#    Observe the `nr_throttled` and `throttled_usec` entries in the v2 hierarchy.
 sleep 60
-docker exec cpu-test cat /sys/fs/cgroup/cpu/cpu.stat
+docker exec cpu-test cat /sys/fs/cgroup/cpu.stat
 
 # 5. Clean up: Stop and remove the container.
 docker rm -f cpu-test
@@ -767,8 +738,8 @@ docker rm -f cpu-test
 
 <details>
 <summary>Expected Output and Analysis</summary>
-- The `cpu.cfs_quota_us` inside the container should be `50000` (for 0.5 CPU) and `cpu.cfs_period_us` should be `100000`.
-- After running `sha256sum` inside the container for a minute, `docker exec cpu-test cat /sys/fs/cgroup/cpu/cpu.stat` will show non-zero (and likely growing) values for `nr_throttled` and `throttled_time`. This confirms that Docker, using cgroups, is actively throttling the container's CPU usage according to the `--cpus` limit. This is directly analogous to how Kubernetes CPU limits work.
+- The `cpu.max` output inside the container should be `50000 100000`.
+- After running `sha256sum` inside the container for a minute, `docker exec cpu-test cat /sys/fs/cgroup/cpu.stat` will show non-zero (and likely growing) values for `nr_throttled` and `throttled_usec`. This confirms that Docker, using cgroups, is actively throttling the container's CPU usage according to the `--cpus` limit. This is directly analogous to how Kubernetes CPU limits work.
 </details>
 
 ### Success Checklist
@@ -777,8 +748,8 @@ docker rm -f cpu-test
 - [ ] I can interpret load average values relative to the number of CPU cores.
 - [ ] I have observed how `nice` values impact CPU allocation among competing processes.
 - [ ] I have monitored context switches and run queue depth under load.
-- [ ] I understand how `cpu.cfs_quota_us` and `cpu.cfs_period_us` implement CPU limits via cgroups.
-- [ ] I have seen evidence of CPU throttling both in native cgroups and within a Docker container.
+- [ ] I understand how cgroups v2 `cpu.max` implement CPU limits natively.
+- [ ] I have seen evidence of CPU throttling both in native cgroups and within a container.
 
 ---
 
@@ -786,7 +757,7 @@ docker rm -f cpu-test
 
 1.  **Load average ≠ CPU utilization**: Load average includes processes waiting for I/O, while CPU utilization only measures active processing. A high load average can indicate either CPU contention or I/O bottlenecks.
 2.  **CFS ensures fairness**: The Completely Fair Scheduler balances CPU time among runnable processes using `vruntime`, prioritizing those that have received less CPU time.
-3.  **Requests = shares, Limits = quotas**: In Kubernetes, CPU requests translate to `cpu.shares` (relative weight during contention), while CPU limits translate to `cpu.cfs_quota_us` (a hard cap on usage).
+3.  **Requests = weight, Limits = max caps**: In Kubernetes, CPU requests translate to cgroup weights (relative priority during contention), while CPU limits translate to hard maximums.
 4.  **Throttling causes latency**: Kubernetes CPU limits, enforced via cgroup quotas, can introduce significant latency spikes by pausing container execution, even if average CPU usage is low.
 5.  **Check per-CPU stats**: Aggregate CPU metrics can hide performance bottlenecks caused by a single saturated core. Use `mpstat -P ALL` for a granular view.
 6.  **I/O wait is critical**: Don't confuse high `iowait` (`wa%`) with CPU starvation; it indicates processes are waiting for disk or network I/O, shifting the troubleshooting focus.
