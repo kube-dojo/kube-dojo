@@ -45,35 +45,21 @@ This module teaches you how to connect Kubernetes workloads to managed data ware
 
 ### Architecture: K8s to Data Warehouse
 
-```
-  +------------------+      +------------------+      +------------------+
-  | Application Pods |      | Streaming (Kafka)|      | Object Storage   |
-  | (event producers)|      | (real-time data) |      | (batch files)    |
-  +--------+---------+      +--------+---------+      +--------+---------+
-           |                         |                         |
-           v                         v                         v
-  +-----------------------------------------------------------|----------+
-  |                     Airflow on K8s (Orchestrator)                     |
-  |  +----------+  +-----------+  +-----------+  +-----------+          |
-  |  | Extract  |  | Transform |  | Load      |  | Validate  |          |
-  |  | (K8s Pod)|  | (K8s Pod) |  | (K8s Pod) |  | (K8s Pod) |          |
-  |  +----------+  +-----------+  +-----------+  +-----------+          |
-  +----------------------------------------------------------------------+
-           |
-           v
-  +------------------+
-  | Data Warehouse   |
-  | (BigQuery /      |
-  |  Redshift /      |
-  |  Snowflake)      |
-  +------------------+
-           |
-           v
-  +------------------+
-  | BI Dashboards    |
-  | (Looker, Tableau,|
-  |  Metabase)       |
-  +------------------+
+```mermaid
+graph TD
+    A[Application Pods<br/>event producers] --> D
+    B[Streaming Kafka<br/>real-time data] --> D
+    C[Object Storage<br/>batch files] --> D
+
+    subgraph Airflow[Airflow on K8s - Orchestrator]
+        direction LR
+        D[Extract<br/>K8s Pod] --> E[Transform<br/>K8s Pod]
+        E --> F[Load<br/>K8s Pod]
+        F --> G[Validate<br/>K8s Pod]
+    end
+
+    Airflow --> H[Data Warehouse<br/>BigQuery / Redshift / Snowflake]
+    H --> I[BI Dashboards<br/>Looker, Tableau, Metabase]
 ```
 
 ---
@@ -236,28 +222,16 @@ helm install airflow apache-airflow/airflow \
 
 ### KubernetesExecutor Architecture
 
-```
-  +------------------+
-  | Airflow Webserver|  (UI, DAG visualization)
-  +--------+---------+
-           |
-  +--------+---------+
-  | Airflow Scheduler|  (DAG parsing, task scheduling)
-  +--------+---------+
-           |
-           | Creates pods for each task
-           v
-  +--------+---------+  +--------+---------+  +--------+---------+
-  | Task Pod 1       |  | Task Pod 2       |  | Task Pod 3       |
-  | (extract)        |  | (transform)      |  | (load)           |
-  | resources:       |  | resources:       |  | resources:       |
-  |   cpu: 500m      |  |   cpu: 2         |  |   cpu: 500m      |
-  |   mem: 1Gi       |  |   mem: 8Gi       |  |   mem: 512Mi     |
-  +------------------+  +------------------+  +------------------+
-       |                     |                     |
-       v                     v                     v
-   (completed)           (completed)           (completed)
-   (pod deleted)         (pod deleted)         (pod deleted)
+```mermaid
+graph TD
+    A[Airflow Webserver<br/>UI, DAG visualization] --> B[Airflow Scheduler<br/>DAG parsing, task scheduling]
+    B -- Creates pods for each task --> C[Task Pod 1<br/>extract<br/>cpu: 500m, mem: 1Gi]
+    B --> D[Task Pod 2<br/>transform<br/>cpu: 2, mem: 8Gi]
+    B --> E[Task Pod 3<br/>load<br/>cpu: 500m, mem: 512Mi]
+    
+    C --> F((completed<br/>pod deleted))
+    D --> G((completed<br/>pod deleted))
+    E --> H((completed<br/>pod deleted))
 ```
 
 > **Stop and think**: If Airflow's KubernetesExecutor creates a new pod for every task, how does this impact pipeline execution time compared to having workers already running?
@@ -890,7 +864,7 @@ spec:
       serviceAccountName: pipeline-runner
       containers:
         - name: orchestrator
-          image: bitnami/kubectl:1.31
+          image: bitnami/kubectl:1.35
           command:
             - /bin/sh
             - -c
@@ -1008,7 +982,7 @@ spec:
           serviceAccountName: pipeline-runner
           containers:
             - name: orchestrator
-              image: bitnami/kubectl:1.31
+              image: bitnami/kubectl:1.35
               command:
                 - /bin/sh
                 - -c
