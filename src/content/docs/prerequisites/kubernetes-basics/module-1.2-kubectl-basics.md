@@ -45,7 +45,7 @@ In 2019, a prominent FinTech startup (anonymized) experienced a devastating 45-m
 kubectl [command] [TYPE] [NAME] [flags]
 
 Examples:
-kubectl get pods                    # List all pods
+kubectl get pods                   # List all pods
 kubectl get pod nginx              # Get specific pod
 kubectl get pods -o wide           # More output columns
 kubectl describe pod nginx         # Detailed info
@@ -71,10 +71,10 @@ kubectl get pods -o json           # JSON output
 
 # Common resource types
 kubectl get nodes                  # Cluster nodes
-kubectl get deployments           # Deployments
-kubectl get services              # Services
-kubectl get all                   # Common resources
-kubectl get events                # Cluster events
+kubectl get deployments            # Deployments
+kubectl get services               # Services
+kubectl get all                    # Common resources
+kubectl get events                 # Cluster events
 
 # Describe (detailed info)
 kubectl describe pod nginx
@@ -160,7 +160,6 @@ kubectl get pod nginx -o yaml
 
 # JSON
 kubectl get pod nginx -o json
-
 ```
 
 > **Bonus: Power User Syntax** (come back to these after you are comfortable with the basics)
