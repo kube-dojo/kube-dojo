@@ -343,6 +343,13 @@ gcloud container clusters create team-a-prod \
   --master-ipv4-cidr=172.16.0.0/28
 ```
 
+> **Stop and think**: In AWS, network segmentation is achieved by isolating workloads into separate VPCs and connecting them via a Transit Gateway with distinct route tables. In GCP's Shared VPC model, multiple environments might share the same VPC. How do you prevent workloads in a staging subnet from communicating with workloads in a production subnet?
+>
+> <details>
+> <summary>Answer</summary>
+> In a GCP Shared VPC, all subnets route to each other by default. To isolate environments, you must implement centralized egress and ingress firewall rules in the host project. You apply network tags or attach specific Service Accounts to the compute instances (or GKE nodes) in each environment. Then, you create firewall rules that explicitly deny traffic between the staging and production tags/service accounts, ensuring network segmentation is enforced by the firewall rather than by route isolation.
+> </details>
+
 ### GCP Network Connectivity Center
 
 NCC is GCP's hub for connecting on-premises networks, other clouds, and remote VPCs. Think of it as the GCP equivalent of AWS Transit Gateway, but focused on hybrid connectivity.
