@@ -249,28 +249,19 @@ But which file? This is where it gets confusing, because there are several and t
 
 ### When Each File Runs
 
-```
-┌──────────────────────────────────────────────────────────┐
-│                   LOGIN SHELL                            │
-│         (SSH session, first terminal on Linux)           │
-│                                                          │
-│   Runs: /etc/profile                                     │
-│         → then the FIRST one found of:                   │
-│           ~/.bash_profile                                │
-│           ~/.bash_login                                  │
-│           ~/.profile                                     │
-│                                                          │
-│   Think: "Welcome! Let me set up your entire session."   │
-└──────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Login ["LOGIN SHELL (SSH session, first terminal on Linux)"]
+        L1["Runs: /etc/profile<br/>→ then the FIRST one found of:<br/>~/.bash_profile<br/>~/.bash_login<br/>~/.profile"]
+        L2>Think: 'Welcome! Let me set up your entire session.']
+        L1 --> L2
+    end
 
-┌──────────────────────────────────────────────────────────┐
-│               INTERACTIVE NON-LOGIN SHELL                │
-│    (new terminal tab/window on desktop, typing bash)     │
-│                                                          │
-│   Runs: ~/.bashrc                                        │
-│                                                          │
-│   Think: "Just another shell, here are your shortcuts."  │
-└──────────────────────────────────────────────────────────┘
+    subgraph NonLogin ["INTERACTIVE NON-LOGIN SHELL (new terminal tab/window on desktop)"]
+        N1["Runs: ~/.bashrc"]
+        N2>Think: 'Just another shell, here are your shortcuts.']
+        N1 --> N2
+    end
 ```
 
 In practice, most people want their settings in **every** shell. The standard trick is:
@@ -392,18 +383,12 @@ ls -l /etc/passwd /bin/ls /home
 
 Let us decode that first column character by character:
 
-```
- -  r  w  x  r  -  x  r  -  x
- │  │  │  │  │  │  │  │  │  │
- │  └──┴──┘  └──┴──┘  └──┴──┘
- │     │        │        │
- │   OWNER    GROUP    OTHERS
- │  (user)
- │
- └── File type
-     - = regular file
-     d = directory
-     l = symbolic link
+```mermaid
+flowchart LR
+    P["-rwxr-xr-x"] --> T["- : File type<br/>(- = regular, d = directory, l = symlink)"]
+    P --> U["rwx : OWNER (user)"]
+    P --> G["r-x : GROUP"]
+    P --> O["r-x : OTHERS"]
 ```
 
 ### What r, w, x Actually Mean
