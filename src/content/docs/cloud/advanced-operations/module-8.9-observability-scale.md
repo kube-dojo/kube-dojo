@@ -529,33 +529,33 @@ processors:
 
 Cardinality -- the number of unique time series -- is the single biggest factor in metrics cost. Each unique combination of metric name and label values creates a new time series.
 
-```
-CARDINALITY EXPLOSION EXAMPLE
-════════════════════════════════════════════════════════════════
-
-  Metric: http_requests_total
-  Labels: method, path, status_code, pod, instance
-
-  Cardinality calculation:
-  methods: 4 (GET, POST, PUT, DELETE)
-  paths: 500 (one per API endpoint)
-  status_codes: 20 (200, 201, 301, 400, 401, 403, 404, 500...)
-  pods: 100 (across all deployments)
-  instances: 50 (nodes)
-
-  Total time series: 4 x 500 x 20 x 100 x 50 = 200,000,000
-
-  At 200M time series, Prometheus will use:
-  - ~400GB memory
-  - ~2TB disk (30-day retention)
-  - Query latency: minutes (not seconds)
-
-  THE FIX: Reduce label cardinality
-  - Remove "pod" label (aggregate at deployment level)
-  - Bucket "path" into categories (/api/users/*, /api/orders/*)
-  - Remove "instance" label (aggregate at cluster level)
-
-  After: 4 x 50 x 20 = 4,000 time series (50,000x reduction)
+```mermaid
+flowchart TD
+    Metric["Metric: http_requests_total"]
+    
+    subgraph Labels ["Labels Contributing to Cardinality"]
+        direction TB
+        Method["methods: 4 (GET, POST, etc.)"]
+        Path["paths: 500 (one per endpoint)"]
+        Status["status_codes: 20 (200, 404, etc.)"]
+        Pod["pods: 100 (across deployments)"]
+        Instance["instances: 50 (nodes)"]
+    end
+    
+    Metric --> Labels
+    Labels --> Total["Total time series: 4 * 500 * 20 * 100 * 50 = 200,000,000"]
+    
+    Total --> Impact["Impact at 200M series:\n- ~400GB memory\n- ~2TB disk (30 days)\n- Minute-long query latency"]
+    
+    subgraph Fix ["THE FIX: Reduce label cardinality"]
+        direction TB
+        DropPod["Remove pod label (aggregate at deployment)"]
+        BucketPath["Bucket path into categories (/api/users/*)"]
+        DropInstance["Remove instance label (aggregate at cluster)"]
+    end
+    
+    Impact --> Fix
+    Fix --> NewTotal["After Fix: 4 * 50 * 20 = 4,000 time series\n(50,000x reduction)"]
 ```
 
 ### Controlling Cardinality
