@@ -345,7 +345,8 @@ gcloud artifacts repositories create pypi-cache \
   --remote-python-repo=PYPI
 
 # Pull an image through the remote repository
-docker pull us-central1-docker.pkg.dev/${PROJECT_ID}/dockerhub-cache/nginx:1.25
+# Note: Docker Hub official images require the 'library/' namespace prefix
+docker pull us-central1-docker.pkg.dev/${PROJECT_ID}/dockerhub-cache/library/nginx:1.25
 
 # Subsequent pulls of the same image come from your local cache
 ```
@@ -470,13 +471,13 @@ You should grant the `roles/artifactregistry.reader` role to the GKE node's serv
 <details>
 <summary>4. A critical zero-day vulnerability is discovered in a popular open-source Python library, and malicious actors have managed to upload a compromised version of the package to PyPI. Your CI/CD pipelines automatically build new container images every night using `pip install`. If your organization uses an Artifact Registry remote repository for PyPI, how does this architecture protect your nightly builds from pulling the compromised package?</summary>
 
-Remote repositories act as a caching proxy, meaning they store a local copy of any package the first time it is pulled from the upstream registry. Because your pipelines have likely pulled the clean, older version of the Python library previously, that clean version is already cached in your Artifact Registry. When the nightly build runs, it pulls the package from the local cache rather than reaching out to PyPI, completely bypassing the newly compromised version. The CI/CD pipeline remains secure because it will only fetch a new version from upstream if a developer explicitly updates the dependency version requirement in their code.
+Remote repositories act as a caching proxy, meaning they store a local copy of any package the first time it is pulled from the upstream registry. Because your pipelines have likely pulled the clean, older version of the Python library previously, that clean version is already cached in your Artifact Registry. When the nightly build runs, it pulls the package from the local cache rather than reaching out to PyPI, completely bypassing the newly compromised version. This caching mechanism provides a critical buffer, allowing your security team time to pin the dependency to a known-safe version before the cache is ever invalidated or updated.
 </details>
 
 <details>
 <summary>5. A new developer joins your team and is trying to push their first Docker image to the company's Artifact Registry repository (`us-central1-docker.pkg.dev/my-project/docker-repo/app:v1`). The developer runs `docker push` but receives a "denied: Permission denied" error. They confirm they are logged into `gcloud` with their corporate account. What are the three most likely configuration issues or missing steps causing this failure?</summary>
 
-The first likely cause is that the developer has not configured Docker to authenticate with Artifact Registry; they must run `gcloud auth configure-docker us-central1-docker.pkg.dev` to inject the credential helper into their Docker configuration. The second common cause is that the developer's identity has not been granted the `roles/artifactregistry.writer` role on that specific repository, leaving them without the necessary permissions to push. The third possible cause is an incorrectly formatted image tag; if they used an old `gcr.io` format or forgot to include the repository name in the path, the registry will reject the push attempt with a permission or not-found error. Ensuring all three of these prerequisites are met is essential before any container image can be successfully uploaded to a secure registry.
+The first likely cause is that the developer has not configured Docker to authenticate with Artifact Registry; they must run `gcloud auth configure-docker us-central1-docker.pkg.dev` to inject the credential helper into their Docker configuration. The second common cause is that the developer's identity has not been granted the `roles/artifactregistry.writer` role on that specific repository, leaving them without the necessary permissions to push. Finally, they may be trying to push to a repository that doesn't exist or isn't in the correct region, which Artifact Registry often masks behind a generic permission denied error to prevent information disclosure. Troubleshooting these three areas resolves almost all initial push access issues.
 </details>
 
 <details>
