@@ -610,9 +610,11 @@ gcloud projects create $DEV_PROJECT --name="IAM Lab Dev"
 # Create the prod project
 gcloud projects create $PROD_PROJECT --name="IAM Lab Prod"
 
-# Link billing (replace BILLING_ACCOUNT_ID with your billing account)
-gcloud billing projects link $DEV_PROJECT --billing-account=BILLING_ACCOUNT_ID
-gcloud billing projects link $PROD_PROJECT --billing-account=BILLING_ACCOUNT_ID
+# Get your active billing account ID and link it to the projects
+export BILLING_ACCOUNT_ID=$(gcloud billing accounts list --format="value(name)" | head -n 1 | cut -d '/' -f 2)
+
+gcloud billing projects link $DEV_PROJECT --billing-account=$BILLING_ACCOUNT_ID
+gcloud billing projects link $PROD_PROJECT --billing-account=$BILLING_ACCOUNT_ID
 
 # Enable required APIs in both projects
 for PROJECT in $DEV_PROJECT $PROD_PROJECT; do
