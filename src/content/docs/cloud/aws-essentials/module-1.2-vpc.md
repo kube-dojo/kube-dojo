@@ -205,6 +205,13 @@ flowchart TD
 
 The response follows the exact reverse path. The IGW sends it to the NAT Gateway's Elastic IP, the NAT Gateway translates the destination back to `10.0.2.50`, and delivers it to the private instance.
 
+> **Stop and think**: You have a database in a private subnet and a NAT Gateway in a public subnet. The database needs to download patches from `archive.ubuntu.com`. Which component performs the actual translation of the database's private IP to a public IP that the internet can route back to?
+>
+> <details>
+> <summary>View Answer</summary>
+> The <strong>NAT Gateway</strong> performs the translation. It takes the outbound request from the database, replaces the database's private IP with its own Elastic IP, and forwards the traffic to the Internet Gateway. When the response comes back from the internet, the NAT Gateway translates the destination IP back to the database's private IP and forwards it into the private subnet. The Internet Gateway only performs 1:1 NAT for instances that already have their own public IPs.
+> </details>
+
 ### NAT Gateway: High Availability Pattern
 
 A single NAT Gateway resides in a single AZ. If that AZ fails, all private subnets routing through it lose internet access. For production workloads, deploy one NAT Gateway per AZ:
@@ -227,6 +234,13 @@ flowchart LR
 ```
 
 Each private subnet's route table points to the NAT Gateway in its own AZ. This means each AZ is self-contained for outbound internet access.
+
+> **Pause and predict**: If you delete a NAT Gateway to save costs but forget to update the private subnet's route table, what happens to traffic destined for `0.0.0.0/0`?
+>
+> <details>
+> <summary>View Answer</summary>
+> The traffic will be dropped into a "black hole." The route table will still have a rule pointing <code>0.0.0.0/0</code> to the deleted NAT Gateway's ID, but the status of that route will become <code>blackhole</code>. Any traffic matching that route is simply discarded until you either remove the route entirely or update it to point to a valid, active target.
+> </details>
 
 ### NAT Gateway vs. NAT Instance
 
