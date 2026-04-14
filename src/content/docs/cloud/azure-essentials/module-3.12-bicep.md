@@ -152,6 +152,19 @@ The differences are stark:
 | **Compilation** | N/A (direct JSON) | Compiles to ARM JSON |
 | **Decompilation** | N/A | Can decompile ARM to Bicep |
 
+### Bicep vs Terraform
+
+While Bicep is the native choice for Azure, Terraform is the industry standard for multi-cloud IaC. How do you choose between them?
+
+| Feature | Bicep | Terraform |
+| :--- | :--- | :--- |
+| **State Management** | No state file (state is in Azure) | Requires state file management (backend) |
+| **Cloud Support** | Azure only | Multi-cloud (AWS, GCP, Azure, etc.) |
+| **Day 0 Support** | Immediate support for new Azure features | Slight delay for provider updates |
+| **Integration** | Native to Azure CLI and Portal | Requires separate Terraform CLI |
+
+**Decision Framework**: Use Bicep if your organization is 100% Azure-native and you want to avoid managing state files. Use Terraform if you have a multi-cloud strategy or already use Terraform for other infrastructure (like GitHub, Datadog, or Kubernetes).
+
 ### Bicep Key Concepts
 
 ```bicep
@@ -417,6 +430,23 @@ az deployment group create \
   --parameters parameters/staging.bicepparam
 ```
 
+### Sharing Modules: Registries and Template Specs
+
+To share Bicep modules across teams, you need a central repository. Azure provides two native ways to share IaC components:
+
+1. **Private Bicep Registries (ACR)**: You can publish Bicep modules to an Azure Container Registry (ACR). Teams reference them using the `br:` scheme (e.g., `module redis 'br:myacr.azurecr.io/bicep/modules/redis:v1'`).
+2. **Template Specs**: Template specs are native Azure resources that store an ARM template for later deployment. You can compile a Bicep file and save it as a Template Spec, complete with RBAC access control and versioning, allowing non-developers to deploy standardized infrastructure directly from the Azure Portal.
+
+```bash
+# Publish a Bicep module to a Template Spec
+az ts create \
+  --name standard-storage-spec \
+  --version "1.0.0" \
+  --resource-group myRG \
+  --location eastus2 \
+  --template-file modules/storage.bicep
+```
+
 ---
 
 ## Deployment Scopes
@@ -465,6 +495,25 @@ az deployment mg create --management-group-id myMG --location eastus2 -f mg.bice
 
 # Tenant scope
 az deployment tenant create --location eastus2 -f tenant.bicep
+```
+
+---
+
+## Deployment Stacks: Managing Resource Lifecycles
+
+While Bicep modules organize your code, **Deployment Stacks** organize your deployed resources. A deployment stack is a native Azure resource that manages the lifecycle of a collection of resources as a single atomic unit, even if those resources span multiple resource groups or subscriptions.
+
+The key superpower of deployment stacks is **cleanup and protection**:
+- **Cleanup**: When you remove a resource from your Bicep file and update the stack, the stack can automatically delete or detach the unmanaged resource.
+- **Protection**: You can apply `DenySettings` to the stack, preventing anyone (even administrators) from manually modifying or deleting the managed resources via the portal or CLI.
+
+```bash
+# Create a deployment stack with DenySettings to protect against drift
+az stack group create \
+  --name my-production-stack \
+  --resource-group myRG \
+  --template-file main.bicep \
+  --deny-settings-mode denyDelete
 ```
 
 ---
