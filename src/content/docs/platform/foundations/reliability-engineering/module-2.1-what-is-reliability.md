@@ -69,7 +69,7 @@ That question seems simple. But answering it systematically—measuring it, desi
 
 Consider what "99% reliable" actually means:
 
-```
+```text
 THE BRUTAL MATH OF UNRELIABILITY
 ═══════════════════════════════════════════════════════════════════════════════
 
@@ -120,7 +120,7 @@ This module teaches you to think about reliability systematically—not as "we h
 
 Here's a conversation that happens in every engineering organization:
 
-```
+```text
 THE VAGUENESS PROBLEM
 ═══════════════════════════════════════════════════════════════════════════════
 
@@ -166,7 +166,7 @@ flowchart TD
 | "Data is safe" | "99.999999999% of objects stored survive over 10 years" |
 | "Fast enough" | "95th percentile latency under 200ms" |
 
-```
+```text
 COMPLETE RELIABILITY DEFINITION EXAMPLE
 ═══════════════════════════════════════════════════════════════════════════════
 
@@ -241,7 +241,7 @@ quadrantChart
 
 Durability is different—it's about data persistence over time, not requests.
 
-```
+```text
 DURABILITY EXPLAINED
 ═══════════════════════════════════════════════════════════════════════════════
 
@@ -339,7 +339,7 @@ The "nines" are a shorthand for the number of 9s in the reliability percentage:
 | Five nines | 99.999% | 0.001% | 5.26 minutes | 26.3 seconds | 0.86 seconds |
 | Six nines | 99.9999% | 0.0001% | 31.5 seconds | 2.6 seconds | 86 ms |
 
-```
+```text
 VISUALIZING THE NINES
 ═══════════════════════════════════════════════════════════════════════════════
 
@@ -374,7 +374,7 @@ If you handle 1,000,000 requests per day:
 
 Each additional nine is approximately **10x harder and more expensive** to achieve. Here's why:
 
-```
+```text
 THE EXPONENTIAL COST OF NINES
 ═══════════════════════════════════════════════════════════════════════════════
 
@@ -477,7 +477,7 @@ flowchart TD
 
 **Calculating Availability from MTBF and MTTR:**
 
-```
+```text
 THE AVAILABILITY FORMULA
 ═══════════════════════════════════════════════════════════════════════════════
 
@@ -524,7 +524,7 @@ Here's a concept that changed how the industry thinks about reliability: the **e
 
 An error budget is the acceptable amount of unreliability—the difference between 100% and your reliability target.
 
-```
+```text
 ERROR BUDGET: THE CONCEPT
 ═══════════════════════════════════════════════════════════════════════════════
 
@@ -563,7 +563,7 @@ Before error budgets, reliability conversations went like this:
 
 Error budgets change the conversation:
 
-```
+```text
 ERROR BUDGETS CREATE ALIGNMENT
 ═══════════════════════════════════════════════════════════════════════════════
 
@@ -597,7 +597,7 @@ Developer: "So we can afford this. Let's go."
 
 > **Stop and think**: If a team has 0 error budget left, how should they handle a critical security vulnerability patch?
 
-```
+```text
 ERROR BUDGET POLICY IN ACTION
 ═══════════════════════════════════════════════════════════════════════════════
 
@@ -657,7 +657,7 @@ flowchart LR
 
 **Why you can't fully optimize both:**
 
-```
+```text
 THE PHYSICS OF THE TRADE-OFF
 ═══════════════════════════════════════════════════════════════════════════════
 
@@ -756,7 +756,7 @@ Cost grows EXPONENTIALLY. At some point, another nine costs more than it's worth
 >
 > A SaaS company promised enterprise customers "99.99% availability" in contracts. Marketing loved the number. Sales closed deals with it. Nobody did the math.
 >
-> ```
+> ```text
 > THE MATH NOBODY DID
 > ═════════════════════════════════════════════════════════════════════════════
 >
@@ -823,7 +823,7 @@ flowchart TD
 
 Reliability engineers think differently. They ask questions that others don't:
 
-```
+```text
 THE FIVE QUESTIONS OF RELIABILITY
 ═══════════════════════════════════════════════════════════════════════════════
 
@@ -990,7 +990,7 @@ You should halt the deployment of the major feature until the next month when th
 
 **Calculate each metric:**
 
-```
+```text
 1. SUCCESS RATE (RELIABILITY)
 ═══════════════════════════════════════════════════════════════════════════════
 Formula: Success Rate = (Total - Failed) / Total × 100
@@ -1004,7 +1004,7 @@ Your calculation:
 Result: _______%
 ```
 
-```
+```text
 2. AVAILABILITY
 ═══════════════════════════════════════════════════════════════════════════════
 Formula: Availability = (Operating Time - Downtime) / Operating Time × 100
@@ -1018,7 +1018,7 @@ Your calculation:
 Result: _______%
 ```
 
-```
+```text
 3. MTBF (Mean Time Between Failures)
 ═══════════════════════════════════════════════════════════════════════════════
 Formula: MTBF = Operating Time / Number of Incidents
@@ -1032,7 +1032,7 @@ Your calculation:
 Result: _______ hours
 ```
 
-```
+```text
 4. MTTR (Mean Time To Recovery)
 ═══════════════════════════════════════════════════════════════════════════════
 Formula: MTTR = Total Downtime / Number of Incidents
@@ -1046,7 +1046,7 @@ Your calculation:
 Result: _______ minutes
 ```
 
-```
+```text
 5. ERROR BUDGET STATUS
 ═══════════════════════════════════════════════════════════════════════════════
 Target: 99.9% reliability
@@ -1064,7 +1064,7 @@ Status: [ ] Healthy  [ ] Warning  [ ] Over budget
 
 Based on your calculations, write a brief assessment:
 
-```
+```text
 RELIABILITY ASSESSMENT TEMPLATE
 ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1185,7 +1185,7 @@ This changes the picture dramatically! The SLI definition matters.
 
 Before moving on, make sure you understand these core concepts:
 
-```
+```text
 RELIABILITY FUNDAMENTALS CHECKLIST
 ═══════════════════════════════════════════════════════════════════════════════
 
