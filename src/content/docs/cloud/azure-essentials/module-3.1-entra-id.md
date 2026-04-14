@@ -659,7 +659,7 @@ SSH into the VM and verify that the Managed Identity can list blobs but cannot d
 ```bash
 # SSH into the VM
 VM_IP=$(az vm show -g "$RG_NAME" -n "identity-lab-vm" -d --query publicIpAddress -o tsv)
-ssh azureuser@"$VM_IP"
+ssh -o StrictHostKeyChecking=no azureuser@"$VM_IP"
 
 # Inside the VM, install Azure CLI
 curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
