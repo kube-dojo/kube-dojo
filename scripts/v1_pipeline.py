@@ -1687,17 +1687,15 @@ def _render_audit_entry(event: str, timestamp: str, fields: dict) -> str:
     lines = [heading, ""]
 
     if event == "WRITE":
-        plan = str(fields.get("plan", ""))
-        plan_preview = plan[:500]
-        if len(plan) > 500:
-            plan_preview += "..."
+        plan = str(fields.get("plan", "")).rstrip()
         lines.extend([
             f"**Writer**: {fields.get('writer', 'unknown')}",
             f"**Mode**: {fields.get('mode', 'write')}",
-            f"**Plan**: {plan_preview}",
             f"**Output**: {fields.get('output_chars', 0)} chars",
             f"**Duration**: {_format_audit_duration(fields.get('duration'))}",
         ])
+        if plan:
+            lines.extend(["", "**Plan**:", _audit_quote_block(plan)])
     elif event == "REVIEW":
         checks = fields.get("checks") if isinstance(fields.get("checks"), list) else []
         lines.extend([
