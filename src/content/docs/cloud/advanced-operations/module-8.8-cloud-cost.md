@@ -295,6 +295,8 @@ kubectl get vpa recommendation-engine-vpa -n ml-platform -o yaml
 #         memory: 4Gi
 ```
 
+**A Note on VPA Auto-Update:** For workloads with unpredictable or bursty traffic, do not use VPA in `Auto` mode. It will aggressively scale down CPU requests during quiet periods, which causes severe CPU throttling when traffic suddenly spikes. Instead, use VPA in recommendation mode to find a safe baseline, and use HPA to scale out horizontally when load increases.
+
 ### HPA for Cost-Efficient Scaling
 
 ```yaml
@@ -410,6 +412,8 @@ gcloud billing accounts describe BILLING_ACCOUNT_ID --format=json
 ## Pillar 4: Spot Instance Lifecycle
 
 Spot instances (AWS) / Preemptible VMs (GCP) / Spot VMs (Azure) offer 60-90% discounts but can be interrupted with short notice. Kubernetes makes them practical by handling rescheduling automatically.
+
+**Spot Instance Golden Rules:** Because cloud providers only give a 2-minute warning before reclaiming a Spot node, they are entirely unsuitable for legacy monoliths, stateful applications relying on local disk, or single-replica deployments. Spot instances should only run stateless, fault-tolerant workloads that can gracefully shut down within 120 seconds and have multiple replicas distributed across nodes.
 
 ### Spot-Friendly Node Groups
 
@@ -543,6 +547,70 @@ spec:
     cpu: "100"
     memory: "400Gi"
 ```
+
+## Automated Budget Alerting and Anomaly Detection
+
+Visibility is only useful if it drives action. Relying on humans to check dashboards guarantees that cost spikes will go unnoticed until the end of the month. You must implement automated budget alerting and anomaly detection pipelines.
+
+### Kubecost Alerts
+
+Kubecost can send alerts directly to Slack or Microsoft Teams when a namespace exceeds its daily budget or when spending anomalies occur.
+
+```yaml
+# Kubecost custom values.yaml for alerting
+kubecostProductConfigs:
+  currencyCode: "USD"
+  slackWebhookUrl: "https://hooks.slack.com/services/T000/B000/XXX"
+  
+  # Alert if any namespace jumps more than 20% compared to a 3-day baseline
+  spendChangeAlerts:
+    enabled: true
+    baselineWindow: "3d"
+    spendChangePercentage: 20
+    
+  # Alert if the ml-platform namespace exceeds $50/day
+  budgetAlerts:
+    - name: "ml-platform-budget"
+      namespace: "ml-platform"
+      budget: 50
+      window: "1d"
+```
+
+### Cloud Provider Anomaly Remediation
+
+For cloud-native resources, you can use AWS Budgets or GCP Budgets to trigger automated remediation (like shutting down a runaway dev environment) when a threshold is breached.
+
+```yaml
+# AWS Budget with an automated SNS action
+apiVersion: cloudformation.aws.crossplane.io/v1alpha1
+kind: Stack
+metadata:
+  name: dev-budget-alerter
+spec:
+  forProvider:
+    templateBody: |
+      Resources:
+        DevBudget:
+          Type: "AWS::Budgets::Budget"
+          Properties:
+            Budget:
+              BudgetName: "DevCluster-Daily"
+              BudgetLimit:
+                Amount: 100
+                Unit: USD
+              TimeUnit: DAILY
+              BudgetType: COST
+            NotificationsWithSubscribers:
+              - Notification:
+                  NotificationType: ACTUAL
+                  ComparisonOperator: GREATER_THAN
+                  Threshold: 100
+                Subscribers:
+                  - SubscriptionType: SNS
+                    Address: "arn:aws:sns:us-east-1:123456789012:CostAlerts"
+```
+
+Once the SNS topic receives the budget breach, it can trigger an AWS Lambda function that acts as a remediation pipeline—for example, automatically patching the cluster's node group `desiredCapacity` to `0` to halt further charges.
 
 ---
 
