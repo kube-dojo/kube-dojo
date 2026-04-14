@@ -35,7 +35,7 @@ When a Pod is scheduled onto a Kubernetes node, the kubelet injects a meticulous
 
 Kubernetes DNS-based service discovery is strictly governed by the kubernetes/dns specification. The Kubernetes DNS-Based Service Discovery Specification at [specification.md](https://github.com/kubernetes/dns/blob/master/docs/specification.md) is the authoritative, definitive reference for valid DNS record types, zone layouts, and supported query protocols.
 
-As of kubeadm version 1.<!-- -->21+, the legacy `kube-dns` support was entirely removed from the ecosystem. The official kubeadm version 1.<!-- -->35 documentation explicitly states: 'the only supported cluster DNS application is CoreDNS'. CoreDNS operates as a fast, flexible, cloud-native DNS server written in Go. CoreDNS current stable version is version 1.<!-- -->14.2, delivering significant performance optimizations and advanced plugin support.
+As of kubeadm version 1.21+, the legacy `kube-dns` support was entirely removed from the ecosystem. The official kubeadm version 1.35 documentation explicitly states: 'the only supported cluster DNS application is CoreDNS'. CoreDNS operates as a fast, flexible, cloud-native DNS server written in Go. CoreDNS current stable version is v1.14.2, delivering significant performance optimizations and advanced plugin support.
 
 ### CoreDNS Architecture and Plugins
 
@@ -208,7 +208,7 @@ DNS efficiently delivers raw traffic to the physical door of your server, but wi
 
 > **Stop and think**: Your team has been using `curl --insecure` and `kubectl --insecure-skip-tls-verify` everywhere because internal services use self-signed certificates. Beyond the inconvenience, what specific security risks does this create? How does a proper CA chain (shown below) eliminate these risks?
 
-To solve this systemic capability gap dynamically and programmatically, the absolute industry standard operator is `cert-manager`. The cert-manager current stable version is version 1.<!-- -->20.2. The cert-manager v1 API (cert-manager.io/v1) is generally available (GA/stable).
+To solve this systemic capability gap dynamically and programmatically, the absolute industry standard operator is `cert-manager`. The cert-manager current stable version is v1.20.2. The cert-manager v1 API (cert-manager.io/v1) is generally available (GA/stable).
 
 cert-manager provides four core CRDs: Certificate, CertificateRequest, Issuer, ClusterIssuer (all cert-manager.io/v1). A Certificate object strictly ensures a signed X.509 certificate is minted and stored securely inside the cluster. The Kubernetes built-in Secret type kubernetes.io/tls stores TLS certificates with fields tls.crt and tls.key. 
 
@@ -428,61 +428,30 @@ As you map out your topology, always remember strict scoping mechanics: the cert
 ## Quiz
 
 ### Question 1
-A pod needs to reach `grafana.internal.company.com`. Trace the DNS resolution path.
+An application pod is attempting to connect to an internal metrics dashboard at `grafana.internal.company.com`. However, the connection is failing due to a resolution error. Trace the intended DNS resolution path to identify where the failure might be occurring.
 
 <details>
 <summary>Answer</summary>
 
-1. **Pod's DNS resolver** (`/etc/resolv.conf`) points to CoreDNS cluster IP (e.g., 10.96.0.10)
-
-2. **CoreDNS (in-cluster)** receives the query. It checks:
-   - Is `grafana.internal.company.com` a Kubernetes service? No (not `*.svc.cluster.local`)
-   - Forward rule: `forward internal.company.com 10.0.10.1 10.0.10.2`
-
-3. **Corporate DNS** (10.0.10.1) receives the query. It is authoritative for `internal.company.com`:
-   - Looks up zone file: `grafana IN A 10.0.50.10`
-   - Returns: 10.0.50.10
-
-4. **Pod** receives the answer and connects to 10.0.50.10 (MetalLB VIP for Grafana)
-
-Total chain: Pod → CoreDNS (cluster) → Corporate DNS → Answer
-
-If the CoreDNS forward rule for `internal.company.com` is missing, the query falls through to the generic forwarder (`. 10.0.10.1`) and still works — but having the explicit forward is clearer and prevents leaking internal names to public DNS if the generic forwarder uses 8.8.8.8.
+The resolution path begins inside the pod, where the local `/etc/resolv.conf` directs the query to the in-cluster CoreDNS service (typically `10.96.0.10`). CoreDNS receives the query and determines that `grafana.internal.company.com` is not a local Kubernetes service, triggering its configured forward rule for `internal.company.com`. The query is then forwarded directly to the authoritative corporate DNS servers (e.g., `10.0.10.1`), which hold the zone file mapping the name to a MetalLB Virtual IP. Finally, the corporate DNS server returns this VIP to CoreDNS, which passes it back to the pod, allowing the application to initiate the connection. If the explicit forward rule were missing, the query would mistakenly fall through to public resolvers and fail, causing an `NXDOMAIN` error.
 </details>
 
 ### Question 2
-Why use Vault PKI instead of a simple self-signed CA for internal certificates?
+Your organization is preparing for a compliance audit and the security team has flagged your use of a standard Kubernetes Secret to store the self-signed CA private key. They are demanding you migrate to HashiCorp Vault PKI. What fundamental architectural and security limitations of the self-signed approach justify this mandatory migration?
 
 <details>
 <summary>Answer</summary>
 
-**Self-signed CA limitations:**
-- CA private key stored in a Kubernetes Secret (accessible to cluster admins)
-- No audit trail of which certificates were issued
-- No revocation capability (CRL/OCSP)
-- Renewing the CA requires manual intervention across all trust stores
-- No role-based access control for certificate issuance
-
-**Vault PKI advantages:**
-- CA private key protected by Vault (sealed, audit-logged, optionally HSM-backed)
-- Full audit trail of every certificate issued
-- Short-lived certificates (hours instead of years) — reduces blast radius of compromise
-- Role-based access: only cert-manager can issue K8s certs, only CI/CD can issue pipeline certs
-- Automatic CRL/OCSP for revocation
-- Integrates with cert-manager for automated renewal
-
-**When self-signed CA is fine**: Dev/test environments, small clusters without compliance requirements.
-
-**When Vault is needed**: Production, regulated industries, environments where certificate issuance must be audited.
+A simple self-signed CA stores its highly sensitive private root key in a standard, base64-encoded Kubernetes Secret, making it easily accessible to anyone with cluster-admin privileges. This approach lacks any auditable trail of which certificates were issued, offers no native mechanism for certificate revocation (such as CRL or OCSP), and provides no role-based access control to restrict issuance. In contrast, HashiCorp Vault securely protects the CA private key using robust encryption and optional Hardware Security Module (HSM) backing. Vault also maintains a complete, non-repudiable audit log of all cryptographic operations, enforces strict role-based access control policies, and automatically supports short-lived certificates to drastically reduce the blast radius of any potential compromise. While a self-signed CA might suffice for temporary development environments, Vault is absolutely required for production workloads and regulated industries to maintain compliance and strict security boundaries.
 </details>
 
 ### Question 3
-Your cert-manager certificate shows `Ready: False` with reason `OrderFailed`. What do you check?
+During a routine deployment, a developer complains that their newly provisioned internal service is failing TLS handshakes. You inspect the `Certificate` resource and notice it is stuck in a `Ready: False` state with the reason `OrderFailed`. Walk through the systematic debugging steps to identify the root cause of this specific failure.
 
 <details>
 <summary>Answer</summary>
 
-Debug steps:
+When an `OrderFailed` state occurs, it indicates that the ACME server rejected the certificate request during the challenge phase. You must first systematically inspect the `Order` and `Challenge` resources in the namespace to identify the exact validation error returned by the issuer.
 
 ```bash
 # Check certificate status
@@ -494,30 +463,18 @@ kubectl describe order <order-name> -n monitoring
 
 # Check the challenge (if ACME issuer)
 kubectl get challenges -n monitoring
-
-# Common causes:
-# 1. Issuer not ready
-kubectl describe clusterissuer internal-ca-issuer
-# Check: Status.Conditions[0].Type == "Ready"
-
-# 2. Secret not found (CA issuer)
-kubectl get secret internal-ca-secret -n cert-manager
-# If missing: the CA certificate was not created
-
-# 3. DNS name not allowed by issuer
-# Check Vault role's allowed_domains or CA issuer constraints
-
-# 4. Vault authentication failed
-# Check cert-manager logs
-kubectl logs -n cert-manager -l app=cert-manager
 ```
+
+Common root causes include network policies blocking the ACME HTTP-01 solver pods from reaching the internet, or missing DNS credentials preventing a DNS-01 TXT record from being created. Additionally, you should verify that the `ClusterIssuer` itself is in a `Ready` state and review the cert-manager controller logs for any authentication failures or rate-limiting errors from the upstream provider. This systematic approach isolates whether the failure is local to the cluster configuration or an external communication issue.
 </details>
 
 ### Question 4
-You need HTTPS for `*.apps.internal.company.com` (wildcard). How do you set this up with cert-manager?
+Your platform team is launching a new internal developer portal that dynamically provisions temporary environments under `*.apps.internal.company.com`. Instead of issuing a new certificate for every environment, they want to use a single wildcard certificate. How do you implement this architecture using cert-manager, and what specific configuration constraints must you observe?
 
 <details>
 <summary>Answer</summary>
+
+To implement a wildcard certificate, you must create a `Certificate` resource that explicitly includes the wildcard domain (`*.apps.internal.company.com`) in its `dnsNames` list. It is also a best practice to include the bare domain (`apps.internal.company.com`) to ensure comprehensive coverage. The `Certificate` will instruct cert-manager to provision the signed material into a designated Kubernetes Secret within the specified namespace.
 
 ```yml
 ---
@@ -538,7 +495,7 @@ spec:
     kind: ClusterIssuer
 ```
 
-The wildcard certificate is stored as a Kubernetes Secret and can be referenced by your ingress controller:
+Crucially, because Kubernetes Ingress controllers typically require the TLS Secret to reside in the exact same namespace as the Ingress resource, you must carefully plan your deployment topology. You can reference the generated Secret directly in your Ingress `tls` specification, as shown below.
 
 ```yml
 ---
@@ -565,25 +522,25 @@ spec:
                   number: 3000
 ```
 
-**Important**: The wildcard cert secret must be in the same namespace as the Ingress, or use a tool like `reflector` to copy it across namespaces.
+If your architecture requires deploying Ingress resources across multiple namespaces, you must utilize a synchronization tool like `reflector` to securely replicate the wildcard Secret, as cert-manager will only provision it into the single namespace defined in the `Certificate`.
 </details>
 
 ### Question 5
-A developer deployed a new Ingress for `dashboard.internal.company.com` but users report `NXDOMAIN`. The internal DNS is managed in Cloudflare. You do not have access to the Cloudflare dashboard to manually create records. How can you automatically provision this record when the Ingress is created?
+A developer has just deployed a new Ingress resource for `dashboard.internal.company.com` in the on-premises cluster. However, internal users are reporting `NXDOMAIN` errors when trying to reach it. The corporate DNS is externally managed in Cloudflare, and the Kubernetes engineering team does not have manual dashboard access to create DNS records. What architectural component should be introduced to resolve this operational bottleneck, and how does it function?
 
 <details>
 <summary>Answer</summary>
 
-You should evaluate and deploy **ExternalDNS**. ExternalDNS acts as a robust bridge between your Kubernetes cluster and an external DNS provider. It actively watches the Kubernetes API for new Services and Ingresses, extracts the desired hostnames, and automatically provisions the matching records in Cloudflare or AWS Route53. This effectively removes the operational overhead of manually editing external zone files every time a developer ships a new ingress rule.
+To automatically provision this record and eliminate the operational bottleneck, you must evaluate and deploy the ExternalDNS operator within your cluster. ExternalDNS acts as a robust, automated bridge between your internal Kubernetes API and your external DNS provider, such as Cloudflare. It actively monitors the cluster for newly created LoadBalancer Services and Ingress resources, automatically extracting their desired hostnames and target IPs. Once extracted, it directly interacts with the Cloudflare API to provision and synchronize the matching DNS records. This completely automated workflow ensures that internal users can immediately resolve and access newly deployed services without requiring manual administrative intervention.
 </details>
 
 ### Question 6
-You are configuring an ACME `ClusterIssuer` using cert-manager, targeting Let's Encrypt. The cluster operates in a completely air-gapped network with no inbound or outbound internet access. What is the fundamental issue with this design?
+An overly ambitious junior engineer has deployed a `ClusterIssuer` configured to use Let's Encrypt via the ACME protocol for a highly secure, air-gapped on-premises cluster. The cluster has strictly no inbound or outbound internet connectivity. Why will this design fundamentally fail to issue any certificates, and what is the required architectural alternative?
 
 <details>
 <summary>Answer</summary>
 
-The fundamental issue is that Let's Encrypt strictly requires public reachability to perform domain validation. Let's Encrypt relies on the ACME protocol, executing either an HTTP-01 challenge or a DNS-01 challenge. Because the network is completely air-gapped, neither public challenge can be completed. In such isolated environments, you must implement a private ACME server like `step-ca` or utilize a private PKI system like HashiCorp Vault.
+This design will fundamentally fail because Let's Encrypt rigidly relies on the ACME protocol, which mandates public reachability to perform domain ownership validation. Whether utilizing HTTP-01 or DNS-01 challenges, the Let's Encrypt validation servers must be able to verify the challenge over the public internet. In a completely air-gapped network lacking outbound or inbound connectivity, these external validation servers are physically unreachable, causing every certificate order to permanently hang or fail. To resolve this architectural flaw, the environment must implement a private ACME server, such as `step-ca`, or utilize an internal PKI system like HashiCorp Vault. These tools securely mirror public certificate workflows locally without requiring any external internet access.
 </details>
 
 ## Hands-On Exercise: Internal DNS and Certificates
