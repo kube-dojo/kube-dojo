@@ -279,6 +279,9 @@ kubectl get deployment nginx
 # READY shows 3/3
 ```
 
+> **Pause and predict**: If you delete the underlying ReplicaSet instead of just a Pod, what will the Deployment do?
+> *Explanation*: The Deployment controller constantly watches for the existence and state of its ReplicaSets. If you delete the ReplicaSet, the Deployment will immediately recreate it, which will in turn recreate all the Pods. This layered reconciliation is why manual tampering with sub-resources is ineffective.
+
 ---
 
 ## Did You Know?
