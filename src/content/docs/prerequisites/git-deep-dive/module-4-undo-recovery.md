@@ -411,7 +411,8 @@ git commit -m "Init: Base deployment manifest"
 git checkout -b feature-scaling
 echo "replicas: 3" >> deployment.yaml
 git commit -am "Feature: Increase replicas to 3"
-echo "kind: HorizontalPodAutoscaler" > hpa.yaml
+echo "apiVersion: autoscaling/v2" > hpa.yaml
+echo "kind: HorizontalPodAutoscaler" >> hpa.yaml
 git add hpa.yaml
 git commit -m "Feature: Add HPA manifest"
 
