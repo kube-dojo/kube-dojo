@@ -64,37 +64,6 @@ The software catalog relies on a strictly typed, graph-based taxonomy. Everythin
 
 There are eight core built-in entity kinds in the Backstage Software Catalog: Component, API, Resource, System, Domain, User, Group, and Location. Additionally, the `Template` kind is used heavily by the Scaffolder feature.
 
-```text
-[CODE-1] (from: 1.1 Entity Kinds)
-┌─────────────────────────────────────────────────────────────────┐
-│                    BACKSTAGE ENTITY KINDS                        │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  OWNERSHIP          ORGANIZATIONAL        CATALOG MACHINERY      │
-│  ┌───────────┐      ┌──────────┐          ┌──────────┐          │
-│  │ Component │      │  Group   │          │ Location │          │
-│  │ (service, │      │  (team,  │          │ (points  │          │
-│  │  library) │      │  dept)   │          │  to YAML)│          │
-│  └───────────┘      └──────────┘          └──────────┘          │
-│  ┌───────────┐      ┌──────────┐          ┌──────────┐          │
-│  │    API    │      │   User   │          │ Template │          │
-│  │ (REST,   │      │  (person)│          │ (scaffol-│          │
-│  │  gRPC)   │      └──────────┘          │  ding)   │          │
-│  └───────────┘                            └──────────┘          │
-│  ┌───────────┐      GROUPING                                    │
-│  │ Resource  │      ┌──────────┐                                │
-│  │ (DB, S3, │      │  System  │                                │
-│  │  queue)  │      │  (group  │                                │
-│  └───────────┘      │  of comp)│                                │
-│                     └──────────┘                                │
-│                     ┌──────────┐                                │
-│                     │  Domain  │                                │
-│                     │ (business│                                │
-│                     │  area)   │                                │
-│                     └──────────┘                                │
-└─────────────────────────────────────────────────────────────────┘
-```
-
 We can visualize this architecture natively using a Mermaid diagram:
 
 ```mermaid
@@ -120,8 +89,6 @@ graph TD
 
 Let us examine the purpose of each entity:
 
-```text
-[TABLE-1]
 | Kind | Purpose | Example |
 |------|---------|---------|
 | **Component** | A piece of software (service, website, library) | `payments-service`, `react-ui-library` |
@@ -133,26 +100,12 @@ Let us examine the purpose of each entity:
 | **User** | An individual person | `jane.doe` |
 | **Location** | A pointer to other entity definition files | A URL referencing a `catalog-info.yaml` in a repo |
 | **Template** | A software template for scaffolding new projects | `springboot-service-template` |
-```
 
 A Resource entity specifically describes the infrastructure a Component needs to operate at runtime (e.g., databases, storage buckets, CDNs). Backstage Software Templates (Scaffolder) use a Template entity kind and are defined in YAML stored in a Git repository.
 
 > **Pause and predict**: If you delete a Git repository containing a Template entity, what happens to the entity in Backstage? Will it disappear immediately? Predict the catalog's behavior before continuing.
 
 **Key relationships between entity kinds:**
-
-```text
-[CODE-2] (from: 1.1 Entity Kinds)
-Domain
-  └── System
-        ├── Component ──ownedBy──► Group/User
-        │     ├── providesApi ──► API
-        │     ├── consumesApi ──► API
-        │     └── dependsOn ──► Resource
-        └── API ──ownedBy──► Group/User
-```
-
-Converted to a native hierarchical view:
 
 ```mermaid
 graph TD
@@ -170,8 +123,7 @@ graph TD
 
 The recommended filename for a Backstage catalog descriptor file is `catalog-info.yaml`. Every entity is described by this file, which typically resides at the root of the source repository. The current catalog entity descriptor `apiVersion` is `backstage.io/v1alpha1`; the schema has not been promoted to a stable (non-alpha) version yet.
 
-```text
-[CODE-3] (from: 1.2 The catalog-info.yaml File)
+```yaml
 # catalog-info.yaml
 apiVersion: backstage.io/v1alpha1
 kind: Component
@@ -207,8 +159,6 @@ Entity references in Backstage use the format `[kind]:[namespace]/[name]`, where
 
 Annotations are the conceptual glue between catalog entities and the broader ecosystem of Backstage plugins. They instruct plugins exactly where to look to retrieve external telemetry, documentation, or operational metrics.
 
-```text
-[TABLE-2]
 | Annotation | What It Does |
 |------------|-------------|
 | `github.com/project-slug` | Links entity to a GitHub repo (`org/repo`) |
@@ -218,7 +168,6 @@ Annotations are the conceptual glue between catalog entities and the broader eco
 | `pagerduty.com/service-id` | Links to PagerDuty for on-call info |
 | `backstage.io/managed-by-location` | Which Location entity registered this entity |
 | `backstage.io/managed-by-origin-location` | Original Location that first introduced the entity |
-```
 
 ---
 
@@ -230,8 +179,7 @@ Backstage catalog entity ingestion relies on two mechanisms: Entity Providers (w
 
 You can statically define locations directly within the configuration file to manually onboard entities:
 
-```text
-[CODE-4] (from: 1.4 Manual Registration: Location Entities)
+```yaml
 # app-config.yaml
 catalog:
   locations:
@@ -248,8 +196,7 @@ catalog:
 
 You can also define a pure Location entity directly in YAML:
 
-```text
-[CODE-5] (from: 1.4 Manual Registration: Location Entities)
+```yaml
 apiVersion: backstage.io/v1alpha1
 kind: Location
 metadata:
@@ -266,8 +213,7 @@ spec:
 
 Backstage ships built-in discovery integrations for GitHub, GitLab, and Bitbucket Server. These providers scan entire organizations or groups to map out the topology automatically.
 
-```text
-[CODE-6] (from: 1.5 Automated Ingestion)
+```yaml
 # app-config.yaml
 catalog:
   providers:
@@ -280,8 +226,7 @@ catalog:
           timeout: { minutes: 3 }
 ```
 
-```text
-[CODE-7] (from: 1.5 Automated Ingestion)
+```yaml
 catalog:
   providers:
     gitlab:
@@ -296,8 +241,7 @@ catalog:
           timeout: { minutes: 3 }
 ```
 
-```text
-[CODE-8] (from: 1.5 Automated Ingestion)
+```yaml
 catalog:
   providers:
     githubOrg:
@@ -315,24 +259,6 @@ catalog:
 
 The entity lifecycle moves from ingestion to processing and finally stitching.
 
-```text
-[CODE-9] (from: 1.6 Entity Processors and Custom Providers)
-┌──────────────┐     ┌─────────────────┐     ┌──────────────────┐
-│   Ingestion  │────►│   Processing    │────►│   Stitching      │
-│              │     │                 │     │                  │
-│ - Locations  │     │ - Validate YAML │     │ - Resolve refs   │
-│ - Discovery  │     │ - Run processors│     │ - Build relation │
-│ - Providers  │     │ - Emit entities │     │   graph          │
-│              │     │ - Emit errors   │     │ - Final entity   │
-└──────────────┘     └─────────────────┘     └──────────────────┘
-       │                     │                        │
-       ▼                     ▼                        ▼
-  Entity enters        Entity validated          Entity visible
-  the pipeline         and enriched              in the catalog
-```
-
-In Mermaid sequence format:
-
 ```mermaid
 sequenceDiagram
     participant Ingestion
@@ -347,8 +273,7 @@ sequenceDiagram
 
 Custom providers allow for arbitrary integration:
 
-```text
-[CODE-10] (from: 1.6 Entity Processors and Custom Providers)
+```typescript
 import { EntityProvider, EntityProviderConnection } from '@backstage/plugin-catalog-node';
 
 class MyCustomProvider implements EntityProvider {
@@ -379,8 +304,7 @@ The Backstage Catalog REST API exposes a `GET /entities/by-query` endpoint with 
 
 When an entity reference is severed, you encounter orphans.
 
-```text
-[CODE-11] (from: 1.7 Troubleshooting the Catalog)
+```bash
 # List orphaned entities via the Backstage catalog API
 curl http://localhost:7007/api/catalog/entities?filter=metadata.annotations.backstage.io/orphan=true
 
@@ -390,16 +314,13 @@ curl -X DELETE http://localhost:7007/api/catalog/entities/by-uid/<entity-uid>
 
 You can force processing manually:
 
-```text
-[CODE-12] (from: 1.7 Troubleshooting the Catalog)
+```bash
 # Refresh a specific entity
 curl -X POST http://localhost:7007/api/catalog/refresh \
   -H 'Content-Type: application/json' \
   -d '{"entityRef": "component:default/payments-service"}'
 ```
 
-```text
-[TABLE-3]
 | Symptom | Likely Cause | Fix |
 |---------|-------------|-----|
 | Entity never shows up | Invalid YAML or schema violation | Check the catalog import page for errors |
@@ -407,45 +328,12 @@ curl -X POST http://localhost:7007/api/catalog/refresh \
 | Stale data after repo update | Refresh cycle has not run yet | Manually refresh via catalog API or wait ~100-200s |
 | Entity shows as orphaned | The Location that registered it was deleted | Re-register or remove the orphan |
 | Relationships broken | Referenced entity name does not match | Check exact `name` fields; they are case-sensitive |
-```
 
 ---
 
 ## Part 5: Infrastructure Architecture (Domain 2)
 
 Backstage utilizes a discrete client-server separation. The New Frontend System became the default in v1.49.0, modernizing how plugins bind to the application shell.
-
-```text
-[CODE-13] (from: 2.1 Framework Architecture)
-┌─────────────────────────────────────────────────────────────────┐
-│                        BROWSER (Client)                          │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │              Backstage Frontend App (React SPA)            │  │
-│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌─────────────┐  │  │
-│  │  │ Catalog  │ │ TechDocs │ │ Scaffolder│ │ Search      │  │  │
-│  │  │ Plugin   │ │ Plugin   │ │ Plugin   │ │ Plugin      │  │  │
-│  │  │ (front)  │ │ (front)  │ │ (front)  │ │ (front)     │  │  │
-│  │  └──────────┘ └──────────┘ └──────────┘ └─────────────┘  │  │
-│  └───────────────────────────────────────────────────────────┘  │
-└──────────────────────────────┬──────────────────────────────────┘
-                               │ HTTP/REST API calls
-                               ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    BACKSTAGE BACKEND (Node.js)                   │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────────────────┐  │
-│  │ Catalog  │ │ TechDocs │ │ Scaffolder│ │ Auth / Proxy /    │  │
-│  │ Backend  │ │ Backend  │ │ Backend  │ │ Search Backend    │  │
-│  └─────┬────┘ └──────────┘ └──────────┘ └───────────────────┘  │
-│        │                                                        │
-│        ▼                                                        │
-│  ┌──────────┐    ┌──────────────────────────────────────────┐   │
-│  │ Database │    │         Integrations                      │   │
-│  │(Postgres)│    │  GitHub, GitLab, Azure DevOps, LDAP ...  │   │
-│  └──────────┘    └──────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-The native Mermaid flow:
 
 ```mermaid
 flowchart TD
@@ -473,8 +361,7 @@ flowchart TD
 
 ### Configuration Loading
 
-```text
-[CODE-14] (from: 2.2 Configuration: app-config.yaml)
+```yaml
 # app-config.yaml — Top-level structure
 app:
   title: My Company Backstage
@@ -521,18 +408,18 @@ catalog:
 
 Config layering merges values at startup:
 
-```text
-[CODE-15] (from: 2.2 Configuration: app-config.yaml)
+```bash
 # You can pass multiple config files — later files override earlier ones
 node packages/backend --config app-config.yaml --config app-config.production.yaml
 ```
+
+> **Stop and think**: If a frontend plugin makes a direct fetch call to an external API (like GitHub) from the user's browser, what security and network issues might occur? Think about CORS and token exposure.
 
 ### The Proxy System
 
 The Proxy routes client browser requests safely through the backend to external sources, masking secret tokens.
 
-```text
-[CODE-16] (from: 2.3 The Backstage Proxy)
+```yaml
 # app-config.yaml
 proxy:
   endpoints:
@@ -547,26 +434,21 @@ proxy:
       allowedHeaders: ['Content-Type']
 ```
 
-```text
-[CODE-17] (from: 2.3 The Backstage Proxy)
-Browser                    Backstage Backend              External API
-  │                              │                             │
-  │  GET /api/proxy/pagerduty/   │                             │
-  │  services/PXXXXXX            │                             │
-  │─────────────────────────────►│                             │
-  │                              │  GET /services/PXXXXXX      │
-  │                              │  Authorization: Token ...   │
-  │                              │────────────────────────────►│
-  │                              │                             │
-  │                              │◄────────────────────────────│
-  │◄─────────────────────────────│   (response forwarded)      │
-  │                              │                             │
+```mermaid
+sequenceDiagram
+    participant Browser
+    participant Backend as Backstage Backend
+    participant External as External API
+    
+    Browser->>Backend: GET /api/proxy/pagerduty/services/PXXXXXX
+    Backend->>External: GET /services/PXXXXXX (Authorization: Token ...)
+    External-->>Backend: (response)
+    Backend-->>Browser: (response forwarded)
 ```
 
 In a production setup, Backstage supports PostgreSQL (recommended for production) and SQLite (used for development/testing) as catalog backend databases.
 
-```text
-[CODE-18] (from: 2.4 Production Deployment)
+```yaml
 # app-config.production.yaml
 backend:
   database:
@@ -578,8 +460,7 @@ backend:
       password: ${POSTGRES_PASSWORD}
 ```
 
-```text
-[CODE-19] (from: 2.4 Production Deployment)
+```yaml
 app:
   baseUrl: https://backstage.mycompany.com
 
@@ -589,8 +470,7 @@ backend:
     origin: https://backstage.mycompany.com
 ```
 
-```text
-[CODE-20] (from: 2.4 Production Deployment)
+```yaml
 auth:
   environment: production
   providers:
@@ -601,7 +481,6 @@ auth:
 ```
 
 ```text
-[CODE-21] (from: 2.5 Client-Server Architecture)
 1. User opens browser → loads React SPA from backend (static files)
 2. SPA boots → calls backend APIs: /api/catalog, /api/techdocs, etc.
 3. Backend plugins handle API calls → query database, call integrations
@@ -633,8 +512,6 @@ When they removed the configuration block in panic, the entities remained. They 
 
 ## Common Mistakes
 
-```text
-[TABLE-4]
 | Mistake | Why It Happens | What To Do Instead |
 |---------|---------------|-------------------|
 | Using SQLite in production | It is the default and "works" in dev | Always configure PostgreSQL for production |
@@ -645,102 +522,98 @@ When they removed the configuration block in panic, the entities remained. They 
 | Running TLS termination in Node.js | Seems simpler than a reverse proxy | Use an ingress controller or load balancer for TLS; Node.js TLS is not needed |
 | Not configuring auth for production | Dev mode works without it | Every production instance must have authentication enabled |
 | Ignoring orphaned entities | They accumulate silently | Monitor orphan count; establish a cleanup process |
-```
 
 ---
 
 ## Quiz
 
-[QUIZ-1]
 **Q1: Which entity kind represents a boundary between components?**
+> **Scenario**: You have two microservices. The frontend service needs to fetch data from the backend service. To properly document the contract and endpoints between these two components in Backstage, which entity kind should you use?
 <details>
 <summary>Answer</summary>
 
-**API**. The API kind represents a contract/boundary between components. A Component `providesApi` and another Component `consumesApi`. API entities can describe REST (OpenAPI), gRPC (protobuf), GraphQL, or AsyncAPI interfaces.
+You should use the **API** kind. The API kind represents a contract or boundary between components, ensuring that dependencies and communication interfaces are explicitly defined in the catalog. A Component `providesApi` and another Component `consumesApi`. By registering it as an API entity, Backstage can display the exact specifications (such as OpenAPI, gRPC, GraphQL, or AsyncAPI) directly in the interface. This makes it clear to consumers how to interact with the service and who owns the contract.
 
 </details>
 
-[QUIZ-2]
 **Q2: What is the default refresh interval for catalog entity processing?**
+> **Scenario**: Your team just pushed a commit updating the `catalog-info.yaml` file to add a new tag. A developer checks Backstage immediately but does not see the new tag. Assuming no errors occurred, why is this happening and when should they expect to see the change automatically?
 <details>
 <summary>Answer</summary>
 
-Approximately **100-200 seconds**. The catalog processing loop continuously cycles through entities, but there is no guarantee of instant updates. You can trigger a manual refresh via `POST /api/catalog/refresh` with the `entityRef`.
+The update is not instantly reflected because Backstage relies on a background processing loop that has a default refresh interval of approximately **100-200 seconds**. The catalog processing loop continuously cycles through all registered entities, fetching their latest state from the source location. Because there is no guarantee of instant updates, developers must either wait for the next cycle to complete or manually trigger a refresh via `POST /api/catalog/refresh` with the `entityRef`. This asynchronous approach prevents the backend from being overwhelmed by simultaneous source repository updates.
 
 </details>
 
-[QUIZ-3]
 **Q3: How do you inject secrets into app-config.yaml?**
+> **Scenario**: You are deploying Backstage to a production environment and need to configure the GitHub integration to read repository data. You have a `GITHUB_TOKEN` that must be kept secure. How should you provide this secret to the `app-config.yaml` file without hardcoding it?
 <details>
 <summary>Answer</summary>
 
-Use **environment variable substitution** with `${VARIABLE_NAME}` syntax. For example: `token: ${GITHUB_TOKEN}`. Backstage resolves these at startup from the process environment. Never hardcode secrets in config files.
+You must use **environment variable substitution** with the `${VARIABLE_NAME}` syntax, such as `token: ${GITHUB_TOKEN}`. Backstage resolves these values at startup by reading them directly from the host process's environment variables. You should never hardcode secrets in configuration files because they are often committed to version control, which poses a severe security risk. Injecting them via environment variables ensures that sensitive credentials remain strictly within the runtime environment.
 
 </details>
 
-[QUIZ-4]
 **Q4: What is the purpose of the Backstage proxy plugin?**
+> **Scenario**: Your Backstage frontend needs to display real-time incident data from PagerDuty. However, querying the PagerDuty API directly from the browser would expose your organization's API token to the client. How does Backstage securely handle this request?
 <details>
 <summary>Answer</summary>
 
-The proxy plugin (`/api/proxy`) forwards requests from the frontend through the backend to external APIs. This solves CORS issues and keeps API credentials server-side. The browser never sees the external service tokens—only the backend injects them before forwarding.
+Backstage securely handles this by using the **proxy plugin** (`/api/proxy`), which forwards requests from the frontend through the backend to external APIs. By routing the request through the backend, the server can safely inject the required authorization headers (such as the PagerDuty API token) before forwarding the request to the external service. The browser never sees the external service tokens, which prevents them from being leaked or exploited by malicious scripts. Furthermore, this pattern effectively circumvents CORS (Cross-Origin Resource Sharing) restrictions that would otherwise block direct client-side requests.
 
 </details>
 
-[QUIZ-5]
 **Q5: Name two ways entities can be registered in the catalog.**
+> **Scenario**: A new team is onboarding into your organization and wants their existing microservices to appear in the Backstage catalog. They can either add their services one-by-one or have them automatically picked up. What are the two primary mechanisms provided by Backstage to achieve this?
 <details>
 <summary>Answer</summary>
 
-1. **Manual registration** — via the UI ("Register Existing Component" button) or by adding static Location entries in `app-config.yaml` under `catalog.locations`.
-2. **Automated discovery** — using providers like `githubDiscovery`, `gitlab`, or `githubOrg` configured under `catalog.providers` in `app-config.yaml`.
-
-Other valid answers include: custom entity providers (programmatic) or direct API calls.
+Entities can be registered through **manual registration** or **automated discovery**. Manual registration involves explicitly adding static Location entries in `app-config.yaml` under `catalog.locations` or clicking the "Register Existing Component" button in the UI. Automated discovery, on the other hand, utilizes built-in providers (like `githubDiscovery`, `gitlab`, or `githubOrg`) configured under `catalog.providers` to automatically scan repositories and organizational groups for `catalog-info.yaml` files. Automated discovery is highly recommended for scaling, while manual registration is useful for testing or isolated components.
 
 </details>
 
-[QUIZ-6]
 **Q6: What database should be used for a production Backstage deployment?**
+> **Scenario**: You have successfully tested Backstage locally using its default in-memory database and are now writing the deployment manifests for a production Kubernetes cluster. To ensure high availability and data persistence, which database backend must you configure?
 <details>
 <summary>Answer</summary>
 
-**PostgreSQL**. SQLite (or better-sqlite3) is only suitable for local development. PostgreSQL supports concurrent connections, is durable, and handles the catalog processing workload in production. Configure it via `backend.database.client: pg` in `app-config.production.yaml`.
+You must use **PostgreSQL** for a production deployment. The default SQLite (or `better-sqlite3`) database is strictly intended for local development and testing, as it lacks the concurrency and durability required for real-world usage. PostgreSQL supports concurrent connections, ensures data persistence, and can efficiently handle the intense catalog processing workloads of a production environment. You configure it by setting `backend.database.client: pg` in your `app-config.production.yaml` file.
 
 </details>
 
-[QUIZ-7]
 **Q7: What happens to entities when their source Location is deleted?**
+> **Scenario**: A developer accidentally deletes a repository containing the `catalog-info.yaml` for a deprecated service. The repository was originally ingested via a static Location entry in Backstage. What will be the state of this entity in the Backstage catalog?
 <details>
 <summary>Answer</summary>
 
-They become **orphaned entities**. They remain in the catalog but are no longer refreshed from their source. Orphans are flagged with the annotation `backstage.io/orphan: 'true'`. They should be cleaned up either through the UI or via the catalog API (`DELETE /api/catalog/entities/by-uid/<uid>`).
+The entity will become an **orphaned entity**. It remains in the catalog database but is no longer actively refreshed from its source because the origin Location is missing. Backstage marks these entities by attaching the annotation `backstage.io/orphan: 'true'`, alerting administrators that the entity is disconnected. These orphans must be explicitly cleaned up, either manually through the Backstage UI or programmatically via the catalog API (`DELETE /api/catalog/entities/by-uid/<uid>`), to prevent the catalog from accumulating stale data.
 
 </details>
 
-[QUIZ-8]
 **Q8: How does configuration layering work in Backstage?**
+> **Scenario**: You want to run Backstage locally but need to override some of the base configuration settings with production-specific values when deploying to your Kubernetes cluster. How does Backstage process multiple configuration files to achieve this?
 <details>
 <summary>Answer</summary>
 
-You pass multiple `--config` flags when starting the backend: `node packages/backend --config app-config.yaml --config app-config.production.yaml`. Later files override values from earlier files (deep merge). Common pattern: base config, production overrides, and a gitignored local config for personal development settings.
+Backstage achieves this through **configuration layering**, where you pass multiple `--config` flags when starting the backend (e.g., `node packages/backend --config app-config.yaml --config app-config.production.yaml`). The framework reads the files in the order they are provided, using a deep merge strategy where values in later files override the corresponding values from earlier files. This pattern allows teams to maintain a common base configuration while safely applying environment-specific overrides, such as database credentials or authentication settings for production. For example, your base config might define the catalog providers, while your production config injects the necessary OAuth client secrets. This separation prevents accidental leakage of production secrets in local environments.
 
 </details>
 
-[QUIZ-9]
 **Q9: Which annotation links a Backstage entity to its GitHub repository?**
+> **Scenario**: You have registered a new Component in Backstage and want the GitHub plugin to display its recent pull requests, CI status, and code owners on the entity's overview page. Which specific metadata field must you add to your `catalog-info.yaml` to enable this?
 <details>
 <summary>Answer</summary>
 
-`github.com/project-slug` with the value `org/repo-name`. For example: `github.com/project-slug: myorg/payments-service`. This annotation is read by GitHub-related plugins to display pull requests, CI status, code owners, and other repo-level information.
+You must add the **`github.com/project-slug`** annotation with the value formatted as `org/repo-name`. For example, specifying `github.com/project-slug: myorg/payments-service` tells Backstage exactly where the source code resides. This annotation acts as the crucial linkage that allows GitHub-related plugins to fetch and surface repository-level telemetry directly in the UI. Without it, the plugins lack the context needed to associate the catalog entity with its upstream source repository.
 
 </details>
 
-[QUIZ-10]
 **Q10: In a production Kubernetes deployment of Backstage, why should catalog processing run on a single replica?**
+> **Scenario**: You are scaling your Backstage backend deployment to 3 replicas to handle increased API traffic. However, you notice unexpected database lock errors and duplicate processing cycles in the logs. What architectural consideration regarding catalog processing was missed?
 <details>
 <summary>Answer</summary>
 
-To avoid **duplicate processing work** and potential conflicts. If multiple replicas all run the processing loop simultaneously, they may redundantly fetch the same sources, create duplicate refresh cycles, and potentially conflict on database writes. The `@backstage/plugin-catalog-backend` supports leader election to ensure only one replica performs catalog processing while others handle API requests.
+The issue occurs because catalog processing should ideally run on a **single replica** to avoid duplicate processing work and database conflicts. If multiple replicas simultaneously execute the catalog processing loop, they may redundantly fetch data from the same external sources and attempt conflicting database writes. To safely scale the backend while preventing these issues, the `@backstage/plugin-catalog-backend` supports leader election. This mechanism ensures that only one replica actively performs catalog processing tasks while all other replicas focus solely on serving API requests.
 
 </details>
 
@@ -752,8 +625,7 @@ To avoid **duplicate processing work** and potential conflicts. If multiple repl
 
 ### Step 1: Define the Descriptors
 
-```text
-# [CODE-22] (from: Step 1: Create the Entity Descriptors)
+```yaml
 ---
 apiVersion: backstage.io/v1alpha1
 kind: Domain
@@ -852,8 +724,7 @@ spec:
 
 ### Step 2: Register Entities Config
 
-```text
-[CODE-23] (from: Step 2: Register via app-config.yaml)
+```yaml
 catalog:
   rules:
     - allow: [Component, System, API, Resource, Location, Domain, Group, User, Template]
@@ -866,24 +737,21 @@ catalog:
 
 ### Step 3: Run Validation
 
-```text
-[CODE-24] (from: Step 3: Start Backstage and Verify)
+```bash
 # Start Backstage in development mode
 yarn dev
 ```
 
 ### Step 4: Proxy Binding
 
-```text
-[CODE-25] (from: Step 4: Test the Proxy (Optional))
+```yaml
 proxy:
   endpoints:
     '/jsonplaceholder':
       target: https://jsonplaceholder.typicode.com
 ```
 
-```text
-[CODE-26] (from: Step 4: Test the Proxy (Optional))
+```bash
 # This request goes through the Backstage proxy
 curl http://localhost:7007/api/proxy/jsonplaceholder/todos/1
 ```
@@ -902,8 +770,6 @@ curl http://localhost:7007/api/proxy/jsonplaceholder/todos/1
 
 ## Key Takeaways
 
-```text
-[TABLE-5]
 | Topic | Remember This |
 |-------|--------------|
 | Entity kinds | 9 built-in: Component, API, Resource, System, Domain, Group, User, Location, Template |
@@ -915,69 +781,7 @@ curl http://localhost:7007/api/proxy/jsonplaceholder/todos/1
 | app-config.yaml | Layered config; `${ENV_VAR}` for secrets; `--config` flag for overrides |
 | Proxy | `/api/proxy/*` forwards frontend requests through backend to external APIs |
 | Production | PostgreSQL, HTTPS (via ingress), authentication required, single processing replica |
-```
 
 ## Next Module
 
 **[CBA Track Overview]()** — Domain 4: Templates, documentation-as-code, and mastering the golden path for executing resilient scaffolding deployments. Prepare to build your first template in the next session!
-
-<!--
-UNMAPPED CLAIMS MATCHING BLOCK:
-& Infrastructure" slug: k8s/cba/module-1.3-backstage-catalog-infrastructure sideba
-**Orphaned entities** occur when the Location that originally registered an entity is removed, but the entity itself remains. Backstage marks these as orphans.
-- `apiVersion` — always `backstage.io/v1alpha1` for built-in kinds
---- title: "Module 1.3: Backstage Catalog & Infrastructure" sl
-1. Navigate to the **Catalog** — you should see `orders-service` listed as a Component
-3. **The Backstage proxy** (`/api/proxy`) lets the frontend call external APIs without exposing credentials to the browser—a pattern so useful that many teams u
-4. **Design** a catalog taxonomy that models your organization's ownership, dependencies, and API contracts
-4. **You can run Backstage without a single plugin installed.** The catalog alone provides enough value that some organizations deploy it purely as a service di
-5. Navigate to `orders-system` — verify it groups the component, API, and resource
-6. Navigate to the `commerce` Domain — verify it contains `orders-system`
-63 chars
-- `spec` — varies by kind
-
-### 1.3 Annotations and Entity Discovery
-
-Annot
-A platform team at a mid-size fintech company set up GitHub discovery to auto-register every repo in their organization. Within a week, the catalog had 10,000 e
-Manual registration does not scale. For organizations with hundreds or thousands of repos, Backstage supports **discovery providers** that automatically find an
-Software Catalog (Domain 3 — 22%)
-
-### 1.1 Entity Kinds
-
-Everything in the Backsta
-The software catalog is the beating heart of Backstage. Without it, Backstage is just a plugin framework with a pretty UI. With it, you have a single pane of gl
-This scans every repo in the `myorg` GitHub organization, checks if `/catalog-info.yaml` exists, and automatically registers any entities found.
-app-config.local.yaml
-app-config.production.yaml
-ations to find the data they need.
-
-### 1.4 Manual Registration: Location Entities
-catalog-entities.yaml
-ionships between entity kinds:**
-
-### 1.2 The catalog-info.yaml File
-
-Every entit
-jane.doe
-maintain user YAML files by hand.
-
-### 1.6 Entity Processors and Custom Providers
-once without automated discovery.
-
-### 1.5 Automated Ingestion
-
-Manual registratio
-the `EntityProvider` interface:
-
-### 1.7 Troubleshooting the Catalog
-
-**Entity n
-v1.1
-v1.2
-v1.3
-v1.5
-v1.6
-v1.7
-| **Group** | A team or organizational unit | `platform-team`, `backend-guild` |
--->
