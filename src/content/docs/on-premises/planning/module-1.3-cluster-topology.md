@@ -39,7 +39,7 @@ Determining how many clusters you should run, where the control planes should ph
 
 ## Single Cluster vs Multi-Cluster Architectures
 
-The first major architectural decision you will make is defining your cluster boundaries. Kubernetes releases approximately three minor versions per year. According to the official release cycle, these minor versions receive about fourteen months of support: twelve months of standard support followed by roughly two months of maintenance mode dedicated strictly to critical and CVE fixes. As of our current state, the three actively supported branches are 1.35 (the latest stable, EOL 2027-02-28), 1.34, and 1.33. This aggressive release cadence strongly influences topology because upgrading a massive monolithic cluster is exponentially riskier than upgrading several smaller, isolated ones.
+The first major architectural decision you will make is defining your cluster boundaries. Kubernetes releases approximately three minor versions per year. According to the official release cycle, these minor versions receive about fourteen months of support: twelve months of standard support followed by roughly two months of maintenance mode dedicated strictly to critical and CVE fixes. As of our current state, the three actively supported branches are 1.35 (the latest stable patch being 1.35.3, EOL 2027-02-28), 1.34, and 1.33. This aggressive release cadence strongly influences topology because upgrading a massive monolithic cluster is exponentially riskier than upgrading several smaller, isolated ones.
 
 ### When One Cluster Is Enough
 
@@ -400,7 +400,7 @@ Your company has 300 nodes, 8 teams, and a regulatory requirement to isolate PCI
 <summary>Answer</summary>
 
 **Minimum 3 clusters, recommended 4-5:**
-You should recommend a minimum of 3 clusters, though 4 to 5 is optimal. First, the PCI cluster is non-negotiable because regulatory scope isolation requires a hard boundary at both the control plane and network levels to pass compliance audits. Second, a dedicated production cluster handles the bulk of your workloads, ensuring that general applications do not impose PCI audit constraints on themselves. Third, a non-production cluster is required to prevent staging incidents and developer experiments from affecting production stability. Finally, a management or platform cluster is highly recommended to isolate CI/CD tooling, observability stacks, and GitOps controllers, thereby reducing the blast radius of any single control plane failure.
+First, the PCI cluster is non-negotiable because regulatory scope isolation requires a hard boundary at both the control plane and network levels to pass compliance audits. Second, a dedicated production cluster handles the bulk of your workloads, ensuring that general applications do not impose PCI audit constraints on themselves. Third, a non-production cluster is required to prevent staging incidents and developer experiments from affecting production stability. Finally, a management or platform cluster is highly recommended to isolate CI/CD tooling, observability stacks, and GitOps controllers, thereby reducing the blast radius of any single control plane failure. This brings the total to four independent environments to properly isolate failure domains.
 </details>
 
 ### Question 2
@@ -425,7 +425,7 @@ A financial institution is designing a 400-node cluster for high-frequency tradi
 <summary>Answer</summary>
 
 **They must deploy the external etcd topology.**
-They must deploy the external etcd topology to satisfy the architecture review board's strict performance mandate. When a cluster scales rapidly and experiences heavy webhook or CRD loads, the API server consumes massive amounts of CPU and memory, which can easily starve co-located processes. By placing etcd on dedicated servers with isolated NVMe drives, this topology guarantees zero resource contention with the heavy API server processes. Structurally decoupling the API server processes from the etcd data store allows the API servers to horizontally scale independently, fully protecting the latency-sensitive Raft consensus mechanism from application-layer traffic spikes.
+This architecture is required to satisfy the review board's strict performance mandate. When a cluster scales rapidly and experiences heavy webhook or CRD loads, the API server consumes massive amounts of CPU and memory, which can easily starve co-located processes. By placing etcd on dedicated servers with isolated NVMe drives, this topology guarantees zero resource contention with the heavy API server processes. Structurally decoupling the API server processes from the etcd data store allows the API servers to horizontally scale independently, fully protecting the latency-sensitive Raft consensus mechanism from application-layer traffic spikes.
 </details>
 
 ### Question 4
@@ -435,7 +435,7 @@ A platform engineering team proposes stretching a single etcd cluster across two
 <summary>Answer</summary>
 
 **The latency exceeds the ~10ms maximum threshold for stable Raft consensus.**
-This design will fail catastrophically because the 25ms network latency far exceeds the practical limits for stable Raft consensus. etcd relies on the Raft protocol, which strictly requires the leader to replicate log entries to a majority of members before acknowledging every single write operation. Because the default heartbeat interval is just 100ms, a 25ms round-trip time consumes a significant portion of the election timeout window, triggering severe leader election instability under heavy load. To achieve multi-datacenter resilience without breaking etcd, you must instead deploy completely separate Kubernetes clusters in each site and use application-layer federation or traffic routing to manage failover.
+This design will fail catastrophically because the 25ms network latency far exceeds the practical limits for etcd stability. etcd relies on the Raft protocol, which strictly requires the leader to replicate log entries to a majority of members before acknowledging every single write operation. Because the default heartbeat interval is just 100ms, a 25ms round-trip time consumes a significant portion of the election timeout window, triggering severe leader election instability under heavy load. To achieve multi-datacenter resilience without breaking etcd, you must instead deploy completely separate Kubernetes clusters in each site and use application-layer federation or traffic routing to manage failover.
 </details>
 
 ### Question 5
@@ -445,7 +445,7 @@ An engineer notices that during a massive deployment involving thousands of pods
 <summary>Answer</summary>
 
 **Insufficient disk IOPS disrupting etcd consensus.**
-The root cause is almost certainly insufficient disk IOPS disrupting the etcd consensus mechanism. etcd requires incredibly fast, low-latency disk writes to append Raft logs reliably and maintain cluster state. Rotational hard drives cannot reliably meet the strict minimum requirement of 50 sequential IOPS required for basic stability, let alone the approximately 500 IOPS demanded during a heavy deployment load. When the underlying disk writes stall, the etcd leader fails to commit log entries in time, prompting chaotic, continuous leader elections that completely block all cluster API operations.
+The root cause is almost certainly insufficient disk performance disrupting the etcd consensus mechanism. etcd requires incredibly fast, low-latency disk writes to append Raft logs reliably and maintain cluster state. Rotational hard drives cannot reliably meet the strict minimum requirement of 50 sequential IOPS required for basic stability, let alone the approximately 500 IOPS demanded during a heavy deployment load. When the underlying disk writes stall, the etcd leader fails to commit log entries in time, prompting chaotic, continuous leader elections that completely block all cluster API operations.
 </details>
 
 ### Question 6
@@ -455,7 +455,7 @@ Your organization is planning a major upgrade window to move your production con
 <summary>Answer</summary>
 
 **Yes, this upgrade strategy is officially supported by the Kubernetes version skew policy.**
-Yes, this upgrade strategy is officially supported by the Kubernetes version skew policy. The policy explicitly permits the `kubelet` and `kube-proxy` components to be up to three minor versions older than the `kube-apiserver` in versions 1.25 and newer. Because your control plane will be at v1.35, a `kubelet` running v1.33 is exactly two minor versions behind, ensuring complete compatibility. This deliberate skew allowance empowers platform teams to upgrade the control plane first, thoroughly verifying stability before incrementally rolling out updates to the massive fleet of worker nodes.
+The policy explicitly permits the `kubelet` and `kube-proxy` components to be up to three minor versions older than the `kube-apiserver` in versions 1.25 and newer. Because your control plane will be at v1.35, a `kubelet` running v1.33 is exactly two minor versions behind, ensuring complete compatibility. This deliberate skew allowance empowers platform teams to upgrade the control plane first, thoroughly verifying stability before incrementally rolling out updates to the massive fleet of worker nodes. Always ensure you consult the version skew documentation before finalizing your cluster upgrade plans.
 </details>
 
 ### Question 7
@@ -464,8 +464,8 @@ A site reliability engineer spreads three control plane nodes across three disti
 <details>
 <summary>Answer</summary>
 
-**Kubernetes explicitly does not provide built-in cross-zone resilience for the API server endpoints themselves.**
-Kubernetes did not automatically reroute the requests because it explicitly does not provide built-in cross-zone resilience for the API server endpoints themselves. While the internal cluster scheduler intelligently handles pod resilience using node labels like `topology.kubernetes.io/zone`, the inbound traffic to the control plane is managed externally. You are entirely responsible for engineering an external TCP forwarding load balancer to manage this failover. The load balancer must be configured to constantly execute health checks against TCP port 6443 and actively reroute inbound traffic away from the dead zone to the surviving control plane nodes.
+**Kubernetes explicitly does not provide built-in cross-zone resilience for the API server endpoints.**
+While the internal cluster scheduler intelligently handles pod resilience using node labels like `topology.kubernetes.io/zone`, the inbound traffic to the control plane is managed externally. You are entirely responsible for engineering an external TCP forwarding load balancer to manage this failover. The load balancer must be configured to constantly execute health checks against TCP port 6443 and actively reroute inbound traffic away from the dead zone to the surviving control plane nodes. Without this external load balancer, client requests will continue to hit the dead control plane node and time out.
 </details>
 
 ---
