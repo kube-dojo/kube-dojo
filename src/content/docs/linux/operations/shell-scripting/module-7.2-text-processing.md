@@ -400,13 +400,12 @@ kubectl get pods -o json | jq -r '.items[].spec.nodeName' | sort | uniq -c
 
 ```bash
 # Common patterns
-cat file.txt | grep "error" | wc -l                    # Count errors
+grep "error" file.txt | wc -l                          # Count errors
 ps aux | awk '{print $1}' | sort | uniq -c | sort -rn  # Process count by user
 kubectl get pods | grep -v Running | awk '{print $1}'  # Non-running pods
 
 # Complex pipeline
-cat access.log | \
-  grep -E "^[0-9]" | \
+grep -E "^[0-9]" access.log | \
   awk '{print $1}' | \
   sort | \
   uniq -c | \
@@ -421,10 +420,10 @@ cat access.log | \
 echo "file1 file2" | xargs rm
 
 # One argument at a time
-cat files.txt | xargs -I {} cp {} /backup/
+xargs -I {} cp {} /backup/ < files.txt
 
 # Parallel execution
-cat urls.txt | xargs -P 4 -I {} curl -s {}
+xargs -P 4 -I {} curl -s {} < urls.txt
 
 # With find
 find . -name "*.tmp" | xargs rm
@@ -641,19 +640,19 @@ cat > /tmp/data.json << 'EOF'
 EOF
 
 # 1. Pretty print
-cat /tmp/data.json | jq .
+jq '.' /tmp/data.json
 
 # 2. Get version
-cat /tmp/data.json | jq -r '.version'
+jq -r '.version' /tmp/data.json
 
 # 3. List all names
-cat /tmp/data.json | jq -r '.users[].name'
+jq -r '.users[].name' /tmp/data.json
 
 # 4. Filter admins
-cat /tmp/data.json | jq '.users[] | select(.role == "admin")'
+jq '.users[] | select(.role == "admin")' /tmp/data.json
 
 # 5. Create new structure
-cat /tmp/data.json | jq '.users | map({username: .name, isAdmin: (.role == "admin")})'
+jq '.users | map({username: .name, isAdmin: (.role == "admin")})' /tmp/data.json
 ```
 
 #### Part 5: Combining Tools
