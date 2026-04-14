@@ -4,6 +4,7 @@ slug: cloud/advanced-operations/module-8.7-stateful-migration
 sidebar:
   order: 8
 ---
+
 > **Complexity**: `[COMPLEX]`
 >
 > **Time to Complete**: 2.5 hours
@@ -16,28 +17,24 @@ sidebar:
 
 After completing this module, you will be able to:
 
-- **Implement live migration strategies for stateful workloads (databases, message queues) between cloud regions**
-- **Configure data replication pipelines using cloud-native tools (DMS, Datastream, Azure Migrate) for zero-downtime migration**
-- **Design migration runbooks that address data gravity, consistency guarantees, and rollback procedures**
-- **Evaluate migration approaches (lift-and-shift, re-platform, re-architect) based on workload state and data volume**
-
----
+- **Design** live migration strategies for stateful workloads between cloud regions to eliminate data gravity constraints.
+- **Implement** data replication pipelines using Change Data Capture (CDC) and logical replication for zero-downtime database migrations.
+- **Evaluate** migration approaches (lift-and-shift, re-platform, re-architect) based on workload state, access patterns, and data volume.
+- **Diagnose** post-migration consistency issues, such as desynchronized sequences or row count mismatches, using robust verification scripts.
 
 ## Why This Module Matters
 
-**September 2022. A media streaming company. 18 months into a cloud migration.**
+In October 2018, GitHub experienced a catastrophic 24-hour degradation of service during a stateful workload disruption. The financial impact was severe, with estimated millions in lost productivity and Service Level Agreement penalties across their enterprise customer base. Their core database cluster, which served as the central source of truth for millions of repositories, encountered a split-brain scenario during a routine topology shift. The incident highlighted a fundamental truth of distributed systems: moving stateless compute is trivial, but moving stateful data is fraught with peril.
 
-The engineering team had successfully migrated 90% of their stateless microservices from on-premises VMs to EKS. The remaining 10% was the hard part: a 12TB PostgreSQL database, a 3TB Elasticsearch cluster, a Redis cluster with 200GB of hot data, and a legacy media processing service with 50TB of files on local NFS. Every migration attempt was estimated at "two weeks of downtime," which the business rejected. The database was too large for a simple dump-and-restore within the maintenance window. The media files were too numerous for a single bulk copy. And every day they waited, the data grew larger.
+A similar scenario unfolded for a major streaming service in late 2022. The engineering team had successfully migrated their stateless microservices from on-premises virtual machines to Kubernetes. The remaining legacy footprint was a 12TB PostgreSQL database, a 3TB Elasticsearch cluster, a Redis cluster with 200GB of hot data, and a media processing service with 50TB of files on local network storage. Every migration attempt was estimated at two weeks of downtime, which the business flatly rejected. The database was simply too large for a standard dump-and-restore within the allowed maintenance window. 
 
-After six months of delay, the team discovered the concept of "data gravity" -- the idea that large datasets attract applications and services to them, making migration progressively harder over time. Their 12TB database had grown to 16TB. Their 50TB media store had reached 68TB. The maintenance window they needed had grown from two weeks to three.
+After months of delay, the streaming service engineers realized they were fighting "data gravity." Their 12TB database had grown to 16TB. Every day they waited, the mass of the data increased, pulling more dependencies into its orbit and making the eventual migration even more difficult. They eventually succeeded by combining Change Data Capture for the database, incremental synchronization for the media files, and the Strangler Fig pattern to route traffic incrementally. This module teaches you how to execute these exact patterns, allowing you to move massive stateful workloads without downtime while maintaining absolute data integrity.
 
-They eventually migrated using a combination of Change Data Capture for the database, incremental rsync for the media files, and the Strangler Fig pattern to gradually route traffic from old to new. The full migration took four months of parallel operation. This module teaches you those techniques: how to move stateful workloads without downtime, how to handle data gravity, and the specific Kubernetes tools and patterns that make database migration tractable.
+## Understanding Data Gravity and Escape Velocity
 
----
+Data gravity is a concept originally coined by Dave McCrory. The core insight relies on a physics analogy: data has mass. As data accumulates in one centralized location, it becomes progressively harder and more expensive to move. Applications, auxiliary services, reporting pipelines, and users are pulled toward the data, much like objects drawn toward a gravitational body. Attempting to move the data requires breaking these gravitational bonds, which demands significant engineering "escape velocity."
 
-## Understanding Data Gravity
-
-Data gravity is a concept coined by Dave McCrory in 2010. The core insight: data has mass. As data accumulates in one location, it becomes harder and more expensive to move. Applications, services, and users are pulled toward the data, like objects toward a gravitational body.
+When a database is small, the applications connecting to it orbit loosely. You can take the database offline, move the files, update the connection strings, and bring the systems back online within a brief maintenance window. However, when a dataset grows into the tens or hundreds of terabytes, taking it offline is no longer feasible. The sheer physics of network transfer speeds means copying the data will take days or weeks. During that transfer window, the original database continues to receive new writes, creating a moving target that is impossible to catch without specialized replication tooling.
 
 ```mermaid
 graph TD
@@ -63,7 +60,7 @@ graph TD
     Z[Data gravity formula: Migration difficulty = Data size x Access frequency x Integration count]
 ```
 
-### Migration Velocity
+To combat data gravity, engineers must decouple the applications from the data source before attempting the physical move. This often involves establishing replication bridges that synchronize state across geographic boundaries. By keeping the legacy system and the new target system in perfect sync, teams can eliminate the urgency of the transfer, allowing the bulk data copy to occur over weeks in the background while the business continues to operate normally.
 
 | Data Size | Migration Method | Expected Duration | Downtime |
 |---|---|---|---|
@@ -75,11 +72,11 @@ graph TD
 
 > **Stop and think**: If you have a 5TB database that is accessed by 30 different microservices, what is the primary factor increasing its data gravity? Is it the size of the database, or the number of integrations? How would this impact your migration approach?
 
----
+## The Strangler Fig Pattern in Practice
 
-## The Strangler Fig Pattern
+Named after the strangler fig tree that germinates in the canopy of a host tree and grows downwards until it eventually replaces the host entirely, this architectural pattern allows you to migrate monolithic services incrementally. Rather than attempting a high-risk big-bang cutover, you place a proxy router in front of the legacy system and selectively redirect specific API paths to newly modernized microservices running in Kubernetes.
 
-Named after the strangler fig tree that grows around a host tree until it replaces it entirely, this pattern lets you migrate services incrementally by routing traffic to the new system one piece at a time.
+This approach drastically reduces risk. If a newly migrated service fails or exhibits poor performance under production load, you can instantly revert the routing rule at the Ingress tier, sending traffic back to the legacy system. The stateful data underlying the new service must be synchronized with the legacy data, ensuring that regardless of which system processes the request, the user experiences consistent behavior.
 
 ```mermaid
 graph TD
@@ -106,7 +103,7 @@ graph TD
     end
 ```
 
-### Implementing Strangler Fig with Kubernetes Ingress
+Implementing this pattern in Kubernetes typically involves configuring an Ingress controller to act as the primary traffic gateway. You define explicit prefix paths for the endpoints you have migrated, directing them to native Kubernetes Service objects. For all unmatched traffic, you define a catch-all route that points to an `ExternalName` Service. This special type of Kubernetes Service acts as a DNS alias, seamlessly passing the traffic out of the cluster to the legacy virtual machine environment.
 
 ```yaml
 # Phase 2: Route some paths to new service, rest to legacy
@@ -145,7 +142,11 @@ spec:
                 name: legacy-proxy
                 port:
                   number: 80
----
+```
+
+To resolve the backend reference for the catch-all legacy route, you define the `ExternalName` service:
+
+```yaml
 # ExternalName service pointing to legacy system
 apiVersion: v1
 kind: Service
@@ -157,7 +158,7 @@ spec:
   externalName: legacy.internal.company.com
 ```
 
-### Canary Routing During Migration
+Beyond simple path-based routing, advanced ingress controllers and service meshes like Istio allow for percentage-based traffic splitting. This is essential for canary deployments during the migration phase. By sending only a small fraction of real user traffic to the new database-backed microservice, you can validate your data replication strategies under realistic workloads without jeopardizing the entire user base.
 
 ```yaml
 # Use traffic splitting to gradually shift traffic
@@ -189,11 +190,11 @@ spec:
 
 > **Pause and predict**: When using the Strangler Fig pattern with Kubernetes Ingress, what happens to requests for API endpoints that haven't been explicitly routed to the new services yet? How do you ensure users don't experience broken links?
 
----
+## Strategic Approaches: Lift, Platform, or Architect
 
-## Lift-and-Shift vs. Re-Platform vs. Re-Architect
+Migration is not a one-size-fits-all endeavor. The strategy chosen for a stateful workload depends heavily on the application's lifecycle phase, the business value it generates, and the technical debt it carries. Teams must critically evaluate whether moving a system as-is will merely transfer legacy problems into a modern environment, or if rebuilding the system will consume resources without delivering corresponding business advantages.
 
-The migration strategy for each workload depends on its complexity and the business value of modernizing it.
+The three primary strategies are Lift-and-Shift, Re-Platform, and Re-Architect. Each carries distinct cost, risk, and timeline profiles. A comprehensive migration program typically utilizes a mix of all three strategies across different components of the software portfolio.
 
 ```mermaid
 graph TD
@@ -208,6 +209,8 @@ graph TD
     Arch -- YES --> Architect[RE-ARCHITECT<br/>Rebuild for cloud-native<br/>Break into microservices<br/>Cost: High | Risk: High | Benefit: High]
 ```
 
+Lift-and-shift involves wrapping the existing binary in a container and mounting a PersistentVolume that contains an exact copy of the legacy disk. This is fast and requires minimal code changes, making it ideal for frozen applications. Re-platforming introduces minor optimizations, such as migrating a self-managed database to a managed cloud service like RDS while keeping the core application logic intact. Re-architecting is the most intensive path, demanding a complete rewrite to utilize cloud-native primitives, break apart monoliths, and decouple shared data stores.
+
 | Strategy | When to Use | Database Approach | Timeline |
 |---|---|---|---|
 | Lift-and-shift | Legacy app, no active development, just need it running | Same DB, just in cloud (EC2/GCE + disk) | Days-weeks |
@@ -216,11 +219,11 @@ graph TD
 
 > **Stop and think**: You inherited a 10-year-old monolithic inventory application. The original developers left the company 5 years ago, and the business only requires it for compliance audits twice a year. Which migration strategy is most appropriate and why?
 
----
+## Infrastructure-Level Migration: CSI Volume Snapshots
 
-## CSI Volume Snapshots for Migration
+When dealing with stateful workloads already running in Kubernetes that need to be migrated to a different cluster or region, the Container Storage Interface (CSI) provides a powerful mechanism: Volume Snapshots. Rather than copying data through the application layer, CSI allows you to leverage the cloud provider's native block-storage snapshot capabilities. 
 
-Kubernetes CSI (Container Storage Interface) volume snapshots provide a portable way to snapshot and restore PersistentVolume data. This is the foundation for migrating stateful workloads between clusters.
+This infrastructure-level approach is highly efficient. An AWS EBS snapshot, for example, is instantaneous from the perspective of the application because it captures the block states in the background and streams them to S3. This means you do not need to take the application offline for the duration of the data transfer. You simply trigger the snapshot, wait for the background copy to complete, and then use that snapshot as the data source for a new PersistentVolumeClaim in the destination cluster.
 
 ```yaml
 # Step 1: Create a VolumeSnapshot of the source PV
@@ -233,7 +236,11 @@ spec:
   volumeSnapshotClassName: ebs-csi-snapclass
   source:
     persistentVolumeClaimName: postgres-data
----
+```
+
+The cluster must have an appropriate `VolumeSnapshotClass` configured to instruct the CSI driver on how to handle the operation:
+
+```yaml
 # VolumeSnapshotClass (must exist in cluster)
 apiVersion: snapshot.storage.k8s.io/v1
 kind: VolumeSnapshotClass
@@ -244,6 +251,8 @@ deletionPolicy: Retain
 parameters:
   tagSpecification_1: "Name=migration-snapshot"
 ```
+
+Once the snapshot object reports as ready, the actual data resides in the cloud provider's storage fabric. You can use standard cloud CLI tools to copy this snapshot across regional boundaries, preparing it for restoration in a disaster recovery or migration scenario.
 
 ```bash
 # Check snapshot status
@@ -268,6 +277,8 @@ aws ec2 copy-snapshot \
   --description "Migration snapshot for postgres-data"
 ```
 
+In the target cluster, provisioning a new persistent volume from the replicated snapshot is as simple as referencing the snapshot in the `dataSource` block of the new PVC definition. The CSI driver handles the allocation of the disk and the hydration of the block data prior to the pod starting.
+
 ```yaml
 # Step 2: In the destination cluster, create a PVC from the snapshot
 apiVersion: v1
@@ -290,13 +301,13 @@ spec:
 
 > **Pause and predict**: You successfully created a volume snapshot in AWS `us-east-1` and copied it to `eu-west-1`. If the original source PV is 500Gi, will the new PVC in `eu-west-1` provision immediately, or do you need to wait for the data to copy into the new EBS volume before the pod can start?
 
----
+## Database Replication Patterns
 
-## Database Migration Patterns
+While infrastructure snapshots are excellent for block storage, migrating active, high-transaction databases requires application-aware methodologies. You must ensure transactional consistency, meaning no half-written records are transferred, and no writes are dropped during the cutover window.
 
 ### Pattern 1: Dump and Restore (Small Databases)
 
-For databases under 10GB, the simplest approach works.
+For databases under a few terabytes where the business can tolerate a maintenance window, a traditional logical dump and restore is the most deterministic approach. It guarantees clean data schemas and avoids the complexities of active replication pipelines. The primary limitation is that the database must be entirely locked against new writes during the extraction, transfer, and restoration phases.
 
 ```bash
 # PostgreSQL: Dump from source, restore to target
@@ -326,7 +337,7 @@ pg_restore \
 
 ### Pattern 2: Logical Replication (Medium Databases)
 
-For databases between 1TB and 10TB, use the database's built-in replication to minimize downtime.
+Modern relational databases support logical replication, a mechanism where the database parses its own Write-Ahead Log (WAL) and streams discrete INSERT, UPDATE, and DELETE commands to a subscribed replica. Unlike physical replication, which requires bit-for-bit identical disk layouts, logical replication allows the target database to run on a different operating system, a different major version, or a managed cloud platform.
 
 ```bash
 # PostgreSQL logical replication: continuous sync with near-zero downtime
@@ -358,6 +369,8 @@ WHERE slot_name = 'migration_sub';
 SQL
 ```
 
+During this process, the target database performs an initial bulk synchronization of all existing rows, followed by a continuous streaming phase where it catches up to the live transaction log. The cutover is executed only when the lag between the source and target drops to nearly zero.
+
 ```mermaid
 sequenceDiagram
     participant Source as Source (primary)
@@ -380,7 +393,9 @@ sequenceDiagram
 
 ### Pattern 3: Change Data Capture (Large Databases)
 
-For databases over 10TB or when you need zero-downtime migration, use CDC tools like Debezium or AWS DMS.
+For massive datasets or heterogeneous migrations (e.g., Oracle to PostgreSQL), direct database-to-database connections are often insufficient. Change Data Capture (CDC) architectures introduce an intermediate event streaming platform like Apache Kafka. A connector tool, such as Debezium, tails the source database's transaction log and publishes every mutation as a distinct event payload onto a Kafka topic. A sink connector then reads these topics and applies the mutations to the target database.
+
+This architecture decouples the extraction phase from the loading phase, providing immense resilience against network partitions. If the target database goes offline during the migration, the source database is unaffected; the events simply buffer in the Kafka topic until the target returns and resumes consumption.
 
 ```mermaid
 graph LR
@@ -446,7 +461,7 @@ spec:
 
 ### Pattern 4: Kubernetes Operator Migration
 
-When migrating from a self-managed database to a Kubernetes operator (e.g., CloudNativePG, Percona Operator), you can use the operator's built-in migration capabilities.
+When moving stateful workloads exclusively within the Kubernetes ecosystem, purpose-built controllers simplify the ingestion of external data. Operators like CloudNativePG are designed to handle bootstrapping by directly reading cloud-stored backups generated by tools like Barman or WAL-G. You can define a declarative specification that instructs the new cluster to construct itself using the history of a legacy external database.
 
 ```yaml
 # CloudNativePG: Create a cluster from an external database backup
@@ -483,6 +498,8 @@ spec:
           compression: gzip
 ```
 
+Alternatively, you can utilize built-in binary streaming mechanisms directly from the cluster, spinning up ephemeral migration pods that execute base backups securely over the internal network.
+
 ```bash
 # Alternative: Use pg_basebackup to seed the operator
 # Run from within the K8s cluster
@@ -501,38 +518,11 @@ kubectl run pg-migration --rm -it --restart=Never \
 
 > **Stop and think**: You are migrating a 50TB PostgreSQL database with a strict SLA of zero downtime (read/write operations cannot be paused for more than 5 seconds). Would you choose logical replication or a CDC tool like Debezium? Why?
 
----
+## Zero-Downtime Cutover Runbooks and Verification
 
-## Zero-Downtime Migration Checklist
+A migration is only as strong as its validation logic. Executing a switch without absolute proof that the target system mirrors the source is an invitation to silent data corruption. A rigorous runbook breaks the cutover into discrete, heavily validated steps. The first phase requires establishing a write freeze on the source database to ensure the final few transactions flow through the replication pipeline.
 
-Every migration follows the same high-level pattern: replicate, verify, cutover, verify again.
-
-### Pre-Migration (Days before)
-- [ ] Set up replication (logical rep / CDC / DMS)
-- [ ] Wait for initial sync to complete
-- [ ] Verify row counts match (source vs target)
-- [ ] Run application test suite against target database
-- [ ] Measure replication lag under normal load
-- [ ] Prepare DNS/config changes (but don't apply yet)
-- [ ] Notify stakeholders of cutover window
-
-### Cutover (The actual switch)
-- [ ] Enable read-only mode on source (or pause writes)
-- [ ] Wait for replication lag to reach 0
-- [ ] Run final verification:
-  - [ ] Row counts match
-  - [ ] Checksums match for sample tables
-  - [ ] Sequences are correct on target
-- [ ] Update application config to point to target (ConfigMap change + rolling restart, or DNS switch)
-- [ ] Verify application health after switch
-- [ ] Monitor error rates for 30 minutes
-
-### Post-Migration
-- [ ] Keep source database running for 48 hours (rollback safety net)
-- [ ] Stop replication
-- [ ] Remove old connection strings from configs
-- [ ] Decommission source database after 1 week
-- [ ] Update documentation
+Once the replication lag registers as absolute zero, the validation scripts execute. These scripts must rapidly compare row counts across critical tables and ensure that sequence generators (the mechanisms that create auto-incrementing primary keys) are correctly synchronized. Because logical replication typically moves data rows but not the underlying generator state, a failure to advance the sequences on the target will result in catastrophic primary key collisions the moment the application begins writing to the new database.
 
 ```bash
 #!/bin/bash
@@ -581,19 +571,12 @@ done
 echo "Verification complete."
 ```
 
----
-
 ## Did You Know?
 
 1. **AWS Database Migration Service (DMS) has migrated millions of databases** since its launch in 2016. The most common migration path is Oracle-to-PostgreSQL, followed by SQL Server-to-Aurora. DMS handles schema conversion (via the Schema Conversion Tool) and ongoing CDC replication. For Kubernetes teams, DMS can replicate to an RDS instance that a K8s operator or application then connects to.
-
 2. **The Strangler Fig pattern was coined by Martin Fowler in 2004**, inspired by the actual strangler fig trees he saw in Australia. These trees germinate in the canopy of a host tree, send roots down to the ground, and gradually envelop the host until the original tree dies. Fowler saw this as the perfect metaphor for gradually replacing a legacy system. The pattern has become the default migration strategy for monolith-to-microservices transitions.
-
 3. **Data transfer over the internet at 1 Gbps takes about 2.5 hours for 1TB of data.** For a 50TB database, that's over 5 days of continuous transfer -- assuming the network link is fully saturated, which it won't be. In practice, with network overhead and shared bandwidth, it often takes much longer. AWS Snowball Edge devices transfer 80TB via physical shipping and typically take 4-6 business days door-to-door, making physical transfer competitive or faster for datasets above ~50TB. GCP has Transfer Appliance and Azure has Data Box for the same purpose.
-
 4. **PostgreSQL's logical replication was introduced in version 10 (2017)** and significantly improved migration tooling. Before logical replication, the primary options for near-zero-downtime migration were: physical replication (requires same PG version and OS), third-party tools like Slony (complex, fragile), or CDC via trigger-based capture (high overhead). Logical replication made it possible to replicate between different PG versions, different platforms (on-prem to cloud), and even different schemas -- transforming database migration from a high-risk event to a routine operation.
-
----
 
 ## Common Mistakes
 
@@ -607,8 +590,6 @@ echo "Verification complete."
 | Ignoring timezone and charset differences | "UTF-8 is UTF-8" | Cloud-managed databases may have different default timezones, collations, or character sets. Verify these match before migration. Mismatches cause subtle data corruption. |
 | Not accounting for DNS caching during cutover | "We changed the DNS, it should work immediately" | Application connection pools cache DNS. Even with low TTLs, a rolling restart of application pods may be needed to force new DNS resolution. |
 | Using the same credentials for source and target during migration | "It's easier" | Use separate credentials for migration replication. This lets you revoke migration access independently and provides better audit trails. |
-
----
 
 ## Quiz
 
@@ -648,19 +629,19 @@ When using logical replication or CDC tools, data rows are copied from the sourc
 Exporting data via `tar` and `scp` requires shutting down the application to ensure data consistency, copying data over the network (which can take days for large datasets), and manually reconstructing the volume on the destination, resulting in significant downtime. CSI volume snapshots provide a better alternative by interacting directly with the underlying cloud provider's storage API to take an instantaneous, point-in-time snapshot of the disk at the block level without extended application downtime. This snapshot can then be easily transferred or referenced in the new location to provision a pre-populated volume immediately. However, the main limitation is that CSI snapshots are cloud-provider-specific; you cannot natively snapshot an AWS EBS volume and restore it as a Google Cloud Persistent Disk, which means this approach only works when staying within the same cloud provider or storage ecosystem.
 </details>
 
----
-
 ## Hands-On Exercise: Migrate a Database to Kubernetes
 
-In this exercise, you will migrate a PostgreSQL database from a standalone deployment to a CloudNativePG-managed cluster using logical replication.
+In this exercise, you will migrate a PostgreSQL database from a standalone deployment to a managed cluster using logical replication, simulating a true zero-downtime cutover.
 
 ### Prerequisites
 
-- kind cluster running
-- kubectl installed
-- PostgreSQL client (psql) installed
+- kind cluster running locally
+- kubectl installed and authenticated
+- PostgreSQL client (`psql`) installed on your workstation
 
 ### Task 1: Deploy a "Legacy" PostgreSQL Instance
+
+Establish your source environment by deploying a single-node PostgreSQL instance and populating it with sample schemas and seed data to represent the legacy system.
 
 <details>
 <summary>Solution</summary>
@@ -771,6 +752,8 @@ echo "Legacy database ready with sample data"
 
 ### Task 2: Set Up Logical Replication to a New Instance
 
+Deploy the target cluster and construct a logical replication pipeline. You must migrate the schema independently before attaching the continuous replication subscription.
+
 <details>
 <summary>Solution</summary>
 
@@ -858,6 +841,8 @@ kubectl exec -n target target-postgres-0 -- psql -U admin -d myapp -c "SELECT CO
 
 ### Task 3: Verify Data Consistency
 
+Validate the synchronization pipeline by writing new data to the legacy system and confirming that it correctly traverses the publication boundary to arrive in the target system.
+
 <details>
 <summary>Solution</summary>
 
@@ -892,6 +877,8 @@ SELECT * FROM orders WHERE user_id = 6;"
 </details>
 
 ### Task 4: Perform the Cutover
+
+Execute the final cutover steps: lock the source against new writes, await the final replication flush, forcefully align the sequences, and terminate the replication subscription to declare the target independent.
 
 <details>
 <summary>Solution</summary>
@@ -938,21 +925,21 @@ echo "Cutover complete! Target is now the primary database."
 
 ### Clean Up
 
+After successfully completing the migration exercise, safely tear down your local kind cluster.
+
 ```bash
 kind delete cluster --name migration-lab
 ```
 
-### Success Criteria
+### Success Checklist
 
-- [ ] Legacy PostgreSQL deployed with sample data
-- [ ] Logical replication established between source and target
-- [ ] New data on source automatically appears on target
-- [ ] Row counts verified as matching before cutover
-- [ ] Sequences advanced on target before cutover
-- [ ] New inserts work on target after replication is dropped
-
----
+- [ ] Legacy PostgreSQL is successfully deployed and populated with sample rows.
+- [ ] Logical replication pipeline is fully established, linking the source and target deployments.
+- [ ] Any new data injected into the legacy system automatically traverses the replication log to the target.
+- [ ] Row counts and structural integrity are empirically verified as matching before executing cutover.
+- [ ] Database sequences are manually advanced on the target system to prevent primary key collision constraints.
+- [ ] New inserts flow flawlessly into the target database following the termination of the replication subscription.
 
 ## Next Module
 
-[Module 8.8: Cloud Cost Optimization (Advanced)](../module-8.8-cloud-cost/) -- Your workloads are migrated, replicated, and running across regions. Now learn how to stop hemorrhaging money. Multi-tenant cost allocation, spot instances, savings plans, and the tools that give you visibility into where every dollar goes.
+[Module 8.8: Cloud Cost Optimization (Advanced)](../module-8.8-cloud-cost/) — Your stateful workloads have been cleanly migrated, continuously replicated, and are currently running smoothly across multiple regions. Now, it is time to learn how to stop hemorrhaging money. You will explore advanced multi-tenant cost allocation techniques, spot instance arbitrage, strategic savings plans, and the observability tools that grant you visibility into where every compute dollar is directed.
