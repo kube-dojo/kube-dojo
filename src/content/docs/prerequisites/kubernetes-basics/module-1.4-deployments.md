@@ -78,8 +78,8 @@ kubectl create deployment nginx --image=nginx --dry-run=client -o yaml
 
 ### Declarative (Production Way)
 
-```yaml
-# deployment.yaml
+```bash
+cat << 'EOF' > deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -101,9 +101,8 @@ spec:
         image: nginx:1.26
         ports:
         - containerPort: 80
-```
+EOF
 
-```bash
 kubectl apply -f deployment.yaml
 ```
 
@@ -146,9 +145,8 @@ kubectl get deploy,rs,pods
 # Scale up/down
 kubectl scale deployment nginx --replicas=5
 
-# Or edit YAML and apply
-kubectl edit deployment nginx
-# Change replicas, save
+# Or patch the deployment to scale
+kubectl patch deployment nginx -p '{"spec": {"replicas": 5}}'
 
 # Watch pods scale
 kubectl get pods -w
@@ -162,9 +160,6 @@ kubectl get pods -w
 ```bash
 # Update image
 kubectl set image deployment/nginx nginx=nginx:1.27
-
-# Or edit deployment
-kubectl edit deployment nginx
 
 # Watch rollout
 kubectl rollout status deployment nginx
@@ -267,8 +262,8 @@ kubectl create deployment nginx --image=nginx --replicas=3
 # See pods
 kubectl get pods
 
-# Delete a pod
-kubectl delete pod <pod-name>
+# Delete a pod (using label selector to target the first one)
+kubectl delete pod $(kubectl get pods -l app=nginx -o jsonpath='{.items[0].metadata.name}')
 
 # Immediately check again
 kubectl get pods
