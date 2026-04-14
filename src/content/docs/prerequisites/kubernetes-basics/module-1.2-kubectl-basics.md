@@ -119,7 +119,7 @@ kubectl patch deployment nginx -p '{"spec":{"replicas":3}}'
 kubectl scale deployment nginx --replicas=5
 
 # Set image
-kubectl set image deployment/nginx nginx=nginx:1.26.0
+kubectl set image deployment/nginx nginx=nginx:1.27.0
 ```
 
 ### Deleting Resources
