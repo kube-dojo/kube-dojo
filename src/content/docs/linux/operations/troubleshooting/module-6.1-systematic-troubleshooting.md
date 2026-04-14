@@ -156,32 +156,35 @@ docker ps -a | head -10   # Containers (if applicable)
 
 ### Questions to Ask
 
-```
-WHAT is the problem?
-├── Exact error message?
-├── What's the expected behavior?
-└── What's the actual behavior?
-
-WHEN did it start?
-├── Sudden or gradual?
-├── Correlates with any event?
-└── Time of first occurrence?
-
-WHERE does it happen?
-├── All servers or one?
-├── All users or some?
-└── All requests or specific paths?
-
-WHO is affected?
-├── Internal or external users?
-├── Specific services?
-└── Specific clients?
-
-WHAT changed?
-├── Recent deployments?
-├── System updates?
-├── Configuration changes?
-└── Traffic patterns?
+```mermaid
+flowchart LR
+    Root[Questions to Ask]
+    
+    Root --> W1[WHAT is the problem?]
+    W1 --> W1a[Exact error message?]
+    W1 --> W1b[What's the expected behavior?]
+    W1 --> W1c[What's the actual behavior?]
+    
+    Root --> W2[WHEN did it start?]
+    W2 --> W2a[Sudden or gradual?]
+    W2 --> W2b[Correlates with any event?]
+    W2 --> W2c[Time of first occurrence?]
+    
+    Root --> W3[WHERE does it happen?]
+    W3 --> W3a[All servers or one?]
+    W3 --> W3b[All users or some?]
+    W3 --> W3c[All requests or specific paths?]
+    
+    Root --> W4[WHO is affected?]
+    W4 --> W4a[Internal or external users?]
+    W4 --> W4b[Specific services?]
+    W4 --> W4c[Specific clients?]
+    
+    Root --> W5[WHAT changed?]
+    W5 --> W5a[Recent deployments?]
+    W5 --> W5b[System updates?]
+    W5 --> W5c[Configuration changes?]
+    W5 --> W5d[Traffic patterns?]
 ```
 
 ### Reproduce vs Observe
@@ -386,7 +389,7 @@ Question: How would you apply the divide-and-conquer strategy to isolate the fai
 
 **Test the middle of the request path to eliminate half of the components immediately.**
 
-For example, testing the internal API gateway directly bypasses the CDN and external load balancer. If the API gateway returns a healthy response, you instantly know the problem lies upstream (CDN, external LB, or internet routing) and can stop investigating the application code or database. If it fails, you know the issue is at the gateway, the web pods, or the database, allowing you to split the remaining path again.
+For example, testing the internal API gateway directly bypasses the CDN and external load balancer. If the API gateway returns a healthy response, you instantly know the problem lies upstream (CDN, external LB, or internet routing) and can stop investigating the application code or database. Conversely, if it fails, you know the issue is at the gateway, the web pods, or the database. This approach allows you to systematically split the remaining path again, drastically reducing the time spent checking healthy components.
 
 </details>
 
@@ -399,7 +402,7 @@ Question: Why is asking "What changed?" still the most crucial investigative pat
 
 **Working systems governed by deterministic code do not spontaneously break without an underlying state change.**
 
-Even if no explicit deployments occurred, environmental factors constantly shift: SSL certificates expire, databases grow until disks fill, log files rotate, cloud provider network topologies update, or external API rate limits are reached. By aggressively seeking out what changed in the environment—using timeline analysis for package updates, system events, or metric anomalies—you move away from guessing and directly target the catalyst of the failure.
+Even if no explicit deployments occurred, environmental factors constantly shift around the application. For instance, SSL certificates expire, databases grow until disks fill, log files rotate, cloud provider network topologies update, or external API rate limits are reached. By aggressively seeking out what changed in the environment—using timeline analysis for package updates, system events, or metric anomalies—you move away from guessing and directly target the catalyst of the failure. This process uncovers the hidden state changes that are ultimately responsible for the outage.
 
 </details>
 
@@ -412,7 +415,7 @@ Question: Under what specific conditions should you push back against immediatel
 
 **You should delay a restart if the root cause of the crash is unknown and the current crashed state holds critical diagnostic data that a restart would wipe out.**
 
-Restarting a database clears process memory, resets active connections, and often rotates or overwrites the very logs needed to understand the failure. If the database crashed due to an Out-Of-Memory (OOM) killer or a corrupted disk sector, restarting it without capturing `dmesg` logs or verifying disk space will likely just cause it to crash again immediately, prolonging the outage while destroying the evidence needed to fix it permanently.
+Restarting a database clears process memory, resets active connections, and often rotates or overwrites the very logs needed to understand the failure. If the database crashed due to an Out-Of-Memory (OOM) killer or a corrupted disk sector, restarting it without capturing `dmesg` logs or verifying disk space will likely just cause it to crash again immediately. This prolongs the outage while destroying the evidence needed to fix it permanently. Always gather system state and logs before taking destructive actions like restarting a service.
 
 </details>
 
