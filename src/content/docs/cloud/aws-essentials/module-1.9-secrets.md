@@ -104,11 +104,32 @@ The critical insight: KMS never sees your secret. It only sees the small data ke
 ### Creating a Customer Managed Key
 
 ```bash
-# Create a symmetric encryption key
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+
+# 1. Define a Key Policy (Delegating to IAM)
+# Note: By granting access to the account root, we allow IAM policies to control key access.
+cat <<EOF > /tmp/key-policy.json
+{
+  "Version": "2012-10-17",
+  "Id": "app-secrets-policy",
+  "Statement": [
+    {
+      "Sid": "Enable IAM User Permissions",
+      "Effect": "Allow",
+      "Principal": { "AWS": "arn:aws:iam::${ACCOUNT_ID}:root" },
+      "Action": "kms:*",
+      "Resource": "*"
+    }
+  ]
+}
+EOF
+
+# 2. Create a symmetric encryption key with the policy
 aws kms create-key \
   --description "Application secrets encryption key" \
   --key-usage ENCRYPT_DECRYPT \
   --key-spec SYMMETRIC_DEFAULT \
+  --policy file:///tmp/key-policy.json \
   --tags TagKey=Environment,TagValue=production
 
 # The output includes the KeyId -- save it
@@ -686,7 +707,7 @@ cat > /tmp/secrets-policy.json <<EOF
     {
       "Effect": "Allow",
       "Action": "secretsmanager:GetSecretValue",
-      "Resource": "arn:aws:secretsmanager:us-east-1:${ACCOUNT_ID}:secret:secrets-lab/*"
+      "Resource": "arn:aws:secretsmanager:*:${ACCOUNT_ID}:secret:secrets-lab/*"
     }
   ]
 }
@@ -716,6 +737,7 @@ ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 SECRET_ARN=$(aws secretsmanager describe-secret \
   --secret-id "secrets-lab/db-credentials" \
   --query 'ARN' --output text)
+AWS_REGION=$(aws configure get region || echo us-east-1)
 
 cat > /tmp/task-definition.json <<EOF
 {
@@ -750,7 +772,7 @@ cat > /tmp/task-definition.json <<EOF
         "logDriver": "awslogs",
         "options": {
           "awslogs-group": "/ecs/secrets-lab",
-          "awslogs-region": "us-east-1",
+          "awslogs-region": "${AWS_REGION}",
           "awslogs-stream-prefix": "ecs",
           "awslogs-create-group": "true"
         }
