@@ -43,32 +43,10 @@ Manually creating GCP projects leads to:
 
 A project vending machine (or "project factory") is an automated system that creates projects with all the required baseline configurations.
 
-```text
-  ┌────────────────┐     Request      ┌────────────────────┐
-  │  Developer       │ ──────────────> │  Project Factory     │
-  │  (via form,      │   "I need a     │  (Terraform or       │
-  │   Terraform,     │    project for   │   Config Connector)  │
-  │   or ServiceNow) │    team-x-prod"  │                      │
-  └────────────────┘                  └──────────┬───────────┘
-                                                  │
-                                        Creates project with:
-                                                  │
-                                        ┌─────────▼──────────┐
-                                        │  Baseline Config    │
-                                        │                     │
-                                        │  - Standard naming  │
-                                        │  - Billing linked   │
-                                        │  - APIs enabled     │
-                                        │  - Default VPC      │
-                                        │    deleted           │
-                                        │  - Shared VPC       │
-                                        │    connected         │
-                                        │  - Log sinks        │
-                                        │    configured        │
-                                        │  - IAM baseline     │
-                                        │  - Org policies     │
-                                        │  - Budget alerts    │
-                                        └─────────────────────┘
+```mermaid
+flowchart TD
+    Dev["Developer<br/>(via form, Terraform,<br/>or ServiceNow)"] -- "Request<br/>'I need a project for team-x-prod'" --> Factory["Project Factory<br/>(Terraform or Config Connector)"]
+    Factory -- "Creates project with:" --> Config["Baseline Config<br/>- Standard naming<br/>- Billing linked<br/>- APIs enabled<br/>- Default VPC deleted<br/>- Shared VPC connected<br/>- Log sinks configured<br/>- IAM baseline<br/>- Org policies<br/>- Budget alerts"]
 ```
 
 ### Terraform Project Factory
@@ -166,44 +144,48 @@ A landing zone is the foundational GCP environment that your organization builds
 
 ### The Three-Layer Architecture
 
-```text
-  ┌───────────────────────────────────────────────────────────────────┐
-  │  Organization: example.com                                        │
-  │                                                                   │
-  │  ┌─────────────────────────────────────────────────────────────┐  │
-  │  │  Folder: Shared Services                                    │  │
-  │  │  ┌───────────────┐ ┌───────────────┐ ┌───────────────┐      │  │
-  │  │  │ shared-       │ │ shared-       │ │ shared-       │      │  │
-  │  │  │ networking    │ │ logging       │ │ security      │      │  │
-  │  │  │               │ │               │ │               │      │  │
-  │  │  │ Host VPC      │ │ Central logs  │ │ Org policies  │      │  │
-  │  │  │ Cloud DNS     │ │ BigQuery sink │ │ SCC config    │      │  │
-  │  │  │ Cloud NAT     │ │ Log buckets   │ │ Binary Auth   │      │  │
-  │  │  │ VPN/InterCon  │ │               │ │               │      │  │
-  │  │  └───────────────┘ └───────────────┘ └───────────────┘      │  │
-  │  └─────────────────────────────────────────────────────────────┘  │
-  │                                                                   │
-  │  ┌─────────────────────────────────────────────────────────────┐  │
-  │  │  Folder: Production                                         │  │
-  │  │  ┌───────────────┐ ┌───────────────┐ ┌───────────────┐      │  │
-  │  │  │ payments-prod │ │ orders-prod   │ │ users-prod    │      │  │
-  │  │  └───────────────┘ └───────────────┘ └───────────────┘      │  │
-  │  └─────────────────────────────────────────────────────────────┘  │
-  │                                                                   │
-  │  ┌─────────────────────────────────────────────────────────────┐  │
-  │  │  Folder: Non-Production                                     │  │
-  │  │  ┌───────────────┐ ┌───────────────┐ ┌───────────────┐      │  │
-  │  │  │ payments-dev  │ │ payments-stg  │ │ orders-dev    │      │  │
-  │  │  └───────────────┘ └───────────────┘ └───────────────┘      │  │
-  │  └─────────────────────────────────────────────────────────────┘  │
-  │                                                                   │
-  │  ┌─────────────────────────────────────────────────────────────┐  │
-  │  │  Folder: Sandbox                                            │  │
-  │  │  ┌───────────────┐ ┌───────────────┐                        │  │
-  │  │  │ sandbox-alice │ │ sandbox-bob   │ Auto-deleted after 30d │  │
-  │  │  └───────────────┘ └───────────────┘                        │  │
-  │  └─────────────────────────────────────────────────────────────┘  │
-  └───────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Org["Organization: example.com"]
+    
+    FolderShared["Folder: Shared Services"]
+    Net["shared-networking<br/>(Host VPC, Cloud DNS, Cloud NAT, VPN/InterCon)"]
+    Log["shared-logging<br/>(Central logs, BigQuery sink, Log buckets)"]
+    Sec["shared-security<br/>(Org policies, SCC config, Binary Auth)"]
+    
+    FolderProd["Folder: Production"]
+    Prod1["payments-prod"]
+    Prod2["orders-prod"]
+    Prod3["users-prod"]
+    
+    FolderNonProd["Folder: Non-Production"]
+    NP1["payments-dev"]
+    NP2["payments-stg"]
+    NP3["orders-dev"]
+    
+    FolderSandbox["Folder: Sandbox (Auto-deleted after 30d)"]
+    SB1["sandbox-alice"]
+    SB2["sandbox-bob"]
+
+    Org --> FolderShared
+    Org --> FolderProd
+    Org --> FolderNonProd
+    Org --> FolderSandbox
+    
+    FolderShared --> Net
+    FolderShared --> Log
+    FolderShared --> Sec
+    
+    FolderProd --> Prod1
+    FolderProd --> Prod2
+    FolderProd --> Prod3
+    
+    FolderNonProd --> NP1
+    FolderNonProd --> NP2
+    FolderNonProd --> NP3
+    
+    FolderSandbox --> SB1
+    FolderSandbox --> SB2
 ```
 
 ### Organization Policies for the Landing Zone
@@ -288,26 +270,19 @@ cd terraform-example-foundation
 
 IAP enables zero-trust access to web applications and VMs without a VPN. Instead of trusting a network (VPN = "inside the firewall means trusted"), IAP verifies the user's identity and context on every request.
 
-```text
-  Traditional VPN Approach:              IAP Approach:
-  ─────────────────────────              ──────────────
-
-  ┌────────┐   VPN     ┌───────┐       ┌────────┐  HTTPS    ┌───────┐
-  │  User   │ ───────> │ VPN   │       │  User   │ ───────> │  IAP  │
-  │         │ tunnel   │ Server│       │         │          │ Proxy │
-  └────────┘          └───┬───┘       └────────┘          └───┬───┘
-                           │                                    │
-                      "You're on                           "Are you who
-                       the VPN, so                          you say? Do
-                       you can access                       you have the
-                       everything"                          right role for
-                           │                                THIS resource?"
-                           ▼                                    │
-                      ┌─────────┐                               ▼
-                      │ Internal│                          ┌─────────┐
-                      │ Apps    │                          │ Specific│
-                      │ (all)   │                          │ App     │
-                      └─────────┘                          └─────────┘
+```mermaid
+flowchart TD
+    subgraph Traditional["Traditional VPN Approach"]
+        direction TB
+        User1["User"] -- "VPN tunnel" --> VPNServer["VPN Server"]
+        VPNServer -- "'You're on the VPN, so you can access everything'" --> Apps1["Internal Apps (all)"]
+    end
+    
+    subgraph IAP["IAP Approach"]
+        direction TB
+        User2["User"] -- "HTTPS" --> IAPProxy["IAP Proxy"]
+        IAPProxy -- "'Are you who you say? Do you have the right role for THIS resource?'" --> Apps2["Specific App"]
+    end
 ```
 
 ### Enabling IAP for Cloud Run
@@ -473,21 +448,23 @@ kubectl annotate serviceaccount my-app-ksa \
 
 Anthos extends GKE to run on-premises, on other clouds (AWS, Azure), and on bare metal. It provides a consistent management plane across all environments.
 
-```text
-  ┌─────────────────────────────────────────────────────────────┐
-  │ Anthos Management Plane (GCP)                               │
-  │                                                             │
-  │ ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐      │
-  │ │ Config   │  │ Service  │  │ Policy   │  │ Fleet    │      │
-  │ │ Mgmt     │  │ Mesh     │  │ Controller│ │ Mgmt     │      │
-  │ └──────────┘  └──────────┘  └──────────┘  └──────────┘      │
-  └───────┬───────────────────────┬───────────────────────┬─────┘
-          │                       │                       │
-  ┌───────▼────────┐      ┌───────▼────────┐      ┌───────▼────────┐
-  │ GKE Cluster    │      │ Anthos on      │      │ Anthos on      │
-  │ (GCP)          │      │ VMware         │      │ AWS            │
-  │                │      │ (on-prem)      │      │ (EKS)          │
-  └────────────────┘      └────────────────┘      └────────────────┘
+```mermaid
+flowchart TD
+    subgraph GCP["Anthos Management Plane (GCP)"]
+        direction LR
+        CM["Config Mgmt"]
+        SM["Service Mesh"]
+        PC["Policy Controller"]
+        FM["Fleet Mgmt"]
+    end
+    
+    GKE["GKE Cluster<br/>(GCP)"]
+    VMware["Anthos on VMware<br/>(on-prem)"]
+    AWS["Anthos on AWS<br/>(EKS)"]
+    
+    GCP --> GKE
+    GCP --> VMware
+    GCP --> AWS
 ```
 
 **When to consider Anthos**:
@@ -559,37 +536,37 @@ gcloud scc assets list organizations/ORG_ID \
 <details>
 <summary>1. A rapidly growing startup has just hired 50 new engineers and formed 8 new product teams. The platform team is currently creating GCP projects manually via the Cloud Console, taking about 3 days per request. What architectural pattern should they implement, and what specific problems will this solve for their scaling organization?</summary>
 
-They should implement a project vending machine (or project factory). This automated system creates GCP projects with a consistent baseline configuration, eliminating manual provisioning bottlenecks. By using a factory, they ensure every new project automatically includes standardized naming, correct billing, connected Shared VPCs, audit logging, and organization policies. This solves the problems of inconsistent security postures, slow onboarding times, and the accumulation of technical debt that occurs when projects are created manually and divergently.
+They should implement a project vending machine (or project factory) using tools like Terraform or Config Connector. This automated system creates GCP projects with a consistent baseline configuration, eliminating manual provisioning bottlenecks that slow down engineering velocity. By using a factory, they ensure every new project automatically includes standardized naming, correct billing, connected Shared VPCs, audit logging, and organization policies right from inception. This definitively solves the problems of inconsistent security postures, slow onboarding times, and the rapid accumulation of technical debt that inevitably occurs when projects are created manually and divergently by multiple different individuals.
 </details>
 
 <details>
 <summary>2. Your company is adopting a remote-first work policy. Historically, engineers used a corporate VPN to access an internal dashboard (running on Cloud Run) and SSH into development VMs. The security team wants to move to a zero-trust model and retire the VPN. How does replacing the VPN with Identity-Aware Proxy (IAP) change the security model for accessing these resources?</summary>
 
-Replacing the VPN with IAP shifts the security model from network-centric trust to identity-centric zero-trust. With a traditional VPN, any user who successfully connects to the network segment gains broad access to resources within that network, regardless of the specific application they need. IAP, conversely, intercepts every individual request to a specific application or VM and verifies the user's identity and IAM authorization before allowing the connection. This means there is no implicit network trust; access is granted on a per-resource basis, significantly reducing the blast radius if a user's device is compromised, and it entirely removes the need for client-side VPN software.
+Replacing the VPN with IAP shifts the security model from network-centric trust to an identity-centric zero-trust architecture. With a traditional VPN, any user who successfully connects to the network segment gains broad, implicit access to resources within that network, regardless of the specific application they actually need to do their job. IAP, conversely, intercepts every individual request to a specific application or VM and strictly verifies the user's identity, context, and IAM authorization before allowing the connection to proceed. This means there is no implicit network trust whatsoever; access is granted exclusively on a granular, per-resource basis. This fundamentally limits lateral movement, significantly reducing the blast radius if a user's device is compromised, while simultaneously entirely removing the administrative burden of client-side VPN software.
 </details>
 
 <details>
 <summary>3. A data science team needs to run a machine learning workload that requires specific NVIDIA GPUs and custom node taints to ensure only specific pods are scheduled on those expensive nodes. Meanwhile, the web backend team needs to deploy a standard stateless microservice that scales based on HTTP traffic. Which GKE operating mode should each team choose and why?</summary>
 
-The data science team should use GKE Standard, while the web backend team should use GKE Autopilot. GKE Standard is necessary for the data science team because they require custom node configurations, specific GPU accelerators, and node-level controls like taints and tolerations, which are fully managed by the user in Standard mode. The web backend team should choose Autopilot because it removes the operational overhead of managing nodes, handles auto-scaling automatically, and bills precisely per pod rather than per node. This makes Autopilot ideal for standard workloads where Google can manage the underlying infrastructure efficiency.
+The data science team should use GKE Standard, while the web backend team should use GKE Autopilot. GKE Standard is necessary for the data science team because they require custom node configurations, specific GPU accelerators, and node-level controls like taints and tolerations, which are fully managed by the user in Standard mode. In contrast, the web backend team should choose Autopilot because it completely removes the operational overhead of managing nodes and handles node auto-scaling automatically behind the scenes. Furthermore, Autopilot bills precisely per pod rather than per node, ensuring you only pay for exactly what the microservice consumes. This makes Autopilot the ideal choice for standard, scalable workloads where Google can manage the underlying infrastructure efficiency and reduce operational burden.
 </details>
 
 <details>
 <summary>4. A financial enterprise is migrating to GCP and needs to ensure that all future workloads comply with strict regulatory requirements before any developer is allowed to deploy code. They need to establish a foundational environment. What foundational components must they build in their landing zone to enforce this organization-wide?</summary>
 
-They must build a comprehensive landing zone consisting of a defined resource hierarchy, centralized networking, and enforced security policies. The resource hierarchy (Organization and Folders) provides the structure to separate production from non-production environments. Centralized networking, typically via a Shared VPC in a host project, ensures all workloads use approved network routes and connectivity. Most importantly for compliance, they must implement Organization Policies at the root or folder level to enforce guardrails (like disabling external IPs or requiring specific regions) and configure centralized log sinks to route all audit logs to a secure, tamper-proof project. These components ensure every new project inherits a secure, compliant baseline by default.
+They must build a comprehensive landing zone consisting of a defined resource hierarchy, centralized networking, and strongly enforced security policies. The resource hierarchy (Organization and Folders) provides the structural foundation to rigidly separate production from non-production environments and apply inheritance-based access control. Centralized networking, typically implemented via a Shared VPC in a dedicated host project, ensures all workloads strictly adhere to approved network routes, egress paths, and internal connectivity standards. Most importantly for compliance, they must implement Organization Policies at the root or folder level to actively enforce guardrails (like disabling external IPs or requiring specific regions) and configure centralized log sinks to automatically route all audit logs to a secure, tamper-proof project. Together, these foundational components guarantee that every new project automatically inherits a secure, auditable, and compliant baseline by default.
 </details>
 
 <details>
 <summary>5. A developer has deployed a pod in GKE that needs to read files from a Cloud Storage bucket. To authenticate, they generated a JSON service account key, base64-encoded it, and stored it as a Kubernetes Secret mounted into the pod. A security auditor flags this as a critical vulnerability. What mechanism should they use instead, and why does it resolve the security finding?</summary>
 
-The developer should use Workload Identity instead of a static service account key. Workload Identity securely maps a Kubernetes service account directly to a GCP service account, allowing the pod to automatically authenticate to GCP APIs without any static credentials. This resolves the security finding because it eliminates the need to generate, store, or manage long-lived JSON keys, which are prone to leakage and are not natively encrypted by Kubernetes Secrets. Workload Identity provides short-lived, automatically rotated credentials, drastically reducing the risk of credential compromise while maintaining precise, IAM-controlled access to the Cloud Storage bucket.
+The developer should use Workload Identity instead of a static service account key, as it provides a fundamentally more secure authentication pattern for Kubernetes. Workload Identity securely maps a Kubernetes service account directly to a GCP service account, allowing the pod to automatically authenticate to GCP APIs without relying on any static credentials. This directly resolves the security finding because it entirely eliminates the need to generate, distribute, store, or manage long-lived JSON keys, which are highly prone to accidental leakage and are not natively encrypted by Kubernetes Secrets. Instead, Workload Identity provides short-lived, automatically rotated credentials handled seamlessly by the platform. This drastically reduces the risk of credential compromise while flawlessly maintaining precise, IAM-controlled access to the required Cloud Storage bucket.
 </details>
 
 <details>
 <summary>6. During a routine security audit, a cloud architect discovers that developers across 40 different GCP projects have accidentally made their Cloud Storage buckets publicly readable, despite an internal company policy forbidding it. What specific architectural control should the platform team have implemented in their landing zone to mathematically prevent this from happening, regardless of developer actions?</summary>
 
-The platform team should have implemented an Organization Policy constraint specifically enforcing `constraints/storage.publicAccessPrevention` at the Organization or Folder level. Organization Policies act as immutable guardrails that override individual project or resource-level IAM permissions. If this policy had been in place within their landing zone, any developer attempting to grant public access to a bucket (or create a new public bucket) would be actively blocked by the GCP API. Relying on documentation or developer compliance is prone to human error, whereas Organization Policies provide programmatic enforcement of security baselines across the entire resource hierarchy.
+The platform team should have implemented an Organization Policy constraint specifically enforcing `constraints/storage.publicAccessPrevention` at the Organization or top-level Folder level. Organization Policies act as immutable, centrally managed guardrails that completely override any individual project or resource-level IAM permissions that a developer might attempt to set. If this specific policy had been in place within their landing zone, any developer attempting to grant public access to a bucket (or create a new publicly readable bucket) would be actively blocked by the GCP API at the moment of creation. Relying purely on documentation, training, or developer compliance is inevitably prone to human error at scale. In contrast, Organization Policies provide programmatic, foolproof enforcement of non-negotiable security baselines across the entire organizational resource hierarchy.
 </details>
 
 ---
