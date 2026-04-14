@@ -177,7 +177,7 @@ gcloud logging sinks update archive-all-logs \
   --log-filter='severity>=WARNING'
 
 # Delete a sink
-gcloud logging sinks delete archive-all-logs
+gcloud logging sinks delete archive-all-logs --quiet
 ```
 
 ### Log Exclusions (Reducing Cost)
@@ -667,7 +667,7 @@ You should implement a Metrics Scope hosted in a dedicated, centralized monitori
 
 ### Objective
 
-Deploy a Cloud Run service with structured logging, create log-based metrics, set up a monitoring dashboard, and configure alerting.
+Deploy a Cloud Run service with structured logging, create log-based metrics, set up an uptime check, and query monitoring metrics.
 
 ### Prerequisites
 
@@ -689,7 +689,9 @@ export REGION=us-central1
 gcloud services enable \
   run.googleapis.com \
   monitoring.googleapis.com \
-  logging.googleapis.com
+  logging.googleapis.com \
+  cloudbuild.googleapis.com \
+  artifactregistry.googleapis.com
 
 mkdir -p /tmp/ops-lab && cd /tmp/ops-lab
 
@@ -777,11 +779,15 @@ gcloud run deploy ops-lab-api \
   --source=. \
   --region=$REGION \
   --allow-unauthenticated \
-  --memory=256Mi
+  --memory=256Mi \
+  --quiet
 
 SERVICE_URL=$(gcloud run services describe ops-lab-api \
   --region=$REGION --format="value(status.url)")
 echo "Service URL: $SERVICE_URL"
+
+# Checkpoint: Verify the service is responsive
+curl -s "$SERVICE_URL/health"
 ```
 </details>
 
