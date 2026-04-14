@@ -23,8 +23,6 @@ In August 2023, a SaaS company running 200 microservices on EKS generated 12 TB 
 
 They migrated to Amazon OpenSearch Service (managed). The migration took three weeks. The managed service handles node replacement, automated snapshots, encryption, and version upgrades. The same engineer now spends 5% of their time on search operations. More importantly, the cluster has not had a single unplanned outage in 14 months. The lesson: running a distributed search cluster on Kubernetes is technically possible, but the operational overhead is enormous. Managed search services let you focus on what matters -- getting insights from your data.
 
-This module teaches you how to ingest Kubernetes logs and metrics into managed search engines, configure index lifecycle management for cost optimization, design sharding and replication strategies, implement fine-grained access control, and optimize queries for operational analytics.
-
 ---
 
 ## Log Ingestion Architecture
@@ -759,50 +757,6 @@ Push simulated Kubernetes log entries into the index.
 <summary>Solution</summary>
 
 ```bash
-cat <<'SCRIPT' > /tmp/ingest-logs.sh
-#!/bin/sh
-OPENSEARCH="http://opensearch-cluster-master:9200"
-
-NAMESPACES="payments frontend api-gateway checkout analytics"
-LEVELS="info info info info info info warn error error"
-MESSAGES=(
-  "Request processed successfully in 42ms"
-  "Connection to database established"
-  "Cache hit for product catalog"
-  "User authentication completed"
-  "Health check passed"
-  "Processing batch job item 23 of 150"
-  "Slow query detected: 2300ms for user lookup"
-  "Connection refused: redis-master:6379"
-  "NullPointerException in PaymentService.process"
-)
-
-# Create bulk index payload
-BULK=""
-for i in $(seq 1 500); do
-  NS=$(echo $NAMESPACES | tr ' ' '\n' | shuf -n 1)
-  LVL=$(echo $LEVELS | tr ' ' '\n' | shuf -n 1)
-  MSG_IDX=$((RANDOM % 9))
-  POD="${NS}-deployment-$(head -c 5 /dev/urandom | od -A n -t x1 | tr -d ' ')"
-  TS=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
-
-  BULK="${BULK}{\"index\":{\"_index\":\"k8s-logs-$(date +%Y.%m.%d)\"}}\n"
-  BULK="${BULK}{\"@timestamp\":\"${TS}\",\"level\":\"${LVL}\",\"message\":\"Request $i processed\",\"kubernetes\":{\"namespace\":\"${NS}\",\"pod\":\"${POD}\",\"container\":\"app\",\"node\":\"worker-1\"}}\n"
-done
-
-printf "$BULK" | curl -s -XPOST "${OPENSEARCH}/_bulk" \
-  -H "Content-Type: application/x-ndjson" \
-  --data-binary @-
-
-echo ""
-echo "Ingested 500 log entries"
-
-# Verify
-curl -s "${OPENSEARCH}/k8s-logs-*/_count" | python3 -m json.tool 2>/dev/null || \
-  curl -s "${OPENSEARCH}/k8s-logs-*/_count"
-SCRIPT
-
-k create configmap ingest-script -n search --from-file=/tmp/ingest-logs.sh
 k run log-ingester --rm -it --image=curlimages/curl -n search --restart=Never \
   --overrides='{
     "spec": {
