@@ -405,11 +405,11 @@ For production, prefer **Graduated** projects. For learning and experimentation,
 
 The cloud native ecosystem includes:
 
-**Core Orchestration**: Kubernetes, Helm, Kustomize
-**Observability**: Prometheus, Grafana, Jaeger, Fluentd
-**Networking**: Cilium, Calico, Istio, Envoy
-**Security**: Falco, Trivy, OPA
-**CI/CD**: ArgoCD, Flux, Tekton
+**Core Orchestration**: Kubernetes, Helm, Kustomize  
+**Observability**: Prometheus, Grafana, Jaeger, Fluentd  
+**Networking**: Cilium, Calico, Istio, Envoy  
+**Security**: Falco, Trivy, OPA  
+**CI/CD**: ArgoCD, Flux, Tekton  
 
 Key points:
 - The CNCF hosts 1000+ projects
