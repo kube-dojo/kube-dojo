@@ -217,14 +217,14 @@ For heavy distributed computing, KubeRay (v1.6.0) is utilized. KubeRay is not a 
 
 KServe provides a Kubernetes Custom Resource Definition (CRD) for serving ML models. It handles autoscaling, networking, health checking, and server configuration across multiple frameworks. It is a CNCF Incubating project (accepted September 2025). The latest stable release is v0.17.0. 
 
-While historically widely referred to as KFServing in community lore, canonical documentation currently refers to it exclusively as KServe. The KServe InferenceService API version is `serving.kserve.io/v1beta1`; it has not yet graduated to a v1 stable release. You will often see `modelserving/v1beta1` in legacy deployment descriptors.
+While historically widely referred to as KFServing in community lore—though this historical rename is unverified in current official documentation—canonical documentation today refers to it exclusively as KServe. The KServe InferenceService API version is `serving.kserve.io/v1beta1`; it has not yet graduated to a v1 stable release. You will often see `modelserving/v1beta1` in legacy deployment descriptors.
 
 Knative Serving (latest v1.21.2) is optional for KServe; it is only required for the serverless (scale-to-zero) deployment mode. Standard deployments can run without Knative if autoscaling to zero is not required or desired.
 
 ### Supported Runtimes
 KServe built-in runtimes include TensorFlow Serving, NVIDIA Triton, Hugging Face Server, LightGBM, XGBoost, SKLearn, MLflow, and OpenVINO Model Server. TorchServe is not a built-in runtime; PyTorch models are served via Triton. NVIDIA Triton Inference Server (v2.67.0, NGC container release 26.03) is particularly powerful, supporting TensorRT, PyTorch (TorchScript), TensorFlow, ONNX Runtime, OpenVINO, Python, RAPIDS FIL, and vLLM backends. 
 
-As an alternative to KServe, Seldon Core v2 uses the Business Source License (BSL), not Apache 2.0, which may impact your deployment compliance. BentoML (v1.4.38) is another alternative, commonly understood to be Apache 2.0 licensed, though you must always verify repository licenses in enterprise contexts.
+As an alternative to KServe, Seldon Core v2 uses the Business Source License (BSL), not Apache 2.0, which may impact your deployment compliance. BentoML (v1.4.38) is another alternative, commonly understood to be Apache 2.0 licensed, though you must always verify repository licenses in enterprise contexts (as the license is unverified in our authoritative fact ledger).
 
 ### A/B Testing and Canary Rollouts
 
@@ -467,7 +467,7 @@ The MLflow UI should load correctly, demonstrating that the frontend API server 
 
 <details>
 <summary>Answer</summary>
-**Correct Answer: B.** The client pod making the API call requires the S3 endpoint URL to push the artifact directly to MinIO. Parameters are sent via HTTP to the tracking server, which succeeds, but the artifact upload fails because the pod defaults to public AWS endpoints when `MLFLOW_S3_ENDPOINT_URL` is omitted.
+**Correct Answer: B.** The client pod making the API call requires the S3 endpoint URL to push the artifact directly to MinIO. Parameters are sent via HTTP to the tracking server, which succeeds, but the artifact upload fails because the pod defaults to public AWS endpoints when `MLFLOW_S3_ENDPOINT_URL` is omitted. Without this specific environment variable injected into the training pod, the underlying `boto3` library attempts to route traffic to the public internet instead of your internal cluster service. This results in a silent hang and eventual connection timeout because the internal pod cannot reach AWS S3, or the bucket simply does not exist there.
 </details>
 
 **2. A data engineering team proposes using a single MinIO bucket to act as both the Feast offline store for batch training and the Feast online store for real-time model serving. Why will this architectural design fail in production?**
@@ -478,7 +478,7 @@ The MLflow UI should load correctly, demonstrating that the frontend API server 
 
 <details>
 <summary>Answer</summary>
-**Correct Answer: B.** Feast relies on two distinct storage tiers. While MinIO (Object Storage) is excellent for the batch offline store, the online store requires exclusively Redis on bare metal to achieve the low-latency lookups needed by live models during inference.
+**Correct Answer: B.** Feast relies on two distinct storage tiers to handle the fundamentally different access patterns of training and serving. While MinIO (Object Storage) is excellent for the batch offline store due to its high throughput for massive datasets, it cannot provide the millisecond latency required for the online serving of real-time features. The online store requires exclusively a low-latency key-value store like Redis on bare metal to achieve the instant lookups needed by live models during inference. Using an object store for both would result in unacceptable latency spikes during real-time prediction requests.
 </details>
 
 **3. You deploy a 4GB deep learning model via KServe. The service works during the day, but the first request sent at 3:00 AM times out with an HTTP 504 Gateway Timeout. Subsequent requests succeed. What is the standard practitioner fix for this?**
@@ -489,7 +489,7 @@ The MLflow UI should load correctly, demonstrating that the frontend API server 
 
 <details>
 <summary>Answer</summary>
-**Correct Answer: B.** Knative scales to zero by default to save resources. Loading massive deep learning models from storage into GPU memory incurs massive cold-start penalties. You must set a minimum scale of 1 (`minScale: "1"`) to ensure instant responses.
+**Correct Answer: B.** By default, when Knative Serving is used with KServe, it scales idle services to zero replicas to conserve cluster resources. When a request arrives after a period of inactivity, Knative must spin up a new pod, pull the multi-gigabyte neural network from storage, and load it into GPU memory. This cold-start penalty often exceeds the ingress gateway's timeout threshold, resulting in a 504 error. Setting a minimum scale of 1 (`serving.knative.dev/minScale: "1"`) ensures that at least one replica is always running in memory, providing instant responses at the cost of dedicated idle resources.
 </details>
 
 **4. Two data science teams are concurrently training models on the same 100TB image dataset stored in MinIO. Team A needs to aggressively filter out blurry images, while Team B needs the unfiltered original dataset. How does LakeFS solve this conflict without requiring an additional 100TB of physical storage?**
@@ -500,7 +500,7 @@ The MLflow UI should load correctly, demonstrating that the frontend API server 
 
 <details>
 <summary>Answer</summary>
-**Correct Answer: B.** LakeFS provides server-side, zero-copy branching via an API gateway. This is highly efficient for massive datasets because branching takes milliseconds and requires no additional physical storage space to maintain multiple divergent states of the data concurrently.
+**Correct Answer: B.** LakeFS provides server-side, zero-copy branching via an API gateway that sits in front of your object storage. This is highly efficient for massive datasets because branching takes milliseconds and requires no additional physical storage space to maintain multiple divergent states of the data concurrently. Instead of copying the actual image files, LakeFS simply creates a new metadata pointer to the existing objects. This allows Team A to logically 'delete' images in their branch without affecting Team B's view of the data, all while keeping storage costs identical to a single copy.
 </details>
 
 **5. You need to perform an A/B test routing exactly 10% of real-time inference traffic to a new model version (v2) while the rest goes to v1. How is this natively achieved in a KServe deployment?**
@@ -511,7 +511,7 @@ The MLflow UI should load correctly, demonstrating that the frontend API server 
 
 <details>
 <summary>Answer</summary>
-**Correct Answer: B.** KServe integrates deeply with Knative's native routing capabilities. You achieve this by configuring the `canaryTrafficPercent: 10` field within the InferenceService specification, offloading the traffic split to the underlying ingress gateway automatically.
+**Correct Answer: B.** KServe integrates deeply with Knative's native routing capabilities to handle traffic splitting at the ingress layer. You achieve this by configuring the `canaryTrafficPercent: 10` field within the InferenceService specification. KServe automatically translates this declarative specification into the underlying Knative and Istio routing rules, offloading the traffic split to the gateway automatically. This eliminates the need for manual replica scaling or custom NGINX proxy scripts to achieve weighted traffic distribution.
 </details>
 
 **6. Your platform team is deploying Kubeflow Pipelines (KFP) v2, but the security team explicitly forbids installing Argo Workflows in the cluster. How does the KFP v2 architecture allow you to proceed?**
@@ -522,7 +522,7 @@ The MLflow UI should load correctly, demonstrating that the frontend API server 
 
 <details>
 <summary>Answer</summary>
-**Correct Answer: B.** The KFP v2 SDK compiles pipelines to a backend-agnostic IR YAML format, moving away from the strict Argo Workflow YAML dependency of v1. This abstraction allows execution engines other than Argo to run the pipeline.
+**Correct Answer: B.** The KFP v2 SDK fundamentally redesigns how pipelines are compiled by generating a backend-agnostic Intermediate Representation (IR) YAML format. This is a significant shift from the KFP v1 SDK, which had a hard dependency on generating Argo Workflow-specific YAML manifests. Because the output is now an agnostic IR, it allows alternative execution engines (like Vertex AI Pipelines or customized Kubernetes operators) to run the pipeline without relying on Argo Workflows. This decoupling provides enterprise teams the flexibility to choose their preferred orchestration layer while standardizing on the KFP SDK for authoring.
 </details>
 
 **7. A data science team complains that their Feast materialization jobs keep failing halfway through the process. Upon inspection, you notice the Kubernetes node hosting the Feast online store is experiencing heavy swapping and intermittent kubelet unresponsiveness. What architectural flaw is causing this?**
@@ -533,7 +533,7 @@ The MLflow UI should load correctly, demonstrating that the frontend API server 
 
 <details>
 <summary>Answer</summary>
-**Correct Answer: B.** During batch materialization, data is moved from PostgreSQL to Redis. Redis can ingest data faster than it handles eviction if unbounded. Setting a hard `memory.limit` and configuring the `maxmemory-policy allkeys-lru` prevents node-level degradation.
+**Correct Answer: B.** During batch materialization, data is moved in bulk from the offline store (like PostgreSQL or MinIO) into the online store (Redis). If the Redis pod lacks strictly defined Kubernetes resource limits, it will attempt to consume all available memory on the host node as it ingests the massive influx of feature data. To prevent node-level degradation or an Out Of Memory (OOM) kill by the kubelet, you must set a hard `memory.limit` on the Redis container and configure the `maxmemory-policy allkeys-lru` setting. This ensures Redis evicts older keys when full rather than crashing the node.
 </details>
 
 ## Further Reading
