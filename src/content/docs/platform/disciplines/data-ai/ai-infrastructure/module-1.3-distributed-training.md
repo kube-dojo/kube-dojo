@@ -236,6 +236,8 @@ spec:
 
 NCCL (NVIDIA Collective Communications Library, pronounced "nickel") is the library that implements collective operations (all-reduce, all-gather, broadcast, reduce-scatter) across GPUs. Every distributed training framework (PyTorch DDP, Horovod, DeepSpeed) uses NCCL under the hood.
 
+> **Stop and think**: If NCCL automatically selects the best path, why do we need to set environment variables like `NCCL_SOCKET_IFNAME`?
+
 NCCL automatically selects the best communication path:
 
 ```mermaid
@@ -716,6 +718,8 @@ aws ec2 create-placement-group \
 
 ### The Reality
 
+> **Pause and predict**: If a node fails in a 128-node cluster, does the entire job fail, or can the remaining 127 nodes continue training?
+
 In a cluster with 128 GPU nodes running a multi-day training job, node failures are not a possibility — they are a certainty. Common failure modes:
 
 | Failure | Frequency (per 1000 GPU-hours) | Impact |
@@ -872,7 +876,7 @@ A new engineer deploys a 4-node PyTorch training job. The job starts successfull
 <details>
 <summary>Show Answer</summary>
 
-The `/dev/shm` directory provides shared memory backed by the host's RAM, which is heavily utilized by NCCL for intra-node GPU-to-GPU communication buffers and by the PyTorch DataLoader to share data between worker processes. By default, container runtimes like Docker and containerd limit `/dev/shm` to a mere 64MB, which is vastly insufficient for the 16-64GB typically required by multi-GPU training jobs. When this shared memory is exhausted, NCCL silently falls back to much slower communication paths like standard TCP sockets instead of high-speed shared memory. Simultaneously, DataLoader workers may fail to allocate shared tensors, causing the entire training job to run 2-5x slower without throwing obvious errors, making it a notoriously difficult performance degradation to diagnose.
+The `/dev/shm` directory provides shared memory backed by the host's RAM, which is heavily utilized by NCCL for intra-node GPU-to-GPU communication buffers and by the PyTorch DataLoader to share data between worker processes. By default, container runtimes like containerd limit `/dev/shm` to a mere 64MB, which is vastly insufficient for the 16-64GB typically required by modern multi-GPU training jobs. When this shared memory is exhausted, NCCL silently falls back to much slower communication paths, such as standard TCP sockets, instead of using high-speed shared memory. Simultaneously, DataLoader workers may fail to allocate shared tensors for data batching, which stalls the data pipeline and starves the GPUs. Because these fallbacks do not crash the container, the entire training job continues to run but at 2-5x slower speeds, making it a notoriously difficult performance degradation to diagnose without checking system resource utilization.
 </details>
 
 ### Question 4
@@ -881,7 +885,7 @@ Your platform team is migrating a legacy Horovod-based computer vision workload 
 <details>
 <summary>Show Answer</summary>
 
-You should guide the developer to use the `MPIJob` CRD because their legacy computer vision workload is based on Horovod, which relies on MPI for distributed execution. The `PyTorchJob` CRD is designed for workloads using PyTorch's native distributed launching mechanism (`torchrun`), where workers self-organize and discover each other via a rendezvous backend like c10d. In contrast, an `MPIJob` uses a centralized Launcher pod running `mpirun` to start and orchestrate workers via SSH, which is exactly how Horovod and some legacy DeepSpeed setups expect to operate. Attempting to use `PyTorchJob` for a Horovod workload would fail because it lacks the centralized MPI process management and SSH setup required to bootstrap the job.
+You should guide the developer to use the `MPIJob` CRD because their legacy computer vision workload is based on Horovod, which fundamentally relies on MPI for distributed execution. The `PyTorchJob` CRD is specifically designed for workloads using PyTorch's native distributed launching mechanism (`torchrun`). In that model, workers self-organize and discover each other dynamically via a rendezvous backend like c10d. In contrast, an `MPIJob` uses a centralized Launcher pod running `mpirun` to start and orchestrate workers via SSH, which is exactly how Horovod and some legacy DeepSpeed setups expect to operate. Attempting to use `PyTorchJob` for a Horovod workload would instantly fail because it lacks the centralized MPI process management and SSH daemon setup required to bootstrap the job.
 </details>
 
 ### Question 5
@@ -890,7 +894,7 @@ A 4-node distributed training job reports NCCL timeout errors after 5 minutes. N
 <details>
 <summary>Show Answer</summary>
 
-First, you must check the NCCL debug logs (`NCCL_DEBUG=INFO`) to determine if the job is actually utilizing the InfiniBand/RDMA transport or if it has silently fallen back to TCP sockets, which often causes timeouts due to sheer latency. Since Node 3 is the last to report the timeout, it is highly likely the source of the bottleneck or failure; you should use `kubectl describe pod` and `kubectl exec` to verify its resource allocation and network connectivity on the secondary high-speed interface (`net1`). From within Node 3's pod, use tools like `ib_write_bw` to verify RDMA connectivity to other nodes, and check for asymmetric issues such as a missing `nvidia-peermem` kernel module or a downed InfiniBand link. Finally, verify that the pod is not hitting CPU or memory limits, which can lead to NCCL thread starvation and subsequent synchronization timeouts across the entire cluster.
+First, you must check the NCCL debug logs (`NCCL_DEBUG=INFO`) to determine if the job is actually utilizing the InfiniBand/RDMA transport or if it has silently fallen back to TCP sockets. TCP fallback often causes synchronization timeouts because it cannot handle the sheer bandwidth requirements of collective operations. Since Node 3 is the last to report the timeout, it is highly likely the source of the bottleneck or failure, as it is holding up the global all-reduce operation. You should use `kubectl describe pod` and `kubectl exec` to verify its resource allocation and network connectivity on the secondary high-speed interface (`net1`). From within Node 3's pod, use diagnostic tools like `ib_write_bw` to verify direct RDMA connectivity to other nodes, checking for asymmetric issues such as a missing `nvidia-peermem` kernel module or a downed InfiniBand link. Finally, verify that the pod is not hitting CPU or memory limits, which can lead to NCCL thread starvation and subsequent synchronization timeouts across the entire training group.
 </details>
 
 ---
