@@ -511,7 +511,7 @@ aws eks update-cluster-config --name my-cluster \
   --access-config authenticationMode=API
 
 # Step 5: Clean up the aws-auth ConfigMap
-k delete configmap aws-auth -n kube-system
+kubectl delete configmap aws-auth -n kube-system
 ```
 
 > **Important**: You cannot go backwards. Once you switch from `API_AND_CONFIG_MAP` to `API`, you cannot re-enable the ConfigMap. Test thoroughly in the transitional mode before making the final switch.
@@ -670,6 +670,9 @@ aws ec2 create-route --route-table-id $PRIV_RT --destination-cidr-block 0.0.0.0/
 aws ec2 associate-route-table --subnet-id $PRIV_SUB1 --route-table-id $PRIV_RT
 aws ec2 associate-route-table --subnet-id $PRIV_SUB2 --route-table-id $PRIV_RT
 
+# Checkpoint: Verify VPC is available
+aws ec2 describe-vpcs --vpc-ids $VPC_ID --query 'Vpcs[0].State' --output text
+
 echo "VPC: $VPC_ID | Public: $PUB_SUB | Private: $PRIV_SUB1, $PRIV_SUB2"
 ```
 
@@ -716,6 +719,39 @@ endpointPrivateAccess=true \
 echo "Cluster creation initiated. This takes 10-15 minutes."
 aws eks wait cluster-active --name dojo-private-cluster
 echo "Cluster is active."
+
+# Create the EKS node role
+cat > /tmp/node-trust-policy.json << 'POLICY'
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Principal": {"Service": "ec2.amazonaws.com"},
+    "Action": "sts:AssumeRole"
+  }]
+}
+POLICY
+
+NODE_ROLE_ARN=$(aws iam create-role \
+  --role-name EKS-Node-Role \
+  --assume-role-policy-document file:///tmp/node-trust-policy.json \
+  --query 'Role.Arn' --output text)
+aws iam attach-role-policy --role-name EKS-Node-Role --policy-arn arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+aws iam attach-role-policy --role-name EKS-Node-Role --policy-arn arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+aws iam attach-role-policy --role-name EKS-Node-Role --policy-arn arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+
+# Create managed node group
+aws eks create-nodegroup \
+  --cluster-name dojo-private-cluster \
+  --nodegroup-name standard-workers \
+  --node-role $NODE_ROLE_ARN \
+  --subnets $PRIV_SUB1 $PRIV_SUB2 \
+  --instance-types m6i.large \
+  --scaling-config minSize=2,maxSize=2,desiredSize=2
+
+echo "Node group creation initiated. This takes 3-5 minutes."
+aws eks wait nodegroup-active --cluster-name dojo-private-cluster --nodegroup-name standard-workers
+echo "Node group is active."
 ```
 
 </details>
@@ -744,6 +780,9 @@ aws iam create-role --role-name EKS-Bastion-Role \
   --assume-role-policy-document file:///tmp/bastion-trust.json
 aws iam attach-role-policy --role-name EKS-Bastion-Role \
   --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+aws iam put-role-policy --role-name EKS-Bastion-Role \
+  --policy-name EKSDescribeCluster \
+  --policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"eks:DescribeCluster","Resource":"*"}]}'
 aws iam create-instance-profile --instance-profile-name EKS-Bastion-Profile
 aws iam add-role-to-instance-profile \
   --instance-profile-name EKS-Bastion-Profile \
@@ -755,6 +794,14 @@ BASTION_SG=$(aws ec2 create-security-group \
   --description "Bastion host - SSM only, no SSH" \
   --vpc-id $VPC_ID \
   --query 'GroupId' --output text)
+
+# Allow Bastion to access the EKS Control Plane
+CLUSTER_SG=$(aws eks describe-cluster --name dojo-private-cluster --query 'cluster.resourcesVpcConfig.clusterSecurityGroupId' --output text)
+aws ec2 authorize-security-group-ingress \
+  --group-id $CLUSTER_SG \
+  --protocol tcp \
+  --port 443 \
+  --source-group $BASTION_SG
 
 # Launch the bastion in the public subnet
 BASTION_ID=$(aws ec2 run-instances \
@@ -772,6 +819,12 @@ tar xzf eksctl_Linux_amd64.tar.gz && mv eksctl /usr/local/bin/
 ' \
   --query 'Instances[0].InstanceId' --output text)
 
+echo "Waiting for bastion instance to be ready..."
+aws ec2 wait instance-status-ok --instance-ids $BASTION_ID
+
+# Checkpoint: Verify Bastion state
+aws ec2 describe-instances --instance-ids $BASTION_ID --query 'Reservations[0].Instances[0].State.Name' --output text
+
 echo "Bastion instance: $BASTION_ID"
 echo "Connect via: aws ssm start-session --target $BASTION_ID"
 ```
@@ -786,6 +839,20 @@ Create access entries that give different teams appropriate permissions.
 <summary>Solution</summary>
 
 ```bash
+# Create IAM roles for the teams so the access entries have valid principals
+cat > /tmp/team-trust.json << 'POLICY'
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Principal": {"Service": "ec2.amazonaws.com"},
+    "Action": "sts:AssumeRole"
+  }]
+}
+POLICY
+aws iam create-role --role-name DevTeamRole --assume-role-policy-document file:///tmp/team-trust.json
+aws iam create-role --role-name SecurityAuditRole --assume-role-policy-document file:///tmp/team-trust.json
+
 CLUSTER_NAME="dojo-private-cluster"
 
 # Grant the bastion role cluster-admin access
@@ -847,12 +914,16 @@ kubectl get nodes  # Should return the managed node group nodes
 kubectl auth whoami  # Should show the bastion role identity
 
 # Exit the bastion session, then switch to API-only mode
-aws eks update-cluster-config \
+UPDATE_ID=$(aws eks update-cluster-config \
   --name dojo-private-cluster \
-  --access-config authenticationMode=API
+  --access-config authenticationMode=API \
+  --query 'update.id' --output text)
 
 # Wait for the update to complete
-aws eks wait cluster-active --name dojo-private-cluster
+echo "Waiting for authentication mode update (this takes a few minutes)..."
+while aws eks describe-update --name dojo-private-cluster --update-id $UPDATE_ID --query 'update.status' --output text | grep -q 'InProgress'; do
+  sleep 15
+done
 
 # Verify the authentication mode
 aws eks describe-cluster --name dojo-private-cluster \
@@ -911,6 +982,19 @@ aws eks wait nodegroup-deleted --cluster-name dojo-private-cluster --nodegroup-n
 aws eks delete-cluster --name dojo-private-cluster
 aws eks wait cluster-deleted --name dojo-private-cluster
 aws ec2 terminate-instances --instance-ids $BASTION_ID
+aws iam detach-role-policy --role-name EKS-Node-Role --policy-arn arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+aws iam detach-role-policy --role-name EKS-Node-Role --policy-arn arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+aws iam detach-role-policy --role-name EKS-Node-Role --policy-arn arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+aws iam delete-role --role-name EKS-Node-Role
+aws iam delete-role --role-name DevTeamRole
+aws iam delete-role --role-name SecurityAuditRole
+aws iam remove-role-from-instance-profile --instance-profile-name EKS-Bastion-Profile --role-name EKS-Bastion-Role
+aws iam delete-instance-profile --instance-profile-name EKS-Bastion-Profile
+aws iam detach-role-policy --role-name EKS-Bastion-Role --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+aws iam delete-role-policy --role-name EKS-Bastion-Role --policy-name EKSDescribeCluster
+aws iam delete-role --role-name EKS-Bastion-Role
+aws iam detach-role-policy --role-name EKS-Cluster-Role --policy-arn arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
+aws iam delete-role --role-name EKS-Cluster-Role
 # Then clean up VPC resources (NAT GW, subnets, IGW, VPC) as in the VPC module
 ```
 
