@@ -51,12 +51,12 @@ She switches to tracing. Finds a failing trace. The error is "connection timeout
 
 | What They Had | What They Lacked |
 |---|---|
-| ☑ 2.3 million metrics | ✗ Dashboard hierarchy (what matters now?) |
-| ☑ 4TB daily logs | ✗ Consistent field names (can't query) |
-| ☑ 500 million spans | ✗ SLO-based alerting (why 2%? is that bad?) |
-| ☑ Beautiful dashboards | ✗ Runbooks (what to do when this happens) |
-| ☑ All three pillars | ✗ Investigation workflow (where to start) |
-| ☑ Perfect instrumentation | ✗ Mental model of failure modes |
+| [x] 2.3 million metrics | [ ] Dashboard hierarchy (what matters now?) |
+| [x] 4TB daily logs | [ ] Consistent field names (can't query) |
+| [x] 500 million spans | [ ] SLO-based alerting (why 2%? is that bad?) |
+| [x] Beautiful dashboards | [ ] Runbooks (what to do when this happens) |
+| [x] All three pillars | [ ] Investigation workflow (where to start) |
+| [x] Perfect instrumentation | [ ] Mental model of failure modes |
 
 **DATA ≠ INSIGHT**
 
@@ -180,6 +180,8 @@ flowchart TD
 - Would only you notice? Maybe don't alert.
 - Error budget burn rate > threshold → Users will be affected → Alert
 
+> **Pause and predict**: How does defining an "error budget" change the conversation between product managers and engineers about when to stop deploying new features?
+
 ### 2.2 SLO-Based Alerting
 
 Instead of arbitrary thresholds, alert based on error budget:
@@ -241,6 +243,8 @@ flowchart TD
 ```
 
 ### 3.2 Common Debugging Patterns
+
+> **Stop and think**: Think about the last time you said "It's weird" when debugging. What was the exact baseline you were implicitly comparing the weird behavior against?
 
 **"It's slow"**
 1. **Confirm**: What's the actual latency? p50? p99?
@@ -412,6 +416,8 @@ flowchart TD
 
 ## Part 5: Building Mental Models
 
+> **Pause and predict**: What happens to an engineering team's incident response time if only the most senior engineer holds the complete mental model of the system architecture?
+
 ### 5.1 What is a Mental Model?
 
 A **mental model** is your understanding of how the system actually works—not the documentation, but your intuition built from experience.
@@ -525,7 +531,7 @@ Mental models in one person's head don't scale. Share them:
    <details>
    <summary>Answer</summary>
 
-   The primary problem is "The Wall of Metrics" anti-pattern, suffering from a complete lack of visual hierarchy where all 47 panels are competing equally for attention. To fix this, the team should reorganize the dashboard into clear, logical tiers. The top row should provide an executive summary answering "are we okay?" in five seconds with high-level SLO status. The middle row should surface the golden signals (latency, traffic, errors) to indicate current behavior, while the bottom section should contain expandable drill-down panels for when deep investigation is actually required.
+   The primary problem is "The Wall of Metrics" anti-pattern, suffering from a complete lack of visual hierarchy where all 47 panels are competing equally for attention. When everything is presented with the same priority, engineers are forced to manually parse through irrelevant data to find the critical signals, wasting precious time during an outage. To fix this, the team should reorganize the dashboard into clear, logical tiers. The top row should provide an executive summary answering "are we okay?" in five seconds with high-level SLO status. The middle row should surface the golden signals (latency, traffic, errors) to indicate current behavior, while the bottom section should contain expandable drill-down panels for when deep investigation is actually required.
    </details>
 
 7. **At 3:00 AM, an alert fires for high latency on the user-profile service. The responding engineer hypothesizes "the database must be hung again," so they immediately restart the primary database pod. The latency drops back to normal, and the engineer closes the ticket with the note "Fixed root cause by restarting DB." Why is this conclusion dangerously incorrect, and what exact steps were skipped in the exploratory investigation pattern?**
@@ -642,10 +648,10 @@ flowchart TD
 ```
 
 **Success Criteria**:
-- [ ] Investigation plan covers all steps of exploratory pattern
-- [ ] Alert design includes SLO target and multiple severity levels
-- [ ] Dashboard has clear hierarchy (summary → signals → details)
-- [ ] Each dashboard panel has a clear purpose
+- [x] Investigation plan covers all steps of exploratory pattern
+- [x] Alert design includes SLO target and multiple severity levels
+- [x] Dashboard has clear hierarchy (summary → signals → details)
+- [x] Each dashboard panel has a clear purpose
 
 ---
 
