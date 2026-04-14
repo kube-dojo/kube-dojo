@@ -31,39 +31,21 @@ Policy as Code solves this problem by treating governance rules the same way you
 
 Governance in a cloud-native enterprise is not a single layer. It is a pyramid with each layer handling different concerns at different points in the resource lifecycle.
 
-```text
-┌─────────────────────────────────────────────────┐
-│                                                   │
-│          Layer 5: RUNTIME DETECTION               │
-│          Falco, KubeArmor, GuardDuty             │
-│          "Is something bad happening NOW?"         │
-│                                                   │
-│       ┌──────────────────────────────────┐        │
-│       │   Layer 4: K8s ADMISSION CONTROL │        │
-│       │   Kyverno, OPA Gatekeeper        │        │
-│       │   "Should this K8s resource be   │        │
-│       │    created?"                      │        │
-│       └──────────────────────────────────┘        │
-│                                                   │
-│    ┌───────────────────────────────────────┐      │
-│    │   Layer 3: IaC VALIDATION             │      │
-│    │   Checkov, tfsec, OPA/Conftest        │      │
-│    │   "Is the Terraform/Bicep correct     │      │
-│    │    before we apply it?"               │      │
-│    └───────────────────────────────────────┘      │
-│                                                   │
-│  ┌──────────────────────────────────────────┐     │
-│  │   Layer 2: CLOUD PROVIDER POLICIES        │     │
-│  │   SCPs, Azure Policy, GCP Org Policies    │     │
-│  │   "What API calls are allowed?"           │     │
-│  └──────────────────────────────────────────┘     │
-│                                                   │
-│  ┌──────────────────────────────────────────┐     │
-│  │   Layer 1: IDENTITY & ACCESS (IAM)        │     │
-│  │   "Who can do what?"                      │     │
-│  └──────────────────────────────────────────┘     │
-│                                                   │
-└─────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Pyramid [The Policy Pyramid]
+        direction BT
+        L1["Layer 1: IDENTITY & ACCESS (IAM)<br/>'Who can do what?'"]
+        L2["Layer 2: CLOUD PROVIDER POLICIES<br/>SCPs, Azure Policy, GCP Org Policies<br/>'What API calls are allowed?'"]
+        L3["Layer 3: IaC VALIDATION<br/>Checkov, tfsec, OPA/Conftest<br/>'Is the Terraform/Bicep correct before we apply it?'"]
+        L4["Layer 4: K8s ADMISSION CONTROL<br/>Kyverno, OPA Gatekeeper<br/>'Should this K8s resource be created?'"]
+        L5["Layer 5: RUNTIME DETECTION<br/>Falco, KubeArmor, GuardDuty<br/>'Is something bad happening NOW?'"]
+        
+        L1 --> L2
+        L2 --> L3
+        L3 --> L4
+        L4 --> L5
+    end
 ```
 
 Each layer catches things the layer below cannot. IAM controls who can call APIs, but it cannot enforce that every S3 bucket has encryption. SCPs can enforce encryption, but they cannot inspect Kubernetes manifests. Admission control can reject bad manifests, but it cannot stop a running container from spawning a reverse shell. Runtime detection catches that.
@@ -134,6 +116,8 @@ SCPs are the top-level preventive control in AWS Organizations. They define the 
   ]
 }
 ```
+
+> **Stop and think**: Why is an implicit deny strategy crucial for top-level organizational policies like SCPs?
 
 **SCP gotchas** that trip up most teams:
 
@@ -287,6 +271,8 @@ Cloud provider policies stop at the cloud API boundary. Once a Kubernetes cluste
 ### Kyverno
 
 Kyverno uses Kubernetes-native YAML to define policies. If you can write a Kubernetes manifest, you can write a Kyverno policy. This is its primary advantage: the learning curve is minimal for teams already fluent in YAML.
+
+> **Pause and predict**: If you mutate a resource during admission control, how does that affect the validation step that follows?
 
 ```yaml
 # Kyverno: Deny containers running as root
@@ -593,21 +579,16 @@ SCRIPT
 
 The most effective governance catches violations as early as possible -- ideally before the code leaves the developer's machine.
 
-```text
-┌──────────────────────────────────────────────────────────┐
-│  SHIFT-LEFT POLICY ENFORCEMENT PIPELINE                    │
-│                                                            │
-│  Local Dev     ──►  CI Pipeline  ──►  Admission   ──►     │
-│  (pre-commit)       (PR checks)      (runtime)            │
-│                                                            │
-│  kyverno-cli        kyverno-cli     Kyverno webhook       │
-│  conftest           checkov          Gatekeeper            │
-│  kubeconform        tfsec            webhook               │
-│                     OPA/Conftest                           │
-│                                                            │
-│  Cost: $0           Cost: $0        Cost: Blocked          │
-│  (instant fix)      (PR feedback)   deployment             │
-└──────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph Pipeline [SHIFT-LEFT POLICY ENFORCEMENT PIPELINE]
+        direction LR
+        A["Local Dev<br/>(pre-commit)<br/><br/>kyverno-cli<br/>conftest<br/>kubeconform<br/><br/>Cost: $0<br/>(instant fix)"]
+        B["CI Pipeline<br/>(PR checks)<br/><br/>kyverno-cli<br/>checkov<br/>tfsec<br/>OPA/Conftest<br/><br/>Cost: $0<br/>(PR feedback)"]
+        C["Admission<br/>(runtime)<br/><br/>Kyverno webhook<br/>Gatekeeper webhook<br/><br/>Cost: Blocked deployment"]
+        
+        A --> B --> C
+    end
 ```
 
 ```bash
@@ -682,44 +663,31 @@ The request is **denied**. SCPs define the maximum available permissions for all
 <details>
 <summary>Question 2: Your company uses Azure Policy with a "Deny" effect to prevent AKS clusters without network policy enabled. A team creates an AKS cluster via Terraform and the deployment fails. They request an exception. How should you handle this?</summary>
 
-Create a **policy exemption** in Azure Policy using the `Microsoft.Authorization/policyExemptions` resource. Azure Policy supports two exemption categories: `Waiver` (the resource is non-compliant but exempted) and `Mitigated` (the requirement is met through other means). The exemption should be scoped to the specific resource, have an expiration date, and reference a tracking ticket. In code:
-
-```json
-{
-  "properties": {
-    "policyAssignmentId": "/providers/Microsoft.Management/managementGroups/.../providers/Microsoft.Authorization/policyAssignments/...",
-    "exemptionCategory": "Waiver",
-    "expiresOn": "2025-06-15T00:00:00Z",
-    "description": "Temporary: team-beta needs kubenet for legacy migration. Ticket: SEC-2341"
-  }
-}
-```
-
-Never disable the entire policy. Scope exceptions to the narrowest possible resource.
+Create a **policy exemption** in Azure Policy using the `Microsoft.Authorization/policyExemptions` resource. Azure Policy supports two exemption categories: `Waiver` (the resource is non-compliant but exempted) and `Mitigated` (the requirement is met through other means). The exemption should be scoped to the specific resource, have an expiration date, and reference a tracking ticket. This formalizes the exception within the platform itself, preventing drift and undocumented workarounds. Never disable the entire policy, as that impacts all other compliant deployments.
 </details>
 
 <details>
-<summary>Question 3: Explain the difference between Kyverno's "validate", "mutate", and "generate" rule types. Give one example of when you would use each.</summary>
+<summary>Question 3: A platform engineering team needs to ensure all newly created namespaces automatically receive a default-deny NetworkPolicy, and they want to block any Pod from running as root. They also want to transparently add a standard `company-managed: true` label to all Deployments. How would these three requirements map to Kyverno rule types?</summary>
 
-**Validate** checks whether a resource meets criteria and blocks it if not. Example: require all pods to have `runAsNonRoot: true`. **Mutate** modifies a resource during admission, adding or changing fields. Example: automatically inject a sidecar container or add default resource limits to pods that lack them. **Generate** creates a new resource when a triggering resource is created. Example: automatically create a NetworkPolicy with default-deny-ingress whenever a new namespace is created. Validate is the most common (enforcement), mutate reduces developer burden (sane defaults), and generate ensures baseline configuration (consistency). An enterprise typically uses all three: generate for namespace baselines, mutate for defaults, and validate for hard security requirements.
+These requirements map directly to Kyverno's core rule types: generate, validate, and mutate. To automatically create a NetworkPolicy when a namespace appears, you would use a **generate** rule, which creates secondary resources based on triggers. To block Pods from running as root, you would use a **validate** rule, which acts as a traditional admission gate that rejects non-compliant configurations. To transparently add the standard label to Deployments without failing the developer's request, you would use a **mutate** rule, which modifies the resource on the fly during admission.
 </details>
 
 <details>
 <summary>Question 4: Your CI pipeline uses Checkov to validate Terraform and kyverno-cli to validate Kubernetes manifests. A developer's PR passes both checks, but the deployment is still rejected by the Kyverno webhook in the cluster. How is this possible?</summary>
 
-Several scenarios can cause this: (1) The cluster has **newer policies** that the CI pipeline does not have. The pipeline validates against a snapshot of policies, but someone added a new policy to the cluster after the CI policy set was last updated. (2) The Kyverno webhook evaluates the **final rendered resource**, which may differ from the manifest file. Helm templating, Kustomize overlays, or ArgoCD sync might modify the manifest between CI validation and cluster admission. (3) The policy uses **external data** (like ConfigMap references or API calls) that produce different results in the cluster than in CI. The fix is to keep CI policy sets in sync with cluster policies via GitOps, and to validate the fully-rendered manifests (post-Helm, post-Kustomize), not the source templates.
+Several scenarios can cause this. First, the cluster might have **newer policies** that the CI pipeline does not have, because the pipeline validates against a snapshot while the cluster is updated continuously. Second, the Kyverno webhook evaluates the **final rendered resource**, which may differ from the manifest file if Helm templating, Kustomize overlays, or ArgoCD sync modified it. Finally, the policy might use **external data** (like ConfigMap references or API calls) that produce different results in the cluster context than in the isolated CI environment. The fix is to validate the fully-rendered manifests and keep CI policy sets strictly synced with cluster policies via GitOps.
 </details>
 
 <details>
 <summary>Question 5: An organization has 300 Kubernetes clusters across 3 cloud providers. They want a single policy set that works everywhere. Should they use Kyverno or OPA Gatekeeper? Justify your answer.</summary>
 
-For **pure Kubernetes policy**, either can work since both run as admission webhooks and are cloud-agnostic. However, if the goal is a single policy language across the entire stack (cloud resources + Kubernetes + CI/CD + API authorization), **OPA Gatekeeper** has an advantage because Rego policies can be reused with standalone OPA for Terraform validation (Conftest), API authorization, and custom services. Kyverno is Kubernetes-specific -- it cannot validate Terraform or authorize API calls. That said, at 300 clusters, operational simplicity matters enormously. Kyverno's YAML-based policies are easier for platform teams to maintain across a large fleet without deep Rego expertise. The pragmatic choice for most organizations: Kyverno for Kubernetes admission control, Conftest/OPA for IaC validation, and a mapping document that ensures both policy sets enforce the same governance requirements.
+For **pure Kubernetes policy**, either can work since both run as admission webhooks and are cloud-agnostic. However, if the goal is a single policy language across the entire stack (cloud resources + Kubernetes + CI/CD + API authorization), **OPA Gatekeeper** has an advantage because Rego policies can be reused with standalone OPA for Terraform validation (Conftest), API authorization, and custom services. Kyverno is Kubernetes-specific and cannot validate Terraform or authorize API calls. That said, at 300 clusters, operational simplicity matters enormously. Kyverno's YAML-based policies are easier for platform teams to maintain across a large fleet without deep Rego expertise, so many organizations choose Kyverno for K8s and Conftest for IaC.
 </details>
 
 <details>
-<summary>Question 6: What happens if a Kyverno mutation policy and a validation policy conflict? For example, the mutation policy adds a label, but the validation policy requires a different value for that label.</summary>
+<summary>Question 6: A platform team deploys a Kyverno mutation policy that adds the label `env: dev` to all Pods missing an env label. Meanwhile, the security team deploys a validation policy that requires the `env` label to match the namespace's `environment` annotation. If a developer deploys an unlabelled Pod to a namespace annotated with `environment: prod`, what happens?</summary>
 
-Kyverno processes **mutations before validations** in a deterministic order. If a mutation policy adds label `env: default` and a validation policy requires `env` to match the namespace annotation `environment`, the validation will fail because the mutated value does not match. This is a policy design bug, not a Kyverno bug. The fix is to ensure mutation and validation policies are designed as a coherent set. Best practice: the mutation policy should read the desired value from context (like namespace labels) rather than hardcoding. Use `kyverno apply` in CI to test the full pipeline (mutation + validation) together against sample resources to catch these conflicts before deployment.
+The Pod deployment will be rejected because Kyverno processes **mutations before validations** in a deterministic order. First, the mutation policy will apply the `env: dev` label to the Pod since it was missing. Next, the validation policy will compare the Pod's newly mutated `env: dev` label against the namespace's `environment: prod` annotation. Since the values do not match, the validation fails and blocks the deployment. This highlights a policy design flaw; mutations should read the desired value from context rather than hardcoding defaults to avoid conflicting with validations.
 </details>
 
 ---
@@ -730,17 +698,16 @@ In this exercise, you will create a multi-layer governance system that validates
 
 **What you will build:**
 
-```text
-┌──────────────────────────────────────────────────────┐
-│  Governance Pipeline                                   │
-│                                                        │
-│  1. Pre-commit: validate YAML with kubeconform         │
-│  2. CI: check manifests against Kyverno policies       │
-│  3. CI: check Terraform against OPA/Conftest           │
-│  4. Cluster: enforce with Kyverno admission webhook    │
-│  5. Audit: scan existing resources for compliance      │
-│  6. Exception: managed PolicyException with expiry     │
-└──────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Gov [Governance Pipeline]
+        direction TD
+        S1["1. Pre-commit: validate YAML with kubeconform"] --> S2["2. CI: check manifests against Kyverno policies"]
+        S2 --> S3["3. CI: check Terraform against OPA/Conftest"]
+        S3 --> S4["4. Cluster: enforce with Kyverno admission webhook"]
+        S4 --> S5["5. Audit: scan existing resources for compliance"]
+        S5 --> S6["6. Exception: managed PolicyException with expiry"]
+    end
 ```
 
 ### Task 1: Set Up the Policy Test Environment
