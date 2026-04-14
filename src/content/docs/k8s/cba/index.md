@@ -176,7 +176,7 @@ Our existing Backstage module (7.1) provides a toolkit overview, and three dedic
 
 ### Coverage Breakdown
 
-```
+```text
 KUBEDOJO CBA COVERAGE
 ════════════════════════════════════════════════════════════════
 
@@ -202,7 +202,7 @@ These three modules plus the existing Module 7.1 provide comprehensive CBA prepa
 
 ## Study Strategy
 
-```
+```text
 CBA PREPARATION PATH (4-week plan)
 ══════════════════════════════════════════════════════════════
 
@@ -241,7 +241,7 @@ Week 4: Review & Practice
 
 The CBA weights Customizing Backstage at **32%** -- nearly a third of the exam. Combined with Development Workflow (24%), that means **56% of the exam is about writing code**. If you're coming from an ops background, budget extra time for React and TypeScript.
 
-```
+```text
 STUDY TIME ALLOCATION (by exam weight)
 ══════════════════════════════════════════════════════════════
 
@@ -278,7 +278,7 @@ Backstage Infrastructure (22%)  ███████████
 
 ## Related Certifications
 
-```
+```text
 CERTIFICATION PATH
 ══════════════════════════════════════════════════════════════
 
