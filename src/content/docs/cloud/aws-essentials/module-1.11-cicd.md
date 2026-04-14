@@ -55,19 +55,11 @@ CodeBuild is a fully managed build service. You give it source code, a build spe
 
 ### How CodeBuild Works
 
-```
-+-------------------+     +-----------------------+     +------------------+
-|   Source           |     |   CodeBuild           |     |   Artifacts      |
-|   (GitHub, S3,    | --> |   - Provisions env    | --> |   (ECR image,    |
-|    CodeCommit)    |     |   - Runs buildspec    |     |    S3 bucket,    |
-|                   |     |   - Reports status    |     |    test reports) |
-+-------------------+     +-----------------------+     +------------------+
-                                    |
-                                    v
-                          +-------------------+
-                          |  CloudWatch Logs  |
-                          |  (build output)   |
-                          +-------------------+
+```mermaid
+flowchart LR
+    Source["Source<br/>(GitHub, S3,<br/>CodeCommit)"] --> CodeBuild["CodeBuild<br/>- Provisions env<br/>- Runs buildspec<br/>- Reports status"]
+    CodeBuild --> Artifacts["Artifacts<br/>(ECR image,<br/>S3 bucket,<br/>test reports)"]
+    CodeBuild --> CloudWatch["CloudWatch Logs<br/>(build output)"]
 ```
 
 ### The buildspec.yml File
@@ -249,27 +241,29 @@ CodeDeploy handles the how of getting new code onto your compute targets. It sup
 
 ### Deployment Types for ECS
 
-```
-Rolling Update (ECS native, no CodeDeploy needed):
-+--------+--------+--------+--------+
-| Old v1 | Old v1 | Old v1 | Old v1 |    Start: 4 tasks running v1
-+--------+--------+--------+--------+
-| Old v1 | Old v1 | Old v1 | NEW v2 |    Step 1: Replace 1 task
-+--------+--------+--------+--------+
-| Old v1 | Old v1 | NEW v2 | NEW v2 |    Step 2: Replace another
-+--------+--------+--------+--------+
-| NEW v2 | NEW v2 | NEW v2 | NEW v2 |    Done: All tasks v2
-+--------+--------+--------+--------+
+```mermaid
+flowchart TD
+    subgraph RollingUpdate [Rolling Update: ECS native]
+        direction TB
+        RU1["[Old v1] [Old v1] [Old v1] [Old v1]<br/>Start: 4 tasks running v1"]
+        RU2["[Old v1] [Old v1] [Old v1] [NEW v2]<br/>Step 1: Replace 1 task"]
+        RU3["[Old v1] [Old v1] [NEW v2] [NEW v2]<br/>Step 2: Replace another"]
+        RU4["[NEW v2] [NEW v2] [NEW v2] [NEW v2]<br/>Done: All tasks v2"]
+        RU1 --> RU2 --> RU3 --> RU4
+    end
 
-Blue/Green (CodeDeploy managed):
-Blue (current):  [v1] [v1] [v1] [v1]  <-- ALB routes 100% here
-Green (new):     [v2] [v2] [v2] [v2]  <-- Launched, health-checked
-
-Traffic shift:
-  - AllAtOnce:       0% --> 100% instantly
-  - Canary10Percent5Minutes: 10% for 5 min, then 100%
-  - Linear10PercentEvery1Minute: 10%, 20%, 30%... every minute
+    subgraph BlueGreen [Blue/Green: CodeDeploy managed]
+        direction TB
+        ALB["Application Load Balancer"]
+        ALB == "Routes 100%" ==> B["Blue (current): [v1] [v1] [v1] [v1]"]
+        ALB -. "Routes 0% (initially)" .-> G["Green (new): [v2] [v2] [v2] [v2]<br/>Launched, health-checked"]
+    end
 ```
+
+**Traffic shift strategies:**
+- **AllAtOnce**: 0% --> 100% instantly
+- **Canary10Percent5Minutes**: 10% for 5 min, then 100%
+- **Linear10PercentEvery1Minute**: 10%, 20%, 30%... every minute
 
 Blue/green is the gold standard for production ECS deployments because it provides:
 1. **Instant rollback** -- just shift traffic back to the blue target group
@@ -353,15 +347,12 @@ CodePipeline connects source, build, and deploy stages into an automated workflo
 
 ### Pipeline Architecture
 
-```
-+----------+    +------------+    +-----------+    +-----------+
-|  Source   | -> |   Build    | -> |  Staging  | -> |Production |
-|  (GitHub) |    | (CodeBuild)|    |  Deploy   |    |  Deploy   |
-|           |    |            |    | (CodeDeploy)   | (CodeDeploy)|
-+----------+    +------------+    +-----------+    +-----------+
-                                       |                |
-                                  [Manual approval] [Auto-rollback
-                                                     on alarm]
+```mermaid
+flowchart LR
+    Source["Source<br/>(GitHub)"] --> Build["Build<br/>(CodeBuild)"]
+    Build --> Staging["Staging Deploy<br/>(CodeDeploy)"]
+    Staging -->|"Manual approval"| Prod["Production Deploy<br/>(CodeDeploy)"]
+    Prod -.->|"Monitors"| Alarm["Auto-rollback<br/>on alarm"]
 ```
 
 ### Creating a Pipeline with CLI
@@ -530,21 +521,28 @@ If your team already uses GitHub Actions for CI and only needs AWS for deploymen
 
 ### How OIDC Federation Works
 
-```
-GitHub Actions Workflow                        AWS
-+----------------------+                 +------------------+
-| 1. Job starts        |                 |                  |
-| 2. Request OIDC      |                 |                  |
-|    token from GitHub  |                 |                  |
-| 3. Token contains:   |  trust chain   | IAM OIDC Provider |
-|    - repo: org/myapp  | ------------> | trusts token.     |
-|    - ref: refs/main   |               | actions.github.io |
-|    - workflow: deploy |                 |                  |
-| 4. AssumeRoleWith-   |                 | IAM Role:        |
-|    WebIdentity       | --------------> | - Validates token |
-| 5. Receive temp creds| <-------------- | - Returns creds   |
-|    (15 min lifetime)  |                 | (STS temp creds)  |
-+----------------------+                 +------------------+
+```mermaid
+flowchart LR
+    subgraph GitHub ["GitHub Actions Workflow"]
+        direction TB
+        Step1["1. Job starts"]
+        Step2["2. Request OIDC token from GitHub"]
+        Step3["3. Token contains:<br/>- repo: org/myapp<br/>- ref: refs/main<br/>- workflow: deploy"]
+        Step4["4. AssumeRoleWithWebIdentity"]
+        Step5["5. Receive temp creds<br/>(15 min lifetime)"]
+        
+        Step1 --> Step2 --> Step3 --> Step4
+    end
+
+    subgraph AWS ["AWS"]
+        direction TB
+        IAM["IAM OIDC Provider<br/>trusts token.<br/>token.actions.githubusercontent.com"]
+        Role["IAM Role:<br/>- Validates token<br/>- Returns creds<br/>(STS temp creds)"]
+    end
+
+    Step3 -- "trust chain" --> IAM
+    Step4 -- "AssumeRole" --> Role
+    Role -- "Returns creds" --> Step5
 ```
 
 ### Setting Up OIDC Federation
