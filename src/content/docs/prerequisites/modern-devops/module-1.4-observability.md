@@ -383,15 +383,15 @@ groups:
 
 ```text
 Good alerts:
-✓ Actionable (someone can fix it)
-✓ Urgent (needs immediate attention)
-✓ Not noisy (low false positives)
-✓ Based on SLO violations
+- Actionable (someone can fix it)
+- Urgent (needs immediate attention)
+- Not noisy (low false positives)
+- Based on SLO violations
 
 Bad alerts:
-✗ "CPU at 80%" (so what? Are users affected?)
-✗ Every pod restart (expected sometimes in K8s)
-✗ Alert fatigue = ignored alerts
+- "CPU at 80%" (so what? Are users affected?)
+- Every pod restart (expected sometimes in K8s)
+- Alert fatigue = ignored alerts
 ```
 
 To prevent alert fatigue and ensure on-call engineers only wake up at 3 AM for genuine crises, the SRE framework defines the **Four Golden Signals**. If you alert solely on these user-facing metrics, you will catch almost all critical issues without inundating your team with noisy, unactionable infrastructure warnings.
