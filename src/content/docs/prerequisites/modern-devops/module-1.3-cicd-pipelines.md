@@ -487,7 +487,7 @@ jobs:
     - name: Setup Node.js and Cache
       uses: actions/setup-node@v4
       with:
-        node-version: '20'
+        node-version: '22'
         cache: 'npm'
 
     - name: Install dependencies
@@ -558,7 +558,7 @@ Total: 3 (CRITICAL: 3)
 To get our pipeline to pass, we must fix the root cause: the insecure base image.
 
 1. Open your `Dockerfile`.
-2. Change the `FROM` line to use a modern, secure, actively supported base image: `node:20-alpine`.
+2. Change the `FROM` line to use a modern, secure, actively supported base image: `node:22-alpine`.
 3. Re-run the local docker build: `docker build -t kubedojo-app:test .`
 4. Re-run the local Trivy scan. It should now pass with 0 critical vulnerabilities and an exit code of `0`.
 
@@ -567,7 +567,7 @@ To get our pipeline to pass, we must fix the root cause: the insecure base image
 
 **Updated Dockerfile:**
 ```dockerfile
-FROM node:20-alpine
+FROM node:22-alpine
 WORKDIR /app
 COPY package*.json ./
 RUN npm install
@@ -610,7 +610,7 @@ jobs:
     - name: Setup Node.js and Cache
       uses: actions/setup-node@v4
       with:
-        node-version: '20'
+        node-version: '22'
         cache: 'npm'
 
     - name: Install dependencies
