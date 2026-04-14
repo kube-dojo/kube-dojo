@@ -371,7 +371,7 @@ flowchart TD
 
 **Monthly Error Budget:** 43.2 minutes (SLO: 99.9%)
 **Total used:** 32 minutes | **Remaining:** 11.2 minutes
-**Status:** ⚠️ 26% remaining - Cautious releases
+**Status:** [WARNING] 26% remaining - Cautious releases
 
 ```mermaid
 pie title Monthly Error Budget (43.2 min)
@@ -893,13 +893,13 @@ Data-driven decisions. No arguments needed.
 
 ### Common Mistakes to Avoid
 
-- 🚩 **Too many SLIs** (>5 per service)
-- 🚩 **SLO = current performance** (no improvement room)
-- 🚩 **Measuring internally** instead of at edge
-- 🚩 **Ignoring error budget** in decisions
-- 🚩 **Blaming individuals** in postmortems
-- 🚩 **Never reviewing/adjusting SLOs**
-- 🚩 **Consistently over-achieving** (might be over-investing)
+- **Too many SLIs** (>5 per service)
+- **SLO = current performance** (no improvement room)
+- **Measuring internally** instead of at edge
+- **Ignoring error budget** in decisions
+- **Blaming individuals** in postmortems
+- **Never reviewing/adjusting SLOs**
+- **Consistently over-achieving** (might be over-investing)
 
 ### The Bottom Line
 
