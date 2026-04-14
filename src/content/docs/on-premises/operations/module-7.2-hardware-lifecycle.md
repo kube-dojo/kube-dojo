@@ -63,9 +63,10 @@ graph TD
 |-----------|--------------|-----------------|------------|
 | BIOS/UEFI | Redfish/IPMI, USB, in-band tool | Yes | High |
 | BMC/iDRAC/iLO | Redfish API | Usually no | Medium |
+| CPU Microcode | BIOS update or OS late-loading | Yes (BIOS) / No (OS) | High |
 | NIC firmware | Vendor tool (ethtool, mlxfwmanager) | Sometimes | Medium |
 | Disk firmware | Vendor tool (smartctl, perccli) | Sometimes | High |
-| GPU firmware | nvidia-smi | Yes | High |
+| GPU & Switch (e.g., NVIDIA DGX H100) | Vendor tool (nvfwupd for VBIOS, NVSwitch, EROT) | Yes | High |
 | RAID controller | Vendor CLI (storcli, perccli) | Yes | High |
 
 ---
@@ -278,7 +279,7 @@ Unlike disks in a Ceph cluster, memory replacements or upgrades require complete
 A complete hardware lifecycle encompasses more than just maintenance windows:
 
 1. **Procurement**: Standardize on fixed SKU configurations (e.g., compute-heavy vs. storage-heavy) to avoid the "snowflake" problem. Ensure hardware vendor compatibility with your Linux kernel and Kubernetes CNI/CSI choices before purchasing.
-2. **Deployment**: Automate bare metal provisioning using PXE boot, Metal3, or Tinkerbell. Servers should go from unboxing to joining the Kubernetes cluster automatically.
+2. **Deployment**: Automate bare metal provisioning using PXE boot, Metal3 (Cluster API Provider Metal3 v1.12.2), or Tinkerbell. Servers should go from unboxing to joining the Kubernetes cluster automatically. Metal3 utilizes OpenStack Ironic (latest release 2025.2 Flamingo) running as a separate service to expose bare metal provisioning via a Kubernetes-native API.
 3. **Maintenance**: See the calendar below for routine operations.
 4. **Decommissioning**: Securely wipe disks using `nvme format` or `hdparm` secure erase. Remove the node from the cluster (`kubectl delete node`), revoke its certificates, and clear its BMC IP from the inventory database.
 
@@ -363,10 +364,13 @@ groups:
 
 ## Did You Know?
 
-- **Redfish was developed by the DMTF (Distributed Management Task Force) starting in 2014** as a replacement for IPMI. IPMI 2.0 (Revision 1.1, 2004) is the final major version and is now effectively frozen. Redfish uses HTTPS with JSON payloads (current base protocol specification DSP0266 is 1.23.1, dated December 2025). Modern BMCs like Dell iDRAC10, HPE iLO 6/7, and Lenovo XCC3 support both during this transition period, but IPMI is being aggressively deprecated.
+- **Redfish was developed by the DMTF (Distributed Management Task Force) starting in 2014** as a replacement for IPMI. IPMI 2.0 (Revision 1.1, 2004) is the final major version and is now effectively frozen. Redfish uses HTTPS with JSON payloads (current base protocol specification DSP0266 is 1.23.1, dated December 2025, and the latest schema bundle is 2025.4, released January 2026). Modern BMCs like Dell iDRAC10, HPE iLO 6/7, and Lenovo XCC3 support both during this transition period, but IPMI is being aggressively deprecated.
 - **The Linux Vendor Firmware Service (LVFS)** and its client `fwupd` (latest stable 2.1.1, March 2026) have revolutionized Linux firmware management. LVFS has delivered over 100 million cumulative firmware updates from over 100 hardware vendors, allowing native in-band updates for components without requiring vendor-specific proprietary binaries.
 - **Microsoft's original UEFI Secure Boot certificates (2011 vintage)** begin expiring in June 2026. This requires a fleet-wide update to new 2023-vintage Certificate Authorities to ensure nodes can continue to boot secure operating systems. Planning rolling firmware updates is essential to distribute these new KEK and DB entries seamlessly.
-- **OpenBMC** (latest release 2.18, May 2025) is increasingly becoming the foundation for enterprise management controllers. For example, Lenovo's ThinkSystem V4 servers use XClarity Controller 3 (XCC3), which is fully OpenBMC-based.
+- **OpenBMC** (latest release 2.18, May 2025) is increasingly becoming the foundation for enterprise management controllers. For example, Lenovo's ThinkSystem V4 servers use XClarity Controller 3 (XCC3), which is fully OpenBMC-based and built on an AST2600 chip with a dual-core ARM Cortex-A7.
+- **CPU microcode updates** (like Intel's August 2025 release fixing Processor Stream Cache privilege escalation, or AMD's Zen 5 microcode upstreamed in July 2025) are often required outside of regular BIOS update cycles to address critical security flaws.
+- **NIST SP 800-193 Platform Firmware Resiliency Guidelines** (published May 2018) is the primary US government standard for firmware resilience, defining core properties for Protection, Detection, and Recovery.
+- Foundational standards continue to evolve: the **UEFI specification 2.11** was published in December 2024, **ACPI 6.6** in May 2025, and the **TCG TPM 2.0 Library specification version 1.85** in March 2026, ensuring modern systems support new architectures, hot-plug capabilities, and up-to-date cryptographic standards.
 - **The "bathtub curve" describes hardware failure rates**: high failure rate in the first 90 days (infant mortality), low and stable for years (useful life), then rising failure rate as components age (wear-out). Plan your spare inventory accordingly -- you need more spares in the first quarter after a hardware refresh and in years 4-5 of the lifecycle.
 
 ---
@@ -407,7 +411,7 @@ A SMART check on `/dev/sdb` shows `Reallocated_Sector_Count = 52` and `Current_P
 
 **This disk is showing signs of imminent failure and should be replaced proactively.**
 
-The presence of pending sectors means the drive is already struggling to read data, and waiting for a complete failure significantly increases the risk of data unavailability if another drive fails simultaneously. Ceph's replication protects your data, but that protection is only effective if you act decisively before multiple disks in the same placement group fail. You must immediately set the OSD to `noout`, mark it `down` and `out`, allow the data to safely migrate, and then purge the OSD before physically replacing the drive.
+The presence of pending sectors means the drive is already struggling to read data, and waiting for a complete failure significantly increases the risk of data unavailability if another drive fails simultaneously. Ceph's replication protects your data, but that protection is only effective if you act decisively before multiple disks in the same placement group fail. You must immediately set the OSD to `noout`, mark it `down` and `out`, allow the data to safely migrate, and then purge the OSD before physically replacing the drive. Proactive replacement eliminates the performance penalty of sudden failure during peak workloads and ensures the cluster maintains its fault tolerance.
 </details>
 
 ### Question 3
@@ -418,7 +422,7 @@ You are managing firmware updates for a mixed fleet: 20 Dell 17th Gen (iDRAC10),
 
 **Build an abstraction layer that maps vendor-specific APIs to a common interface.**
 
-You should build an abstraction layer that maps vendor-specific APIs to a common interface, usually driven by a hardware inventory database. The Redfish standard aims for vendor interoperability, but practical implementations often diverge slightly on authentication mechanics, image staging URLs, and task tracking polling. By utilizing an abstraction library like sushy-tools or building vendor-specific adapter scripts around a unified CMDB, you can normalize the deployment pipeline. This ensures your Kubernetes drain and cordon automation remains vendor-agnostic while the underlying adapters handle the specific quirks of iDRAC10, iLO 6, or XCC3.
+You should build an abstraction layer that maps vendor-specific APIs to a common interface, usually driven by a hardware inventory database. The Redfish standard (with its latest 2025.4 schema) aims for vendor interoperability, but practical implementations often diverge slightly on authentication mechanics, image staging URLs, and task tracking polling. By utilizing an abstraction library like sushy-tools or building vendor-specific adapter scripts around a unified CMDB, you can normalize the deployment pipeline. This ensures your Kubernetes drain and cordon automation remains vendor-agnostic while the underlying adapters handle the specific quirks of iDRAC10, iLO 6/7, or XCC3.
 </details>
 
 ### Question 4
@@ -429,7 +433,7 @@ After a BIOS update, a server fails to boot and sits at a blank screen. The BMC 
 
 **Recovery options typically start with the least invasive remote methods and escalate to physical intervention.**
 
-Your first step should be to use the BMC's Redfish API or virtual console to trigger a BIOS rollback, as modern BMCs maintain a backup ROM specifically for this scenario. If the rollback fails, resetting the BIOS to factory defaults via the BMC often clears corrupted NVRAM state that prevents POST. You have time to execute these steps safely because the node was already cordoned and drained prior to the update, meaning no Kubernetes workloads are currently impacted by the outage.
+Your first step should be to use the BMC's Redfish API or virtual console to trigger a BIOS rollback, as modern BMCs maintain a backup ROM specifically for this scenario. If the rollback fails, resetting the BIOS to factory defaults via the BMC often clears corrupted NVRAM state that prevents POST. You have time to execute these steps safely because the node was already cordoned and drained prior to the update, meaning no Kubernetes workloads are currently impacted by the outage. Should all remote options fail, the final escalation involves physical datacenter hands to clear the CMOS or re-flash the firmware via a dedicated motherboard jumper.
 </details>
 
 ---
