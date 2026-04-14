@@ -217,6 +217,10 @@ In RKE2, you must ensure the `rke2-selinux` package is installed on the host. Th
 
 In defense and intelligence work, "Cloud Native" often means "Disconnected." Your servers have zero path to the internet. 
 
+> **Stop and think**: If RKE2 is installed in a fully air-gapped environment with no internet access, how does the cluster handle pulling container images for new application deployments that aren't part of the core RKE2 bundle?
+>
+> *(Answer: You must configure RKE2 to use a private, internal container registry (like Harbor) using the `registries.yaml` file. You then need a separate process—often involving a secure cross-domain transfer—to manually move your application images from the outside world into that internal registry before the cluster can pull them.)*
+
 ### The Artifact-Driven Install
 
 RKE2 is engineered for the "Data Diode" environment. You don't "pull" RKE2; you "carry" it.
@@ -243,6 +247,10 @@ mirrors:
 ## 8. Helm Controller and Add-on Management
 
 RKE2 includes a built-in Helm Controller that allows you to manage cluster add-ons declaratively.
+
+> **Pause and predict**: If you manually edit the `rke2-ingress-nginx` Deployment using `kubectl edit`, what will happen to your changes after a few minutes?
+>
+> *(Answer: The RKE2 Helm Controller will detect that the live state of the Deployment has drifted from the state defined in the underlying Helm chart. It will automatically reconcile the resource and overwrite your manual changes. This is why you must use `HelmChartConfig` resources to apply persistent customizations.)*
 
 ### HelmChartConfig: The Power of Overrides
 
