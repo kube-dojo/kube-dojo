@@ -229,6 +229,8 @@ This small convention reduces review friction enormously. The author knows what'
 
 ---
 
+> **Stop and think**: When was the last time you pair programmed with someone? Were you primarily driving or navigating, and what did you learn from the experience?
+
 ## Part 3: Pairing, Mobbing, and Async Feedback
 
 ### Pair Programming: When and How
@@ -293,10 +295,10 @@ Mob programming extends pairing to the whole team: one screen, one keyboard, the
 4. Take breaks---mob programming is mentally intense.
 
 **Anti-Patterns:**
-- ✗ One person dominates the conversation
-- ✗ The driver codes independently while others watch
-- ✗ Sessions run longer than 90 minutes
-- ✗ Used for tasks that don't benefit from collaboration
+- One person dominates the conversation
+- The driver codes independently while others watch
+- Sessions run longer than 90 minutes
+- Used for tasks that don't benefit from collaboration
 
 ### Async Feedback
 
@@ -373,6 +375,8 @@ flowchart TD
 
 ---
 
+> **Pause and predict**: How can you tell the difference between a team with high psychological safety and one where people are just being "nice" to each other?
+
 ## Part 5: Psychological Safety
 
 ### What Psychological Safety Actually Means
@@ -382,19 +386,19 @@ Google's Project Aristotle (2015) studied 180 teams to find what makes teams eff
 ### What Psychological Safety Is and Isn't
 
 **Psychological Safety is NOT:**
-- ✗ Being nice all the time
-- ✗ Avoiding conflict
-- ✗ Lowering the quality bar
-- ✗ Agreeing with everyone
-- ✗ Never giving critical feedback
+- Being nice all the time
+- Avoiding conflict
+- Lowering the quality bar
+- Agreeing with everyone
+- Never giving critical feedback
 
 **Psychological Safety IS:**
-- ✓ Admitting mistakes without fear of punishment
-- ✓ Asking "dumb" questions without being mocked
-- ✓ Disagreeing with senior engineers respectfully
-- ✓ Proposing unconventional ideas without ridicule
-- ✓ Saying "I don't know" without losing credibility
-- ✓ Giving honest feedback upward without retaliation
+- Admitting mistakes without fear of punishment
+- Asking "dumb" questions without being mocked
+- Disagreeing with senior engineers respectfully
+- Proposing unconventional ideas without ridicule
+- Saying "I don't know" without losing credibility
+- Giving honest feedback upward without retaliation
 
 ### Building Psychological Safety as a Tech Lead
 
@@ -430,6 +434,8 @@ Run a monthly "failure retrospective" where the team shares things that went wro
 - **Junior Engineer:** *"I deployed on Friday at 4 PM and caused an alert storm. I didn't know about the no-Friday-deploys convention. What I'll do differently: check with the team before deploying late in the week, and I added it to our onboarding doc."*
 
 ---
+
+> **Stop and think**: Have you ever worked with a "brilliant jerk"? What was the unseen cost to the rest of the team's productivity and morale?
 
 ## Part 6: Inclusive Engineering Cultures
 
@@ -639,7 +645,7 @@ Your first priority must be to help them restore service and fix the outage with
 
 <details>
 <summary>Show Answer</summary>
-The missing dynamic is psychological safety, which is the belief that team members will not be punished or humiliated for speaking up, asking questions, or making mistakes. When psychological safety is absent, teams suffer from groupthink and critical flaws go unaddressed because engineers are too intimidated to challenge authority. The long-term cost is that the team will ship broken architectures, junior engineers will remain stagnant because they fear asking questions, and diverse perspectives will be entirely lost. You can build this safety by actively encouraging dissent, praising people when they point out flaws, and having senior engineers publicly admit their own mistakes.
+The missing dynamic is psychological safety, which is the belief that team members will not be punished or humiliated for speaking up, asking questions, or making mistakes. When psychological safety is absent, teams suffer from groupthink and critical flaws go unaddressed because engineers are too intimidated to challenge authority. The long-term cost is that the team will ship broken architectures, junior engineers will remain stagnant because they fear asking questions, and diverse perspectives will be entirely lost. You can build this safety by actively encouraging dissent, praising people when they point out flaws, and having senior engineers publicly admit their own mistakes. This ensures that the best ideas surface regardless of who proposes them.
 </details>
 
 **Question 6:** You are pair programming with a new hire to debug a complex race condition. You know exactly what the fix is, and it would only take you two minutes to type it out, but it's taking the new hire over twenty minutes to navigate the file. Why is it critical that you keep your hands off the keyboard, and what should your role be instead?
