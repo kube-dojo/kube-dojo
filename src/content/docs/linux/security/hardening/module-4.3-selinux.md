@@ -262,6 +262,8 @@ getsebool -a | grep httpd
 # httpd_read_user_content
 ```
 
+> **Pause and predict**: If an application running under `httpd_t` needs outbound network access but the SELinux policy currently denies it, what is the safest and least intrusive way to grant this access?
+
 ### Common Booleans
 
 | Boolean | Purpose |
