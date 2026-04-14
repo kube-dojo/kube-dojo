@@ -35,23 +35,31 @@ The Amazon VPC CNI plugin (`aws-node` DaemonSet) is the default networking solut
 
 In the default mode, the VPC CNI pre-allocates secondary IP addresses on each node's Elastic Network Interfaces (ENIs). When a pod is scheduled, it receives one of these pre-allocated IPs.
 
-```text
-EC2 Instance (m5.xlarge)
-├── ENI-0 (Primary)
-│   ├── Primary IP: 10.0.10.5 (node IP)
-│   ├── Secondary IP: 10.0.10.6 → Pod A
-│   ├── Secondary IP: 10.0.10.7 → Pod B
-│   └── Secondary IP: 10.0.10.8 → (warm pool)
-├── ENI-1 (Secondary)
-│   ├── Primary IP: 10.0.10.20 (ENI primary, not used by pods)
-│   ├── Secondary IP: 10.0.10.21 → Pod C
-│   ├── Secondary IP: 10.0.10.22 → Pod D
-│   └── Secondary IP: 10.0.10.23 → (warm pool)
-└── ENI-2 (Secondary)
-    ├── Primary IP: 10.0.10.35
-    ├── Secondary IP: 10.0.10.36 → Pod E
-    ├── Secondary IP: 10.0.10.37 → (warm pool)
-    └── Secondary IP: 10.0.10.38 → (warm pool)
+```mermaid
+graph LR
+    EC2["EC2 Instance (m5.xlarge)"]
+    ENI0["ENI-0 (Primary)"]
+    ENI1["ENI-1 (Secondary)"]
+    ENI2["ENI-2 (Secondary)"]
+
+    EC2 --> ENI0
+    EC2 --> ENI1
+    EC2 --> ENI2
+
+    ENI0 --> IP0_P["Primary IP: 10.0.10.5 (node IP)"]
+    ENI0 --> IP0_S1["Secondary IP: 10.0.10.6 → Pod A"]
+    ENI0 --> IP0_S2["Secondary IP: 10.0.10.7 → Pod B"]
+    ENI0 --> IP0_S3["Secondary IP: 10.0.10.8 → (warm pool)"]
+
+    ENI1 --> IP1_P["Primary IP: 10.0.10.20 (ENI primary, not used by pods)"]
+    ENI1 --> IP1_S1["Secondary IP: 10.0.10.21 → Pod C"]
+    ENI1 --> IP1_S2["Secondary IP: 10.0.10.22 → Pod D"]
+    ENI1 --> IP1_S3["Secondary IP: 10.0.10.23 → (warm pool)"]
+
+    ENI2 --> IP2_P["Primary IP: 10.0.10.35"]
+    ENI2 --> IP2_S1["Secondary IP: 10.0.10.36 → Pod E"]
+    ENI2 --> IP2_S2["Secondary IP: 10.0.10.37 → (warm pool)"]
+    ENI2 --> IP2_S3["Secondary IP: 10.0.10.38 → (warm pool)"]
 ```
 
 The number of pods a node can run is directly limited by the formula:
@@ -130,20 +138,25 @@ k get ds aws-node -n kube-system -o json | \
 
 After enabling Prefix Delegation, you must also update the `max-pods` setting on your nodes. Without this, the kubelet still uses the old secondary-IP-based pod limit, and the extra IPs go to waste.
 
-```text
 How Prefix Delegation looks on a node:
 
-EC2 Instance (m5.xlarge) with Prefix Delegation
-├── ENI-0 (Primary)
-│   ├── Primary IP: 10.0.10.5 (node IP)
-│   ├── Prefix: 10.0.10.16/28  → 16 IPs for pods
-│   ├── Prefix: 10.0.10.32/28  → 16 IPs for pods
-│   └── Prefix: 10.0.10.48/28  → 16 IPs (warm pool)
-├── ENI-1 (Secondary)
-│   ├── Primary IP: 10.0.10.100
-│   ├── Prefix: 10.0.10.112/28 → 16 IPs for pods
-│   └── Prefix: 10.0.10.128/28 → 16 IPs (warm pool)
-...
+```mermaid
+graph LR
+    EC2["EC2 Instance (m5.xlarge) with Prefix Delegation"]
+    ENI0["ENI-0 (Primary)"]
+    ENI1["ENI-1 (Secondary)"]
+
+    EC2 --> ENI0
+    EC2 --> ENI1
+
+    ENI0 --> IP0_P["Primary IP: 10.0.10.5 (node IP)"]
+    ENI0 --> P0_1["Prefix: 10.0.10.16/28 → 16 IPs for pods"]
+    ENI0 --> P0_2["Prefix: 10.0.10.32/28 → 16 IPs for pods"]
+    ENI0 --> P0_3["Prefix: 10.0.10.48/28 → 16 IPs (warm pool)"]
+
+    ENI1 --> IP1_P["Primary IP: 10.0.10.100"]
+    ENI1 --> P1_1["Prefix: 10.0.10.112/28 → 16 IPs for pods"]
+    ENI1 --> P1_2["Prefix: 10.0.10.128/28 → 16 IPs (warm pool)"]
 ```
 
 ---
@@ -222,20 +235,16 @@ k apply -f eniconfig-us-east-1b.yaml
 
 After enabling Custom Networking, the architecture looks like this:
 
-```text
-┌────────────────────────────────────────────────────────────────┐
-│  VPC: Primary CIDR 10.0.0.0/16 + Secondary CIDR 100.64.0.0/16│
-│                                                                │
-│  ┌────── Node Subnet (10.0.10.0/24) ──────┐                  │
-│  │  Node Primary ENI: 10.0.10.x            │                  │
-│  │  (only node IPs live here)              │                  │
-│  └─────────────────────────────────────────┘                  │
-│                                                                │
-│  ┌────── Pod Subnet (100.64.0.0/19) ──────┐                  │
-│  │  Pod ENIs: 100.64.x.x                   │                  │
-│  │  8,192 IPs available for pods!           │                  │
-│  └─────────────────────────────────────────┘                  │
-└────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph VPC ["VPC: Primary CIDR 10.0.0.0/16 + Secondary CIDR 100.64.0.0/16"]
+        subgraph NodeSubnet ["Node Subnet (10.0.10.0/24)"]
+            NodeENI["Node Primary ENI: 10.0.10.x\n(only node IPs live here)"]
+        end
+        subgraph PodSubnet ["Pod Subnet (100.64.0.0/19)"]
+            PodENI["Pod ENIs: 100.64.x.x\n8,192 IPs available for pods!"]
+        end
+    end
 ```
 
 > **Pause and predict**: If we place pod ENIs into a separate subnet from the node's primary ENI, what happens to the ENI slot that the node's primary interface occupies? Can pods still use it?
@@ -254,20 +263,29 @@ By default, all pods on a node share the node's security groups. Security Groups
 
 Security Groups for Pods uses a feature called "branch ENIs" (also called trunk ENIs). The VPC CNI creates a trunk ENI on the node and then creates branch ENIs off that trunk, each with its own security group.
 
-```text
-Without SG for Pods:                  With SG for Pods:
-┌────────────────────┐                ┌────────────────────┐
-│ Node SG: sg-node   │                │ Trunk ENI          │
-│                    │                │   ├─ Branch ENI    │
-│  Pod A ─┐          │                │   │  SG: sg-frontend│
-│  Pod B ─┤ All use  │                │   │  → Pod A       │
-│  Pod C ─┘ sg-node  │                │   ├─ Branch ENI    │
-│                    │                │   │  SG: sg-backend │
-└────────────────────┘                │   │  → Pod B       │
-                                      │   └─ Branch ENI    │
-                                      │      SG: sg-db     │
-                                      │      → Pod C       │
-                                      └────────────────────┘
+```mermaid
+flowchart LR
+    subgraph WithoutSGPods ["Without SG for Pods"]
+        NodeSG["Node SG: sg-node"]
+        PodA1["Pod A"] --> NodeSG
+        PodB1["Pod B"] --> NodeSG
+        PodC1["Pod C"] --> NodeSG
+    end
+
+    subgraph WithSGPods ["With SG for Pods"]
+        TrunkENI["Trunk ENI"]
+        Branch1["Branch ENI (SG: sg-frontend)"]
+        Branch2["Branch ENI (SG: sg-backend)"]
+        Branch3["Branch ENI (SG: sg-db)"]
+        
+        TrunkENI --> Branch1
+        TrunkENI --> Branch2
+        TrunkENI --> Branch3
+        
+        Branch1 --> PodA2["Pod A"]
+        Branch2 --> PodB2["Pod B"]
+        Branch3 --> PodC2["Pod C"]
+    end
 ```
 
 ### Enabling Security Groups for Pods
@@ -434,7 +452,7 @@ aws eks create-cluster \
   --role-arn $EKS_ROLE_ARN \
   --kubernetes-network-config ipFamily=ipv6 \
   --resources-vpc-config subnetIds=$SUB1,$SUB2,endpointPublicAccess=true,endpointPrivateAccess=true \
-  --kubernetes-version 1.32
+  --kubernetes-version 1.35
 ```
 
 In IPv6 mode:
@@ -493,31 +511,31 @@ Yes, this will immediately recover a massive number of IPs. By default, `WARM_EN
 <details>
 <summary>Question 3: You just migrated your EKS cluster to use Custom Networking to solve IP exhaustion, mapping pod IPs to a massive `100.64.0.0/16` secondary CIDR. However, immediately after rolling out the new node groups, you get alerts that `m5.xlarge` nodes are failing to schedule more than 44 pods, even though they used to schedule 58 pods before the migration. What is causing this capacity reduction, and how can you fix it?</summary>
 
-The reduction is happening because Custom Networking reserves the node's primary ENI exclusively for node-level communication in the primary subnet, completely removing it from the pod IP allocation pool. Previously, the primary ENI could host secondary IPs for pods, but now only the secondary ENIs (which are attached to the Custom Networking subnets) can host pods. For an m5.xlarge, this reduces the usable ENIs from 4 to 3, dropping max pods from 58 to 44. To fix this and massively increase capacity, you should enable Prefix Delegation alongside Custom Networking, which will assign `/28` prefixes to those remaining ENI slots and allow the node to easily hit the EKS hard cap of 110 pods.
+The reduction is happening because Custom Networking reserves the node's primary ENI exclusively for node-level communication in the primary subnet, completely removing it from the pod IP allocation pool. Previously, the primary ENI could host secondary IPs for pods, but now only the secondary ENIs (which are attached to the Custom Networking subnets) can host pods. For an m5.xlarge, this reduces the usable ENIs from 4 to 3, dropping max pods from 58 to 44. To fix this and massively increase capacity, you should enable Prefix Delegation alongside Custom Networking, which will assign `/28` prefixes to those remaining ENI slots and allow the node to easily hit the EKS hard cap of 110 pods. This combination ensures pods have dedicated IP space while maximizing scheduling density per node.
 </details>
 
 <details>
-<summary>Question 4: You have a Kubernetes Ingress with annotation `target-type: instance` and pods running on 10 nodes across 3 AZs. A pod fails its health check. What happens to traffic?</summary>
+<summary>Question 4: During a busy traffic spike, you have a Kubernetes Ingress with the annotation `target-type: instance` routing to pods spread across 10 nodes in 3 Availability Zones. One of the application pods suddenly crashes and begins failing its readiness probe, yet users are reporting intermittent HTTP 502 errors when accessing the service. Why is traffic still reaching the failed pod, and how do you resolve it?</summary>
 
-With `target-type: instance`, the ALB targets the NodePort on each node, not individual pods. The ALB health checks the NodePort -- and if any pod behind that NodePort on a specific node fails, kube-proxy may still route traffic to the unhealthy pod because the ALB only sees the node as healthy or unhealthy. This means traffic can reach unhealthy pods until kube-proxy removes the endpoint. With `target-type: ip`, the ALB health-checks each pod directly and stops sending traffic to failed pods within seconds, regardless of the node.
+With `target-type: instance`, the ALB targets the NodePort on each node, not individual pods. The ALB health checks the NodePort -- and if any pod behind that NodePort on a specific node fails, kube-proxy may still route traffic to the unhealthy pod because the ALB only sees the node as healthy or unhealthy. This means traffic can reach unhealthy pods until kube-proxy removes the endpoint. With `target-type: ip`, the ALB health-checks each pod directly and stops sending traffic to failed pods within seconds, regardless of the node. Changing the target type completely bypasses the unpredictable kube-proxy hop, providing immediate routing updates when a pod fails.
 </details>
 
 <details>
-<summary>Question 5: Your team uses Security Groups for Pods to isolate a payment service. After applying the SecurityGroupPolicy, the payment pods cannot resolve DNS. What went wrong?</summary>
+<summary>Question 5: Your team successfully implements Security Groups for Pods to isolate a sensitive payment service, attaching a dedicated security group that only allows inbound traffic on port 443. Immediately after the pods restart to apply the policy, the application begins throwing connection timeout errors because it cannot resolve the database's DNS hostname. What went wrong with the network configuration?</summary>
 
-When you assign security groups to pods via SecurityGroupPolicy, those pods use the specified security groups **instead of** the node's security groups. If the pod-specific security groups do not include an outbound rule allowing DNS traffic (UDP port 53 to the CoreDNS service IP, typically `10.100.0.10`), DNS resolution fails. The fix is to add an outbound rule for UDP/TCP port 53 to the CoreDNS cluster IP CIDR (or the VPC CIDR) in the pod's security group.
+When you assign security groups to pods via SecurityGroupPolicy, those pods use the specified security groups **instead of** the node's security groups. By default, security groups deny all outbound traffic unless explicitly permitted. If the pod-specific security groups do not include an outbound rule allowing DNS traffic (UDP port 53 to the CoreDNS service IP, typically `10.100.0.10`), DNS resolution fails entirely. The fix is to add an outbound rule for UDP/TCP port 53 to the CoreDNS cluster IP CIDR (or the VPC CIDR) in the pod's security group. This ensures the pod can communicate with CoreDNS before attempting to reach external dependencies.
 </details>
 
 <details>
 <summary>Question 6: Your platform hosts 45 different microservices, each with its own standard Kubernetes Ingress resource using the `alb` ingress class. Finance just flagged your AWS bill because you are spending over $700 per month just on Application Load Balancers. You need to reduce this cost immediately without changing the routing behavior for the clients. How can you architect this change using the AWS Load Balancer Controller, and what operational risk does it introduce?</summary>
 
-You can consolidate all 45 microservices behind a single Application Load Balancer by adding the `alb.ingress.kubernetes.io/group.name: shared-alb` annotation to all 45 Ingress resources. The AWS Load Balancer Controller will merge these into a single ALB with path-based or host-based listener rules, reducing your fixed ALB hourly costs from 45 LBs down to just 1. However, this introduces a shared blast radius risk: if someone deploys a misconfigured Ingress that breaks the ALB listener rules, or if you exceed the AWS quota of 100 rules per ALB, all 45 microservices could experience routing failures simultaneously. It is best practice to group non-critical services together while keeping highly critical domains on dedicated ALBs.
+You can consolidate all 45 microservices behind a single Application Load Balancer by adding the `alb.ingress.kubernetes.io/group.name: shared-alb` annotation to all 45 Ingress resources. The AWS Load Balancer Controller will merge these into a single ALB with path-based or host-based listener rules, reducing your fixed ALB hourly costs from 45 LBs down to just 1. However, this introduces a shared blast radius risk: if someone deploys a misconfigured Ingress that breaks the ALB listener rules, or if you exceed the AWS quota of 100 rules per ALB, all 45 microservices could experience routing failures simultaneously. It is best practice to group non-critical services together while keeping highly critical domains on dedicated ALBs. This balances cost efficiency with isolation and operational safety.
 </details>
 
 <details>
-<summary>Question 7: Your VPC uses 10.0.0.0/16 and you have exhausted all IPs in your EKS subnets. You need more IPs immediately. What are your two fastest options?</summary>
+<summary>Question 7: During an unexpected traffic surge, your EKS cluster scales rapidly to handle the load, but new pods suddenly remain in a Pending state due to `FailedCreatePodSandBox: no available IP addresses`. Your VPC uses a `10.0.0.0/16` CIDR and you have exhausted all IPs in your EKS subnets. What are your two fastest options to restore scheduling capability without rebuilding the cluster?</summary>
 
-**Option 1**: Tune the VPC CNI warm pool. Set `WARM_IP_TARGET=1` and `WARM_ENI_TARGET=0` on the `aws-node` DaemonSet. This immediately releases pre-allocated but unused IPs across all nodes, often recovering hundreds of IPs within minutes. **Option 2**: Enable Prefix Delegation (`ENABLE_PREFIX_DELEGATION=true`). This changes the allocation from individual IPs to `/28` prefixes, dramatically reducing the number of IPs consumed per ENI slot while increasing pod capacity. Both changes take effect within minutes as the aws-node DaemonSet rolls out, though Prefix Delegation requires updating max-pods on nodes (meaning a rolling restart). For a longer-term fix, add a secondary CIDR (e.g., `100.64.0.0/16`) with Custom Networking.
+**Option 1**: Tune the VPC CNI warm pool by setting `WARM_IP_TARGET=1` and `WARM_ENI_TARGET=0` on the `aws-node` DaemonSet. This immediately releases pre-allocated but unused IPs across all nodes, often recovering hundreds of IPs within minutes. **Option 2**: Enable Prefix Delegation (`ENABLE_PREFIX_DELEGATION=true`), which changes the allocation from individual IPs to `/28` prefixes, dramatically reducing the number of IPs consumed per ENI slot while increasing pod capacity. Both changes take effect within minutes as the aws-node DaemonSet rolls out, though Prefix Delegation requires updating max-pods on nodes (meaning a rolling restart). For a longer-term architectural fix, you should add a secondary CIDR (e.g., `100.64.0.0/16`) with Custom Networking to permanently expand the available address space.
 </details>
 
 ---
@@ -528,25 +546,22 @@ In this exercise, you will configure an EKS cluster with Prefix Delegation for m
 
 **What you will build:**
 
-```text
-┌────────────────────────────────────────────────────────────────┐
-│  Internet                                                      │
-│    │                        │                                  │
-│    ▼                        ▼                                  │
-│  ┌──────────┐         ┌──────────┐                            │
-│  │   ALB    │         │   NLB    │                            │
-│  │ (HTTPS)  │         │ (TCP)    │                            │
-│  └────┬─────┘         └────┬─────┘                            │
-│       │                    │                                   │
-│       ▼                    ▼                                   │
-│  ┌─────────┐         ┌─────────┐                              │
-│  │Web Pods │         │gRPC Pods│                              │
-│  │(IP mode)│         │(IP mode)│                              │
-│  └─────────┘         └─────────┘                              │
-│                                                                │
-│  VPC CNI: Prefix Delegation enabled                            │
-│  Max Pods: 110 per node                                        │
-└────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Internet["Internet"]
+
+    subgraph Cluster ["VPC CNI: Prefix Delegation enabled | Max Pods: 110 per node"]
+        ALB["ALB (HTTPS)"]
+        NLB["NLB (TCP)"]
+        WebPods["Web Pods (IP mode)"]
+        gRPCPods["gRPC Pods (IP mode)"]
+        
+        ALB --> WebPods
+        NLB --> gRPCPods
+    end
+
+    Internet --> ALB
+    Internet --> NLB
 ```
 
 ### Task 1: Enable Prefix Delegation on the VPC CNI
