@@ -328,7 +328,7 @@ git gc
 git gc --aggressive
 ```
 
-When you run `gc`, Git performs a `repack`. It takes thousands of individual loose object files and compresses them into a single "packfile." Packfiles use delta compression to store objects incredibly efficiently. This reduces the number of file handles the operating system needs to open and saves disk space.
+When you run `git gc`, Git performs a `repack`. It takes thousands of individual loose object files and compresses them into a single "packfile." Packfiles use delta compression to store objects incredibly efficiently. This reduces the number of file handles the operating system needs to open and saves disk space.
 
 ### Commit Graphs
 
@@ -390,7 +390,7 @@ The team is using Git Submodules to include the shared CRDs, and a standard `git
 <details>
 <summary>Question 3: Your team lead asks you to configure sparse checkout so you only download the `services/billing` directory. You run `git sparse-checkout init --cone` and then `git sparse-checkout set services/billing`. Later, you run `git merge main` to get the latest updates. Will this merge process updates to the `services/auth` directory even though you cannot see it?</summary>
 
-Yes, the merge operation will successfully process and record the updates to the `services/auth` directory. Sparse checkout is purely a working tree optimization; it only hides files from your local disk view to save space and index time. The underlying `.git database still downloads and tracks the full history and state of the entire repository during fetch and merge operations. Therefore, your local repository remains perfectly in sync with the remote, and you will not inadvertently revert or ignore changes made by other teams in directories outside your sparse cone.
+Yes, the merge operation will successfully process and record the updates to the `services/auth` directory. Sparse checkout is purely a working tree optimization; it only hides files from your local disk view to save space and index time. The underlying `.git` database still downloads and tracks the full history and state of the entire repository during fetch and merge operations. Therefore, your local repository remains perfectly in sync with the remote, and you will not inadvertently revert or ignore changes made by other teams in directories outside your sparse cone.
 </details>
 
 <details>
