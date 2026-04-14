@@ -97,6 +97,66 @@ flowchart TD
 
 ---
 
+## Monolithic vs Microkernel Architecture
+
+Operating systems generally follow one of two architectural patterns: monolithic or microkernel.
+
+### Monolithic Architecture (Linux)
+
+In a monolithic kernel, all core OS services (file systems, device drivers, network stack, memory management) run together in a single, large program in kernel space.
+
+**Pros:**
+- **Performance**: High performance because all components communicate directly via function calls in the same memory space. No context-switching overhead.
+- **Simplicity of design**: Subsystems can easily access each other's data structures when necessary.
+
+**Cons:**
+- **Stability**: A bug or crash in *any* device driver or subsystem can crash the entire kernel (kernel panic).
+- **Security**: A vulnerability in one component compromises the entire kernel.
+
+### Microkernel Architecture
+
+In a microkernel, the kernel is stripped down to the absolute minimum (just basic process communication, scheduling, and basic memory management). Everything else—device drivers, file systems, network stacks—runs as regular user-space processes.
+
+**Pros:**
+- **Stability**: If the network driver crashes, it just restarts like a normal app. The system stays up.
+- **Security**: Components are isolated. A compromised driver doesn't grant full system access.
+
+**Cons:**
+- **Performance**: High overhead. For a filesystem to talk to a disk driver, it must send messages through the microkernel, requiring expensive context switches between user and kernel space.
+
+> **Pause and predict**: If a monolithic kernel design is fundamentally faster, why do modern operating systems still research and develop microkernels?
+
+### Why Linux Chose Monolithic
+
+When Linus Torvalds started Linux, a famous debate occurred (the Tanenbaum–Torvalds debate). Andrew Tanenbaum argued that microkernels were the future due to their superior design and stability. Torvalds argued that monolithic kernels were simpler to build and performed much better on real-world hardware.
+
+History favored performance. However, Linux adopted a compromise: **Loadable Kernel Modules**. It remains a monolithic kernel, but you can dynamically load and unload components (modules) without rebooting, getting some of the flexibility of a microkernel without sacrificing the performance of a monolithic design.
+
+---
+
+## The Boot Process: How the Kernel Starts
+
+How does the kernel actually get into memory and start running? The boot process follows a strict sequence:
+
+```mermaid
+flowchart TD
+    A[Hardware Power On] --> B[BIOS / UEFI]
+    B --> C[Bootloader<br/>e.g., GRUB]
+    C --> D[Kernel Initialization]
+    D --> E[Init Process<br/>e.g., systemd]
+    E --> F[User Space Ready]
+```
+
+1. **BIOS/UEFI**: When you power on a machine, the hardware runs firmware. It performs hardware checks (POST) and locates the boot device.
+2. **Bootloader (GRUB)**: The firmware loads a tiny program called the bootloader. GRUB (GRand Unified Bootloader) is the most common in Linux. GRUB's job is to load the Linux kernel image and an initial RAM disk (`initramfs`) into memory.
+3. **Kernel Initialization**: The kernel takes control. It extracts the `initramfs`, which contains just enough drivers to mount the real root filesystem (like disk controller drivers). It probes hardware, initializes memory, and sets up core subsystems.
+4. **The Init Process (`systemd`)**: Once the real root filesystem is mounted, the kernel starts the very first user-space program, traditionally called `init`, which is modernly `systemd`. It runs as Process ID (PID) 1.
+5. **User Space**: `systemd` then starts all other necessary services (networking, SSH, Kubernetes components like `kubelet`), bringing the system to a fully operational state.
+
+> **Stop and think**: If a server powers on but halts with an error saying "VFS: Unable to mount root fs on unknown-block(0,0)", which stage of the boot process failed?
+
+---
+
 ## Kernel Space vs User Space
 
 This is the most important concept in this module.
@@ -454,6 +514,26 @@ Test your understanding:
 
 </details>
 
+### Question 6
+**Scenario**: You are maintaining a fleet of bare-metal Kubernetes nodes. After applying a routine operating system update and rebooting, one of the nodes fails to come back online. You attach a console cable and see the system is stuck at a prompt reading `grub>`. What phase of the system startup has failed, and what is missing?
+
+<details>
+<summary>Show Answer</summary>
+
+**The Bootloader phase has failed.** The system successfully passed the BIOS/UEFI hardware checks and handed control to the bootloader (GRUB). However, GRUB was unable to locate its configuration file, the kernel image, or the initial RAM disk (`initramfs`) required to continue the boot process. As a result, it dropped to a minimal command prompt, preventing the Linux kernel from ever being loaded into memory or initialized.
+
+</details>
+
+### Question 7
+**Scenario**: A junior engineer proposes replacing the Linux kernel on your edge devices with a strict microkernel operating system. They argue that edge devices frequently experience unstable network driver crashes, and a microkernel will automatically restart the driver without bringing down the whole system. While their stability argument is valid, what major trade-off will significantly impact the high-throughput packet processing required on these devices?
+
+<details>
+<summary>Show Answer</summary>
+
+**The performance overhead of continuous context switching.** In a microkernel architecture, device drivers (like the network driver) run in isolated user-space processes rather than within the kernel itself. Every time the network driver needs to communicate with the core kernel or the file system to process packets, it must send messages that require expensive context switches between user space and kernel space. For high-throughput packet processing, this constant boundary crossing will severely degrade performance compared to Linux's monolithic architecture, where all subsystems run together in kernel space and communicate directly.
+
+</details>
+
 ---
 
 ## Hands-On Exercise
@@ -537,12 +617,30 @@ docker run --rm centos:7 uname -r 2>/dev/null || \
 - Are the kernel versions the same?
 - What does this prove about container architecture?
 
+#### Part 5: Inspect the Boot Process
+
+```bash
+# 1. View the kernel ring buffer (early boot messages)
+dmesg | head -n 20
+
+# 2. Search for memory initialization in boot logs
+dmesg | grep -i memory
+
+# 3. See how long the system took to boot
+systemd-analyze
+```
+
+**Questions to answer:**
+- What hardware did the kernel detect during the first few seconds of boot?
+- How much time was spent in the kernel versus user space during boot?
+
 ### Success Criteria
 
 - [ ] Identified your kernel version and boot parameters
 - [ ] Listed loaded kernel modules and found container-related ones
 - [ ] Traced system calls and understood the user/kernel boundary
 - [ ] (If Docker available) Demonstrated kernel sharing between containers
+- [ ] Explored kernel boot logs and analyzed startup time
 
 ---
 
