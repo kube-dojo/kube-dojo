@@ -652,16 +652,12 @@ Answer these questions:
 
 1. What domain is this scenario in initially? Why?
 
-   ```text
-   ┌─────────────────────────────────────────────────────────────┐
-   │ Domain: ________________                                    │
-   │                                                             │
-   │ Evidence:                                                   │
-   │ - Cause-effect is: clear / analyzable / only in hindsight   │
-   │ - Experts can: definitely solve it / might need experiments │
-   │ - The urgency is: low / medium / critical                   │
-   └─────────────────────────────────────────────────────────────┘
-   ```
+   > **Domain**: ________________
+   >
+   > **Evidence**:
+   > - Cause-effect is: clear / analyzable / only in hindsight
+   > - Experts can: definitely solve it / might need experiments
+   > - The urgency is: low / medium / critical
 
 2. What specific actions would help move to a better-understood domain?
 
