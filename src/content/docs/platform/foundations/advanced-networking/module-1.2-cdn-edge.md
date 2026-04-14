@@ -127,7 +127,12 @@ Only 2 requests reach the shield. Only 1 reaches origin if missed at the shield.
 
 Enable origin shield in the region closest to your origin. Adds one more cache layer between edge and origin. Reduces origin load by 50-80% in practice.
 
-`Edge (330+ locations) -> Regional Edge Cache (13 locations) -> Origin Shield (1 location you choose) -> Your Origin Server`
+```mermaid
+flowchart LR
+    E["Edge\n(330+ locations)"] --> R["Regional Edge Cache\n(13 locations)"]
+    R --> S["Origin Shield\n(1 location)"]
+    S --> O["Your Origin Server"]
+```
 
 ### 1.3 How CDNs Connect: Peering and Transit
 
@@ -356,14 +361,23 @@ flowchart LR
 **4. Route Optimization (Argo Smart Routing)**
 Internet routing (BGP) optimizes for policy, not speed. CDN backbone routing optimizes for latency.
 
-- Public internet path: Client -> 7 hops -> Origin (120ms)
-- CDN optimized path: Client -> Edge -> 3 hops -> Origin (75ms)
+```mermaid
+flowchart LR
+    subgraph Public Internet Path
+    C1["Client"] --> H1["7 hops"] --> O1["Origin (120ms)"]
+    end
+    subgraph CDN Optimized Path
+    C2["Client"] --> E2["Edge"] --> H2["3 hops"] --> O2["Origin (75ms)"]
+    end
+```
 
 Cloudflare Argo: ~30% latency reduction on average. Measured by testing all paths and choosing fastest.
 
 ### 3.2 Image Optimization at the Edge
 
 Images are 40-60% of most web page weight. Modern CDNs optimize images on the fly.
+
+> **Pause and predict**: If you transform an image based on the raw `Accept` header, how many cache variations might you create? Since `Accept` headers vary widely between browsers, you must normalize them to just the formats your CDN supports (like WebP or AVIF) before generating the cache key, otherwise your hit rate will plummet.
 
 **Transformations**
 Original: `product-photo.png` (4.2 MB, 4000x3000, PNG)
@@ -463,8 +477,8 @@ flowchart LR
     end
 ```
 Edge verifies origin certificate (strict validation). End-to-end encryption.
-- ✓ Data encrypted everywhere. Protects against MITM between edge and origin.
-- ✗ Must manage certificate on origin. Slightly higher latency.
+- **Pro:** Data encrypted everywhere. Protects against MITM between edge and origin.
+- **Con:** Must manage certificate on origin. Slightly higher latency.
 
 ```mermaid
 flowchart LR
@@ -474,8 +488,8 @@ flowchart LR
     end
 ```
 Edge connects to origin via HTTPS but accepts any cert.
-- ✓ Encrypted in transit.
-- ✗ Origin certificate not validated (MITM possible). False sense of security.
+- **Pro:** Encrypted in transit.
+- **Con:** Origin certificate not validated (MITM possible). False sense of security.
 
 ```mermaid
 flowchart LR
