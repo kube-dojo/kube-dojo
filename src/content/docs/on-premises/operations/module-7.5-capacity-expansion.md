@@ -96,7 +96,7 @@ set -euo pipefail
 
 RACK_ID="$1"             # e.g., rack-e
 NODES_FILE="$2"          # hostname,bmc-ip,mgmt-ip
-JOIN_TOKEN="$3"          # from kubeadm token create
+JOIN_TOKEN="$3"          # from kubeadm token create (default TTL is 24h)
 CA_CERT_HASH="$4"        # from kubeadm
 API_SERVER="$5"          # e.g., 10.0.10.10:6443
 
