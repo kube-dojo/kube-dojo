@@ -59,14 +59,14 @@ An agent runs on the spoke cluster and connects outbound to the central hub to r
 
 | Tool | Architecture | Primary Abstraction | Best Use Case |
 | :--- | :--- | :--- | :--- |
-| **Argo CD ApplicationSets** | Push (usually) | `ApplicationSet`, `ClusterGenerator` | 10-50 clusters on flat networks. Developer-centric GitOps. The controller is merged into core Argo CD. |
-| **Rancher Fleet** | Pull | `GitRepo`, `Bundle`, `ClusterGroup` | Edge deployments (1000+ clusters). Tight integration with Rancher. (Proprietary, non-CNCF project). |
-| **Open Cluster Management** | Pull | `ManagedCluster`, `ManifestWork`, `Placement` | Bare metal, complex dynamic targeting, policy orchestration. (CNCF Sandbox project). |
-| **Karmada** | Push/Pull | `PropagationPolicy`, `ResourceBinding` | Multi-cloud federation, stretching a single deployment across clusters. (CNCF Incubating project). |
+| **Argo CD ApplicationSets** | Push (usually) | `ApplicationSet`, `ClusterGenerator` | 10-50 clusters on flat networks. Developer-centric GitOps. Stable at v3.3.x. The controller is merged into core Argo CD. |
+| **Rancher Fleet** | Pull | `GitRepo`, `Bundle`, `ClusterGroup` | Edge deployments (1000+ clusters). Stable at v0.15.0. (Proprietary, non-CNCF project). |
+| **Open Cluster Management** | Pull | `ManagedCluster`, `ManifestWork`, `Placement` | Bare metal, complex dynamic targeting, policy orchestration. Stable at v1.2.0. (CNCF Sandbox project). |
+| **Karmada** | Push/Pull | `PropagationPolicy`, `ResourceBinding` | Multi-cloud federation, stretching a single deployment across clusters. Stable at v1.17.1. (CNCF Incubating project). |
 
 :::note
 **Cluster API (CAPI) vs. Fleet Management**
-CAPI provisions the *infrastructure* (machines, control planes, etcd). Fleet management provisions the *payload* (workloads, policies, RBAC). While CAPI provides a `Cluster` CRD, fleet managers use their own constructs (e.g., `ManagedCluster`) to handle the post-provisioning lifecycle. You typically use CAPI to create the cluster, and a post-hook triggers the fleet manager agent installation.
+While CAPI (stable at v1.12.5) provisions the *infrastructure* (machines, control planes, etcd), fleet management provisions the *payload* (workloads, policies, RBAC). While CAPI provides a `Cluster` CRD, fleet managers use their own constructs (e.g., `ManagedCluster`) to handle the post-provisioning lifecycle. You typically use CAPI to create the cluster, and a post-hook triggers the fleet manager agent installation.
 :::
 
 ## Open Cluster Management (OCM) Deep Dive
@@ -97,7 +97,7 @@ In production bare metal, automate CSR approval using a custom controller that v
 
 ## Argo CD ApplicationSets at Scale
 
-While OCM handles the "how to deliver", Argo CD (now stable at v3.x) is often still used for "what to deliver". `ApplicationSets` allow you to template Argo CD `Applications` across multiple clusters. The ApplicationSet controller is no longer standalone and is fully integrated into core Argo CD.
+While OCM handles the "how to deliver", Argo CD (now stable at v3.3.x) is often still used for "what to deliver". `ApplicationSets` allow you to template Argo CD `Applications` across multiple clusters. The ApplicationSet controller is no longer standalone and is fully integrated into core Argo CD.
 
 When operating at fleet scale (100+ clusters), rely on the **Matrix Generator** combined with a Git directory structure, rather than configuring each cluster explicitly.
 
@@ -323,10 +323,10 @@ kubectl get deployments -n default
 *Correct Answer: B*
 *Rationale:* A `ManifestWork` encapsulates all target Kubernetes resources as nested JSON within its own Custom Resource Definition structure. Etcd imposes a hard limit on the size of a single object (typically 1.5MB), meaning massive payloads will be rejected by the hub's API server before they ever reach the spoke clusters. To circumvent this, platform engineers must split large configurations across multiple `ManifestWorks` or use the fleet manager to bootstrap a lightweight continuous delivery agent that pulls the heavy manifests directly from a Git repository. Option C is incorrect because the failure occurs at the hub API server during the initial apply, not during the Klusterlet's retrieval phase.
 
-**4. The `hubAcceptsClient` field on an OCM `ManagedCluster` resource is currently set to `false`. What state is the cluster registration in?**
+**4. An automation script on your central Hub cluster has just detected a new `ManagedCluster` resource created by a bare-metal spoke cluster, but its `hubAcceptsClient` field remains set to `false`. What is the operational state of this spoke cluster, and what must happen next?**
 *   A) The Spoke cluster has successfully joined but has no active `ManifestWorks`.
 *   B) The Klusterlet agent has crashed on the Spoke cluster.
-*   C) The Spoke has submitted a Certificate Signing Request (CSR), but the Hub administrator has not yet authorized the spoke to join.
+*   C) The Spoke has submitted a Certificate Signing Request (CSR), but the Hub administrator (or automation) has not yet authorized the spoke to join.
 *   D) The Hub API server is currently unreachable due to network partition.
 
 *Correct Answer: C*
