@@ -372,7 +372,7 @@ In this exercise, you will build a foundational GitOps repository structure from
 
 ### Setup Instructions
 
-Ensure you have a modern terminal, `git`, and the `kustomize` CLI tool installed. Alternatively, if you have `kubectl` installed (version 1.14+), it has Kustomize functionality built-in via the `-k` flag.
+Ensure you have a modern terminal, `git`, and the `kustomize` CLI tool installed. Alternatively, if you have `kubectl` installed (version 1.35+), it has Kustomize functionality built-in via the `-k` flag.
 
 Create a new working directory for this exercise:
 ```bash
