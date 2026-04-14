@@ -82,7 +82,7 @@ classDiagram
 | USB token | YubiHSM 2 | 50 ops/sec | $650 | Small deployments, dev/test |
 | Cloud HSM | AWS CloudHSM, Azure Cloud HSM, Google Cloud HSM | Varies | Varies | Hybrid environments |
 
-For hybrid deployments using cloud providers as a trust anchor, verify current validation limits: AWS CloudHSM `hsm2m.medium` is FIPS 140-3 Level 3 certified (the legacy `hsm1.medium` was archived to historical status January 4, 2026). Azure's modern offering is Azure Cloud HSM, utilizing Marvell LiquidSecurity HSMs validated to FIPS 140-3 Level 3, which succeeds the legacy Azure Dedicated HSM. Google Cloud HSM is backed by FIPS 140-2 Level 3 validated hardware.
+For hybrid deployments using cloud providers as a trust anchor, verify current validation limits: AWS CloudHSM `hsm2m.medium` is FIPS 140-3 Level 3 certified (the legacy `hsm1.medium` was archived to historical status January 4, 2026). Note that while AWS CloudHSM charges per HSM per hour, third-party sources conflict on the exact rate, so verify directly at aws.amazon.com/cloudhsm/pricing/. Azure's modern offering is Azure Cloud HSM, utilizing Marvell LiquidSecurity HSMs validated to FIPS 140-3 Level 3, which succeeds the legacy Azure Dedicated HSM. Google Cloud HSM is backed by FIPS 140-2 Level 3 validated hardware.
 
 ---
 
@@ -115,7 +115,7 @@ flowchart LR
 
 ### Verifying TPM and Measured Boot on Kubernetes Nodes
 
-These commands check whether TPM 2.0 hardware is present and read the Platform Configuration Registers that store the hash chain from boot. Linux TPM 2.0 driver support stabilized from kernel 4.9, with the `/dev/tpmrm0` resource-manager interface available from kernel 4.12.
+These commands check whether TPM 2.0 hardware is present and read the Platform Configuration Registers that store the hash chain from boot. Linux TPM 2.0 driver support stabilized from kernel 4.9, with the `/dev/tpmrm0` resource-manager interface available from kernel 4.12. *(Note: The current version of the underlying `tpm2-tss` library cannot be confirmed via standard search results and must be checked directly on the GitHub releases page. Additionally, while secondary sources claim kernel 6.10 enabled `CONFIG_TCG_TPM2_HMAC` by default for TPM 2.0 session encryption, this remains unverified against primary kernel.org changelogs.)*
 
 ```bash
 # Check if TPM 2.0 is available
@@ -346,7 +346,7 @@ flowchart TB
 
 While LUKS auto-unlock protects data at rest, it does not prevent a booted (but later compromised) node from joining the Kubernetes cluster. To verify bare-metal server integrity before or during cluster admission, you must implement remote node attestation using the TPM:
 
-- **Keylime**: A CNCF project providing scalable remote boot attestation and runtime integrity measurement using TPM hardware.
+- **Keylime**: A CNCF project providing scalable remote boot attestation and runtime integrity measurement using TPM hardware. (Note: Keylime entered CNCF as a Sandbox project in September 2020; its current 2026 maturity level should be verified directly on the CNCF project page).
 - **SPIRE (SPIFFE)**: Includes a built-in `tpm_devid` node attestor for TPM 2.0 + DevID certificate-based node attestation. The community `bloomberg/spire-tpm-plugin` also provides agent and server plugins enabling TPM 2.0 node attestation via TPM credential activation.
 - **Cloud integration**: For hybrid clusters using managed control planes like AKS, Trusted Launch integrates a vTPM (TPM 2.0 compliant) for remote attestation of AKS node VMs, ensuring secure boot across environments.
 
@@ -386,17 +386,7 @@ Scenario: Your production Vault cluster uses HSM auto-unseal. The HSM appliance 
 <summary>Answer</summary>
 
 **Immediate impact on running workloads: None.**
-Running pods that already have their secrets (injected via Vault Agent or CSI driver) will continue operating normally. Kubernetes does not re-fetch secrets continuously; they are cached in pod memory or tmpfs volumes, so existing workloads remain stable despite the HSM failure.
-
-**What breaks:**
-1. New pods cannot start if they require secrets from Vault (Vault Agent sidecar init will timeout).
-2. Secret rotation stops -- any automated rotation policies will fail.
-3. If a Vault pod restarts, it cannot unseal because the HSM is unavailable to perform the unseal operation.
-
-**Recovery plan:**
-1. **Short-term (minutes)**: If you have an HSM HA pair, the standby HSM takes over automatically. Vault auto-unseal retries and succeeds.
-2. **If no HA HSM**: Vault pods that are already running and unsealed continue serving requests. Do not restart them. Contact the HSM vendor for emergency replacement.
-3. **Disaster recovery**: If all Vault pods restart before the HSM is restored, you cannot unseal Vault. Recovery keys generated during `vault operator init` with HSM auto-unseal are for recovery operations (e.g., generating a new root token) -- they **cannot** be used to unseal Vault. You must either restore the HSM, provision a replacement HSM with the same key material (from HSM backups), or migrate the seal type.
+Running pods that already have their secrets (injected via Vault Agent or CSI driver) will continue operating normally because Kubernetes does not continuously re-fetch secrets. Secrets are cached in pod memory or tmpfs volumes, meaning existing workloads remain stable despite the HSM failure. However, new pods requiring Vault secrets will fail to start due to init container timeouts, and automated secret rotation policies will halt. Most critically, if a Vault pod restarts, it will be unable to unseal since it cannot communicate with the HSM to unwrap its master key. To recover, if an HA HSM pair is not available, you must rely on HSM backups to provision a replacement, as the Vault recovery keys generated during initialization cannot unseal the cluster.
 </details>
 
 ### Question 2
@@ -405,16 +395,8 @@ Scenario: A rogue datacenter technician steals a physical node (disk, motherboar
 <details>
 <summary>Answer</summary>
 
-**Stolen disk scenario:**
-An attacker removes the disk from the server. They connect it to a different machine, which has a different TPM with different PCR values (or no TPM at all). Because the LUKS key was sealed specifically to the original server's TPM PCRs, the TPM on the new machine cannot unseal the key. The disk remains encrypted and unreadable, effectively defeating the attack.
-
-**Stolen server scenario:**
-An attacker steals the entire server -- disk, motherboard, and TPM chip together. On normal power-on, the exact same firmware runs, the same bootloader loads, and the identical kernel starts. Consequently, the PCR values perfectly match what the TPM expects. The TPM then automatically releases the LUKS key, decrypting the disk and granting the attacker full access.
-
-**Mitigations for stolen server:**
-1. **PIN + TPM**: Require a boot-time PIN in addition to TPM (`systemd-cryptenroll --tpm2-with-pin=yes`). The attacker needs both the server and the secret PIN.
-2. **Network-bound disk encryption (NBDE)**: Use Clevis + Tang. The LUKS key is sealed to a network server (Tang) that is only reachable on the internal datacenter network. A stolen server outside the network cannot reach Tang and cannot unseal.
-3. **Remote attestation**: The server must attest to a central service (like Keylime) before the OS fully boots. If attestation fails (wrong network, unexpected location), the boot process halts.
+**Stolen disk vs Stolen server:**
+When an attacker steals only the disk and connects it to a different machine, the new machine has a different TPM (or no TPM) with different PCR values. Because the LUKS key was sealed specifically to the original server's TPM PCRs, the new TPM will refuse to unseal the key, leaving the disk fully encrypted and protecting your data. Conversely, if an attacker steals the entire server (disk, motherboard, and TPM chip together), the exact same firmware, bootloader, and kernel will load upon power-on. This causes the PCR values to perfectly match what the TPM expects, prompting the TPM to automatically release the LUKS key and grant the attacker full access. To mitigate the stolen server scenario, you must implement a boot-time PIN, Network-Bound Disk Encryption (NBDE) via Tang, or remote attestation via Keylime to halt the boot process if the node leaves your physical datacenter.
 </details>
 
 ### Question 3
@@ -424,16 +406,7 @@ Scenario: Your organization is migrating from AWS to on-premises. The security t
 <summary>Answer</summary>
 
 **Architecture: Kubernetes KMS v2 Provider with Vault + HSM.**
-
-The envelope encryption chain functions identically to cloud KMS providers:
-1. **Kubernetes API server** receives a request to create a Secret.
-2. The API server calls the **KMS v2 plugin** via a Unix socket (gRPC).
-3. The KMS plugin calls **Vault's Transit secrets engine** to encrypt the data encryption key (DEK).
-4. Vault's Transit engine uses a key encryption key (KEK) stored within Vault.
-5. Vault's seal wraps the KEK using the **HSM** via PKCS#11. The HSM master key never leaves the hardware boundary.
-6. The encrypted DEK and encrypted Secret are ultimately stored in **etcd**.
-
-This effectively replicates the AWS KMS architecture on-premises. The key advantage over cloud KMS is data sovereignty: you physically own the HSM, and the key material resides entirely in your datacenter, ensuring no third party can be compelled to provide access to your keys.
+To satisfy this requirement, you must configure the Kubernetes API server to use the KMS v2 provider pointing to a Vault instance backed by an HSM. When a Secret is created, the API server sends the data encryption key (DEK) to Vault's Transit secrets engine via the KMS plugin. Vault encrypts this DEK using its internal key encryption key (KEK), which is itself securely wrapped by the HSM via the PKCS#11 interface. Because the master key resides permanently within the HSM's hardware boundary and never enters the Kubernetes control plane or Vault's memory, this architecture fulfills the strict security mandate while maintaining automatic encryption of etcd Secrets. This setup effectively mirrors cloud-native KMS behavior while retaining complete on-premises data sovereignty.
 </details>
 
 ### Question 4
@@ -442,13 +415,8 @@ Scenario: A junior engineer proposes deploying SoftHSM to production to save the
 <details>
 <summary>Answer</summary>
 
-**SoftHSM is purely a software implementation of the PKCS#11 interface.** It stores keys in files on the filesystem, protected only by standard OS file permissions. While it implements the exact same API as a real HSM, making it ideal for development and testing integrations, it lacks any of the structural security guarantees required for production.
-
-**Why it is unacceptable for production:**
-1. **No hardware protection**: Keys are stored in regular files. Anyone with root access (or a disk image) can extract them natively. A real HSM stores keys in tamper-proof hardware, and attempting to physically extract them triggers immediate key destruction.
-2. **No FIPS certification**: SoftHSM cannot be FIPS 140-2/3 certified because it fundamentally lacks hardware security boundaries. Regulated industries strictly require FIPS-certified hardware for cryptographic key storage.
-3. **Keys in memory**: SoftHSM keys exist in process memory, leaving them highly vulnerable to memory dumps, cold boot attacks, and swap file extraction. Physical HSMs isolate keys within dedicated security processors where memory is cleared upon tamper detection.
-4. **No hardware audit trail**: SoftHSM does not generate a secure hardware audit log. HSMs produce immutable, tamper-evident logs of every single cryptographic operation performed.
+**Why SoftHSM is unacceptable for production:**
+SoftHSM is purely a software implementation of the PKCS#11 interface that stores keys in standard filesystem files, making them vulnerable to native extraction by anyone with root access or a disk image. While it perfectly mimics the API of a real HSM for integration testing, it fundamentally lacks the tamper-proof hardware boundaries required to protect keys from physical or memory-level attacks. Furthermore, SoftHSM keys reside in process memory, leaving them exposed to memory dumps and cold boot attacks, whereas real HSMs process keys entirely within isolated security co-processors. Finally, regulated industries require FIPS 140-2 or 140-3 certification, which SoftHSM cannot achieve without a physical hardware boundary, and it cannot provide the immutable, tamper-evident audit logs of cryptographic operations that enterprise compliance demands.
 </details>
 
 ---
