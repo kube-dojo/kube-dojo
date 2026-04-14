@@ -52,7 +52,7 @@ The crucial lesson from this outage is that Backstage plugin development is not 
 1. **Massive Ecosystem**: The Backstage community maintains a public directory at `backstage.io/plugins` and a dedicated `backstage/community-plugins` repository governed strictly under the Apache License 2.0. The Certified Backstage Associate (CBA) certification itself is officially offered by the CNCF.
 2. **Strict Release Cadence**: As a CNCF Incubating project (not yet Graduated), Backstage follows a monthly main release line (shipping the Tuesday before the third Wednesday of each month) and a weekly `next` release line on Tuesdays for early access. The `next` release line offers early access to upcoming features with fewer stability guarantees.
 3. **Runtime Support Windows**: Backstage strictly supports exactly two adjacent even-numbered Node.js LTS releases (e.g., Node.js 22 and 24 as of v1.46.0) and the last three major TypeScript versions at any given time. React 18 is currently supported, with React 19 under evaluation.
-4. **The New Default**: The latest confirmed stable release is v1.49.0 (released 2026-01-28; note that later 1.50+ versions may have shipped by now but are unconfirmed in available search records). As of v1.49.0, newly created Backstage apps use the New Frontend System by default. The old `--next` CLI flag has been removed and replaced by a `--legacy` flag.
+4. **The New Default**: The Backstage GitHub releases confirm v1.49.0 as the stable release as of 2026-01-28. Given the documented monthly release cadence, versions up to 1.51.x may have shipped by the time of writing (April 2026), but v1.49.0 remains our verified baseline. As of v1.49.0, newly created Backstage apps use the New Frontend System by default. The old `--next` CLI flag has been removed and replaced by a `--legacy` flag.
 
 ---
 
@@ -119,6 +119,7 @@ yarn new --select plugin
 ```
 
 > **Pause and predict**: What package naming convention does the CLI follow for new plugins?
+>
 > The generated package follows the convention `@<scope>/plugin-<pluginId>` for the main package. If your plugin requires additional roles, those packages use suffixes like `-react`, `-common`, `-backend`, `-node`, or `-backend-module-<moduleId>`.
 
 The generated plugin structure:
@@ -1333,6 +1334,7 @@ cd my-backstage-app
 ```
 
 > **Pause and predict**: Why did we use the `--legacy` flag here? 
+>
 > As of Backstage v1.49.0, the New Frontend System is the default. Since this exercise focuses on the extensively-tested core API (`createPlugin`), we scaffold using the legacy frontend flag.
 
 **Checkpoint**: Verify the app was created successfully by checking the directory structure.
