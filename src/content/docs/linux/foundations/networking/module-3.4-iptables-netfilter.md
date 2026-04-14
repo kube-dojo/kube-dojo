@@ -104,16 +104,23 @@ flowchart TD
 
 ### Rule Structure
 
-```
+```bash
 iptables -t <table> -A <chain> <match> -j <target>
+```
 
-Example:
-iptables -t filter -A INPUT -p tcp --dport 22 -j ACCEPT
-         │         │        │                   │
-         │         │        │                   └── Action: Accept
-         │         │        └── Match: TCP port 22
-         │         └── Append to INPUT chain
-         └── Table: filter (default)
+```mermaid
+flowchart TD
+    Command["iptables -t filter -A INPUT -p tcp --dport 22 -j ACCEPT"]
+    
+    Table["Table: filter (default)"]
+    Chain["Append to INPUT chain"]
+    Match["Match: TCP port 22"]
+    Target["Action: Accept"]
+    
+    Command -->|"-t filter"| Table
+    Command -->|"-A INPUT"| Chain
+    Command -->|"-p tcp --dport 22"| Match
+    Command -->|"-j ACCEPT"| Target
 ```
 
 ### Common Targets
@@ -171,6 +178,8 @@ sudo iptables -A INPUT -p tcp --dport 443 -j ACCEPT
 # Drop everything else
 sudo iptables -A INPUT -j DROP
 ```
+
+> **Pause and predict**: If you forget to add the ESTABLISHED,RELATED rule, what will happen when you try to curl an external website from this host?
 
 ### NAT Examples
 
@@ -295,7 +304,7 @@ sudo iptables -L cali-* -n 2>/dev/null | head -50
 
 ### When to Use What
 
-```
+```text
 Small cluster (< 100 services): iptables is fine
 Medium cluster (100-1000 services): Consider IPVS
 Large cluster (1000+ services): nftables or eBPF (Cilium)
@@ -331,6 +340,8 @@ sudo tail -f /var/log/kern.log | grep TRACE
 
 # Don't forget to remove trace rules when done!
 ```
+
+> **Stop and think**: Why is it critical to remove the TRACE rules immediately after you finish debugging a busy production node?
 
 ### Common Issues
 
@@ -400,7 +411,7 @@ You have deployed a new microservice with three replica Pods, and exposed it via
 
 Using the **statistic module** with probability:
 
-```
+```text
 -m statistic --mode random --probability 0.5 -j KUBE-SEP-AAA
 -j KUBE-SEP-BBB
 ```
