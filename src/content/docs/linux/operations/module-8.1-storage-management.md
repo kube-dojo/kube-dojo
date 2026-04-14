@@ -752,7 +752,7 @@ When managing storage for Kubernetes nodes, the approach differs significantly f
 
 3.  **Storage Provisioning**:
     *   **Static Provisioning**: An administrator manually creates PVs, which Pods then claim via PVCs.
-    *   **Dynamic Provisioning**: StorageClasses are used to dynamically provision PVs on demand when a PVC is created. This typically relies on Container Storage Interface (CSI) drivers specific to the storage system (e.g., `aws-ebs`, `azure-disk`, `nfs-subdir-external-provisioner`).
+    *   **Dynamic Provisioning**: StorageClasses are used to dynamically provision PVs on demand when a PVC is created. For most production Kubernetes deployments (including current v1.35+ releases), this typically relies on Container Storage Interface (CSI) drivers specific to the storage system (e.g., `aws-ebs`, `azure-disk`, `nfs-subdir-external-provisioner`).
 
 4.  **Swap on Kubernetes Nodes**:
     *   Kubernetes generally recommends **disabling swap** on worker nodes. The Kubelet (the agent that runs on each node) has a configuration option `failSwapOn` which defaults to true, meaning if swap is enabled, the Kubelet will fail to start. This is because swap can lead to unpredictable performance, especially for memory-sensitive applications, and can interfere with Kubernetes' memory management and scheduling decisions. While it can be manually disabled, it's generally best practice to design applications to run within their allocated memory limits.
@@ -1002,4 +1002,3 @@ sudo sed -i '/vg_practice/d' /etc/fstab
 ## Next Module
 
 Continue with [Module 8.2: Network Administration](../module-8.2-network-administration/) to cover firewall configuration, NAT, network bonding, and other LFCS networking topics.
----
