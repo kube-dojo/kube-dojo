@@ -33,27 +33,28 @@ In this module, you will learn how GCP VPCs differ fundamentally from AWS VPCs, 
 
 If you are coming from AWS, this is the most important mental model shift: **in GCP, a VPC is a global resource. Subnets are regional, but they all belong to the same global VPC.** There are no availability zone-scoped subnets.
 
-```text
-  AWS Model                               GCP Model
-  ─────────                               ─────────
-  ┌────────── VPC (us-east-1) ──────┐     ┌──────────── VPC (global) ────────────────┐
-  │                                 │     │                                           │
-  │  ┌── AZ: us-east-1a ──┐        │     │  ┌── Region: us-central1 ──┐              │
-  │  │  Subnet: 10.0.1/24 │        │     │  │  Subnet: 10.0.1.0/24   │              │
-  │  └─────────────────────┘        │     │  │  (spans all zones in   │              │
-  │                                 │     │  │   us-central1)          │              │
-  │  ┌── AZ: us-east-1b ──┐        │     │  └────────────────────────┘              │
-  │  │  Subnet: 10.0.2/24 │        │     │                                           │
-  │  └─────────────────────┘        │     │  ┌── Region: europe-west1 ──┐            │
-  │                                 │     │  │  Subnet: 10.0.2.0/24     │            │
-  └─────────────────────────────────┘     │  │  (spans all zones in     │            │
-                                          │  │   europe-west1)           │            │
-  ┌────────── VPC (eu-west-1) ──────┐     │  └──────────────────────────┘            │
-  │  Needs VPC Peering to reach     │     │                                           │
-  │  the us-east-1 VPC!             │     │  VMs in these subnets can communicate    │
-  └─────────────────────────────────┘     │  using internal IPs directly---no         │
-                                          │  peering or transit gateway needed!        │
-                                          └───────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph AWS [AWS Model]
+        direction TB
+        subgraph AWS_VPC1 [VPC us-east-1]
+            AWS_Sub1[AZ: us-east-1a<br/>Subnet: 10.0.1/24]
+            AWS_Sub2[AZ: us-east-1b<br/>Subnet: 10.0.2/24]
+        end
+        subgraph AWS_VPC2 [VPC eu-west-1]
+            AWS_Note[Needs VPC Peering to reach<br/>the us-east-1 VPC!]
+        end
+        AWS_VPC1 -.->|Peering required| AWS_VPC2
+    end
+
+    subgraph GCP [GCP Model]
+        direction TB
+        subgraph GCP_VPC [VPC global]
+            GCP_Sub1[Region: us-central1<br/>Subnet: 10.0.1.0/24<br/>spans all zones]
+            GCP_Sub2[Region: europe-west1<br/>Subnet: 10.0.2.0/24<br/>spans all zones]
+            GCP_Sub1 <-->|Internal routing automatic| GCP_Sub2
+        end
+    end
 ```
 
 > **Stop and think**: If a GCP VPC spans the globe by default, what happens if an application team in `europe-west1` requests a new subnet with the CIDR block `10.10.0.0/20` when the `us-central1` team is already using that exact range? How does this differ from managing CIDRs across multiple AWS regions?
@@ -296,32 +297,22 @@ gcloud compute firewall-policies associations create \
 
 Cloud NAT allows VMs without external IP addresses to make outbound connections to the internet (for package updates, API calls, etc.) without exposing them to inbound traffic.
 
-```text
-  ┌────────────────────────────────────────────────────────────┐
-  │  VPC: prod-vpc                                              │
-  │                                                             │
-  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐        │
-  │  │ VM-1        │  │ VM-2        │  │ VM-3        │        │
-  │  │ 10.10.0.2   │  │ 10.10.0.3   │  │ 10.10.0.4   │        │
-  │  │ (no ext IP) │  │ (no ext IP) │  │ (no ext IP) │        │
-  │  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘        │
-  │         │                │                │                │
-  │         └───────────┬────┘────────────────┘                │
-  │                     │                                       │
-  │              ┌──────▼──────┐                                │
-  │              │ Cloud Router │  ← Manages BGP routing        │
-  │              └──────┬──────┘                                │
-  │                     │                                       │
-  │              ┌──────▼──────┐                                │
-  │              │  Cloud NAT   │  ← Translates internal IPs    │
-  │              │  Gateway     │     to external NAT IPs        │
-  │              └──────┬──────┘                                │
-  │                     │                                       │
-  └─────────────────────┼───────────────────────────────────────┘
-                        │
-                        ▼
-                   Internet
-              (outbound only)
+```mermaid
+flowchart TD
+    subgraph VPC [VPC: prod-vpc]
+        VM1[VM-1<br/>10.10.0.2<br/>no ext IP]
+        VM2[VM-2<br/>10.10.0.3<br/>no ext IP]
+        VM3[VM-3<br/>10.10.0.4<br/>no ext IP]
+        CR[Cloud Router<br/>Manages BGP routing]
+        NAT[Cloud NAT Gateway<br/>Translates internal IPs<br/>to external NAT IPs]
+        
+        VM1 --> CR
+        VM2 --> CR
+        VM3 --> CR
+        CR --> NAT
+    end
+    Internet((Internet<br/>outbound only))
+    NAT --> Internet
 ```
 
 ### Setting Up Cloud NAT
@@ -434,37 +425,38 @@ Shared VPC is the mechanism that allows multiple GCP projects to share a single 
 
 ### Architecture
 
-```text
-  ┌─────────────────────────────────────────────────────────────────┐
-  │  HOST PROJECT (shared-networking)                                │
-  │  ┌──────────────────── Shared VPC ────────────────────────────┐ │
-  │  │                                                             │ │
-  │  │  Subnet: web-tier        Subnet: app-tier                  │ │
-  │  │  10.10.0.0/24            10.10.1.0/24                      │ │
-  │  │  Region: us-central1     Region: us-central1               │ │
-  │  │                                                             │ │
-  │  │  Subnet: data-tier       Subnet: europe-web                │ │
-  │  │  10.10.2.0/24            10.11.0.0/24                      │ │
-  │  │  Region: us-central1     Region: europe-west1              │ │
-  │  │                                                             │ │
-  │  │  Firewall Rules    Cloud NAT    Cloud Router               │ │
-  │  │  (centrally managed)                                        │ │
-  │  └─────────┬──────────────┬────────────────┬──────────────────┘ │
-  │            │              │                │                     │
-  └────────────┼──────────────┼────────────────┼─────────────────────┘
-               │              │                │
-    ┌──────────▼───┐  ┌──────▼────────┐  ┌────▼──────────┐
-    │ SERVICE      │  │ SERVICE       │  │ SERVICE       │
-    │ PROJECT:     │  │ PROJECT:      │  │ PROJECT:      │
-    │ team-a       │  │ team-b        │  │ team-c        │
-    │              │  │               │  │               │
-    │ Uses:        │  │ Uses:         │  │ Uses:         │
-    │ - web-tier   │  │ - app-tier    │  │ - data-tier   │
-    │ - app-tier   │  │ - data-tier   │  │ - europe-web  │
-    │              │  │               │  │               │
-    │ Creates VMs, │  │ Creates VMs,  │  │ Creates VMs,  │
-    │ GKE, etc.    │  │ Cloud Run     │  │ Cloud SQL     │
-    └──────────────┘  └───────────────┘  └───────────────┘
+```mermaid
+flowchart TD
+    subgraph HostProject [HOST PROJECT: shared-networking]
+        subgraph SharedVPC [Shared VPC]
+            direction TB
+            Sub1[Subnet: web-tier<br/>10.10.0.0/24<br/>Region: us-central1]
+            Sub2[Subnet: app-tier<br/>10.10.1.0/24<br/>Region: us-central1]
+            Sub3[Subnet: data-tier<br/>10.10.2.0/24<br/>Region: us-central1]
+            Sub4[Subnet: europe-web<br/>10.11.0.0/24<br/>Region: europe-west1]
+            
+            CentralRules[Firewall Rules, Cloud NAT, Cloud Router<br/>centrally managed]
+            Sub1 ~~~ Sub2
+            Sub3 ~~~ Sub4
+            Sub2 ~~~ CentralRules
+        end
+    end
+
+    subgraph SP_A [SERVICE PROJECT: team-a]
+        A_Uses[Uses:<br/>- web-tier<br/>- app-tier<br/><br/>Creates VMs, GKE, etc.]
+    end
+
+    subgraph SP_B [SERVICE PROJECT: team-b]
+        B_Uses[Uses:<br/>- app-tier<br/>- data-tier<br/><br/>Creates VMs, Cloud Run]
+    end
+
+    subgraph SP_C [SERVICE PROJECT: team-c]
+        C_Uses[Uses:<br/>- data-tier<br/>- europe-web<br/><br/>Creates VMs, Cloud SQL]
+    end
+
+    SharedVPC --> SP_A
+    SharedVPC --> SP_B
+    SharedVPC --> SP_C
 ```
 
 > **Stop and think**: In a Shared VPC architecture, a Host Project administrator grants a Service Project developer the `compute.networkUser` role. If no IAM conditions are applied to this binding, what is the immediate blast radius of this permission, and how could a compromised developer account exploit it across different environments?
@@ -582,43 +574,43 @@ gcloud compute networks peerings create peer-b-to-a \
 <details>
 <summary>1. You are migrating a multi-tier application from AWS to GCP. In AWS, the frontend in us-east-1 communicates with a backend in eu-west-1 via an inter-region VPC Peering connection. In GCP, you deploy the frontend to us-central1 and the backend to europe-west1 within the same Custom Mode VPC. What additional networking resources must you deploy to enable private IP communication between these two tiers?</summary>
 
-None. In GCP, a single VPC is a global resource that automatically spans all regions without requiring peering, transit gateways, or VPNs. Subnets are regional, but instances in different regions within the same VPC can natively route to one another using internal IP addresses. This fundamentally simplifies multi-region architectures by treating the global backbone as a single contiguous network space.
+None. In GCP, a single VPC is a global resource that automatically spans all regions without requiring peering, transit gateways, or VPNs. Subnets are regional, but instances in different regions within the same VPC can natively route to one another using internal IP addresses. This fundamentally simplifies multi-region architectures by treating the global backbone as a single contiguous network space. By not needing complex overlays or extra hops, network latency and administrative overhead are greatly reduced.
 </details>
 
 <details>
 <summary>2. During a security audit, your team discovers that a junior developer accidentally opened port 22 to the public internet on a critical production database by adding a string to the instance metadata. You need to ensure that firewall rules can only be applied to instances by principals who have explicitly been granted IAM privileges for that specific role. Which firewall target type should you migrate to, and why?</summary>
 
-You should migrate from target network tags to target service accounts. Network tags are arbitrary strings with no strict validation, meaning anyone with `compute.instances.setTags` permission can add a tag and unintentionally expose a VM to an existing firewall rule. Service accounts, by contrast, are IAM identities; to attach one to a VM, a user must possess the `iam.serviceAccounts.actAs` permission on that specific service account. This guarantees that only authorized identities can bind a VM to the permissions and network access rules associated with that role, preventing silent failures and privilege escalation.
+You should migrate from target network tags to target service accounts. Network tags are arbitrary strings with no strict validation, meaning anyone with `compute.instances.setTags` permission can add a tag and unintentionally expose a VM to an existing firewall rule. Service accounts, by contrast, are IAM identities; to attach one to a VM, a user must possess the `iam.serviceAccounts.actAs` permission on that specific service account. This guarantees that only authorized identities can bind a VM to the permissions and network access rules associated with that role, preventing silent failures and privilege escalation. This structural difference ensures security rules are fundamentally tied to authenticated machine identities rather than fragile, human-typed strings.
 </details>
 
 <details>
 <summary>3. A batch processing VM in us-central1 has only an internal IP address and needs to upload 500 GB of processed data to a Cloud Storage bucket every night. The infrastructure team proposes deploying a Cloud NAT gateway to allow the VM to reach the internet and access the bucket. Why is this a suboptimal design, and what feature should be enabled instead?</summary>
 
-Deploying Cloud NAT for this use case is suboptimal because it routes the traffic through a NAT gateway to the public internet, which incurs unnecessary egress data transfer costs and introduces a potential bottleneck. Instead, you should enable Private Google Access on the VM's subnet. Private Google Access allows resources with only internal IP addresses to reach Google APIs and services directly through Google's internal backbone. This approach is significantly more cost-effective, faster, and keeps the data entirely within the Google network boundary.
+Deploying Cloud NAT for this use case is suboptimal because it routes the traffic through a NAT gateway to the public internet, which incurs unnecessary egress data transfer costs and introduces a potential bottleneck. Instead, you should enable Private Google Access on the VM's subnet. Private Google Access allows resources with only internal IP addresses to reach Google APIs and services directly through Google's internal backbone. This approach is significantly more cost-effective, faster, and keeps the data entirely within the Google network boundary. Furthermore, utilizing Private Google Access reduces the public attack surface since data never traverses the public internet to reach the destination bucket.
 </details>
 
 <details>
 <summary>4. Your enterprise has 50 application teams, each requiring their own GCP project for billing and resource isolation. The security team mandates that all outbound internet traffic must be funneled through a centralized set of firewall rules and a single pair of Cloud NAT gateways. Which GCP networking architecture pattern best fulfills both the application teams' need for project isolation and the security team's need for centralized network control?</summary>
 
-The organization should implement a Shared VPC architecture. In this model, a centralized Host Project owns the VPC network, subnets, firewall rules, and Cloud NAT gateways, managed strictly by the network and security teams. The 50 application teams are given their own Service Projects, which are attached to the Host Project, allowing them to deploy compute resources into the shared subnets. This separation of concerns ensures application teams maintain autonomy over their instances while the security team retains absolute control over the network boundary and routing policies.
+The organization should implement a Shared VPC architecture. In this model, a centralized Host Project owns the VPC network, subnets, firewall rules, and Cloud NAT gateways, managed strictly by the network and security teams. The 50 application teams are given their own Service Projects, which are attached to the Host Project, allowing them to deploy compute resources into the shared subnets. This separation of concerns ensures application teams maintain autonomy over their instances while the security team retains absolute control over the network boundary and routing policies. Without Shared VPC, managing 50 disconnected VPCs would require complex peering meshes and decentralized security rules that are prone to configuration drift.
 </details>
 
 <details>
 <summary>5. Company A acquires Company B and Company C. Company A's VPC is peered with Company B's VPC, and Company B's VPC is subsequently peered with Company C's VPC. A developer in Company A attempts to ping an internal web server in Company C using its private IP address, but the connection times out. Based on GCP's networking rules, what is the root cause of this failure?</summary>
 
-The connection times out because GCP VPC Network Peering is strictly non-transitive. Even though Company B has direct peering connections with both A and C, it cannot act as a transit network to route traffic between them. To enable communication between Company A and Company C, you must either establish a direct VPC peering connection between their respective networks, migrate them into a Shared VPC, or utilize Network Connectivity Center.
+The connection times out because GCP VPC Network Peering is strictly non-transitive. Even though Company B has direct peering connections with both A and C, it cannot act as a transit network to route traffic between them. In a non-transitive networking model, hops beyond directly peered networks drop traffic automatically to preserve explicit security boundaries. Because of this architectural behavior, Company A's internal network fundamentally has no knowledge of Company C's subnets or routing tables. To enable direct communication without relying on the public internet, you must establish an explicit peer connection directly between Company A and Company C, or adopt a centralized hub-and-spoke model using Network Connectivity Center.
 </details>
 
 <details>
 <summary>6. The global CISO mandates that SSH access (port 22) from the public internet (0.0.0.0/0) must be blocked across all 200 GCP projects in your organization, with absolutely no exceptions allowed for individual project owners. How can you implement this mandate so that a project owner cannot override it with a higher-priority VPC firewall rule?</summary>
 
-You must implement a Hierarchical Firewall Policy at the Organization level with an explicit `DENY` action for port 22 from `0.0.0.0/0`. In GCP, firewall evaluation order processes Organization-level policies first, followed by Folder-level policies, and finally VPC-level rules. Because the Organization-level deny rule is evaluated and enforced before any VPC rules are even checked, project owners cannot circumvent the mandate, regardless of the priority number they assign to their local VPC firewall rules.
+You must implement a Hierarchical Firewall Policy at the Organization level with an explicit `DENY` action for port 22 from `0.0.0.0/0`. In GCP, firewall evaluation order processes Organization-level policies first, followed by Folder-level policies, and finally VPC-level rules. Because the Organization-level deny rule is evaluated and enforced before any VPC rules are even checked, project owners cannot circumvent the mandate, regardless of the priority number they assign to their local VPC firewall rules. This hierarchical enforcement guarantees baseline security standards remain intact during large-scale operations or accidental misconfigurations at the project level. Even if a local developer applies a VPC firewall rule with a priority of 0 (the highest possible local priority) to allow SSH, it will be overridden by the higher-level policy. Consequently, deploying hierarchical rules provides a structural safety net against shadow IT and non-compliant network exposures.
 </details>
 
 <details>
 <summary>7. An architect is designing a purely cloud-native environment with no on-premises data centers and no VPN connections. The design includes a requirement for private VMs to access the internet via Cloud NAT. A junior engineer questions why a Cloud Router is included in the Terraform configuration since no BGP routing is required. How should the architect justify the inclusion of the Cloud Router?</summary>
 
-The architect should explain that Cloud Router serves as the mandatory management and control plane for Cloud NAT, even when BGP routing is entirely absent from the architecture. While Cloud NAT is a software-defined service that translates IP addresses, the Cloud Router orchestrates this translation, manages the mapping of internal to external IPs, and distributes the NAT configuration across Google's infrastructure. Without the Cloud Router acting as its foundation, the Cloud NAT gateway cannot be created or function.
+The architect should explain that Cloud Router serves as the mandatory management and control plane for Cloud NAT, even when BGP routing is entirely absent from the architecture. While Cloud NAT is a software-defined service that translates IP addresses, the Cloud Router orchestrates this translation, manages the mapping of internal to external IPs, and distributes the NAT configuration across Google's infrastructure. Without the Cloud Router acting as its foundation, the Cloud NAT gateway cannot be created or function. Therefore, in a GCP context, 'Router' does not exclusively mean a BGP speaker or traditional transit gateway, but rather a dynamic configuration engine for network services. When instances in the subnets scale out or require more NAT ports, it is the Cloud Router that recalculates and updates these allocations dynamically behind the scenes. Omitting the Cloud Router would fundamentally break the capability to provision egress access, making it a strict dependency.
 </details>
 
 ---
