@@ -1,58 +1,140 @@
-# Session handoff — 2026-04-14
+# Session Handoff — 2026-04-14 evening
 
-Read this file at the start of a new session to pick up where we left off.
+> **READ THIS FIRST.** Picks up where the previous session ended. All work pushed to `main` at commit `d6311ee6`. Nothing currently running in the background.
 
-## What happened this session
+## What landed today (in commit order)
 
-### Pipeline convergence review (#235)
-- **Codex** reviewed full `v1_pipeline.py` (4077 lines) across 8 batches
-- Found 1 CRITICAL + 14 HIGH + 8 MEDIUM + 3 LOW bugs
-- Applied 15 fixes (179 insertions, 103 deletions), 126 tests passing
-- **Gemini** adversary-reviewed all 5 chunks, found 3 additional bugs, all fixed
-- **Codex** reviewed Gemini's fixes, tightened 2 of them
-- Final: 18 bug fixes, 126 tests green, all committed but NOT pushed
+1. **#235 — v1 pipeline convergence fixes** (Codex+Gemini, 18 bugs)
+   - Atomic state writes, dynamic concurrency, stale resume metadata cleared
+   - `cmd_reset_stuck` added with regex-based error matching
+   - 126 v1 tests pass
 
-### Key fixes
-- Parallel race condition: serialized state + git commits via lock
-- Dead-end states: CHECK failures route back to write, stale metadata cleared
-- Write-only mode: now sets phase="review" so next run reviews (not rewrites)
-- Retry off-by-one: last-attempt edit apply no longer records terminal failure
-- Review fallback: skips to last-resort instead of aborting
-- Errors cleared at each run start (no more stale error accumulation)
-- Malformed review JSON validation (prevents silent bad approvals)
-- Deep-copy in fact ledger merging (prevents data corruption)
-- Circuit breaker reset on all severe rewrite paths
-- Content-aware fact ledger kept separate (no longer poisons retries)
+2. **#236 — Per-module review audit log**
+   - `.pipeline/reviews/{module_key}.md` with full reviewer feedback
+   - `fcntl.flock` cross-process safe, atomic writes, reverse-chronological
+   - 7 new tests (133 total)
 
-### Leadership transition
-- User is transitioning from Claude-led to Codex-led development
-- Codex and Gemini handle code fixes; Claude assists with coordination
-- cmd_reset_stuck was added by Claude (not in Codex's version) — needs to be re-added from the original diff or reimplemented
+3. **#237 — Decoupled lab pipeline + LAB removed from module review**
+   - Module reviewer no longer evaluates inline "Hands-On Exercise" sections
+   - New `scripts/lab_pipeline.py` operates on `~/projects/kubedojo-labs/`
+   - Bi-directional metadata: `lab:` in module frontmatter, `module:` in lab `index.json`
+   - `--static` (no Docker) and `--exec` (Docker) tiers
+   - End-to-end demo: fixed `cka-1.1-control-plane` lab, REJECT severe → APPROVE clean
+   - 8 new lab tests (141 total)
 
-## Git state
+4. **#238 — INVALID_YAML multi-doc fix**
+   - `yaml.safe_load` → `yaml.safe_load_all` accepts K8s-style multi-doc YAML
 
-- On branch `main`, multiple unpushed commits (Codex fixes + Gemini fixes)
-- Codex worktree at `/Users/krisztiankoos/projects/codex-wt-pipeline-fix-round2` (can be cleaned up)
-- All pipelines killed — none running
+5. **Reset-stuck migrates stale `phase=write` → `phase=review`**
+   - 93 modules left over from old `--write-only` runs no longer get rewritten
 
-## Pipeline numbers (pre-fix, needs re-check)
+6. **Audit log Plan field no longer truncated at 500 chars**
+   - Full reviewer feedback now visible in WRITE entries
 
-- 816 total modules
-- 113 pass, 81 fail, 267 WIP, 355 not started
-- 124 modules were stuck in dead-end states (now reset)
+7. **#239 — v2 pipeline (Weeks 1-4 ALL complete)**
+   - `scripts/pipeline_v2/` — control plane, review/patch/write workers
+   - `.pipeline/v2.db` (SQLite, WAL mode) replaces mutable phase state
+   - **Atomic budget reservation** in single SQLite transaction
+   - **Dynamic `max_concurrent`** — edit `.pipeline/budgets.yaml` or `pipeline budget set <model> max_concurrent <N>`
+   - Model tiering: Flash for simple checks, Pro for writes/deep, Claude for bounded patches
+   - Pre-flight linters (markdownlint, yamllint, secrets, K8s API) skip LLM call when fail
+   - Targeted-patch-first loop with content slicing (NOT full module to LLM)
+   - Rewrite escalation triggers + `needs_human_intervention` dead-letter
+   - HTTP 429 cooldown + 20% token buffer + global kill-switch policies
+   - 38 v2 tests (41 total = 38 v2 + 3 lab) — full v1+v2 test suite at **179 tests**
+   - Reviewed iteratively by Codex (impl) + Gemini (catches bugs Codex misses)
 
-## What's next
+8. **Anti-compaction harness** (`.claude/hooks/context-monitor.sh`)
+   - PostToolUse hook fires after every tool, estimates context vs `autoCompactWindow`
+   - Tiers: 75% heads-up, 85% critical, 95% emergency
+   - `autoCompactWindow: 1000000` (max) for runway
+   - Source in `claude_extensions/hooks/`, deploys via `deploy.sh`
 
-1. **Push fixes**: `git push origin main`
-2. **Run `reset-stuck`**: clear dead-end modules so new code can retry them
-3. **Restart pipeline waves** (write-only, one at a time):
-   - Prereqs (14 remaining)
-   - Cloud + Linux
-   - Platform (210 modules — biggest gap)
-   - On-prem + Specialty
-4. **Review pass** after all content written
-5. Re-add `cmd_reset_stuck` if needed (was in Claude's partial patch, not Codex's)
+## Current pipeline state
 
-## Token budget
+```
+.venv/bin/python scripts/v1_pipeline.py status
+```
 
-Claude is near weekly limit. Use Codex/Gemini for remaining work.
+Last known: 102 pass, 1 fail, 431 in progress, 282 not started (816 total). Numbers may have moved if v1 pipelines ran briefly.
+
+## What's NOT running
+
+- No v1 pipeline processes (`pgrep -fl v1_pipeline` empty)
+- No v2 workers
+- No background Codex/Gemini agents
+
+## Choose your next move (3 paths)
+
+### Path A — v2 cutover (recommended; this is what we built today)
+```bash
+# 1. Migrate v1 state into v2 (idempotent, safe to re-run)
+.venv/bin/python scripts/pipeline_v2/cli.py migrate-v1 \
+  --state /Users/krisztiankoos/projects/kubedojo/.pipeline/state.yaml
+
+# 2. Start workers (separate terminals or & background)
+#    Adjust max_concurrent in .pipeline/budgets.yaml first if needed
+.venv/bin/python scripts/pipeline_v2/cli.py write-worker loop &
+.venv/bin/python scripts/pipeline_v2/cli.py review-worker loop &
+.venv/bin/python scripts/pipeline_v2/cli.py patch-worker loop &
+
+# 3. Watch progress
+.venv/bin/python scripts/pipeline_v2/cli.py status
+.venv/bin/python scripts/pipeline_v2/cli.py show budget
+```
+
+### Path B — A/B test v2 vs v1 first (safer — 50 modules to validate convergence/cost)
+```bash
+.venv/bin/python scripts/v2_ab_test.py --count 50 --modules cloud
+# Reports convergence, estimated cost, wall time per cohort
+```
+
+### Path C — Stick with v1 for now (all v1 fixes from today are live)
+```bash
+# Reset stale modules first (also handles stale phase=write)
+.venv/bin/python scripts/v1_pipeline.py reset-stuck
+
+# Resume — v1 fixes mean modules converge faster, no LAB rewrites
+KUBEDOJO_MAX_CLAUDE_CALLS=100 .venv/bin/python scripts/v1_pipeline.py e2e \
+  cloud linux platform on-prem specialty prereqs --no-translate \
+  >> /tmp/wave-restart.log 2>&1 &
+```
+
+## Open GH issues (in priority order)
+
+| # | Title | Status |
+|---|---|---|
+| 239 | v2 pipeline budget-aware job queue rewrite | All 4 weeks merged; ready for cutover |
+| 235 | Pipeline convergence | All fixes merged |
+| 236 | Per-module review audit log | Closed |
+| 237 | Decoupled lab pipeline + LAB removal | Closed |
+| 238 | INVALID_YAML multi-doc | Closed |
+
+## Important files
+
+- `.pipeline/spec-v2-pipeline.md` — v2 spec (post-review v2)
+- `.pipeline/budgets.yaml` — runtime-adjustable concurrency caps per model
+- `.pipeline/state.yaml` — v1 state (still source of truth until cutover)
+- `.pipeline/v2.db` — v2 SQLite (created on first migrate-v1 run)
+- `STATUS.md` — high-level project status
+- `.claude/hooks/context-monitor.sh` — anti-compaction warning system
+
+## Things to know about the hook
+
+- It runs after every tool call, so you'll see warnings in this/future sessions
+- If it warns and you're in the middle of something — finish that one task, then update this handoff and `/exit`
+- To temporarily silence: set env var `CLAUDE_NON_INTERACTIVE=1` for that command
+
+## How to start next session
+
+```bash
+cd /Users/krisztiankoos/projects/kubedojo
+claude --continue   # if you want to resume context (NOT recommended — heavy)
+# OR (recommended):
+claude              # fresh session — first thing: read this file
+```
+
+In the new session, paste this prompt:
+> Read `.pipeline/session-handoff.md` and brief me on where we are.
+
+That gives the new session full context for ~3KB instead of replaying our 3.5MB conversation.
