@@ -60,7 +60,7 @@ flowchart TD
 
 A team was paged at 3AM to 2,000 alerts. A single database failover had triggered cascading alerts across the stack—database connection failures, API timeouts, health check failures, queue backlogs.
 
-The on-call engineer spent 45 minutes correlating alerts to find the root cause. With AIOps event correlation, those 2,000 alerts would have been one incident: "Database primary failover affecting 47 dependent services."
+The on-call engineer spent 45 minutes correlating alerts to find the root cause. With AIOps event correlation, those 2,000 alerts would have been one incident: "Database primary failover affecting 42 dependent services."
 
 That's not science fiction—it's what modern AIOps platforms do every day.
 
@@ -121,7 +121,7 @@ flowchart TD
     subgraph With Correlation
         C1[Incident: Database Connection Issue]
         C2[Root Cause: MySQL primary failover]
-        C3[Impact: 47 dependent services]
+        C3[Impact: 42 dependent services]
         C1 --- C2
         C1 --- C3
     end
@@ -268,6 +268,8 @@ flowchart TD
 | Ignoring context/topology | Poor correlation without structure | Model your service dependencies |
 | Treating AIOps as a project | Falls behind as systems change | Continuous investment required |
 | No success metrics | Can't prove value | Define noise reduction, MTTR targets |
+
+> **Pause and predict**: Which of these common mistakes is the most difficult to recover from technically, rather than organizationally?
 
 ## Quiz
 
