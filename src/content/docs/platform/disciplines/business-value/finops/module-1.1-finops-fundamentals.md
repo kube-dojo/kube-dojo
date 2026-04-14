@@ -424,6 +424,8 @@ Raw cloud spend is meaningless without context. Spending $200,000/month on cloud
 
 **Unit economics** connects cloud cost to business value.
 
+> **Pause and predict**: If your cloud bill increases by 50% next month, but your unit cost per transaction drops by 10%, how should finance interpret this change?
+
 ### Common Unit Metrics
 
 | Business Type | Unit Metric | Example |
@@ -488,7 +490,7 @@ A workload runs 24/7 and has been stable for 8 months. It currently uses On-Dema
 <details>
 <summary>Show Answer</summary>
 
-**Reserved Instances or Savings Plans.** With 8 months of stable usage data, this workload is a strong candidate for commitment-based pricing. A 1-Year All Upfront RI could save ~41%, bringing the cost down to ~$1,240/month, resulting in a direct savings of $860/month or $10,320/year. If the engineering team suspects they might need to change instance types or scale across regions in the future, a Compute Savings Plan offers a similar financial benefit while preserving architectural flexibility.
+You should recommend **Reserved Instances or Savings Plans** for this workload. With 8 months of stable usage data, this workload is a strong candidate for commitment-based pricing rather than on-demand. A 1-Year All Upfront RI could save approximately 41%, bringing the cost down to around $1,240/month and resulting in significant annual savings. However, if the engineering team suspects they might need to change instance types or scale across regions in the future, a Compute Savings Plan offers a similar financial benefit while preserving necessary architectural flexibility.
 </details>
 
 ### Question 3
