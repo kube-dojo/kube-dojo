@@ -243,6 +243,8 @@ S3 offers different storage classes designed for different data access patterns.
 
 **S3 Intelligent-Tiering** deserves special attention. It automatically moves objects between an infrequent-access tier and a frequent-access tier based on usage patterns. It charges a small monthly monitoring fee per object (~$0.0025 per 1,000 objects) but can save significantly on large datasets with unpredictable access patterns. There is no retrieval fee.
 
+> **Pause and predict**: If you use S3 Intelligent-Tiering for a small bucket with only 50 objects that you access constantly, will you save money compared to S3 Standard?
+
 ### Cost Example
 
 Suppose you store 10 TB of application logs:
@@ -462,6 +464,8 @@ Important versioning behaviors:
 - Suspended versioning still preserves previously created versions — it does not delete them.
 - You pay for **every** stored version. A 1 GB file overwritten 100 times = 100 GB of storage.
 - MFA Delete can require multi-factor authentication to delete versions or change versioning state.
+
+> **Stop and think**: If you have a bucket with 1 million objects, and you enable versioning but never overwrite or delete any existing objects, what happens to your storage bill?
 
 ---
 
