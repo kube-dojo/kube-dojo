@@ -39,26 +39,21 @@ GitOps is an operational model where:
 3. **Automated agents** sync actual state to match Git
 4. **Drift is automatically corrected** back to Git state
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              TRADITIONAL vs GITOPS                          │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  Traditional CI/CD (Push-based):                           │
-│  ┌─────┐    ┌─────┐    ┌─────────┐    ┌─────────┐        │
-│  │ Dev │───►│ Git │───►│   CI    │───►│ Cluster │        │
-│  └─────┘    └─────┘    │ Pipeline│    └─────────┘        │
-│                        └─────────┘                         │
-│  CI pipeline pushes to cluster (needs cluster credentials) │
-│                                                             │
-│  GitOps (Pull-based):                                      │
-│  ┌─────┐    ┌─────┐    ┌─────────┐    ┌─────────┐        │
-│  │ Dev │───►│ Git │◄───│  GitOps │───►│ Cluster │        │
-│  └─────┘    └─────┘    │  Agent  │    └─────────┘        │
-│                        └─────────┘                         │
-│  Agent pulls from Git and applies (agent lives in cluster) │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph Traditional["Traditional CI/CD (Push-based)"]
+        direction LR
+        Dev1[Dev] --> Git1[Git]
+        Git1 --> CI[CI Pipeline]
+        CI -->|Pushes| Cluster1[Cluster]
+    end
+
+    subgraph GitOps["GitOps (Pull-based)"]
+        direction LR
+        Dev2[Dev] --> Git2[Git]
+        Git2 <--|Pulls| Agent[GitOps Agent]
+        Agent -->|Applies| K8s[Local Kubernetes API]
+    end
 ```
 
 > **Stop and think**: If Git is the single source of truth, what happens to imperative commands like `kubectl scale` or `kubectl edit`? Are they still useful in a GitOps environment?
@@ -106,16 +101,14 @@ g7h8i9j Initial deployment
 
 Agents continuously pull and apply:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  GitOps Agent Loop (every 30 seconds - 5 minutes):         │
-│                                                             │
-│  1. Check Git for changes                                  │
-│  2. Compare Git state with cluster state                   │
-│  3. If different: apply changes to cluster                 │
-│  4. Repeat                                                  │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Check[1. Check Git for changes] --> Compare[2. Compare Git state with cluster state]
+    Compare --> Diff{3. Different?}
+    Diff -->|Yes| Apply[Apply changes to cluster]
+    Diff -->|No| Wait[Wait 30s - 5m]
+    Apply --> Wait
+    Wait --> Check
 ```
 
 ### 4. Continuously Reconciled
@@ -145,43 +138,29 @@ With these principles establishing the foundation, we need specific software to 
 
 The most popular GitOps tool for Kubernetes:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              ARGO CD ARCHITECTURE                           │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  ┌─────────────────────────────────────────────────┐       │
-│  │              KUBERNETES CLUSTER                  │       │
-│  │                                                  │       │
-│  │  ┌──────────────────────────────────────────┐  │       │
-│  │  │           ARGO CD                         │  │       │
-│  │  │  ┌────────────┐  ┌────────────────────┐ │  │       │
-│  │  │  │ API Server │  │ Application        │ │  │       │
-│  │  │  │            │  │ Controller         │ │  │       │
-│  │  │  └────────────┘  │ (sync loop)        │ │  │       │
-│  │  │                  └─────────┬──────────┘ │  │       │
-│  │  │  ┌────────────┐            │            │  │       │
-│  │  │  │ Web UI     │            │            │  │       │
-│  │  │  │ (dashboard)│            │            │  │       │
-│  │  │  └────────────┘            │            │  │       │
-│  │  └────────────────────────────┼────────────┘  │       │
-│  │                               │                │       │
-│  │         ┌─────────────────────┘                │       │
-│  │         ▼                                      │       │
-│  │    ┌─────────┐  ┌─────────┐  ┌─────────┐     │       │
-│  │    │ App 1   │  │ App 2   │  │ App 3   │     │       │
-│  │    │(synced) │  │(synced) │  │(synced) │     │       │
-│  │    └─────────┘  └─────────┘  └─────────┘     │       │
-│  │                                               │       │
-│  └───────────────────────────────────────────────┘       │
-│                         ▲                                 │
-│                         │ pulls manifests                │
-│                    ┌────┴────┐                           │
-│                    │   Git   │                           │
-│                    │  Repo   │                           │
-│                    └─────────┘                           │
-│                                                          │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Git[Git Repo]
+
+    subgraph Cluster["Kubernetes Cluster"]
+        subgraph ArgoCD["Argo CD"]
+            API[API Server]
+            UI[Web UI]
+            Controller[Application Controller]
+        end
+
+        App1[App 1 synced]
+        App2[App 2 synced]
+        App3[App 3 synced]
+
+        Controller -->|Syncs| App1
+        Controller -->|Syncs| App2
+        Controller -->|Syncs| App3
+    end
+
+    Controller -->|Pulls manifests| Git
+    API --- Controller
+    UI --- API
 ```
 
 Here is a worked Argo CD configuration example that connects a Git repository to a cluster namespace:
@@ -315,35 +294,16 @@ gitops-config/
 
 ## GitOps Workflow
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              GITOPS DEPLOYMENT WORKFLOW                     │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  1. Developer makes change                                  │
-│     └── Updates deployment.yaml (new image tag)            │
-│                                                             │
-│  2. Creates Pull Request                                    │
-│     └── PR triggers: linting, validation, security scan    │
-│                                                             │
-│  3. Review and Approve                                      │
-│     └── Team reviews, comments, approves                   │
-│                                                             │
-│  4. Merge to main                                          │
-│     └── Git now has new desired state                      │
-│                                                             │
-│  5. GitOps agent detects change                            │
-│     └── Compares Git state vs cluster state                │
-│                                                             │
-│  6. Agent applies change                                    │
-│     └── kubectl apply (or Helm upgrade, etc.)              │
-│                                                             │
-│  7. Cluster reaches new state                              │
-│     └── New pods running, old pods terminated              │
-│                                                             │
-│  Time from merge to deploy: ~30 seconds to 5 minutes       │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Dev[1. Developer makes change] --> PR[2. Creates Pull Request]
+    PR --> CI[PR triggers validations]
+    CI --> Review[3. Review and Approve]
+    Review --> Merge[4. Merge to main branch]
+    Merge --> Detect[5. GitOps agent detects change]
+    Detect --> Compare[Agent compares state]
+    Compare --> Apply[6. Agent applies change]
+    Apply --> State[7. Cluster reaches new state]
 ```
 
 ---
@@ -382,45 +342,38 @@ spec:
       branch: main
 ```
 
-```
-Flow:
-1. CI builds new image: myapp:v1.2.3
+**Flow:**
+1. CI builds new image: `myapp:v1.2.3`
 2. Pushes to registry
 3. GitOps detects new tag
 4. Updates Git repo with new tag
 5. Syncs cluster to new image
 
 Fully automated, fully audited in Git!
-```
 
 ---
 
 ## Environment Promotion
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              ENVIRONMENT PROMOTION                          │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  environments/                                              │
-│  ├── base/                 # Common configuration          │
-│  │   ├── deployment.yaml                                   │
-│  │   └── service.yaml                                      │
-│  ├── dev/                  # Dev overrides                 │
-│  │   └── kustomization.yaml  (replicas: 1, image: latest) │
-│  ├── staging/              # Staging overrides             │
-│  │   └── kustomization.yaml  (replicas: 2, image: v1.2.3) │
-│  └── prod/                 # Production overrides          │
-│      └── kustomization.yaml  (replicas: 5, image: v1.2.2) │
-│                                                             │
-│  Promotion workflow:                                        │
-│  1. Changes go to dev first (auto-deploy)                  │
-│  2. Promote to staging (PR: update staging image tag)      │
-│  3. Promote to prod (PR: update prod image tag)            │
-│                                                             │
-│  Each promotion is a Git commit = full audit trail         │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Environments
+        Base[base/ common config]
+        Dev[dev/ overrides]
+        Staging[staging/ overrides]
+        Prod[prod/ overrides]
+    end
+
+    Base --> Dev
+    Base --> Staging
+    Base --> Prod
+
+    Action1[1. Auto-deploy to Dev] --> Dev
+    Action2[2. PR: Promote to Staging] --> Staging
+    Action3[3. PR: Promote to Prod] --> Prod
+
+    Action1 --> Action2
+    Action2 --> Action3
 ```
 
 ---
@@ -491,7 +444,7 @@ abc123 Deploy v1.2.3           # ← Bad deployment
 3. **Scenario**: The latest release of your payment microservice contains a bug that is double-charging customers. You need to revert the system to the exact state it was in one hour ago as quickly as possible. How do you accomplish this in a pure GitOps environment?
    <details>
    <summary>Answer</summary>
-   You execute a `git revert` command on the commit that introduced the broken payment service manifests, and push that reversion to the main branch. The GitOps agent will immediately detect this new commit and reconcile the cluster state to match the previous, stable configuration. Because Git history is immutable, this process provides a perfectly documented audit trail of both the failure and the rollback action.
+   You execute a `git revert` command on the commit that introduced the broken payment service manifests, and push that reversion to the main branch. The GitOps agent will immediately detect this new commit and reconcile the cluster state to match the previous, stable configuration. Because Git history is immutable, this process provides a perfectly documented audit trail of both the failure and the rollback action. This approach guarantees that your version control system remains the undisputed source of truth for the entire incident.
    </details>
 
 4. **Scenario**: You are designing the repository structure for a large enterprise with 50 microservices. The lead developer suggests keeping all Kubernetes manifests in the same repository as the application source code. What specific GitOps problem will this likely cause?
@@ -550,7 +503,7 @@ spec:
     spec:
       containers:
       - name: nginx
-        image: nginx:1.24
+        image: nginx:1.27
 EOF
 
 # 3. Apply (simulate GitOps sync)
@@ -571,14 +524,14 @@ kubectl apply -f manifests/
 # Back to 2 replicas!
 
 # 8. Make a "Git change"
-sed -i '' 's/nginx:1.24/nginx:1.25/' manifests/deployment.yaml
+sed -i '' 's/nginx:1.27/nginx:1.28/' manifests/deployment.yaml
 
 # 9. Apply new state (simulate GitOps sync)
 kubectl apply -f manifests/
 
 # 10. Verify update
 kubectl get deployment gitops-demo -o jsonpath='{.spec.template.spec.containers[0].image}'
-# Shows nginx:1.25
+# Shows nginx:1.28
 
 # 11. Cleanup
 kubectl delete -f manifests/
