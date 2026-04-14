@@ -11,9 +11,9 @@ sidebar:
 After completing this module, you will be able to:
 
 - **Configure Artifact Registry repositories for container images, language packages, and OS packages**
-- **Implement vulnerability scanning policies and Binary Authorization to block unscanned images from deployment**
-- **Deploy cross-region repository replication for multi-region CI/CD pipelines**
-- **Secure Artifact Registry with VPC Service Controls and IAM policies scoped to specific repositories**
+- **Implement vulnerability scanning policies and understand Binary Authorization integration**
+- **Configure remote and virtual repositories for upstream caching and package aggregation**
+- **Secure Artifact Registry with IAM policies scoped to specific repositories**
 
 ---
 
@@ -112,7 +112,7 @@ gcloud artifacts repositories create apt-repo \
 
 ```bash
 # Configure Docker to authenticate with Artifact Registry
-gcloud auth configure-docker us-central1-docker.pkg.dev
+gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
 # This adds a credential helper to your Docker config (~/.docker/config.json)
 # For other regions, specify them:
@@ -532,7 +532,7 @@ gcloud artifacts repositories create dockerhub-mirror \
   --remote-docker-repo=DOCKER-HUB
 
 # Configure Docker authentication
-gcloud auth configure-docker ${REGION}-docker.pkg.dev
+gcloud auth configure-docker ${REGION}-docker.pkg.dev --quiet
 
 # Verify repositories
 gcloud artifacts repositories list --location=$REGION
