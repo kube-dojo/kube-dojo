@@ -23,7 +23,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-It's 2:47 AM on a Friday night. Sarah, a senior SRE at a mid-size fintech company, wakes up to her phone buzzing with a cascade of PagerDuty alerts. The primary database cluster serving 12 million users across three continents has stopped accepting writes. The read replicas are 47 seconds behind and climbing. Customer-facing APIs are returning 500 errors at a rate of 14,000 per minute. The on-call Slack channel is already filling up with panicked messages from engineers who were also paged. Three people are SSH'd into production servers running diagnostic queries. Nobody is coordinating. Nobody knows what anyone else is doing. A junior engineer, trying to help, restarts the primary database node — which wipes the in-memory query cache and doubles the read latency on the replicas. The outage, which could have been contained in 20 minutes, drags on for 3 hours and 41 minutes. The company loses $2.3 million in failed transactions and spends the next two weeks apologizing to enterprise clients.
+It's 2:45 AM on a Friday night. Sarah, a senior SRE at a mid-size fintech company, wakes up to her phone buzzing with a cascade of PagerDuty alerts. The primary database cluster serving 12 million users across three continents has stopped accepting writes. The read replicas are 45 seconds behind and climbing. Customer-facing APIs are returning 500 errors at a rate of 14,000 per minute. The on-call Slack channel is already filling up with panicked messages from engineers who were also paged. Three people are SSH'd into production servers running diagnostic queries. Nobody is coordinating. Nobody knows what anyone else is doing. A junior engineer, trying to help, restarts the primary database node — which wipes the in-memory query cache and doubles the read latency on the replicas. The outage, which could have been contained in 20 minutes, drags on for 3 hours and 41 minutes. The company loses $2.3 million in failed transactions and spends the next two weeks apologizing to enterprise clients.
 
 This is not a rare story. This is what happens when talented engineers face a crisis without a system for managing it.
 
@@ -448,7 +448,7 @@ The same engineers. The same problem. The same root cause. But one team had a 14
 
 | Time | Event | Who |
 |---|---|---|
-| 02:47 | Alerts fire: DB write errors > 1000/min | Monitoring |
+| 02:46 | Alerts fire: DB write errors > 1000/min | Monitoring |
 | 02:48 | On-call engineer acks the page | Sarah |
 | 02:50 | Sarah checks dashboards: primary DB disk I/O at 100%, replica lag climbing | Sarah |
 | 02:52 | Sarah declares Sev-1 in #incidents<br>Creates #incident-2026-03-24-db-outage<br>Pages Ops Lead (Alex) and Comms Lead (Jordan) | Sarah (IC) |
@@ -470,7 +470,7 @@ The same engineers. The same problem. The same root cause. But one team had a 14
 
 | Time | Event | Who |
 |---|---|---|
-| 02:47 | Alerts fire: DB write errors > 1000/min | Monitoring |
+| 02:46 | Alerts fire: DB write errors > 1000/min | Monitoring |
 | 02:48 | On-call engineer acks the page | Mike |
 | 02:50 | Mike SSHs into primary DB. Starts reading logs. | Mike |
 | 03:00 | Two more engineers get paged by escalation policy. They also SSH into production. | Dev1, Dev2 |
@@ -480,7 +480,7 @@ The same engineers. The same problem. The same root cause. But one team had a 14
 | 03:20 | Mike, Dev1, Dev2 are each investigating different theories. Nobody is coordinating. | Mike, Dev1, Dev2 |
 | 03:30 | VP Eng joins the bridge call and starts asking questions every 2 minutes. Nobody can focus. | VP Eng |
 | 03:45 | Dev2, trying to help, restarts the primary DB node. This wipes the query cache. | Dev2 |
-| 03:47 | Read latency doubles. More alerts fire. | Monitoring |
+| 03:46 | Read latency doubles. More alerts fire. | Monitoring |
 | 04:00 | A senior DBA is finally paged. She assesses the situation in 5 minutes: disk controller failing. Recommends failover. | DBA |
 | 04:10 | Nobody is sure who should approve the failover. 10 minutes of discussion. | (nobody) |
 | 04:20 | Failover initiated. | DBA |
@@ -492,7 +492,7 @@ The difference between these two incidents is not technical skill. It is inciden
 
 ---
 
-## War Story: The $4.7 Million Login Outage
+## War Story: The $4.8 Million Login Outage
 
 A SaaS company serving enterprise clients experienced a login failure on a Monday morning at 9:02 AM Eastern — the highest-traffic hour of their week. The authentication service was rejecting all login attempts with a cryptic "internal server error."
 
@@ -502,15 +502,15 @@ Here is where incident management failed. The engineer who found the problem kne
 
 No Incident Commander had been declared. No one was tracking that the investigation had shifted from mitigation to root cause analysis. No status page had been updated. Customer success managers were fielding calls with no information to share.
 
-The certificate was finally renewed at 9:47 AM — 45 minutes after the initial failure. During that 45 minutes, the company's enterprise clients, who had contractual SLAs guaranteeing 99.95% uptime, experienced a complete authentication outage during peak business hours.
+The certificate was finally renewed at 9:48 AM — 46 minutes after the initial failure. During that 46 minutes, the company's enterprise clients, who had contractual SLAs guaranteeing 99.95% uptime, experienced a complete authentication outage during peak business hours.
 
 The financial impact:
 - **SLA credits owed to enterprise clients**: $1.2 million
 - **Lost revenue from churned trial customers**: $340,000 (estimated)
 - **Emergency customer success outreach**: $85,000 in overtime and professional services
-- **Deal pipeline impact**: Two enterprise prospects paused their evaluations, representing $3.1 million in ARR
+- **Deal pipeline impact**: Two enterprise prospects paused their evaluations, representing $3.2 million in ARR
 
-Total estimated impact: **$4.7 million** from a 45-minute outage caused by an expired certificate that could have been renewed in 2 minutes.
+Total estimated impact: **$4.8 million** from a 46-minute outage caused by an expired certificate that could have been renewed in 2 minutes.
 
 The postmortem identified three failures: the missing certificate expiry alert, the lack of auto-renewal monitoring, and — most critically — **the absence of incident command that would have separated mitigation from investigation.**
 
