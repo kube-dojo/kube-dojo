@@ -58,15 +58,15 @@ Pass 3 (90-120 min): Complex tasks — multi-step traffic management, debugging
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│ ICA Exam Domains by Weight                                          │
+│ ICA Exam Domains by Weight                                           │
 ├──────────────────────────────────────────────────────────────────────┤
 │                                                                      │
 │  Traffic Management     ████████████████████████████████████  35%    │
-│  Installation & Config  ████████████████████               20%      │
-│  Security               ███████████████                    15%      │
-│  Resilience & Fault Inj ██████████                         10%      │
-│  Observability          ██████████                         10%      │
-│  Troubleshooting        ██████████                         10%      │
+│  Installation & Config  ████████████████████                  20%    │
+│  Security               ███████████████                       15%    │
+│  Resilience & Fault Inj ██████████                            10%    │
+│  Observability          ██████████                            10%    │
+│  Troubleshooting        ██████████                            10%    │
 │                                                                      │
 └──────────────────────────────────────────────────────────────────────┘
 ```
