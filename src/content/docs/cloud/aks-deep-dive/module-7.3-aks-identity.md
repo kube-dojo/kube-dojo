@@ -351,6 +351,32 @@ When the pod starts, the file `/mnt/secrets/db-connection-string` will contain t
 
 ---
 
+## Kubernetes RBAC with Entra ID Groups
+
+To secure developer access to the AKS cluster API, you should integrate Kubernetes RBAC with Entra ID. Instead of distributing individual client certificates, you map Entra ID groups directly to Kubernetes `ClusterRole` or `Role` resources using a `RoleBinding`.
+
+When you enable AKS Entra ID integration, you bind native RBAC roles to the Entra ID group's Object ID:
+
+```yaml
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: dev-team-binding
+  namespace: payments
+subjects:
+  - kind: Group
+    name: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" # Entra ID Group Object ID
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: edit
+  apiGroup: rbac.authorization.k8s.io
+```
+
+This grants every member of the Entra ID group `edit` privileges within the `payments` namespace. When developers run `az aks get-credentials`, they authenticate via Azure CLI and receive a short-lived token, providing scalable, team-based access control.
+
+---
+
 ## Microsoft Defender for Containers
 
 Defender for Containers provides runtime threat protection for AKS clusters. It monitors container behavior using an agent (deployed as a DaemonSet) and compares activity against known attack patterns.
