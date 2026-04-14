@@ -11,46 +11,43 @@ sidebar:
 Before starting this module, ensure you have:
 - Completed [Module 1.3: EC2 & Compute Fundamentals](../module-1.3-ec2/) (launching instances, security groups, IAM instance profiles)
 - An AWS account with admin access (or scoped permissions for CloudWatch, EC2, IAM)
-- AWS CLI v2 installed and configured
+- AWS CLI v2 installed and configured locally
 - At least one running EC2 instance to instrument (or willingness to launch one)
-- Basic understanding of metrics, logs, and alerting concepts
+- Basic understanding of metrics, logs, and alerting concepts in distributed systems
 
 ## What You'll Be Able to Do
 
 After completing this module, you will be able to:
 
-- **Configure the CloudWatch Agent to collect custom metrics including memory utilization, disk I/O, and application-level telemetry**
-- **Deploy CloudWatch Alarms with composite alarm logic and SNS notification routing for multi-signal alerting**
-- **Implement CloudWatch Logs Insights queries to diagnose application errors across distributed services**
-- **Design CloudWatch dashboards with metric math expressions to visualize service health and cost trends**
+- **Implement** the CloudWatch Agent to collect custom OS-level metrics (memory, disk) and application logs from EC2 instances.
+- **Design** CloudWatch Alarms combining multiple metrics with composite logic and automated EventBridge remediations.
+- **Diagnose** complex application failures by writing efficient Logs Insights queries to filter and parse distributed system logs.
+- **Evaluate** the financial impact of your architecture by designing CloudWatch Dashboards that utilize metric math to visualize real-time cost trends.
 
 ---
 
 ## Why This Module Matters
 
-In July 2019, a major financial services company experienced a 14-hour outage that cost them an estimated $12 million in lost transactions. The root cause was a memory leak in a Java microservice running on EC2. The leak took roughly 6 hours to exhaust available memory, at which point the application began throwing OutOfMemoryError exceptions. The operations team did not notice for another 3 hours because they only monitored CPU utilization -- the default CloudWatch metric for EC2. Memory usage, application-level errors, and garbage collection pauses were invisible to them. By the time a customer complaint triggered investigation, cascading failures had spread to three downstream services.
+In July 2019, a major financial services company experienced a 14-hour outage that cost them an estimated $12 million in lost transactions. The root cause was a memory leak in a Java microservice running on EC2. The leak took roughly 6 hours to exhaust available memory, at which point the application began throwing `OutOfMemoryError` exceptions. The operations team did not notice the issue for another 3 hours because they only monitored CPU utilization—the default CloudWatch metric for EC2. Memory usage, application-level errors, and garbage collection pauses were completely invisible to them. 
 
-Had they installed the CloudWatch Agent to collect memory and disk metrics, configured a custom metric for JVM heap usage, and set an alarm at 80% memory utilization, they would have received an alert 6 hours before the outage. A simple auto-scaling policy tied to memory pressure could have launched fresh instances automatically. Total cost of prevention: about $3/month in CloudWatch custom metrics.
+By the time a customer complaint finally triggered a manual investigation, cascading failures had already spread to three downstream payment services. The system was completely paralyzed, and engineers had to comb through raw text logs manually via SSH to find the failure point, losing precious hours during the highest traffic window of the week.
 
-In this module, you will learn the full CloudWatch observability stack -- from the free standard metrics that every AWS resource emits, to custom metrics you define, to log aggregation with CloudWatch Logs, to alerting with CloudWatch Alarms, to tracing with X-Ray. You will understand what AWS gives you for free, what costs money, and where the sharp edges are that catch teams off guard.
+Had they installed the CloudWatch Agent to collect memory and disk metrics, configured a custom metric for JVM heap usage, and set an alarm at 80% memory utilization, they would have received an automated alert 6 hours before the outage occurred. A simple auto-scaling policy tied to memory pressure could have launched fresh instances automatically to mitigate the leak. The total cost of prevention would have been roughly $3 per month in CloudWatch custom metrics. In this module, you will learn the full CloudWatch observability stack to prevent these exact scenarios.
 
 ---
 
 ## Did You Know?
 
-- **CloudWatch ingests over 1 trillion metrics per day** across all AWS customers. It is one of the oldest AWS services, launching alongside EC2 in 2009, and has grown from a simple CPU-monitoring tool into a full observability platform.
-
-- **EC2 standard metrics have a 5-minute resolution** by default and are completely free. Enabling "detailed monitoring" bumps this to 1-minute resolution but costs ~$2.10 per instance per month (7 metrics at $0.30 each). Most production workloads need 1-minute resolution -- 5-minute intervals can hide spikes that cause real user impact.
-
-- **CloudWatch Logs Insights can query terabytes of logs in seconds** using a purpose-built query language. It was released in November 2018 and has largely eliminated the need for teams to ship logs to Elasticsearch just for ad-hoc querying. You pay $0.005 per GB of data scanned.
-
-- **The CloudWatch Agent replaced three older tools**: the CloudWatch Monitoring Scripts (Perl-based `mon-put-instance-data.pl`), the SSM CloudWatch Plugin (on Windows), and the CloudWatch Logs Agent (`awslogs`). If you encounter tutorials referencing `awslogs` agent or `mon-put-instance-data.pl`, they are outdated -- the unified CloudWatch Agent handles everything.
+- **CloudWatch ingests over 1 trillion metrics per day** across all AWS customers. It is one of the oldest AWS services, launching alongside EC2 in 2009, and has grown from a simple CPU-monitoring tool into a massive, globally distributed observability platform.
+- **EC2 standard metrics have a 5-minute resolution** by default and are completely free. Enabling "detailed monitoring" bumps this to 1-minute resolution but costs approximately $2.10 per instance per month (7 metrics at $0.30 each). Most production workloads strictly require 1-minute resolution to catch transient spikes.
+- **CloudWatch Logs Insights can query terabytes of logs in seconds** using a purpose-built query language. It was released in November 2018 and has largely eliminated the need for teams to ship logs to complex external search clusters just for ad-hoc querying. You only pay $0.005 per GB of data scanned.
+- **The CloudWatch Agent replaced three older tools**: the CloudWatch Monitoring Scripts (Perl-based `mon-put-instance-data.pl`), the SSM CloudWatch Plugin (on Windows), and the older CloudWatch Logs Agent (`awslogs`). If you encounter legacy tutorials referencing these components, they are outdated.
 
 ---
 
 ## Standard Metrics: What AWS Gives You for Free
 
-Every AWS service automatically publishes metrics to CloudWatch at no cost. These are called **standard metrics** (sometimes "basic monitoring" or "vended metrics"). Understanding what is free versus paid prevents surprise bills.
+Every AWS service automatically publishes metrics to CloudWatch at no cost. These are called **standard metrics** (sometimes referred to as basic monitoring or vended metrics). Understanding what is free versus paid prevents surprise billing spikes.
 
 ### EC2 Standard Metrics
 
@@ -85,11 +82,13 @@ graph TD
     F --> F4[Process-level metrics]
 ```
 
-The biggest gap in EC2 standard metrics is **memory**. AWS cannot see inside your instance's operating system (the hypervisor only sees CPU, network, and instance-store disk I/O), so memory and EBS disk space metrics require an agent running inside the instance.
+The biggest gap in EC2 standard metrics is **memory**. AWS cannot see inside your instance's operating system. The hypervisor only sees hardware-level data like CPU cycles, network packets, and instance-store disk I/O. Therefore, memory and EBS disk space metrics require an agent running inside the instance.
 
 > **Stop and think**: If an EC2 instance exhausts its memory and crashes, which of the standard free metrics might give you a clue that something went wrong, given that `MemoryUtilization` is not tracked?
 
 ### Viewing Standard Metrics
+
+You can retrieve these metrics instantly using the AWS CLI.
 
 ```bash
 # List all available metrics for an instance
@@ -122,15 +121,17 @@ aws cloudwatch get-metric-statistics \
 | SQS | NumberOfMessagesSent, ApproximateNumberOfMessagesVisible, ApproximateAgeOfOldestMessage | 5 minutes |
 | DynamoDB | ConsumedReadCapacityUnits, ConsumedWriteCapacityUnits, ThrottledRequests | 1 minute |
 
-Notice that ECS gives you memory utilization for free (it can see container-level memory from the task metadata), while EC2 does not.
+Notice that ECS gives you memory utilization for free because it can observe container-level memory from the task metadata. EC2, operating at the virtual machine level, does not.
 
 ---
 
 ## Custom Metrics: Measuring What Matters
 
-Standard metrics tell you about infrastructure. Custom metrics tell you about your application. Business-critical values -- requests per second, payment processing latency, queue depth, cache hit ratio -- need custom metrics.
+Standard metrics tell you about the health of your infrastructure. Custom metrics tell you about the health of your business. Business-critical values—like requests per second, payment processing latency, queue depth, and cache hit ratio—must be emitted as custom metrics.
 
 ### Publishing Custom Metrics
+
+You can publish data points directly to the CloudWatch API. 
 
 ```bash
 # Publish a single metric data point
@@ -161,9 +162,9 @@ aws cloudwatch put-metric-data \
 
 ### Pricing Reality Check
 
-Custom metrics cost **$0.30 per metric per month** for the first 10,000 metrics, dropping to $0.10 at scale. A "metric" is defined by its unique combination of namespace, metric name, and dimensions.
+Custom metrics cost **$0.30 per metric per month** for the first 10,000 metrics, dropping to $0.10 at scale. A "metric" is uniquely defined by its combination of namespace, metric name, and dimensions.
 
-This means these are three separate billable metrics:
+For instance, the following represent three separate billable metrics:
 
 ```
 MyApp/Production + OrdersProcessed + Environment=production,Service=orders
@@ -171,11 +172,11 @@ MyApp/Production + OrdersProcessed + Environment=staging,Service=orders
 MyApp/Production + OrdersProcessed + Environment=production,Service=payments
 ```
 
-Teams that over-use dimensions (adding instance ID, request ID, or user ID as dimensions) can accidentally create millions of metrics and face bills in the thousands. A good rule: dimensions should have low cardinality (tens or hundreds of values, not thousands).
+Teams that over-use dimensions (e.g., adding an instance ID, request ID, or user IP address as dimensions) can accidentally create millions of unique metrics and face bills in the tens of thousands of dollars. A firm rule: dimensions should have low cardinality. Store high-cardinality data in log files, not metric dimensions.
 
 ### Embedded Metric Format (EMF)
 
-If your application writes structured JSON logs, CloudWatch can automatically extract metrics from them. This is called the Embedded Metric Format, and it is the most cost-effective way to publish custom metrics from Lambda functions and ECS tasks:
+If your application writes structured JSON logs, CloudWatch can automatically extract metrics from them. This is the Embedded Metric Format (EMF), and it is the most scalable way to publish custom metrics from Lambda functions and ECS tasks without blocking application threads.
 
 ```python
 import json
@@ -209,19 +210,19 @@ emit_metric("CheckoutLatency", 234, "Milliseconds",
             {"Environment": "production", "Region": "us-east-1"})
 ```
 
-The beauty of EMF: you get both a log entry AND a CloudWatch metric from a single `print` statement. No separate `put-metric-data` API call needed.
+With EMF, you get both a searchable log entry AND a CloudWatch metric from a single stdout print statement, entirely bypassing the network latency of the `put-metric-data` API.
 
 > **Pause and predict**: If you use `put-metric-data` synchronously in a Lambda function that processes 10,000 requests per second, what two major bottlenecks or operational issues will you likely encounter?
 
 ---
 
-## CloudWatch Alarms: Getting Notified Before Users Do
+## CloudWatch Alarms: Intelligent Alerting
 
-Metrics without alarms are just dashboards that nobody watches at 3 AM. Alarms bridge the gap between data collection and incident response.
+Metrics without alarms are simply graphs that no one watches at 3:00 AM. Alarms bridge the gap between telemetry collection and incident response, waking up engineers only when action is required.
 
 ### Alarm Anatomy
 
-Every CloudWatch Alarm has three states:
+Every CloudWatch Alarm evaluates data over a defined period and maintains one of three states:
 
 ```mermaid
 stateDiagram-v2
@@ -233,6 +234,8 @@ stateDiagram-v2
 ```
 
 ### Creating Alarms
+
+Alarms can perform automated actions based on their state transitions.
 
 ```bash
 # CPU alarm: trigger if average CPU > 80% for 3 consecutive 5-minute periods
@@ -281,7 +284,7 @@ aws cloudwatch put-metric-alarm \
 
 ### The `treat-missing-data` Gotcha
 
-This setting determines what happens when CloudWatch has no data points for an evaluation period. The options:
+This crucial setting determines what happens when CloudWatch has no data points for an evaluation period.
 
 | Setting | Behavior | Best For |
 |---------|----------|----------|
@@ -290,13 +293,13 @@ This setting determines what happens when CloudWatch has no data points for an e
 | `breaching` | Treats missing data as ALARM | Critical systems where silence is bad |
 | `ignore` | Skips the period entirely | Alarms with naturally gappy data |
 
-The default is `missing`, which is usually correct. But for critical health checks, consider `breaching` -- if your application stops reporting metrics, that itself is a problem worth alerting on.
+The default is `missing`, which is generally safe. But for critical continuous health checks, consider `breaching`—if your application completely stops reporting metrics, silence is itself an emergency worth alerting on.
 
 > **Stop and think**: You have an alarm monitoring a batch job that runs once an hour. If `treat-missing-data` is set to `missing`, what state will the alarm be in for the 59 minutes the job isn't running, and how might that affect your incident response?
 
 ### Composite Alarms
 
-When a single metric alarm is too noisy, combine multiple alarms with boolean logic:
+When a single metric alarm produces too much noise, combine multiple alarms with boolean logic to create high-signal composite alarms.
 
 ```bash
 # Only alert if BOTH CPU is high AND memory is high
@@ -306,13 +309,13 @@ aws cloudwatch put-composite-alarm \
   --alarm-actions arn:aws:sns:us-east-1:123456789012:ops-alerts
 ```
 
-This reduces alert fatigue significantly. A CPU spike alone is often transient. A CPU spike combined with high memory and elevated error rate is a real problem.
+This drastically reduces alert fatigue. A transient CPU spike alone is often harmless. A CPU spike combined with exhausted memory and an elevated 5xx error rate is an active incident.
 
 ---
 
 ## CloudWatch Logs: Centralized Log Management
 
-Every application produces logs. CloudWatch Logs gives you a central place to store, search, and analyze them.
+Every application produces logs, but accessing them across hundreds of instances via SSH is impossible at scale. CloudWatch Logs gives you a centralized data store to securely hold, search, and parse those logs.
 
 ### Core Concepts
 
@@ -330,13 +333,13 @@ graph TD
     LS3 --> LE4["Log Event: '2026-03-24T10:30:03Z WARN Cache miss rate above 20%'"]
 ```
 
-- **Log Group**: A container for log streams, typically one per application/environment combination. Retention, access policies, and encryption are set at the group level.
-- **Log Stream**: A sequence of log events from a single source (one per instance, container, or Lambda invocation).
-- **Log Event**: A single log message with a timestamp.
+- **Log Group**: A massive container for log streams, typically one per application/environment.
+- **Log Stream**: A continuous sequence of log events from a specific source (like one EC2 instance or one Lambda invocation).
+- **Log Event**: A single timestamped string of text or JSON.
 
 ### Setting Retention (Cost Control)
 
-By default, CloudWatch Logs retains data **forever**. This is the single biggest cost surprise for CloudWatch newcomers.
+By default, CloudWatch Logs retains data **forever**. This is the single biggest cause of billing shock for CloudWatch newcomers.
 
 ```bash
 # Set retention to 30 days (common for production)
@@ -353,11 +356,9 @@ aws logs describe-log-groups \
   --output table
 ```
 
-A good strategy: 7-14 days for development, 30-90 days for production, and archive to S3 for long-term compliance needs.
-
 ### CloudWatch Logs Insights
 
-This is where CloudWatch Logs becomes genuinely powerful. Logs Insights lets you write SQL-like queries across log groups:
+Logs Insights provides a purpose-built query language to scan terabytes of logs asynchronously. 
 
 ```bash
 # Find the 20 slowest requests in the last hour
@@ -405,7 +406,7 @@ Key Logs Insights query patterns:
 
 ### Metric Filters: Turning Logs Into Metrics
 
-You can create CloudWatch Metrics from log patterns without changing your application code:
+You can define CloudWatch Metrics from continuous log patterns without altering application code. Crucially, evaluating logs with metric filters is completely free; you are not charged for the compute required to scan the incoming log streams. You only pay standard rates for the resulting custom metrics that the filter generates.
 
 ```bash
 # Create a metric filter that counts ERROR lines
@@ -425,13 +426,11 @@ aws logs put-metric-filter \
     metricName=Server5xxErrors,metricNamespace=MyApp/Production,metricValue=1,defaultValue=0
 ```
 
-Now you can alarm on `ApplicationErrors` or `Server5xxErrors` just like any other CloudWatch metric.
-
 ---
 
-## The CloudWatch Agent: Unlocking OS-Level Metrics and Custom Logs
+## The CloudWatch Agent: Unlocking OS-Level Metrics
 
-The CloudWatch Agent is a lightweight daemon that runs inside your EC2 instances (and on-premises servers). It collects operating system metrics that the hypervisor cannot see and ships log files to CloudWatch Logs.
+The CloudWatch Agent is a lightweight daemon that resides inside your EC2 instances. It captures the operating system metrics the hypervisor misses and streams text logs directly to CloudWatch Logs.
 
 ### Installation
 
@@ -449,7 +448,7 @@ amazon-cloudwatch-agent-ctl -a status
 
 ### Configuration
 
-The agent is configured with a JSON file. You can generate one interactively with a wizard or write it directly:
+The agent is governed by a JSON file that explicitly declares which metrics to scrape and which file paths to tail.
 
 ```json
 {
@@ -525,6 +524,8 @@ The agent is configured with a JSON file. You can generate one interactively wit
 
 ### Storing Config in SSM and Starting the Agent
 
+Do not bake this config file directly into your AMI. Instead, store it centrally in Systems Manager (SSM).
+
 ```bash
 # Store the config in SSM Parameter Store
 aws ssm put-parameter \
@@ -545,7 +546,7 @@ amazon-cloudwatch-agent-ctl -a status
 
 ### Required IAM Policy
 
-The EC2 instance role needs these permissions:
+The EC2 instance role requires permission to write metrics, create log streams, and fetch parameters from SSM.
 
 ```json
 {
@@ -572,7 +573,7 @@ The EC2 instance role needs these permissions:
 }
 ```
 
-AWS provides a managed policy `CloudWatchAgentServerPolicy` that covers these permissions. Use it instead of maintaining a custom policy:
+AWS provides the `CloudWatchAgentServerPolicy` managed policy which natively covers these exact requirements:
 
 ```bash
 aws iam attach-role-policy \
@@ -584,13 +585,13 @@ aws iam attach-role-policy \
 
 ## CloudWatch Dashboards and Metric Math
 
-While alarms are critical for proactive response, dashboards provide the single pane of glass needed during an incident to correlate multiple signals. CloudWatch Dashboards allow you to visualize metrics from multiple regions and accounts.
+While alarms handle proactive response, dashboards provide the unified situational awareness required during live incident triage. 
 
 ### Metric Math
 
-Metric Math enables you to query multiple CloudWatch metrics and use math expressions to create new time series based on these metrics. This is invaluable for calculating rates, percentages, or ratios that are not emitted directly by your application.
+Metric Math enables you to mathematically manipulate multiple CloudWatch metrics to derive entirely new operational insights without writing custom publisher code.
 
-For example, if your load balancer emits `RequestCount` and `HTTPCode_Target_5XX_Count`, you can use metric math to graph the error rate percentage:
+For example, calculating a live error rate percentage directly from raw load balancer metrics:
 
 ```json
 [
@@ -600,13 +601,17 @@ For example, if your load balancer emits `RequestCount` and `HTTPCode_Target_5XX
 ]
 ```
 
-In this example, `requests` and `errors` are not displayed (`"ReturnData": false`), but the calculated `error_rate` is graphed. This allows you to visualize the derived metric math expression on a dashboard.
+### Visualizing Cost Trends
 
-## EventBridge: Event-Driven Automation
+A highly effective, yet often overlooked, use of metric math is tracking **cost trends**. By querying the `EstimatedCharges` metric in the `AWS/Billing` namespace and comparing it mathematically against your application's `RequestCount`, you can use metric math to graph your real-time cost-per-request. This powerful technique transforms a standard operational dashboard into an immediate FinOps visibility tool, allowing engineers to evaluate the financial efficiency of a new code deployment within minutes.
 
-EventBridge (formerly CloudWatch Events) is the event bus that connects AWS services together. When something happens in your account -- an EC2 instance changes state, a deployment completes, an alarm triggers -- EventBridge can route that event to a target for automated response.
+---
 
-### Common Event Patterns
+## EventBridge and X-Ray: Automation and Tracing
+
+### EventBridge: Event-Driven Automation
+
+EventBridge is the high-throughput nervous system connecting AWS services. When infrastructure state changes—an instance terminates, a pipeline completes, or an alarm breaches—EventBridge routes that payload to a designated target for remediation.
 
 ```bash
 # React when an EC2 instance stops unexpectedly
@@ -633,19 +638,9 @@ aws events put-rule \
   --state ENABLED
 ```
 
-### EventBridge vs CloudWatch Alarms
+### X-Ray: Distributed Tracing
 
-Think of alarms as threshold-based monitoring ("alert me when X exceeds Y") and EventBridge as event-based automation ("when X happens, do Y"). They are complementary:
-
-- **Alarm**: CPU > 80% for 15 minutes --> send SNS notification
-- **EventBridge**: ECS task failed --> trigger Lambda to investigate and post to Slack
-- **Combined**: Alarm triggers --> EventBridge rule catches alarm state change --> Lambda creates a PagerDuty incident
-
----
-
-## X-Ray: Distributed Tracing (Brief Overview)
-
-When a request flows through multiple services (API Gateway to Lambda to DynamoDB to SQS to another Lambda), logs alone cannot tell you which service caused the slowdown. AWS X-Ray provides distributed tracing.
+In modern microservices architectures, an API request might flow through ten different distributed services. When the request is slow, logs alone cannot quickly pinpoint the exact bottleneck. AWS X-Ray solves this by passing a trace ID through every hop.
 
 ```mermaid
 graph LR
@@ -659,13 +654,11 @@ graph LR
     class LA bottleneck
 ```
 
-X-Ray integration requires adding the X-Ray SDK to your application code and enabling tracing on the service. It is most useful for Lambda and ECS-based microservice architectures. For a deep dive, the X-Ray service deserves its own module -- here, know that it exists and what it solves.
-
 ---
 
-## Cost Considerations
+## Cost Considerations and Best Practices
 
-CloudWatch costs sneak up on teams that do not plan. Here is a pricing summary for US East (as of 2026):
+CloudWatch scaling costs can ambush unprepared teams. Here is a baseline pricing reality check (US East, 2026):
 
 | Component | Free Tier | Paid Rate |
 |-----------|-----------|-----------|
@@ -678,10 +671,10 @@ CloudWatch costs sneak up on teams that do not plan. Here is a pricing summary f
 | Logs Insights queries | None free | $0.005/GB scanned |
 | Dashboards | 3 dashboards (50 metrics) | $3.00/dashboard/month |
 
-The three biggest cost drivers are usually:
-1. **Log ingestion** -- verbose application logging at scale adds up fast
-2. **Custom metric cardinality** -- too many dimension combinations
-3. **Log retention** -- the default is "forever," which compounds monthly
+The three catastrophic cost drivers are almost always:
+1. **Unchecked log ingestion** – verbose debugging statements left active in production.
+2. **Infinite log retention** – retaining massive datasets indefinitely because no policy was set.
+3. **Metric cardinality explosions** – injecting highly variable data like `UserId` into metric dimensions.
 
 ---
 
@@ -735,7 +728,7 @@ You should use a combination of both a CloudWatch Alarm action and an EventBridg
 <details>
 <summary>6. During a major production incident, your team ran the same complex Logs Insights query across 500 GB of log data dozens of times, resulting in hundreds of dollars in query fees. How can you architect the system to reduce the cost of tracking this specific error pattern in the future?</summary>
 
-To prevent repeated query fees for known error patterns, you should create a CloudWatch Metric Filter on the log group that matches the specific error syntax. The metric filter continuously evaluates incoming logs in real-time for free and increments a custom CloudWatch metric whenever the pattern is found. You can then build dashboards and alarms based on this custom metric, which costs a flat, predictable monthly rate rather than incurring per-query scan charges. For ad-hoc querying during an incident, you can also reduce costs by narrowing the Logs Insights time range to just the last few minutes, drastically reducing the gigabytes of data scanned. Using these strategies ensures that operational visibility does not result in unpredictable billing spikes.
+To prevent repeated query fees for known error patterns, you should create a CloudWatch Metric Filter on the log group that matches the specific error syntax. Evaluating logs with metric filters is completely free; it continuously evaluates incoming logs in real-time and increments a custom CloudWatch metric whenever the pattern is found. You can then build dashboards and alarms based on this custom metric, which costs a flat, predictable monthly rate rather than incurring per-query scan charges. For ad-hoc querying during an incident, you can also reduce costs by narrowing the Logs Insights time range to just the last few minutes, drastically reducing the gigabytes of data scanned. Using these strategies ensures that operational visibility does not result in unpredictable billing spikes.
 </details>
 
 <details>
@@ -755,11 +748,11 @@ Install the CloudWatch Agent on an EC2 instance, configure it to collect memory 
 ### Setup
 
 You need:
-- An EC2 instance (Amazon Linux 2023 recommended) with an IAM role attached
-- SSH access to the instance
-- The IAM role must have `CloudWatchAgentServerPolicy` attached
+- An EC2 instance (Amazon Linux 2023 recommended) with an IAM role attached.
+- SSH access to the instance.
+- The IAM role must have `CloudWatchAgentServerPolicy` attached.
 
-If you do not have an instance ready:
+If you do not have an instance ready, run the following from your local terminal:
 
 ```bash
 # Create an IAM role for the instance (if you don't have one)
@@ -799,14 +792,15 @@ aws ec2 run-instances \
 
 ### Task 1: Install the CloudWatch Agent
 
-SSH into the instance and install the agent.
+Extract the instance IP automatically, SSH into the instance, and install the agent.
 
 <details>
 <summary>Solution</summary>
 
 ```bash
 # SSH into the instance
-ssh -i your-key.pem ec2-user@INSTANCE_PUBLIC_IP
+INSTANCE_PUBLIC_IP=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=cw-lab" --query "Reservations[0].Instances[0].PublicIpAddress" --output text)
+ssh -i your-key.pem ec2-user@$INSTANCE_PUBLIC_IP
 
 # Install the CloudWatch Agent
 sudo yum install -y amazon-cloudwatch-agent
@@ -819,7 +813,7 @@ amazon-cloudwatch-agent-ctl -a status
 
 ### Task 2: Create a Sample Application Log
 
-Generate a log file that simulates application output.
+Generate a log file that continuously simulates application output.
 
 <details>
 <summary>Solution</summary>
@@ -849,7 +843,7 @@ nohup /tmp/generate-logs.sh &
 
 ### Task 3: Configure and Start the CloudWatch Agent
 
-Write the agent configuration to collect memory metrics and ship the application log.
+Write the agent configuration to capture OS-level memory metrics and tail the mock application log file.
 
 <details>
 <summary>Solution</summary>
@@ -916,7 +910,7 @@ amazon-cloudwatch-agent-ctl -a status
 
 ### Task 4: Verify Metrics and Logs Appear in CloudWatch
 
-Wait 2-3 minutes for data to flow, then verify from your local machine.
+Wait a few minutes for the telemetry payload to reach AWS, then execute these commands from your local machine.
 
 <details>
 <summary>Solution</summary>
@@ -929,7 +923,8 @@ aws cloudwatch list-metrics \
   --output table
 
 # Get the latest memory metric
-INSTANCE_ID="i-YOUR_INSTANCE_ID"
+INSTANCE_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=cw-lab" --query "Reservations[0].Instances[0].InstanceId" --output text)
+
 aws cloudwatch get-metric-statistics \
   --namespace "CWAgentLab" \
   --metric-name "mem_used_percent" \
@@ -957,13 +952,14 @@ aws logs get-log-events \
 
 ### Task 5: Create a CPU Alarm
 
-Create an alarm that triggers when CPU exceeds 70% for 2 consecutive 1-minute periods. Then stress the CPU to trigger it.
+Create a proactive alarm that triggers an SNS notification when CPU load exceeds a designated threshold, then stress-test the environment.
 
 <details>
 <summary>Solution</summary>
 
 ```bash
-INSTANCE_ID="i-YOUR_INSTANCE_ID"
+INSTANCE_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=cw-lab" --query "Reservations[0].Instances[0].InstanceId" --output text)
+INSTANCE_PUBLIC_IP=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=cw-lab" --query "Reservations[0].Instances[0].PublicIpAddress" --output text)
 
 # Create an SNS topic for notifications (or use an existing one)
 TOPIC_ARN=$(aws sns create-topic --name cw-lab-alerts --query 'TopicArn' --output text)
@@ -992,7 +988,7 @@ aws cloudwatch put-metric-alarm \
   --treat-missing-data missing
 
 # SSH into the instance and stress the CPU
-ssh -i your-key.pem ec2-user@INSTANCE_PUBLIC_IP
+ssh -i your-key.pem ec2-user@$INSTANCE_PUBLIC_IP
 
 # Inside the EC2 instance, install and run stress-ng
 sudo yum install -y stress-ng
@@ -1008,14 +1004,19 @@ aws cloudwatch describe-alarms \
 
 ### Task 6: Clean Up
 
+Tear down all infrastructure deployed in this lab to avoid ongoing costs.
+
 <details>
 <summary>Solution</summary>
 
 ```bash
+INSTANCE_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=cw-lab" --query "Reservations[0].Instances[0].InstanceId" --output text)
+
 # Delete the alarm
 aws cloudwatch delete-alarms --alarm-names "cw-lab-high-cpu"
 
 # Delete SNS topic and subscription
+TOPIC_ARN=$(aws sns create-topic --name cw-lab-alerts --query 'TopicArn' --output text)
 aws sns delete-topic --topic-arn $TOPIC_ARN
 
 # Delete log group
@@ -1041,16 +1042,16 @@ aws iam delete-role --role-name cw-lab-ec2-role
 
 ### Success Criteria
 
-- [ ] CloudWatch Agent installed and running on EC2 instance
-- [ ] Memory metrics (`mem_used_percent`) appearing in CloudWatch under `CWAgentLab` namespace
-- [ ] Application logs visible in CloudWatch Logs under `/cw-lab/application`
-- [ ] CPU alarm created and in `OK` state initially
-- [ ] CPU stress test triggers alarm to `ALARM` state
-- [ ] Alarm notification received (email or visible state change)
-- [ ] All resources cleaned up
+- [ ] CloudWatch Agent installed and running successfully on the provisioned EC2 instance.
+- [ ] Memory metrics (`mem_used_percent`) successfully emitted and visible under the custom `CWAgentLab` namespace.
+- [ ] Simulated application logs securely flowing into CloudWatch Logs under the `/cw-lab/application` log group.
+- [ ] Proactive CPU alarm correctly provisioned and initiating in an `OK` state.
+- [ ] `stress-ng` test predictably forces the CPU threshold limit, pushing the alarm into the `ALARM` state.
+- [ ] Event-driven SNS notification dispatched and validated by email receipt.
+- [ ] Complete teardown and removal of all lab infrastructure elements.
 
 ---
 
 ## Next Module
 
-Continue to [Module 1.11: CI/CD on AWS](../module-1.11-cicd/) -- where you will build automated deployment pipelines using AWS CodeBuild, CodeDeploy, and CodePipeline. Now that you can monitor your infrastructure, it is time to automate how code gets there.
+Continue to [Module 1.11: CI/CD on AWS](../module-1.11-cicd/) — where you will progress from observing operations to automating them, leveraging AWS CodeBuild, CodeDeploy, and CodePipeline to safely deploy applications into the very infrastructure you have now successfully instrumented.
