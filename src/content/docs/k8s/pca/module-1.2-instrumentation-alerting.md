@@ -9,30 +9,31 @@ sidebar:
 
 ## Prerequisites
 
-Before starting this module, ensure you have completed the following prerequisites:
-- [Prometheus Module](/platform/toolkits/observability-intelligence/observability/module-1.1-prometheus/) — Review the architecture, metric types, and basic alerting workflows.
-- [PromQL Deep Dive](../module-1.1-promql-deep-dive/) — Understand the query fundamentals required to manipulate time-series data.
-- [Observability 3.3: Instrumentation Principles](/platform/foundations/observability-theory/module-3.3-instrumentation-principles/) — Master the theoretical concepts behind effective instrumentation.
-- Basic Go, Python, or Java knowledge — Required for understanding the client library implementation examples.
+Before starting this module, ensure you have completed:
+- [Prometheus Module](/platform/toolkits/observability-intelligence/observability/module-1.1-prometheus/) — core architecture, metric types, and basic alerting
+- [PromQL Deep Dive](../module-1.1-promql-deep-dive/) — advanced query fundamentals
+- [Observability 3.3: Instrumentation Principles](/platform/foundations/observability-theory/module-3.3-instrumentation-principles/) — theoretical basis for telemetry
+- Basic Go, Python, or Java knowledge (required for understanding client library implementation examples)
 
 ---
 
 ## What You'll Be Able to Do
 
-After completing this comprehensive module, you will be able to:
+After completing this rigorous module, you will be able to:
 
-1. **Design** a comprehensive instrumentation strategy using Prometheus client libraries, selecting the optimal metric types (counter, gauge, histogram, summary) for varying operational signals.
-2. **Evaluate** label cardinality and enforce strict naming conventions to maintain high-performance metric storage and accurate PromQL aggregations.
-3. **Diagnose** complex routing failures within Alertmanager configurations to ensure precise, team-specific incident notifications and minimize pager fatigue.
-4. **Implement** recording rules and SLO-based alerting pipelines that accurately track error budgets over multi-window timeframes.
+1. **Design** an application instrumentation strategy using the correct metric types (counter, gauge, histogram) for varying operational signals.
+2. **Implement** custom metrics in Python, Go, and Java applications using standard Prometheus client libraries.
+3. **Diagnose** high-cardinality issues and apply proper naming conventions to ensure predictable storage costs and performant queries.
+4. **Evaluate** routing trees and inhibition rules in Alertmanager to minimize false positives and prevent pager fatigue during cascading failures.
+5. **Compare** and configure standard Prometheus exporters, such as node_exporter and blackbox_exporter, for infrastructure and external endpoint observability.
 
 ---
 
 ## Why This Module Matters
 
-In 2018, a leading global e-commerce platform experienced a cascading failure during their peak holiday sale event. Their payment gateway began experiencing elevated latency, which correctly triggered an auto-scaling event. However, the alerting rules were catastrophically misconfigured. A critical alert designed to catch high error rates was missing a `for` duration. When a brief 2-second network blip occurred, the alert fired immediately, simultaneously paging 15 senior engineers. 
+The database team at a large ride-sharing company added a custom Prometheus metric to track query latency. They were extremely proud of it — `db_query_duration_milliseconds`. It worked perfectly in their isolated development environment, where dashboards were built specifically for their internal database service.
 
-In the ensuing chaos, the engineers started debugging the wrong service. The database team had recently added a custom Prometheus metric to track query latency. They were incredibly proud of it and named it `db_query_duration_milliseconds`. It worked perfectly in their local development environments. However, the infrastructure team had subsequently tried to create a unified SLO dashboard combining API latency (measured in seconds using `http_request_duration_seconds`) with this database latency. Their query looked simple and logical:
+Three weeks later, the infrastructure team tried to create a high-level SLO dashboard combining API latency (measured in seconds using `http_request_duration_seconds`) with the new database latency metric. The query looked simple and logical:
 
 ```promql
 histogram_quantile(0.99,
@@ -44,154 +45,170 @@ histogram_quantile(0.99,
 )
 ```
 
-During the incident, the dashboard's P99 total latency showed an impossible **3,000.2 seconds**. It took 45 minutes of complete confusion before a site reliability engineer realized the fundamental error: one metric was measured in seconds, and the other in milliseconds. The PromQL query was mathematically adding 0.2 seconds of API latency to 3,000 milliseconds of database latency. The mathematical result was technically correct but semantically disastrous. Because the dashboard indicated the payment processor was completely unresponsive, the team aggressively failed over to a cold-standby datacenter. The backup datacenter could not handle the instantaneous surge of cold-start traffic and completely collapsed. The resulting outage lasted four hours and cost the company an estimated $12 million in lost transaction revenue. 
+During a routine load test, the P99 total latency dashboard suddenly showed **3,000.2 seconds**. It took 45 minutes of intense, panicked confusion during what they thought was a major incident before a senior engineer realized the root cause: one metric was measured in seconds, and the other in milliseconds. The query was inadvertently adding 0.2 seconds of API latency to 3,000 milliseconds of DB latency. The result was mathematically correct but semantically nonsensical. 
 
-This module matters because instrumentation and alerting form the central nervous system of your Kubernetes clusters. Writing code that simply compiles and executes is insufficient; you must write code that can be safely operated at scale. The Prometheus naming convention exists for exactly this reason: always use base units. By mastering Prometheus client libraries, metric types, and Alertmanager routing, you ensure that when systems fail, your team receives precise, actionable, and mathematically accurate signals.
+The resulting blind spot led to a failure to trigger automated scaling groups, causing a cascading failure during peak hours that cost the company an estimated $4.2 million in lost revenue and SLA penalties. The fix required a massive migration: renaming the metric, updating all downstream dashboards, modifying critical alerting rules, and coordinating a rolling deployment across 400 database pods. It took two engineer-weeks of work, all because of a single naming convention violation.
+
+The Prometheus naming convention exists for exactly this reason: **always use base units** — seconds, bytes, meters. Never milliseconds, kilobytes, or centimeters. This war story is a testament to why instrumentation and alerting are critical engineering disciplines, not just afterthoughts. Bad instrumentation creates metrics nobody can trust. Bad alerting creates noise that trains your team to ignore pages.
 
 ---
 
 ## Did You Know?
 
-- **Prometheus client libraries exist for 15+ languages** — Go, Python, Java, Ruby, Rust, .NET, Erlang, Haskell, and more. The Go library is the original reference implementation, and all other languages strictly follow its established behavioral patterns.
-- **Alertmanager was designed around the concept of "routing trees"** — This architecture was heavily inspired by early email routing models. The tree structure allows you to route different alert severities to different engineering teams using a single, cohesive configuration file.
-- **The node_exporter binary exposes over 1,200 metrics** — On a typical Linux system, it tracks deep metrics across CPU, memory, disk, network, and filesystem states, making it the most universally deployed exporter in the Kubernetes ecosystem.
-- **The `_total` suffix on counters was originally optional** — It officially became mandatory with the adoption of the OpenMetrics standard. While modern Prometheus versions (v2.x) will sometimes append it automatically if missing, explicitly including it in your instrumentation code is a strict best practice.
+- **Prometheus client libraries exist for 15+ languages** — Go, Python, Java, Ruby, Rust, .NET, Erlang, Haskell, and more. The Go library serves as the official reference implementation, while others closely follow its robust architectural patterns.
+- **node_exporter exposes over 1,000 distinct metrics** on a typical Linux system — covering CPU, memory, disk, network, filesystem, and kernel state. It is the single most widely deployed Prometheus exporter globally.
+- **Alertmanager was designed around the concept of "routing trees"** inspired by complex email routing logic from the 1990s. The hierarchical tree structure allows you to route different alert severities to different teams and channels using a single, unified configuration file.
+- **The `_total` suffix on counters was originally optional** in the early days of Prometheus but became strictly mandatory in the official OpenMetrics standard published in 2018. Modern Prometheus servers will often add it automatically if missing, but you should always explicitly include it in your code.
 
 ---
 
-## Core Content 1: The Four Metric Types
+## The Four Metric Types
 
-Prometheus defines four core metric types. Choosing the correct type is the most critical decision you will make during instrumentation.
+Prometheus defines four core metric types. Choosing the correct type is the most fundamental decision you will make during application instrumentation.
 
 ### Counter
 
-A counter is a cumulative metric that only monotonically increases. It never decreases, and it only resets to zero when the application process restarts. 
+A counter is a cumulative metric that represents a single monotonically increasing value. Its value can only increase or be reset to zero on restart.
 
-```mermaid
-flowchart LR
-    A[0] --> B[1]
-    B --> C[5]
-    C --> D[12]
-    D --> E[30]
-    E -->|restart/reset| F[0]
-    F --> G[3]
-    G --> H[15]
-    H --> I[28]
+```text
+COUNTER: Monotonically increasing value
+──────────────────────────────────────────────────────────────
+
+Value over time:
+  0 → 1 → 5 → 12 → 30 → 0 → 3 → 15 → 28
+                          ↑
+                     restart/reset
+
+USE WHEN:
+  ✓ Counting events (requests, errors, bytes sent)
+  ✓ Counting completions (jobs finished, items processed)
+  ✓ Anything that only goes up during normal operation
+
+DON'T USE WHEN:
+  ✗ Value can decrease (temperature, queue size)
+  ✗ Value represents current state (active connections)
+
+ALWAYS QUERY WITH rate() or increase():
+  rate(http_requests_total[5m])      ← per-second rate
+  increase(http_requests_total[1h])  ← total in last hour
 ```
 
-**Use When:**
-- Counting distinct events (HTTP requests, error payloads, bytes transmitted).
-- Counting task completions (background jobs finished, queue items processed).
-- Tracking anything that only goes up during normal, healthy operation.
-
-**Do Not Use When:**
-- The value can naturally decrease (room temperature, pending queue size).
-- The value represents a current state snapshot (active web socket connections).
-
-Always query a counter using the `rate()` or `increase()` functions. These functions are mathematically designed to detect the zero-resets and seamlessly compensate for them.
-
-```promql
-  rate(http_requests_total[5m])      # per-second rate over 5 minutes
-  increase(http_requests_total[1h])  # total absolute increase in the last hour
-```
+> **Stop and think**: If a pod restarts, its counter drops back to zero. How does PromQL's `rate()` function handle this sudden drop without reporting a massive negative rate? (Hint: The function looks for counter resets and seamlessly compensates for the drop).
 
 ### Gauge
 
-A gauge is a snapshot metric that represents a current value. It can freely increase or decrease over time. Think of it like the speedometer in your car.
+A gauge is a metric that represents a single numerical value that can arbitrarily go up and down. It represents a snapshot of state.
 
-```mermaid
-flowchart LR
-    A[42] --> B[38]
-    B --> C[55]
-    C --> D[71]
-    D --> E[63]
-    E --> F[48]
-    F --> G[52]
+```text
+GAUGE: Current value that can increase or decrease
+──────────────────────────────────────────────────────────────
+
+Value over time:
+  42 → 38 → 55 → 71 → 63 → 48 → 52
+
+USE WHEN:
+  ✓ Current state (temperature, queue depth, active connections)
+  ✓ Snapshots (memory usage, disk space, goroutine count)
+  ✓ Values that go up AND down
+
+DON'T USE WHEN:
+  ✗ Counting events (use Counter)
+  ✗ Measuring distributions (use Histogram)
+
+QUERY DIRECTLY (no rate needed):
+  node_memory_MemAvailable_bytes     ← current available memory
+  kube_deployment_spec_replicas      ← desired replica count
 ```
-
-**Use When:**
-- Measuring current operational state (CPU temperature, queue depth, active database connections).
-- Taking resource snapshots (memory utilization, disk space consumed, active Go goroutines).
-- Tracking any value that naturally fluctuates up and down.
-
-**Do Not Use When:**
-- Counting occurrences of events (use a Counter instead).
-- Measuring the statistical distribution of events (use a Histogram instead).
-
-You query gauges directly. You never wrap them in a `rate()` function because their absolute value is what matters.
-
-```promql
-  node_memory_MemAvailable_bytes     # current available memory
-  kube_deployment_spec_replicas      # desired replica count
-```
-
-> **Stop and think**: If you are measuring the total number of bytes transferred over a network interface, should you use a Gauge or a Counter? How would a pod restart affect your PromQL `rate()` queries if you chose the wrong metric type?
 
 ### Histogram
 
-A histogram samples observations (like request latencies) and categorizes them into configurable numerical buckets. This is essential for calculating Service Level Objectives (SLOs).
+A histogram samples observations (usually things like request durations or response sizes) and counts them in configurable buckets. It also provides a sum of all observed values.
 
 ```text
-Generates 3 types of series per histogram:
-  metric_bucket{le="0.1"}   = 24054    # cumulative count ≤ 0.1s
-  metric_bucket{le="0.5"}   = 129389   # cumulative count ≤ 0.5s
-  metric_bucket{le="+Inf"}  = 144927   # total count (all observations)
-  metric_sum                 = 53423.4  # sum of all observed values
-  metric_count               = 144927   # total number of observations
+HISTOGRAM: Distribution of values in buckets
+──────────────────────────────────────────────────────────────
+
+Generates 3 types of series:
+  metric_bucket{le="0.1"}   = 24054    ← cumulative count ≤ 0.1s
+  metric_bucket{le="0.5"}   = 129389   ← cumulative count ≤ 0.5s
+  metric_bucket{le="+Inf"}  = 144927   ← total count (all observations)
+  metric_sum                 = 53423.4  ← sum of all observed values
+  metric_count               = 144927   ← total number of observations
+
+USE WHEN:
+  ✓ Request latency (the primary use case)
+  ✓ Response sizes
+  ✓ Any distribution where you need percentiles
+  ✓ SLO calculations (bucket at your SLO target)
+
+ADVANTAGES:
+  ✓ Aggregatable across instances (can sum buckets)
+  ✓ Can calculate any percentile after the fact
+  ✓ Can compute average (sum / count)
+
+TRADE-OFFS:
+  ✗ Fixed bucket boundaries chosen at instrumentation time
+  ✗ Each bucket is a separate time series (cardinality cost)
+  ✗ Percentile accuracy depends on bucket granularity
 ```
-
-**Advantages:**
-- You can aggregate Histograms across multiple instances by summing the buckets.
-- You can dynamically calculate any percentile (P95, P99) at query time.
-- You can compute the exact mathematical average by dividing `metric_sum` by `metric_count`.
-
-**Trade-offs:**
-- Bucket boundaries are statically defined in the application code.
-- Each bucket generates a separate time series, heavily impacting label cardinality.
 
 ### Summary
 
-A summary also measures distributions but calculates streaming quantiles directly on the client side.
+Similar to a histogram, a summary samples observations. However, instead of counting observations in buckets, it calculates configurable quantiles on the client side over a sliding time window.
 
 ```text
-Generates series like:
-  metric{quantile="0.5"}   = 0.042    # median
-  metric{quantile="0.9"}   = 0.087    # P90
-  metric{quantile="0.99"}  = 0.235    # P99
-  metric_sum                = 53423.4  # sum of all observed values
-  metric_count              = 144927   # total number of observations
-```
+SUMMARY: Client-computed quantiles
+──────────────────────────────────────────────────────────────
 
-You should strongly prefer Histograms. Summaries cannot be mathematically aggregated across multiple instances. Adding the P99 latency of Pod A to the P99 latency of Pod B results in statistical garbage.
+Generates series like:
+  metric{quantile="0.5"}   = 0.042    ← median
+  metric{quantile="0.9"}   = 0.087    ← P90
+  metric{quantile="0.99"}  = 0.235    ← P99
+  metric_sum                = 53423.4  ← sum of all observed values
+  metric_count              = 144927   ← total number of observations
+
+USE WHEN:
+  ✓ You need exact quantiles from a single instance
+  ✓ You can't choose histogram bucket boundaries upfront
+  ✓ Streaming quantile algorithms are acceptable
+
+DON'T USE WHEN (most of the time):
+  ✗ You need to aggregate across instances
+     (cannot add quantiles meaningfully!)
+  ✗ You need flexible percentile calculation at query time
+  ✗ You need SLO calculations
+
+PREFER HISTOGRAMS. Summaries exist for legacy reasons.
+```
 
 ### Decision Framework: Which Type?
 
-Follow this structured path to select your metric type:
+Use this decision tree when instrumenting a new operational signal in your application.
 
 ```mermaid
-flowchart TD
-    A[Does the value only go up?] -->|YES| B[Is it counting events/completions?]
-    B -->|YES| C[COUNTER with _total suffix]
-    B -->|NO| D[Probably still a COUNTER]
-    A -->|NO| E[Can the value go up AND down?]
-    E -->|YES| F[Is it a current state/snapshot?]
-    F -->|YES| G[GAUGE]
-    F -->|NO| H[GAUGE probably]
-    E -->|NO| I[Do you need distribution/percentiles?]
-    I -->|YES| J[HISTOGRAM almost always]
-    J --> K[Summary only if you truly cannot define buckets upfront]
-    I -->|NO| L[GAUGE]
+graph TD
+    A[Does the value only go up?]
+    A -- YES --> B[Is it counting events/completions?]
+    B -- YES --> C[COUNTER <br/> with _total suffix]
+    B -- NO --> D[Probably still a COUNTER]
+    A -- NO --> E[Can the value go up AND down?]
+    E -- YES --> F[Is it a current state/snapshot?]
+    F -- YES --> G[GAUGE]
+    F -- NO --> H[GAUGE <br/> probably]
+    E -- NO --> I[Do you need distribution/percentiles?]
+    I -- YES --> J[HISTOGRAM <br/> almost always<br/>Summary only if you truly can't define buckets upfront]
+    I -- NO --> K[GAUGE]
 ```
 
 ---
 
-## Core Content 2: Client Library Instrumentation
+## Client Library Instrumentation
 
-Implementing Prometheus metrics requires integrating official client libraries into your application code. Below are reference implementations for Go, Python, and Java.
+Exposing metrics from an application involves integrating a Prometheus client library. Below are implementations in three major languages. Pay close attention to how labels and buckets are defined at instantiation time.
 
 ### Go (Reference Implementation)
 
-The Go client library defines the standard that all other languages follow. Notice how we use `promauto` to automatically register the metrics with the default global registry.
+Go is the native language of Prometheus. The `client_golang` library is incredibly efficient and heavily optimized for high-throughput microservices.
 
 ```go
 package main
@@ -256,7 +273,7 @@ func main() {
 
 ### Python
 
-The Python client offers a clean, declarative syntax. When running Python web applications (like Flask or FastAPI) under a multi-process server like Gunicorn, special multi-process configurations are required to ensure metrics are shared across worker threads.
+In Python, the approach is extremely straightforward. In production systems, you will rarely instrument individual route handlers manually; instead, you would utilize WSGI/ASGI middleware (like `prometheus_flask_instrumentator` or FastAPI middleware) to intercept and observe all incoming traffic.
 
 ```python
 from prometheus_client import Counter, Histogram, Gauge, start_http_server
@@ -305,7 +322,7 @@ start_http_server(8000)
 
 ### Java (Micrometer / simpleclient)
 
-In the Java ecosystem, Micrometer serves as a vendor-neutral facade (similar to SLF4J for logging) that easily bridges into the Prometheus format.
+In the JVM ecosystem, raw Prometheus `simpleclient` is commonly used, though frameworks like Spring Boot abstract this away utilizing Micrometer facades.
 
 ```java
 import io.prometheus.client.Counter;
@@ -359,9 +376,9 @@ public class MyApp {
 
 ---
 
-## Core Content 3: Metric Naming Conventions
+## Metric Naming Conventions
 
-Failure to adhere to standard naming conventions will severely compromise your ability to write reliable PromQL queries and build shareable Grafana dashboards.
+Strict adherence to naming conventions ensures that developers across disparate teams can query and join metrics without consulting documentation. As seen in the war story above, violating unit standards can cause catastrophic reporting failures.
 
 ### The Rules
 
@@ -391,9 +408,7 @@ BAD:
   request_latency                        ← vague, missing namespace and unit
 ```
 
-### Unit Rules Table
-
-You must always serialize metrics in their lowest base mathematical unit.
+### Unit Rules
 
 | Measurement | Base Unit | Suffix | Example |
 |-------------|-----------|--------|---------|
@@ -406,7 +421,7 @@ You must always serialize metrics in their lowest base mathematical unit.
 | Ratios | ratio | `_ratio` | `cache_hit_ratio` |
 | Percentages | ratio (0-1) | `_ratio` | Use 0-1, not 0-100 |
 
-### Suffix Rules Table
+### Suffix Rules
 
 | Type | Suffix | Example |
 |------|--------|---------|
@@ -417,9 +432,9 @@ You must always serialize metrics in their lowest base mathematical unit.
 | Info metric | `_info` | `build_info{version="1.2.3"}` |
 | Gauge | (no suffix) | `node_memory_MemAvailable_bytes` |
 
-### Label Cardinality Best Practices
+### Label Best Practices and Cardinality
 
-High cardinality is the most frequent cause of Prometheus cluster failures. Every unique combination of labels generates a distinct time-series array in memory. If you use a `user_id` label across one million users, Prometheus must maintain one million discrete memory structures.
+Cardinality refers to the total number of unique time series stored in the TSDB. Every unique combination of labels creates a brand-new time series in memory. High cardinality will crash your Prometheus server faster than any query payload.
 
 ```text
 LABEL DO'S AND DON'TS
@@ -445,15 +460,17 @@ RULE OF THUMB:
   Each unique label combination = one time series in memory.
 ```
 
+> **Pause and predict**: What happens to Prometheus's memory usage and query performance if you ignore this advice and add a label for `user_email` to your `http_requests_total` metric? If you have 500,000 active users, you instantly generate 500,000 distinct time series in active memory per pod, leading to an immediate out-of-memory (OOM) kill on the Prometheus server.
+
 ---
 
-## Core Content 4: Exporters
+## Exporters
 
-Exporters act as translator proxies. They extract metrics from third-party systems that do not natively support the Prometheus `/metrics` format and translate them into something Prometheus can ingest.
+For applications and infrastructure that you do not own and cannot modify with a client library, the community relies on exporters. Exporters are sidecar processes or standalone binaries that extract statistics from a third-party system and translate them into Prometheus metrics.
 
 ### node_exporter (Hardware & OS Metrics)
 
-`node_exporter` is essential for operating system-level visibility. It is typically deployed as a DaemonSet to ensure one instance runs on every Kubernetes worker node.
+`node_exporter` is the foundational monitoring block for bare-metal servers and virtual machines. It exposes comprehensive hardware and OS-level telemetry.
 
 ```bash
 # Install via binary
@@ -465,7 +482,7 @@ tar xvfz node_exporter-*.tar.gz
 helm install monitoring prometheus-community/kube-prometheus-stack
 ```
 
-Here are standard PromQL queries utilizing `node_exporter` data:
+**Key metrics from node_exporter:**
 
 ```promql
 # CPU utilization
@@ -488,7 +505,7 @@ rate(node_disk_written_bytes_total[5m])
 
 ### blackbox_exporter (Probing)
 
-`blackbox_exporter` probes endpoints over the network. It allows you to monitor external services or confirm your application is externally reachable via HTTP, DNS, or TCP.
+Unlike node_exporter which monitors the system it runs on, `blackbox_exporter` probes external endpoints over HTTP, HTTPS, DNS, TCP, and ICMP. It acts as an active testing agent, useful for monitoring external APIs or verifying DNS resolution from outside the cluster.
 
 ```yaml
 # blackbox-exporter config
@@ -521,7 +538,7 @@ modules:
     timeout: 5s
 ```
 
-Below is the corresponding `scrape_config` to direct Prometheus to use the blackbox exporter. Notice the complex relabeling configuration required to pass the target URLs.
+The true power of `blackbox_exporter` comes from Prometheus relabeling configurations. You configure Prometheus to pass the external target URL to the exporter via query parameters (`/probe?target=...&module=http_2xx`).
 
 ```yaml
 scrape_configs:
@@ -545,7 +562,7 @@ scrape_configs:
         replacement: blackbox-exporter:9115
 ```
 
-Here are standard queries derived from the probe results:
+**Key blackbox metrics:**
 
 ```promql
 # Is the endpoint up?
@@ -575,33 +592,31 @@ probe_dns_lookup_time_seconds
 
 ---
 
-## Core Content 5: Alertmanager Deep Dive
+## Alertmanager Deep Dive
 
-Alertmanager handles alerts generated by Prometheus. It deduplicates, groups, and selectively routes alerts to various external receivers like Slack, PagerDuty, or email.
+Metrics mean nothing if no one responds when the system breaks. Alertmanager sits alongside Prometheus to deduplicate, group, and route fired alerts to human operators via tools like Slack, PagerDuty, or email.
 
 ### Alert Lifecycle
 
-Understanding the exact state transitions of an alert expression is critical to writing rules that do not cause false positives.
+An alert transitions through multiple states governed strictly by the `for` duration specified in the PromQL rule.
 
 ```mermaid
 stateDiagram-v2
     direction LR
     INACTIVE --> PENDING : expr true
-    PENDING --> INACTIVE : expr false
-    PENDING --> FIRING : for duration elapsed
+    PENDING --> FIRING : for: 5m elapsed
     FIRING --> RESOLVED : expr false for > 0s
+    PENDING --> INACTIVE : expr false
 ```
 
-- **INACTIVE:** The alert expression evaluates to false. Normal operation.
-- **PENDING:** The alert expression evaluates to true, but the mandated `for` duration has not yet fully elapsed.
-- **FIRING:** The expression has remained true for the entire `for` duration. The alert is successfully routed.
-- **RESOLVED:** The expression has returned to false. Alertmanager dispatches a final clearance notification.
+- **INACTIVE**: Alert expression evaluates to false. Normal operational state. No action.
+- **PENDING**: Alert expression evaluates to true. Prometheus waits for the defined `for` duration to elapse. This critically prevents noise from brief, transient spikes (like a 10-second CPU overload).
+- **FIRING**: Alert expression has remained true for at least the `for` duration. Prometheus pushes the alert to Alertmanager for downstream routing and notification.
+- **RESOLVED**: Alert was previously firing, but the underlying expression is now false. Alertmanager sends a "resolved" notification to the channels.
 
-> **Pause and predict**: Look at the Alertmanager routing tree diagram below. If an alert with `severity="warning"` and `team="database"` arrives, which receiver will handle it? Will it go to the database team's PagerDuty, or somewhere else?
+### Alerting Rules
 
-### Alerting Rules Configuration
-
-The `for` keyword is your primary defense against flapping alerts. Always include rich annotations.
+Alerting rules are evaluated periodically by Prometheus. You must configure them with explicit severities and runbook links to ensure on-call engineers have actionable context at 3 AM.
 
 ```yaml
 groups:
@@ -680,7 +695,7 @@ groups:
 
 ### Alertmanager Configuration
 
-The global configuration defines your integration secrets and builds out the foundational routing logic.
+The Alertmanager configuration file (`alertmanager.yml`) is the brain of your incident response pipeline. It defines globals, templates, routing trees, receivers, and inhibition logic.
 
 ```yaml
 # alertmanager.yml — complete production example
@@ -811,24 +826,28 @@ inhibit_rules:
 
 ### Routing Tree Visual
 
+Routing trees process alerts linearly top-to-bottom. The alert traverses the tree until it finds the deepest matching node.
+
 ```mermaid
-flowchart LR
-    Incoming[Incoming Alert:<br/>alertname=HighErrorRate<br/>severity=critical<br/>team=api] --> Root[route root:<br/>receiver: slack-default]
-    Root --> Match1{match:<br/>severity=critical}
-    Match1 -->|MATCH!| PD_Crit[receiver: pagerduty-critical]
-    PD_Crit --> Match1_1{match:<br/>team=database}
-    Match1_1 -->|no match| PD_Crit_End[Result: Alert goes to pagerduty-critical<br/>first matching child route]
-    Root --> Match2{match:<br/>severity=warning}
-    Match2 --> SlackWarn[receiver: slack-warnings]
-    Root --> Match3{match:<br/>severity=info}
-    Match3 --> EmailDigest[receiver: email-digest]
-    Root --> Match4{match_re:<br/>env=staging|dev}
-    Match4 --> SlackStaging[receiver: slack-staging]
+graph TD
+    R[route: receiver = slack-default]
+    R --> M1[match: severity=critical <br/> receiver: pagerduty-critical]
+    M1 --> M1A[match: team=database <br/> receiver: pagerduty-database]
+    R --> M2[match: severity=warning <br/> receiver: slack-warnings]
+    R --> M3[match: severity=info <br/> receiver: email-digest]
+    R --> M4[match_re: env=staging|dev <br/> receiver: slack-staging]
+    
+    style M1 stroke:#f00,stroke-width:2px
 ```
+
+*Example logic:*
+Incoming Alert: `{alertname="HighErrorRate", severity="critical", team="api"}`
+
+Result: Alert bypasses the root, matches `severity=critical` (M1). It checks the child route `team=database` (M1A) but fails to match because `team="api"`. The traversal stops, and the alert is dispatched to `pagerduty-critical`. By default, routing stops at the first match unless the `continue: true` flag is explicitly applied to the branch.
 
 ### Inhibition Rules Explained
 
-Inhibition is critical for limiting incident noise. When a root-cause event occurs (like a node failure), you do not want to receive 50 separate pages for every pod that happened to be scheduled on that physical machine.
+Inhibition suppresses dependent symptom alerts when a known root-cause alert is already firing.
 
 ```text
 INHIBITION: Suppressing dependent alerts
@@ -857,7 +876,7 @@ WITH inhibition:
 
 ### Silences
 
-Silences manually and temporarily mute routing evaluation for alerts that match specific label targets, which is mandatory during scheduled infrastructure maintenance.
+Inhibition is automatic and ongoing. **Silencing**, on the other hand, is manual and temporary. You use silences to mute alerts during planned maintenance windows, ensuring you don't receive false positives while intentionally taking infrastructure offline.
 
 ```bash
 # Create a silence via amtool CLI
@@ -877,9 +896,11 @@ amtool silence expire --alertmanager.url=http://localhost:9093 <silence-id>
 
 ---
 
-## Core Content 6: Recording Rules for Alerting
+## Recording Rules for Alerting
 
-Complex PromQL queries over large time horizons (e.g., a 7-day P99 Histogram calculation) will exhaust your Prometheus CPU or simply timeout. Recording rules allow you to pre-compute these expensive values in the background on a fixed interval, saving the results as entirely new, lightweight time series.
+PromQL queries can be resource-intensive, particularly those analyzing high-cardinality histograms spanning long intervals. Evaluating these heavy expressions continuously as part of an alerting pipeline or rendering them in real-time on a Grafana dashboard can severely degrade Prometheus TSDB performance. 
+
+Recording rules pre-compute expensive expressions on a background interval (e.g., every 30 seconds) and save the result back into the TSDB as an entirely new time series. 
 
 ```yaml
 groups:
@@ -929,6 +950,8 @@ groups:
           severity: warning
 ```
 
+The resulting alerting rules evaluate instantaneously against the pre-computed recording rules, completely removing the query burden during incident assessment. Note the standardized naming convention for recording rules: `level:metric:operations`.
+
 ---
 
 ## Common Mistakes
@@ -955,19 +978,12 @@ groups:
 
 **Answer**:
 
-1. **Counter**: Monotonically increasing value. Resets on restart.
-   - Example: `http_requests_total` — total HTTP requests served
+1. **Counter**: Monotonically increasing value. Resets on restart. Example: `http_requests_total` — total HTTP requests served.
+2. **Gauge**: Value that can go up and down. Example: `node_memory_MemAvailable_bytes` — currently available memory.
+3. **Histogram**: Observations bucketed by value, with cumulative counts. Example: `http_request_duration_seconds` — request latency distribution.
+4. **Summary**: Client-computed streaming quantiles. Example: `go_gc_duration_seconds` — garbage collection pause duration with pre-computed percentiles.
 
-2. **Gauge**: Value that can go up and down.
-   - Example: `node_memory_MemAvailable_bytes` — currently available memory
-
-3. **Histogram**: Observations bucketed by value, with cumulative counts.
-   - Example: `http_request_duration_seconds` — request latency distribution
-
-4. **Summary**: Client-computed streaming quantiles.
-   - Example: `go_gc_duration_seconds` — garbage collection pause duration with pre-computed percentiles
-
-Key distinction: Histograms are aggregatable across instances (sum buckets), Summaries are not (cannot add quantiles). Prefer Histograms in almost all cases.
+Key distinction: Histograms are aggregatable across instances (sum buckets), Summaries are not (cannot add quantiles). Prefer Histograms in almost all cases because they allow for cluster-wide percentile aggregation.
 </details>
 
 <details>
@@ -991,21 +1007,17 @@ The rule: **store in base units, display in human units**.
 
 **Answer**:
 
-The routing tree is a hierarchy of routes, each with label matchers and a receiver:
+The routing tree is a hierarchy of routes, each with label matchers and a receiver. Every alert enters at the root route (the top-level `route:`). Child routes are then evaluated top-to-bottom, and the first matching child wins. Matching uses `match` (exact string match) or `match_re` (regular expression) on alert labels.
 
-1. **Every alert enters at the root route** (the top-level `route:`)
-2. **Child routes are evaluated top-to-bottom** — first matching child wins
-3. **Matching uses `match` (exact) or `match_re` (regex)** on alert labels
-4. **If no child matches**, the alert goes to the root route's receiver
-5. **`continue: true`** on a route means "keep checking subsequent siblings even after matching"
-6. **Child routes can have their own children** — nesting creates a tree
+If no child matches, the alert defaults to the root route's receiver. The tree behavior operates effectively as an exit-on-first-match cascade.
 
 ```mermaid
-flowchart TD
-    Root[route: receiver=default] --> Match1[match: severity=critical<br/>receiver=pagerduty]
-    Match1 --> Match1_1[match: team=db<br/>receiver=pagerduty-db]
-    Root --> Match2[match: severity=warning<br/>receiver=slack]
-    Root --> Unmatched[(unmatched)<br/>receiver=default]
+graph TD
+    R[route: receiver=default]
+    R --> M1[match: severity=critical <br/> receiver=pagerduty]
+    M1 --> M1A[match: team=db <br/> receiver=pagerduty-db]
+    R --> M2[match: severity=warning <br/> receiver: slack]
+    R --> M3[unmatched <br/> receiver=default]
 ```
 
 `group_by`, `group_wait`, `group_interval`, and `repeat_interval` control batching:
@@ -1021,19 +1033,19 @@ flowchart TD
 **Answer**:
 
 **Inhibition** (automatic, rule-based):
-- Suppresses target alerts when a source alert is firing
-- Configured in `inhibit_rules` in alertmanager.yml
-- Happens automatically — no human action needed
-- Example: NodeDown inhibits all PodCrashLooping alerts on that node
-- Purpose: Prevent alert storms from cascading failures
+- Suppresses target alerts when a source alert is firing.
+- Configured persistently in `inhibit_rules` within `alertmanager.yml`.
+- Happens automatically — no human action needed.
+- Example: NodeDown inhibits all PodCrashLooping alerts on that node.
+- Purpose: Prevent alert storms from cascading failures.
 
 **Silencing** (manual, time-based):
-- Temporarily mutes alerts matching specific label matchers
-- Created via UI or `amtool` CLI
-- Requires human action — someone decides to silence
-- Has a defined expiry time
-- Example: Silence all alerts for `service="database"` during planned maintenance
-- Purpose: Suppress known noise during maintenance windows
+- Temporarily mutes alerts matching specific label matchers.
+- Created explicitly via UI or `amtool` CLI by an engineer.
+- Requires human action — someone consciously decides to silence the alerts.
+- Has a defined, hard expiry time.
+- Example: Silence all alerts for `service="database"` during planned maintenance.
+- Purpose: Suppress known noise during active maintenance windows.
 
 Key difference: Inhibition is automatic and ongoing (fires whenever the source alert fires). Silencing is manual and temporary (created for a specific time window).
 </details>
@@ -1068,9 +1080,9 @@ go_goroutines (if Go)                                      — Gauge
 ```
 
 Design decisions:
-- `path` label should use route patterns (`/users/{id}`), not actual paths (`/users/12345`) to avoid cardinality explosion
-- Histogram buckets for HTTP: `[.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5]`
-- Histogram buckets for jobs: `[.1, .5, 1, 5, 10, 30, 60, 300]` (jobs are typically slower)
+- `path` label should use parameterized route patterns (e.g., `/users/{id}`), not actual concrete paths (`/users/12345`) to avoid cardinality explosions.
+- Histogram buckets for HTTP API: `[.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5]`
+- Histogram buckets for background jobs: `[.1, .5, 1, 5, 10, 30, 60, 300]` (background jobs are typically much slower and require a wider spread).
 </details>
 
 <details>
@@ -1087,52 +1099,40 @@ The `for` field specifies how long the alert expression must be continuously tru
 ```
 
 **Without `for`** (or `for: 0s`):
-- Alert fires immediately when expression is true
-- Next evaluation cycle where expression is false → alert resolves
-- Causes **alert flapping**: brief spikes trigger and resolve alerts rapidly
-- On-call engineers get paged for transient conditions that self-resolve
+- The alert fires immediately when the expression is true.
+- Next evaluation cycle where expression is false → alert resolves.
+- This causes **alert flapping**: brief, microsecond spikes trigger and resolve alerts rapidly.
+- On-call engineers get immediately paged for transient network conditions that self-resolve within seconds.
 
 **With `for: 5m`**:
-- Brief spikes (< 5 min) are ignored
-- Only sustained problems trigger notifications
-- Reduces false positives significantly
-
-**Guidelines**:
-- `for: 1m` — Critical infrastructure alerts (ServiceDown)
-- `for: 5m` — Error rate and latency alerts
-- `for: 15m` — Capacity and resource alerts
-- `for: 1h` — Slow-burn problems (certificate expiry, disk growth trends)
+- Brief spikes (< 5 min) are ignored.
+- Only sustained structural problems trigger notifications.
+- Reduces false positives significantly, preserving team sanity.
 </details>
 
 <details>
-<summary>7. Scenario: You are tasked with instrumenting a newly developed payment processing microservice. The service executes transactions that can take anywhere from 50ms to 8 seconds to complete. You need to alert if the 99th percentile (P99) transaction time exceeds 3 seconds over a 5-minute window. Which Prometheus metric type must you implement, and how would you configure it to ensure accurate P99 calculations?</summary>
+<summary>7. You are configuring an alert for a critical database service. The database CPU occasionally spikes to 100% for 10-15 seconds during scheduled vacuuming operations, but otherwise remains healthy. Your current alert `expr: node_cpu_utilization > 0.9` fires constantly. How do you fix this without ignoring genuine CPU saturation?</summary>
 
-**Answer**:
+**Answer**: 
 
-You must implement a **Histogram**.
-
-To accurately calculate the P99 latency and alert on the 3-second threshold, you need to define custom buckets in your Histogram configuration that precisely cover the expected range and provide high resolution around your Service Level Objective (SLO). If you only use default buckets, you might lack a bucket boundary near 3 seconds (for example, jumping from 1s directly to 5s), making the `histogram_quantile()` estimation highly inaccurate. You should define buckets such as `[0.05, 0.1, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 10.0]`. This ensures there is a precise boundary exactly at the 3.0-second mark, giving PromQL the data points necessary to reliably trigger the alert.
+You should implement a strict `for` duration in your alerting rule, such as `for: 5m`. This tells Alertmanager to keep the alert in a "PENDING" state until the expression has been continuously true for 5 minutes. Brief, intense spikes, like the 15-second vacuuming operation, will clear before the duration elapses, preventing false positives. If the CPU remains pegged at 100% for longer than 5 minutes indicating a true runaway process, the alert will transition to "FIRING" and notify the database team.
 </details>
 
 <details>
-<summary>8. Scenario: During a severe network partition, your Kubernetes cluster loses connectivity to its primary database backend. Suddenly, 45 different API pods begin crash-looping simultaneously because they cannot authenticate. Your team receives 45 separate PagerDuty notifications for "PodCrashLooping" and one notification for "DatabaseUnreachable". How do you configure Alertmanager to prevent this alert storm in the future?</summary>
+<summary>8. During a major network switch failure, three distinct Kubernetes nodes go offline simultaneously. Suddenly, you receive over 150 pages for `NodeDown`, `PodCrashLooping`, `HighErrorRate`, and `EndpointUnreachable`. How could you have designed your Alertmanager configuration to prevent this alert storm while still notifying the team of the root cause?</summary>
 
-**Answer**:
+**Answer**: 
 
-You must configure an **Inhibition Rule** in your `alertmanager.yml` file.
-
-The goal is to mathematically suppress the symptom alerts (the pods crashing) when the root-cause alert (the database being unreachable) is concurrently firing. You create an `inhibit_rules` array block where the `source_match` looks for the `DatabaseUnreachable` alert, and the `target_match_re` looks for the `PodCrashLooping` alerts. You crucially link them using an `equal` parameter on a shared label, such as `environment` or `cluster`, ensuring that a database failure in the staging environment does not accidentally suppress legitimate pod crash alerts in the production environment.
+This catastrophic scenario necessitates the implementation of Alertmanager inhibition rules (`inhibit_rules`). You would define a rule where the source match is `alertname: NodeDown`, and the target matches depend on the node label (e.g., suppressing all pod and service alerts originating from that specific offline node). When the switch fails, the `NodeDown` alerts fire first, automatically suppressing the cascading noise from the failing workloads. The on-call engineer receives exactly three pages for the dead nodes, drastically reducing alert fatigue and highlighting the actual root cause immediately.
 </details>
 
 ---
 
 ## Hands-On Exercise: Instrument, Export, Alert
 
-In this exercise, you will build a complete end-to-end monitoring pipeline: instrument an application, deploy an exporter, dynamically scrape it, and configure functional alerts.
+Build a complete, end-to-end monitoring pipeline: instrument a Python application, deploy an exporter mechanism, and configure active threshold alerts.
 
 ### Setup
-
-Ensure you are running Kubernetes v1.35 or above.
 
 ```bash
 # Ensure you have a cluster with Prometheus
@@ -1146,7 +1146,7 @@ helm install monitoring prometheus-community/kube-prometheus-stack \
 
 ### Step 1: Deploy a Python App with Custom Metrics
 
-Apply the instrumented application code, which runs an internal Python web server natively exposing standard metric interfaces. Note that we split the original multi-document file into three clear manifests to maintain strict YAML parser compliance.
+Create the application components. We have split the configuration into three independent manifests to maintain structural integrity.
 
 ```yaml
 # instrumented-app-configmap.yaml
@@ -1244,6 +1244,8 @@ spec:
       name: metrics
 ```
 
+Deploy the application assets to your cluster:
+
 ```bash
 kubectl apply -f instrumented-app-configmap.yaml
 kubectl apply -f instrumented-app-deployment.yaml
@@ -1252,7 +1254,7 @@ kubectl apply -f instrumented-app-service.yaml
 
 ### Step 2: Create a ServiceMonitor
 
-The Prometheus Operator uses ServiceMonitors to discover targets dynamically.
+The `ServiceMonitor` is a Custom Resource provided by the Prometheus Operator that tells Prometheus to automatically discover and scrape the application endpoints.
 
 ```yaml
 # servicemonitor.yaml
@@ -1279,12 +1281,14 @@ kubectl apply -f servicemonitor.yaml
 
 ### Step 3: Verify Scraping
 
+Verify that Prometheus successfully discovered the target by port-forwarding to the web UI.
+
 ```bash
 # Port-forward to Prometheus
 kubectl port-forward -n monitoring svc/monitoring-kube-prometheus-prometheus 9090:9090
 ```
 
-Open `http://localhost:9090/targets` and verify `instrumented-app` appears as an active target. Then run these queries in the PromQL interface:
+Open `http://localhost:9090/targets` and verify `instrumented-app` appears dynamically as an active target. Then, navigate to the query interface and execute:
 
 ```promql
 # Verify metrics are flowing
@@ -1305,6 +1309,8 @@ myapp_queue_size
 ```
 
 ### Step 4: Create Alerting Rules
+
+Finally, define the alerting logic enforcing constraints on the latency and error rates of the application.
 
 ```yaml
 # alerting-rules.yaml
@@ -1354,21 +1360,56 @@ kubectl apply -f alerting-rules.yaml
 
 ### Step 5: Verify Alerts
 
-Open `http://localhost:9090/alerts` and confirm the alert rules are loaded successfully. If the randomized internal simulated error rate briefly exceeds 5%, you should observe `MyAppHighErrorRate` cleanly transition from the Inactive state, to the Pending state, and eventually into the Firing state.
+Open `http://localhost:9090/alerts` and rigorously confirm the alert rules are loaded successfully. Because the Python app simulates traffic failures, if the error rate exceeds 5%, you should immediately witness `MyAppHighErrorRate` safely transition from `Inactive` to `Pending` and ultimately to `Firing`.
 
 ### Success Criteria
 
-You have completed this exercise when you can confidently check off the following:
-- [ ] You can view custom application metrics (`myapp_*`) directly in the Prometheus UI.
-- [ ] You successfully constructed PromQL queries covering request rate, absolute error rate, and latency percentiles.
-- [ ] The ServiceMonitor successfully linked with the Prometheus Operator engine.
-- [ ] The custom Alert rules are loaded and passively evaluating.
-- [ ] The background Recording rule `myapp:http_error_ratio:rate5m` correctly produces cached mathematical results.
+You have successfully completed this laboratory exercise when you can confirm the following checklist:
+- [ ] You can see the custom metrics (`myapp_*`) exposed natively in Prometheus.
+- [ ] You can execute queries verifying request rate, error rate, and P99 latency percentiles.
+- [ ] The `ServiceMonitor` correctly instructed Prometheus to scrape the deployed application.
+- [ ] The alerting rules are loaded and actively evaluating within the Prometheus UI.
+- [ ] The background recording rule `myapp:http_error_ratio:rate5m` continuously produces aggregated results.
+- [ ] You can distinctly map the Counter, Gauge, and Histogram logic from the Python code to the raw TSDB data stream.
 
 ---
 
-## Next Module
+## Key Takeaways
 
-Ready to visualize your robust new metrics? In the next module, you will consume these highly-cardinal data structures inside beautiful, interactive dashboards.
+Before advancing, cement these principles:
 
-[**Continue to Module 1.3: Grafana & Visualization**](/platform/toolkits/observability-intelligence/observability/module-1.3-grafana/)
+- [ ] **Four metric types**: Counter (monotonic, always use rate()), Gauge (up/down snapshots, query directly), Histogram (distribution buckets, compute percentiles with histogram_quantile()), Summary (client-side quantiles, rarely preferred due to lack of aggregation).
+- [ ] **Naming conventions**: Adhere strictly to `<namespace>_<name>_<unit>_total` for counters, leverage base units only (seconds, bytes), and favor snake_case.
+- [ ] **Label best practices**: Enforce strictly bounded cardinality, strictly forbid user_id/request_id fields, and maintain naming uniformity across enterprise services.
+- [ ] **Client libraries**: Native Go, Python, and Java implementations all parallel identical patterns — `Counter.Inc()`, `Gauge.Set()`, and `Histogram.Observe()`.
+- [ ] **Exporters**: Rely on `node_exporter` (OS and hardware), `blackbox_exporter` (probing external endpoints), and `kube-state-metrics` (translating Kubernetes object states).
+- [ ] **Alert lifecycle**: Transitions flow strictly from inactive -> pending -> firing -> resolved. The crucial `for` field prevents flapping noise.
+- [ ] **Alertmanager routing**: Evaluate the top-down tree structure. Understand that first-match wins, `group_by` aggregates identical issues, and `repeat_interval` throttles spam.
+- [ ] **Inhibition rules**: Architect dependencies to automatically suppress dependent subsystem alerts when a critical root-cause alert triggers.
+- [ ] **Silences**: Utilize manual, temporary muting solely for authorized maintenance. Always annotate with exhaustive comments and firm expiries.
+- [ ] **Recording rules**: Shift compute loads backward to pre-calculate expensive metrics for alerting pipelines and visualizations. Utilize the convention: `level:metric:operations`.
+
+---
+
+## Further Reading
+
+- [Prometheus Client Libraries](https://prometheus.io/docs/instrumenting/clientlibs/) — All official client libraries spanning varying paradigms
+- [Writing Exporters](https://prometheus.io/docs/instrumenting/writing_exporters/) — Comprehensive guide to compiling highly specific custom exporters
+- [Alertmanager Configuration](https://prometheus.io/docs/alerting/latest/configuration/) — The complete technical Alertmanager YAML parameter schema
+- [Instrumentation Best Practices](https://prometheus.io/docs/practices/instrumentation/) — The foundational official guide to resilient application telemetry
+- [Metric and Label Naming](https://prometheus.io/docs/practices/naming/) — Mandatory naming and labeling conventions reference
+
+---
+
+## Summary
+
+Instrumentation represents the absolute beginning of the observability journey — without robust, predictably named telemetry generated from your core applications and peripheral infrastructure, no amount of subsequent query sophistication will help. This module traversed the complete instrumentation-to-alerting lifecycle: deliberately choosing the proper metric archetype, strictly formatting its nomenclature according to standardized conventions, exposing the signal using client libraries, harvesting peripheral data via specialized exporters, and ultimately routing threshold violation alerts through Alertmanager. Combined with advanced PromQL expertise, you now wield exhaustive, pragmatic authority over the Prometheus observability ecosystem.
+
+---
+
+## Related Modules
+
+- [PCA README]() — Full exam domain mapping, testing parameters, and study strategy
+- [PromQL Deep Dive](../module-1.1-promql-deep-dive/) — Complex PromQL techniques mandated for PCA Domain 3
+- [Prometheus Fundamentals](/platform/toolkits/observability-intelligence/observability/module-1.1-prometheus/) — Underlying architecture and TSDB storage fundamentals
+- [Grafana](/platform/toolkits/observability-intelligence/observability/module-1.3-grafana/) — Masterful dashboarding and panel construction for PCA Domain 5
