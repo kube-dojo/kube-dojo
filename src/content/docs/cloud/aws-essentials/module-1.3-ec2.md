@@ -550,6 +550,14 @@ WEB_SG=$(aws ec2 create-security-group \
 aws ec2 authorize-security-group-ingress \
     --group-id $WEB_SG --protocol tcp --port 80 --source-group $ALB_SG
 
+# Create IAM Role for SSM Access
+aws iam create-role --role-name DojoWebSSMRole --assume-role-policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ec2.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
+aws iam attach-role-policy --role-name DojoWebSSMRole --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+aws iam create-instance-profile --instance-profile-name DojoWebSSMRole
+aws iam add-role-to-instance-profile --instance-profile-name DojoWebSSMRole --role-name DojoWebSSMRole
+
+sleep 10 # Wait for IAM instance profile to propagate
+
 echo "ALB SG: $ALB_SG"
 echo "Web SG: $WEB_SG"
 
@@ -616,7 +624,10 @@ cat << EOF > template-data.json
     "ImageId": "$AMI_ID",
     "InstanceType": "t3.micro",
     "SecurityGroupIds": ["$WEB_SG"],
-    "UserData": "$(base64 -i userdata.sh)",
+    "UserData": "$(cat userdata.sh | base64 | tr -d '\n')",
+    "IamInstanceProfile": {
+        "Name": "DojoWebSSMRole"
+    },
     "MetadataOptions": {
         "HttpTokens": "required",
         "HttpEndpoint": "enabled"
@@ -842,7 +853,13 @@ sleep 60
 aws ec2 delete-security-group --group-id $WEB_SG
 aws ec2 delete-security-group --group-id $ALB_SG
 
-# Step 6: Clean up local files
+# Step 6: Clean up IAM Role
+aws iam remove-role-from-instance-profile --instance-profile-name DojoWebSSMRole --role-name DojoWebSSMRole
+aws iam delete-instance-profile --instance-profile-name DojoWebSSMRole
+aws iam detach-role-policy --role-name DojoWebSSMRole --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+aws iam delete-role --role-name DojoWebSSMRole
+
+# Step 7: Clean up local files
 rm -f userdata.sh template-data.json
 
 echo "Cleanup complete!"
