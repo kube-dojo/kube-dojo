@@ -181,6 +181,8 @@ flowchart LR
 - **Complexity**: High
 - **Common pitfall**: Replication lag, split-brain
 
+> **Stop and think**: If you use data redundancy (like database replication) but the replication is asynchronous, what happens to the data that was acknowledged to the user but hasn't replicated yet when the primary fails?
+
 #### 4. Geographic Redundancy
 **What**: Same system in multiple physical locations
 **Where**: Data centers, cloud regions
@@ -565,6 +567,8 @@ flowchart LR
         P2A <== sync ==> P2B[(Primary B)]
     end
 ```
+
+> **Pause and predict**: In a multi-primary write scaling setup, what happens if two users update the exact same record simultaneously on different primary nodes before the nodes synchronize?
 
 ### 4.2 Kubernetes Redundancy
 
