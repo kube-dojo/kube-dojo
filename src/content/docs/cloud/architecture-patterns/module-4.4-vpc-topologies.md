@@ -45,7 +45,7 @@ IP Address Management (IPAM) for Kubernetes is different from traditional infras
 
 ### How Many IPs Does Kubernetes Actually Need?
 
-```
+```text
 IP CONSUMPTION: TRADITIONAL VS KUBERNETES
 ═══════════════════════════════════════════════════════════════
 
@@ -70,47 +70,47 @@ Kubernetes (overlay network, e.g., Calico VXLAN):
 
 On EKS with the default VPC CNI plugin, every pod gets a VPC IP address. Here's exactly how IPs are consumed per node:
 
+```mermaid
+flowchart TB
+    subgraph Node["Node: m5.2xlarge (Total IPs consumed from VPC: 60)"]
+        subgraph ENI0["ENI 0 (primary)"]
+            direction TB
+            e01["IP 1: node addr"]
+            e02["IP 2: pod-a"]
+            e03["IP 3: pod-b"]
+            e04["..."]
+            e05["IP 15: pod-n"]
+        end
+        subgraph ENI1["ENI 1"]
+            direction TB
+            e11["IP 1: ENI addr"]
+            e12["IP 2: pod-f"]
+            e13["IP 3: pod-g"]
+            e14["..."]
+            e15["IP 15: pod-z"]
+        end
+        subgraph ENI2["ENI 2"]
+            direction TB
+            e21["IP 1: ENI addr"]
+            e22["IP 2: pod-aa"]
+            e23["..."]
+            e25["IP 15: pod-nn"]
+        end
+        subgraph ENI3["ENI 3"]
+            direction TB
+            e31["IP 1: ENI addr"]
+            e32["IP 2: pod-ff"]
+            e33["..."]
+            e35["IP 15: pod-zz"]
+        end
+    end
 ```
-AWS VPC CNI: IP ALLOCATION PER NODE
-═══════════════════════════════════════════════════════════════
 
-Instance type: m5.2xlarge
-  Max ENIs: 4
-  Max IPs per ENI: 15
-  Max pods: (4 ENIs × (15 IPs - 1)) + 2 = 58 pods
-
-How it works:
-  ┌──────────────────────────────────────────────────────┐
-  │ Node: m5.2xlarge                                      │
-  │                                                      │
-  │  ENI 0 (primary)         ENI 1                       │
-  │  ┌─────────────────┐    ┌─────────────────┐          │
-  │  │ IP 1: node addr │    │ IP 1: ENI addr  │          │
-  │  │ IP 2: pod-a     │    │ IP 2: pod-f     │          │
-  │  │ IP 3: pod-b     │    │ IP 3: pod-g     │          │
-  │  │ ...             │    │ ...             │          │
-  │  │ IP 15: pod-n    │    │ IP 15: pod-z    │          │
-  │  └─────────────────┘    └─────────────────┘          │
-  │                                                      │
-  │  ENI 2                   ENI 3                       │
-  │  ┌─────────────────┐    ┌─────────────────┐          │
-  │  │ IP 1: ENI addr  │    │ IP 1: ENI addr  │          │
-  │  │ IP 2: pod-aa    │    │ IP 2: pod-ff    │          │
-  │  │ ...             │    │ ...             │          │
-  │  │ IP 15: pod-nn   │    │ IP 15: pod-zz   │          │
-  │  └─────────────────┘    └─────────────────┘          │
-  │                                                      │
-  │  Total IPs consumed from VPC: 60                     │
-  │  (4 ENIs × 15 IPs each)                             │
-  └──────────────────────────────────────────────────────┘
-
-With prefix delegation (recommended):
-  Each ENI gets /28 prefixes (16 IPs) instead of individual IPs
-  Max pods: 110 (Kubernetes limit, not ENI limit)
-  IPs consumed: Still 60 from VPC perspective, but each
-  /28 prefix provides 16 pod IPs from the prefix space
-  Effective: 110 pods using far fewer VPC-level IPs
-```
+**With prefix delegation (recommended):**
+*   Each ENI gets /28 prefixes (16 IPs) instead of individual IPs
+*   Max pods: 110 (Kubernetes limit, not ENI limit)
+*   IPs consumed: Still 60 from VPC perspective, but each /28 prefix provides 16 pod IPs from the prefix space
+*   Effective: 110 pods using far fewer VPC-level IPs
 
 ```bash
 # Enable prefix delegation on EKS (recommended for new clusters)
@@ -172,62 +172,58 @@ This is the foundational networking decision for your Kubernetes clusters. It af
 
 Pods get real VPC IP addresses. Cloud network infrastructure routes pod traffic natively.
 
+```mermaid
+flowchart TD
+    subgraph VPC["VPC: 10.0.0.0/16"]
+        subgraph NodeA["Node A (10.0.1.10)"]
+            Pod1["Pod 1: 10.0.1.15"]
+            Pod2["Pod 2: 10.0.1.16"]
+        end
+        subgraph NodeB["Node B (10.0.1.20)"]
+            Pod3["Pod 3: 10.0.1.25"]
+            Pod4["Pod 4: 10.0.1.26"]
+        end
+        Router["VPC Router"]
+        
+        NodeA --- Router
+        NodeB --- Router
+    end
+    classDef default fill:#f9f9f9,stroke:#333,stroke-width:1px;
+    classDef highlight fill:#e1f5fe,stroke:#0288d1,stroke-width:2px;
+    class Pod1,Pod2,Pod3,Pod4 highlight;
 ```
-UNDERLAY NETWORKING (VPC CNI)
-═══════════════════════════════════════════════════════════════
 
-  ┌─────────── VPC: 10.0.0.0/16 ────────────────────────┐
-  │                                                      │
-  │  Node A (10.0.1.10)           Node B (10.0.1.20)    │
-  │  ┌────────────────┐          ┌────────────────┐      │
-  │  │ Pod 1: 10.0.1.15│         │ Pod 3: 10.0.1.25│     │
-  │  │ Pod 2: 10.0.1.16│         │ Pod 4: 10.0.1.26│     │
-  │  └────────┬────────┘         └────────┬────────┘     │
-  │           │                           │              │
-  │  ─────────┴───────────────────────────┴──────────    │
-  │                    VPC Router                        │
-  │  Pod-to-pod traffic: Routed natively by VPC          │
-  │  No encapsulation. No tunnel. Full line speed.       │
-  └──────────────────────────────────────────────────────┘
+**Pod-to-pod traffic:** Routed natively by VPC. No encapsulation. No tunnel. Full line speed.
 
-  Cloud load balancers → target pods directly by IP
-  Cloud security groups → applied to pod IPs
-  VPC Flow Logs → show individual pod traffic
-  Network ACLs → filter pod traffic natively
-```
+*   Cloud load balancers → target pods directly by IP
+*   Cloud security groups → applied to pod IPs
+*   VPC Flow Logs → show individual pod traffic
+*   Network ACLs → filter pod traffic natively
 
 ### Overlay (Encapsulated Networking)
 
 Pods get IPs from a separate, private address space. Traffic between nodes is encapsulated in tunnels (VXLAN, Geneve, or IP-in-IP).
 
+```mermaid
+flowchart TD
+    subgraph VPC["VPC: 10.0.0.0/16 (VPC cannot see individual pod traffic)"]
+        subgraph NodeA["Node A (10.0.1.10)"]
+            Pod1["Pod 1: 192.168.1.15 (overlay)"]
+            Pod2["Pod 2: 192.168.1.16 (overlay)"]
+        end
+        subgraph NodeB["Node B (10.0.1.20)"]
+            Pod3["Pod 3: 192.168.2.25 (overlay)"]
+            Pod4["Pod 4: 192.168.2.26 (overlay)"]
+        end
+        
+        NodeA <-->|VXLAN Tunnel<br>Outer: 10.0.1.10 to 10.0.1.20<br>Inner: 192.168.1.15 to 192.168.2.25| NodeB
+    end
 ```
-OVERLAY NETWORKING (Calico VXLAN)
-═══════════════════════════════════════════════════════════════
 
-  ┌─────────── VPC: 10.0.0.0/16 ────────────────────────┐
-  │                                                      │
-  │  Node A (10.0.1.10)           Node B (10.0.1.20)    │
-  │  ┌────────────────┐          ┌────────────────┐      │
-  │  │ Pod 1: 192.168.│          │ Pod 3: 192.168.│      │
-  │  │  1.15 (overlay)│          │  2.25 (overlay)│      │
-  │  │ Pod 2: 192.168.│          │ Pod 4: 192.168.│      │
-  │  │  1.16 (overlay)│          │  2.26 (overlay)│      │
-  │  └───────┬────────┘          └────────┬───────┘      │
-  │          │                            │              │
-  │          ▼                            ▼              │
-  │    VXLAN Tunnel ════════════════ VXLAN Tunnel        │
-  │    Outer: 10.0.1.10 → 10.0.1.20                     │
-  │    Inner: 192.168.1.15 → 192.168.2.25               │
-  │                                                      │
-  │  VPC only sees: Node A (10.0.1.10) → Node B         │
-  │  VPC cannot see: Individual pod traffic              │
-  └──────────────────────────────────────────────────────┘
-
-  Cloud load balancers → must target nodes (extra hop)
-  Cloud security groups → applied to nodes, not pods
-  VPC Flow Logs → show node-to-node, not pod-to-pod
-  Network ACLs → cannot filter individual pod traffic
-```
+*   Cloud load balancers → must target nodes (extra hop)
+*   Cloud security groups → applied to nodes, not pods
+*   VPC Flow Logs → show node-to-node, not pod-to-pod
+*   Network ACLs → cannot filter individual pod traffic
 
 ### Decision Matrix
 
@@ -288,57 +284,41 @@ Every pod that calls an external API, downloads a package, or talks to a SaaS se
 
 ### NAT Gateway: The Default (and Expensive) Path
 
+```mermaid
+flowchart LR
+    Pod["Pod (10.0.2.15)<br>curl api.example.com"] --> RT["Route Table<br>0.0.0.0/0 → nat-gw-id"]
+    RT --> NAT["NAT GW (public subnet)<br>Elastic IP: 52.1.2.3"]
+    NAT --> Internet["Internet<br>api.example.com"]
 ```
-NAT GATEWAY EGRESS
-═══════════════════════════════════════════════════════════════
 
-  Pod (10.0.2.15)                            Internet
-  ┌──────────┐                               ┌──────────┐
-  │ curl     │──▶ Route Table ──▶ NAT GW ──▶│ api.     │
-  │ api.com  │    0.0.0.0/0       (public    │ example  │
-  └──────────┘    → nat-gw-id     subnet)    │ .com     │
-                                   │          └──────────┘
-                                   ▼
-                              Elastic IP
-                              52.1.2.3
-                              (your public IP)
-
-  Cost:
-    NAT Gateway hourly: $0.045/hr × 730 hrs = $32.85/mo
-    Data processing: $0.045/GB
-    At 1TB/month egress: $32.85 + $45.00 = $77.85/mo per AZ
-
-    With 3 AZs: $233.55/mo JUST for NAT
-    (plus standard data transfer charges on top)
-```
+**Cost Analysis:**
+*   NAT Gateway hourly: $0.045/hr × 730 hrs = $32.85/mo
+*   Data processing: $0.045/GB
+*   At 1TB/month egress: $32.85 + $45.00 = $77.85/mo per AZ
+*   With 3 AZs: $233.55/mo JUST for NAT (plus standard data transfer charges on top)
 
 NAT Gateways are the single most expensive surprise in AWS Kubernetes deployments. A medium cluster pulling container images, calling external APIs, and sending logs to a SaaS observability platform can easily generate 5-10 TB of NAT data processing per month.
 
 ### Reducing NAT Costs
 
-```
-COST-OPTIMIZED EGRESS ARCHITECTURE
-═══════════════════════════════════════════════════════════════
-
-Strategy 1: VPC Endpoints (eliminate NAT for AWS services)
-  ┌──────────┐                    ┌──────────────────┐
-  │ Pod      │──▶ VPC Endpoint ──▶│ S3 (no NAT)      │
-  │          │    (Gateway type)  │ Free data path    │
-  └──────────┘                    └──────────────────┘
-
-  ┌──────────┐                    ┌──────────────────┐
-  │ Pod      │──▶ VPC Endpoint ──▶│ ECR (no NAT)     │
-  │          │    (Interface type)│ $0.01/hr + free   │
-  └──────────┘    $7.30/mo each   │ data processing  │
-                                  └──────────────────┘
-
-Strategy 2: ECR pull-through cache (reduce image pulls)
-  First pull: ECR → upstream registry → cache
-  Subsequent: ECR → local cache (in-VPC, no NAT)
-
-Strategy 3: NAT Instance (cheaper for low traffic)
-  t4g.nano: $3.02/mo (vs $32.85/mo for NAT GW)
-  Trade-off: No HA, lower bandwidth, you manage it
+```mermaid
+flowchart LR
+    subgraph Strategy1 ["Strategy 1: VPC Endpoints (eliminate NAT for AWS services)"]
+        direction LR
+        Pod1["Pod"] -->|Gateway type| S3["S3 (no NAT)<br>Free data path"]
+        Pod2["Pod"] -->|Interface type<br>$7.30/mo each| ECR["ECR (no NAT)<br>$0.01/hr + free data processing"]
+    end
+    
+    subgraph Strategy2 ["Strategy 2: ECR pull-through cache (reduce image pulls)"]
+        direction LR
+        S2_1["First pull"] -->|ECR → upstream registry → cache| S2_2["Cache"]
+        S2_3["Subsequent"] -->|ECR → local cache| S2_4["In-VPC (no NAT)"]
+    end
+    
+    subgraph Strategy3 ["Strategy 3: NAT Instance (cheaper for low traffic)"]
+        direction LR
+        S3_1["t4g.nano: $3.02/mo (vs $32.85/mo for NAT GW)<br>Trade-off: No HA, lower bandwidth, you manage it"]
+    end
 ```
 
 ```bash
@@ -390,30 +370,20 @@ aws ec2 create-vpc-endpoint \
 
 Some regulated environments require all egress traffic to flow through an inspection proxy. This provides URL-level filtering, TLS inspection, and logging.
 
-```
-PROXY-BASED EGRESS
-═══════════════════════════════════════════════════════════════
-
-  Pod → Proxy (Squid/Envoy) → Internet
-         │
-         ├── Allow: api.stripe.com (payment processor)
-         ├── Allow: registry.npmjs.org (package registry)
-         ├── Allow: *.datadog.com (observability)
-         ├── Block: * (everything else)
-         │
-         └── Full URL logging for audit trail
-
-  Implementation:
-  ┌──────────┐     ┌──────────┐     ┌──────────┐
-  │ Pod      │────▶│ Egress   │────▶│ NAT GW   │──▶ Internet
-  │          │     │ Proxy    │     │          │
-  │ HTTP_    │     │ (Envoy)  │     └──────────┘
-  │ PROXY=   │     │ - Allow  │
-  │ proxy:   │     │   list   │
-  │ 3128     │     │ - Logging│
-  └──────────┘     │ - TLS    │
-                   │   inspect│
-                   └──────────┘
+```mermaid
+flowchart LR
+    Pod["Pod<br>HTTP_PROXY=proxy:3128"] --> Proxy["Egress Proxy (Envoy)<br>- Allow list<br>- Logging<br>- TLS inspect"]
+    Proxy --> NAT["NAT GW"]
+    NAT --> Internet["Internet"]
+    
+    subgraph Rules ["Proxy Rules"]
+        direction TB
+        R1["✅ Allow: api.stripe.com (payment processor)"]
+        R2["✅ Allow: registry.npmjs.org (package registry)"]
+        R3["✅ Allow: *.datadog.com (observability)"]
+        R4["❌ Block: * (everything else)"]
+    end
+    Proxy -.-> Rules
 ```
 
 ```yaml
@@ -456,38 +426,25 @@ Ingress is the mirror of egress. It's how external traffic reaches your Kubernet
 
 ### Cloud Load Balancer Integration
 
+```mermaid
+flowchart TD
+    subgraph OptA ["Option A: NLB → NodePort (L4)"]
+        direction LR
+        C1["Client"] --> NLB1["NLB (L4)"] --> NP["Node Port 30080"] --> P1["Pod"]
+    end
+    subgraph OptB ["Option B: NLB → Pod IP directly (L4, IP target mode)"]
+        direction LR
+        C2["Client"] --> NLB2["NLB (L4)"] -- "pod IP is LB target" --> P2["Pod 10.0.1.42"]
+    end
+    subgraph OptC ["Option C: ALB → Pod IP (L7, via Ingress/Gateway API)"]
+        direction LR
+        C3["Client"] --> ALB["ALB (L7)<br>WAF, Auth"] -- "routes by path/host<br>TLS terminated at ALB" --> P3["Pod"]
+    end
 ```
-INGRESS PATH: CLOUD LB → KUBERNETES
-═══════════════════════════════════════════════════════════════
 
-Option A: NLB → NodePort (L4)
-  ┌────────┐     ┌──────┐     ┌──────┐     ┌─────┐
-  │ Client │────▶│ NLB  │────▶│ Node │────▶│ Pod │
-  └────────┘     │ (L4) │     │ Port │     └─────┘
-                 └──────┘     │30080 │
-                              └──────┘
-  Pros: Simple, preserves source IP
-  Cons: Extra hop (NodePort), uneven distribution
-
-Option B: NLB → Pod IP directly (L4, IP target mode)
-  ┌────────┐     ┌──────┐                   ┌─────┐
-  │ Client │────▶│ NLB  │──────────────────▶│ Pod │
-  └────────┘     │ (L4) │   (pod IP is LB   │10.0.│
-                 └──────┘    target)         │1.42 │
-                                             └─────┘
-  Pros: No extra hop, even distribution, lower latency
-  Cons: Requires VPC CNI (underlay networking)
-
-Option C: ALB → Pod IP (L7, via Ingress/Gateway API)
-  ┌────────┐     ┌──────┐                   ┌─────┐
-  │ Client │────▶│ ALB  │──────────────────▶│ Pod │
-  └────────┘     │ (L7) │   (TLS terminated  │     │
-                 │ WAF  │    at ALB, routes  │     │
-                 │ Auth │    by path/host)   └─────┘
-                 └──────┘
-  Pros: L7 routing, WAF integration, auth offloading
-  Cons: ALB cost ($16/mo + LCU charges)
-```
+*   **Option A:** Pros: Simple, preserves source IP. Cons: Extra hop (NodePort), uneven distribution.
+*   **Option B:** Pros: No extra hop, even distribution, lower latency. Cons: Requires VPC CNI (underlay networking).
+*   **Option C:** Pros: L7 routing, WAF integration, auth offloading. Cons: ALB cost ($16/mo + LCU charges).
 
 ### Gateway API: The Modern Standard
 
@@ -612,61 +569,34 @@ When you have multiple VPCs (dev, staging, production, shared services), they ne
 
 ### VPC Peering: Simple, Point-to-Point
 
+```mermaid
+flowchart TD
+    Prod["Production<br>10.1.0.0/16"] <--> Staging["Staging<br>10.2.0.0/16"]
+    Prod <--> Shared["Shared Svc<br>10.10.0.0/16"]
+    Staging <--> Shared
 ```
-VPC PEERING: DIRECT CONNECTIONS
-═══════════════════════════════════════════════════════════════
 
-  2 VPCs = 1 peering connection
-  3 VPCs = 3 peering connections
-  4 VPCs = 6 peering connections
-  N VPCs = N×(N-1)/2 connections
-
-  ┌─────────────┐         ┌─────────────┐
-  │ Production  │◀──────▶│ Staging     │
-  │ 10.1.0.0/16│         │ 10.2.0.0/16│
-  └──────┬──────┘         └──────┬──────┘
-         │                       │
-         │    ┌─────────────┐    │
-         └───▶│ Shared Svc  │◀──┘
-              │ 10.10.0.0/16│
-              └─────────────┘
-
-  3 VPCs = 3 peering connections. Manageable.
-
-  With 10 VPCs:
-  10 × 9 / 2 = 45 peering connections.
-  Not manageable.
-```
+*   2 VPCs = 1 peering connection
+*   3 VPCs = 3 peering connections
+*   4 VPCs = 6 peering connections
+*   N VPCs = N×(N-1)/2 connections
+*   With 10 VPCs: 10 × 9 / 2 = 45 peering connections. Not manageable.
 
 ### Transit Gateway: Hub-and-Spoke
 
+```mermaid
+flowchart TD
+    Prod["Prod<br>10.1.0.0/16"] --- TGW
+    Staging["Staging<br>10.2.0.0/16"] --- TGW
+    Dev["Dev<br>10.3.0.0/16"] --- TGW
+    Shared["Shared<br>10.10.0.0/16"] --- TGW
+    
+    subgraph TransitGateway ["Transit Gateway"]
+        TGW["Central Router<br><br>Route Tables:<br>Prod → Shared, Staging<br>Staging → Shared, Prod<br>Dev → Shared only<br>Shared → All<br>+ On-Premises via VPN/DX"]
+    end
 ```
-TRANSIT GATEWAY: CENTRALIZED ROUTING
-═══════════════════════════════════════════════════════════════
 
-  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐
-  │ Prod     │  │ Staging  │  │ Dev      │  │ Shared   │
-  │10.1.0/16│  │10.2.0/16│  │10.3.0/16│  │10.10.0/16│
-  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘
-       │              │              │              │
-       └──────────────┼──────────────┼──────────────┘
-                      │              │
-              ┌───────▼──────────────▼───────┐
-              │       Transit Gateway         │
-              │                               │
-              │  Route Tables:                │
-              │    Prod → Shared, Staging     │
-              │    Staging → Shared, Prod     │
-              │    Dev → Shared only          │
-              │    Shared → All               │
-              │                               │
-              │  + On-Premises via VPN/DX     │
-              └───────────────────────────────┘
-
-  Any number of VPCs: 1 TGW attachment per VPC.
-  Centralized routing policies.
-  Route table segmentation (Dev can't reach Prod).
-```
+Any number of VPCs: 1 TGW attachment per VPC. Centralized routing policies. Route table segmentation (Dev can't reach Prod).
 
 ```bash
 # Create a Transit Gateway
@@ -712,41 +642,25 @@ Transit Gateway is worth it when you have 4+ VPCs or need centralized routing po
 
 Connecting Kubernetes clusters to on-premises data centers requires choosing between VPN (encrypted over internet) and Direct Connect (dedicated private link).
 
+```mermaid
+flowchart LR
+    subgraph Opt1 ["Option 1: Site-to-Site VPN"]
+        OP1["On-Prem Datacenter"] <-->|IPSec Tunnel<br>over internet| AWS1["AWS VPC / TGW"]
+    end
+    subgraph Opt2 ["Option 2: AWS Direct Connect"]
+        OP2["On-Prem Datacenter"] <-->|Dedicated Fiber<br>private circuit| AWS2["AWS DX Location"]
+    end
 ```
-CONNECTIVITY OPTIONS
-═══════════════════════════════════════════════════════════════
 
-Option 1: Site-to-Site VPN
-  ┌────────────┐    IPSec Tunnel     ┌────────────┐
-  │ On-Prem    │◀═══════════════════▶│ AWS VPC    │
-  │ Datacenter │    (over internet)  │ / TGW      │
-  └────────────┘                     └────────────┘
-  Cost: $0.05/hr (~$36.50/mo) + data transfer
-  Bandwidth: Up to 1.25 Gbps per tunnel (2 tunnels for HA)
-  Latency: Variable (internet-dependent)
-  Setup time: Hours
-
-Option 2: AWS Direct Connect
-  ┌────────────┐    Dedicated Fiber   ┌────────────┐
-  │ On-Prem    │◀═══════════════════▶│ AWS DX     │
-  │ Datacenter │    (private circuit) │ Location   │
-  └────────────┘                     └────────────┘
-  Cost: $0.30/hr (1Gbps port) + data transfer
-  Bandwidth: 1, 10, or 100 Gbps dedicated
-  Latency: Consistent (no internet hops)
-  Setup time: Weeks to months
-
-Option 3: Direct Connect + VPN Backup
-  Primary: Direct Connect (high bandwidth, consistent latency)
-  Backup: Site-to-Site VPN (automatic failover if DX fails)
-  Best for: Production workloads needing reliability + performance
-```
+*   **Option 1:** Cost: $0.05/hr (~$36.50/mo) + data transfer. Bandwidth: Up to 1.25 Gbps per tunnel (2 tunnels for HA). Latency: Variable (internet-dependent). Setup time: Hours.
+*   **Option 2:** Cost: $0.30/hr (1Gbps port) + data transfer. Bandwidth: 1, 10, or 100 Gbps dedicated. Latency: Consistent (no internet hops). Setup time: Weeks to months.
+*   **Option 3:** Direct Connect + VPN Backup. Primary: Direct Connect (high bandwidth, consistent latency). Backup: Site-to-Site VPN (automatic failover if DX fails). Best for: Production workloads needing reliability + performance.
 
 ### The Critical Point: Non-Overlapping CIDRs
 
 When connecting cloud VPCs to on-premises networks, CIDR overlap is the most common and painful mistake. If your on-prem network uses `10.0.0.0/8` and your VPC also uses `10.0.0.0/16`, routing breaks. Traffic destined for `10.0.1.5` could mean a pod in your cluster or a server in your data center.
 
-```
+```text
 THE OVERLAPPING CIDR DISASTER
 ═══════════════════════════════════════════════════════════════
 
@@ -865,7 +779,7 @@ Create a non-overlapping CIDR scheme that accommodates all current and future en
 <details>
 <summary>Solution</summary>
 
-```
+```text
 GLOBAL CIDR ALLOCATION
 ═══════════════════════════════════════════════════════════════
 
@@ -910,7 +824,7 @@ Create the subnet layout for the production VPC (10.1.0.0/16) across 3 AZs, with
 <details>
 <summary>Solution</summary>
 
-```
+```text
 PRODUCTION VPC: 10.1.0.0/16
 ═══════════════════════════════════════════════════════════════
 
@@ -962,7 +876,7 @@ Configure the Transit Gateway route tables to enforce environment isolation: dev
 <details>
 <summary>Solution</summary>
 
-```
+```text
 TRANSIT GATEWAY ROUTE TABLE DESIGN
 ═══════════════════════════════════════════════════════════════
 
