@@ -122,32 +122,21 @@ Nobody warns you about this: the transition *feels* like getting worse at your j
 
 This feeling is normal, and it's wrong. You ARE doing real work. It just doesn't look like what you're used to.
 
-```
-THE PRODUCTIVITY IDENTITY CRISIS
-======================================================================
-
-WEEK 1 AS TECH LEAD:
-
-  Monday:    3 hours of code review, 1 hour of mentoring,
-             2 hours of planning, 1 hour of 1:1s
-  Tuesday:   Design review meeting, helped junior debug a
-             concurrency issue, wrote ADR for caching strategy
-  Wednesday: Paired with mid-level engineer on API design,
-             reviewed 4 PRs, unblocked deployment pipeline issue
-  Thursday:  Sprint planning, architecture discussion with
-             platform team, wrote technical spec for Q2 project
-  Friday:    1:1s, reviewed 3 PRs, helped new hire understand
-             the authentication flow
-
-  LINES OF CODE WRITTEN: 47
-
-  YOUR BRAIN: "I was useless this week. I barely wrote any code."
-
-  REALITY: You unblocked 5 engineers, prevented 3 bugs from
-  reaching production, transferred knowledge to a new hire, and
-  shaped the technical direction for next quarter. Your team
-  shipped 40% more than they would have without you.
-```
+> ### The Productivity Identity Crisis
+>
+> **Week 1 as Tech Lead:**
+>
+> - **Monday:** 3 hours of code review, 1 hour of mentoring, 2 hours of planning, 1 hour of 1:1s
+> - **Tuesday:** Design review meeting, helped junior debug a concurrency issue, wrote ADR for caching strategy
+> - **Wednesday:** Paired with mid-level engineer on API design, reviewed 4 PRs, unblocked deployment pipeline issue
+> - **Thursday:** Sprint planning, architecture discussion with platform team, wrote technical spec for Q2 project
+> - **Friday:** 1:1s, reviewed 3 PRs, helped new hire understand the authentication flow
+>
+> **Lines of code written:** 47
+>
+> **Your Brain:** *"I was useless this week. I barely wrote any code."*
+>
+> **Reality:** You unblocked 5 engineers, prevented 3 bugs from reaching production, transferred knowledge to a new hire, and shaped the technical direction for next quarter. Your team shipped 40% more than they would have without you.
 
 ### The Multiplier Mindset
 
@@ -180,49 +169,25 @@ Every PR review is a chance to:
 - Model how to think about problems
 - Build the reviewer's (and author's) engineering judgment
 
-### The Teaching vs. Nitpicking Spectrum
+### The Code Review Spectrum
 
-```
-THE CODE REVIEW SPECTRUM
-======================================================================
+**Nitpicking (Low value, high annoyance)**
+- *"Use camelCase here."*
+- *"Add a blank line before the return statement."*
+- *"This variable name should be longer."*
+- *"I prefer map() over forEach()."*
+> **Takeaway:** These should be handled by linters and formatters, not humans. If you're writing these comments, automate them instead.
 
-NITPICKING (low value, high annoyance)
-─────────────────────────────────────────────────────────────────────
-  "Use camelCase here."
-  "Add a blank line before the return statement."
-  "This variable name should be longer."
-  "I prefer map() over forEach()."
+**Correcting (Medium value, necessary but insufficient)**
+- *"This will cause a null pointer exception if user is undefined."*
+- *"This SQL query is vulnerable to injection."*
+- *"This loop is O(n^2); it'll be slow with large datasets."*
+> **Takeaway:** Important to catch, but misses the teaching opportunity. The author fixes the bug but doesn't learn to prevent it.
 
-  → These should be handled by linters and formatters, not humans.
-  → If you're writing these comments, automate them instead.
-
-CORRECTING (medium value, necessary but insufficient)
-─────────────────────────────────────────────────────────────────────
-  "This will cause a null pointer exception if user is undefined."
-  "This SQL query is vulnerable to injection."
-  "This loop is O(n^2); it'll be slow with large datasets."
-
-  → Important to catch, but misses the teaching opportunity.
-  → The author fixes the bug but doesn't learn to prevent it.
-
-TEACHING (high value, lasting impact)
-─────────────────────────────────────────────────────────────────────
-  "This will NPE if user is undefined. A pattern I've found helpful
-   is to validate inputs at the function boundary---that way every
-   function can assume its inputs are valid. See how we did this in
-   the PaymentService: [link]. What do you think about that approach
-   here?"
-
-  "This SQL query concatenates user input directly, which opens us
-   to injection attacks. Here's a quick article on parameterized
-   queries: [link]. The short version: never put user input directly
-   in SQL strings. Use ? placeholders and let the database driver
-   handle escaping. Want to pair on refactoring this? It's a pattern
-   you'll use in every service."
-
-  → The author learns a principle they'll apply forever.
-  → The reviewer invests 3 extra minutes for a permanent improvement.
-```
+**Teaching (High value, lasting impact)**
+- *"This will NPE if user is undefined. A pattern I've found helpful is to validate inputs at the function boundary---that way every function can assume its inputs are valid. See how we did this in the PaymentService: [link]. What do you think about that approach here?"*
+- *"This SQL query concatenates user input directly, which opens us to injection attacks. Here's a quick article on parameterized queries: [link]. The short version: never put user input directly in SQL strings. Use `?` placeholders and let the database driver handle escaping. Want to pair on refactoring this? It's a pattern you'll use in every service."*
+> **Takeaway:** The author learns a principle they'll apply forever. The reviewer invests 3 extra minutes for a permanent improvement.
 
 ### The Code Review Checklist for Mentors
 
@@ -270,50 +235,38 @@ This small convention reduces review friction enormously. The author knows what'
 
 Pair programming is not about writing code faster. It's about **transferring knowledge in real time**. Used correctly, it's the fastest way to level up a junior engineer.
 
-```
-WHEN TO PAIR
-======================================================================
+### When to Pair
 
-HIGH VALUE:                          LOW VALUE:
-────────────────────────────────    ────────────────────────────────────
-Complex debugging sessions           Routine CRUD implementation
-Unfamiliar part of the codebase     Well-understood, repetitive tasks
-Architecture/design decisions        Writing tests for existing code
-Junior learning a new concept        Senior doing something they've
-                                      done 100 times
-Onboarding a new team member         Solo deep-focus work
-```
+| High Value | Low Value |
+|------------|-----------|
+| Complex debugging sessions | Routine CRUD implementation |
+| Unfamiliar part of the codebase | Well-understood, repetitive tasks |
+| Architecture/design decisions | Writing tests for existing code |
+| Junior learning a new concept | Senior doing something they've done 100 times |
+| Onboarding a new team member | Solo deep-focus work |
 
-### Pair Programming Roles
+### The Driver / Navigator Model
 
-```
-DRIVER / NAVIGATOR MODEL
-======================================================================
+**Driver (Hands on keyboard):**
+- Writes the code
+- Focuses on syntax and implementation
+- Asks questions when stuck
+- Thinks about the current line
 
-DRIVER (hands on keyboard):
-  - Writes the code
-  - Focuses on syntax and implementation
-  - Asks questions when stuck
-  - Thinks about the current line
+**Navigator (Watches the screen):**
+- Thinks about the big picture
+- Catches bugs and typos
+- Suggests approaches and patterns
+- Thinks about edge cases
+- Looks up documentation
 
-NAVIGATOR (watches the screen):
-  - Thinks about the big picture
-  - Catches bugs and typos
-  - Suggests approaches and patterns
-  - Thinks about edge cases
-  - Looks up documentation
+> **Key Rule:** Switch roles every 20-30 minutes.
 
-KEY RULE: Switch roles every 20-30 minutes.
-
-FOR MENTORING: Let the junior engineer drive. They learn by doing.
-The mentor navigates, asking guiding questions instead of dictating:
-
-  GOOD: "What do you think would happen if the input is null?"
-  BAD:  "Add a null check on line 14."
-
-  GOOD: "How could we make this function easier to test?"
-  BAD:  "Extract that into a separate function."
-```
+**For Mentoring:** Let the junior engineer drive. They learn by doing. The mentor navigates, asking guiding questions instead of dictating:
+- **Good:** *"What do you think would happen if the input is null?"*
+- **Bad:** *"Add a null check on line 14."*
+- **Good:** *"How could we make this function easier to test?"*
+- **Bad:** *"Extract that into a separate function."*
 
 ### Mob Programming
 
@@ -324,30 +277,26 @@ Mob programming extends pairing to the whole team: one screen, one keyboard, the
 - Making complex architectural decisions with full team buy-in
 - Breaking through blockers that have stalled the team
 
-```
-MOB PROGRAMMING FORMAT
-======================================================================
+### Mob Programming Format
 
-SETUP:
-  - One large screen (or screen share)
-  - One person "drives" (types)
-  - Everyone else "navigates" (suggests, questions, researches)
-  - Driver rotates every 10-15 minutes
-  - Time-box to 90 minutes maximum (with a break at 45)
+**Setup:**
+- One large screen (or screen share)
+- One person "drives" (types)
+- Everyone else "navigates" (suggests, questions, researches)
+- Driver rotates every 10-15 minutes
+- Time-box to 90 minutes maximum (with a break at 45)
 
-RULES:
-  1. The driver ONLY types what the navigators tell them
-     (this ensures the driver isn't running ahead alone)
-  2. Anyone can suggest an approach
-  3. Disagreements are resolved by trying both approaches
-  4. Take breaks---mob programming is mentally intense
+**Rules:**
+1. The driver ONLY types what the navigators tell them (this ensures the driver isn't running ahead alone).
+2. Anyone can suggest an approach.
+3. Disagreements are resolved by trying both approaches.
+4. Take breaks---mob programming is mentally intense.
 
-ANTI-PATTERNS:
-  ✗ One person dominates the conversation
-  ✗ The driver codes independently while others watch
-  ✗ Sessions run longer than 90 minutes
-  ✗ Used for tasks that don't benefit from collaboration
-```
+**Anti-Patterns:**
+- ✗ One person dominates the conversation
+- ✗ The driver codes independently while others watch
+- ✗ Sessions run longer than 90 minutes
+- ✗ Used for tasks that don't benefit from collaboration
 
 ### Async Feedback
 
@@ -383,6 +332,8 @@ timeline
 ```
 
 THE PROBLEM: If junior engineers are never allowed to fail, they never develop engineering judgment. They follow rules without understanding why the rules exist.
+
+> **Stop and think**: Think about a time you made a critical mistake in production. How did your team react, and how did that reaction affect your future work?
 
 ### Safe Failure Environments
 
@@ -428,26 +379,22 @@ flowchart TD
 
 Google's Project Aristotle (2015) studied 180 teams to find what makes teams effective. The single most important factor wasn't skill, experience, or having senior engineers. It was **psychological safety**---the belief that you won't be punished for making mistakes, asking questions, or proposing ideas.
 
-```
-PSYCHOLOGICAL SAFETY IS NOT:
-======================================================================
+### What Psychological Safety Is and Isn't
 
-  ✗ Being nice all the time
-  ✗ Avoiding conflict
-  ✗ Lowering the quality bar
-  ✗ Agreeing with everyone
-  ✗ Never giving critical feedback
+**Psychological Safety is NOT:**
+- ✗ Being nice all the time
+- ✗ Avoiding conflict
+- ✗ Lowering the quality bar
+- ✗ Agreeing with everyone
+- ✗ Never giving critical feedback
 
-PSYCHOLOGICAL SAFETY IS:
-======================================================================
-
-  ✓ Admitting mistakes without fear of punishment
-  ✓ Asking "dumb" questions without being mocked
-  ✓ Disagreeing with senior engineers respectfully
-  ✓ Proposing unconventional ideas without ridicule
-  ✓ Saying "I don't know" without losing credibility
-  ✓ Giving honest feedback upward without retaliation
-```
+**Psychological Safety IS:**
+- ✓ Admitting mistakes without fear of punishment
+- ✓ Asking "dumb" questions without being mocked
+- ✓ Disagreeing with senior engineers respectfully
+- ✓ Proposing unconventional ideas without ridicule
+- ✓ Saying "I don't know" without losing credibility
+- ✓ Giving honest feedback upward without retaliation
 
 ### Building Psychological Safety as a Tech Lead
 
@@ -464,35 +411,23 @@ Psychological safety is not declared. It is demonstrated. Every day, in small in
 
 ### The "Failure Retrospective" Practice
 
-Run a monthly "failure retrospective" where the team shares things that went wrong and what they learned. Rules:
+Run a monthly "failure retrospective" where the team shares things that went wrong and what they learned.
 
-```
-FAILURE RETROSPECTIVE FORMAT
-======================================================================
+### Failure Retrospective Format
 
-FREQUENCY: Monthly, 30 minutes
-FORMAT:    Each person shares one failure or mistake from the month
+**Frequency:** Monthly, 30 minutes
+**Format:** Each person shares one failure or mistake from the month
 
-RULES:
-  1. Failures are celebrated, not criticized
-  2. Focus on learning, not blame
-  3. The most senior person goes FIRST (models vulnerability)
-  4. No "but it worked out fine"---own the failure
-  5. End each story with "What I'll do differently"
+**Rules:**
+1. Failures are celebrated, not criticized.
+2. Focus on learning, not blame.
+3. The most senior person goes FIRST (models vulnerability).
+4. No "but it worked out fine"---own the failure.
+5. End each story with "What I'll do differently."
 
-EXAMPLE:
-
-  Tech Lead: "I approved a PR without testing the migration script.
-  It worked in staging but failed in production because the staging
-  database was missing 3 tables. What I'll do differently: always
-  run migration scripts against a production-like database backup
-  before approving."
-
-  Junior Engineer: "I deployed on Friday at 4 PM and caused an
-  alert storm. I didn't know about the no-Friday-deploys convention.
-  What I'll do differently: check with the team before deploying
-  late in the week, and I added it to our onboarding doc."
-```
+**Example:**
+- **Tech Lead:** *"I approved a PR without testing the migration script. It worked in staging but failed in production because the staging database was missing 3 tables. What I'll do differently: always run migration scripts against a production-like database backup before approving."*
+- **Junior Engineer:** *"I deployed on Friday at 4 PM and caused an alert storm. I didn't know about the no-Friday-deploys convention. What I'll do differently: check with the team before deploying late in the week, and I added it to our onboarding doc."*
 
 ---
 
@@ -523,38 +458,34 @@ Inclusion isn't just an HR initiative. It directly affects engineering outcomes:
 
 Every team eventually faces this: a highly skilled engineer who is condescending, dismissive, or hostile to others. They write great code, but they make people miserable.
 
-```
-THE BRILLIANT JERK COST ANALYSIS
-======================================================================
-
-WHAT THE BRILLIANT JERK PRODUCES:
-  + Exceptional individual output
-  + Solves hard problems quickly
-
-WHAT THE BRILLIANT JERK COSTS:
-  - Junior engineers stop asking questions (learning stops)
-  - Team members avoid their code reviews (quality drops)
-  - People leave the team (replacement cost: $150K-$300K each)
-  - Remaining engineers disengage (productivity drops 20-40%)
-  - Candidates decline offers after meeting them (hiring slows)
-  - Psychological safety collapses (innovation stops)
-
-THE MATH:
-  If one brilliant jerk causes 2 engineers to leave per year:
-    Replacement cost: 2 × $200K = $400K
-    Lost productivity during vacancy: 2 × 3 months × $15K/mo = $90K
-    Ramp-up time for replacements: 2 × 3 months × reduced output = $60K
-    Total annual cost: ~$550K
-
-  No individual contributor's output is worth $550K/year in
-  damage to the team.
-
-WHAT TO DO:
-  1. Give clear, specific feedback about the behavior (not the person)
-  2. Set concrete expectations with a timeline
-  3. If behavior doesn't change, manage them out
-  4. NEVER tolerate brilliance as an excuse for cruelty
-```
+> ### The Brilliant Jerk Cost Analysis
+>
+> **What the Brilliant Jerk Produces:**
+> - Exceptional individual output
+> - Solves hard problems quickly
+>
+> **What the Brilliant Jerk Costs:**
+> - Junior engineers stop asking questions (learning stops)
+> - Team members avoid their code reviews (quality drops)
+> - People leave the team (replacement cost: $150K-$300K each)
+> - Remaining engineers disengage (productivity drops 20-40%)
+> - Candidates decline offers after meeting them (hiring slows)
+> - Psychological safety collapses (innovation stops)
+>
+> **The Math:**
+> If one brilliant jerk causes 2 engineers to leave per year:
+> - Replacement cost: 2 × $200K = $400K
+> - Lost productivity during vacancy: 2 × 3 months × $15K/mo = $90K
+> - Ramp-up time for replacements: 2 × 3 months × reduced output = $60K
+> - **Total annual cost: ~$550K**
+> 
+> *No individual contributor's output is worth $550K/year in damage to the team.*
+>
+> **What to Do:**
+> 1. Give clear, specific feedback about the behavior (not the person).
+> 2. Set concrete expectations with a timeline.
+> 3. If behavior doesn't change, manage them out.
+> 4. NEVER tolerate brilliance as an excuse for cruelty.
 
 ---
 
@@ -579,75 +510,63 @@ Before discussing good metrics, let's address the bad ones:
 
 The DevOps Research and Assessment (DORA) team at Google identified four metrics that reliably predict engineering team effectiveness:
 
-```
-THE FOUR DORA METRICS
-======================================================================
+### The Four DORA Metrics
 
-1. DEPLOYMENT FREQUENCY
-   How often does your team deploy to production?
-   ─────────────────────────────────────────────────────────
-   Elite:    Multiple times per day
-   High:     Once per day to once per week
-   Medium:   Once per week to once per month
-   Low:      Less than once per month
+**1. Deployment Frequency**
+*How often does your team deploy to production?*
+- **Elite:** Multiple times per day
+- **High:** Once per day to once per week
+- **Medium:** Once per week to once per month
+- **Low:** Less than once per month
 
-2. LEAD TIME FOR CHANGES
-   How long from code commit to running in production?
-   ─────────────────────────────────────────────────────────
-   Elite:    Less than 1 hour
-   High:     1 day to 1 week
-   Medium:   1 week to 1 month
-   Low:      More than 1 month
+**2. Lead Time for Changes**
+*How long from code commit to running in production?*
+- **Elite:** Less than 1 hour
+- **High:** 1 day to 1 week
+- **Medium:** 1 week to 1 month
+- **Low:** More than 1 month
 
-3. CHANGE FAILURE RATE
-   What percentage of deployments cause a failure?
-   ─────────────────────────────────────────────────────────
-   Elite:    0-15%
-   High:     16-30%
-   Medium:   31-45%
-   Low:      46-60%
+**3. Change Failure Rate**
+*What percentage of deployments cause a failure?*
+- **Elite:** 0-15%
+- **High:** 16-30%
+- **Medium:** 31-45%
+- **Low:** 46-60%
 
-4. TIME TO RESTORE SERVICE
-   How long to recover from a failure in production?
-   ─────────────────────────────────────────────────────────
-   Elite:    Less than 1 hour
-   High:     Less than 1 day
-   Medium:   1 day to 1 week
-   Low:      More than 1 week
+**4. Time to Restore Service**
+*How long to recover from a failure in production?*
+- **Elite:** Less than 1 hour
+- **High:** Less than 1 day
+- **Medium:** 1 day to 1 week
+- **Low:** More than 1 week
 
-KEY INSIGHT: Elite teams score high on ALL FOUR metrics.
-Speed and stability are NOT trade-offs---they reinforce each other.
-```
+> **Key Insight:** Elite teams score high on ALL FOUR metrics. Speed and stability are NOT trade-offs---they reinforce each other.
 
 ### SPACE Framework: A Broader View
 
 DORA metrics focus on delivery. The SPACE framework (from Microsoft Research and GitHub) adds dimensions for developer satisfaction and collaboration:
 
-```
-THE SPACE FRAMEWORK
-======================================================================
+### The SPACE Framework
 
-S - SATISFACTION AND WELL-BEING
-    Are developers happy and sustainable?
-    Measures: Survey scores, retention rates, burnout indicators
+**S - Satisfaction and Well-Being**
+*Are developers happy and sustainable?*
+- **Measures:** Survey scores, retention rates, burnout indicators
 
-P - PERFORMANCE
-    What is the outcome of the developer's work?
-    Measures: Quality, reliability, customer impact
+**P - Performance**
+*What is the outcome of the developer's work?*
+- **Measures:** Quality, reliability, customer impact
 
-A - ACTIVITY
-    How much output is being produced? (Use cautiously)
-    Measures: Deployment frequency, PR throughput
+**A - Activity**
+*How much output is being produced? (Use cautiously)*
+- **Measures:** Deployment frequency, PR throughput
 
-C - COMMUNICATION AND COLLABORATION
-    How effectively does the team work together?
-    Measures: Review turnaround time, knowledge sharing,
-              onboarding speed
+**C - Communication and Collaboration**
+*How effectively does the team work together?*
+- **Measures:** Review turnaround time, knowledge sharing, onboarding speed
 
-E - EFFICIENCY AND FLOW
-    Can developers get work done without interruptions?
-    Measures: Flow state time, context switches, meeting load
-```
+**E - Efficiency and Flow**
+*Can developers get work done without interruptions?*
+- **Measures:** Flow state time, context switches, meeting load
 
 ### Mentorship-Specific Metrics
 
@@ -744,6 +663,8 @@ Promoting this engineer is dangerous because they are a "brilliant jerk" whose i
 ### Scenario
 
 A junior engineer named Alex has submitted a pull request for a function that finds duplicate users in a database. The function works correctly but has several issues you'd want to address in a mentoring code review.
+
+> **Stop and think**: Think about the worst PR review you've ever received. How did it make you feel, and how did it affect your productivity that week?
 
 Here is Alex's code:
 
