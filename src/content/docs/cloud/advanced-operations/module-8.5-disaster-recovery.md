@@ -319,6 +319,43 @@ velero restore logs full-restore
 
 ---
 
+## Cross-Region Replication for DR
+
+Backups are useless if they are destroyed in the same regional outage that took down your cluster. True disaster recovery requires replicating your state to a secondary region.
+
+### Container Image Replication
+
+During a disaster, you must pull container images to your new DR cluster. If your primary registry (e.g., ECR in `us-east-1`) is down, your pods will fail with `ImagePullBackOff`. You must configure cross-region replication for your registries.
+
+```bash
+# AWS ECR Cross-Region Replication Example
+aws ecr put-registry-scanning-configuration \
+  --scan-type ENHANCED
+
+aws ecr put-registry-policy \
+  --policy-text file://registry-policy.json
+
+aws ecr put-replication-configuration \
+  --replication-configuration '{ "rules": [ { "destinations": [ { "region": "eu-west-1", "registryId": "123456789012" } ] } ] }'
+```
+
+### Persistent Volume Replication
+
+While Velero can back up volume data to S3, this file-level copy is slow for large databases. For critical workloads, use storage-level replication (like AWS EBS snapshots or CSI volume replication) synced to your DR region.
+
+```yaml
+# Example: CSI VolumeReplication CRD (requires replication-capable CSI driver)
+apiVersion: replication.storage.openshift.io/v1alpha1
+kind: VolumeReplication
+metadata:
+  name: prod-db-replication
+  namespace: data
+spec:
+  volumeSnapshotClass: ebs-csi-snapclass
+  replicationState: primary
+  replicationSecretName: ebs-replication-secret
+```
+
 ## DR Patterns for Kubernetes
 
 ### Pattern 1: Backup & Restore (Cold DR)
@@ -706,7 +743,7 @@ EOF
 kubectl wait --for=condition=Ready pod -l app=minio -n velero-storage --timeout=120s
 
 # Create the velero bucket
-kubectl run minio-client --rm -it --restart=Never \
+kubectl run minio-client --rm -i --restart=Never \
   --image=minio/mc:latest \
   --command -- sh -c '
     mc alias set myminio http://minio.velero-storage.svc:9000 minioadmin minioadmin
@@ -906,7 +943,7 @@ Document the exact steps for disaster recovery of the payments service, includin
 
 ```bash
 kind delete cluster --name dr-test
-rm /tmp/velero-creds
+rm -f /tmp/velero-creds
 ```
 
 ### Success Criteria
