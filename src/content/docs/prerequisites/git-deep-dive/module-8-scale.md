@@ -488,7 +488,7 @@ This tells Git to construct a cone that explicitly includes those two directorie
 ls services/
 ```
 
-You should now ONLY see `service-4` and `service-12`. The other 18 service directories remain hidden from your local disk, fulfilling the prediction that sparse checkout isolates your view to exactly the cones you defined, saving space and index time.
+You should now ONLY see `service-4` and `service-12`. The other 18 service directories remain hidden from your local disk. This fulfills the prediction that sparse checkout isolates your view to exactly the cones you defined. As a result, you save local disk space and significantly reduce Git's index parsing time.
 </details>
 
 <details>
