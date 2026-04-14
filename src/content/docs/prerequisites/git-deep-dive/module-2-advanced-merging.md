@@ -591,10 +591,10 @@ GitLab similarly offers three formal merge request methods: 'Merge commit' (the 
 
 ## Did You Know?
 
-1. While unverified in our current fact ledger, Git 2.53.0 is reportedly the current stable release as of April 2026, with the 2.54.0-rc1 candidate expected to be tagged precisely on April 8, 2026.
+1. While unverified in our current fact ledger [REVIEWER: Please verify], Git 2.53.0 is reportedly the current stable release as of April 2026, with the 2.54.0-rc1 candidate expected to be tagged precisely on April 8, 2026.
 2. The `ort` merge strategy (Ostensibly Recursive's Twin) was introduced in Git 2.33 to mathematically process large renames up to 500x faster. It officially became the default engine for all two-branch merges in Git 2.34.0 (November 2021) and defaults to using the highly optimized `diff-algorithm=histogram` internally.
 3. Running the maintenance command `git rerere gc` systematically prunes unresolved conflict records that are older than 15 days, and clears out successfully resolved records older than 60 days, preventing cache bloat.
-4. While unverified in our current fact ledger, GitLab is reported to have added a powerful automatic rebase before merge feature for semi-linear and fast-forward repository methods beginning in the major GitLab 18.0 release.
+4. While unverified in our current fact ledger [REVIEWER: Please verify], GitLab is reported to have added a powerful automatic rebase before merge feature for semi-linear and fast-forward repository methods beginning in the major GitLab 18.0 release.
 5. Linus Torvalds originally designed Git's octopus merge specifically because he grew frustrated merging dozens of separate Linux kernel subsystem maintainer branches sequentially.
 6. The conflict marker symbols (`<<<<<<<`, `=======`, `>>>>>>>`) predate Git by decades. They were established by the `merge` program developed at Bell Labs in the late 1980s for the RCS version control system.
 7. Git allows you to configure specific merge drivers for different file types via `.gitattributes`. You could theoretically write a custom merge driver specifically designed to intelligently merge Kubernetes YAML files without breaking indentation, though maintaining it is notoriously difficult.
