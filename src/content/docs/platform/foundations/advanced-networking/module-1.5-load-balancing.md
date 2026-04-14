@@ -317,6 +317,8 @@ This gives kube-proxy time to remove the endpoint before the pod starts shutting
 
 ## Part 3: Session Affinity (Sticky Sessions)
 
+> **Pause and predict**: If you scale up your backend from 3 to 10 instances during a traffic spike, but your load balancer uses cookie-based session affinity, what will happen to the load distribution across your new instances?
+
 ### 3.1 Types of Session Affinity
 
 Session affinity ensures the same client always reaches the same backend server.
@@ -455,6 +457,8 @@ NLB health checks do NOT send Proxy Protocol headers. If your backend requires P
 
 ## Part 5: Cross-Zone Load Balancing
 
+> **Stop and think**: If enabling cross-zone load balancing distributes traffic perfectly across all backends, why do cloud providers sometimes charge extra for it, and why might you choose to leave it disabled?
+
 ### 5.1 The Cross-Zone Problem
 
 Cloud load balancers span multiple Availability Zones. Cross-zone determines whether traffic can flow across zones.
@@ -522,6 +526,8 @@ flowchart TD
 ---
 
 ## Part 6: Cloud Load Balancer Architectures
+
+> **Pause and predict**: If a cloud load balancer uses consistent hashing to map flows to backend servers, what happens to existing active connections mapped to Server A if Server B crashes?
 
 ### 6.1 AWS Load Balancers
 
@@ -692,7 +698,7 @@ nodes:
   - role: worker
 EOF
 
-kind create cluster --name lb-lab --config /tmp/lb-lab-cluster.yaml
+kind create cluster --name lb-lab --config /tmp/lb-lab-cluster.yaml --image=kindest/node:v1.35.0
 ```
 
 ### Part 2: Deploy nginx Ingress with Proxy Protocol Support (15 minutes)
