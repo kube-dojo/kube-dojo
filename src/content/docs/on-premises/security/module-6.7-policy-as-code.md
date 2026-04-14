@@ -12,17 +12,11 @@ Kubernetes RBAC controls *who* can perform an action, but it cannot inspect the 
 
 Policy as Code fills this gap by intercepting API requests and evaluating them against predefined rules. On bare-metal environments, where you lack cloud provider guardrails (like AWS IAM roles for service accounts or managed security hubs), robust cluster governance and runtime enforcement are mandatory to prevent node compromise and lateral movement.
 
-## Learning Outcomes
-
-*   Evaluate and select between OPA Gatekeeper and Kyverno based on operational constraints and declarative paradigms.
-*   Deploy and configure validating and mutating admission webhooks without degrading control plane latency.
-*   Implement runtime security enforcement policies using eBPF-based tooling (Falco and Tetragon).
-*   Design deterministic exemption workflows that balance developer velocity with strict security guardrails.
-*   Construct automated CI/CD pipelines to test and validate policies against static manifests before cluster deployment.
-
 ## The Governance Architecture
 
-Kubernetes implements policy primarily through Admission Controllers. When an authenticated and authorized API request reaches the API server, it passes through two sequential webhook phases before persisting to etcd.
+Kubernetes implements policy primarily through Admission Controllers. Before exploring external policy engines, it is important to understand built-in mechanisms. Pod Security Admission (PSA) replaced the legacy PodSecurityPolicy (which was deprecated in Kubernetes v1.21 and removed in v1.25). PSA, which reached stable feature state in Kubernetes v1.25, defines exactly three Pod Security levels: `privileged`, `baseline`, and `restricted`. Namespace policy is configured with labels using modes `enforce`, `audit`, and `warn` (e.g., `pod-security.kubernetes.io/enforce: restricted`), while cluster-level configuration using `pod-security.admission.config.k8s.io/v1` also requires Kubernetes v1.25+.
+
+For more advanced logic beyond pod security, requests pass through external webhooks. When an authenticated and authorized API request reaches the API server, it passes through two sequential webhook phases before persisting to etcd.
 
 ```mermaid
 sequenceDiagram
@@ -44,6 +38,8 @@ sequenceDiagram
     API Server-->>User: 201 Created (or 403 Forbidden)
 ```
 
+> **Pause and predict**: If a mutating webhook modifies an object, does the API server re-validate the schema?
+
 1.  **Mutating Admission**: Modifies the incoming object (e.g., injecting sidecars, appending default labels).
 2.  **Validating Admission**: Inspects the final state of the object and strictly allows or denies the request.
 
@@ -53,15 +49,25 @@ A platform team deployed a validating webhook with `failurePolicy: Fail` coverin
 
 ## Admission Control: OPA Gatekeeper vs Kyverno
 
-The ecosystem has converged on two primary engines for Kubernetes admission control: OPA Gatekeeper and Kyverno. 
+The ecosystem has converged on two primary engines for Kubernetes admission control: OPA Gatekeeper (a CNCF graduated project since 2021) and Kyverno (which achieved CNCF graduated status on March 16, 2026). 
+
+### Native Validating Admission Policy (CEL)
+Before choosing an engine, it is critical to understand the shift toward native policies. Starting in Kubernetes v1.30, **ValidatingAdmissionPolicy** is a stable feature. It natively integrates the Common Expression Language (CEL) into the API server, eliminating external webhook latency. It supports `validationActions` values of `Deny`, `Warn`, and `Audit` (note that `Deny` and `Warn` cannot be allowed together). Additionally, **MutatingAdmissionPolicy** entered beta in Kubernetes v1.34 (requiring a feature gate and runtime-config). 
+
+Both Gatekeeper and Kyverno now orchestrate these native CEL policies alongside their traditional webhooks.
+
+> **Stop and think**: If both Gatekeeper and Kyverno are installed and evaluate the same request, how does the API server handle conflicting decisions?
+> *Answer: When multiple admission controllers return decisions, a "deny" result is overriding; any single deny from either controller will block the request entirely.*
 
 ### OPA Gatekeeper
 
-Gatekeeper is a Kubernetes-specific implementation of the Open Policy Agent (OPA). It uses **Rego**, a purpose-built query language, to evaluate policies.
+Gatekeeper is a Kubernetes-specific implementation of the Open Policy Agent (OPA). While OPA is a general-purpose policy engine capable of validating and mutating resources for create, update, and delete flows, Gatekeeper adds Kubernetes-native CRDs (Constraints and ConstraintTemplates) and audit functionality on top of plain OPA. It uses **Rego**, a purpose-built query language, to evaluate policies.
 
 Gatekeeper separates policy logic from policy instantiation:
 *   **ConstraintTemplate**: The CRD defining the Rego logic and the schema for parameters.
 *   **Constraint**: The CRD that instantiates the template, binding it to specific Kubernetes resources and supplying parameters.
+
+Gatekeeper also supports mutations, a feature stable since v3.10+. When mapping native VAP CEL policies (CEL validation is stable by Gatekeeper v3.18, and VAP management is beta in v3.20, requiring at least Gatekeeper v3.17 with K8s v1.30), Gatekeeper maps its enforcement actions cleanly: `deny` maps to `Deny`, `warn` maps to `Warn`, and `dryrun` maps to `Audit`.
 
 **Example ConstraintTemplate (Rego)**:
 ```yaml
@@ -99,6 +105,8 @@ spec:
 
 Kyverno is designed specifically for Kubernetes. Instead of a bespoke language like Rego, policies are written as native Kubernetes YAML using overlays, variables, and wildcards.
 
+*Note: The example below uses the legacy `ClusterPolicy` format for familiarity. However, Kyverno introduced CEL-based policy types (like `ValidatingPolicy`) in v1.14 which became stable in v1.17. Consequently, `ClusterPolicy` and `CleanupPolicy` were deprecated in v1.17, entering a critical-fixes-only phase in v1.18/v1.19, and are planned for complete removal in v1.20.*
+
 **Example Kyverno Policy (YAML)**:
 ```yaml
 apiVersion: kyverno.io/v1
@@ -128,7 +136,7 @@ spec:
 | :--- | :--- | :--- |
 | **Language** | Rego (Declarative Query Language) | Native YAML |
 | **Learning Curve** | High (Requires learning Rego) | Low (Familiar to K8s engineers) |
-| **Mutation** | Supported (via distinct Mutation CRDs) | Native, highly capable (JSONPatches) |
+| **Mutation** | Supported (via distinct Mutation CRDs, stable v3.10+) | Native, highly capable (JSONPatches) |
 | **External Data** | `external_data` provider framework | API calls via `context` natively in YAML |
 | **Generation** | Not supported natively | Native (can generate RoleBindings, ConfigMaps) |
 | **Performance** | Extremely high (Rego is optimized) | Moderate (Heavy regex/API calls can slow it) |
@@ -289,7 +297,7 @@ In this lab, we will deploy Kyverno, implement a strict policy, test an exemptio
 
 **Prerequisites**:
 *   `kind` (Kubernetes IN Docker) v0.20+
-*   `kubectl` v1.32+
+*   `kubectl` v1.35+
 *   `helm` v3.14+
 
 ### Step 1: Bootstrap the Cluster
@@ -459,40 +467,60 @@ kind delete cluster --name policy-lab
 
 ## Quiz
 
-**1. A cluster upgrade has stalled because new `kube-system` pods cannot be scheduled. The API server logs indicate timeouts reaching the Gatekeeper validating webhook. What is the most robust architectural fix to prevent this?**
+**1. Scenario: You are the lead platform engineer. During a minor Kubernetes cluster upgrade, the control plane stalls. New `kube-system` pods, such as CoreDNS, are stuck in a `Pending` state. The API server logs reveal timeouts when attempting to reach the Gatekeeper validating webhook. What is the most robust architectural fix to restore scheduling and prevent this in the future?**
 A) Scale Gatekeeper to 5 replicas.
 B) Modify the Gatekeeper `ValidatingWebhookConfiguration` to include a `namespaceSelector` that ignores the `kube-system` namespace.
 C) Change the Kubernetes API server configuration to bypass webhooks during upgrades.
 D) Convert all Gatekeeper policies to Kyverno policies.
-<details><summary>Answer</summary>B</details>
+<details><summary>Answer</summary>
+**B**
 
-**2. In OPA Gatekeeper, what is the correct relationship between a `ConstraintTemplate` and a `Constraint`?**
+**Explanation**: Webhooks configured with a `failurePolicy: Fail` will permanently block object creation if the webhook endpoint is unreachable. When the nodes hosting the policy engine go down, their replacements cannot be scheduled because the webhook required to validate them is offline, creating a circular dependency and cluster deadlock. By using a `namespaceSelector` or `MatchConditions` to exempt critical namespaces like `kube-system`, you ensure that fundamental control plane components can always be scheduled regardless of the policy engine's health. This allows the cluster to self-heal the policy engine pods and restores full governance without manual intervention.
+</details>
+
+**2. Scenario: Your security team wants to implement a new policy using OPA Gatekeeper that restricts hostPath mounts across the fleet. They have written the Rego logic and defined the schema for the policy parameters, but the policy is not affecting any newly created pods. In the Gatekeeper architecture, what is the exact mechanism required to apply this logic to the `apps/v1/Deployment` resources in your cluster?**
 A) The Constraint contains the Rego code, and the ConstraintTemplate defines the parameters.
 B) The ConstraintTemplate contains the Rego code and parameter schema, while the Constraint instantiates the policy against specific Kubernetes resources.
 C) The ConstraintTemplate generates Kyverno YAML, which is executed by the Constraint.
 D) The ConstraintTemplate dictates Mutating policies, while the Constraint dictates Validating policies.
-<details><summary>Answer</summary>B</details>
+<details><summary>Answer</summary>
+**B**
 
-**3. You require an admission controller that can automatically inject a sidecar container into any Pod annotated with `sidecar.io/inject: "true"`. Which tool provides the most native and straightforward approach for this mutation?**
+**Explanation**: OPA Gatekeeper strictly separates the policy definition from its application to maximize reusability. The `ConstraintTemplate` Custom Resource Definition (CRD) acts as the blueprint, containing the Rego evaluation code and the OpenAPI schema for any required parameters. However, the template alone is inert until it is instantiated. You must create a `Constraint` (a custom resource matching the template's kind) that targets specific Kubernetes resources, such as Deployments, and provides the actual parameter values, thereby binding the logic to the cluster state.
+</details>
+
+**3. Scenario: Your development teams frequently forget to add required tracing annotations to their pods. You need an admission controller that automatically injects `sidecar.io/inject: "true"` into any Pod created in the `frontend` namespace. You want the most native, straightforward configuration without writing external code or managing complex supplementary CRDs. Which tool and mechanism should you choose?**
 A) OPA Gatekeeper (using Rego)
 B) Falco
 C) Kyverno (using JSONPatch overlays)
 D) Tetragon
-<details><summary>Answer</summary>C</details>
+<details><summary>Answer</summary>
+**C**
 
-**4. A critical zero-day vulnerability requires you to block the execution of a specific binary (`/usr/bin/vuln`) inside all running containers immediately, without restarting the containers. Which technology is capable of this?**
+**Explanation**: While both OPA Gatekeeper and Kyverno support mutation, Kyverno is designed specifically for Kubernetes and uses native YAML constructs that administrators are already familiar with. Kyverno allows you to define mutation policies using simple JSONPatch overlays directly within the policy definition, making it highly accessible. Gatekeeper also supports mutation (a feature marked stable since v3.10+), but it requires authoring separate Mutation CRDs and managing a steeper learning curve. Therefore, Kyverno offers a significantly lower barrier to entry for straightforward sidecar or label injection scenarios.
+</details>
+
+**4. Scenario: A critical zero-day vulnerability in bash is actively being exploited across the industry. You need to instantly block the execution of `/bin/bash` inside all currently running containers in your bare-metal cluster without restarting them. Admission controllers cannot help because the pods are already deployed. Which technology provides the deep kernel hooks necessary to synchronously block this action?**
 A) Validating Admission Webhooks
 B) Kyverno Enforce Policies
 C) Falco alerting rules
 D) Tetragon TracingPolicies with `Sigkill` actions
-<details><summary>Answer</summary>D</details>
+<details><summary>Answer</summary>
+**D**
 
-**5. You need to implement an exemption for a legacy application that violates your "No Root" policy. According to best practices, how should this exemption be handled?**
+**Explanation**: Admission controllers like Gatekeeper and Kyverno only evaluate resources at the time of creation or modification; they cannot interact with or govern running processes. Falco monitors runtime events via eBPF but operates asynchronously, meaning it can alert you that the shell was executed but cannot reliably prevent the execution itself. Tetragon hooks deeply into the Linux kernel using eBPF and can evaluate system calls synchronously. By using a Tetragon `TracingPolicy` with a `Sigkill` action, the kernel will forcefully terminate the process attempting to execute `/bin/bash` before the system call even completes.
+</details>
+
+**5. Scenario: You have deployed a strict "No Root" policy cluster-wide using Kyverno. A vendor provides a legacy Helm chart that requires running as root, and they refuse to update it. You must deploy this application into the `legacy-apps` namespace without triggering policy violations, while maintaining strict enforcement for all other namespaces. According to modern Kubernetes best practices, how should you implement this exemption to minimize webhook latency and risk?**
 A) Hardcode the pod name into the Rego/YAML policy logic.
-B) Use `MatchConditions` in the webhook configuration or `exclude` blocks to bypass the namespace/labels before evaluation.
+B) Use `MatchConditions` in the webhook configuration or native `exclude` blocks to bypass the namespace/labels before evaluation.
 C) Disable the "No Root" policy cluster-wide until the application is fixed.
 D) Assign the application deployment to the `kube-system` namespace.
-<details><summary>Answer</summary>B</details>
+<details><summary>Answer</summary>
+**B**
+
+**Explanation**: Hardcoding exemptions directly into policy logic (like Rego or Kyverno rule blocks) creates brittle, hard-to-audit configurations that blend business logic with governance. Starting in Kubernetes v1.28, `MatchConditions` natively filter requests directly at the API server before they are ever sent over the network to the validating or mutating webhook. This cleanly abstracts the exemption from the policy definition itself. Furthermore, it significantly reduces webhook latency and eliminates the risk of failure-open scenarios for exempted workloads, as the API server avoids the webhook call entirely.
+</details>
 
 ## Further Reading
 
