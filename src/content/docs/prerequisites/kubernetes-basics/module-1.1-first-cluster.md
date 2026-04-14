@@ -556,8 +556,8 @@ Because `kind` leverages Docker containers to simulate entire physical nodes, an
 </details>
 
 <details>
-<summary><strong>[Tests LO1: Construct a local Kubernetes cluster]</strong> You are strictly required to test a third-party custom operator that explicitly mandates Kubernetes version 1.33. Your currently running local `kind` cluster is operating on version 1.35. What is the safest, most deterministic, and fastest method to acquire a local 1.33 environment?</summary>
-You must completely bypass the upgrade or downgrade process and create an entirely new, parallel cluster by explicitly specifying the node image version tag during the creation command. You execute `kind create cluster --name test-133 --image kindest/node:v1.33.0`. Unlike attempting to upgrade or downgrade a complex production cluster in place (which is inherently risky and error-prone), local clusters are strictly ephemeral. It is fundamentally safer and significantly faster to provision a fresh cluster with the exact version required, execute your tests, and subsequently destroy the cluster when finished.
+<summary><strong>[Tests LO1: Construct a local Kubernetes cluster]</strong> You are strictly required to test a third-party custom operator that explicitly mandates Kubernetes version 1.34. Your currently running local `kind` cluster is operating on version 1.35. What is the safest, most deterministic, and fastest method to acquire a local 1.34 environment?</summary>
+You must completely bypass the upgrade or downgrade process and create an entirely new, parallel cluster by explicitly specifying the node image version tag during the creation command. You execute `kind create cluster --name test-134 --image kindest/node:v1.34.0`. Unlike attempting to upgrade or downgrade a complex production cluster in place (which is inherently risky and error-prone), local clusters are strictly ephemeral. It is fundamentally safer and significantly faster to provision a fresh cluster with the exact version required, execute your tests, and subsequently destroy the cluster when finished.
 </details>
 
 <details>
@@ -601,7 +601,7 @@ Ensure the Docker daemon is installed and actively running on your host machine.
 
 1. **The Baseline Cluster Initialization:** Create a standard single-node cluster named `primary-dojo`. Verify the cluster is fully running, and utilize command-line tools to determine the exact IP address and port the control plane API server is bound to on your host machine's network interface.
 2. **The Kubeconfig Deep Dive:** Without using the `kubectl config view` command, directly open your `~/.kube/config` file utilizing a terminal text editor (like `cat`, `less`, or `vim`). Locate the precise Cluster, User, and Context blocks that `kind` just injected for your `primary-dojo` cluster.
-3. **Strict Version Pinning:** Create a second, completely simultaneous cluster named `legacy-dojo`. This cluster must rigidly enforce running an older version of Kubernetes, specifically v1.33.0 (utilizing the specific image tag `kindest/node:v1.33.0`).
+3. **Strict Version Pinning:** Create a second, completely simultaneous cluster named `legacy-dojo`. This cluster must rigidly enforce running an older version of Kubernetes, specifically v1.34.0 (utilizing the specific image tag `kindest/node:v1.34.0`).
 4. **Context Switching Mastery:** Utilize `kubectl` to seamlessly switch your authentication context back and forth between `primary-dojo` and `legacy-dojo`. Execute a version command against each to mathematically prove you are communicating with two distinctly different API Server versions.
 5. **Topology Engineering and Declaration:** Create a declarative YAML configuration file designed to deploy a third cluster named `ha-dojo`. This cluster must artificially simulate a highly available control plane architecture by provisioning exactly three control-plane nodes and zero worker nodes. 
 6. **Simulated Catastrophic Failure:** Delete all currently running clusters to reclaim resources. Create a fresh cluster named `broken-dojo`. Locate the underlying Docker container running the control plane daemon. Utilize a raw Docker command to forcibly terminate (kill) the container without graceful shutdown. Immediately observe and document how `kubectl` behaves when the control plane is suddenly annihilated.
@@ -653,9 +653,9 @@ We can run multiple `kind` clusters simultaneously on the same machine, as long 
 
 ```bash
 # Provision the version-pinned cluster in parallel
-kind create cluster --name legacy-dojo --image kindest/node:v1.33.0
+kind create cluster --name legacy-dojo --image kindest/node:v1.34.0
 ```
-This command will take a moment as it must download the 1.5GB+ Docker image for version 1.33.0.
+This command will take a moment as it must download the 1.5GB+ Docker image for version 1.34.0.
 </details>
 
 <details>
@@ -677,7 +677,7 @@ kubectl version
 # Explicitly switch the active context to the legacy cluster
 kubectl config use-context kind-legacy-dojo
 
-# Verify the server version matches exactly v1.33.0
+# Verify the server version matches exactly v1.34.0
 kubectl version
 ```
 </details>
