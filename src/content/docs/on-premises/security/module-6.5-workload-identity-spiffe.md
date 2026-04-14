@@ -480,7 +480,7 @@ If the Workload API returns `no identity issued`, the attestation failed. Check 
 - D) The SPIRE Agent crashes upon parsing the invalid entry.
 
 **Answer:**
-**B**. The SPIRE specification strictly forbids combining node and workload selectors in a single registration entry. This design enforces a hierarchical separation between the infrastructure identity (node) and the application identity (workload). You must create a parent entry for the node and a child entry for the workload, where the workload entry references the node entry via its parent ID—this structure explicitly models the trust chain rather than collapsing it into a single ambiguous rule.
+**B**. The SPIRE specification strictly forbids combining node and workload selectors in a single registration entry. This design enforces a hierarchical separation between the infrastructure identity (node) and the application identity (workload). You must create a parent entry for the node and a child entry for the workload, where the workload entry references the node entry via its parent ID—this structure explicitly models the trust chain rather than collapsing it into a single ambiguous rule. If SPIRE allowed combining them, an operator might accidentally tie a microservice to a specific physical server, permanently breaking its ability to be rescheduled by Kubernetes during a node failure.
 </details>
 
 <details>
@@ -506,4 +506,4 @@ If the Workload API returns `no identity issued`, the attestation failed. Check 
 
 ## Next Module
 
-Ready to dive deeper into identity-aware networking? Head over to [Module 6.6: Advanced Service Mesh Authorization](/on-premises/security/module-6.5-workload-identity-spiffe/), where we will use our newly minted SPIFFE identities to enforce strict Layer 7 access controls using Envoy and Open Policy Agent.
+Ready to dive deeper into identity-aware networking? Head over to [Module 6.6: Advanced Service Mesh Authorization](/on-premises/security/module-6.6-advanced-service-mesh-authorization/), where we will use our newly minted SPIFFE identities to enforce strict Layer 7 access controls using Envoy and Open Policy Agent.
