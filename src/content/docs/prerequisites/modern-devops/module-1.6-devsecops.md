@@ -212,7 +212,7 @@ In the secure example, we explicitly prevent privilege escalation, force the fil
 
 ### Pod Security Standards
 
-Relying on developers to remember every security context setting is error-prone. Modern Kubernetes (v1.25+) uses Pod Security Standards (PSS) enforced via the Pod Security Admission controller. This allows administrators to enforce security baselines automatically at the namespace level.
+Relying on developers to remember every security context setting is error-prone. Modern Kubernetes (v1.35+) uses Pod Security Standards (PSS) enforced via the Pod Security Admission controller. This allows administrators to enforce security baselines automatically at the namespace level.
 
 ```yaml
 # Enforce security standards at namespace level
@@ -517,7 +517,7 @@ In the secure configuration, the developer can only interact with deployments an
    Committing raw secrets to any version control system, even a private one, is fundamentally flawed because Git retains a permanent history of all changes. Once a secret is committed, anyone with read access to the repository—or anyone who gains access in the future—can retrieve the credentials from the commit history, even if the file is later deleted. A better alternative is to use a tool like Sealed Secrets, which uses asymmetric cryptography to encrypt the secret so that it can be safely committed to Git. Only the Kubernetes cluster holds the private key required to decrypt the SealedSecret back into a usable Kubernetes Secret object.
    </details>
 
-5. **Your organization wants to enforce a policy where no pods can run in the `production` namespace with privileged access or host-level mounts. How can you implement this natively in Kubernetes 1.25+ without installing third-party admission controllers?**
+5. **Your organization wants to enforce a policy where no pods can run in the `production` namespace with privileged access or host-level mounts. How can you implement this natively in modern Kubernetes (v1.35+) without installing third-party admission controllers?**
    <details>
    <summary>Answer</summary>
    You can achieve this natively by configuring Pod Security Standards (PSS) at the namespace level using specific labels. By applying the label `pod-security.kubernetes.io/enforce: restricted` to the `production` namespace, the Kubernetes built-in admission controller will automatically reject any Pod creation requests that violate the restricted profile. This profile explicitly forbids privileged containers, host network namespaces, and hostpath volumes, among other insecure configurations. This native approach requires no additional tooling and ensures that misconfigured pods are blocked before they are ever scheduled onto a node.
