@@ -508,6 +508,9 @@ sudo dmesg | grep -i apparmor
 sudo grep apparmor /var/log/syslog
 ```
 
+> **Stop and think**: If `aa-status` shows that 0 profiles are loaded, but your Kubelet is trying to start a pod configured with a specific `Localhost` profile, what will happen?
+> *Answer*: The Pod startup will fail with an error such as `CreateContainerError` or `CreateContainerConfigError`. The runtime will check for the profile in the kernel, fail to locate it, and safely abort the container initialization process. You must distribute and load the profile using `apparmor_parser -r` before scheduling the Pod.
+
 ### Diagnosing Common Application Failures
 
 You must learn to map application-level symptoms to kernel-level MAC denials:
