@@ -466,7 +466,7 @@ kubectl apply -f deployment.yaml
 # Notice the output says "deployment.apps/iac-demo unchanged"
 
 # 2. Modify the code
-sed -i 's/replicas: 2/replicas: 4/' deployment.yaml
+sed 's/replicas: 2/replicas: 4/' deployment.yaml > temp.yaml && mv temp.yaml deployment.yaml
 
 # 3. Apply change
 kubectl apply -f deployment.yaml
