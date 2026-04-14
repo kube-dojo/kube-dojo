@@ -204,25 +204,25 @@ Each domain requires a different approach. Using the wrong approach is worse tha
 * **Sense:** See the alert.
 * **Categorize:** This is a known issue with a known fix.
 * **Respond:** Run the disk cleanup playbook.
-> ⚠️ **Danger:** Don't overcomplicate it! If you start analyzing why logs grew so much, you're treating a clear problem as complicated. First: fix it. Then: investigate (separate action).
+> **Danger:** Don't overcomplicate it! If you start analyzing why logs grew so much, you're treating a clear problem as complicated. First: fix it. Then: investigate (separate action).
 
 **COMPLICATED: Performance Degradation**
 * **Sense:** Gather data (metrics, traces, logs).
 * **Analyze:** Have experts examine the evidence (profile code paths, check query plans, examine network latency).
 * **Respond:** Implement the fix that analysis reveals.
-> ⚠️ **Danger:** Analysis paralysis! If you're still analyzing after 30 minutes while users are affected, you've waited too long. Set a time limit. Act with the best available information.
+> **Danger:** Analysis paralysis! If you're still analyzing after 30 minutes while users are affected, you've waited too long. Set a time limit. Act with the best available information.
 
 **COMPLEX: Mystery Failures** (Users complain checkout fails but metrics look fine)
 * **Probe:** Run safe-to-fail experiments (Canary with verbose logging, test different user segments).
 * **Sense:** Observe patterns that emerge ("Oh, it only happens on mobile Safari" or "It correlates with CDN cache age").
 * **Respond:** Amplify what works, dampen what doesn't.
-> ⚠️ **Danger:** Premature convergence! Saying "I bet it's the database" and attempting an immediate fix is treating a complex problem as complicated. Run experiments first. Let patterns emerge.
+> **Danger:** Premature convergence! Saying "I bet it's the database" and attempting an immediate fix is treating a complex problem as complicated. Run experiments first. Let patterns emerge.
 
 **CHAOTIC: Complete Outage** (Site is completely down, everything is red)
 * **Act:** Do something immediately to stabilize (Roll back the last deployment, restart critical services, fail over to backup region).
 * **Sense:** What effect did the action have?
 * **Respond:** Iterate until stable.
-> ⚠️ **Danger:** Analysis during chaos! "Let's understand what's happening first..." NO. The site is down. Users are angry. Revenue is lost. ACT FIRST. Understand later. A wrong action that provides information is better than perfect analysis while everything burns.
+> **Danger:** Analysis during chaos! "Let's understand what's happening first..." NO. The site is down. Users are angry. Revenue is lost. ACT FIRST. Understand later. A wrong action that provides information is better than perfect analysis while everything burns.
 
 > **War Story: The 45-Minute Analysis Meeting**
 >
@@ -428,6 +428,8 @@ Resilience engineering identifies four capabilities that enable systems to adapt
 
 Chaos Engineering deliberately introduces failures to discover weaknesses before real incidents.
 
+> **Stop and think**: What would happen if your primary database instances were suddenly terminated right now? Would the system recover automatically, or require human intervention?
+
 1. **Start with a hypothesis**: "If we kill 30% of API pods, latency should stay under 200ms." This lets you learn regardless of outcome.
 2. **Use production-like conditions**: Real chaos happens in production because staging lacks real user behavior and data volumes.
 3. **Minimize blast radius**: Start small. Build confidence. Expand gradually.
@@ -503,14 +505,14 @@ Resilience engineering (**Safety-II**) also studies what goes right. It recogniz
    <details>
    <summary>Answer</summary>
 
-   The request is flawed because complex systems do not fail due to a single "root cause." **WHY?** In complex systems, catastrophe requires multiple defenses to fail simultaneously (the Swiss Cheese model). The incident was likely caused by a combination of individually harmless factors (e.g., a latent bug in a recent PR, a muted alert from last month, a peak load spike, and random timing) that happened to align perfectly. Searching for a single root cause, especially to assign blame, ignores the systemic conditions that made the failure possible and guarantees the real vulnerabilities will remain unaddressed.
+   The request is flawed because complex systems do not fail due to a single "root cause." **WHY?** In complex systems, catastrophe requires multiple defenses to fail simultaneously (the Swiss Cheese model). The incident was likely caused by a combination of individually harmless factors (e.g., a latent bug in a recent PR, a muted alert from last month, a peak load spike, and random timing) that happened to align perfectly. Searching for a single root cause, especially to assign blame, ignores the systemic conditions that made the failure possible and guarantees the real vulnerabilities will remain unaddressed. Blameless postmortems that seek to understand how the system allowed the failure are required to genuinely improve resilience.
    </details>
 
 4. **Team A builds an API that rigidly rejects any request taking longer than 500ms, causing the entire frontend to crash with a 500 Error when the database slows down. Team B builds an API that returns cached, slightly stale data if the database takes longer than 500ms, allowing the user to continue using the app. Which team built a robust system and which built a resilient system?**
    <details>
    <summary>Answer</summary>
 
-   Team A built a robust system, while Team B built a resilient system. **WHY?** A robust system (Team A) is designed like a fortress to resist known failures up to a specific threshold, but when it encounters unexpected stress (like a database slow down that pushes past its rigid limits), it fails catastrophically (crashing the frontend). A resilient system (Team B) is designed to adapt and bend like a reed; it accepts that failures will happen and degrades gracefully (returning stale data) rather than collapsing completely. For complex systems, resilience is always preferred over robustness.
+   Team A built a robust system, while Team B built a resilient system. **WHY?** A robust system (Team A) is designed like a fortress to resist known failures up to a specific threshold, but when it encounters unexpected stress (like a database slow down that pushes past its rigid limits), it fails catastrophically (crashing the frontend). A resilient system (Team B) is designed to adapt and bend like a reed; it accepts that failures will happen and degrades gracefully (returning stale data) rather than collapsing completely. For complex systems, resilience is always preferred over robustness. This allows users to keep interacting with the application, preserving trust even during degraded operations.
    </details>
 
 ---
@@ -650,7 +652,7 @@ Answer these questions:
 
 1. What domain is this scenario in initially? Why?
 
-   ```
+   ```text
    ┌─────────────────────────────────────────────────────────────┐
    │ Domain: ________________                                    │
    │                                                             │
