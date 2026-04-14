@@ -667,6 +667,9 @@ aws dynamodb create-table \
   --key-schema AttributeName=orderId,KeyType=HASH \
   --billing-mode PAY_PER_REQUEST
 
+# Wait for the table to become active
+aws dynamodb wait table-exists --table-name dojo-orders
+
 # Insert test data
 aws dynamodb put-item --table-name dojo-orders \
   --item '{"orderId":{"S":"ORD-001"},"customer":{"S":"Alice"},"amount":{"N":"99.95"}}'
