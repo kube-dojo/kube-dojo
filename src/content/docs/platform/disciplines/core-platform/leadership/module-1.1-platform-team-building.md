@@ -191,6 +191,8 @@ Traditional engineering interviews test algorithm skills and system design. For 
 
 ## Team Size and Skill Mix
 
+> **Stop and think**: Looking at your current platform team, is the skill mix skewed too far toward pure infrastructure? Do you have engineers dedicated to developer experience?
+
 ### The Two-Pizza Rule (Adapted for Platforms)
 
 Amazon's "two-pizza team" (6-8 people) applies to platform teams, but the skill mix is different:
@@ -311,6 +313,8 @@ Google's infrastructure is arguably the first modern platform organization, thou
 ---
 
 ## Common Anti-Patterns
+
+> **Pause and predict**: Which of these four anti-patterns is most prevalent in your current organization?
 
 ### Anti-Pattern 1: The Ticket Queue
 
