@@ -619,6 +619,7 @@ az storage account create \
 USER_ID=$(az ad signed-in-user show --query id -o tsv)
 STORAGE_ID=$(az storage account show -n "$STORAGE_NAME" -g "$RG" --query id -o tsv)
 az role assignment create --assignee "$USER_ID" --role "Storage Blob Data Contributor" --scope "$STORAGE_ID"
+sleep 30
 ```
 
 <details>
@@ -803,6 +804,12 @@ az storage account create \
   --sku Standard_LRS \
   --enable-hierarchical-namespace true \
   --allow-blob-public-access false
+
+# Assign yourself Storage Blob Data Contributor for the Data Lake
+USER_ID=$(az ad signed-in-user show --query id -o tsv)
+DL_ID=$(az storage account show -n "$DL_NAME" -g "$RG" --query id -o tsv)
+az role assignment create --assignee "$USER_ID" --role "Storage Blob Data Contributor" --scope "$DL_ID"
+sleep 30
 
 # Create a file system (container equivalent)
 az storage fs create --name "analytics-raw" --account-name "$DL_NAME" --auth-mode login
