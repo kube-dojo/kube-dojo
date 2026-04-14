@@ -616,7 +616,7 @@ Acknowledge their urgency, give them what they need, and immediately redirect th
 The 3-3-3 format is the perfect tool here because micromanagement is usually a symptom of a manager feeling uninformed or anxious. By structuring your weekly update into 3 things completed, 3 things in progress, and 3 risks or blockers, you proactively fill the information vacuum before your manager feels the need to ask. This format forces you to focus on concrete outcomes and high-level timelines rather than low-level technical minutiae like individual pod disruptions. When your manager sees that you are predictably surfacing progress and risks on your own, their anxiety decreases. Over time, this proactive transparency rebuilds trust and significantly reduces their urge to micromanage your day-to-day execution.
 </details>
 
-**Question 6:** You need to convince your CFO to approve $280,000/year for security improvements. What framing do you use?
+**Question 6:** Your company recently failed a compliance pre-audit due to missing security controls. You need to convince your CFO to approve a $280,000/year budget for security improvements, but she is hesitant due to recent budget cuts. What framing do you use to secure the funding?
 
 <details>
 <summary>Show Answer</summary>
