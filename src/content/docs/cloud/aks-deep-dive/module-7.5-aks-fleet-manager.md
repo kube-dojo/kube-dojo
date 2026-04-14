@@ -133,7 +133,7 @@ Instead of upgrading clusters randomly or relying on external CI/CD loops, you m
 
 1.  **Update Groups:** Logical groupings of clusters (e.g., `dev-clusters`, `canary-clusters`, `prod-westeurope`, `prod-eastus`).
 2.  **Update Stages:** Ordered sequences of Update Groups. A stage waits for the previous stage to complete successfully before starting. You can also configure bake times (wait periods) between stages.
-3.  **Update Runs:** The actual execution of an upgrade, targeting a specific Kubernetes version (e.g., upgrade all clusters to v1.35.x).
+3.  **Update Runs:** The actual execution of an upgrade, targeting a specific Kubernetes version (e.g., upgrade all clusters to v1.35.2).
 
 ### Defining an Update Strategy
 
@@ -212,7 +212,7 @@ What is the most likely cause of this discrepancy?
 
 **Correct Answer: C**
 
-If the Hub reports successful placement to all 12 clusters, it means the Fleet controller successfully communicated with the API servers of those member clusters and applied the manifests. However, if a member cluster has its own local GitOps controller (like ArgoCD) running, and that controller is configured to manage the same namespaces or resources, it will view the Fleet's changes as "drift". The local GitOps agent will immediately reconcile the cluster state back to *its* Git source, effectively deleting or undoing the resources placed by Fleet Manager. When using Fleet Manager for workload placement, you must ensure that local cluster controllers do not have conflicting management scopes. Answer B is incorrect because the scenario states the status showed it matched all 12 clusters. Answer D is incorrect as Fleet member clusters can be in any region.
+If the Hub reports successful placement to all 12 clusters, it means the Fleet controller successfully communicated with the API servers of those member clusters and applied the manifests. However, if a member cluster has its own local GitOps controller (like ArgoCD) running, and that controller is configured to manage the same namespaces or resources, it will view the Fleet's changes as drift. The local GitOps agent will immediately reconcile the cluster state back to its Git source, effectively deleting or undoing the resources placed by Fleet Manager. When using Fleet Manager for workload placement, you must ensure that local cluster controllers do not have conflicting management scopes. Answer B is incorrect because the scenario states the status showed it matched all 12 clusters. Answer D is incorrect as Fleet member clusters can be in any region.
 </details>
 
 ### Scenario 2
