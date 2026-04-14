@@ -603,8 +603,8 @@ sleep 30
 echo "Current replicas: $(az containerapp replica list -g "$RG" -n queue-worker --query 'length(@)' -o tsv)"
 
 # Check the queue length
-az storage queue metadata show \
-  --queue-name "work-items" \
+az storage queue show \
+  --name "work-items" \
   --account-name "$STORAGE_NAME" \
   --connection-string "$STORAGE_CONN" \
   --query approximateMessageCount -o tsv
