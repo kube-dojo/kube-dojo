@@ -31,25 +31,24 @@ In this module, you will learn how to write `cloudbuild.yaml` configurations, us
 
 ### How Cloud Build Works
 
-```text
-  ┌──────────┐     Trigger        ┌──────────────┐     Steps      ┌──────────────┐
-  │  Source   │ ─────────────────> │  Cloud Build  │ ─────────────> │  Artifacts    │
-  │           │                    │  Worker Pool   │                │               │
-  │  GitHub   │     cloudbuild.yaml│               │                │  Artifact     │
-  │  GitLab   │     defines steps  │  ┌─────────┐ │                │  Registry     │
-  │  CSR      │                    │  │ Step 1   │ │                │  (images)     │
-  │  GCS      │                    │  │ Build    │ │                │               │
-  └──────────┘                    │  └────┬────┘ │                │  Cloud Storage│
-                                   │  ┌────▼────┐ │                │  (binaries)   │
-                                   │  │ Step 2   │ │                │               │
-                                   │  │ Test    │ │                └──────────────┘
-                                   │  └────┬────┘ │
-                                   │  ┌────▼────┐ │                ┌──────────────┐
-                                   │  │ Step 3   │ │ ─────────────> │  Deployment   │
-                                   │  │ Deploy  │ │                │  Target       │
-                                   │  └─────────┘ │                │  (Cloud Run,  │
-                                   └──────────────┘                │   GKE, GCE)   │
-                                                                    └──────────────┘
+```mermaid
+flowchart LR
+    Source["Source\n\nGitHub\nGitLab\nCSR\nGCS"]
+    
+    subgraph CB ["Cloud Build Worker Pool"]
+        direction TB
+        S1["Step 1\nBuild"]
+        S2["Step 2\nTest"]
+        S3["Step 3\nDeploy"]
+        S1 --> S2 --> S3
+    end
+    
+    Artifacts["Artifacts\n\nArtifact Registry\n(images)\n\nCloud Storage\n(binaries)"]
+    Target["Deployment Target\n(Cloud Run, GKE, GCE)"]
+
+    Source -- "Trigger\n\ncloudbuild.yaml\ndefines steps" --> CB
+    CB -- "Steps" --> Artifacts
+    S3 --> Target
 ```
 
 Each Cloud Build execution runs in a **fresh, ephemeral environment**. Steps run in Docker containers that share a workspace volume (`/workspace`). The workspace persists across steps, so step 1 can build code that step 2 tests.
@@ -466,14 +465,11 @@ gcloud builds triggers update my-trigger \
 
 Cloud Deploy manages the promotion of releases across environments (dev, staging, production) with approval gates and rollback capabilities.
 
-```text
-  ┌─────────┐     ┌─────────┐     ┌──────────┐     ┌──────────┐
-  │  Cloud   │────>│  Dev     │────>│  Staging  │────>│  Prod     │
-  │  Build   │     │  Target  │     │  Target   │     │  Target   │
-  │          │     │          │     │           │     │           │
-  │  Creates │     │ Auto-    │     │ Auto-     │     │ Requires  │
-  │  Release │     │ deploy   │     │ deploy    │     │ Approval  │
-  └─────────┘     └─────────┘     └──────────┘     └──────────┘
+```mermaid
+flowchart LR
+    CB["Cloud Build\n\nCreates\nRelease"] --> Dev["Dev\nTarget\n\nAuto-\ndeploy"]
+    Dev --> Stg["Staging\nTarget\n\nAuto-\ndeploy"]
+    Stg --> Prod["Prod\nTarget\n\nRequires\nApproval"]
 ```
 
 ### Setting Up a Delivery Pipeline
