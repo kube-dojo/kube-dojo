@@ -10,6 +10,8 @@ from .control_plane import (
     DEFAULT_DB_PATH,
     ControlPlane,
 )
+from .preflight import run_preflight
+from .review_worker import ReviewWorker
 from .watchdog import sweep_once, watch_forever
 
 
@@ -65,6 +67,22 @@ def build_parser() -> argparse.ArgumentParser:
     watchdog_subparsers.add_parser("sweep", help="Release expired leases once")
     watchdog_loop = watchdog_subparsers.add_parser("loop", help="Run the optional watchdog loop")
     watchdog_loop.add_argument("--interval-seconds", type=int, default=30)
+
+    review_worker = subparsers.add_parser("review-worker", help="Run the Week 2 review worker")
+    review_worker_subparsers = review_worker.add_subparsers(
+        dest="review_worker_command",
+        required=True,
+    )
+    review_worker_run = review_worker_subparsers.add_parser("run", help="Review one queued job")
+    review_worker_run.add_argument("--worker-id", default="review-worker")
+    review_worker_run.add_argument("--json", action="store_true")
+    review_worker_loop = review_worker_subparsers.add_parser("loop", help="Run the review worker loop")
+    review_worker_loop.add_argument("--worker-id", default="review-worker")
+    review_worker_loop.add_argument("--sleep-seconds", type=float, default=5.0)
+
+    preflight = subparsers.add_parser("preflight", help="Run deterministic pre-flight checks")
+    preflight.add_argument("module_path", type=Path)
+    preflight.add_argument("--json", action="store_true")
 
     return parser
 
@@ -137,6 +155,42 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         watch_forever(control_plane, interval_seconds=args.interval_seconds)
         return 0
+
+    if args.command == "review-worker":
+        worker = ReviewWorker(control_plane, worker_id=args.worker_id)
+        if args.review_worker_command == "run":
+            outcome = worker.run_once()
+            if args.json:
+                print(
+                    json.dumps(
+                        {
+                            "status": outcome.status,
+                            "module_key": outcome.module_key,
+                            "lease_id": outcome.lease_id,
+                            "details": outcome.details,
+                        },
+                        indent=2,
+                        sort_keys=True,
+                    )
+                )
+            elif outcome.status == "idle":
+                print("no review job available")
+            else:
+                print(f"{outcome.status}: {outcome.module_key}")
+            return 0
+        worker.loop_forever(sleep_seconds=args.sleep_seconds)
+        return 0
+
+    if args.command == "preflight":
+        result = run_preflight(args.module_path)
+        if args.json:
+            print(json.dumps(result.to_dict(), indent=2, sort_keys=True))
+        else:
+            print(f"Preflight {'PASS' if result.passed else 'FAIL'}: {args.module_path}")
+            for finding in result.findings:
+                icon = "PASS" if finding.passed else finding.severity
+                print(f"[{icon}] {finding.id}: {finding.evidence}")
+        return 0 if result.passed else 1
 
     parser.error(f"Unhandled command: {args.command}")
     return 1

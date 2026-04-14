@@ -337,6 +337,7 @@ class ControlPlane:
         self,
         worker_id: str,
         *,
+        phase: str | None = None,
         model: str | None = None,
         requested_calls: int | None = None,
         estimated_usd: float | None = None,
@@ -354,6 +355,10 @@ class ControlPlane:
                 )
 
             params: list[Any] = []
+            phase_clause = ""
+            if phase:
+                phase_clause = "AND phase = ?"
+                params.append(phase)
             model_clause = ""
             if model:
                 model_clause = "AND model = ?"
@@ -363,6 +368,7 @@ class ControlPlane:
                 SELECT *
                 FROM jobs
                 WHERE queue_state = 'pending'
+                {phase_clause}
                 {model_clause}
                 ORDER BY priority ASC, enqueued_at ASC, id ASC
                 LIMIT 1
@@ -627,6 +633,7 @@ class ControlPlane:
         tokens_in: int = 0,
         tokens_out: int = 0,
         outcome: str = "attempt_succeeded",
+        event_payload: dict[str, Any] | None = None,
     ) -> bool:
         conn = self._connect()
         try:
@@ -685,6 +692,7 @@ class ControlPlane:
                     "tokens_in": tokens_in,
                     "tokens_out": tokens_out,
                     "usage_deduped": not inserted,
+                    **(event_payload or {}),
                 },
             )
             conn.commit()
@@ -694,6 +702,27 @@ class ControlPlane:
             raise
         finally:
             conn.close()
+
+    def complete_lease(
+        self,
+        lease_id: str,
+        *,
+        actual_calls: int = 1,
+        actual_usd: float = 0.0,
+        tokens_in: int = 0,
+        tokens_out: int = 0,
+        outcome: str = "attempt_succeeded",
+        event_payload: dict[str, Any] | None = None,
+    ) -> bool:
+        return self.record_usage(
+            lease_id,
+            actual_calls=actual_calls,
+            actual_usd=actual_usd,
+            tokens_in=tokens_in,
+            tokens_out=tokens_out,
+            outcome=outcome,
+            event_payload=event_payload,
+        )
 
     def release_lease(self, lease_id: str, *, reason: str) -> bool:
         conn = self._connect()
@@ -873,6 +902,31 @@ class ControlPlane:
             if row is None:
                 return None
             return row[0]
+        finally:
+            conn.close()
+
+    def emit_event(
+        self,
+        event_type: str,
+        *,
+        module_key: str | None = None,
+        lease_id: str | None = None,
+        payload: dict[str, Any] | None = None,
+    ) -> None:
+        conn = self._connect()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            _record_event(
+                conn,
+                event_type,
+                module_key=module_key,
+                lease_id=lease_id,
+                payload=payload,
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
         finally:
             conn.close()
 
