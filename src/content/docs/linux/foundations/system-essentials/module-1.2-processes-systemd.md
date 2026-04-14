@@ -271,16 +271,10 @@ flowchart TD
 
 When Kubernetes terminates a pod:
 
-```
-1. kubectl delete pod
-         │
-         ▼
-2. SIGTERM sent to PID 1 in container
-         │
-         │  (terminationGracePeriodSeconds, default 30s)
-         │
-         ▼
-3. SIGKILL sent if still running
+```mermaid
+flowchart TD
+    A["1. kubectl delete pod"] --> B["2. SIGTERM sent to PID 1 in container"]
+    B -- "(terminationGracePeriodSeconds, default 30s)" --> C["3. SIGKILL sent if still running"]
 ```
 
 This is why your containerized applications **must handle SIGTERM**!
@@ -622,7 +616,7 @@ Scenario: A monitoring alert fires for "High PID usage". You run `top` and see 5
 <details>
 <summary>Show Answer</summary>
 
-The system is accumulating "Zombie" processes, which are child processes that have terminated. They consume no CPU or RAM, which is why your resource usage is normal, but they still occupy a slot in the system's process table (PID). A zombie exists because its parent process hasn't called `wait()` to read its exit status and properly reap it. To resolve this, you must troubleshoot, restart, or kill the *parent* process that is failing to manage its children correctly.
+The system is accumulating "Zombie" processes, which are child processes that have terminated. They consume no CPU or RAM, which is why your resource usage is normal, but they still occupy a slot in the system's process table (PID). A zombie exists because its parent process hasn't called `wait()` to read its exit status and properly reap it. To resolve this, you must troubleshoot, restart, or kill the *parent* process that is failing to manage its children correctly. Once the parent is terminated, the zombie processes will be inherited by PID 1 (systemd), which automatically reaps them.
 
 </details>
 
@@ -632,7 +626,7 @@ Scenario: A backup script is stuck. You try `kill 1234` (SIGTERM) and then `kill
 <details>
 <summary>Show Answer</summary>
 
-The process is in an "Uninterruptible Sleep" (D state), meaning it is waiting on hardware I/O, such as a disconnected network drive or a failing disk. Because it is deep in a kernel system call, it cannot process any signals whatsoever, including `SIGKILL`. `SIGKILL` only works on processes that can actually receive signals from the kernel. You must resolve the underlying hardware or storage issue, or if that is impossible, forcefully reboot the system.
+The process is in an "Uninterruptible Sleep" (D state), meaning it is waiting on hardware I/O, such as a disconnected network drive or a failing disk. Because it is deep in a kernel system call, it cannot process any signals whatsoever, including `SIGKILL`. `SIGKILL` only works on processes that can actually receive signals from the kernel. You must resolve the underlying hardware or storage issue, or if that is impossible, forcefully reboot the system. This state protects the system from data corruption by ensuring processes don't terminate abruptly while writing to block devices.
 
 </details>
 
@@ -642,7 +636,7 @@ Scenario: You create a new `web-app.service` and run `systemctl start web-app`. 
 <details>
 <summary>Show Answer</summary>
 
-You missed running `systemctl enable web-app` before rebooting the server. While `start` runs the service immediately, it does not configure the system to launch it automatically on boot. The `enable` command creates a symbolic link in the appropriate target's `.wants` directory (e.g., `/etc/systemd/system/multi-user.target.wants/web-app.service`). This symlink tells systemd that the service is a dependency for the boot target, ensuring it starts up automatically when the target is reached.
+You missed running `systemctl enable web-app` before rebooting the server. While `start` runs the service immediately, it does not configure the system to launch it automatically on boot. The `enable` command creates a symbolic link in the appropriate target's `.wants` directory (e.g., `/etc/systemd/system/multi-user.target.wants/web-app.service`). This symlink tells systemd that the service is a dependency for the boot target, ensuring it starts up automatically when the target is reached. Without this link, systemd has no instruction to start the process during the boot sequence.
 
 </details>
 
@@ -652,7 +646,7 @@ Scenario: A developer complains their Node.js container takes exactly 30 seconds
 <details>
 <summary>Show Answer</summary>
 
-When Kubernetes deletes a pod, it sends a `SIGTERM` signal to PID 1 inside the container to request a graceful shutdown. If the Node.js application (acting as PID 1) does not have explicit code to catch and handle `SIGTERM`, it simply ignores the signal and keeps running. Kubernetes patiently waits for the default 30-second grace period to expire, gives up on a graceful exit, and then forcefully terminates the container with `SIGKILL`. To fix this, the developer must add a signal handler to their application or use a lightweight init system like `tini`.
+When Kubernetes deletes a pod, it sends a `SIGTERM` signal to PID 1 inside the container to request a graceful shutdown. If the Node.js application (acting as PID 1) does not have explicit code to catch and handle `SIGTERM`, it simply ignores the signal and keeps running. Kubernetes patiently waits for the default 30-second grace period to expire, gives up on a graceful exit, and then forcefully terminates the container with `SIGKILL`. To fix this, the developer must add a signal handler to their application or use a lightweight init system like `tini`. This ensures the application catches the termination request and exits before the forceful kill.
 
 </details>
 
