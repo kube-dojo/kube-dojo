@@ -125,11 +125,11 @@ A `ContainerSet` template runs multiple containers in a single Pod. The workflow
         image: alpine/git
         command: [sh, -c, "git clone https://github.com/argoproj/argo-workflows /workspace/repo"]
       - name: build
-        image: golang:1.35.0
+        image: golang:1.26
         command: [sh, -c, "cd /workspace/repo && go build ./..."]
         dependencies: [clone]
       - name: test
-        image: golang:1.35.0
+        image: golang:1.26
         command: [sh, -c, "cd /workspace/repo && go test ./..."]
         dependencies: [clone]
   volumes:
@@ -451,47 +451,47 @@ When upgrading, use the `argo convert` command. Added in v4.0, this CLI tool aut
 
 ## Quiz
 
-### Question 1: What is the difference between a Resource template and a Container running kubectl?
+### Question 1: Your team needs a workflow step that creates a Kubernetes ConfigMap containing summary data from a previous step. You are debating between using a standard `container` template with a `kubectl` image or a `resource` template. Which approach should you choose and why?
 <details><summary>Show Answer</summary>
 The <code>resource</code> template is the more efficient choice for this scenario. A <code>container</code> template requires the cluster to pull an image, schedule a Pod, and execute a shell process, which consumes unnecessary compute and time. In contrast, a <code>resource</code> template interacts directly with the Kubernetes API server to perform CRUD operations without spinning up a Pod or pulling an image. Furthermore, the <code>resource</code> template provides native fields like <code>successCondition</code> to explicitly wait and verify the resource's state, making your pipeline faster and more reliable.
 </details>
 
-### Question 2: How do you configure a CronWorkflow for 3 AM UTC on weekdays that skips delayed runs?
+### Question 2: You are migrating a legacy nightly database backup script to Argo Workflows v4.0. The backup must run at 3 AM UTC Monday through Friday. If the cluster control plane goes down and the scheduled time is missed by more than 10 minutes, the run should be skipped entirely to avoid running during peak business hours. Furthermore, overlapping backups must never occur. How do you configure the CronWorkflow to meet these requirements?
 <details><summary>Show Answer</summary>
 You must configure the <code>spec</code> using the plural <code>schedules</code> field, as the singular <code>schedule</code> field was removed in v4.0. Set the schedule to <code>["0 3 * * 1-5"]</code> and the <code>timezone</code> to <code>UTC</code>. To handle the missed run scenario, set <code>startingDeadlineSeconds: 600</code>, which ensures the run is skipped if delayed by more than 10 minutes. Finally, to prevent stampedes or overlapping backups if a previous run is still active, you should set <code>concurrencyPolicy: Forbid</code>.
 </details>
 
-### Question 3: Why would memoizing a 50GB dataset directly in an output parameter fail?
+### Question 3: A data science team has a workflow step that cleans a 50GB dataset. Because this step takes two hours, they want to use Argo's memoization feature to skip the step if the same raw dataset is processed again. They configure the step to memoize the entire 50GB cleaned dataset directly as an output parameter. Why will this approach fail, and how should it be redesigned?
 <details><summary>Show Answer</summary>
 This approach will fail because memoization caches the step's output parameters in a Kubernetes ConfigMap, which has a strict 1MB size limit per entry. It cannot be used to cache massive data payloads or artifacts directly. To resolve this, you must redesign the step to output the 50GB cleaned dataset as an Argo Artifact stored in an S3-compatible backend. You then configure memoization to cache only the storage path or a lightweight manifest of the artifact as an output parameter, allowing subsequent steps to retrieve the data from S3 without re-running the heavy computation.
 </details>
 
-### Question 4: Why are expression tags necessary for conditional logic in workflows?
+### Question 4: While designing a workflow that dynamically scales a deployment based on an input parameter, you need to calculate the replica count by adding 1 to the input value. You attempt to use a simple variable tag, but the math is not evaluated. Why are expression tags necessary in this scenario, and how do they differ from simple tags?
 <details><summary>Show Answer</summary>
-Simple tags like <code>{{inputs.parameters.environment}}</code> only perform basic string substitution, replacing the tag with its value. Expression tags, denoted by the <code>{{=</code> prefix (e.g., <code>{{=inputs.parameters.environment == 'production'}}</code>), invoke the <code>expr-lang</code> engine to evaluate boolean logic, arithmetic, and string manipulation directly within the YAML. In this scenario, evaluating a condition requires boolean logic, so you must use an expression tag to resolve the comparison safely. Always remember to quote your expression tags in the manifest so the YAML parser does not misinterpret the curly braces as a dictionary definition.
+Simple tags like <code>{{inputs.parameters.replicas}}</code> only perform basic string substitution, replacing the tag with its literal string value. Expression tags, denoted by the <code>{{=</code> prefix (e.g., <code>{{=asInt(inputs.parameters.replicas) + 1}}</code>), invoke the <code>expr-lang</code> engine to evaluate boolean logic, arithmetic, and string manipulation directly within the YAML. In this scenario, evaluating a mathematical condition requires arithmetic logic, so you must use an expression tag to resolve the addition safely. Always remember to quote your expression tags in the manifest so the YAML parser does not misinterpret the curly braces as a dictionary definition.
 </details>
 
-### Question 5: How can you prevent workflow starvation when sharing a small pool of GPU nodes?
+### Question 5: Your machine learning platform uses Argo Workflows to schedule training jobs on a cluster that has only 4 GPU nodes. During peak hours, 20 different researchers might submit their training workflows simultaneously. If all workflows start at once, they will endlessly wait in a pending state, causing scheduler thrashing and workflow starvation. How can you prevent this using Argo's native synchronization features?
 <details><summary>Show Answer</summary>
 You must implement a synchronization semaphore backed by a Kubernetes ConfigMap. First, create a ConfigMap in the workflow's namespace with a key-value pair like <code>data: { gpu-limit: "4" }</code>. Then, in your workflow or workflow template specification, add a <code>synchronization.semaphores</code> block that references this ConfigMap and key. Argo Workflows will natively queue any workflows beyond the limit of 4, ensuring they wait for a "lock" to release before scheduling their Pods, completely preventing the cluster scheduler from being overwhelmed.
 </details>
 
-### Question 6: What is the overall impact if a workflow's exit handler step fails due to a network timeout?
+### Question 6: You have configured a massive data processing workflow with an exit handler that sends a final status report to a Slack webhook. The main workflow tasks complete successfully, but the exit handler step fails due to a transient DNS resolution network timeout when contacting the Slack API. What is the overall impact on the workflow's final status, and how can you mitigate this risk?
 <details><summary>Show Answer</summary>
 If the exit handler fails, the entire workflow's final status will be marked as <code>Error</code>, potentially triggering false alarms and masking the fact that the primary business logic succeeded. Exit handlers must be designed with extreme resilience because their failure dictates the final state of the pipeline. To prevent this, you should configure a <code>retryStrategy</code> specifically on the exit handler's template to gracefully handle transient network errors (<code>OnError</code> or <code>OnTransientError</code>). Additionally, keep exit handler logic as minimal as possible, avoiding heavy container startups by using lightweight <code>http</code> templates where feasible.
 </details>
 
-### Question 7: Which version of a WorkflowTemplate runs if the template is modified mid-execution?
+### Question 7: A developer submits a long-running workflow that references a `WorkflowTemplate` named `build-pipeline` using the `v1.0.0` image tag. While the workflow is executing its first step, another engineer updates the `build-pipeline` `WorkflowTemplate` in the cluster to use the `v1.1.0` image tag. When the executing workflow reaches the next step defined in the template, which version of the image will it use, and why?
 <details><summary>Show Answer</summary>
 The running workflow will use the older image tag. When an Argo workflow is submitted, the controller resolves all referenced <code>WorkflowTemplates</code> at submission time and embeds their exact specifications into the live <code>Workflow</code> object. Consequently, any subsequent updates to the template in the cluster will only apply to new workflows submitted after the change. This design ensures that in-flight workflows remain deterministic and do not unexpectedly change behavior mid-execution.
 </details>
 
-### Question 8: How do you design a retry strategy that maximizes recovery from node-level issues?
+### Question 8: Your cluster occasionally experiences sudden node evictions or kernel panics that cause running pods to fail. You have an Argo task that is idempotent and can be safely retried. How do you design a retry strategy for this task that maximizes the chance of recovery specifically from these node-level infrastructure issues?
 <details><summary>Show Answer</summary>
 You implement a <code>retryStrategy</code> block on the task's template. Set <code>limit: 3</code> and use <code>retryPolicy: OnError</code> to specifically target infrastructure or transient failures rather than application logic bugs. Under the <code>backoff</code> field, define <code>duration: 30s</code>, <code>factor: 2</code>, and <code>maxDuration: 5m</code> to enforce the exponential delay. Finally, use the <code>affinity.nodeAntiAffinity</code> configuration block within the retry strategy; Argo will automatically inject the necessary pod anti-affinity rules to ensure each retry is scheduled on a different node than the previous attempts.
 </details>
 
-### Question 9: Why use a ContainerSet instead of a DAG for tightly coupled build steps?
+### Question 9: You are designing a CI pipeline task that requires cloning a git repository, building a Go binary, and running unit tests. These three operations must happen sequentially and they operate on the exact same files. You could model this as three separate templates coordinated by a DAG. Why would you choose to use a `containerSet` template instead, and what is the primary trade-off?
 <details><summary>Show Answer</summary>
 You would choose a <code>containerSet</code> because these three steps are tightly coupled and operate on the exact same files. A <code>containerSet</code> runs all the steps as separate containers within a single Kubernetes Pod, allowing them to share a local <code>emptyDir</code> volume for the workspace. This eliminates the need to upload and download heavy artifacts to S3 between steps, and drastically reduces the overhead of scheduling multiple Pods. However, the trade-off is that you cannot use enhanced boolean dependency logic, and the total resource request is the sum of all containers, which could make the Pod harder to schedule if it grows too large.
 </details>
