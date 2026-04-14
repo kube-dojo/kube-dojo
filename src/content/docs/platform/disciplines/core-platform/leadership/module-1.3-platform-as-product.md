@@ -336,10 +336,10 @@ flowchart LR
 | Leading (predict future success) | Lagging (confirm past success) |
 |----------------------------------|-------------------------------|
 | Feature usage within first week | Adoption rate at quarter end |
-| Developer NPS trend | Developer retention rate |
-| Support ticket resolution time | Support ticket volume trend |
+| Developer NPS trend | Support ticket resolution time |
 | Time-to-first-deploy for new teams | Overall time-to-production |
 | Documentation page views | Self-service ratio |
+| Support ticket resolution time | Support ticket volume trend |
 
 **Track leading indicators weekly, lagging indicators monthly.** If leading indicators are trending down, you have time to course-correct before lagging indicators confirm the problem.
 
@@ -515,8 +515,7 @@ Complete this canvas for your platform (or a platform you plan to build):
 | USERS | PROBLEMS |
 |-------|----------|
 | **Who uses our platform?**<br><br>•<br>•<br>• | **What problems do they have?**<br><br>•<br>•<br>• |
-| **ALTERNATIVES** | **VALUE PROPOSITION** |
-| **What do they use today?**<br><br>•<br>•<br>• | **Why is our platform better?**<br><br>•<br>•<br>• |
+| **ALTERNATIVES** | **What do they use today?**<br><br>•<br>•<br>• | **Why is our platform better?**<br><br>•<br>•<br>• |
 | **KEY METRICS** | **UNFAIR ADVANTAGE** |
 | **How do we measure success?**<br><br>•<br>•<br>• | **What can we do that nobody else can?**<br><br>•<br>•<br>• |
 | **CHANNELS** | **COST STRUCTURE** |
