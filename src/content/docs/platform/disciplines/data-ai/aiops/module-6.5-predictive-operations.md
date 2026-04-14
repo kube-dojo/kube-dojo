@@ -548,6 +548,8 @@ class TrafficPredictor:
 
 ## Predictive Alerting
 
+> **Stop and think**: Why should predictive alerts include a confidence interval? Because operational trust is fragile. If you page an engineer for a predicted failure that doesn't happen, they will ignore the next alert. Tying severity to model confidence protects the team from alert fatigue while still surfacing genuine risks.
+
 ### Tiered Alert Strategy
 
 ```mermaid
@@ -1040,4 +1042,3 @@ The key is matching the model to the pattern (linear vs. seasonal), acting on pr
 ## Next Module
 
 Continue to [Module 6.6: Auto-Remediation](../module-6.6-auto-remediation/) to learn how to safely automate fixes with proper guardrails.
----
