@@ -27,7 +27,7 @@ After completing this module, you will be able to:
 
 The company operated a distributed trading system with five database nodes using Paxos-based replication. During the migration, a network misconfiguration caused three nodes to become unreachable from each other—but each could still reach some of the remaining two nodes. The Paxos implementation had a subtle bug: under this specific partition pattern, two different nodes each believed they had achieved quorum.
 
-**For 47 minutes, the trading system had two leaders accepting conflicting writes.** One leader processed $127 million in buy orders. The other processed $89 million in sell orders for the same securities. When the partition healed and the nodes attempted to reconcile, the conflict was irreconcilable—the audit log showed trades that couldn't have both happened.
+**For 45 minutes, the trading system had two leaders accepting conflicting writes.** One leader processed $127 million in buy orders. The other processed $89 million in sell orders for the same securities. When the partition healed and the nodes attempted to reconcile, the conflict was irreconcilable—the audit log showed trades that couldn't have both happened.
 
 **The total cost: $23 million in immediate losses from voided trades, $31 million in regulatory fines for order book integrity violations, and $180 million in customer lawsuit settlements.** The root cause wasn't the network—it was a consensus algorithm implementation that hadn't been tested against byzantine partition scenarios.
 
@@ -383,25 +383,25 @@ Followers must match leader.
 If mismatch, leader sends earlier entries until sync.
 ```
 
-> **War Story: The $4.7 Million etcd Split-Brain**
+> **War Story: The $4.2 Million etcd Split-Brain**
 >
-> **June 2019. A fintech startup's Kubernetes cluster loses $4.7 million in a single weekend due to an etcd misconfiguration.**
+> **June 2019. A fintech startup's Kubernetes cluster loses $4.2 million in a single weekend due to an etcd misconfiguration.**
 >
 > The company ran a payment processing platform on Kubernetes. Their 3-node etcd cluster sat in a single availability zone—violating every high-availability best practice. When the network switch serving Node A failed, the cluster split: Node A was isolated, while Nodes B and C remained connected.
 >
 > **The timeline of disaster:**
-> - **Friday 6:47 PM**: Network switch fails, partitioning Node A
-> - **Friday 6:47 PM**: Nodes B and C detect missing heartbeat, start election
-> - **Friday 6:48 PM**: Node B wins election with term 42 (majority: B+C = 2/3)
-> - **Friday 6:48 PM - Sunday 2:00 AM**: System operates normally on B+C
-> - **Friday 6:47 PM - Sunday 2:00 AM**: Node A continues receiving writes from misconfigured clients
+> - **Friday 6:42 PM**: Network switch fails, partitioning Node A
+> - **Friday 6:42 PM**: Nodes B and C detect missing heartbeat, start election
+> - **Friday 6:43 PM**: Node B wins election with term 42 (majority: B+C = 2/3)
+> - **Friday 6:43 PM - Sunday 2:00 AM**: System operates normally on B+C
+> - **Friday 6:42 PM - Sunday 2:00 AM**: Node A continues receiving writes from misconfigured clients
 >
 > **The critical failure**: Some microservices had been configured with Node A's IP directly, bypassing the load balancer. These services kept writing to Node A, which accepted writes despite having no quorum—**the etcd version had a bug where stale leaders accepted reads but not writes, except through a deprecated API the microservices used**.
 >
 > **When the network healed Sunday morning:**
 > - Node A rejoined with term 41 (stale)
 > - Node A's 33 hours of writes were rejected—term 42 > term 41
-> - 147,000 payment records existed only on Node A
+> - 142,000 payment records existed only on Node A
 > - Node A's data was overwritten by B+C's authoritative log
 >
 > **The cost:**
@@ -437,17 +437,16 @@ LEADER-BASED
 
 COMPARISON
 ─────────────────────────────────────────────────────────────
-┌──────────────────┬────────────────┬─────────────────┐
-│                  │   Leaderless   │  Leader-based   │
-├──────────────────┼────────────────┼─────────────────┤
-│ Writes           │ Any node       │ Leader only     │
-│ Coordination     │ Every write    │ Leader election │
-│ Latency          │ Higher         │ Lower           │
-│ Availability     │ Higher         │ Lower (election)│
-│ Complexity       │ Complex reads  │ Complex failover│
-│ Examples         │ Cassandra      │ etcd, ZooKeeper │
-└──────────────────┴────────────────┴─────────────────┘
 ```
+
+| Feature | Leaderless | Leader-based |
+|---------|------------|--------------|
+| **Writes** | Any node | Leader only |
+| **Coordination** | Every write | Leader election |
+| **Latency** | Higher | Lower |
+| **Availability** | Higher | Lower (election) |
+| **Complexity** | Complex reads | Complex failover |
+| **Examples** | Cassandra | etcd, ZooKeeper |
 
 ### 3.2 Leader Election Mechanisms
 
@@ -680,18 +679,19 @@ Both provide:
 
 DIFFERENCES
 ─────────────────────────────────────────────────────────────
-┌─────────────────┬────────────────────┬────────────────────┐
-│                 │       etcd         │    ZooKeeper       │
-├─────────────────┼────────────────────┼────────────────────┤
-│ Protocol        │ gRPC               │ Custom binary      │
-│ Consensus       │ Raft               │ Zab (Paxos-like)   │
-│ Data model      │ Flat key-value     │ Hierarchical (tree)│
-│ API             │ Simple KV          │ ZNodes (like files)│
-│ Watches         │ Efficient (stream) │ One-time triggers  │
-│ Typical use     │ Kubernetes         │ Kafka, Hadoop      │
-│ Language        │ Go                 │ Java               │
-└─────────────────┴────────────────────┴────────────────────┘
+```
 
+| Feature | etcd | ZooKeeper |
+|---------|------|-----------|
+| **Protocol** | gRPC | Custom binary |
+| **Consensus** | Raft | Zab (Paxos-like) |
+| **Data model** | Flat key-value | Hierarchical (tree) |
+| **API** | Simple KV | ZNodes (like files) |
+| **Watches** | Efficient (stream) | One-time triggers |
+| **Typical use** | Kubernetes | Kafka, Hadoop |
+| **Language** | Go | Java |
+
+```
 etcd EXAMPLE
 ─────────────────────────────────────────────────────────────
 # Set a key
@@ -775,42 +775,42 @@ Use battle-tested implementations (etcd, ZooKeeper).
 YOU NEED CONSENSUS WHEN
 ═══════════════════════════════════════════════════════════════
 
-✓ LEADER ELECTION
+[YES] LEADER ELECTION
     Only one leader at a time, all must agree.
     Alternative: Live with multiple (might cause duplicates)
 
-✓ DISTRIBUTED LOCKS (if correctness matters)
+[YES] DISTRIBUTED LOCKS (if correctness matters)
     Only one holder, must be certain.
     Alternative: Optimistic locking with conflicts
 
-✓ CONFIGURATION CHANGES
+[YES] CONFIGURATION CHANGES
     All nodes must see same config.
     Alternative: Eventual propagation (brief inconsistency)
 
-✓ TRANSACTION COMMIT
+[YES] TRANSACTION COMMIT
     All participants agree: commit or abort.
     Alternative: Sagas (compensating transactions)
 
-✓ TOTAL ORDERING
+[YES] TOTAL ORDERING
     All nodes process operations in same order.
     Alternative: Partial ordering or eventual consistency
 
 YOU PROBABLY DONT NEED CONSENSUS WHEN
 ═══════════════════════════════════════════════════════════════
 
-✗ CACHING
+[NO] CACHING
     Stale data is acceptable.
     Use TTLs instead.
 
-✗ METRICS/LOGGING
+[NO] METRICS/LOGGING
     Approximate counts are fine.
     Eventual consistency is enough.
 
-✗ USER PREFERENCES
+[NO] USER PREFERENCES
     Minor inconsistency is tolerable.
     Conflict-free data types (CRDTs) work well.
 
-✗ SHOPPING CART
+[NO] SHOPPING CART
     Merge conflicts on checkout.
     Eventual consistency with conflict resolution.
 ```
