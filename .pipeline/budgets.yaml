@@ -1,0 +1,25 @@
+kill_switch_policy: CLAUDE_ONLY_PAUSE
+models:
+  claude-sonnet-4-6:
+    cooldown_after_rate_limit: 600
+    hourly_calls: 50
+    max_concurrent: 2
+    weekly_budget_usd: 40.0
+    weekly_calls: 500
+  gemini-3-flash-preview:
+    cooldown_after_rate_limit: 300
+    hourly_calls: 800
+    max_concurrent: 5
+    weekly_calls: 10000
+  gemini-3.1-pro-preview:
+    cooldown_after_rate_limit: 300
+    hourly_calls: 200
+    max_concurrent: 3
+    weekly_calls: 2000
+defaults:
+  cooldown_after_rate_limit: 300
+  hourly_calls: 100
+  max_concurrent: 1
+  weekly_budget_usd: 10.0
+  weekly_calls: 100
+  weekly_window: rolling_7d
