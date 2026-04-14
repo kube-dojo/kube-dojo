@@ -47,30 +47,27 @@ The most common misconception about managed Kubernetes is that "managed" means "
 
 Think of it like renting an apartment versus owning a house. In an apartment, the landlord fixes the plumbing and the roof, but you're responsible for your own furniture, your own locks, and not burning the place down. Managed Kubernetes is the apartment -- the provider maintains the control plane (the plumbing), but you still own your workloads (the furniture).
 
-```
-SHARED RESPONSIBILITY: WHO OWNS WHAT?
-===========================================================================
+### Shared Responsibility: Who Owns What?
 
-                     Self-Managed    Managed (EKS/GKE/AKS)    Serverless (Fargate/Cloud Run)
-                     ─────────────   ──────────────────────    ─────────────────────────────
-  Application Code       YOU              YOU                        YOU
-  Container Images       YOU              YOU                        YOU
-  Pod Security           YOU              YOU                        YOU
-  Network Policies       YOU              YOU                        SHARED
-  Ingress / LB           YOU              YOU                        PROVIDER
-  Worker Nodes           YOU              YOU *                      PROVIDER
-  Node OS Patching       YOU              YOU *                      PROVIDER
-  kubelet                YOU              YOU *                      PROVIDER
-  Control Plane          YOU              PROVIDER                   PROVIDER
-  etcd                   YOU              PROVIDER                   PROVIDER
-  API Server HA          YOU              PROVIDER                   PROVIDER
-  Certificate Mgmt       YOU              PROVIDER                   PROVIDER
-  Cloud Infra            YOU **           PROVIDER                   PROVIDER
-  Physical Security      YOU **           PROVIDER                   PROVIDER
+| Component | Self-Managed | Managed (EKS/GKE/AKS) | Serverless (Fargate/Cloud Run) |
+|-----------|-------------|----------------------|------------------------------|
+| Application Code | YOU | YOU | YOU |
+| Container Images | YOU | YOU | YOU |
+| Pod Security | YOU | YOU | YOU |
+| Network Policies | YOU | YOU | SHARED |
+| Ingress / LB | YOU | YOU | PROVIDER |
+| Worker Nodes | YOU | YOU * | PROVIDER |
+| Node OS Patching | YOU | YOU * | PROVIDER |
+| kubelet | YOU | YOU * | PROVIDER |
+| Control Plane | YOU | PROVIDER | PROVIDER |
+| etcd | YOU | PROVIDER | PROVIDER |
+| API Server HA | YOU | PROVIDER | PROVIDER |
+| Certificate Mgmt | YOU | PROVIDER | PROVIDER |
+| Cloud Infra | YOU ** | PROVIDER | PROVIDER |
+| Physical Security | YOU ** | PROVIDER | PROVIDER |
 
-  * With managed node groups, some node responsibilities shift to provider
-  ** Only applies to on-premises / bare-metal
-```
+*\* With managed node groups, some node responsibilities shift to provider*  
+*\*\* Only applies to on-premises / bare-metal*
 
 Notice that even with fully managed Kubernetes, you're still responsible for a large portion of the stack. Worker node patching, network policies, pod security, ingress configuration -- these are yours regardless.
 
@@ -92,91 +89,73 @@ When you use EKS, GKE, or AKS, the provider runs these components for you. But "
 
 ### Provider Comparison: Control Plane Architectures
 
+#### EKS Architecture
+```mermaid
+flowchart TD
+    subgraph AWS ["AWS-Managed VPC"]
+        direction TB
+        API["API Server x3<br/>(NLB fronted)"]
+        ETCD["etcd x3<br/>(encrypted)"]
+        API --> ETCD
+    end
+    
+    subgraph VPC ["YOUR VPC"]
+        direction LR
+        W1["Worker Node 1"]
+        W2["Worker Node 2"]
+    end
+    
+    AWS -. "ENI injected into" .-> VPC
 ```
-EKS ARCHITECTURE
-═══════════════════════════════════════════════════════════════
-                    AWS-Managed VPC
-                ┌────────────────────────┐
-                │   ┌────────────────┐   │
-                │   │  API Server x3 │   │
-                │   │  (NLB fronted) │   │
-                │   └───────┬────────┘   │
-                │           │            │
-                │   ┌───────▼────────┐   │
-                │   │   etcd x3      │   │
-                │   │   (encrypted)  │   │
-                │   └────────────────┘   │
-                └───────────┬────────────┘
-                            │ ENI injected into
-                ┌───────────▼────────────────────┐
-                │        YOUR VPC                 │
-                │   ┌─────────┐  ┌─────────┐     │
-                │   │ Worker  │  │ Worker  │     │
-                │   │ Node 1  │  │ Node 2  │     │
-                │   └─────────┘  └─────────┘     │
-                └────────────────────────────────┘
+**Key:**
+- Control plane in AWS-managed account.
+- ENIs bridge into your VPC for kubelet communication.
+- You NEVER see or touch the etcd instances.
 
-Key: Control plane in AWS-managed account.
-     ENIs bridge into your VPC for kubelet communication.
-     You NEVER see or touch the etcd instances.
-
-
-GKE ARCHITECTURE
-═══════════════════════════════════════════════════════════════
-                 Google-Managed Infrastructure
-                ┌────────────────────────┐
-                │   ┌────────────────┐   │
-                │   │  API Server    │   │
-                │   │  (Regional HA) │   │
-                │   └───────┬────────┘   │
-                │           │            │
-                │   ┌───────▼────────┐   │
-                │   │   etcd         │   │
-                │   │   (Spanner-    │   │
-                │   │    backed)     │   │
-                │   └────────────────┘   │
-                └───────────┬────────────┘
-                            │ VPC Peering
-                ┌───────────▼────────────────────┐
-                │        YOUR VPC                 │
-                │   ┌─────────┐  ┌─────────┐     │
-                │   │ Node    │  │ Node    │     │
-                │   │ Pool 1  │  │ Pool 2  │     │
-                │   └─────────┘  └─────────┘     │
-                └────────────────────────────────┘
-
-Key: GKE Autopilot goes further -- Google manages
-     nodes too. You only define workloads.
-     etcd backed by Spanner for extreme durability.
-
-
-AKS ARCHITECTURE
-═══════════════════════════════════════════════════════════════
-                Azure-Managed Infrastructure
-                ┌────────────────────────┐
-                │   ┌────────────────┐   │
-                │   │  API Server    │   │
-                │   │  (Free or SLA) │   │
-                │   └───────┬────────┘   │
-                │           │            │
-                │   ┌───────▼────────┐   │
-                │   │   etcd         │   │
-                │   └────────────────┘   │
-                └───────────┬────────────┘
-                            │
-                ┌───────────▼────────────────────┐
-                │     YOUR RESOURCE GROUP         │
-                │   ┌─────────┐  ┌─────────┐     │
-                │   │ VMSS    │  │ VMSS    │     │
-                │   │ Pool 1  │  │ Pool 2  │     │
-                │   └─────────┘  └─────────┘     │
-                └────────────────────────────────┘
-
-Key: Free tier has NO SLA on control plane.
-     Standard tier ($0.10/hr) adds 99.95% SLA.
-     AKS places some components in a managed
-     resource group (MC_*) in YOUR subscription.
+#### GKE Architecture
+```mermaid
+flowchart TD
+    subgraph Google ["Google-Managed Infrastructure"]
+        direction TB
+        API["API Server<br/>(Regional HA)"]
+        ETCD["etcd<br/>(Spanner-backed)"]
+        API --> ETCD
+    end
+    
+    subgraph VPC ["YOUR VPC"]
+        direction LR
+        NP1["Node Pool 1"]
+        NP2["Node Pool 2"]
+    end
+    
+    Google -. "VPC Peering" .-> VPC
 ```
+**Key:**
+- GKE Autopilot goes further -- Google manages nodes too. You only define workloads.
+- etcd backed by Spanner for extreme durability.
+
+#### AKS Architecture
+```mermaid
+flowchart TD
+    subgraph Azure ["Azure-Managed Infrastructure"]
+        direction TB
+        API["API Server<br/>(Free or SLA)"]
+        ETCD["etcd"]
+        API --> ETCD
+    end
+    
+    subgraph RG ["YOUR RESOURCE GROUP"]
+        direction LR
+        VM1["VMSS Pool 1"]
+        VM2["VMSS Pool 2"]
+    end
+    
+    Azure -. " " .-> RG
+```
+**Key:**
+- Free tier has NO SLA on control plane.
+- Standard tier ($0.10/hr) adds 99.95% SLA.
+- AKS places some components in a managed resource group (MC_*) in YOUR subscription.
 
 > **Pause and predict**: GKE Autopilot completely abstracts away worker nodes, billing you only for requested pod resources. If your security team mandates a third-party intrusion detection agent that runs as a highly privileged DaemonSet to inspect host-level syscalls, how will Autopilot's architecture conflict with this requirement?
 
@@ -202,71 +181,76 @@ The biggest mistake teams make is comparing only the sticker price. "EKS costs $
 
 Let's build a realistic TCO model for a medium-complexity production deployment.
 
-```
-SELF-MANAGED KUBERNETES: TRUE ANNUAL COST
-═══════════════════════════════════════════════════════════════
+### Self-Managed Kubernetes: True Annual Cost
 
-Infrastructure
-  Control plane VMs (3x HA)           $3,600/yr
-  etcd dedicated nodes (3x SSD)       $5,400/yr
-  Load balancer for API server         $1,200/yr
-  Backup storage (etcd snapshots)        $360/yr
-  ───────────────────────────────────────────────
-  Infrastructure subtotal:            $10,560/yr
+**Infrastructure**
 
-Operational Labor (2 senior engineers, partial allocation)
-  Kubernetes upgrades (4x/yr)         $12,000
-  etcd maintenance + monitoring        $8,000
-  Certificate rotation                 $4,000
-  Security patching (CVEs)             $6,000
-  Incident response (control plane)   $10,000
-  Documentation & runbooks             $3,000
-  ───────────────────────────────────────────────
-  Labor subtotal:                     $43,000/yr
+| Component | Cost |
+|-----------|------|
+| Control plane VMs (3x HA) | $3,600/yr |
+| etcd dedicated nodes (3x SSD) | $5,400/yr |
+| Load balancer for API server | $1,200/yr |
+| Backup storage (etcd snapshots) | $360/yr |
+| **Infrastructure subtotal:** | **$10,560/yr** |
 
-Risk (annualized)
-  Extended outage (control plane)      $8,000
-  Failed upgrade rollback              $5,000
-  Key person dependency                $7,000
-  ───────────────────────────────────────────────
-  Risk subtotal:                      $20,000/yr
+**Operational Labor (2 senior engineers, partial allocation)**
 
-  ═══════════════════════════════════════════════
-  TOTAL SELF-MANAGED:                 $73,560/yr
-```
+| Component | Cost |
+|-----------|------|
+| Kubernetes upgrades (4x/yr) | $12,000 |
+| etcd maintenance + monitoring | $8,000 |
+| Certificate rotation | $4,000 |
+| Security patching (CVEs) | $6,000 |
+| Incident response (control plane) | $10,000 |
+| Documentation & runbooks | $3,000 |
+| **Labor subtotal:** | **$43,000/yr** |
 
-```
-MANAGED KUBERNETES (EKS): TRUE ANNUAL COST
-═══════════════════════════════════════════════════════════════
+**Risk (annualized)**
 
-Managed Service
-  EKS control plane                      $876/yr
-  NAT Gateway (2 AZs)                  $7,200/yr *
-  VPC endpoints (ECR, S3, etc.)        $1,800/yr *
-  CloudWatch / logging                 $2,400/yr
-  ───────────────────────────────────────────────
-  Service subtotal:                   $12,276/yr
+| Component | Cost |
+|-----------|------|
+| Extended outage (control plane) | $8,000 |
+| Failed upgrade rollback | $5,000 |
+| Key person dependency | $7,000 |
+| **Risk subtotal:** | **$20,000/yr** |
 
-Operational Labor (1 senior engineer, partial allocation)
-  Managed upgrades (4x/yr)             $4,000
-  Node group management                 $3,000
-  Add-on management                     $2,000
-  Incident response (node-level)        $4,000
-  ───────────────────────────────────────────────
-  Labor subtotal:                     $13,000/yr
+**TOTAL SELF-MANAGED: $73,560/yr**
 
-Risk (annualized)
-  Provider outage impact                $3,000
-  Upgrade compatibility issues          $2,000
-  ───────────────────────────────────────────────
-  Risk subtotal:                       $5,000/yr
+---
 
-  ═══════════════════════════════════════════════
-  TOTAL MANAGED:                      $30,276/yr
+### Managed Kubernetes (EKS): True Annual Cost
 
-  * These costs exist in BOTH models but are often
-    forgotten when comparing "free kubeadm vs $73/mo EKS"
-```
+**Managed Service**
+
+| Component | Cost |
+|-----------|------|
+| EKS control plane | $876/yr |
+| NAT Gateway (2 AZs) | $7,200/yr * |
+| VPC endpoints (ECR, S3, etc.) | $1,800/yr * |
+| CloudWatch / logging | $2,400/yr |
+| **Service subtotal:** | **$12,276/yr** |
+
+**Operational Labor (1 senior engineer, partial allocation)**
+
+| Component | Cost |
+|-----------|------|
+| Managed upgrades (4x/yr) | $4,000 |
+| Node group management | $3,000 |
+| Add-on management | $2,000 |
+| Incident response (node-level) | $4,000 |
+| **Labor subtotal:** | **$13,000/yr** |
+
+**Risk (annualized)**
+
+| Component | Cost |
+|-----------|------|
+| Provider outage impact | $3,000 |
+| Upgrade compatibility issues | $2,000 |
+| **Risk subtotal:** | **$5,000/yr** |
+
+**TOTAL MANAGED: $30,276/yr**
+
+*\* These costs exist in BOTH models but are often forgotten when comparing "free kubeadm vs $73/mo EKS"*
 
 The managed option is roughly 60% cheaper when you account for labor and risk. But the numbers shift dramatically at scale. An organization running 50 clusters might find that investing in a dedicated platform team to manage self-hosted Kubernetes is more cost-effective than 50 x $876/year in control plane fees plus the cumulative data transfer costs.
 
@@ -291,30 +275,24 @@ The managed option is roughly 60% cheaper when you account for labor and risk. B
 
 Kubernetes releases three minor versions per year (approximately every 15 weeks). Each version is supported for about 14 months. This means you're constantly on an upgrade treadmill -- fall behind, and you're running unsupported software with known vulnerabilities.
 
+```mermaid
+gantt
+    title Kubernetes Version Lifecycle
+    dateFormat  YYYY-MM
+    axisFormat  %Y-%m
+    
+    section v1.33
+    Supported : active, 2025-01, 2026-04
+    section v1.34
+    Supported : active, 2025-04, 2026-07
+    section v1.35
+    Supported : active, 2025-07, 2026-10
 ```
-KUBERNETES VERSION LIFECYCLE
-═══════════════════════════════════════════════════════════════
 
-  v1.33 ──────────────────────────── EOL
-  v1.34 ─────────────────────────────────────── EOL
-  v1.35 ──────────────────────────────────────────────────── EOL
-
-  │         │         │         │         │         │
-  Jan       Apr       Jul       Oct       Jan       Apr
-  2025      2025      2025      2025      2026      2026
-
-  EKS:  Adds version ~2-3 months after upstream release
-        Gives ~3 months notice before forced upgrade
-        Extended support available (+12 months, extra $)
-
-  GKE:  Adds version ~1-2 months after upstream release
-        Auto-upgrades by default (Release channels)
-        Rapid / Regular / Stable channels
-
-  AKS:  Adds version ~2-3 months after upstream release
-        "N-2" support model (latest 3 minor versions)
-        Preview versions available earlier
-```
+**Provider Policies:**
+- **EKS**: Adds version ~2-3 months after upstream release. Gives ~3 months notice before forced upgrade. Extended support available (+12 months, extra $).
+- **GKE**: Adds version ~1-2 months after upstream release. Auto-upgrades by default (Release channels). Rapid / Regular / Stable channels.
+- **AKS**: Adds version ~2-3 months after upstream release. "N-2" support model (latest 3 minor versions). Preview versions available earlier.
 
 ### Self-Managed Upgrade Reality
 
@@ -425,40 +403,25 @@ If your reason for leaving managed is any of the following, reconsider:
 
 Many mature organizations adopt a hybrid model:
 
-```
-THE HYBRID MODEL
-═══════════════════════════════════════════════════════════════
-
-  ┌──────────────────────────────────────────────────────┐
-  │                 MANAGED (EKS/GKE/AKS)                │
-  │                                                      │
-  │   Production workloads                               │
-  │   Standard web services                              │
-  │   Batch processing                                   │
-  │   Developer environments                             │
-  │                                                      │
-  │   Why: SLA-backed, lower ops burden, faster delivery │
-  └──────────────────────────────────────────────────────┘
-
-  ┌──────────────────────────────────────────────────────┐
-  │              SELF-MANAGED (Cluster API)               │
-  │                                                      │
-  │   Edge locations (retail stores, factories)           │
-  │   Air-gapped environments (defense, gov)             │
-  │   GPU clusters with custom scheduling                │
-  │   Performance-critical trading systems                │
-  │                                                      │
-  │   Why: Requirements that managed can't satisfy        │
-  └──────────────────────────────────────────────────────┘
-
-  Both managed via:
-  ┌──────────────────────────────────────────────────────┐
-  │              FLEET MANAGEMENT LAYER                   │
-  │                                                      │
-  │   Cluster API / Rancher / Anthos / Fleet Manager     │
-  │   GitOps (ArgoCD) for consistent configuration       │
-  │   Unified observability (Prometheus federation)       │
-  └──────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Fleet ["FLEET MANAGEMENT LAYER"]
+        direction TB
+        F1["Cluster API / Rancher / Anthos / Fleet Manager<br/>GitOps (ArgoCD) for consistent configuration<br/>Unified observability (Prometheus federation)"]
+    end
+    
+    subgraph Managed ["MANAGED (EKS/GKE/AKS)"]
+        direction TB
+        M1["Production workloads<br/>Standard web services<br/>Batch processing<br/>Developer environments<br/><br/>Why: SLA-backed, lower ops burden, faster delivery"]
+    end
+    
+    subgraph Self ["SELF-MANAGED (Cluster API)"]
+        direction TB
+        S1["Edge locations (retail stores, factories)<br/>Air-gapped environments (defense, gov)<br/>GPU clusters with custom scheduling<br/>Performance-critical trading systems<br/><br/>Why: Requirements that managed can't satisfy"]
+    end
+    
+    Fleet --> Managed
+    Fleet --> Self
 ```
 
 ---
