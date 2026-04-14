@@ -19,7 +19,7 @@ When they moved to bare metal, they initially considered using Datadog. However,
 
 Forced to build a self-hosted stack, the infrastructure team assumed they could replicate their cloud observability in a weekend. They deployed a single Prometheus instance, pointed Grafana at it, and called it done.
 
-Three months later, Prometheus crashed. It had been ingesting 800,000 samples per second across 400 nodes, and its local storage had grown to 1.2TB. The 15-day retention consumed all available disk space on the monitoring node. When Prometheus restarted, it took 45 minutes to replay the WAL (Write-Ahead Log), during which there was zero monitoring visibility. The team later discovered that Prometheus had been silently dropping samples for a week due to memory pressure, so their dashboards had gaps nobody noticed. Meanwhile, container logs were being written to local disk and rotated away after 24 hours -- they had no centralized logging at all.
+Three months later, Prometheus crashed. It had been ingesting 800,000 samples per second across 400 nodes, and its local storage had grown to 1.2TB. The default 15-day retention period consumed all available disk space on the monitoring node. When Prometheus restarted, it took 45 minutes to replay the WAL (Write-Ahead Log), during which there was zero monitoring visibility. The team later discovered that Prometheus had been silently dropping samples for a week due to memory pressure, so their dashboards had gaps nobody noticed. Meanwhile, container logs were being written to local disk and rotated away after 24 hours -- they had no centralized logging at all.
 
 The rebuild took six weeks: Prometheus with Thanos for long-term storage and high availability, Loki for centralized logging, a proper Alertmanager cluster with on-call rotation, and IPMI exporters for hardware-level metrics. Total cost: $15,000 in additional hardware and 240 engineering hours. The lesson: observability on bare metal is not a weekend project. It is a production system that requires the same care as the workloads it monitors.
 
@@ -41,6 +41,7 @@ After completing this module, you will be able to:
 - Self-hosted Prometheus architecture with Thanos for long-term storage
 - Grafana deployment at scale (dashboards, provisioning, multi-tenancy)
 - Loki for centralized logging (replacing CloudWatch/Stackdriver)
+- Distributed tracing self-hosted architectures (OpenTelemetry, Jaeger, Tempo)
 - Alertmanager configuration with on-call rotation
 - IPMI exporter for hardware-level monitoring
 - Capacity planning for the monitoring stack itself
@@ -49,51 +50,47 @@ After completing this module, you will be able to:
 
 ## Prometheus + Thanos Architecture
 
-A single Prometheus instance cannot scale to large bare metal clusters. Thanos extends Prometheus with global querying, long-term storage, and high availability.
+Prometheus 3.x is the current major release line (latest stable v3.11.1) and is a CNCF graduated project. It natively supports UTF-8 characters in metric names by default and stabilized native OTLP ingestion (originally introduced experimentally in v2.47.0). Note that Prometheus LTS releases receive security and bug fixes for one year, while older 2.x versions are considered legacy.
 
-```
-+---------------------------------------------------------------+
-|         PROMETHEUS + THANOS ARCHITECTURE                       |
-|                                                                |
-|  Per-cluster Prometheus instances (scraping):                  |
-|                                                                |
-|  ┌──────────┐  ┌──────────┐  ┌──────────┐                    |
-|  │Prometheus│  │Prometheus│  │Prometheus│                    |
-|  │  (HA-a)  │  │  (HA-b)  │  │ (infra)  │                    |
-|  │ workers  │  │ workers  │  │ctrl+stor │                    |
-|  │  1-50    │  │  1-50    │  │          │                    |
-|  └────┬─────┘  └────┬─────┘  └────┬─────┘                    |
-|       │ sidecar      │ sidecar     │ sidecar                   |
-|  ┌────▼─────┐  ┌────▼─────┐  ┌────▼─────┐                    |
-|  │  Thanos  │  │  Thanos  │  │  Thanos  │                    |
-|  │ Sidecar  │  │ Sidecar  │  │ Sidecar  │                    |
-|  └────┬─────┘  └────┬─────┘  └────┬─────┘                    |
-|       │              │              │                           |
-|       ▼              ▼              ▼                           |
-|  ┌─────────────────────────────────────────┐                   |
-|  │          Thanos Query (global)          │                   |
-|  │  Deduplicates HA pairs, fans out       │                   |
-|  └─────────────┬───────────────────────────┘                   |
-|                │                                                |
-|       ┌────────┴────────┐                                      |
-|       ▼                 ▼                                      |
-|  ┌─────────┐    ┌──────────────┐                               |
-|  │ Grafana │    │ Thanos Store │──> Object Storage (MinIO)     |
-|  │         │    │   Gateway    │    (long-term, cheap)         |
-|  └─────────┘    └──────────────┘                               |
-|                                                                |
-|  ┌──────────────┐                                              |
-|  │Thanos Compact│  Downsamples old data:                       |
-|  │              │  raw -> 5m -> 1h                              |
-|  └──────────────┘  Saves 90%+ storage                          |
-+---------------------------------------------------------------+
+Despite these capabilities, a single Prometheus instance cannot scale to large bare metal clusters. Thanos (a CNCF incubating project) extends Prometheus with global querying, long-term storage, and high availability.
+
+```mermaid
+flowchart TD
+    subgraph Scraping["Per-cluster Prometheus instances (scraping)"]
+        direction LR
+        P1["Prometheus\n(HA-a)\nworkers 1-50"]
+        P2["Prometheus\n(HA-b)\nworkers 1-50"]
+        P3["Prometheus\n(infra)\nctrl+stor"]
+    end
+
+    S1["Thanos Sidecar"]
+    S2["Thanos Sidecar"]
+    S3["Thanos Sidecar"]
+
+    P1 --- S1
+    P2 --- S2
+    P3 --- S3
+
+    TQ["Thanos Query (global)\nDeduplicates HA pairs, fans out"]
+    
+    S1 --> TQ
+    S2 --> TQ
+    S3 --> TQ
+
+    Grafana["Grafana"] --> TQ
+    TQ --> TSG["Thanos Store\nGateway"]
+    
+    MinIO[("Object Storage (MinIO)\n(long-term, cheap)")]
+    TSG --> MinIO
+    
+    TC["Thanos Compact\nDownsamples old data:\nraw -> 5m -> 1h\nSaves 90%+ storage"] --> MinIO
 ```
 
-> **Pause and predict**: A single Prometheus instance with 15-day retention crashed under 800K samples/second. What architectural change would prevent this from happening again, and how would you handle the need for 1-year retention?
+> **Pause and predict**: A single Prometheus instance with a 15-day retention crashed under 800K samples/second. What architectural change would prevent this from happening again, and how would you handle the need for 1-year retention?
 
 ### Prometheus Configuration for Bare Metal
 
-This configuration is optimized for bare-metal clusters: a 30-second scrape interval (15s is overkill for most infrastructure metrics), HA labeling for Thanos deduplication, and scrape targets that include IPMI and SMART exporters unique to physical infrastructure.
+This configuration is optimized for bare-metal clusters: a 30-second scrape interval (15s is often used in tutorials but is overkill for most infrastructure metrics), HA labeling for Thanos deduplication, and scrape targets that include IPMI and SMART exporters unique to physical infrastructure.
 
 ```yaml
 # prometheus.yaml — optimized for bare metal
@@ -169,13 +166,15 @@ Deploy each Prometheus as a StatefulSet with a Thanos sidecar container. Key Pro
 - `--storage.tsdb.min-block-duration=2h` and `--storage.tsdb.max-block-duration=2h` (required for Thanos block upload)
 - `--web.enable-lifecycle` (allows Thanos sidecar to trigger reloads)
 
-The sidecar uploads completed TSDB blocks to object storage (MinIO) and serves real-time data via the Thanos StoreAPI. Configure the object store connection in a Secret with S3-compatible endpoint, bucket name, and credentials.
+The sidecar uploads completed TSDB blocks to object storage (MinIO) and serves real-time data via the Thanos StoreAPI. Configure the object store connection in a Secret with an S3-compatible endpoint, bucket name, and credentials.
+
+*(Note: As an alternative to Thanos, many on-premises environments adopt VictoriaMetrics—latest LTS v1.136.3—as a highly efficient, drop-in replacement for Prometheus long-term storage.)*
 
 ---
 
 ## Grafana Deployment at Scale
 
-To operate Grafana reliably for multiple teams on bare metal, avoid manual dashboard creation. Instead, manage Grafana as code.
+To operate Grafana (latest stable v12.4.2) reliably for multiple teams on bare metal, avoid manual dashboard creation. Instead, manage Grafana as code.
 
 ### Provisioning and Multi-Tenancy
 
@@ -185,37 +184,26 @@ Use Grafana's provisioning feature to load dashboards and datasources automatica
 
 ## Loki for Centralized Logging
 
-Loki replaces CloudWatch Logs and Stackdriver Logging. Unlike Elasticsearch, Loki indexes only metadata (labels), not the full log text, making it dramatically cheaper to operate.
+Loki (latest stable v3.7.1) replaces CloudWatch Logs and Stackdriver Logging. Unlike Elasticsearch, Loki indexes only metadata (labels), not the full log text, making it dramatically cheaper to operate.
 
-```
-+---------------------------------------------------------------+
-|              LOKI LOGGING ARCHITECTURE                         |
-|                                                                |
-|  ┌──────────┐  ┌──────────┐  ┌──────────┐                    |
-|  │ Promtail │  │ Promtail │  │ Promtail │  (DaemonSet)       |
-|  │ worker-01│  │ worker-02│  │ worker-03│  Tails container   |
-|  │          │  │          │  │          │  logs from          |
-|  └────┬─────┘  └────┬─────┘  └────┬─────┘  /var/log/pods/   |
-|       │              │              │                          |
-|       └──────────────┼──────────────┘                          |
-|                      ▼                                         |
-|              ┌──────────────┐                                  |
-|              │   Loki       │  Stores log streams              |
-|              │   (3 pods,   │  indexed by labels only          |
-|              │    HA mode)  │  (namespace, pod, container)     |
-|              └──────┬───────┘                                  |
-|                     │                                          |
-|                     ▼                                          |
-|              ┌──────────────┐                                  |
-|              │ Object Store │  Chunks stored in MinIO          |
-|              │   (MinIO)    │  or local filesystem             |
-|              └──────────────┘                                  |
-|                                                                |
-|              ┌──────────────┐                                  |
-|              │   Grafana    │  Query logs alongside metrics    |
-|              │              │  using LogQL                     |
-|              └──────────────┘                                  |
-+---------------------------------------------------------------+
+```mermaid
+flowchart TD
+    subgraph DaemonSet["Promtail (DaemonSet)"]
+        PT1["Promtail\nworker-01"]
+        PT2["Promtail\nworker-02"]
+        PT3["Promtail\nworker-03"]
+    end
+    
+    Loki["Loki (3 pods, HA mode)\nStores log streams indexed by labels only\n(namespace, pod, container)"]
+    
+    PT1 --> Loki
+    PT2 --> Loki
+    PT3 --> Loki
+    
+    MinIO[("Object Store (MinIO)\nChunks stored in MinIO or local filesystem")]
+    Loki --> MinIO
+    
+    Grafana["Grafana\nQuery logs alongside metrics using LogQL"] --> Loki
 ```
 
 > **Stop and think**: Loki indexes only labels (namespace, pod, container), not the full log text. This makes it 10-100x cheaper than Elasticsearch. What is the trade-off? When would this design choice make troubleshooting harder?
@@ -264,22 +252,35 @@ storage_config:
     cache_location: /loki/cache
 ```
 
-Promtail runs as a DaemonSet, mounting `/var/log` and `/var/log/pods` as read-only host volumes. It tails container logs and ships them to Loki with labels extracted from the Kubernetes metadata (namespace, pod, container name). To improve query performance, you can configure Promtail `pipeline_stages` to extract additional high-value labels like `level` or `component`.
+Promtail runs as a DaemonSet, mounting `/var/log` and `/var/log/pods` as read-only host volumes. It tails container logs and ships them to Loki with labels extracted from the Kubernetes metadata. To improve query performance, configure Promtail `pipeline_stages` to extract additional high-value labels like `level` or `component`.
 
 ### Troubleshooting Loki Query Performance
 
 If queries for older logs become extremely slow (e.g., 30+ seconds), check these common bottlenecks:
-1. **Missing Chunk Cache**: Loki reads chunks from MinIO for every historical query. Deploying a Memcached cluster (e.g., 3 pods) for chunk caching is a quick win that typically reduces query times by 5-10x.
+1. **Missing Chunk Cache**: Loki reads chunks from MinIO for every historical query. Deploying a Memcached cluster for chunk caching is a quick win that typically reduces query times by 5-10x.
 2. **Too Few Label Indexes**: If logs only have `namespace` and `pod` labels, Loki must scan massive chunks. Add more labels in Promtail.
-3. **Object Storage Latency**: If MinIO disks are shared with other workloads, I/O contention will stall Loki. Ensure MinIO has dedicated disks.
+3. **Object Storage Latency**: If MinIO disks are shared with other workloads, I/O contention will stall Loki.
 4. **Large Chunk Size**: The default `chunk_target_size` (1.5MB) may be too large for your ingestion rate; reducing it can speed up queries.
 5. **Legacy Indexing**: Ensure you are using the `tsdb` index format, not the legacy BoltDB shipper.
 
 ---
 
+## Distributed Tracing on Bare Metal
+
+While metrics and logs cover most infrastructure issues, application performance on bare metal often requires distributed tracing. OpenTelemetry (a CNCF graduated project, latest Collector release v0.149.0) has become the standard framework for gathering traces.
+
+For the storage and querying backend:
+- **Jaeger**: A CNCF graduated project. Note that Jaeger v1 reached end-of-life on December 31, 2025. You should deploy Jaeger v2 (latest stable v2.17.0), which now natively uses the OpenTelemetry Collector framework as its core.
+- **Grafana Tempo**: (Latest stable v2.10.3) An alternative that integrates deeply with Grafana and uses object storage (like MinIO) for highly cost-effective trace retention.
+- **Agent Migration**: If you historically used Grafana Agent for telemetry collection, be aware that it reached end-of-life on November 1, 2025, and has been replaced by Grafana Alloy.
+
+> **Stop and think**: If Jaeger v1 has reached end-of-life and Grafana Agent is deprecated, how should you architect a new tracing pipeline today?
+
+---
+
 ## Alertmanager Without PagerDuty
 
-On-premises environments often cannot use cloud-based alerting services due to network isolation or compliance requirements. Alertmanager supports direct integrations.
+On-premises environments often cannot use cloud-based alerting services due to network isolation or compliance requirements. Alertmanager (latest stable v0.32.0) supports direct integrations to bridge this gap.
 
 ### Alertmanager Configuration
 
@@ -289,35 +290,29 @@ Alertmanager routes alerts based on labels. Configure multiple receivers with es
 - **Application critical alerts**: webhook + email, repeat every 30 minutes
 - **Warnings**: email only, repeat every 24 hours
 
-Group alerts by `alertname`, `cluster`, and `namespace` to reduce noise. Use `group_wait: 30s` to batch alerts that fire simultaneously (e.g., multiple nodes in the same rack losing power). Ensure every alert rule includes a `runbook_url` annotation linking directly to the mitigation steps, so on-call engineers have immediate access to remediation procedures.
+Group alerts by `alertname`, `cluster`, and `namespace` to reduce noise. Use `group_wait: 30s` to batch alerts that fire simultaneously (e.g., multiple nodes losing power). Ensure every alert rule includes a `runbook_url` annotation linking directly to the mitigation steps.
 
 ### Alerting Across Network Boundaries
 
-When the Kubernetes cluster resides in a datacenter VLAN isolated from the corporate network, alerts sent to an internal SMTP server (e.g., on port 587) may be silently dropped by firewalls. To diagnose this, check the Alertmanager logs (`kubectl logs -n monitoring alertmanager-0`) for connection timeouts, or use a `busybox` pod with `nc -zv` to test SMTP reachability. If you cannot open the firewall, the most robust fix is to deploy a local SMTP relay (like Postfix) in the monitoring namespace that is explicitly allowed to forward mail to the corporate server, or to switch entirely to webhook-based notifications.
+When the Kubernetes cluster resides in a datacenter VLAN isolated from the corporate network, alerts sent to an internal SMTP server may be silently dropped by firewalls. To diagnose this, check the Alertmanager logs (`kubectl logs -n monitoring alertmanager-0`) for connection timeouts, or use a `busybox` pod with `nc -zv` to test SMTP reachability. If you cannot open the firewall, the most robust fix is to deploy a local SMTP relay (like Postfix) in the monitoring namespace that is explicitly allowed to forward mail to the corporate server.
 
 ### Self-Hosted On-Call with Grafana OnCall
 
-```
-+---------------------------------------------------------------+
-|            SELF-HOSTED ON-CALL STACK                           |
-|                                                                |
-|  Alertmanager                                                  |
-|       │                                                        |
-|       ▼ webhook                                                |
-|  Grafana OnCall (open-source, self-hosted)                     |
-|       │                                                        |
-|       ├──> Slack notification                                  |
-|       ├──> Email notification                                  |
-|       ├──> Phone call (via Twilio integration)                 |
-|       └──> SMS (via Twilio integration)                        |
-|                                                                |
-|  On-call schedules:                                            |
-|  - Primary: rotates weekly                                     |
-|  - Secondary: backup, rotates opposite week                    |
-|  - Escalation: if no ack in 10 min, page secondary            |
-|  - If no ack in 20 min, page engineering manager               |
-|                                                                |
-+---------------------------------------------------------------+
+```mermaid
+flowchart TD
+    AM["Alertmanager"] -->|webhook| GOC["Grafana OnCall\n(open-source, self-hosted)"]
+    GOC --> Slack["Slack notification"]
+    GOC --> Email["Email notification"]
+    GOC --> Phone["Phone call (via Twilio)"]
+    GOC --> SMS["SMS (via Twilio)"]
+
+    subgraph Schedules["On-call schedules"]
+        direction TB
+        S1["Primary: rotates weekly"]
+        S2["Secondary: backup, rotates opposite week"]
+        S3["Escalation: if no ack in 10 min, page secondary"]
+        S4["If no ack in 20 min, page engineering manager"]
+    end
 ```
 
 ---
@@ -332,29 +327,13 @@ Deploy the `prometheuscommunity/ipmi-exporter` as a Deployment in the monitoring
 
 ### Key IPMI Metrics to Monitor
 
-```
-+---------------------------------------------------------------+
-|         CRITICAL IPMI METRICS                                  |
-|                                                                |
-|  Metric                        Alert Threshold                 |
-|  ─────────────────────────────────────────────────             |
-|  ipmi_temperature_celsius      > 85 (CPU)                     |
-|    {name="CPU Temp"}           > 45 (ambient)                  |
-|                                                                |
-|  ipmi_fan_speed_rpm            < 1000 (fan failure)            |
-|    {name="Fan 1"}                                              |
-|                                                                |
-|  ipmi_voltage_volts            +/- 10% of nominal              |
-|    {name="12V"}                (11.4V warning)                 |
-|                                                                |
-|  ipmi_power_watts              > 90% of PSU rated              |
-|    {name="System Power"}       capacity                        |
-|                                                                |
-|  ipmi_sensor_state             != 0 (any critical state)       |
-|    {name="PSU Status"}                                         |
-|                                                                |
-+---------------------------------------------------------------+
-```
+| Metric | Alert Threshold |
+|--------|-----------------|
+| `ipmi_temperature_celsius{name="CPU Temp"}` | > 85 (CPU), > 45 (ambient) |
+| `ipmi_fan_speed_rpm{name="Fan 1"}` | < 1000 (fan failure) |
+| `ipmi_voltage_volts{name="12V"}` | +/- 10% of nominal (11.4V warning) |
+| `ipmi_power_watts{name="System Power"}` | > 90% of PSU rated capacity |
+| `ipmi_sensor_state{name="PSU Status"}` | != 0 (any critical state) |
 
 ---
 
@@ -367,31 +346,21 @@ The monitoring stack itself needs resources. Undersizing it leads to the monitor
 Prometheus TSDB is highly optimized, compressing raw samples down to an average of 2 bytes per sample. You can calculate your storage needs using this formula: `samples_per_second * 2 bytes * 86,400 seconds`.
 For example, a cluster ingesting 500,000 samples per second generates ~1 MB/s, or ~84 GB per day.
 - **Local Storage (48 hours)**: Requires ~168 GB of fast NVMe storage per Prometheus replica.
-- **Long-Term Storage (1 year)**: Keeping 1 year of data locally would require ~30 TB of disk, which is expensive and slows down queries. Instead, Thanos offloads this to MinIO object storage. With Thanos Compactor downsampling historical data (raw -> 5m -> 1h), 1 year of metrics for this cluster will consume approximately 3 TB of object storage.
+- **Long-Term Storage (1 year)**: Keeping 1 year of data locally would require ~30 TB of disk, which is expensive and slows down queries. Instead, Thanos offloads this to MinIO object storage. With Thanos Compactor downsampling historical data, 1 year of metrics will consume approximately 3 TB of object storage.
 
 ### Sizing Guidelines
 
-```
-+---------------------------------------------------------------+
-|       MONITORING STACK SIZING (per 100 nodes)                  |
-|                                                                |
-|  Component        CPU    Memory    Disk     Notes              |
-|  ────────────────────────────────────────────────              |
-|  Prometheus (x2)  4 CPU  16 GB     200 GB   HA pair, 48h ret  |
-|  Thanos Query     2 CPU   4 GB       -      Stateless         |
-|  Thanos Store GW  2 CPU   8 GB      50 GB   Cache for S3      |
-|  Thanos Compact   2 CPU   4 GB     100 GB   Downsampling      |
-|  Loki (x3)        2 CPU   8 GB      50 GB   HA mode           |
-|  Grafana (x2)     1 CPU   2 GB       -      HA pair           |
-|  Alertmanager(x3) 0.5CPU  1 GB       -      HA cluster        |
-|  MinIO (x4)       2 CPU   8 GB    1000 GB   Object store      |
-|  ────────────────────────────────────────────────              |
-|  Total           ~30 CPU  ~90 GB   ~1.6 TB                    |
-|                                                                |
-|  Rule of thumb: dedicate 3-5% of cluster resources             |
-|  to observability                                               |
-+---------------------------------------------------------------+
-```
+| Component | CPU | Memory | Disk | Notes |
+|-----------|-----|--------|------|-------|
+| Prometheus (x2) | 4 CPU | 16 GB | 200 GB | HA pair, 48h ret |
+| Thanos Query | 2 CPU | 4 GB | - | Stateless |
+| Thanos Store GW | 2 CPU | 8 GB | 50 GB | Cache for S3 |
+| Thanos Compact | 2 CPU | 4 GB | 100 GB | Downsampling |
+| Loki (x3) | 2 CPU | 8 GB | 50 GB | HA mode |
+| Grafana (x2) | 1 CPU | 2 GB | - | HA pair |
+| Alertmanager(x3) | 0.5 CPU | 1 GB | - | HA cluster |
+| MinIO (x4) | 2 CPU | 8 GB | 1000 GB | Object store |
+| **Total** | **~30 CPU** | **~90 GB** | **~1.6 TB** | |
 
 > **Pause and predict**: Your monitoring stack itself needs 30 CPU and 90 GB RAM for a 100-node cluster. If monitoring runs on the same nodes as workloads and a major incident causes resource contention, what happens to your ability to diagnose the incident?
 
@@ -406,24 +375,16 @@ curl -s http://prometheus:9090/api/v1/status/tsdb | jq '
   sort_by(-.value) |
   .[0:20] |
   .[] | "\(.name): \(.value) series"'
-
-# Common offenders on bare metal:
-# container_* metrics with high pod churn
-# node_* metrics with many disk/interface labels
-# Custom metrics with unbounded label values (IP addresses, user IDs)
 ```
 
 ---
 
 ## Did You Know?
 
-- **Prometheus was created at SoundCloud in 2012** and donated to the CNCF in 2016. It was the second project to graduate after Kubernetes itself. Its pull-based scraping model was inspired by Google's Borgmon, which monitored Borg (the predecessor to Kubernetes) internally at Google.
-
-- **Thanos was named after the Marvel villain** because it brings balance to the Prometheus universe -- specifically, it balances the trade-off between local retention (fast queries) and long-term storage (cheap, durable). The project started at Improbable (a gaming technology company) in 2017.
-
-- **Loki processes logs 10-100x cheaper than Elasticsearch** for the same volume because it indexes only labels (namespace, pod, container), not the full log text. The trade-off is that full-text search requires scanning chunks -- which is slower for ad-hoc queries but perfectly fast for targeted queries like "show me logs from pod X in namespace Y."
-
-- **IPMI (Intelligent Platform Management Interface) was first released in 1998** by Intel, HP, NEC, and Dell. Despite being nearly 30 years old, it remains the standard for out-of-band server management. The protocol runs on a dedicated BMC (Baseboard Management Controller) chip with its own network interface, CPU, and memory -- essentially a computer within your computer that runs even when the main system is powered off.
+- **Prometheus is a CNCF graduated project**. Created at SoundCloud in 2012 and donated to the CNCF in 2016, it was the second project to graduate after Kubernetes itself. Its pull-based scraping model was inspired by Google's Borgmon.
+- **Thanos was named after the Marvel villain** because it brings balance to the Prometheus universe -- specifically, it balances the trade-off between local retention (fast queries) and long-term storage (cheap, durable). The project started at Improbable in 2017.
+- **Loki processes logs 10-100x cheaper than Elasticsearch** for the same volume because it indexes only labels, not the full log text. The trade-off is that full-text search requires scanning chunks -- slower for ad-hoc queries but perfectly fast for targeted queries.
+- **IPMI (Intelligent Platform Management Interface) was first released in 1998**. Despite being nearly 30 years old, it remains the standard for out-of-band server management. The protocol runs on a dedicated BMC chip with its own network interface and CPU that runs even when the main system is powered off.
 
 ---
 
@@ -435,8 +396,8 @@ curl -s http://prometheus:9090/api/v1/status/tsdb | jq '
 | 15-day local retention | Fills disk, crashes Prometheus | Use 48h local + Thanos for long-term |
 | No log aggregation | Logs lost on container restart or node failure | Deploy Loki + Promtail DaemonSet |
 | Alertmanager singleton | Missed alerts if Alertmanager crashes | Deploy 3-node Alertmanager cluster |
-| Monitoring on same nodes as workloads | Resource contention during incidents | Dedicated monitoring nodes or guaranteed resources |
-| No IPMI monitoring | Hardware failures are invisible until node goes down | Deploy IPMI exporter for temperature, PSU, fan metrics |
+| Monitoring on workload nodes | Resource contention during incidents | Dedicated monitoring nodes or guaranteed resources |
+| No IPMI monitoring | Hardware failures are invisible | Deploy IPMI exporter for temperature, PSU, fan metrics |
 | Unbounded label cardinality | Prometheus OOM from millions of series | Drop high-cardinality labels via relabeling |
 | No monitoring-of-monitoring | Monitoring stack fails silently | External black-box probe (ping from outside cluster) |
 
@@ -445,171 +406,46 @@ curl -s http://prometheus:9090/api/v1/status/tsdb | jq '
 ## Quiz
 
 ### Question 1
-Your Prometheus instance is ingesting 500,000 samples per second with 30-second scrape intervals across 200 bare metal nodes. You need 1 year of metrics retention. How do you architect this?
+Your Prometheus instance is ingesting 500,000 samples per second with 30-second scrape intervals across 200 bare metal nodes. You are currently mandated to retain 1 year of metrics retention to comply with auditing requirements. How do you architect this without causing continuous Out-Of-Memory (OOM) crashes?
 
 <details>
 <summary>Answer</summary>
 
-**Architecture: Prometheus HA pair + Thanos with MinIO object storage.**
-
-**Sizing calculation:**
-- 500,000 samples/sec * 2 bytes/sample (TSDB compressed) = ~1 MB/s
-- Per day: 1 MB/s * 86,400 = ~84 GB/day
-  (The 2 bytes/sample figure already accounts for Prometheus TSDB compression;
-  raw uncompressed samples are 16 bytes each)
-- 48-hour local retention: ~168 GB per Prometheus instance
-- 1 year in Thanos with downsampling:
-  - Raw (first 30 days): 84 GB * 30 = ~2.5 TB
-  - 5-minute downsampled (30-365 days): ~400 GB
-  - 1-hour downsampled (optional, for very old data): ~60 GB
-  - Total object storage: ~3 TB
-
-**Architecture:**
-1. **2x Prometheus** (HA pair, same config, external_labels differ only by `replica`)
-2. **2x Thanos Sidecar** (one per Prometheus, uploads blocks to MinIO)
-3. **1x Thanos Query** (deduplicates HA pair, queries both local and store)
-4. **1x Thanos Store Gateway** (serves queries from MinIO)
-5. **1x Thanos Compactor** (downsamples: raw -> 5m -> 1h)
-6. **MinIO cluster** (4 nodes, erasure coding, 4 TB usable)
-
-**Why not just increase Prometheus retention?**
-- 1 year at 84 GB/day = ~30 TB local disk -- expensive NVMe
-- Prometheus queries slow down with large TSDB
-- No HA: disk failure = data loss
-- MinIO with erasure coding is cheaper and fault-tolerant
+To architect this successfully, you must split the storage responsibilities between fast local storage and long-term object storage. Increasing the Prometheus local retention to one year would require roughly 30 TB of expensive NVMe disk per instance, which is cost-prohibitive and severely degrades query performance. Instead, you should deploy a highly available Prometheus pair with 48-hour local retention and attach Thanos sidecars to continuously upload compressed metric blocks to a MinIO cluster. A Thanos Compactor then downsamples the historical data to 5-minute and 1-hour intervals, drastically reducing the required long-term storage to around 3 TB while maintaining fast query performance across the entire year.
 </details>
 
 ### Question 2
-Your Loki cluster is receiving logs from 200 nodes, but queries for logs older than 2 days are extremely slow (30+ seconds). What is likely wrong and how do you fix it?
+Your Loki cluster is receiving logs from 200 nodes successfully, but when engineers attempt to query logs older than 2 days, the queries are timing out or taking upwards of 30 seconds to return. What is likely wrong with the ingestion or querying pipeline, and how do you fix it?
 
 <details>
 <summary>Answer</summary>
 
-**Likely causes and fixes:**
-
-1. **No chunk caching**: Loki reads chunks from object storage (MinIO) for every query. Without a cache, this means network I/O for every request.
-   ```yaml
-   # Add chunk cache in loki-config.yaml
-   chunk_store_config:
-     chunk_cache_config:
-       memcached:
-         host: memcached.monitoring.svc
-         service: memcached
-   ```
-
-2. **Too few label indexes**: If most logs have the same label set (e.g., only `namespace` and `pod`), Loki must scan large chunks to filter.
-   ```yaml
-   # Add more labels in Promtail
-   pipeline_stages:
-     - labels:
-         level:     # extract log level (info, error, warn)
-         component: # extract component name from log line
-   ```
-
-3. **Large chunk size**: Default chunk target size might be too large for your ingestion rate.
-   ```yaml
-   ingester:
-     chunk_target_size: 1572864  # 1.5 MB (default)
-     # Consider reducing for faster queries at the cost of more chunks
-   ```
-
-4. **Object storage latency**: MinIO might be slow due to disk I/O contention.
-   - Check MinIO disk I/O: `iostat -x 1`
-   - Ensure MinIO has dedicated disks (not shared with Ceph or other workloads)
-
-5. **Missing TSDB index**: Ensure you are using the TSDB index (not BoltDB) for better query performance.
-   ```yaml
-   schema_config:
-     configs:
-       - store: tsdb  # not boltdb-shipper
-   ```
-
-**Quick win**: Deploy a Memcached cluster (3 pods, 4 GB each) for chunk caching. This alone typically reduces query times by 5-10x for historical data.
+When querying historical logs, Loki must retrieve compressed chunks from the object storage backend (MinIO) because it does not keep full log text in its index. If you have not configured a chunk cache, Loki incurs massive network I/O and object storage latency for every historical query, slowing responses to a crawl. You can fix this by deploying a Memcached cluster and configuring Loki to use it, which caches frequently accessed chunks in memory. Additionally, if your log streams have too few labels, Loki is forced to download and scan excessively large chunks to find matching lines, so adding targeted labels in Promtail for high-cardinality data like `component` or `level` will reduce the scan size and speed up queries significantly.
 </details>
 
 ### Question 3
-Your Alertmanager sends alerts via email, but the SMTP server is on the corporate network and your Kubernetes cluster is in a separate datacenter VLAN. Alerts are being silently dropped. How do you diagnose and fix this?
+Your Alertmanager is configured to send critical hardware alerts via email, but the SMTP server resides on the corporate network while your Kubernetes cluster operates in a strictly separated datacenter VLAN. Alerts are firing in the UI but are never arriving in your inbox. How do you diagnose and reliably fix this routing issue?
 
 <details>
 <summary>Answer</summary>
 
-**Diagnosis:**
-
-1. **Check Alertmanager logs:**
-   ```bash
-   kubectl logs -n monitoring alertmanager-0 | grep -i "error\|fail\|smtp"
-   # Look for: "connection refused", "timeout", "TLS handshake"
-   ```
-
-2. **Test SMTP connectivity from within the cluster:**
-   ```bash
-   kubectl run smtp-test --image=busybox --restart=Never -- sh -c \
-     "nc -zv smtp.internal 587; echo exit code: $?"
-   ```
-
-3. **Check network policies or firewall rules** blocking port 587 from the monitoring namespace.
-
-**Fix options:**
-
-1. **Open firewall**: Allow port 587 from monitoring VLAN to corporate VLAN.
-
-2. **Deploy a local SMTP relay** inside the cluster:
-   ```yaml
-   # Deploy Postfix as an SMTP relay in the monitoring namespace
-   # Configure it to relay through the corporate SMTP server
-   # Alertmanager sends to local relay (in-cluster, no firewall issue)
-   # Relay forwards to corporate SMTP (firewall rule needed only for relay pod)
-   ```
-
-3. **Use webhook instead of email**: Deploy a webhook receiver that posts to Slack, Teams, or a custom notification service.
-
-4. **Alertmanager -> Grafana OnCall -> Twilio**: If email is unreliable, use a notification chain that does not depend on corporate SMTP.
-
-**Prevention**: Always test alerting during initial setup. Send a test alert and verify it arrives:
-```bash
-# Manually fire a test alert
-curl -X POST http://alertmanager:9093/api/v2/alerts \
-  -H "Content-Type: application/json" \
-  -d '[{"labels":{"alertname":"TestAlert","severity":"warning"},"annotations":{"summary":"Test alert from setup verification"}}]'
-```
+Alerts are likely being dropped because the datacenter VLAN firewall blocks outbound traffic on port 587 (SMTP) to the corporate network. You can diagnose this by checking the Alertmanager logs for connection timeouts or by running a diagnostic pod with `nc -zv smtp.internal 587` to confirm network unreachability. To resolve this without compromising network isolation, you should deploy a local SMTP relay, such as Postfix, directly within the monitoring namespace. Alertmanager can then route emails to this local relay without traversing the firewall, and the network team only needs to whitelist the relay pod's IP to forward mail to the corporate SMTP server.
 </details>
 
 ### Question 4
-You are building the monitoring stack for a new 150-node bare metal cluster. The infrastructure team asks: "Can we just use the existing Datadog agents?" What are the trade-offs of Datadog vs self-hosted on bare metal?
+You are building the monitoring stack for a new 150-node bare metal cluster. The infrastructure manager asks: "Our cloud team uses Datadog successfully. Can we just install the Datadog agent on these new servers and be done with it?" What are the core architectural and business trade-offs of using Datadog versus a self-hosted stack on bare metal?
 
 <details>
 <summary>Answer</summary>
 
-**Trade-offs:**
-
-| Factor | Datadog | Self-hosted (Prometheus/Thanos/Loki) |
-|--------|---------|--------------------------------------|
-| **Cost** | $23/host/month * 150 = $41,400/year (infrastructure plan) | $15,000 hardware + ~$5,000/year ops |
-| **Setup time** | Days | Weeks |
-| **Maintenance** | Zero (SaaS) | Ongoing (upgrades, capacity, failures) |
-| **Data residency** | Data leaves your network | Data stays on-premises |
-| **Network dependency** | Requires internet egress | Works air-gapped |
-| **Retention** | 15 months (paid tier) | Unlimited (limited by storage) |
-| **Customization** | Limited to Datadog features | Full control |
-| **Hardware metrics** | Requires custom integration | IPMI exporter built for this |
-| **Compliance** | May not meet data sovereignty requirements | Full control over data location |
-
-**Recommendation depends on context:**
-
-- **Use Datadog if**: Budget allows, no data sovereignty requirements, small team without monitoring expertise, internet egress is available.
-
-- **Use self-hosted if**: Data must stay on-premises (healthcare, finance, government), air-gapped environment, cost-sensitive at scale (150+ nodes), team has Prometheus expertise, need deep hardware-level monitoring (IPMI, SMART).
-
-- **Hybrid option**: Datadog for application APM/tracing, self-hosted Prometheus for infrastructure and hardware metrics. This gives you the best APM with full hardware visibility.
-
-Most on-premises Kubernetes deployments choose self-hosted because the primary reason for running on-premises (data control, compliance, cost) also applies to monitoring data.
+While Datadog provides a turnkey SaaS solution with zero maintenance overhead, it becomes astronomically expensive at bare-metal scale, costing over $40,000 annually just for the infrastructure tier on 150 nodes. Additionally, SaaS monitoring requires opening outbound internet access for telemetry, which often violates strict data sovereignty and air-gapped compliance requirements common in on-premises environments. In contrast, a self-hosted stack using Prometheus, Thanos, and Loki keeps all telemetry data securely within your private network and avoids per-node licensing fees. The trade-off is that self-hosting requires significant upfront engineering time to architect correctly and ongoing operational effort to manage capacity, upgrades, and high availability.
 </details>
 
 ---
 
 ## Hands-On Exercise: Deploy a Monitoring Stack
 
-**Task**: Deploy Prometheus, Grafana, and Alertmanager on a kind cluster.
+**Task**: Deploy Prometheus, Grafana, and Alertmanager on a kind cluster using the community Helm chart.
 
 ### Setup
 
@@ -617,13 +453,14 @@ Most on-premises Kubernetes deployments choose self-hosted because the primary r
 # Create a kind cluster
 kind create cluster --name monitoring-lab
 
-# Install kube-prometheus-stack via Helm
+# Install kube-prometheus-stack via Helm (latest version 83.4.0)
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo update
 
 helm install monitoring prometheus-community/kube-prometheus-stack \
   --namespace monitoring \
   --create-namespace \
+  --version 83.4.0 \
   --wait \
   --timeout 10m \
   --set grafana.adminPassword=admin \
