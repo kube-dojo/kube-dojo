@@ -68,29 +68,29 @@ BASIC DNS RECORDS — QUICK REVIEW
 
 A RECORD
 ─────────────────────────────────────────────────────────────
-Maps hostname → IPv4 address
+Maps hostname -> IPv4 address
 
     app.example.com.   300   IN   A   203.0.113.10
 
 AAAA RECORD
 ─────────────────────────────────────────────────────────────
-Maps hostname → IPv6 address
+Maps hostname -> IPv6 address
 
     app.example.com.   300   IN   AAAA   2001:db8::1
 
 CNAME RECORD
 ─────────────────────────────────────────────────────────────
-Maps hostname → another hostname (alias)
+Maps hostname -> another hostname (alias)
 
     www.example.com.   300   IN   CNAME   app.example.com.
 
-    ⚠️  LIMITATION: CNAME cannot coexist with other records
+    WARNING: LIMITATION: CNAME cannot coexist with other records
         at the same name (RFC 1034). This means you CANNOT
         put a CNAME at the zone apex (example.com).
 
 MX RECORD
 ─────────────────────────────────────────────────────────────
-Maps hostname → mail server (with priority)
+Maps hostname -> mail server (with priority)
 
     example.com.   300   IN   MX   10   mail.example.com.
     example.com.   300   IN   MX   20   backup.example.com.
@@ -107,8 +107,8 @@ ALIAS / ANAME RECORD (Provider-Specific)
 Solves the "CNAME at zone apex" problem.
 
 Problem:
-    example.com.   CNAME   lb.cloud.com.    ← ILLEGAL per RFC
-    example.com.   A       ???              ← Need dynamic IP
+    example.com.   CNAME   lb.cloud.com.    <- ILLEGAL per RFC
+    example.com.   A       ???              <- Need dynamic IP
 
 Solution: ALIAS/ANAME resolves at the DNS server level
 
@@ -116,7 +116,7 @@ Solution: ALIAS/ANAME resolves at the DNS server level
 
 How it works:
     1. Client queries: example.com A?
-    2. DNS server resolves lb.us-east-1.elb.amazonaws.com → 52.1.2.3
+    2. DNS server resolves lb.us-east-1.elb.amazonaws.com -> 52.1.2.3
     3. DNS server returns: example.com A 52.1.2.3
 ```
 
@@ -130,7 +130,7 @@ sequenceDiagram
 ```
 
 ```text
-    ⚠️  NOT standardized. Called "ALIAS" (Route53, DNSimple),
+    WARNING: NOT standardized. Called "ALIAS" (Route53, DNSimple),
         "ANAME" (PowerDNS, RFC draft), "CNAME flattening"
         (Cloudflare). Behavior varies by provider.
 
@@ -157,9 +157,9 @@ Controls which CAs can issue certificates for your domain.
     example.com.  300  IN  CAA  0  issuewild  "letsencrypt.org"
     example.com.  300  IN  CAA  0  iodef  "mailto:security@example.com"
 
-    issue      → Who can issue regular certs
-    issuewild  → Who can issue wildcard certs
-    iodef      → Where to report violations
+    issue      -> Who can issue regular certs
+    issuewild  -> Who can issue wildcard certs
+    iodef      -> Where to report violations
 
     Since Sept 2017, CAs MUST check CAA before issuing.
     Missing CAA = any CA can issue (bad for security).
@@ -199,8 +199,8 @@ flowchart TD
 
 ```text
 Step-by-step (uncached):
-    1. Browser checks its cache → miss
-    2. OS stub resolver checks /etc/hosts → miss
+    1. Browser checks its cache -> miss
+    2. OS stub resolver checks /etc/hosts -> miss
     3. OS sends query to configured recursive resolver
     4. Recursive resolver asks root: "Where is .com?"
     5. Root says: "Try 192.5.6.30 (a.gtld-servers.net)"
@@ -232,28 +232,31 @@ UNICAST vs ANYCAST
 
 UNICAST (Traditional)
 ─────────────────────────────────────────────────────────────
-One IP address → One physical server
+One IP address -> One physical server
+```
 
-    Client in Tokyo ──────────────→ Server in Virginia
-                    10,000+ km         IP: 198.51.100.1
-                    ~150ms RTT
+```mermaid
+flowchart LR
+    C1[Client in Tokyo] -- "10,000+ km<br/>~150ms RTT" --> S1["Server in Virginia<br/>IP: 198.51.100.1"]
+```
 
+```text
     Every client goes to the same server, regardless of location.
 
 ANYCAST
 ─────────────────────────────────────────────────────────────
-One IP address → Multiple physical servers
+One IP address -> Multiple physical servers
 BGP routing sends each client to the nearest one.
+```
 
-    Client in Tokyo ───→ Server in Tokyo     IP: 198.51.100.1
-                  ~5ms
+```mermaid
+flowchart LR
+    C2[Client in Tokyo] -- "~5ms" --> S2["Server in Tokyo<br/>IP: 198.51.100.1"]
+    C3[Client in London] -- "~3ms" --> S3["Server in London<br/>IP: 198.51.100.1"]
+    C4[Client in NYC] -- "~8ms" --> S4["Server in Virginia<br/>IP: 198.51.100.1"]
+```
 
-    Client in London ──→ Server in London    IP: 198.51.100.1
-                  ~3ms
-
-    Client in NYC ─────→ Server in Virginia  IP: 198.51.100.1
-                  ~8ms
-
+```text
     Same IP, different physical servers!
 
 HOW ANYCAST WORKS
@@ -265,7 +268,7 @@ Multiple servers announce the same IP prefix via BGP.
 flowchart TD
     Tokyo["Tokyo PoP<br/>198.51.100.0/24"]
     London["London PoP<br/>198.51.100.0/24"]
-    Mesh["Internet BGP Mesh<br/>Router sees same prefix from multiple origins → picks shortest AS-path"]
+    Mesh["Internet BGP Mesh<br/>Router sees same prefix from multiple origins -> picks shortest AS-path"]
     
     Tokyo -- "BGP announces 198.51.100.0/24" --> Mesh
     London -- "BGP announces 198.51.100.0/24" --> Mesh
@@ -274,12 +277,12 @@ flowchart TD
 ```text
 WHY IT WORKS FOR DNS (AND CDN)
 ─────────────────────────────────────────────────────────────
-    ✓ DNS is UDP-based → no long-lived connections
-    ✓ Each query is independent → stateless
-    ✓ BGP convergence time (~30-90s) > DNS query time (~ms)
-    ✓ Natural DDoS absorption: attack traffic gets distributed
+    + DNS is UDP-based -> no long-lived connections
+    + Each query is independent -> stateless
+    + BGP convergence time (~30-90s) > DNS query time (~ms)
+    + Natural DDoS absorption: attack traffic gets distributed
 
-    ⚠️ Less suitable for TCP (BGP route changes can break
+    WARNING: Less suitable for TCP (BGP route changes can break
        established connections). Some providers handle this
        with connection migration or short-lived flows.
 ```
@@ -335,9 +338,9 @@ SIMPLE (Round Robin)
 ─────────────────────────────────────────────────────────────
 Return all IPs, rotate the order.
 
-    Query 1: app.example.com → [10.0.1.1, 10.0.2.1, 10.0.3.1]
-    Query 2: app.example.com → [10.0.2.1, 10.0.3.1, 10.0.1.1]
-    Query 3: app.example.com → [10.0.3.1, 10.0.1.1, 10.0.2.1]
+    Query 1: app.example.com -> [10.0.1.1, 10.0.2.1, 10.0.3.1]
+    Query 2: app.example.com -> [10.0.2.1, 10.0.3.1, 10.0.1.1]
+    Query 3: app.example.com -> [10.0.3.1, 10.0.1.1, 10.0.2.1]
 
     Pros: Dead simple
     Cons: No health awareness, no locality, uneven distribution
@@ -346,12 +349,12 @@ WEIGHTED
 ─────────────────────────────────────────────────────────────
 Return IPs based on configured weights.
 
-    us-east   70%  →  52.1.1.1    (primary, more capacity)
-    eu-west   20%  →  54.2.2.2    (secondary)
-    ap-south  10%  →  13.3.3.3    (new region, testing)
+    us-east   70%  ->  52.1.1.1    (primary, more capacity)
+    eu-west   20%  ->  54.2.2.2    (secondary)
+    ap-south  10%  ->  13.3.3.3    (new region, testing)
 
     Use cases:
-    - Gradual migration (90/10 → 80/20 → 50/50 → 0/100)
+    - Gradual migration (90/10 -> 80/20 -> 50/50 -> 0/100)
     - Canary deployments
     - Proportional to capacity
 
@@ -359,9 +362,9 @@ LATENCY-BASED
 ─────────────────────────────────────────────────────────────
 Return the IP with lowest latency to the client.
 
-    Client in Tokyo   → ap-northeast-1 (13.3.3.3)   ~5ms
-    Client in NYC     → us-east-1 (52.1.1.1)         ~8ms
-    Client in Berlin  → eu-west-1 (54.2.2.2)         ~12ms
+    Client in Tokyo   -> ap-northeast-1 (13.3.3.3)   ~5ms
+    Client in NYC     -> us-east-1 (52.1.1.1)         ~8ms
+    Client in Berlin  -> eu-west-1 (54.2.2.2)         ~12ms
 
     How it works:
     1. DNS provider continuously measures latency from
@@ -369,7 +372,7 @@ Return the IP with lowest latency to the client.
     2. Maps client's resolver IP to nearest region
     3. Returns the lowest-latency endpoint
 
-    ⚠️  EDNS Client Subnet (ECS) improves accuracy.
+    WARNING: EDNS Client Subnet (ECS) improves accuracy.
         Without ECS, latency is measured to the RESOLVER,
         not the actual client. A user in Tokyo using 8.8.8.8
         might get routed based on Google's resolver location.
@@ -378,16 +381,16 @@ GEOLOCATION
 ─────────────────────────────────────────────────────────────
 Return IPs based on the client's geographic location.
 
-    Client in Germany → eu-central-1 (GDPR compliance!)
-    Client in China   → cn-north-1  (content compliance!)
-    Client in Brazil  → sa-east-1   (data sovereignty!)
+    Client in Germany -> eu-central-1 (GDPR compliance!)
+    Client in China   -> cn-north-1  (content compliance!)
+    Client in Brazil  -> sa-east-1   (data sovereignty!)
 
     Use cases:
     - Regulatory compliance (data residency)
     - Content licensing (geo-restricted media)
     - Language-specific endpoints
 
-    Hierarchy: Continent → Country → State → City
+    Hierarchy: Continent -> Country -> State -> City
     Fallback if no match: default record
 
 GEOPROXIMITY
@@ -414,24 +417,24 @@ FAILOVER (Active-Passive)
 Return primary IP unless health check fails, then failover.
 
     Normal:
-        app.example.com → 52.1.1.1 (primary, healthy ✓)
+        app.example.com -> 52.1.1.1 (primary, healthy)
 
     After primary fails health check:
-        app.example.com → 54.2.2.2 (secondary)
+        app.example.com -> 54.2.2.2 (secondary)
 
     Health check configuration:
         Protocol: HTTP/HTTPS/TCP
         Path: /healthz
         Interval: 10s
-        Threshold: 3 consecutive failures → failover
-        Recovery: 3 consecutive successes → failback
+        Threshold: 3 consecutive failures -> failover
+        Recovery: 3 consecutive successes -> failback
 
 MULTIVALUE ANSWER
 ─────────────────────────────────────────────────────────────
 Like round robin, but with health checks.
 Returns up to 8 healthy IPs. Client picks one.
 
-    Healthy:  [52.1.1.1 ✓, 54.2.2.2 ✓, 13.3.3.3 ✓]
+    Healthy:  [52.1.1.1 [OK], 54.2.2.2 [OK], 13.3.3.3 [OK]]
     Response: [52.1.1.1, 54.2.2.2, 13.3.3.3]
 
     After 54.2.2.2 fails:
@@ -459,10 +462,10 @@ flowchart TD
 ```text
     Failure determination:
     ─────────────────────────────────────────────────
-    If 1/4 checkers fail   → Network issue, ignore
-    If 2/4 checkers fail   → Possible problem
-    If 3/4 checkers fail   → Mark unhealthy, failover
-    If 4/4 checkers fail   → Definitely down
+    If 1/4 checkers fail   -> Network issue, ignore
+    If 2/4 checkers fail   -> Possible problem
+    If 3/4 checkers fail   -> Mark unhealthy, failover
+    If 4/4 checkers fail   -> Definitely down
 
 CALCULATED HEALTH CHECKS (Composite)
 ─────────────────────────────────────────────────────────────
@@ -471,16 +474,16 @@ CALCULATED HEALTH CHECKS (Composite)
 ```mermaid
 flowchart LR
     subgraph Web[Web Tier OR]
-        W1["Web Server 1: /healthz ✓"]
-        W2["Web Server 2: /healthz ✓"]
+        W1["Web Server 1: /healthz [OK]"]
+        W2["Web Server 2: /healthz [OK]"]
     end
     subgraph DB[DB Tier OR]
-        D1["DB Primary: port 5432 ✓"]
-        D2["DB Replica: port 5432 ✓"]
+        D1["DB Primary: port 5432 [OK]"]
+        D2["DB Replica: port 5432 [OK]"]
     end
     Web --> AND((AND))
     DB --> AND
-    AND --> Result["HEALTHY ✓"]
+    AND --> Result["HEALTHY [OK]"]
 ```
 
 ```text
@@ -536,9 +539,9 @@ THE COUNTDOWN PROBLEM
 
     t=0:    Auth server sets TTL=300 (5 min)
     t=0:    Recursive resolver caches with TTL=300
-    t=120:  Client A queries resolver → gets answer with TTL=180
+    t=120:  Client A queries resolver -> gets answer with TTL=180
     t=120:  Client A caches with TTL=180
-    t=290:  Client B queries resolver → gets answer with TTL=10
+    t=290:  Client B queries resolver -> gets answer with TTL=10
     t=290:  Client B caches with TTL=10
 
     Client A won't re-query for 3 minutes.
@@ -569,10 +572,10 @@ Use when: Records rarely change, performance matters most
     SPF/DKIM/DMARC:       3600   (email auth records)
     Static infrastructure: 3600  (on-prem servers)
 
-    ✓ Fewer queries to authoritative servers
-    ✓ Faster resolution for end users
-    ✗ Changes take hours to propagate
-    ✗ Failover is slow
+    + Fewer queries to authoritative servers
+    + Faster resolution for end users
+    - Changes take hours to propagate
+    - Failover is slow
 
 MEDIUM TTL (60-300 seconds / 1-5 min)
 ─────────────────────────────────────────────────────────────
@@ -581,9 +584,9 @@ Use when: Balance between performance and flexibility
     Production apps:      300  (good default)
     API endpoints:        120  (moderate change frequency)
 
-    ✓ Reasonable cache hit rate
-    ✓ Changes propagate within minutes
-    ✗ More queries than high TTL
+    + Reasonable cache hit rate
+    + Changes propagate within minutes
+    - More queries than high TTL
 
 LOW TTL (10-60 seconds)
 ─────────────────────────────────────────────────────────────
@@ -593,11 +596,11 @@ Use when: Fast failover required, frequent changes
     Blue-green deploys:   30   (fast cutover)
     During migrations:    10   (minimize risk window)
 
-    ✓ Fast failover
-    ✓ Rapid propagation
-    ✗ High query volume
-    ✗ Higher latency (more cache misses)
-    ✗ Higher cost (DNS queries per second pricing)
+    + Fast failover
+    + Rapid propagation
+    - High query volume
+    - Higher latency (more cache misses)
+    - Higher cost (DNS queries per second pricing)
 
 PRE-MIGRATION TTL STRATEGY
 ─────────────────────────────────────────────────────────────
@@ -609,7 +612,7 @@ PRE-MIGRATION TTL STRATEGY
     Day +1:  Verify everything works
     Day +7:  Raise TTL back to 3600
 
-    ⚠️  You must lower the TTL BEFORE the migration!
+    WARNING: You must lower the TTL BEFORE the migration!
         If TTL is 3600, you need to wait 1 hour for the
         old TTL to expire before the low TTL takes effect.
 ```
@@ -665,16 +668,16 @@ DNSSEC adds cryptographic signatures to DNS responses.
     Resolver verifies signatures with public key.
     Forged responses fail signature verification.
 
-    ┌──────────────────────────────────────────────────────┐
-    │  example.com.  300  A  52.1.1.1                     │
-    │                                                      │
-    │  RRSIG:  A 13 2 300 20250101000000 20241201000000   │
-    │          12345 example.com.                           │
-    │          <base64-encoded-signature>                   │
-    └──────────────────────────────────────────────────────┘
+    ------------------------------------------------------
+      example.com.  300  A  52.1.1.1                     
+                                                           
+      RRSIG:  A 13 2 300 20250101000000 20241201000000   
+              12345 example.com.                           
+              <base64-encoded-signature>                   
+    ------------------------------------------------------
 
     Resolver checks: Does the RRSIG match the A record
-    using example.com's DNSKEY? If yes → trust. If no → reject.
+    using example.com's DNSKEY? If yes -> trust. If no -> reject.
 ```
 
 ### 5.2 DNSSEC Chain of Trust
@@ -686,9 +689,9 @@ DNSSEC CHAIN OF TRUST
 
 ```mermaid
 flowchart TD
-    Root["Root Zone (IANA)<br/>KSK → Signs → ZSK → Signs → DS records for .com"]
-    TLD[".com TLD (Verisign)<br/>KSK → Signs → ZSK → Signs → DS records for example.com"]
-    Zone["example.com (You)<br/>KSK → Signs → ZSK → Signs → A, AAAA, MX records"]
+    Root["Root Zone (IANA)<br/>KSK -> Signs -> ZSK -> Signs -> DS records for .com"]
+    TLD[".com TLD (Verisign)<br/>KSK -> Signs -> ZSK -> Signs -> DS records for example.com"]
+    Zone["example.com (You)<br/>KSK -> Signs -> ZSK -> Signs -> A, AAAA, MX records"]
     Root --> TLD --> Zone
 ```
 
@@ -746,9 +749,9 @@ flowchart TD
         R["/etc/resolv.conf<br/>nameserver 10.96.0.10<br/>search default.svc.cluster.local...<br/>ndots: 5"]
     end
     subgraph CoreDNS [CoreDNS kube-dns service: 10.96.0.10]
-        Svc["Service records: my-svc... → ClusterIP"]
-        PodRec["Pod records: 10-244... → Pod IP"]
-        Headless["Headless: my-svc... → Pod IPs"]
+        Svc["Service records: my-svc... -> ClusterIP"]
+        PodRec["Pod records: 10-244... -> Pod IP"]
+        Headless["Headless: my-svc... -> Pod IPs"]
         Ext["External: Forward to upstream"]
     end
     Pod --> CoreDNS
@@ -763,10 +766,10 @@ THE ndots TRAP
     Query: api.example.com (2 dots, < 5)
 
     Resolution order:
-    1. api.example.com.default.svc.cluster.local  → NXDOMAIN
-    2. api.example.com.svc.cluster.local          → NXDOMAIN
-    3. api.example.com.cluster.local              → NXDOMAIN
-    4. api.example.com.                           → SUCCESS!
+    1. api.example.com.default.svc.cluster.local  -> NXDOMAIN
+    2. api.example.com.svc.cluster.local          -> NXDOMAIN
+    3. api.example.com.cluster.local              -> NXDOMAIN
+    4. api.example.com.                           -> SUCCESS!
 
     That's 3 WASTED queries for every external domain!
 
@@ -893,7 +896,7 @@ flowchart TD
 ### Part 1: Set Up the Multi-Region Simulation (20 minutes)
 
 ```bash
-# Create a kind cluster
+# Create a kind cluster using Kubernetes 1.35
 cat <<'EOF' > /tmp/dns-lab-cluster.yaml
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
@@ -907,7 +910,7 @@ nodes:
       region: eu-west
 EOF
 
-kind create cluster --name dns-lab --config /tmp/dns-lab-cluster.yaml
+kind create cluster --name dns-lab --config /tmp/dns-lab-cluster.yaml --image kindest/node:v1.35.0
 ```
 
 ### Part 2: Deploy Region-Specific Applications (15 minutes)
@@ -1155,13 +1158,13 @@ data:
       echo "[$TIMESTAMP] us-east: $US_STATUS | eu-west: $EU_STATUS"
 
       if [ "$US_STATUS" = "UNHEALTHY" ] && [ "$EU_STATUS" = "UNHEALTHY" ]; then
-        echo "  ⚠ BOTH REGIONS DOWN — no healthy endpoints!"
+        echo "  WARNING: BOTH REGIONS DOWN - no healthy endpoints!"
       elif [ "$US_STATUS" = "UNHEALTHY" ]; then
-        echo "  → Failover: routing all traffic to eu-west"
+        echo "  -> Failover: routing all traffic to eu-west"
       elif [ "$EU_STATUS" = "UNHEALTHY" ]; then
-        echo "  → Failover: routing all traffic to us-east"
+        echo "  -> Failover: routing all traffic to us-east"
       else
-        echo "  → Normal: latency-based routing active"
+        echo "  -> Normal: latency-based routing active"
       fi
 
       sleep 5
@@ -1230,7 +1233,7 @@ nslookup api.example.com. 2>&1 | head -10
 # Test resolution timing
 time nslookup kubernetes.default.svc.cluster.local
 time nslookup google.com
-time nslookup google.com.   # With trailing dot — faster!
+time nslookup google.com.   # With trailing dot - faster!
 ```
 
 ### Clean Up
