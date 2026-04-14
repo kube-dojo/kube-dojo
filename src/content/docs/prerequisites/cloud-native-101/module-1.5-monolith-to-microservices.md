@@ -271,12 +271,12 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    subgraph Pod A
+    subgraph PodA [Pod A]
         SvcA[Service A]
         ProxyA[Proxy]
         SvcA <--> ProxyA
     end
-    subgraph Pod B
+    subgraph PodB [Pod B]
         SvcB[Service B]
         ProxyB[Proxy]
         SvcB <--> ProxyB
