@@ -600,7 +600,7 @@ spec:
 <details>
 <summary>Show Answer</summary>
 
-If you use a Deployment, all replicas will be treated as identical and interchangeable cattle, lacking stable network identities. They might all try to write to the shared NFS volume simultaneously without coordination, leading to severe data corruption. A StatefulSet provides three essential guarantees to prevent this: stable network identity (each Pod gets a predictable DNS name), stable persistent storage (each Pod gets its own PVC that follows it across rescheduling), and ordered lifecycle management. This means the primary database node can initialize before replicas attempt to sync, and each replica safely maintains its own isolated data directory.
+If you use a Deployment, all replicas will be treated as identical and interchangeable cattle, lacking stable network identities. They might all try to write to the shared NFS volume simultaneously without coordination, leading to severe data corruption. A StatefulSet provides three essential guarantees to prevent this: stable network identity (each Pod gets a predictable DNS name), stable persistent storage (each Pod gets its own PVC that follows it across rescheduling), and ordered lifecycle management. This means the primary database node can initialize before replicas attempt to sync, and each replica safely maintains its own isolated data directory. Because Deployments cannot provide these ordered guarantees, they are fundamentally unsafe for replicated relational databases.
 
 </details>
 
@@ -609,7 +609,7 @@ If you use a Deployment, all replicas will be treated as identical and interchan
 <details>
 <summary>Show Answer</summary>
 
-Without the `volumeBindingMode: WaitForFirstConsumer` parameter, the storage provisioner defaults to `Immediate` binding. This means the PersistentVolumeClaim (PVC) might immediately bind to an available local PersistentVolume (PV) on Node A, completely independent of the Pod scheduling process. When the Kubernetes scheduler then tries to place the Cassandra Pod, it might decide Node B is the best fit based on CPU or memory availability. Because the Pod is scheduled on Node B but its data is physically locked to Node A's local disk, the Pod cannot start and remains stuck in the Pending state forever. Setting the binding mode to `WaitForFirstConsumer` delays the PVC binding until the Pod is scheduled, ensuring both are assigned to the exact same node.
+Without the `volumeBindingMode: WaitForFirstConsumer` parameter, the storage provisioner defaults to `Immediate` binding. This means the PersistentVolumeClaim (PVC) might immediately bind to an available local PersistentVolume (PV) on Node A, completely independent of the Pod scheduling process. When the Kubernetes scheduler then tries to place the Cassandra Pod, it might decide Node B is the best fit based on CPU or memory availability. Because the Pod is scheduled on Node B but its data is physically locked to Node A's local disk, the Pod cannot start and remains stuck in the Pending state forever. Setting the binding mode to `WaitForFirstConsumer` fixes this by delaying the PVC binding until the Pod is scheduled, ensuring both are assigned to the exact same node.
 
 </details>
 
@@ -618,7 +618,7 @@ Without the `volumeBindingMode: WaitForFirstConsumer` parameter, the storage pro
 <details>
 <summary>Show Answer</summary>
 
-Because the StorageClass was configured with a `Delete` reclaim policy, the underlying storage volumes (like AWS EBS or GCP Persistent Disks) were automatically destroyed the moment their associated PVCs were deleted along with the namespace. Your database data is now permanently lost and must be restored from an external backup. This is the default behavior for dynamically provisioned volumes in Kubernetes, which is extremely dangerous for stateful workloads. To prevent this catastrophic scenario, the `reclaimPolicy` must always be explicitly set to `Retain` for databases. With `Retain`, even if the PVC is deleted, the physical volume is preserved and marked as `Released`, allowing administrators to manually recover the data.
+Because the StorageClass was configured with a `Delete` reclaim policy, the underlying storage volumes (like AWS EBS or GCP Persistent Disks) were automatically destroyed the moment their associated PVCs were deleted along with the namespace. Your database data is now permanently lost and must be restored from an external backup, which causes significant downtime and potential data loss. This is the default behavior for dynamically provisioned volumes in Kubernetes, which is extremely dangerous for stateful workloads. To prevent this catastrophic scenario, the `reclaimPolicy` must always be explicitly set to `Retain` for databases. With `Retain`, even if the PVC is deleted, the physical volume is preserved and marked as `Released`, allowing administrators to manually recover the data.
 
 </details>
 
@@ -627,7 +627,7 @@ Because the StorageClass was configured with a `Delete` reclaim policy, the unde
 <details>
 <summary>Show Answer</summary>
 
-To optimize this rollout, you should change the StatefulSet's `podManagementPolicy` from the default `OrderedReady` to `Parallel`. By default, Kubernetes waits for each Pod to become Running and Ready before starting the next one, which creates a massive bottleneck when scaling out to 50 nodes. It is perfectly safe to use `Parallel` in this scenario because CockroachDB is a modern distributed database that uses the Raft consensus algorithm to handle its own internal coordination and leader election. Since the application does not rely on Kubernetes for sequential startup or strict ordering, launching all Pods simultaneously significantly reduces deployment time without risking cluster stability.
+To optimize this rollout, you should change the StatefulSet's `podManagementPolicy` from the default `OrderedReady` to `Parallel`. By default, Kubernetes waits for each Pod to become Running and Ready before starting the next one, which creates a massive bottleneck when scaling out to 50 nodes. It is perfectly safe to use `Parallel` in this scenario because CockroachDB is a modern distributed database that uses the Raft consensus algorithm to handle its own internal coordination and leader election. Since the application does not rely on Kubernetes for sequential startup or strict ordering, launching all Pods simultaneously significantly reduces deployment time without risking cluster stability. This allows the cluster to rapidly absorb the traffic spike while relying on its own robust internal mechanisms to establish quorum.
 
 </details>
 
@@ -636,7 +636,7 @@ To optimize this rollout, you should change the StatefulSet's `podManagementPoli
 <details>
 <summary>Show Answer</summary>
 
-While a Helm chart can template the initial deployment manifests, it is essentially a static package manager that cannot respond to real-time cluster events or database failures. A Redis Sentinel deployment requires active, continuous management to handle tasks like failovers, reconfiguring replicas, and taking consistent backups without downtime. An Operator solves this by running a continuous reconciliation loop inside the cluster—constantly watching the state of the Redis pods and automatically taking corrective action if a node fails. By extending the Kubernetes API with Custom Resource Definitions, the Operator encodes human operational knowledge directly into software, ensuring day-2 operations are handled autonomously rather than relying on brittle scripts or manual intervention.
+While a Helm chart can template the initial deployment manifests, it is essentially a static package manager that cannot respond to real-time cluster events or database failures. A Redis Sentinel deployment requires active, continuous management to handle tasks like failovers, reconfiguring replicas, and taking consistent backups without downtime. An Operator solves this by running a continuous reconciliation loop inside the cluster—constantly watching the state of the Redis pods and automatically taking corrective action if a node fails. By extending the Kubernetes API with Custom Resource Definitions, the Operator encodes human operational knowledge directly into software, ensuring day-2 operations are handled autonomously rather than relying on brittle scripts or manual intervention. This dramatically reduces the operational burden and risk of human error during critical incidents.
 
 </details>
 
