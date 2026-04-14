@@ -403,6 +403,8 @@ spec:
 
 Fargate (AWS) and Autopilot (GCP) remove node management entirely. You define pods, and the cloud runs them without you provisioning or managing nodes.
 
+> **Pause and predict**: If you deploy a DaemonSet to a cluster using EKS Fargate for all its compute capacity, how many pods will the DaemonSet create? How does the Fargate architecture dictate this outcome?
+
 ### Comparison
 
 | Feature | EKS Fargate | GKE Autopilot | AKS Virtual Nodes |
@@ -578,17 +580,20 @@ Knative solves this by handling traffic splitting at the networking and request 
 ### Setup
 
 ```bash
-# Create kind cluster with extra ports for Knative
+# Create kind cluster with extra ports for Knative and explicitly target v1.35
 cat > /tmp/kind-knative.yaml << 'EOF'
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 nodes:
   - role: control-plane
+    image: kindest/node:v1.35.0
     extraPortMappings:
       - containerPort: 31080
         hostPort: 8080
   - role: worker
+    image: kindest/node:v1.35.0
   - role: worker
+    image: kindest/node:v1.35.0
 EOF
 
 kind create cluster --name knative-lab --config /tmp/kind-knative.yaml
