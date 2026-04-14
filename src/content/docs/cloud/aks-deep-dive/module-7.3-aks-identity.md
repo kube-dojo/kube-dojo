@@ -405,6 +405,8 @@ k get pods -n gatekeeper-system
 
 ### Essential Policies for Production AKS
 
+> **Stop and think**: If you apply a new Azure Policy with a "deny" effect, what happens to existing pods that are already running and violate the policy? Will Gatekeeper terminate them?
+
 Azure provides dozens of built-in policies. Here are the critical ones every production cluster should enforce:
 
 | Policy | Effect | Why It Matters |
