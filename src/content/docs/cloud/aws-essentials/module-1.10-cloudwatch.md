@@ -54,32 +54,35 @@ Every AWS service automatically publishes metrics to CloudWatch at no cost. Thes
 
 ### EC2 Standard Metrics
 
-```
-+------------------------------------------------------------------+
-|                    EC2 Standard Metrics                           |
-|                  (Free, 5-minute intervals)                      |
-+------------------------------------------------------------------+
-|                                                                  |
-|  CPU                          Network                            |
-|  - CPUUtilization (%)         - NetworkIn (bytes)                |
-|  - CPUCreditUsage (T-series)  - NetworkOut (bytes)               |
-|  - CPUCreditBalance           - NetworkPacketsIn                 |
-|                               - NetworkPacketsOut                |
-|  Disk (instance store only)                                      |
-|  - DiskReadOps                Status Checks                      |
-|  - DiskWriteOps               - StatusCheckFailed                |
-|  - DiskReadBytes              - StatusCheckFailed_Instance       |
-|  - DiskWriteBytes             - StatusCheckFailed_System         |
-|                                                                  |
-+------------------------------------------------------------------+
-|                                                                  |
-|  NOT included (requires CloudWatch Agent):                       |
-|  - Memory utilization                                            |
-|  - Disk space utilization (EBS volumes)                          |
-|  - Swap usage                                                    |
-|  - Process-level metrics                                         |
-|                                                                  |
-+------------------------------------------------------------------+
+```mermaid
+graph TD
+    A[EC2 Standard Metrics<br>Free, 5-minute intervals] --> B(CPU)
+    A --> C(Network)
+    A --> D(Disk - instance store only)
+    A --> E(Status Checks)
+
+    B --> B1[CPUUtilization %]
+    B --> B2[CPUCreditUsage T-series]
+    B --> B3[CPUCreditBalance]
+
+    C --> C1[NetworkIn bytes]
+    C --> C2[NetworkOut bytes]
+    C --> C3[NetworkPacketsIn]
+    C --> C4[NetworkPacketsOut]
+
+    D --> D1[DiskReadOps]
+    D --> D2[DiskWriteOps]
+    D --> D3[DiskReadBytes]
+    D --> D4[DiskWriteBytes]
+
+    E --> E1[StatusCheckFailed]
+    E --> E2[StatusCheckFailed_Instance]
+    E --> E3[StatusCheckFailed_System]
+
+    F[NOT included - requires CloudWatch Agent] --> F1[Memory utilization]
+    F --> F2[Disk space utilization on EBS]
+    F --> F3[Swap usage]
+    F --> F4[Process-level metrics]
 ```
 
 The biggest gap in EC2 standard metrics is **memory**. AWS cannot see inside your instance's operating system (the hypervisor only sees CPU, network, and instance-store disk I/O), so memory and EBS disk space metrics require an agent running inside the instance.
@@ -220,18 +223,13 @@ Metrics without alarms are just dashboards that nobody watches at 3 AM. Alarms b
 
 Every CloudWatch Alarm has three states:
 
-```
-+----------+      threshold breached       +---------+
-|   OK     | ---------------------------> | ALARM   |
-|          | <--------------------------- |         |
-+----------+      threshold recovered      +---------+
-      |                                        |
-      |       insufficient data                |
-      v                                        v
-+---------------------------------------------------+
-|              INSUFFICIENT_DATA                     |
-|  (not enough data points to evaluate)              |
-+---------------------------------------------------+
+```mermaid
+stateDiagram-v2
+    OK --> ALARM : threshold breached
+    ALARM --> OK : threshold recovered
+    OK --> INSUFFICIENT_DATA : insufficient data
+    ALARM --> INSUFFICIENT_DATA : insufficient data
+    INSUFFICIENT_DATA : INSUFFICIENT_DATA<br>(not enough data points to evaluate)
 ```
 
 ### Creating Alarms
@@ -318,20 +316,18 @@ Every application produces logs. CloudWatch Logs gives you a central place to st
 
 ### Core Concepts
 
-```
-CloudWatch Logs Architecture:
+```mermaid
+graph TD
+    LG["Log Group: /myapp/production/api"] --> LS1["Log Stream: i-0abc123/application.log"]
+    LG --> LS2["Log Stream: i-0def456/application.log"]
+    LG --> LS3["Log Stream: i-0ghi789/application.log"]
 
-Log Group: /myapp/production/api
-  |
-  +-- Log Stream: i-0abc123/application.log
-  |     - Log Event: "2026-03-24T10:30:01Z INFO Request processed in 234ms"
-  |     - Log Event: "2026-03-24T10:30:02Z ERROR Database connection timeout"
-  |
-  +-- Log Stream: i-0def456/application.log
-  |     - Log Event: "2026-03-24T10:30:01Z INFO Request processed in 189ms"
-  |
-  +-- Log Stream: i-0ghi789/application.log
-        - Log Event: "2026-03-24T10:30:03Z WARN Cache miss rate above 20%"
+    LS1 --> LE1["Log Event: '2026-03-24T10:30:01Z INFO Request processed in 234ms'"]
+    LS1 --> LE2["Log Event: '2026-03-24T10:30:02Z ERROR Database connection timeout'"]
+    
+    LS2 --> LE3["Log Event: '2026-03-24T10:30:01Z INFO Request processed in 189ms'"]
+    
+    LS3 --> LE4["Log Event: '2026-03-24T10:30:03Z WARN Cache miss rate above 20%'"]
 ```
 
 - **Log Group**: A container for log streams, typically one per application/environment combination. Retention, access policies, and encryption are set at the group level.
@@ -370,9 +366,9 @@ aws logs start-query \
   --start-time $(date -u -v-1H '+%s') \
   --end-time $(date -u '+%s') \
   --query-string '
-    fields @timestamp, @src/content/docs/cloud/managed-services/module-9.2-message-brokers.md
-    | filter @src/content/docs/cloud/managed-services/module-9.2-message-brokers.md like /processed in/
-    | parse @src/content/docs/cloud/managed-services/module-9.2-message-brokers.md "processed in *ms" as latency
+    fields @timestamp, @message
+    | filter @message like /processed in/
+    | parse @message "processed in *ms" as latency
     | sort latency desc
     | limit 20
   '
@@ -383,9 +379,9 @@ aws logs start-query \
   --start-time $(date -u -v-24H '+%s') \
   --end-time $(date -u '+%s') \
   --query-string '
-    fields @timestamp, @src/content/docs/cloud/managed-services/module-9.2-message-brokers.md
-    | filter @src/content/docs/cloud/managed-services/module-9.2-message-brokers.md like /ERROR/
-    | parse @src/content/docs/cloud/managed-services/module-9.2-message-brokers.md "ERROR * - *" as errorType, errorMessage
+    fields @timestamp, @message
+    | filter @message like /ERROR/
+    | parse @message "ERROR * - *" as errorType, errorMessage
     | stats count(*) as errorCount by errorType
     | sort errorCount desc
   '
@@ -398,8 +394,8 @@ Key Logs Insights query patterns:
 
 | Pattern | Example | Use Case |
 |---------|---------|----------|
-| `filter` | `filter @src/content/docs/cloud/managed-services/module-9.2-message-brokers.md like /ERROR/` | Narrow to relevant logs |
-| `parse` | `parse @src/content/docs/cloud/managed-services/module-9.2-message-brokers.md "status=*" as code` | Extract fields from unstructured logs |
+| `filter` | `filter @message like /ERROR/` | Narrow to relevant logs |
+| `parse` | `parse @message "status=*" as code` | Extract fields from unstructured logs |
 | `stats` | `stats count(*) by code` | Aggregate and group |
 | `sort` | `sort @timestamp desc` | Order results |
 | `limit` | `limit 50` | Cap result size |
@@ -631,18 +627,16 @@ Think of alarms as threshold-based monitoring ("alert me when X exceeds Y") and 
 
 When a request flows through multiple services (API Gateway to Lambda to DynamoDB to SQS to another Lambda), logs alone cannot tell you which service caused the slowdown. AWS X-Ray provides distributed tracing.
 
-```
-User Request
-    |
-    v
-[API Gateway] --trace--> [Lambda A] --trace--> [DynamoDB]
-    2ms                     45ms                   12ms
-                              |
-                              +--trace--> [SQS] --trace--> [Lambda B]
-                                           3ms                28ms
+```mermaid
+graph LR
+    UR[User Request] --> API[API Gateway<br>2ms]
+    API --trace--> LA[Lambda A<br>45ms<br>Bottleneck!]
+    LA --trace--> DDB[DynamoDB<br>12ms]
+    LA --trace--> SQS[SQS<br>3ms]
+    SQS --trace--> LB[Lambda B<br>28ms]
 
-Total request time: 90ms
-Bottleneck: Lambda A (45ms)
+    classDef bottleneck fill:#f99,stroke:#f33,stroke-width:2px;
+    class LA bottleneck
 ```
 
 X-Ray integration requires adding the X-Ray SDK to your application code and enabling tracing on the service. It is most useful for Lambda and ECS-based microservice architectures. For a deep dive, the X-Ray service deserves its own module -- here, know that it exists and what it solves.
@@ -697,37 +691,37 @@ EC2 standard metrics are collected by the hypervisor, which sits outside the ins
 <details>
 <summary>2. You configure a CloudWatch Alarm on CPUUtilization with a period of 300 seconds, an evaluation period of 3, and a threshold of 80%. A bug causes CPU to spike to 100% for 10 minutes, drop to 50% for 5 minutes, and spike back to 100% for 5 minutes. Does the alarm trigger? Why or why not?</summary>
 
-The alarm does not trigger under these specific conditions. For an alarm to trigger with the default settings, the metric must breach the threshold for all consecutive evaluation periods—in this case, three consecutive 5-minute periods (15 minutes total). Since the CPU dropped below the 80% threshold during the third 5-minute period, the consecutive breach chain was broken. To catch intermittent spikes like this, you would need to use the "M out of N" evaluation model, such as requiring 2 out of 3 periods to breach the threshold.
+The alarm does not trigger under these specific conditions. For an alarm to trigger with the default settings, the metric must breach the threshold for all consecutive evaluation periods—in this case, three consecutive 5-minute periods (15 minutes total). Since the CPU dropped below the 80% threshold during the third 5-minute period, the consecutive breach chain was broken, effectively resetting the evaluation timer. To catch intermittent spikes like this, you would need to use the "M out of N" evaluation model, such as requiring 2 out of 3 periods to breach the threshold.
 </details>
 
 <details>
 <summary>3. Your team is writing a high-throughput Lambda function that processes thousands of payment events per second. A developer suggests using the boto3 SDK to call `put_metric_data` for every payment to track custom business metrics. Why is this a poor architectural choice, and what should be used instead?</summary>
 
-Calling the `put-metric-data` API directly within a high-throughput Lambda function introduces significant latency and cost, as every invocation must wait for a synchronous HTTP network call to CloudWatch to complete. At thousands of requests per second, this could lead to API throttling limits and inflate your Lambda duration billing. Instead, you should use the Embedded Metric Format (EMF) to write the metric data as structured JSON to stdout. CloudWatch Logs will asynchronously parse the EMF logs and publish the metrics behind the scenes, eliminating the API latency and cost from your function's execution path.
+Calling the `put-metric-data` API directly within a high-throughput Lambda function introduces significant latency and cost, as every invocation must wait for a synchronous HTTP network call to CloudWatch to complete. At thousands of requests per second, this synchronous bottleneck could lead to API throttling limits and artificially inflate your Lambda duration billing. Furthermore, standard API calls do not automatically capture log correlation data, making debugging harder. Instead, you should use the Embedded Metric Format (EMF) to write the metric data as structured JSON to stdout. CloudWatch Logs will asynchronously parse the EMF logs and publish the metrics behind the scenes, eliminating the API latency and cost from your function's execution path.
 </details>
 
 <details>
 <summary>4. You inherit an AWS environment where the monthly CloudWatch bill has inexplicably jumped from $50 to $800. The application architecture has not changed, but traffic has doubled. What are the first three areas you should investigate to identify the root cause?</summary>
 
-First, you should investigate log ingestion volume, as doubled traffic often means doubled logs, and verbose logging quickly consumes terabytes of expensive ingestion data. Second, you must check the log group retention policies; if the default "Never expire" is set, storage costs will compound infinitely over time as old logs are never deleted. Third, review the custom metrics for high-cardinality dimensions, such as a developer accidentally adding a unique Request ID or User ID as a dimension. This mistake generates millions of unique billable metrics, which is one of the most common causes of massive CloudWatch billing spikes.
+First, you should investigate log ingestion volume, as doubled traffic often means doubled logs, and verbose logging quickly consumes terabytes of expensive ingestion data. Second, you must check the log group retention policies; if the default "Never expire" is set, storage costs will compound infinitely over time as old logs are never deleted. Third, review the custom metrics for high-cardinality dimensions, such as a developer accidentally adding a unique Request ID or User ID as a dimension. This mistake generates millions of unique billable metrics, which is one of the most common causes of massive CloudWatch billing spikes. Checking these three areas will quickly isolate the source of the unexpected charges.
 </details>
 
 <details>
 <summary>5. You need to automatically reboot an EC2 instance when it fails a system status check, and you also need to trigger a complex Step Functions workflow that opens a Jira ticket and pages the on-call engineer. Should you use a CloudWatch Alarm action, an EventBridge rule, or both? Why?</summary>
 
-You should use a combination of both a CloudWatch Alarm action and an EventBridge rule for this scenario. CloudWatch Alarm actions are threshold-based and have built-in, native support for simple EC2 recovery actions (like rebooting or recovering an instance) when a status check fails. However, Alarm actions cannot directly trigger complex workflows like Step Functions. To achieve the second requirement, you would create an EventBridge rule configured to listen for the specific CloudWatch Alarm state change event, which can then flexibly route that event to the Step Functions state machine to handle the ticketing and paging.
+You should use a combination of both a CloudWatch Alarm action and an EventBridge rule for this scenario. CloudWatch Alarm actions are threshold-based and have built-in, native support for simple EC2 recovery actions (like rebooting or recovering an instance) when a status check fails. However, Alarm actions cannot directly trigger complex workflows like Step Functions, as their targets are limited to specific automated actions or SNS topics. To achieve the second requirement, you would create an EventBridge rule configured to listen for the specific CloudWatch Alarm state change event. EventBridge can then flexibly route that event payload directly to the Step Functions state machine to handle the ticketing and paging.
 </details>
 
 <details>
 <summary>6. During a major production incident, your team ran the same complex Logs Insights query across 500 GB of log data dozens of times, resulting in hundreds of dollars in query fees. How can you architect the system to reduce the cost of tracking this specific error pattern in the future?</summary>
 
-To prevent repeated query fees for known error patterns, you should create a CloudWatch Metric Filter on the log group that matches the specific error syntax. The metric filter continuously evaluates incoming logs in real-time for free and increments a custom CloudWatch metric whenever the pattern is found. You can then build dashboards and alarms based on this custom metric, which costs a flat, predictable monthly rate rather than incurring per-query scan charges. For ad-hoc querying during an incident, you can also reduce costs by narrowing the Logs Insights time range to just the last few minutes, drastically reducing the gigabytes of data scanned.
+To prevent repeated query fees for known error patterns, you should create a CloudWatch Metric Filter on the log group that matches the specific error syntax. The metric filter continuously evaluates incoming logs in real-time for free and increments a custom CloudWatch metric whenever the pattern is found. You can then build dashboards and alarms based on this custom metric, which costs a flat, predictable monthly rate rather than incurring per-query scan charges. For ad-hoc querying during an incident, you can also reduce costs by narrowing the Logs Insights time range to just the last few minutes, drastically reducing the gigabytes of data scanned. Using these strategies ensures that operational visibility does not result in unpredictable billing spikes.
 </details>
 
 <details>
 <summary>7. Your infrastructure team is deploying 50 EC2 instances via Auto Scaling. A junior engineer suggests baking the CloudWatch Agent JSON configuration file directly into the Golden AMI. Why might this lead to operational headaches, and what service should you use instead?</summary>
 
-Baking the configuration file directly into the AMI creates a tight coupling that requires you to rebuild and redeploy the entire Golden AMI across all 50 instances just to change a single metric interval or add a new log path. This turns a trivial configuration change into a time-consuming infrastructure deployment. Instead, you should store the JSON configuration in Systems Manager (SSM) Parameter Store. This centralized approach allows instances to fetch the latest configuration dynamically at startup, and you can push updates to running instances using SSM Run Command without ever needing to touch the base AMI.
+Baking the configuration file directly into the AMI creates a tight coupling that requires you to rebuild and redeploy the entire Golden AMI across all 50 instances just to change a single metric interval or add a new log path. This turns a trivial configuration change into a time-consuming infrastructure deployment that increases the risk of operational drift if some instances fail to update. Instead, you should store the JSON configuration in Systems Manager (SSM) Parameter Store. This centralized approach allows instances to fetch the latest configuration dynamically at startup. Furthermore, you can push updates to running instances using SSM Run Command without ever needing to touch the base AMI.
 </details>
 
 ---
