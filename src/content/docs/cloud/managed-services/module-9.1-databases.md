@@ -359,17 +359,26 @@ spec:
 
 When the secret rotates in Secrets Manager (via an AWS Lambda rotation function or equivalent), ESO picks up the new value within the `refreshInterval` window.
 
+> **Stop and think**: How does the External Secrets Operator authenticate with AWS Secrets Manager without using hardcoded IAM user keys? (Hint: Think about Kubernetes Service Accounts and IAM OIDC Workload Identity.)
+
 ### Dual-User Rotation Strategy
 
 The safest rotation pattern uses two database users, alternating between them:
 
-```text
-Time 0:  user_a (active)    user_b (standby)
-Time 1:  Rotate user_b password in Secrets Manager
-Time 2:  Update K8s Secret to point to user_b
-Time 3:  Rolling restart -- pods pick up user_b credentials
-Time 4:  user_a (standby)   user_b (active)
-Time 5:  Rotate user_a password (safe -- nobody using it)
+```mermaid
+sequenceDiagram
+    participant SM as Secrets Manager
+    participant K8s as Kubernetes
+    participant Pods as Application Pods
+    participant DB as Database
+
+    Note over DB: Time 0: user_a (active), user_b (standby)
+    SM->>DB: Time 1: Rotate user_b password
+    SM->>K8s: Time 2: Update Secret to point to user_b
+    K8s->>Pods: Time 3: Trigger rolling restart
+    Pods->>DB: Pods connect using user_b credentials
+    Note over DB: Time 4: user_b (active), user_a (standby)
+    SM->>DB: Time 5: Rotate user_a password (safe)
 ```
 
 This ensures zero-downtime rotation because the old credentials remain valid throughout the entire rollout.
@@ -407,10 +416,10 @@ Running `ALTER TABLE` in production is nerve-wracking enough. Doing it automatic
 
 Never make breaking schema changes in a single step. Instead:
 
-```text
-Phase 1: EXPAND   - Add new column (nullable or with default)
-Phase 2: MIGRATE  - Application writes to both old and new columns
-Phase 3: CONTRACT - Remove old column after all pods use new schema
+```mermaid
+flowchart LR
+    P1["Phase 1: EXPAND<br/>(Add new column)"] --> P2["Phase 2: MIGRATE<br/>(Write to both)"]
+    P2 --> P3["Phase 3: CONTRACT<br/>(Remove old column)"]
 ```
 
 | Phase | Database Schema | Application Behavior |
@@ -420,6 +429,8 @@ Phase 3: CONTRACT - Remove old column after all pods use new schema
 | **3: CONTRACT**| `[ id | email ]`<br>*(name column dropped)* | App v3: Writes `[email]` |
 
 ### Kubernetes Job for Migrations
+
+> **Stop and think**: Why is it dangerous to run database migrations as an `initContainer` within your application Deployment? Consider what happens when a Deployment horizontally scales from 2 to 10 replicas during an unexpected load spike.
 
 ```yaml
 apiVersion: batch/v1
@@ -584,7 +595,7 @@ In `session` mode, PgBouncer assigns a backend server connection to a client for
 <details>
 <summary>3. Your team needs to rename the `user_status` column to `account_state` in the primary database. The lead developer plans to run `ALTER TABLE users RENAME COLUMN user_status TO account_state;` during the next Argo CD sync. You block the PR, explaining that this will cause an outage during the rolling deployment. Why will a simple rename cause an outage in Kubernetes, and how should the team apply the expand-contract pattern to execute this change safely?</summary>
 
-A simple rename causes an outage because Kubernetes rolling deployments run old and new pod versions simultaneously. The old pods still running during the rollout will attempt to query the `user_status` column, which no longer exists, causing them to crash immediately. The expand-contract pattern solves this by breaking the change into phases. First, you expand by adding the new `account_state` column. Next, you deploy application code that writes to both columns. Finally, once all pods are updated and data is backfilled, you contract by removing the old `user_status` column. This ensures every version of the application can safely interact with the database schema at any given moment.
+A simple rename causes an outage because Kubernetes rolling deployments run old and new pod versions simultaneously. The older pods still running during the rollout will attempt to query the `user_status` column, which no longer exists, causing them to crash immediately. The expand-contract pattern solves this by breaking the change into additive phases, starting with expanding the schema to include the new `account_state` column. Next, you deploy application code that writes to both columns, and finally, once all pods are updated and data is backfilled, you contract by removing the old `user_status` column. This incremental approach ensures every version of the application can safely interact with the database schema at any given moment.
 </details>
 
 <details>
