@@ -79,28 +79,12 @@ flowchart TD
 
 ### 1.2 Layer Independence
 
-For defense in depth to work, layers must be **independent**:
+For defense in depth to work, layers must be **independent**. One compromise should not defeat multiple layers.
 
-```text
-LAYER INDEPENDENCE
-═══════════════════════════════════════════════════════════════
-
-DEPENDENT (weak)
-─────────────────────────────────────────────────────────────
-Firewall credentials → Same password as app admin
-App server compromise → Attacker gets firewall access too
-
-One compromise defeats multiple layers.
-
-INDEPENDENT (strong)
-─────────────────────────────────────────────────────────────
-Firewall credentials → Hardware token + unique password
-App credentials → Different identity provider
-Database credentials → Rotated automatically, not known to app
-
-Each layer has its own authentication, its own keys,
-its own failure modes.
-```
+| Architecture | Characteristics | Failure Mode |
+|--------------|-----------------|--------------|
+| **Dependent (Weak)** | • Firewall uses same password as app admin<br>• DB credentials hardcoded in app | App server compromise gives attacker firewall and database access too. |
+| **Independent (Strong)** | • Firewall requires hardware token<br>• App uses different identity provider<br>• DB credentials rotated automatically | Each layer has its own authentication, keys, and isolated failure modes. |
 
 > **Pause and predict**: If an attacker steals a database administrator's credentials, how many layers of your current architecture are compromised?
 
@@ -146,28 +130,22 @@ flowchart TD
 
 ### 2.2 Firewall Rules
 
-```text
-FIREWALL STRATEGY
-═══════════════════════════════════════════════════════════════
-
-DEFAULT DENY
-─────────────────────────────────────────────────────────────
+**Default Deny Strategy**
 - Block everything by default
 - Explicitly allow only what's needed
 - Log blocked traffic (anomaly detection)
 
-Rule: ALLOW TCP 443 from Internet to Web-Tier
-Rule: ALLOW TCP 8080 from Web-Tier to App-Tier
-Rule: ALLOW TCP 5432 from App-Tier to DB-Tier
-Rule: DENY ALL (default)
+**Example Ruleset:**
+- `ALLOW TCP 443` from Internet to Web-Tier
+- `ALLOW TCP 8080` from Web-Tier to App-Tier
+- `ALLOW TCP 5432` from App-Tier to DB-Tier
+- `DENY ALL` (default)
 
-COMMON MISTAKES
-─────────────────────────────────────────────────────────────
-✗ ALLOW ALL from Internal  → Flat network, defeats segmentation
-✗ ALLOW TCP 0-65535       → Overly permissive port ranges
-✗ Old rules never cleaned  → Accumulated holes
-✗ No logging               → Attacks go unnoticed
-```
+**Common Mistakes:**
+- ✗ `ALLOW ALL` from Internal → Flat network, defeats segmentation
+- ✗ `ALLOW TCP 0-65535` → Overly permissive port ranges
+- ✗ Old rules never cleaned → Accumulated holes
+- ✗ No logging → Attacks go unnoticed
 
 ### 2.3 Zero Trust Networking
 
@@ -218,65 +196,47 @@ Even input from "internal" services—an attacker who compromises one service sh
 
 Context determines encoding. Wrong encoding equals a vulnerability. Use framework functions.
 
-```text
-OUTPUT ENCODING
-═══════════════════════════════════════════════════════════════
+**HTML Context**
+`<div>Hello, {{name}}</div>`
+If `name` = `<script>alert('xss')</script>`
+Encode: `&lt;script&gt;alert('xss')&lt;/script&gt;`
 
-HTML CONTEXT
-    <div>Hello, {{name}}</div>
+**JavaScript Context**
+`<script>var name = "{{name}}";</script>`
+If `name` = `; alert('xss');//`
+Encode: `\x3B\x20alert\x28\x27xss\x27\x29\x3B\x2F\x2F`
 
-    If name = "<script>alert('xss')</script>"
-    Encode: &lt;script&gt;alert('xss')&lt;/script&gt;
+**SQL Context**
+`SELECT * FROM users WHERE name = '{{name}}'`
+If `name` = `'; DROP TABLE users;--`
+Use parameterized queries instead!
 
-JAVASCRIPT CONTEXT
-    <script>var name = "{{name}}";</script>
-
-    If name = "; alert('xss');//"
-    Encode: \x3B\x20alert\x28\x27xss\x27\x29\x3B\x2F\x2F
-
-SQL CONTEXT
-    SELECT * FROM users WHERE name = '{{name}}'
-
-    If name = "'; DROP TABLE users;--"
-    Use parameterized queries instead!
-
-URL CONTEXT
-    <a href="/search?q={{query}}">
-
-    If query = "<script>alert(1)</script>"
-    Encode: %3Cscript%3Ealert%281%29%3C%2Fscript%3E
-```
+**URL Context**
+`<a href="/search?q={{query}}">`
+If `query` = `<script>alert(1)</script>`
+Encode: `%3Cscript%3Ealert%281%29%3C%2Fscript%3E`
 
 ### 3.3 Authentication and Session Management
 
-```text
-AUTHENTICATION LAYERS
-═══════════════════════════════════════════════════════════════
+**Authentication Layers**
 
-LAYER 1: Something you know
-    Password, PIN
-    Weakness: Phishing, brute force, credential stuffing
+- **Layer 1: Something you know**
+  - Password, PIN
+  - *Weakness:* Phishing, brute force, credential stuffing
+- **Layer 2: Something you have**
+  - Phone (SMS, TOTP), hardware key (YubiKey)
+  - *Weakness:* SIM swapping, device theft
+- **Layer 3: Something you are**
+  - Biometrics (fingerprint, face)
+  - *Weakness:* Can't be changed if compromised
 
-LAYER 2: Something you have
-    Phone (SMS, TOTP), hardware key (YubiKey)
-    Weakness: SIM swapping, device theft
-
-LAYER 3: Something you are
-    Biometrics (fingerprint, face)
-    Weakness: Can't be changed if compromised
-
-DEFENSE IN DEPTH FOR AUTH
-─────────────────────────────────────────────────────────────
-    Password (Layer 1)
-         +
-    TOTP Code (Layer 2)
-         +
-    Device Trust (is this a known device?)
-         +
-    Risk Analysis (unusual location? time? behavior?)
-         +
-    Session Limits (timeout, single-use tokens)
-```
+**Defense in Depth for Auth**
+Combine multiple independent checks for robust security:
+1. Password (Layer 1)
+2. + TOTP Code (Layer 2)
+3. + Device Trust (Is this a known device?)
+4. + Risk Analysis (Unusual location, time, or behavior?)
+5. + Session Limits (Timeout, single-use tokens)
 
 > **Stop and think**: Does your password reset flow require the same level of authentication (like MFA) as your primary login flow? If not, you've created a shortcut around your security layers.
 
@@ -512,28 +472,28 @@ spec:
    <details>
    <summary>Answer</summary>
 
-   This violates the core mathematical principle of layer independence in defense in depth. If you rely solely on the WAF (which is 99% effective), an attacker has a 1% chance of success per attempt. If you layer parameterized queries (e.g., 99% effective against remaining novel bypasses), the probability of an attack bypassing both independent layers drops to 0.01% (0.01 * 0.01). Furthermore, architecturally, a WAF operates at the network/HTTP layer and lacks business logic context, making it susceptible to novel encoding tricks. Parameterized queries operate at the data layer and structurally prevent SQL injection regardless of how the payload is encoded, providing a critical fallback when the WAF fails.
+   This violates the core mathematical principle of layer independence in defense in depth. If you rely solely on the WAF (which is 99% effective), an attacker has a 1% chance of success per attempt. If you layer parameterized queries (e.g., 99% effective against remaining novel bypasses), the probability of an attack bypassing both independent layers drops to 0.01% (0.01 * 0.01). Furthermore, architecturally, a WAF operates at the network/HTTP layer and lacks business logic context, making it susceptible to novel encoding tricks. Parameterized queries operate at the data layer and structurally prevent SQL injection regardless of how the payload is encoded, providing a critical fallback when the WAF fails. By relying on multiple distinct enforcement points, the system remains secure even if attackers discover a bypass technique for one specific layer.
    </details>
 
 6. **Scenario**: Target's HVAC vendor had credentials that allowed remote access into Target's network. Once inside, attackers successfully pinged and connected to the point-of-sale (POS) systems located in physical retail stores. Based on defense in depth, what specific network security control was missing or misconfigured here?
    <details>
    <summary>Answer</summary>
 
-   The missing control was proper network segmentation with strict access policies between segments. In a well-architected defense in depth strategy, the HVAC vendor's access should have been heavily segmented into an isolated vendor network zone. There should have been no routing path or firewall rule allowing traffic to cross from the vendor segment into the highly sensitive PCI-compliant segment housing the POS systems. By operating a flat or loosely segmented network, Target allowed an attacker who breached a low-security dependency (HVAC monitoring) to pivot laterally into a high-security zone without encountering an independent network barrier.
+   The missing control was proper network segmentation with strict access policies between segments. In a well-architected defense in depth strategy, the HVAC vendor's access should have been heavily segmented into an isolated vendor network zone. There should have been no routing path or firewall rule allowing traffic to cross from the vendor segment into the highly sensitive PCI-compliant segment housing the POS systems. By operating a flat or loosely segmented network, Target allowed an attacker who breached a low-security dependency (HVAC monitoring) to pivot laterally into a high-security zone without encountering an independent network barrier. Establishing strict internal boundaries ensures that a breach in a less critical system does not automatically compromise the entire organization.
    </details>
 
 7. **Scenario**: You are reviewing a Kubernetes Pod manifest for a legacy application. The container runs as root, mounts the host's `/var/run/docker.sock`, and has no CPU or memory limits defined. If the application has a remote code execution (RCE) vulnerability, how does this Pod configuration fail to provide defense in depth at the host and container layers?
    <details>
    <summary>Answer</summary>
 
-   This configuration completely strips away host and container isolation, violating defense in depth. First, running as root within the container and mounting the Docker socket means an attacker exploiting the RCE can easily escape the container, compromise the underlying node, and potentially take over the entire cluster. Second, the lack of resource limits means the attacker can launch a denial-of-service attack (like cryptomining) that consumes all node resources, starving other applications. A defense in depth approach would use a non-root `SecurityContext`, a read-only root filesystem, and strict resource quotas to contain the blast radius of the RCE to just that single, isolated container.
+   This configuration completely strips away host and container isolation, violating defense in depth. First, running as root within the container and mounting the Docker socket means an attacker exploiting the RCE can easily escape the container, compromise the underlying node, and potentially take over the entire cluster. Second, the lack of resource limits means the attacker can launch a denial-of-service attack (like cryptomining) that consumes all node resources, starving other applications. A defense in depth approach would use a non-root `SecurityContext`, a read-only root filesystem, and strict resource quotas to contain the blast radius of the RCE to just that single, isolated container. Implementing these overlapping controls ensures that even if the application code is vulnerable, the infrastructure itself actively resists further exploitation and lateral movement.
    </details>
 
 8. **Scenario**: During a penetration test, the tester successfully bypasses the corporate VPN (Network Layer) and accesses an internal employee portal. However, they are unable to view any sensitive HR documents because the application requires a biometric prompt (WebAuthn) for high-privilege actions. Which security concept does this demonstrate, and why is it effective?
    <details>
    <summary>Answer</summary>
 
-   This scenario perfectly demonstrates Zero Trust Architecture and the principle of layer independence. The system does not implicitly trust the user just because they bypassed the perimeter network (the VPN). Instead, the application layer independently enforces its own strong authentication and authorization controls before granting access to sensitive data. This is highly effective because the failure of the network security layer did not result in a total system compromise; the independent, data-centric access control (Layer 3: "Something you are") stopped the attack path and protected the underlying assets.
+   This scenario perfectly demonstrates Zero Trust Architecture and the principle of layer independence. The system does not implicitly trust the user just because they bypassed the perimeter network (the VPN). Instead, the application layer independently enforces its own strong authentication and authorization controls before granting access to sensitive data. This is highly effective because the failure of the network security layer did not result in a total system compromise; the independent, data-centric access control (Layer 3: "Something you are") stopped the attack path and protected the underlying assets. When identity and authorization are verified at the application level regardless of network origin, the system maintains its integrity even if the perimeter is fully breached.
    </details>
 
 ---
