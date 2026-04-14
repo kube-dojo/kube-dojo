@@ -197,6 +197,8 @@ This ensures your large training job lands on A100/H100 nodes, not on a T4 that 
 
 ## nvidia-container-toolkit
 
+> **Stop and think**: If a container is isolated from the host via namespaces and cgroups, how can it securely access a physical hardware component like a GPU without running in fully privileged mode?
+
 ### What It Does
 
 The nvidia-container-toolkit (formerly nvidia-docker2) is the bridge between containers and GPUs. Without it, a container cannot see or use any GPU on the host.
@@ -365,6 +367,8 @@ kubectl run cuda-test --rm -it --restart=Never \
 ---
 
 ## DCGM-Exporter: GPU Metrics for Prometheus
+
+> **Pause and predict**: If your organization's cloud bill spikes due to GPU costs, how would you systematically determine if those GPUs were actively training models versus sitting completely idle while attached to running Pods?
 
 ### Why GPU Metrics Matter
 
