@@ -5,6 +5,11 @@
 # Dispatch logs (CLI agent comms)
 .dispatch-logs/
 
+# Python bytecode caches
+__pycache__/
+*.pyc
+*.pyo
+
 # OS files
 .DS_Store
 Thumbs.db
