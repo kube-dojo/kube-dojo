@@ -101,10 +101,31 @@ COMMIT;
 ```
 
 **Why this works:**
-- Two workers racing on the same budget: one wins the transaction, the other gets IntegrityError/ROLLBACK and retries or pauses
+- Two workers racing on the same budget: one wins the transaction, the other gets `count >= max_concurrent` and ROLLBACKs, then retries or pauses
 - Hard cap enforcement is atomic (not check-then-act)
 - Post-hoc dollar reconciliation catches overruns; next reservation query sums actuals + pending reservations together
 - Crash recovery: lease has `expires_at`; watchdog releases abandoned leases; idempotency keys prevent double-charge
+
+### Dynamic concurrency (runtime adjustable)
+
+`max_concurrent` is enforced by COUNT query inside the transaction, NOT by a static DB constraint:
+```sql
+SELECT COUNT(*) FROM active_leases
+  WHERE model = ? AND expires_at > now;
+-- If count >= budgets.yaml::models[model].max_concurrent: ROLLBACK
+```
+
+This means the cap can be changed **at runtime** without restarting workers:
+- Edit `.pipeline/budgets.yaml` directly → next dispatch picks up new value
+- Or via CLI: `pipeline budget set claude-sonnet-4-6 max_concurrent 1` (writes yaml + sends SIGHUP)
+- Workers reload the budgets config per dispatch (or cache with 10s TTL — to be tuned)
+
+Use cases:
+- "I'm about to launch another long-running task, drop Claude to 1"
+- "Weekly budget refilled, bump Gemini to 5 to catch up"
+- "Friday afternoon batch — dial everything back to be polite to providers"
+
+Lowering `max_concurrent` while leases are active does NOT kill running jobs — they finish naturally. New leases just block until enough release.
 
 ### Budget tracker (built on the reservation model)
 
@@ -354,6 +375,8 @@ Safe checkpoints: each week's deliverable is independently useful. v1 keeps runn
 - [ ] Weekly cap hit → worker halts, user notified
 - [ ] HTTP 429 → model cooldown for configured seconds
 - [ ] Default `max_concurrent: 1` for any model not in config
+- [ ] **Dynamic `max_concurrent`**: edit `budgets.yaml` or run `pipeline budget set <model> max_concurrent <N>` — takes effect on next dispatch without restarting workers
+- [ ] Lowering cap while leases are active doesn't kill running jobs — new leases block until enough release
 
 ### Job queue
 - [ ] SQLite `.pipeline/jobs.db` with jobs and attempts tables
