@@ -249,6 +249,8 @@ You cannot distinguish these cases from the client side.
 This is fundamental. No protocol can solve it.
 ```
 
+> **Pause and predict**: If you send an API request to a remote server and the connection times out after 30 seconds, can you safely assume the server did not process your request? How does this uncertainty impact the design of the client?
+
 ### 2.3 Challenge #3: No Global Clock
 
 ```mermaid
@@ -299,7 +301,7 @@ Server B's clock is 2ms ahead. The timestamps are misleading.
 
 ---
 
-## Part 4: The CAP Theorem
+## Part 3: The CAP Theorem
 
 ### 3.1 Understanding CAP
 
@@ -501,4 +503,103 @@ They handle crash failures, not Byzantine failures.
 ### 4.3 Idempotency
 
 ```text
-ID
+IDEMPOTENCY: SAFE RETRIES
+═══════════════════════════════════════════════════════════════
+
+Because of partial failure (specifically omission and timing failures),
+we never know if a message was lost on the way there, or if the
+response was lost on the way back.
+
+The only safe response to a timeout is to RETRY.
+
+But retrying is dangerous if the operation is not idempotent.
+
+NOT IDEMPOTENT (Dangerous to retry):
+    "Add $10 to account"
+    If response is lost, and we retry, we might add $20.
+
+IDEMPOTENT (Safe to retry):
+    "Set account balance to $110"
+    "Process transaction ID 98765"
+    If response is lost, and we retry, the result is the same.
+
+Distributed systems MUST use idempotent operations wherever possible
+so that retries are safe.
+```
+
+---
+
+## Part 5: Kubernetes as a Distributed System
+
+Kubernetes is fundamentally a distributed system designed to manage other distributed systems. It was built from the ground up to handle the fallacies of distributed computing.
+
+### 5.1 Control Plane and Nodes
+
+In Kubernetes v1.35, the architecture clearly separates the global state from local execution:
+
+- **etcd**: The CP data store (Consistent and Partition-tolerant). It uses the Raft consensus algorithm to maintain consistency across the control plane. If etcd loses quorum (a network partition), the cluster stops accepting changes rather than risk inconsistent state.
+- **kube-apiserver**: The stateless gateway. It handles API requests, but relies entirely on etcd for state.
+- **kubelet**: The node agent. It receives declarative target states ("make sure these 3 pods are running") and works autonomously to achieve them. If the network partitions and the kubelet can't reach the control plane, it keeps running the existing pods (Availability over Consistency for local node state).
+
+### 5.2 Declarative State and Idempotency
+
+Kubernetes doesn't use imperative commands like "start this pod." If a "start pod" message were lost, the system would be out of sync.
+
+Instead, Kubernetes uses declarative state: "ensure 3 replicas of this pod exist." The controllers constantly compare the current state to the desired state. This reconciliation loop is inherently **idempotent**. If the controller evaluates the state and sends an update that gets lost, the next loop will simply try again.
+
+> **Pause and predict**: If the network connection between the Kubernetes control plane and a worker node is completely severed for 5 minutes, what happens to the pods running on that node?
+
+---
+
+## Module Quiz
+
+### Question 1
+**Scenario**: You are operating a critical e-commerce platform during the busiest shopping day of the year. The inventory service uses a strongly consistent (CP) database to track available stock. Suddenly, a network switch fails, causing a partition between the web frontend servers and the inventory database.
+Based on the CAP theorem, how must the system behave during this partition?
+
+A) The web frontend should serve cached inventory data to ensure customers can still browse, prioritizing availability.
+B) The web frontend must block or reject requests that require inventory checks until the partition is resolved.
+C) The inventory database will automatically switch to asynchronous replication to accept reads from the web frontend.
+D) The system will maintain both consistency and availability because it is running in a modern cloud environment.
+
+<details>
+<summary><strong>View Answer</strong></summary>
+
+**Correct Answer: B) The web frontend must block or reject requests that require inventory checks until the partition is resolved.**
+
+**Why:** By definition, a CP (Consistent and Partition-tolerant) system prioritizes consistency over availability during a network partition. Because the system cannot guarantee that it has the most up-to-date inventory data—since it cannot reach the database to verify—it must reject requests to prevent inconsistent states. Selling items that are actually out of stock is a prime example of an inconsistent state that a CP system is designed to avoid. Option A describes an AP (Available and Partition-tolerant) approach, which intentionally sacrifices consistency to keep the system up. Option C misunderstands how partitions work, as the network connection is broken and changing the replication type won't fix immediate reachability. Option D violates the CAP theorem, which states you cannot mathematically have both consistency and availability during a partition.
+</details>
+
+### Question 2
+**Scenario**: Your team is building a microservice that processes payments. The service calls an external banking API to deduct funds. Sometimes, the banking API takes too long to respond, and your service's HTTP client times out after 10 seconds. Your service automatically retries the request. 
+Which distributed computing challenge does this highlight, and what property must the external banking API implement to make your retries safe?
+
+A) This highlights Clock Skew; the API must implement Logical Clocks.
+B) This highlights Latency; the API must implement the Two Generals protocol.
+C) This highlights Partial Failure; the API must implement Idempotency.
+D) This highlights Network Partitions; the API must implement Consensus.
+
+<details>
+<summary><strong>View Answer</strong></summary>
+
+**Correct Answer: C) This highlights Partial Failure; the API must implement Idempotency.**
+
+**Why:** The timeout is a classic example of partial failure, specifically a timing or omission failure. From the perspective of your service, it is mathematically impossible to know if the banking API never received the request, if it crashed while processing, or if the response was merely delayed or lost in transit. Because you cannot know the actual state of the transaction on the remote server, the only safe way to recover and retry is if the target API is idempotent. An idempotent API guarantees that applying the same operation multiple times will yield the exact same result as applying it once. Using an idempotent identifier, like processing a specific transaction ID rather than applying a relative charge, ensures that retries will never result in duplicate charges.
+</details>
+
+### Question 3
+**Scenario**: A distributed logging system aggregates logs from 500 different microservices across three global regions. You are trying to debug an incident by sorting the aggregated logs by their physical timestamps. However, you notice that an event logged by Service A appears to happen *before* the user request that triggered it in Service B, even though Service A was called by Service B.
+What is the root cause of this anomaly, and what is the standard distributed systems solution?
+
+A) The network latency between regions caused the logs to arrive out of order; the solution is to use TCP instead of UDP.
+B) The servers have clock skew (No Global Clock); the solution is to use logical clocks (like Lamport timestamps) to track causality.
+C) The logging database experienced a network partition; the solution is to switch to a CP database.
+D) The system is suffering from Byzantine failures; the solution is to require a 3f+1 consensus algorithm.
+
+<details>
+<summary><strong>View Answer</strong></summary>
+
+**Correct Answer: B) The servers have clock skew (No Global Clock); the solution is to use logical clocks (like Lamport timestamps) to track causality.**
+
+**Why:** Physical clocks across distributed servers are never perfectly synchronized, even when using protocols like NTP. This inevitable clock drift (clock skew) means that comparing physical timestamps between different machines is unreliable for determining the exact order of events. When strict ordering of causal events is required, distributed systems must use logical clocks, such as Lamport timestamps or vector clocks. Logical clocks work by incrementing a counter with each operation and passing that counter along with messages. This guarantees that an effect always has a higher logical timestamp than its cause, regardless of what the physical time says.
+</details>
