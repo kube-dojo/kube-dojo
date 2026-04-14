@@ -143,7 +143,7 @@ For Argo Events v1.7 and above, namespace-scoped installs must use the `--namesp
 
 ### 3.3 Versioning and Helm Considerations
 
-When operating Argo Events in production, version drift can cause controller failures. The project's release policy requires matching image versions across all components: `eventsource-controller`, `sensor-controller`, `eventbus-controller`, and `events-webhook`. 
+When operating Argo Events in production, version drift can cause controller failures. The project's release policy requires matching image versions across all components: `eventsource`, `sensor`, `eventbus-controller`, `eventsource-controller`, `sensor-controller`, and `events-webhook`. 
 
 Furthermore, the release policy strictly follows semantic versioning (x.y.z) with only the two most recent minor branches maintained. If you manage your deployments using Helm, be aware that the Argo Helm chart documentation explicitly states that only the latest upstream versions are officially supported; older versions are not guaranteed to receive bug or security patching.
 
