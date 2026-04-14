@@ -459,6 +459,8 @@ The error budget policy must be **agreed upon in advance** by all stakeholders. 
 | **SRE / Platform** | Monitors budget, enforces policy, provides tooling |
 | **Leadership** | Sponsors the policy, breaks ties, escalation path |
 
+> **Pause and predict**: If you don't define an error budget policy before an incident occurs, who ends up deciding whether to halt feature development during a crisis?
+
 > **Did You Know?**
 >
 > According to Gartner research, the average cost of IT downtime across industries is approximately **$5,600 per minute**, or over **$300,000 per hour**. Error budget policies that freeze risky deploys when budget is low directly prevent these costs. A team that spends 3 days on reliability work to avoid a 2-hour outage has saved the business between $600,000 and $2 million.
