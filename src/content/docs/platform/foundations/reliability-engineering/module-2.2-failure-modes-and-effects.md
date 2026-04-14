@@ -212,7 +212,7 @@ THE EIGHT DEADLY FAILURE MODES
 
    Example: Thread waiting for database lock → all threads exhausted
 
-   ⚠️  Hangs are often WORSE than crashes because:
+   WARNING: Hangs are often WORSE than crashes because:
        - Health checks might pass (process is "up")
        - Resources stay consumed
        - Load balancer keeps sending traffic
@@ -241,7 +241,7 @@ THE EIGHT DEADLY FAILURE MODES
 
    Example: Calculation bug returns $0.00 tax on $1000 purchase
 
-   ⚠️  Byzantine failures are the HARDEST to detect and recover from
+   WARNING: Byzantine failures are the HARDEST to detect and recover from
 
 
 5. NETWORK PARTITION
