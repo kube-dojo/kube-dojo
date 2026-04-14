@@ -443,13 +443,13 @@ When performing upgrades, changing the version initiates a carefully orchestrate
 ```yaml
    # TalosControlPlane — version is at spec.version
    spec:
-     version: v1.35.0  # was v1.33.0
+     version: v1.35.0  # was v1.34.0
 
    # MachineDeployment — version is at spec.template.spec.version
    spec:
      template:
        spec:
-         version: v1.35.0  # was v1.33.0
+         version: v1.35.0  # was v1.34.0
    ```
 
 ## Did You Know?
@@ -533,148 +533,75 @@ kind delete cluster --name capi-mgmt
 ## Quiz
 
 ### Question 1
-What happens if the management cluster goes down? Can the workload clusters still function?
+Your datacenter experiences a partial power failure that takes down the entire 3-node HA management cluster. However, the physical servers hosting your production workload clusters remain online. What happens to the applications running on the workload clusters, and what operational capabilities are lost while the management cluster is down?
 
 <details>
 <summary>Answer</summary>
 
-**Yes, workload clusters continue to function normally.** The management cluster only manages the lifecycle (creation, scaling, upgrades, health checks) of workload clusters. Once a workload cluster is provisioned, it operates independently — its control plane, workers, and workloads are self-contained.
-
-However, you lose:
-- **Scaling**: Cannot add/remove worker nodes
-- **Upgrades**: Cannot trigger K8s or OS upgrades
-- **Auto-remediation**: MachineHealthChecks stop working (unhealthy nodes are not replaced)
-- **New cluster creation**: Cannot provision new clusters
-
-**Design Recommendation**: It is typically advised to run the management cluster with 3-node HA, back up its etcd regularly, and optionally consider a standby management cluster in a second datacenter.
+**Yes, workload clusters continue to function normally.** The management cluster strictly oversees the declarative lifecycle (creation, scaling, upgrades, health checks) of the workload clusters, acting as an external orchestrator. Once a workload cluster is fully provisioned, its control plane, worker nodes, and workloads operate entirely independently of the management cluster. However, during the outage, you lose the ability to scale nodes, trigger Kubernetes upgrades, or rely on `MachineHealthCheck` auto-remediation, meaning any hardware failures in the workload clusters will require manual intervention until the management cluster is restored. For this reason, it is typically advised to run the management cluster in a highly available configuration with regular etcd backups.
 </details>
 
 ### Question 2
-You need to upgrade Kubernetes from version 1.33.0 to version 1.35.0 on a 50-node production cluster managed by Cluster API. How does this work?
+A new security vulnerability requires you to urgently upgrade your 50-node bare-metal production cluster from Kubernetes v1.34.0 to v1.35.0. You are using Cluster API with a GitOps workflow. Describe the exact mechanism by which Cluster API rolls out this upgrade across the physical servers without causing application downtime.
 
 <details>
 <summary>Answer</summary>
 
-**Rolling upgrade via CAPI:**
-
-1. **Update the version field** in the control plane and MachineDeployment YAMLs:
-   ```yaml
-   # TalosControlPlane — version is at spec.version
-   spec:
-     version: v1.35.0  # was v1.33.0
-
-   # MachineDeployment — version is at spec.template.spec.version
-   spec:
-     template:
-       spec:
-         version: v1.35.0  # was v1.33.0
-   ```
-
-2. **Apply** (or Git push if using GitOps). CAPI detects the version change.
-
-3. **CAPI performs a rolling update:**
-   - Creates a new Machine with version 1.35.0
-   - Waits for it to join the cluster and become Ready
-   - Cordons and drains an old version 1.33.0 Machine
-   - Deletes the old Machine (hardware returns to pool)
-   - Repeats until all machines are upgraded
-
-4. **Control plane upgrades first**, then workers.
-
-This is exactly like a Deployment rollout — CAPI manages Machine objects the same way the Deployment controller manages Pods. The `maxSurge` and `maxUnavailable` settings on MachineDeployment control the rollout speed.
-
-**Key consideration on bare metal**: This requires spare servers in the pool. CAPI needs to provision a new machine before deprovisioning the old one (surge). If your pool has no spare servers, the upgrade blocks.
+**Rolling upgrade via CAPI is managed identically to a Pod Deployment rollout.** First, you update the `version` field (e.g., to `v1.35.0`) in your Git repository for the `TalosControlPlane` and `MachineDeployment` manifests, which ArgoCD or Flux applies to the management cluster. CAPI's controllers detect this version change and initiate a rolling update by provisioning a new physical machine with the updated version. Once the new machine joins the cluster and reports a `Ready` status, CAPI gracefully cordons and drains an old machine, deletes its `Machine` object, and allows the infrastructure provider to securely wipe and return the old server to the hardware pool. This process repeats—upgrading the control plane first, then the workers—ensuring that application workloads are seamlessly rescheduled without downtime, provided there is enough buffer capacity in your physical server pool.
 </details>
 
 ### Question 3
-Compare Metal3 and Sidero. When would you choose each?
+Your organization is designing a new edge computing platform. Team A wants to use standard Ubuntu with various custom kernel modules, while Team B insists on a minimal, immutable OS like Talos Linux to reduce the attack surface. Based on these OS preferences, how would you decide between Metal3 and Sidero for your Cluster API infrastructure provider, and what are the architectural tradeoffs?
 
 <details>
 <summary>Answer</summary>
 
-**Metal3:**
-- Supports any OS (Ubuntu, Flatcar, RHEL, etc.)
-- Uses Ironic (OpenStack heritage) — more complex but battle-tested
-- Backed by Red Hat, used in OpenShift bare metal deployments
-- Often utilized in multi-OS environments or organizations already using OpenStack
-- More mature ecosystem and documentation
-
-**Sidero:**
-- Talos Linux only (no other OS support)
-- Simpler architecture (no Ironic dependency)
-- Auto-discovers servers via PXE (no manual BareMetalHost creation)
-- ServerClass grouping for hardware-aware scheduling
-- Best for all-Talos environments where simplicity is valued
-
-**Decision**: If you chose Talos Linux in Module 2.3, use Sidero. If you need Ubuntu/Flatcar/RHEL, use Metal3.
+**Your choice between Metal3 and Sidero hinges entirely on your operating system strategy and desired operational complexity.** If Team A's requirement for standard Ubuntu and custom kernel modules prevails, you must choose Metal3. Metal3 utilizes Ironic under the hood, making it highly capable of PXE booting and provisioning a wide variety of traditional operating systems, though it introduces a more complex architectural footprint. Conversely, if Team B's vision for an immutable, minimal OS wins, Sidero is the optimal choice because it is purpose-built exclusively for Talos Linux. Sidero eliminates the heavy Ironic dependency, utilizing native DHCP-based auto-discovery to rapidly onboard hardware, resulting in a significantly simpler and more streamlined management stack tailored for immutable environments.
 </details>
 
 ### Question 4
-How do you handle a server with a failed disk in a Cluster API-managed cluster?
+At 2:00 AM on a Sunday, a worker node in your bare-metal production cluster experiences a catastrophic NVMe drive failure, causing its kubelet to stop responding entirely. Walk through the automated sequence of events triggered by the MachineHealthCheck and explain what manual steps, if any, remain for the operations team on Monday morning.
 
 <details>
 <summary>Answer</summary>
 
-**Automatic remediation via MachineHealthCheck:**
-
-1. The disk failure causes kubelet to report NotReady (or the node stops responding entirely).
-
-2. MachineHealthCheck detects the `Ready=False` condition persisting beyond the timeout (e.g., 5 minutes).
-
-3. CAPI marks the Machine for deletion.
-
-4. The infrastructure provider (Metal3/Sidero):
-   - Deprovisions the server (marks as "needs maintenance")
-   - The server does NOT return to the available pool (bad hardware)
-
-5. CAPI creates a new Machine, which is provisioned on a healthy server from the pool.
-
-6. The new node joins the cluster and workloads are scheduled on it.
-
-**Manual steps still needed:**
-- Someone must physically replace the failed disk
-- After repair, re-register the server (update BareMetalHost or re-PXE for Sidero)
-- The server goes through inspection and returns to the available pool
-
-**This is why spare servers matter.** If your pool is empty, the MachineHealthCheck cannot create a replacement, and the unhealthy machine stays in the cluster.
+**The remediation is fully automated by the MachineHealthCheck controller, dramatically reducing downtime.** When the NVMe drive fails, the node's kubelet stops reporting, causing its status to eventually become `NotReady` or `Unknown`. The `MachineHealthCheck` constantly monitors these conditions; once the timeout threshold (e.g., 5 minutes) is breached, CAPI automatically marks the broken `Machine` for deletion. The infrastructure provider then forcefully deprovisions the server, effectively quarantining it from the available pool, while CAPI simultaneously provisions a brand-new `Machine` on a healthy standby server. By Monday morning, the cluster has already healed itself and restored full capacity, leaving the operations team with only the manual tasks of physically replacing the failed drive, verifying the hardware, and registering the repaired server back into the available bare-metal pool.
 </details>
 
 ### Question 5
-Your team runs `clusterctl init` on a new management cluster without any flags. Later, you notice that the kubeadm bootstrap and control-plane providers are running, but you only intended to use a custom bootstrap provider. What caused this, and how should you have executed the initialization?
+Your team is building a custom management cluster and runs `clusterctl init` without any additional flags. During a subsequent audit, you discover that the kubeadm bootstrap and control-plane providers are actively running, even though your architectural design specified a custom bootstrap provider. Why did this happen, and what specific change to the initialization command would have prevented it?
 
 <details>
 <summary>Answer</summary>
 
-**Cause:** Using `clusterctl init` without flags automatically installs the core provider, kubeadm bootstrap provider, and kubeadm control-plane provider by default, always fetching the latest available versions.
-
-**Solution:** To avoid the default kubeadm providers, you must explicitly control them using flags (or `-` placeholders) during initialization to specify your custom bootstrap provider instead.
+**This occurred because `clusterctl init` provisions a default set of providers unless explicitly overridden.** By design, when you execute `clusterctl init` without any flags, the tool automatically fetches and installs the latest versions of the core provider, the kubeadm bootstrap provider, and the kubeadm control-plane provider to ensure a functional baseline. Because your architecture required a custom bootstrap mechanism, the initialization command should have included specific flags or `-` placeholders to bypass the default kubeadm components. To prevent this, you must explicitly declare your custom providers in the command (e.g., `--bootstrap custom-provider`) so that clusterctl bypasses its default selections and aligns with your intended architectural design.
 </details>
 
 ### Question 6
-During a datacenter migration, you execute `clusterctl move` to pivot your workload clusters to a new management cluster. Afterward, the target cluster successfully manages `Cluster` and `Machine` objects, but it cannot see or control the underlying physical servers. What was missed during the pivot preparation?
+Your team is migrating a bare-metal workload cluster to a new management cluster in a different datacenter. You execute `clusterctl move` to pivot the state. Afterward, the target management cluster successfully reports the status of `Cluster` and `Machine` objects, but it is completely unable to see or control the underlying physical servers (e.g., `BareMetalHost` objects). What critical step was missed during the pivot preparation, and why is it necessary?
 
 <details>
 <summary>Answer</summary>
 
-**The physical hosts were not labeled for the move.** In move operations, objects outside the default discovery graph (like CAPM3's `BareMetalHost` CRDs) move only when explicitly labeled. You must apply labels such as `clusterctl.cluster.x-k8s.io/move` to these non-standard objects before executing the pivot so `clusterctl move` includes them.
+**The physical hosts were not explicitly labeled for the move operation before the pivot was initiated.** When executing `clusterctl move`, the command safely transfers standard Cluster API resources by following a default discovery graph. However, objects that reside outside this default graph—such as CAPM3's specific `BareMetalHost` CRDs—are ignored unless they are explicitly tagged. You must apply the `clusterctl.cluster.x-k8s.io/move` label (or a similar hierarchy label) to these non-standard objects so that the move command recognizes their association with the cluster. Failing to do so leaves the physical infrastructure definitions behind on the source cluster, resulting in orphaned hardware that the target management cluster cannot see or manage.
 </details>
 
 ### Question 7
-After successfully pivoting management state to a new cluster using `clusterctl move`, an engineer panics because all `Machine` and `Cluster` objects show empty status fields, fearing the physical nodes might be rebooted. Is the cluster state broken?
+You have just completed a `clusterctl move` operation to pivot management state to a newly built management cluster. A junior engineer panics and alerts you that all `Machine` and `Cluster` objects on the new management cluster show completely empty status fields, fearing that the physical nodes have lost their state and might be rebooted. How do you explain the architectural reason for this behavior to reassure them that the cluster state is not broken?
 
 <details>
 <summary>Answer</summary>
 
-**No.** The `clusterctl move` command does not restore status subresources on the target cluster. Because status fields represent ephemeral state maintained by active controllers, they are deliberately excluded during the move. The newly activated controllers on the target management cluster will automatically rebuild the status fields upon their first reconciliation loop without impacting the physical workloads.
+**You can reassure the engineer that this is the expected, safe behavior of a pivot operation and the cluster state is completely intact.** The `clusterctl move` command is specifically designed to transfer the declarative definitions (the `spec` fields) of your workload clusters to the new management cluster. However, the `status` subresources are intentionally not restored because they represent ephemeral, point-in-time state maintained exclusively by active controllers. Once the move is complete and the new management cluster's controllers begin their first reconciliation loop, they will independently observe the workload cluster, verify the physical infrastructure, and automatically rebuild the status fields. The physical nodes and their workloads remain entirely unaffected during this controller handoff.
 </details>
 
 ### Question 8
-An engineer proposes running `clusterctl init` and skipping the core provider installation to save memory on a resource-constrained edge management cluster, relying only on the infrastructure provider. Will this architecture work?
+To optimize resource utilization on a highly constrained edge management cluster, a platform engineer proposes modifying the `clusterctl init` command to skip the core provider installation, arguing that only the infrastructure and bootstrap providers are strictly necessary. Based on Cluster API's architecture, will this proposed optimization work? Explain the technical role of the core provider to justify your answer.
 
 <details>
 <summary>Answer</summary>
 
-**No.** Cluster API does not support skipping the core provider install from `clusterctl init`. The core controller establishes the fundamental abstractions (like `Machine` and `Cluster`) required by all other controllers. Skipping is only available for bootstrap and control-plane providers using `-` placeholders. The core provider is absolutely required for CAPI to function.
+**No, this proposed optimization will completely break the management cluster because the core provider is mandatory.** Cluster API fundamentally relies on the core provider to establish and manage the foundational Custom Resource Definitions, such as `Cluster` and `Machine`, which all other providers depend upon. While it is possible to skip the installation of bootstrap and control-plane providers using `-` placeholders during `clusterctl init`, the tool does not support skipping the core provider. Without the core controller orchestrating the top-level lifecycle logic and reconciling these primary objects, the infrastructure and bootstrap providers would have no abstract state to act upon, rendering the entire Cluster API deployment non-functional.
 </details>
 
 ## Next Module
