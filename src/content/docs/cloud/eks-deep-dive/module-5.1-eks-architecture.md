@@ -35,39 +35,29 @@ When you create an EKS cluster, AWS provisions a highly available Kubernetes con
 
 The EKS control plane consists of at least two API server instances and three etcd nodes, spread across three Availability Zones in the AWS-owned account. You do not pay for this infrastructure directly -- it is included in the $0.10/hour cluster fee.
 
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│                    AWS-Managed Account                          │
-│                                                                 │
-│   AZ-1a              AZ-1b              AZ-1c                  │
-│  ┌──────────┐      ┌──────────┐      ┌──────────┐             │
-│  │ API      │      │ API      │      │          │             │
-│  │ Server   │      │ Server   │      │ (Standby)│             │
-│  ├──────────┤      ├──────────┤      ├──────────┤             │
-│  │ etcd     │◄────►│ etcd     │◄────►│ etcd     │             │
-│  │ (leader) │      │ (follower│      │ (follower│             │
-│  └────┬─────┘      └────┬─────┘      └────┬─────┘             │
-│       │                 │                 │                    │
-│       └─────────────────┼─────────────────┘                    │
-│                         │                                      │
-│              Cross-Account ENIs                                │
-│              (placed in YOUR VPC)                               │
-└─────────────────────────┼──────────────────────────────────────┘
-                          │
-┌─────────────────────────┼──────────────────────────────────────┐
-│              Your AWS Account / Your VPC                        │
-│                         │                                      │
-│              ┌──────────▼──────────┐                           │
-│              │  ENI: 10.0.3.15     │  ← Control plane ENI      │
-│              │  ENI: 10.0.3.42     │  ← Control plane ENI      │
-│              │  (Private Subnets)  │                           │
-│              └──────────┬──────────┘                           │
-│                         │                                      │
-│              ┌──────────▼──────────┐                           │
-│              │    Worker Nodes     │                           │
-│              │    10.0.10.x        │                           │
-│              └─────────────────────┘                           │
-└────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph AWS ["AWS-Managed Account"]
+        subgraph AZ1 ["AZ-1a"]
+            API1["API Server"] --- ETCD1["etcd (leader)"]
+        end
+        subgraph AZ2 ["AZ-1b"]
+            API2["API Server"] --- ETCD2["etcd (follower)"]
+        end
+        subgraph AZ3 ["AZ-1c"]
+            ETCD3["etcd (standby)"]
+        end
+        ETCD1 <--> ETCD2 <--> ETCD3
+    end
+
+    subgraph VPC ["Your AWS Account / Your VPC"]
+        ENI["Cross-Account ENIs\n(Private Subnets)\nENI: 10.0.3.15\nENI: 10.0.3.42"]
+        Worker["Worker Nodes\n10.0.10.x"]
+        ENI --- Worker
+    end
+
+    API1 --> ENI
+    API2 --> ENI
 ```
 
 ### Cross-Account ENIs: The Bridge
@@ -114,29 +104,31 @@ The single most consequential architectural decision you make when creating an E
 
 When you create an EKS cluster, the default configuration exposes a public endpoint. The API server gets a public DNS name (e.g., `https://ABCDEF1234.gr7.us-east-1.eks.amazonaws.com`) that resolves to public IP addresses.
 
-```text
-┌────────────────────────────────────────┐
-│           Public Internet              │
-│                                        │
-│   Developer ──► EKS Public Endpoint    │
-│   Laptop        (public IP)            │
-│                     │                  │
-│                     ▼                  │
-│              ┌─────────────┐           │
-│              │ EKS Control │           │
-│              │ Plane       │           │
-│              └──────┬──────┘           │
-│                     │                  │
-│         Cross-Account ENIs             │
-│                     │                  │
-│              ┌──────▼──────┐           │
-│              │ Worker Nodes│           │
-│              │ (Private)   │           │
-│              └─────────────┘           │
-└────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Dev["Developer Laptop"]
+    NAT["NAT Gateway"]
 
-Traffic path for kubelet → API server:
-  Node → NAT Gateway → Internet → Public Endpoint → Control Plane
+    subgraph Internet ["Public Internet"]
+        PubEndpoint["EKS Public Endpoint (Public IP)"]
+    end
+
+    subgraph AWS ["AWS-Managed Account"]
+        CP["EKS Control Plane"]
+    end
+
+    subgraph VPC ["Your VPC"]
+        ENI["Cross-Account ENIs"]
+        Nodes["Worker Nodes (Private)"]
+    end
+
+    Dev --> PubEndpoint
+    PubEndpoint --> CP
+    CP --- ENI
+    ENI --- Nodes
+
+    Nodes -- "kubelet traffic" --> NAT
+    NAT -- "via Internet" --> PubEndpoint
 ```
 
 **The problem**: Your worker nodes in private subnets must traverse the NAT Gateway and the public internet to reach the API server. This adds latency, costs money (NAT data processing fees), and creates a dependency on the NAT Gateway. If your NAT Gateway is overwhelmed or fails, your nodes lose contact with the control plane.
@@ -154,22 +146,25 @@ aws eks update-cluster-config --name my-cluster \
 
 With a private endpoint, the API server DNS resolves to the private IP addresses of the cross-account ENIs inside your VPC. No public endpoint exists.
 
-```text
-┌────────────────────────────────────────┐
-│              Your VPC                  │
-│                                        │
-│   Bastion ──► ENI (10.0.3.15) ──► Control Plane │
-│   Host                                 │
-│                                        │
-│   Worker Nodes ──► ENI (10.0.3.15) ──► Control Plane │
-│   (10.0.10.x)     (stays in VPC!)     │
-│                                        │
-│   Developer (laptop) ──► CANNOT REACH  │
-│   (unless VPN/Direct Connect)          │
-└────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Dev["Developer (laptop)"]
+    
+    subgraph VPC ["Your VPC"]
+        Bastion["Bastion Host"]
+        Nodes["Worker Nodes (10.0.10.x)"]
+        ENI["Cross-Account ENI (10.0.3.15)"]
+        
+        Bastion --> ENI
+        Nodes -- "traffic stays in VPC" --> ENI
+    end
 
-Traffic path for kubelet → API server:
-  Node → ENI → Control Plane (never leaves VPC)
+    subgraph AWS ["AWS-Managed Account"]
+        CP["EKS Control Plane"]
+    end
+
+    ENI --> CP
+    Dev -. "CANNOT REACH\n(unless VPN/Direct Connect)" .-> VPC
 ```
 
 **Advantages**: Node-to-control-plane traffic stays entirely within the VPC. No NAT Gateway dependency for Kubernetes operations. No public attack surface.
@@ -187,21 +182,27 @@ aws eks update-cluster-config --name my-cluster \
 
 The best-practice configuration enables both endpoints. Nodes use the private endpoint (traffic stays in VPC), while developers and CI/CD pipelines can use the public endpoint (optionally restricted by CIDR).
 
-```text
-┌────────────────────────────────────────┐
-│              Your VPC                  │
-│                                        │
-│   Worker Nodes ──► ENI (private)  ──► Control Plane │
-│   (stays in VPC, no NAT needed)        │
-│                                        │
-└────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Dev["Developer (Laptop)"]
+    
+    subgraph Internet ["Public Internet"]
+        PubEndpoint["Public Endpoint\n(CIDR restricted)"]
+    end
 
-┌────────────────────────────────────────┐
-│           Public Internet              │
-│                                        │
-│   Developer ──► Public Endpoint   ──► Control Plane │
-│   (CIDR restricted)                    │
-└────────────────────────────────────────┘
+    subgraph VPC ["Your VPC"]
+        Nodes["Worker Nodes"]
+        ENI["Cross-Account ENI (Private)"]
+        Nodes -- "traffic stays in VPC" --> ENI
+    end
+
+    subgraph AWS ["AWS-Managed Account"]
+        CP["EKS Control Plane"]
+    end
+
+    Dev --> PubEndpoint
+    PubEndpoint --> CP
+    ENI --> CP
 ```
 
 ```bash
@@ -335,7 +336,7 @@ Before EKS Add-ons, teams installed these components using Helm charts or raw ma
 ```bash
 # List available add-ons and their versions
 aws eks describe-addon-versions \
-  --kubernetes-version 1.32 \
+  --kubernetes-version 1.35 \
   --query 'addons[*].{Name:addonName, Latest:addonVersions[0].addonVersion}' \
   --output table
 ```
@@ -387,7 +388,7 @@ The `--resolve-conflicts` flag is important:
 
 For production, always use `PRESERVE` unless you specifically want to reset to defaults.
 
-> **Pause and predict**: You trigger an EKS cluster upgrade from Kubernetes 1.30 to 1.31. You do not update the `vpc-cni` add-on. Several weeks later, nodes start scaling up, but new pods are stuck in `ContainerCreating`. What likely went wrong with the add-on lifecycle?
+> **Pause and predict**: You trigger an EKS cluster upgrade from Kubernetes 1.34 to 1.35. You do not update the `vpc-cni` add-on. Several weeks later, nodes start scaling up, but new pods are stuck in `ContainerCreating`. What likely went wrong with the add-on lifecycle?
 
 ---
 
@@ -573,9 +574,9 @@ Deleting these cross-account ENIs immediately severs the network connection betw
 </details>
 
 <details>
-<summary>Question 5: You upgrade your EKS cluster from Kubernetes 1.31 to 1.32, but pods start failing DNS resolution. What is the likely cause?</summary>
+<summary>Question 5: After successfully upgrading your production EKS cluster's control plane from Kubernetes v1.34 to v1.35, the application teams report that their newly scheduled pods are crashing with `CrashLoopBackOff`. Upon inspection, you find that the pods are unable to resolve internal service names. What is the most likely cause of this specific failure?</summary>
 
-The most likely cause is that the **CoreDNS add-on was not updated** after the cluster control plane upgrade. When you upgrade the Kubernetes version of an EKS cluster, managed add-ons like CoreDNS, VPC CNI, and kube-proxy are not automatically upgraded alongside the control plane. If the running CoreDNS version becomes deprecated or strictly incompatible with the new Kubernetes API version, DNS resolution within the cluster can fail or silently degrade. To resolve this issue, you must immediately update the CoreDNS add-on to a version explicitly tested and compatible with Kubernetes 1.32. As a best practice, always review and update all EKS add-ons to their compatible versions immediately following any cluster version upgrade.
+The most likely cause is that the CoreDNS add-on was not updated after the cluster control plane upgrade. When you upgrade the Kubernetes version of an EKS cluster, managed add-ons like CoreDNS, VPC CNI, and kube-proxy are not automatically upgraded alongside the control plane. If the running CoreDNS version becomes deprecated or strictly incompatible with the new Kubernetes API version, DNS resolution within the cluster can fail or silently degrade. To resolve this issue, you must immediately update the CoreDNS add-on to a version explicitly tested and compatible with Kubernetes 1.35. As a best practice, always review and update all EKS add-ons to their compatible versions immediately following any cluster version upgrade.
 </details>
 
 <details>
@@ -598,28 +599,24 @@ In this exercise, you will create a production-grade EKS cluster with a private 
 
 **What you will build:**
 
-```text
-┌────────────────────────────────────────────────────────────────┐
-│  VPC: 10.0.0.0/16                                              │
-│                                                                │
-│  ┌────── Public Subnet (10.0.1.0/24) ──────┐                  │
-│  │  Bastion Host (SSM-enabled)              │                  │
-│  │  NAT Gateway                             │                  │
-│  └──────────────────────────────────────────┘                  │
-│                                                                │
-│  ┌────── Private Subnet (10.0.10.0/24) ────┐                  │
-│  │  EKS Control Plane ENIs                  │                  │
-│  │  Managed Node Group (2x m6i.large)       │                  │
-│  └──────────────────────────────────────────┘                  │
-│                                                                │
-│  ┌────── Private Subnet (10.0.20.0/24) ────┐                  │
-│  │  EKS Control Plane ENIs                  │                  │
-│  │  Managed Node Group (2x m6i.large)       │                  │
-│  └──────────────────────────────────────────┘                  │
-│                                                                │
-│  Endpoint: Private only                                        │
-│  Auth: Access Entries (API mode)                               │
-└────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph VPC ["VPC: 10.0.0.0/16\nEndpoint: Private only | Auth: Access Entries (API mode)"]
+        subgraph PubSub ["Public Subnet (10.0.1.0/24)"]
+            Bastion["Bastion Host (SSM-enabled)"]
+            NAT["NAT Gateway"]
+        end
+        
+        subgraph PrivSub1 ["Private Subnet (10.0.10.0/24)"]
+            ENI1["EKS Control Plane ENIs"]
+            MNG1["Managed Node Group (2x m6i.large)"]
+        end
+        
+        subgraph PrivSub2 ["Private Subnet (10.0.20.0/24)"]
+            ENI2["EKS Control Plane ENIs"]
+            MNG2["Managed Node Group (2x m6i.large)"]
+        end
+    end
 ```
 
 ### Task 1: Create the VPC Infrastructure
@@ -713,7 +710,7 @@ aws eks create-cluster \
     subnetIds=$PRIV_SUB1,$PRIV_SUB2,\
 endpointPublicAccess=false,\
 endpointPrivateAccess=true \
-  --kubernetes-version 1.32 \
+  --kubernetes-version 1.35 \
   --access-config authenticationMode=API_AND_CONFIG_MAP
 
 echo "Cluster creation initiated. This takes 10-15 minutes."
