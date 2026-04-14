@@ -829,4 +829,3 @@ pool:
 ## Next Module
 
 [Module 1.3: Mental Models for Operations](../module-1.3-mental-models-for-operations/) - Build practical mental models for understanding production systems: leverage points, stock-and-flow diagrams, and the frameworks that experienced operators use instinctively.
----
