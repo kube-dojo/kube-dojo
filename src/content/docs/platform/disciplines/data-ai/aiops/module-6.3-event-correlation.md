@@ -260,6 +260,8 @@ class TopologyCorrelator:
 
 Group alerts with similar messages using natural language processing.
 
+> **Stop and think**: What happens if an alert message contains dynamically generated request IDs or timestamps? How would that affect text-based correlation if the messages aren't normalized first?
+
 ```python
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import DBSCAN
@@ -404,6 +406,8 @@ class AlertDeduplicator:
 ## Alert Suppression
 
 Prevent redundant alerts during known issues:
+
+> **Pause and predict**: If you suppress alerts after detecting a service is "flapping" (rapidly changing states), what is the risk if that service is actually failing repeatedly due to a genuine underlying capacity issue?
 
 ```python
 class AlertSuppressor:
