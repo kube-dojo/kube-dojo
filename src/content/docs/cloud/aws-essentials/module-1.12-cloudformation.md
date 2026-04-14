@@ -315,24 +315,15 @@ aws cloudformation describe-stacks \
 
 When you update a stack, each resource change falls into one of three categories:
 
-```
-+-------------------------------------------------------------------+
-|  Update with No Interruption                                      |
-|  - Resource stays running, updated in-place                       |
-|  - Example: Changing a security group description                 |
-|  - Example: Adding a tag to an instance                           |
-+-------------------------------------------------------------------+
-|  Update with Some Interruption                                    |
-|  - Resource may restart or briefly disconnect                     |
-|  - Example: Changing an EC2 instance type (requires stop/start)   |
-|  - Example: Modifying RDS parameter group                         |
-+-------------------------------------------------------------------+
-|  Replacement                                                      |
-|  - Old resource deleted, new one created                          |
-|  - Example: Changing a VPC CIDR block                             |
-|  - Example: Changing an RDS engine type                           |
-|  - WARNING: Data loss if not handled carefully!                   |
-+-------------------------------------------------------------------+
+```mermaid
+flowchart TD
+    A["<b>Update with No Interruption</b><br/>Resource stays running, updated in-place<br/>Example: Changing a security group description<br/>Example: Adding a tag to an instance"]
+    
+    B["<b>Update with Some Interruption</b><br/>Resource may restart or briefly disconnect<br/>Example: Changing an EC2 instance type (requires stop/start)<br/>Example: Modifying RDS parameter group"]
+    
+    C["<b>Replacement</b><br/>Old resource deleted, new one created<br/>Example: Changing a VPC CIDR block<br/>Example: Changing an RDS engine type<br/>WARNING: Data loss if not handled carefully!"]
+    
+    A ~~~ B ~~~ C
 ```
 
 Always check the AWS documentation for a resource type to understand which property changes trigger replacement. The CloudFormation docs mark each property with "Update requires: No interruption," "Some interruption," or "Replacement."
@@ -420,15 +411,22 @@ Resources:
 
 Common patterns for stack boundaries:
 
-```
-Option A: By Layer              Option B: By Service
-+-------------------+          +----------+----------+
-|    Application    |          | Service A| Service B|
-+-------------------+          | (App+DB+ | (App+DB+ |
-|     Database      |          |  Network)| Network) |
-+-------------------+          +----------+----------+
-|     Network       |          | Shared Network      |
-+-------------------+          +---------------------+
+```mermaid
+flowchart TD
+    subgraph OptionA [Option A: By Layer]
+        direction TB
+        App[Application] --- DB[Database] --- Net[Network]
+    end
+
+    subgraph OptionB [Option B: By Service]
+        direction TB
+        SvcA["Service A<br/>(App+DB+Network)"]
+        SvcB["Service B<br/>(App+DB+Network)"]
+        Shared["Shared Network"]
+        
+        SvcA --- Shared
+        SvcB --- Shared
+    end
 ```
 
 Option A (layer-based) works well for monolithic applications. Option B (service-based) works better for microservices where each team owns their full stack.
@@ -554,7 +552,7 @@ You should use cross-stack references (Outputs with `Export` and `!ImportValue`)
 <details>
 <summary>6. Your team is adopting AWS CDK to replace raw YAML templates. A developer argues that since CDK uses TypeScript, they no longer need to understand CloudFormation concepts like logical IDs, stack rollbacks, or change sets. How would you correct this architectural misunderstanding?</summary>
 
-You must correct this misunderstanding by explaining that CDK is not an alternative infrastructure engine, but rather a higher-level abstraction layer that compiles directly down into standard CloudFormation templates. When you run `cdk deploy`, AWS is still executing a CloudFormation stack under the hood, meaning all the fundamental rules of CloudFormation—including resource replacement behaviors, stack state machines, and drift detection—still entirely govern your deployment. Furthermore, when deployments fail, AWS returns errors referencing the generated CloudFormation logical IDs and property structures, making it impossible to effectively debug CDK applications without a solid understanding of the underlying CloudFormation engine.
+You must correct this misunderstanding by explaining that CDK is not an alternative infrastructure engine, but rather a higher-level abstraction layer that compiles directly down into standard CloudFormation templates. When you run `cdk deploy`, AWS is still executing a CloudFormation stack under the hood. This means all the fundamental rules of CloudFormation—including resource replacement behaviors, stack state machines, and drift detection—still entirely govern your deployment. Furthermore, when deployments fail, AWS returns errors referencing the generated CloudFormation logical IDs and property structures, making it impossible to effectively debug CDK applications without a solid understanding of the underlying CloudFormation engine.
 </details>
 
 <details>
