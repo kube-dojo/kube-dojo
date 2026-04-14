@@ -31,39 +31,43 @@ In this module, you will learn how Azure Monitor collects and organizes data, ho
 
 Azure Monitor is not a single service---it is a platform composed of several interconnected components:
 
-```text
-    ┌──────────────────────────────────────────────────────────────────┐
-    │                        Data Sources                              │
-    │                                                                  │
-    │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────────┐   │
-    │  │ Azure    │ │ VMs      │ │ Containers│ │ Applications     │   │
-    │  │ Resources│ │ (Agent)  │ │ (AKS,ACA) │ │ (App Insights)   │   │
-    │  └────┬─────┘ └────┬─────┘ └────┬──────┘ └────────┬─────────┘   │
-    │       │             │            │                 │             │
-    └───────┼─────────────┼────────────┼─────────────────┼─────────────┘
-            │             │            │                 │
-            ▼             ▼            ▼                 ▼
-    ┌──────────────────────────────────────────────────────────────────┐
-    │                     Azure Monitor Platform                       │
-    │                                                                  │
-    │  ┌────────────────────────┐  ┌──────────────────────────────┐   │
-    │  │    Metrics Store       │  │    Log Analytics Workspace    │   │
-    │  │  (Time-series DB)      │  │  (Kusto / KQL engine)        │   │
-    │  │                        │  │                              │   │
-    │  │  - Platform metrics    │  │  - Activity logs             │   │
-    │  │  - Custom metrics      │  │  - Resource logs             │   │
-    │  │  - 93 day retention    │  │  - VM agent logs             │   │
-    │  │  - Near real-time      │  │  - Application traces        │   │
-    │  │                        │  │  - Custom logs               │   │
-    │  └─────────┬──────────────┘  └──────────┬───────────────────┘   │
-    │            │                             │                       │
-    │            ▼                             ▼                       │
-    │  ┌────────────────────────────────────────────────────────┐     │
-    │  │                   Consumers                            │     │
-    │  │  Metrics Explorer │ KQL Queries │ Dashboards │ Alerts  │     │
-    │  │  Workbooks        │ Power BI    │ Grafana    │ APIs    │     │
-    │  └────────────────────────────────────────────────────────┘     │
-    └──────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph DS [Data Sources]
+        R[Azure Resources]
+        V[VMs Agent]
+        C[Containers AKS/ACA]
+        A[Applications App Insights]
+    end
+
+    subgraph AMP [Azure Monitor Platform]
+        M["Metrics Store<br/>(Time-series DB)<br/>• Platform metrics<br/>• Custom metrics<br/>• 93 day retention<br/>• Near real-time"]
+        L["Log Analytics Workspace<br/>(Kusto / KQL engine)<br/>• Activity logs<br/>• Resource logs<br/>• VM agent logs<br/>• App traces<br/>• Custom logs"]
+    end
+
+    R --> M
+    R --> L
+    V --> M
+    V --> L
+    C --> M
+    C --> L
+    A --> M
+    A --> L
+
+    subgraph CONS [Consumers]
+        C1[Metrics Explorer / Workbooks]
+        C2[KQL Queries / Power BI]
+        C3[Dashboards / Grafana]
+        C4[Alerts / APIs]
+    end
+
+    M --> C1
+    M --> C3
+    M --> C4
+    L --> C1
+    L --> C2
+    L --> C3
+    L --> C4
 ```
 
 > **Stop and think**: If a critical application crashes due to an out-of-memory exception, which monitoring capability (metrics or logs) would alert you that the memory was exhausted, and which would help you find the specific line of code that caused it?
@@ -339,19 +343,18 @@ az monitor activity-log alert create \
 
 Application Insights is a component of Azure Monitor focused on application performance monitoring (APM). It traces requests through distributed systems, captures exceptions, and profiles performance.
 
-```text
-    ┌──────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐
-    │  Client   │ ──► │  API GW   │ ──► │  Order   │ ──► │ Payment  │
-    │  Browser  │     │  Service  │     │  Service │     │ Service  │
-    └──────────┘     └──────────┘     └──────────┘     └──────────┘
-         │                │                │                │
-         │   Request ID: abc-123          │                │
-         │   ────────────────────────────────────────────  │
-         │          All services share the same            │
-         │          correlation ID (Operation ID)          │
-         │                                                 │
-         └── Application Insights traces the entire ───────┘
-             request across all services
+```mermaid
+sequenceDiagram
+    participant C as Client Browser
+    participant A as API GW Service
+    participant O as Order Service
+    participant P as Payment Service
+
+    Note over C, P: Shared Request ID (Operation ID): abc-123
+    C->>A: HTTP Request
+    A->>O: Forward Request
+    O->>P: Process Payment
+    Note over C, P: Application Insights traces the entire request across all services using this correlation ID
 ```
 
 ```bash
