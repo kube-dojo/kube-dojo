@@ -358,6 +358,8 @@ cat /proc/$PID/smaps_rollup
 
 ## lsof
 
+> **Pause and predict**: If you delete a massive log file using `rm`, but the `df -h` command still shows the disk is 100% full, how could `lsof` explain this discrepancy?
+
 ### List Open Files
 
 ```bash
@@ -399,6 +401,8 @@ lsof /mnt/point
 ---
 
 ## ltrace
+
+> **Stop and think**: If a closed-source application is failing to parse its configuration file, would you prefer `strace` or `ltrace` to see the exact strings it is attempting to read from the file?
 
 ### Library Calls
 
