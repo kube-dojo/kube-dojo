@@ -198,6 +198,8 @@ graph TD
 
 Never trust, always verify. Assume the network is compromised.
 
+> **Pause and predict**: If you adopt a Zero Trust model, how does the role of your traditional perimeter firewall change?
+
 ```mermaid
 graph LR
     subgraph Trad ["Traditional (Perimeter) Model"]
