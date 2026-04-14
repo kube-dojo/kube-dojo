@@ -322,7 +322,7 @@ Your organization restricts all bare metal nodes from communicating directly wit
 *   C) Configure registry mirrors in `/etc/containerd/config.toml` on all cluster nodes to intercept pulls for `docker.io` and route them to your internal Harbor Proxy Cache.
 *   D) Set `imagePullPolicy: Always` and configure the kubelet with a global HTTP_PROXY environment variable pointing to Harbor.
 
-*Correct Answer: C* (Configuring the containerd mirror allows the runtime to transparently rewrite `docker.io` requests to the internal cache without modifying the deployment YAML. This means the deployment manifests remain clean and portable across environments. The container runtime seamlessly handles the interception and routing to your internal Harbor Proxy Cache, fully satisfying the air-gapped node requirements without introducing developer friction.)
+*Correct Answer: C* (Configuring the containerd mirror allows the runtime to transparently rewrite `docker.io` requests to the internal cache without modifying the deployment YAML. This means the deployment manifests remain clean and portable across different environments. The container runtime seamlessly handles the interception and routing to your internal Harbor Proxy Cache. Consequently, this fully satisfies the air-gapped node requirements while ensuring developers do not have to rewrite their deployment manifests to include internal registry URLs.)
 
 **Question 2**
 During a routine operational check, you notice that your Harbor S3 bucket (MinIO) is consuming 5TB of data, but querying the Harbor API shows total project quotas utilizing only 1TB. You have recently deleted hundreds of old image tags via the Harbor UI. What is the most likely cause?
@@ -331,7 +331,7 @@ During a routine operational check, you notice that your Harbor S3 bucket (MinIO
 *   C) Cosign signatures are taking up 4TB of space because they are not compressed.
 *   D) The PostgreSQL database transaction logs have expanded and are writing backups to the S3 bucket automatically.
 
-*Correct Answer: B* (Deleting an image tag in a container registry only removes the metadata pointer stored within the registry database. The actual layer blobs remain in the underlying S3 storage backend to support efficient layer sharing across different images. Reclaiming this physical storage capacity requires explicitly executing a Garbage Collection (GC) job, which scans for and permanently deletes unreferenced blobs from the S3 bucket.)
+*Correct Answer: B* (Deleting an image tag in a container registry only removes the metadata pointer stored within the registry database. The actual layer blobs remain securely in the underlying S3 storage backend to support efficient layer sharing across different images. Because layers can be shared by multiple images, the registry does not immediately delete them to prevent breaking other active images. Reclaiming this physical storage capacity requires explicitly executing a Garbage Collection (GC) job, which scans for and permanently deletes unreferenced blobs from the S3 bucket.)
 
 **Question 3**
 You are designing a high-availability registry for a bare-metal edge environment with extreme resource constraints. The available hardware only provides 2 CPU cores and 4GB RAM for the entire registry infrastructure. You require OCI artifact support and basic pull-through caching, but do not need a web UI or complex RBAC. Which registry is the most appropriate choice?
@@ -340,7 +340,7 @@ You are designing a high-availability registry for a bare-metal edge environment
 *   C) Quay
 *   D) Zot
 
-*Correct Answer: D* (Zot is intentionally designed as a single Go binary to function as an OCI-native, extremely lightweight registry. This minimal architectural footprint makes it the ideal solution for edge environments where hardware is severely constrained. In contrast, microservice-based architectures like Harbor or Quay require significant operational overhead, including separate databases and Redis instances, which would immediately overwhelm a strict 2 CPU and 4GB RAM allocation.)
+*Correct Answer: D* (Zot is intentionally designed as a single Go binary to function as an OCI-native, extremely lightweight registry. This minimal architectural footprint makes it the ideal solution for edge environments where hardware is severely constrained. Because it does not rely on external databases or caching tiers, it avoids the memory penalties associated with traditional enterprise registries. In contrast, microservice-based architectures like Harbor or Quay require significant operational overhead, including separate PostgreSQL databases and Redis instances, which would immediately overwhelm a strict 2 CPU and 4GB RAM allocation.)
 
 **Question 4**
 A developer pushes `app:v1.0.0`, signs it using Cosign, and verifies the signature exists in Harbor. The next day, a compromised pipeline overwrites the `app:v1.0.0` tag with a new, malicious image containing cryptominers. What happens to the cryptographic signature?
@@ -349,7 +349,7 @@ A developer pushes `app:v1.0.0`, signs it using Cosign, and verifies the signatu
 *   C) The signature becomes invalid for the new image because the signature is cryptographically bound to the immutable digest (`sha256:...`) of the original image, not the mutable tag.
 *   D) Harbor will natively reject the push of the malicious image because the tag `v1.0.0` is permanently locked once signed.
 
-*Correct Answer: C* (Cosign cryptographic signatures are intrinsically bound to the immutable digest of the specific image layer configuration, rather than the mutable string tag. When the tag is overwritten with malicious layers, the underlying computed digest fundamentally changes. Because the original cryptographic signature does not match this new digest, the malicious image will immediately fail verification, thereby protecting the deployment environment from the compromised pipeline.)
+*Correct Answer: C* (Cosign cryptographic signatures are intrinsically bound to the immutable digest of the specific image layer configuration, rather than the mutable string tag. When the tag is overwritten with malicious layers, the underlying computed digest fundamentally changes. Because the original cryptographic signature does not match this new digest, the malicious image will immediately fail verification. This immutable binding ensures that even if a registry allows tag mutability, the deployment environment remains protected from the compromised pipeline.)
 
 **Question 5**
 You have configured Harbor with a project-level policy to prevent pulling images with `CRITICAL` vulnerabilities. A pod scaling event triggers, and the kubelet attempts to pull an image that was pushed and scanned clean 6 months ago. The pull is rejected by Harbor at the API level, citing a critical vulnerability. Why did this happen?
@@ -358,7 +358,7 @@ You have configured Harbor with a project-level policy to prevent pulling images
 *   C) The containerd runtime on the node has its own vulnerability scanner that rejected the layer extraction.
 *   D) The Harbor database lost connection to Redis, causing the policy engine to fail open and reject all pulls.
 
-*Correct Answer: B* (Vulnerability databases are continuously updated by security researchers as new exploits are discovered in existing software packages. Scheduled periodic scans in Harbor re-evaluate all stored images against the latest CVE definitions, regardless of when they were originally pushed. An image that was perfectly clean six months ago likely contains software packages that have since been identified as vulnerable, prompting the policy engine to correctly block the deployment.)
+*Correct Answer: B* (Vulnerability databases are continuously updated by security researchers as new exploits are discovered in existing software packages. Scheduled periodic scans in Harbor re-evaluate all stored images against the latest CVE definitions, regardless of when they were originally pushed. An image that was perfectly clean six months ago likely contains software packages that have since been identified as vulnerable. Consequently, when the cluster scales and attempts to pull the image, Harbor's policy engine correctly blocks the deployment based on the newly discovered critical vulnerability.)
 
 ## Further Reading
 
