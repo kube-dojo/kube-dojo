@@ -11,8 +11,8 @@ sidebar:
 After completing this module, you will be able to:
 
 - **Design multi-stage CI/CD pipelines incorporating container builds and release approvals for platforms like Azure DevOps and GitHub Actions**
-- **Configure GitHub Actions workflows with Azure login, container builds, and AKS deployment steps**
-- **Implement deployment strategies (blue/green, canary, ring-based) using Azure DevOps environments and gates**
+- **Configure GitHub Actions workflows with Azure login, container builds, and Container Apps deployment steps**
+- **Implement deployment approvals and staging environments using Azure DevOps and GitHub Actions environments**
 - **Secure CI/CD pipelines with service connections, managed identities, and environment protection rules**
 
 ---
@@ -558,11 +558,13 @@ az ad sp create --id "$APP_ID"
 SP_OBJECT_ID=$(az ad sp show --id "$APP_ID" --query id -o tsv)
 
 # Create federated credential for your GitHub repo
-# Replace YOUR_GITHUB_ORG and YOUR_REPO with your actual values
+GITHUB_ORG="<your-github-org>"
+GITHUB_REPO="<your-repo-name>"
+
 az ad app federated-credential create --id "$APP_OBJECT_ID" --parameters '{
   "name": "github-main",
   "issuer": "https://token.actions.githubusercontent.com",
-  "subject": "repo:YOUR_GITHUB_ORG/YOUR_REPO:ref:refs/heads/main",
+  "subject": "repo:'"${GITHUB_ORG}"'/'"${GITHUB_REPO}"':ref:refs/heads/main",
   "audiences": ["api://AzureADTokenExchange"]
 }'
 
