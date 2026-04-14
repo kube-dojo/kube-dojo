@@ -4,36 +4,44 @@ slug: cloud/eks-deep-dive/module-5.2-eks-networking
 sidebar:
   order: 3
 ---
-**Complexity**: [COMPLEX] | **Time to Complete**: 3.5h | **Prerequisites**: Module 5.1 (EKS Architecture & Control Plane)
 
 ## What You'll Be Able to Do
 
 After completing this module, you will be able to:
 
-- **Configure the AWS VPC CNI plugin with custom networking, prefix delegation, and secondary CIDR ranges for large clusters**
-- **Implement EKS networking with security groups for pods, network policies, and pod-level traffic isolation**
-- **Deploy AWS Load Balancer Controller to provision ALB ingress and NLB services from Kubernetes manifests**
-- **Diagnose pod networking failures related to IP exhaustion, ENI limits, and subnet routing misconfigurations**
+- **Diagnose** pod networking failures related to IP exhaustion, ENI limits, and subnet routing misconfigurations within massive multi-tenant clusters.
+- **Implement** the AWS VPC CNI plugin with custom networking, prefix delegation, and secondary CIDR ranges to ensure scalable IP allocation for large-scale deployments.
+- **Design** EKS networking architectures that leverage security groups for pods, enabling granular pod-level traffic isolation without relying solely on network policies.
+- **Evaluate** and deploy the AWS Load Balancer Controller to dynamically provision Application Load Balancers (ALB) and Network Load Balancers (NLB) using optimized IP target types.
+- **Compare** secondary IP mode against Prefix Delegation mode to accurately calculate and optimize the maximum pod density across different EC2 instance types.
 
 ---
 
 ## Why This Module Matters
 
-In March 2023, a major European e-commerce platform running 800 pods across 40 EKS nodes hit a wall during their annual spring sale. At 09:12, Kubernetes could not schedule new pods. The error was not about CPU or memory. It was `FailedCreatePodSandBox: failed to setup network for sandbox: no available IP addresses`. Their VPC subnets had run out of IP addresses. The VPC CNI plugin assigns a real VPC IP address to every single pod -- and with each `m5.xlarge` node consuming up to 58 IP addresses (14 ENIs x 4 secondary IPs + the node's primary IPs), their `/24` subnets were mathematically exhausted. The sale was live, customers were clicking, and the platform could not scale. The engineering team spent 90 minutes frantically adding secondary CIDR blocks and reconfiguring subnets while losing an estimated EUR 2.3 million in revenue.
+In March 2023, a major European e-commerce platform running 800 pods across 40 EKS nodes hit a wall during their annual spring sale. At 09:12 AM, just as traffic peaked, Kubernetes completely halted the scheduling of new pods. The error was not related to CPU or memory exhaustion. Instead, the control plane logs screamed: `FailedCreatePodSandBox: failed to setup network for sandbox: no available IP addresses`. Their VPC subnets had mathematically run out of IP addresses. The VPC CNI plugin assigns a real VPC IP address to every single pod, and with each `m5.xlarge` node consuming up to 58 IP addresses (14 ENIs multiplied by 4 secondary IPs, plus the node's primary IPs), their `/24` subnets were instantly exhausted. The sale was live, customers were clicking, and the platform was paralyzed. The engineering team spent 90 minutes frantically adding secondary CIDR blocks and reconfiguring subnets while losing an estimated EUR 2.3 million in revenue.
 
-This is the most common production failure mode specific to EKS. Unlike most Kubernetes distributions that use overlay networks (where pod IPs are virtual and unlimited), EKS uses the VPC CNI plugin, which gives every pod a routable VPC IP address. This is both a superpower (native VPC networking, security groups on pods, no overlay overhead) and a trap (finite IP address space that can run out at the worst possible moment).
+This scenario represents the most common and devastating production failure mode specific to Elastic Kubernetes Service (EKS). Unlike most other Kubernetes distributions that rely on overlay networks (where pod IPs are virtual, internal to the cluster, and practically unlimited), EKS natively utilizes the Amazon VPC CNI plugin. This plugin guarantees that every pod receives a real, routable IP address directly from your VPC subnet. This design is both a tremendous superpower—enabling native VPC networking, direct assignment of security groups to pods, and the elimination of overlay encapsulation overhead—and a dangerous trap. It creates a finite, physical constraint on your IP address space that can violently exhaust your network at the worst possible moment during auto-scaling events.
 
-In this module, you will master the VPC CNI mechanics, understand IP allocation modes including Prefix Delegation that 16x your IP capacity per ENI slot, learn how to solve IP exhaustion with Custom Networking and secondary CIDRs, configure Security Groups for Pods, set up the AWS Load Balancer Controller for ALB and NLB ingress, and understand EKS IPv6 networking.
+In this module, you will master the intricate mechanics of the VPC CNI. You will thoroughly understand IP allocation modes, specifically focusing on Prefix Delegation—a feature that can multiply your IP capacity per ENI slot by 16x. You will learn the definitive strategies for solving IP exhaustion by implementing Custom Networking paired with secondary CIDRs. Furthermore, you will configure Security Groups for Pods to achieve zero-trust network isolation, set up the AWS Load Balancer Controller for highly efficient ALB and NLB ingress routing, and explore the future of EKS networking through IPv6 adoption.
 
 ---
 
-## VPC CNI: How Pods Get Their IP Addresses
+## The Architecture of AWS VPC CNI
 
-The Amazon VPC CNI plugin (`aws-node` DaemonSet) is the default networking solution for EKS. Unlike overlay networks (Calico, Cilium in overlay mode, Flannel), the VPC CNI assigns each pod a real, routable IP address from your VPC subnet. This means pods can communicate directly with any VPC resource -- RDS databases, ElastiCache clusters, Lambda functions -- without NAT or encapsulation.
+To understand EKS networking, you must first understand the fundamental architecture of the Amazon VPC CNI plugin. When a Pod is scheduled onto a node, the Kubelet must establish the pod's network before the application containers can start. It does this by invoking the CNI plugin.
 
-### Secondary IP Mode (Default)
+The AWS VPC CNI consists of two primary components operating on every worker node:
+1. **The CNI Binary**: This is the executable invoked by the Kubelet. It creates the Linux network namespace for the pod, sets up the `veth` (virtual ethernet) pairs connecting the pod to the host's networking stack, and configures the routing rules on the host.
+2. **The IPAMD (IP Address Management Daemon)**: This is a long-running background process (running as the `aws-node` DaemonSet) that continuously monitors the node's IP usage. It proactively communicates with the AWS EC2 API to attach new Elastic Network Interfaces (ENIs) and allocate secondary IP addresses to those ENIs so that the CNI binary always has a pool of IPs ready to assign to incoming pods.
 
-In the default mode, the VPC CNI pre-allocates secondary IP addresses on each node's Elastic Network Interfaces (ENIs). When a pod is scheduled, it receives one of these pre-allocated IPs.
+Because EKS pods receive native VPC IPs, they exist as first-class citizens on your AWS network. They can be routed to directly from an AWS Transit Gateway, they can be targeted directly by Application Load Balancers, and their traffic can be monitored natively using VPC Flow Logs.
+
+---
+
+## Secondary IP Mode (Default)
+
+In its default configuration, known as Secondary IP Mode, the VPC CNI pre-allocates individual secondary IP addresses on each node's Elastic Network Interfaces (ENIs). When a new pod is scheduled by the Kubernetes scheduler, the CNI binary immediately assigns it one of these pre-allocated IPs from the IPAMD's local pool.
 
 ```mermaid
 graph LR
@@ -62,7 +70,9 @@ graph LR
     ENI2 --> IP2_S3["Secondary IP: 10.0.10.38 → (warm pool)"]
 ```
 
-The number of pods a node can run is directly limited by the formula:
+The strict limitation in this mode is defined by the hardware capabilities of the EC2 instance type. The AWS Nitro hypervisor enforces a hard limit on the number of ENIs an instance can attach, as well as the number of secondary IP addresses each ENI can support. 
+
+The number of pods a node can run is directly limited by the following physical formula:
 
 ```text
 Max Pods = (Number of ENIs x (IPs per ENI - 1)) + 2
@@ -72,11 +82,15 @@ For m5.xlarge:
   Max Pods = (4 x (15 - 1)) + 2 = 58
 ```
 
-The `-1` accounts for the primary IP on each ENI (used by the ENI itself, not assignable to pods). The `+2` accounts for the node's host-networking pods (kube-proxy and aws-node themselves).
+In this formula, the `-1` accounts for the primary IP on each ENI, which is required for the ENI itself to function on the network and cannot be assigned to user pods. The `+2` accounts for the node's foundational host-networking pods (specifically `kube-proxy` and the `aws-node` DaemonSet), which share the host's primary IP and do not consume secondary VPC IPs.
 
-### The Warm Pool: WARM_ENI_TARGET and WARM_IP_TARGET
+---
 
-The VPC CNI pre-allocates IPs to reduce pod startup latency. By default, it maintains one "warm" ENI (an ENI with all its IPs pre-allocated but unassigned to pods). This means a fresh node immediately consumes IPs for the entire warm ENI, even if no pods are scheduled.
+## The Warm Pool: WARM_ENI_TARGET and WARM_IP_TARGET
+
+Why does the VPC CNI pre-allocate IPs instead of requesting them on-demand when a pod starts? The answer lies in AWS EC2 API latency and rate limiting. Assigning a new secondary IP or attaching a new ENI requires an API call to the AWS control plane, which can take anywhere from 1 to 3 seconds to complete. If a sudden traffic spike causes a deployment to scale from 10 to 500 pods, executing 490 simultaneous EC2 API calls would not only introduce massive pod startup latency but would also result in severe API throttling (RateExceeded errors).
+
+To prevent this, the IPAMD maintains a "warm pool" of pre-allocated IPs. By default, it keeps an entire "warm" ENI attached to the node, with all of its secondary IPs fully allocated but unassigned to any pods.
 
 ```bash
 # Check current VPC CNI configuration
@@ -84,7 +98,7 @@ k get daemonset aws-node -n kube-system -o json | \
   jq '.spec.template.spec.containers[0].env[] | select(.name | startswith("WARM"))'
 ```
 
-Tuning the warm pool is critical for IP conservation:
+While this guarantees instant pod startup, it aggressively hoards IP addresses. A 100-node cluster sitting entirely empty will immediately consume thousands of IP addresses simply to satisfy the default warm pool requirements. Tuning this warm pool is your first line of defense in IP-constrained environments.
 
 | Variable | Default | Effect |
 | :--- | :--- | :--- |
@@ -92,7 +106,7 @@ Tuning the warm pool is critical for IP conservation:
 | `WARM_IP_TARGET` | Not set | Number of warm IPs to keep ready (overrides WARM_ENI_TARGET) |
 | `MINIMUM_IP_TARGET` | Not set | Minimum IPs to keep allocated at all times |
 
-For IP-constrained environments, set `WARM_IP_TARGET` instead of `WARM_ENI_TARGET`:
+If you are running dangerously low on IPs, you must instruct the IPAMD to maintain individual warm IPs rather than entire warm ENIs:
 
 ```bash
 # Configure VPC CNI to keep only 2 warm IPs instead of an entire warm ENI
@@ -102,11 +116,15 @@ k set env daemonset aws-node -n kube-system \
   MINIMUM_IP_TARGET=4
 ```
 
-This reduces IP waste from ~15 IPs per node (one warm ENI) to just 2, but pod startup may be slightly slower when new ENIs need to be attached.
+This configuration forces the node to release excess IPs back to the VPC. Instead of wasting ~14 IPs per node on a dormant warm ENI, the node will only keep 2 unassigned IPs in reserve. The trade-off is clear: if you suddenly schedule 5 pods onto a node that only has 2 warm IPs, the 3rd, 4th, and 5th pods will experience a startup delay of a few seconds while IPAMD negotiates with the EC2 API for more addresses.
 
-### Prefix Delegation Mode
+---
 
-Prefix Delegation fundamentally changes the IP math. Instead of assigning individual secondary IPs to each ENI slot, the VPC CNI assigns `/28` prefixes (16 IP addresses each) to each ENI slot. This multiplies your pod capacity by up to 16x per node.
+## Prefix Delegation Mode: The 16x Multiplier
+
+To permanently resolve the severe density limitations of Secondary IP Mode without requiring massive subnets, AWS introduced Prefix Delegation. Prefix Delegation fundamentally transforms the IP assignment math. 
+
+Instead of an ENI slot holding a single, discrete secondary IP address, Prefix Delegation allows that exact same ENI slot to hold a contiguous `/28` IPv4 prefix. A `/28` prefix contains exactly 16 IP addresses. Because this is handled at the ENI attachment level, you effectively multiply your IP capacity by 16x without attaching a single additional ENI.
 
 ```text
 Secondary IP Mode (default):           Prefix Delegation Mode:
@@ -117,9 +135,11 @@ m5.xlarge:                              m5.xlarge:
   Max pods: ~58                           Max pods: 110 (capped by EKS)
 ```
 
-EKS caps the maximum pods at 110 for most instance types (250 for some larger types), even if Prefix Delegation provides more IPs than that. The bottleneck shifts from IP addresses to node CPU and memory.
-
 > **Stop and think**: If Prefix Delegation multiplies IP capacity by 16x, why does EKS still cap an m5.xlarge at 110 pods instead of the theoretical 960? (Hint: IP addresses are not the only resource a pod consumes on a node).
+
+Even though the networking stack can theoretically support 960 pods on an `m5.xlarge`, EKS enforces a logical ceiling of 110 pods for most instance types (and up to 250 for extremely large instances). This is because the Kubernetes control plane, the local `kubelet`, the container runtime (containerd), and the Linux kernel itself would be severely exhausted trying to manage 960 concurrent containers on a 4 vCPU instance. The `max-pods` cap ensures cluster stability.
+
+Enabling Prefix Delegation is a two-step process. First, you configure the VPC CNI:
 
 ```bash
 # Enable Prefix Delegation
@@ -136,9 +156,9 @@ k get ds aws-node -n kube-system -o json | \
   jq '.spec.template.spec.containers[0].env[] | select(.name=="ENABLE_PREFIX_DELEGATION")'
 ```
 
-After enabling Prefix Delegation, you must also update the `max-pods` setting on your nodes. Without this, the kubelet still uses the old secondary-IP-based pod limit, and the extra IPs go to waste.
+Crucially, after enabling Prefix Delegation in the CNI, the `kubelet` on your worker nodes must be restarted with a new `--max-pods` argument. If you do not update the node's user data, the `kubelet` will continue enforcing the old 58-pod limit, completely ignoring the thousands of new IP addresses made available by the CNI.
 
-How Prefix Delegation looks on a node:
+Once correctly provisioned, the IP allocation on the node transforms significantly:
 
 ```mermaid
 graph LR
@@ -161,13 +181,11 @@ graph LR
 
 ---
 
-## Solving IP Exhaustion
+## Solving IP Exhaustion: Secondary CIDRs and Custom Networking
 
-Even with Prefix Delegation, large clusters can exhaust their subnet IP space. Here are the production-grade solutions.
+Prefix Delegation dramatically increases how many pods you can fit on a single node, but it does not magically create more IP addresses in your VPC. If your entire VPC subnet only has 251 usable addresses (a `/24`), you will still run out of IPs as you add more nodes to the cluster.
 
-### Solution 1: Secondary CIDR Blocks
-
-Add a non-routable (RFC 6598) CIDR block to your VPC specifically for pod IPs. The `100.64.0.0/10` range is commonly used because it does not conflict with typical RFC 1918 ranges.
+When physical IP address exhaustion looms, the industry-standard architectural solution is to attach a massive, non-routable Secondary CIDR block exclusively for pod networking. The `100.64.0.0/10` space (RFC 6598, originally intended for Carrier-Grade NAT) is frequently utilized because it does not conflict with traditional enterprise RFC 1918 ranges (like `10.x` or `192.168.x`).
 
 ```bash
 # Add secondary CIDR to VPC
@@ -193,9 +211,7 @@ aws ec2 create-tags --resources $POD_SUB1 $POD_SUB2 \
   --tags Key=Name,Value=EKS-Pod-Subnet
 ```
 
-### Solution 2: Custom Networking (ENIConfig)
-
-Custom Networking tells the VPC CNI to place pod ENIs in different subnets than the node's primary ENI. Combined with secondary CIDRs, this gives pods a massive, separate IP space.
+By default, the VPC CNI will pull pod IPs from the exact same subnet that the EC2 instance resides in. To force the VPC CNI to use these newly created secondary subnets, you must enable Custom Networking. 
 
 ```bash
 # Enable custom networking on the VPC CNI
@@ -204,7 +220,7 @@ k set env daemonset aws-node -n kube-system \
   ENI_CONFIG_LABEL_DEF=topology.kubernetes.io/zone
 ```
 
-Create ENIConfig resources that map Availability Zones to pod subnets:
+With Custom Networking enabled, the IPAMD daemon looks for Custom Resource Definitions (CRDs) named `ENIConfig`. The `ENIConfig` maps a specific Availability Zone to the new pod subnets and security groups. Because EKS clusters span multiple AZs, you must create one `ENIConfig` per AZ.
 
 ```yaml
 # eniconfig-us-east-1a.yaml
@@ -216,7 +232,9 @@ spec:
   subnet: subnet-aaa111    # Pod subnet in 100.64.0.0/19
   securityGroups:
     - sg-0abc123def456      # Security group for pods
----
+```
+
+```yaml
 # eniconfig-us-east-1b.yaml
 apiVersion: crd.k8s.amazonaws.com/v1alpha1
 kind: ENIConfig
@@ -228,12 +246,14 @@ spec:
     - sg-0abc123def456
 ```
 
+Apply these configurations to the cluster:
+
 ```bash
 k apply -f eniconfig-us-east-1a.yaml
 k apply -f eniconfig-us-east-1b.yaml
 ```
 
-After enabling Custom Networking, the architecture looks like this:
+Once implemented, the architecture physically isolates the node's network traffic from the pod's network traffic. The primary ENI handles SSH, Kubelet-to-API-server communication, and internal OS networking on the `10.x` subnet. Meanwhile, all secondary ENIs are dynamically deployed into the `100.64.x` subnet to host the massive volume of pods.
 
 ```mermaid
 flowchart TD
@@ -249,19 +269,15 @@ flowchart TD
 
 > **Pause and predict**: If we place pod ENIs into a separate subnet from the node's primary ENI, what happens to the ENI slot that the node's primary interface occupies? Can pods still use it?
 
-> **Important**: With Custom Networking, the node's primary ENI is NOT used for pod IPs. This means the max-pods formula loses one ENI: `Max Pods = ((ENIs - 1) x (IPs per ENI - 1)) + 2`. For `m5.xlarge`, that drops from 58 to 44 in secondary IP mode. Combine Custom Networking with Prefix Delegation to get the best of both worlds.
-
-*War Story: The e-commerce company from the opening eventually implemented Custom Networking with a `100.64.0.0/16` secondary CIDR. Their pod subnets went from 251 IPs (a `/24`) to 8,192 IPs per AZ (a `/19`). Combined with Prefix Delegation, they ran their next spring sale with 2,400 pods and never came close to exhaustion. The total migration took two weeks, including new node groups -- you cannot enable Custom Networking on existing nodes.*
+*Critical Architecture Note*: Because Custom Networking dictates that pod IPs can *only* live on ENIs attached to the Custom Networking subnet, the node's Primary ENI (which lives in the Node Subnet) is entirely removed from the pod scheduling pool. If an instance has 4 ENIs, only 3 are available for pods. This slightly reduces your total pod density per node unless you combine Custom Networking with Prefix Delegation—a combination that represents the gold standard for large-scale EKS clusters.
 
 ---
 
-## Security Groups for Pods
+## Pod-Level Isolation: Security Groups for Pods
 
-By default, all pods on a node share the node's security groups. Security Groups for Pods allows you to assign VPC security groups directly to individual pods, enabling network-level isolation at the pod granularity rather than the node level.
+Historically, all pods running on a specific EC2 node shared that node's security groups. If a node required access to an RDS database for one specific microservice, every other pod on that node inherited that database access. While Kubernetes Network Policies provide Layer 3/4 isolation inside the cluster, many enterprises mandate zero-trust security enforced by the cloud provider's native firewall layer.
 
-### How It Works
-
-Security Groups for Pods uses a feature called "branch ENIs" (also called trunk ENIs). The VPC CNI creates a trunk ENI on the node and then creates branch ENIs off that trunk, each with its own security group.
+Security Groups for Pods solves this by integrating directly with the AWS Nitro hypervisor to attach VPC Security Groups dynamically at the individual pod level. It achieves this utilizing a "Trunk and Branch" ENI architecture.
 
 ```mermaid
 flowchart LR
@@ -288,7 +304,9 @@ flowchart LR
     end
 ```
 
-### Enabling Security Groups for Pods
+The VPC CNI transforms one of the node's standard secondary ENIs into a massive "Trunk ENI". From this trunk, it spawns dozens of lightweight "Branch ENIs". Because each branch is recognized as an independent network interface by the AWS fabric, it can be assigned its own discrete Security Group.
+
+To leverage this powerful feature, first enable it within the VPC CNI:
 
 ```bash
 # Enable the feature on the VPC CNI
@@ -297,7 +315,7 @@ k set env daemonset aws-node -n kube-system \
   POD_SECURITY_GROUP_ENFORCING_MODE=standard
 ```
 
-Create a `SecurityGroupPolicy` resource that maps pods to security groups:
+Then, deploy a `SecurityGroupPolicy` resource. This object uses standard label selectors to identify target pods and apply the required Security Groups transparently:
 
 ```yaml
 apiVersion: vpcresources.k8s.aws/v1beta1
@@ -315,22 +333,15 @@ spec:
       - sg-0def789ghi012    # Allow only port 5432 to RDS
 ```
 
-Any pod in the `production` namespace with the label `app: payment-service` will now use these specific security groups instead of the node's security groups.
-
-### Limitations to Know
-
-- Pods with security groups cannot use NodePort or HostPort services
-- Node must use a Nitro-based instance type (m5, m6i, c5, r5, etc.)
-- Each branch ENI consumes one of the node's ENI slots, reducing pod capacity
-- Security group changes require pod restart (not hot-reloaded)
+Whenever a pod matching `app: payment-service` is scheduled, the CNI provisions a dedicated branch ENI, applies the `sg-0abc123def456` and `sg-0def789ghi012` security groups, and attaches the interface to the pod's namespace. The pod is now isolated by AWS native firewalls. This functionality is heavily dependent on modern Nitro instances (m5, c5, r5, t3, and newer) and strictly prohibits the use of NodePort or HostPort services on the affected pods.
 
 ---
 
-## AWS Load Balancer Controller
+## AWS Load Balancer Controller: Ingress and Egress
 
-The AWS Load Balancer Controller is the modern replacement for the legacy `kube-proxy`-based Service type LoadBalancer. It provisions and configures AWS Application Load Balancers (ALBs) for Ingress resources and Network Load Balancers (NLBs) for Service type LoadBalancer.
+Historically, Kubernetes created AWS Load Balancers via an in-tree cloud provider controller that was baked directly into the Kubernetes source code. This legacy approach is deprecated. Modern EKS networking dictates the use of the out-of-tree AWS Load Balancer Controller (LBC).
 
-### Installation
+The AWS LBC is an intelligent operator that watches for Kubernetes `Ingress` and `Service` resources and directly orchestrates AWS Application Load Balancers (ALBs) and Network Load Balancers (NLBs) to satisfy them.
 
 ```bash
 # Install via Helm
@@ -346,7 +357,7 @@ helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
 
 ### ALB for HTTP/HTTPS Traffic
 
-The controller creates an ALB when you create an Ingress resource with the `alb` ingress class:
+When dealing with Layer 7 traffic (HTTP, HTTPS, or gRPC over HTTP/2), the ALB provides advanced routing capabilities including path-based routing, host-based routing, and native TLS termination via AWS Certificate Manager (ACM). 
 
 ```yaml
 apiVersion: networking.k8s.io/v1
@@ -377,7 +388,7 @@ spec:
                   number: 80
 ```
 
-Key annotations explained:
+The annotations on this resource hold incredible power over the physical AWS infrastructure. 
 
 | Annotation | Purpose |
 | :--- | :--- |
@@ -387,11 +398,11 @@ Key annotations explained:
 | `ssl-redirect` | Automatic HTTP-to-HTTPS redirect |
 | `certificate-arn` | ACM certificate for TLS termination |
 
-The `target-type: ip` annotation is critical for EKS. It tells the ALB to send traffic directly to pod IP addresses (which are real VPC IPs, thanks to the VPC CNI). This bypasses the kube-proxy hop and gives you direct pod-level health checking.
+The `target-type: ip` annotation is arguably the most critical setting in EKS ingress. In legacy `instance` mode, the ALB sends traffic to a random NodePort on an EC2 instance, and `kube-proxy` (via iptables or IPVS) blindly forwards that traffic across the cluster network to the actual pod. This introduces massive latency, asymmetric load distribution, and obscures pod-level health. Because EKS pods have real VPC IP addresses, `target-type: ip` allows the ALB to route traffic *directly* to the pod's IP, completely bypassing the node's proxy layer.
 
 ### NLB for gRPC and TCP Traffic
 
-For non-HTTP workloads (gRPC, TCP, UDP), use a Service type LoadBalancer that creates an NLB:
+For raw Layer 4 traffic, extreme low-latency requirements, or protocols that cannot be terminated by an ALB, EKS relies on the Network Load Balancer (NLB). You provision an NLB by creating a Kubernetes `Service` of type `LoadBalancer` and applying specific annotations.
 
 ```yaml
 apiVersion: v1
@@ -419,7 +430,7 @@ spec:
       protocol: TCP
 ```
 
-### ALB vs. NLB Decision Matrix
+The differences between ALB and NLB are distinct and determine your entire edge architecture.
 
 | Feature | ALB (Application LB) | NLB (Network LB) |
 | :--- | :--- | :--- |
@@ -437,13 +448,9 @@ spec:
 
 ---
 
-## IPv6 on EKS
+## Future-Proofing: IPv6 on EKS
 
-EKS supports IPv6-only pods, which eliminates IP exhaustion entirely by giving every pod a unique IPv6 address from your VPC's `/56` range (over 4 billion billion IPs).
-
-### Enabling IPv6
-
-IPv6 must be configured at cluster creation -- you cannot migrate an existing IPv4 cluster to IPv6.
+The ultimate architectural solution to IPv4 exhaustion is completely bypassing it. EKS natively supports IPv6-only pods. By assigning pods unique IPv6 addresses from your VPC's globally unique `/56` range, you unlock over 4.7 sextillion IP addresses. IP exhaustion becomes a mathematical impossibility.
 
 ```bash
 # Create an IPv6 cluster
@@ -455,26 +462,21 @@ aws eks create-cluster \
   --kubernetes-version 1.35
 ```
 
-In IPv6 mode:
+In an IPv6 cluster:
+- Pods are assigned exclusively IPv6 addresses.
+- Kubernetes Services are configured as dual-stack, receiving both IPv4 and IPv6 cluster IPs to facilitate backward compatibility.
+- Internal node-to-node and pod-to-pod communication is entirely IPv6.
+- The CNI no longer performs complex SNAT translation, dramatically improving CPU efficiency on high-throughput network nodes.
 
-- Pods get IPv6 addresses only
-- Services get both IPv4 and IPv6 cluster IPs (dual-stack)
-- Node-to-node traffic uses IPv6
-- External traffic uses IPv6 (requires IPv6-capable VPC and subnets)
-- No IP exhaustion (the `/56` provides 4,722,366,482,869,645,213,696 addresses)
-
-The trade-off is that many AWS services and third-party tools still have limited IPv6 support. Test thoroughly before adopting.
+However, IPv6 must be designated during cluster creation—you cannot migrate a live IPv4 EKS cluster to IPv6. Furthermore, be rigorously vigilant regarding your dependencies: while AWS fully supports IPv6 for ELB and EC2, certain specialized third-party operators and older logging daemons may violently crash when encountering an IPv6 address socket.
 
 ---
 
 ## Did You Know?
 
 1. The VPC CNI's default behavior of pre-allocating one warm ENI per node means a 100-node cluster with `m5.xlarge` instances wastes approximately 1,400 IP addresses just on warm pools (14 IPs per warm ENI x 100 nodes). By switching `WARM_IP_TARGET=2` and `WARM_ENI_TARGET=0`, you can recover roughly 1,200 of those IPs immediately. For teams hitting IP exhaustion, this is often the fastest fix before migrating to Prefix Delegation.
-
 2. Prefix Delegation was introduced in 2021 and is now the AWS-recommended default for new clusters. A single `m5.xlarge` node goes from supporting 58 pods to 110 pods (the EKS-imposed cap), while consuming fewer IP reservation calls because a `/28` prefix is allocated atomically rather than 15 individual IPs. This also reduces EC2 API throttling during large-scale node launches.
-
 3. The AWS Load Balancer Controller's `group.name` annotation lets you share a single ALB across dozens of Ingress resources. Without it, every Ingress creates its own ALB at $16/month minimum. A team with 30 microservices each exposing an Ingress could be paying $480/month in ALB charges when a single shared ALB with path-based routing would cost $16/month plus traffic.
-
 4. Security Groups for Pods use Nitro's "branch ENI" capability, which was originally designed for AWS ECS. The trunk/branch architecture allows up to 110 branch ENIs on a single node (depending on instance type), each with its own security group. This is the same technology that makes ECS task-level networking work, repurposed for Kubernetes pods.
 
 ---
@@ -542,7 +544,7 @@ You can consolidate all 45 microservices behind a single Application Load Balanc
 
 ## Hands-On Exercise: Prefix Delegation + ALB for Web + NLB for gRPC
 
-In this exercise, you will configure an EKS cluster with Prefix Delegation for maximum IP efficiency, deploy a web application behind an ALB, and a gRPC service behind an NLB.
+In this comprehensive exercise, you will architect a highly scalable EKS networking foundation by configuring Prefix Delegation for maximum IP efficiency, deploying the AWS Load Balancer Controller, and exposing both a standard web application and a low-latency gRPC service to the internet.
 
 **What you will build:**
 
@@ -566,7 +568,7 @@ flowchart TD
 
 ### Task 1: Enable Prefix Delegation on the VPC CNI
 
-Configure the VPC CNI for Prefix Delegation and verify it is working.
+Configure the `aws-node` DaemonSet to allocate `/28` prefixes to EC2 ENIs rather than requesting individual secondary IP addresses.
 
 <details>
 <summary>Solution</summary>
@@ -597,7 +599,7 @@ aws ec2 describe-instances --instance-ids $INSTANCE_ID \
 
 ### Task 2: Update Node Group Max-Pods
 
-Ensure the kubelet allows 110 pods to take advantage of Prefix Delegation.
+Update the physical nodes to inform the `kubelet` that it is now permitted to schedule up to 110 pods per node, fully utilizing the newly available Prefix Delegation IP space.
 
 <details>
 <summary>Solution</summary>
@@ -641,6 +643,8 @@ k get node -o json | jq '.items[0].status.allocatable.pods'
 
 ### Task 3: Install the AWS Load Balancer Controller
 
+Provision the AWS LBC using Helm so the cluster can autonomously communicate with the AWS API to generate load balancers from manifest files.
+
 <details>
 <summary>Solution</summary>
 
@@ -672,6 +676,8 @@ k get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
 </details>
 
 ### Task 4: Deploy a Web Application Behind an ALB
+
+Deploy an NGINX web application and expose it dynamically utilizing an Application Load Balancer functioning in direct-IP routing mode.
 
 <details>
 <summary>Solution</summary>
@@ -767,6 +773,8 @@ curl -s -o /dev/null -w "%{http_code}" http://$ALB_URL
 
 ### Task 5: Deploy a gRPC Service Behind an NLB
 
+Implement a high-performance gRPC health-check service operating over TCP port 9000, exposed via an ultra-low latency Network Load Balancer.
+
 <details>
 <summary>Solution</summary>
 
@@ -846,7 +854,7 @@ aws elbv2 describe-target-health --target-group-arn $TG_ARN \
 
 ### Task 6: Verify Pod IP Allocation with Prefix Delegation
 
-Confirm that pods are using IPs from allocated prefixes, not individual secondary IPs.
+Probe the AWS EC2 sub-system directly to validate that your node ENIs are being assigned `/28` prefixes by the IPAMD layer, securing your cluster against IP exhaustion.
 
 <details>
 <summary>Solution</summary>
@@ -878,6 +886,8 @@ k get node $NODE -o json | jq '.status.allocatable.pods'
 
 ### Clean Up
 
+Ensure you purge all resources, as unmanaged load balancers will continually accrue billing charges against your AWS account.
+
 ```bash
 k delete namespace web-demo
 helm uninstall aws-load-balancer-controller -n kube-system
@@ -886,16 +896,18 @@ helm uninstall aws-load-balancer-controller -n kube-system
 
 ### Success Criteria
 
-- [ ] I enabled Prefix Delegation on the VPC CNI and verified `/28` prefixes on node ENIs
-- [ ] I updated node max-pods to 110 to take advantage of Prefix Delegation
-- [ ] I installed the AWS Load Balancer Controller via Helm
-- [ ] I deployed a web application accessible through an ALB with `target-type: ip`
-- [ ] I deployed a gRPC service accessible through an NLB with cross-zone load balancing
-- [ ] I verified ALB/NLB target health shows pod IPs (not node IPs)
-- [ ] I can explain why Prefix Delegation solves IP exhaustion for most clusters
+- [ ] I enabled Prefix Delegation on the VPC CNI and verified `/28` prefixes on node ENIs.
+- [ ] I updated node max-pods to 110 to take advantage of Prefix Delegation.
+- [ ] I installed the AWS Load Balancer Controller via Helm.
+- [ ] I deployed a web application accessible through an ALB with `target-type: ip`.
+- [ ] I deployed a gRPC service accessible through an NLB with cross-zone load balancing.
+- [ ] I verified ALB/NLB target health shows pod IPs (not node IPs).
+- [ ] I can explain why Prefix Delegation solves IP exhaustion for most clusters.
 
 ---
 
 ## Next Module
 
-Your pods have IP addresses and your traffic flows through load balancers. But how do those pods authenticate to AWS services like S3, DynamoDB, and SQS? Head to [Module 5.3: EKS Identity (IRSA vs Pod Identity)](../module-5.3-eks-identity/) to master the transition from IRSA to the simpler Pod Identity system.
+Your pods possess real, routable IP addresses directly connected to the VPC backbone, and your ingress architecture is highly available behind fully native AWS Load Balancers. However, networking is only one half of the security equation. How do these pods securely authenticate against internal AWS APIs like S3 buckets, DynamoDB tables, and SQS queues without relying on easily compromised static access keys? 
+
+In the subsequent section, we tear down IAM complexities. Head to [Module 5.3: EKS Identity (IRSA vs Pod Identity)](../module-5.3-eks-identity/) to master the critical migration path from legacy IAM Roles for Service Accounts (IRSA) to the radically simpler AWS Pod Identity system.
