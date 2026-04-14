@@ -83,7 +83,7 @@ Special characters:
 - `-` -- Range (`1-5` = Monday through Friday)
 - `/` -- Step values (`*/5` = every 5 units)
 
-> **Try It Now**: Want to see what a cron expression translates to in plain English? If you have a browser open, go to `crontab.guru` and type `*/15 9-17 * * 1-5`. It's a lifesaver for checking your work before committing a schedule.
+> **Stop and think**: Want to see what a cron expression translates to in plain English? If you have a browser open, go to `crontab.guru` and type `*/15 9-17 * * 1-5`. It's a lifesaver for checking your work before committing a schedule.
 
 #### Common Cron Patterns
 
@@ -139,7 +139,7 @@ sudo crontab -u deploy -e
 sudo crontab -u deploy -l
 ```
 
-> **Exam tip**: `crontab -r` deletes ALL your cron jobs without asking. Many sysadmins have accidentally typed `crontab -r` when they meant `crontab -e` (the keys are adjacent). Some people alias `crontab -r` to `crontab -ri` for safety.
+> **Pause and predict**: What happens if you run `crontab -r` by accident? It deletes ALL your cron jobs without asking. Many sysadmins have accidentally typed `crontab -r` when they meant `crontab -e` (the keys are adjacent). Some people alias `crontab -r` to `crontab -ri` for safety.
 
 #### System-Wide Cron Directories
 
@@ -189,7 +189,7 @@ MAILTO=admin@example.com
 # 4. Script uses relative paths that don't resolve in cron's context
 ```
 
-> **Pro tip**: Always test your cron command by running it manually first. Then add `>> /var/log/myscript.log 2>&1` to capture any output when it runs via cron.
+> **Stop and think**: Always test your cron command by running it manually first. Then add `>> /var/log/myscript.log 2>&1` to capture any output when it runs via cron.
 
 ---
 
@@ -290,7 +290,7 @@ systemd-analyze calendar "Mon..Fri *-*-* 09:00:00"
 # From now: 2 days left
 ```
 
-> **Try It Now**: Test this on your own system. Run `systemd-analyze calendar "Fri *-*-13 00:00:00"`. When is the next time Friday the 13th happens? Systemd will calculate it instantly.
+> **Stop and think**: Test this on your own system. Run `systemd-analyze calendar "Fri *-*-13 00:00:00"`. When is the next time Friday the 13th happens? Systemd will calculate it instantly.
 
 #### Monitoring Timers
 
@@ -344,7 +344,7 @@ at -c 3
 atrm 3
 ```
 
-> **When to use `at` vs cron**: Use `at` for tasks you want to run exactly once -- a scheduled reboot, a one-time data migration, or a reminder. Use cron for anything recurring.
+> **Pause and predict**: When should you use `at` vs cron? Use `at` for tasks you want to run exactly once -- a scheduled reboot, a one-time data migration, or a reminder. Use cron for anything recurring.
 
 ---
 
@@ -472,7 +472,7 @@ tar -tzvf backup.tar.gz
 | bzip2 | `-j` | `.tar.bz2` | Slow | Better | Archival storage |
 | xz | `-J` | `.tar.xz` | Slowest | Best | Distribution tarballs, long-term storage |
 
-> **Rule of thumb**: Use gzip for daily backups (speed matters), xz for archives you will keep for months or years (ratio matters), and skip compression for data that is already compressed (images, videos, encrypted files).
+> **Stop and think**: As a rule of thumb, use gzip for daily backups (speed matters), xz for archives you will keep for months or years (ratio matters), and skip compression for data that is already compressed (images, videos, encrypted files).
 
 ---
 
@@ -494,7 +494,7 @@ rsync -av /source   /dest/    # Copies /source directory itself into /dest
 # Result: /dest/file.txt  vs  /dest/source/file.txt
 ```
 
-> **Try It Now**: Experience the trailing slash difference yourself. Open your terminal and run:
+> **Stop and think**: Experience the trailing slash difference yourself. Open your terminal and run:
 > ```bash
 > mkdir -p /tmp/source_dir /tmp/dest1 /tmp/dest2
 > touch /tmp/source_dir/file.txt
