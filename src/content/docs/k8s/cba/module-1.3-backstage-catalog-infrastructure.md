@@ -52,7 +52,7 @@ By the end of this comprehensive module, you will deeply understand:
 
 Understanding the lineage of Backstage provides crucial context for its architectural decisions. Backstage was open sourced by Spotify on March 16, 2020. The project quickly gained traction, entering the CNCF Sandbox on September 8, 2020. Recognizing its immense impact on developer productivity, the Cloud Native Computing Foundation promoted Backstage to the CNCF Incubating maturity level on March 15, 2022. 
 
-As of April 2026, Backstage remains at the CNCF Incubating level and has not yet formally graduated, though it serves as the de facto standard for Internal Developer Portals (IDPs). Reports indicate Backstage adoption has grown significantly, with some marketing materials claiming over 3,000 organizations and 2 million developers utilizing it globally. While some blog summaries claim an 89% market share for Backstage in the IDP space, this lacks an authoritative primary source; nevertheless, its dominant footprint in the ecosystem is undeniable. Furthermore, as of early 2026, v1.49.0 is among the most recent major releases, introducing massive systemic upgrades like the New Frontend System.
+As of April 2026, Backstage remains at the CNCF Incubating level and has not yet formally graduated, though it serves as the de facto standard for Internal Developer Portals (IDPs). Reports indicate Backstage adoption has grown significantly, though specific numbers—such as claims of over 3,000 organizations, 2 million developers, or an 89% market share—remain unverified by authoritative primary sources. Nevertheless, its dominant footprint in the ecosystem is undeniable. Furthermore, while v1.49.0 is recognized as a recent major release in early 2026 that introduced massive systemic upgrades like the New Frontend System, the exact latest version at any given moment is subject to the project's frequent release cycles.
 
 ---
 
@@ -541,7 +541,7 @@ You should use the **API** kind. The API kind represents a contract or boundary 
 <details>
 <summary>Answer</summary>
 
-The update is not instantly reflected because Backstage relies on a background processing loop that has a default refresh interval of approximately **100-200 seconds**. The catalog processing loop continuously cycles through all registered entities, fetching their latest state from the source location. Because there is no guarantee of instant updates, developers must either wait for the next cycle to complete or manually trigger a refresh via `POST /api/catalog/refresh` with the `entityRef`. This asynchronous approach prevents the backend from being overwhelmed by simultaneous source repository updates.
+The update is not instantly reflected because Backstage relies on a background processing loop that has a default refresh interval of approximately **100-200 seconds**. The catalog processing loop continuously cycles through all registered entities, fetching their latest state from the source location. Because there is no guarantee of instant updates, developers must either wait for the next cycle to complete or manually trigger a refresh via `POST /api/catalog/refresh` with the `entityRef`. This asynchronous approach prevents the backend from being overwhelmed by simultaneous source repository updates, ensuring stable performance across the platform.
 
 </details>
 
@@ -550,7 +550,7 @@ The update is not instantly reflected because Backstage relies on a background p
 <details>
 <summary>Answer</summary>
 
-You must use **environment variable substitution** with the `${VARIABLE_NAME}` syntax, such as `token: ${GITHUB_TOKEN}`. Backstage resolves these values at startup by reading them directly from the host process's environment variables. You should never hardcode secrets in configuration files because they are often committed to version control, which poses a severe security risk. Injecting them via environment variables ensures that sensitive credentials remain strictly within the runtime environment.
+You must use **environment variable substitution** with the `${VARIABLE_NAME}` syntax, such as `token: ${GITHUB_TOKEN}`. Backstage resolves these values at startup by reading them directly from the host process's environment variables. You should never hardcode secrets in configuration files because they are often committed to version control, which poses a severe security risk. Injecting them via environment variables ensures that sensitive credentials remain strictly within the runtime environment, protecting your infrastructure from unauthorized access.
 
 </details>
 
@@ -559,7 +559,7 @@ You must use **environment variable substitution** with the `${VARIABLE_NAME}` s
 <details>
 <summary>Answer</summary>
 
-Backstage securely handles this by using the **proxy plugin** (`/api/proxy`), which forwards requests from the frontend through the backend to external APIs. By routing the request through the backend, the server can safely inject the required authorization headers (such as the PagerDuty API token) before forwarding the request to the external service. The browser never sees the external service tokens, which prevents them from being leaked or exploited by malicious scripts. Furthermore, this pattern effectively circumvents CORS (Cross-Origin Resource Sharing) restrictions that would otherwise block direct client-side requests.
+Backstage securely handles this by using the **proxy plugin** (`/api/proxy`), which forwards requests from the frontend through the backend to external APIs. By routing the request through the backend, the server can safely inject the required authorization headers (such as the PagerDuty API token) before forwarding the request to the external service. The browser never sees the external service tokens, which prevents them from being leaked or exploited by malicious scripts. Furthermore, this pattern effectively circumvents CORS (Cross-Origin Resource Sharing) restrictions that would otherwise block direct client-side requests from the single-page application.
 
 </details>
 
@@ -568,7 +568,7 @@ Backstage securely handles this by using the **proxy plugin** (`/api/proxy`), wh
 <details>
 <summary>Answer</summary>
 
-Entities can be registered through **manual registration** or **automated discovery**. Manual registration involves explicitly adding static Location entries in `app-config.yaml` under `catalog.locations` or clicking the "Register Existing Component" button in the UI. Automated discovery, on the other hand, utilizes built-in providers (like `githubDiscovery`, `gitlab`, or `githubOrg`) configured under `catalog.providers` to automatically scan repositories and organizational groups for `catalog-info.yaml` files. Automated discovery is highly recommended for scaling, while manual registration is useful for testing or isolated components.
+Entities can be registered through **manual registration** or **automated discovery**. Manual registration involves explicitly adding static Location entries in `app-config.yaml` under `catalog.locations` or clicking the "Register Existing Component" button in the UI. Automated discovery, on the other hand, utilizes built-in providers (like `githubDiscovery`, `gitlab`, or `githubOrg`) configured under `catalog.providers` to automatically scan repositories and organizational groups for `catalog-info.yaml` files. Automated discovery is highly recommended for scaling across large engineering organizations, while manual registration is useful for testing or isolated components.
 
 </details>
 
@@ -577,7 +577,7 @@ Entities can be registered through **manual registration** or **automated discov
 <details>
 <summary>Answer</summary>
 
-You must use **PostgreSQL** for a production deployment. The default SQLite (or `better-sqlite3`) database is strictly intended for local development and testing, as it lacks the concurrency and durability required for real-world usage. PostgreSQL supports concurrent connections, ensures data persistence, and can efficiently handle the intense catalog processing workloads of a production environment. You configure it by setting `backend.database.client: pg` in your `app-config.production.yaml` file.
+You must use **PostgreSQL** for a production deployment. The default SQLite (or `better-sqlite3`) database is strictly intended for local development and testing, as it lacks the concurrency and durability required for real-world usage. PostgreSQL supports concurrent connections, ensures data persistence, and can efficiently handle the intense catalog processing workloads of a production environment. You configure it by setting `backend.database.client: pg` in your `app-config.production.yaml` file to ensure your catalog remains highly available and resilient.
 
 </details>
 
@@ -586,7 +586,7 @@ You must use **PostgreSQL** for a production deployment. The default SQLite (or 
 <details>
 <summary>Answer</summary>
 
-The entity will become an **orphaned entity**. It remains in the catalog database but is no longer actively refreshed from its source because the origin Location is missing. Backstage marks these entities by attaching the annotation `backstage.io/orphan: 'true'`, alerting administrators that the entity is disconnected. These orphans must be explicitly cleaned up, either manually through the Backstage UI or programmatically via the catalog API (`DELETE /api/catalog/entities/by-uid/<uid>`), to prevent the catalog from accumulating stale data.
+The entity will become an **orphaned entity**. It remains in the catalog database but is no longer actively refreshed from its source because the origin Location is missing. Backstage marks these entities by attaching the annotation `backstage.io/orphan: 'true'`, alerting administrators that the entity is disconnected from its source of truth. These orphans must be explicitly cleaned up, either manually through the Backstage UI or programmatically via the catalog API (`DELETE /api/catalog/entities/by-uid/<uid>`), to prevent the catalog from accumulating stale and confusing data.
 
 </details>
 
@@ -595,7 +595,7 @@ The entity will become an **orphaned entity**. It remains in the catalog databas
 <details>
 <summary>Answer</summary>
 
-Backstage achieves this through **configuration layering**, where you pass multiple `--config` flags when starting the backend (e.g., `node packages/backend --config app-config.yaml --config app-config.production.yaml`). The framework reads the files in the order they are provided, using a deep merge strategy where values in later files override the corresponding values from earlier files. This pattern allows teams to maintain a common base configuration while safely applying environment-specific overrides, such as database credentials or authentication settings for production. For example, your base config might define the catalog providers, while your production config injects the necessary OAuth client secrets. This separation prevents accidental leakage of production secrets in local environments.
+Backstage achieves this through **configuration layering**, where you pass multiple `--config` flags when starting the backend (e.g., `node packages/backend --config app-config.yaml --config app-config.production.yaml`). The framework reads the files in the order they are provided, using a deep merge strategy where values in later files override the corresponding values from earlier files. This pattern allows teams to maintain a common base configuration while safely applying environment-specific overrides, such as database credentials or authentication settings for production. For example, your base config might define the catalog providers, while your production config injects the necessary OAuth client secrets. This separation prevents accidental leakage of production secrets in local environments while maintaining an easily testable application structure.
 
 </details>
 
@@ -604,7 +604,7 @@ Backstage achieves this through **configuration layering**, where you pass multi
 <details>
 <summary>Answer</summary>
 
-You must add the **`github.com/project-slug`** annotation with the value formatted as `org/repo-name`. For example, specifying `github.com/project-slug: myorg/payments-service` tells Backstage exactly where the source code resides. This annotation acts as the crucial linkage that allows GitHub-related plugins to fetch and surface repository-level telemetry directly in the UI. Without it, the plugins lack the context needed to associate the catalog entity with its upstream source repository.
+You must add the **`github.com/project-slug`** annotation with the value formatted as `org/repo-name`. For example, specifying `github.com/project-slug: myorg/payments-service` tells Backstage exactly where the source code resides. This annotation acts as the crucial linkage that allows GitHub-related plugins to fetch and surface repository-level telemetry directly in the UI. Without it, the plugins lack the context needed to associate the catalog entity with its upstream source repository, leaving your component page devoid of valuable integration data.
 
 </details>
 
@@ -613,7 +613,7 @@ You must add the **`github.com/project-slug`** annotation with the value formatt
 <details>
 <summary>Answer</summary>
 
-The issue occurs because catalog processing should ideally run on a **single replica** to avoid duplicate processing work and database conflicts. If multiple replicas simultaneously execute the catalog processing loop, they may redundantly fetch data from the same external sources and attempt conflicting database writes. To safely scale the backend while preventing these issues, the `@backstage/plugin-catalog-backend` supports leader election. This mechanism ensures that only one replica actively performs catalog processing tasks while all other replicas focus solely on serving API requests.
+The issue occurs because catalog processing should ideally run on a **single replica** to avoid duplicate processing work and database conflicts. If multiple replicas simultaneously execute the catalog processing loop, they may redundantly fetch data from the same external sources and attempt conflicting database writes. To safely scale the backend while preventing these issues, the `@backstage/plugin-catalog-backend` supports leader election. This mechanism ensures that only one replica actively performs catalog processing tasks while all other replicas focus solely on serving API requests, preventing race conditions and unnecessary load on upstream integrations.
 
 </details>
 
