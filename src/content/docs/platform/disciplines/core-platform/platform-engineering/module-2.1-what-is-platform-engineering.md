@@ -408,6 +408,8 @@ flowchart BT
 
 Platform Engineering *uses* DevOps practices and *builds on* infrastructure to create products for developers.
 
+> **Stop and think**: If a platform team is just renaming the infrastructure team without changing their ticket-based workflow, have they actually adopted Platform Engineering?
+
 ---
 
 ## Platform Team Topologies
@@ -438,14 +440,15 @@ How should platform teams be structured? Team Topologies (Skelton & Pais) provid
 
 ### Platform Team Responsibilities
 
-```text
-Platform Team Owns:
-├── Developer Portal (service catalog, docs, templates)
-├── Deployment Platform (CI/CD, GitOps, environments)
-├── Infrastructure Abstraction (compute, storage, networking)
-├── Observability Platform (monitoring, logging, tracing)
-├── Security Platform (secrets, policies, scanning)
-└── Developer Experience (onboarding, support, training)
+```mermaid
+flowchart LR
+    PT["Platform Team Owns"]
+    PT --> A["Developer Portal<br/>(service catalog, docs, templates)"]
+    PT --> B["Deployment Platform<br/>(CI/CD, GitOps, environments)"]
+    PT --> C["Infrastructure Abstraction<br/>(compute, storage, networking)"]
+    PT --> D["Observability Platform<br/>(monitoring, logging, tracing)"]
+    PT --> E["Security Platform<br/>(secrets, policies, scanning)"]
+    PT --> F["Developer Experience<br/>(onboarding, support, training)"]
 ```
 
 ### Platform Team Interactions
