@@ -188,6 +188,8 @@ sequenceDiagram
     end
 ```
 
+> **Pause and predict**: If you use asynchronous replication and the primary node crashes before replicating to followers, what happens to the most recent writes?
+
 - **Synchronous Replication**: Write completes after ALL replicas acknowledge. Strong consistency, no data loss on primary failure. High latency (wait for slowest replica), availability depends on all replicas.
 - **Asynchronous Replication**: Write completes after PRIMARY acknowledges. Low latency (respond immediately), availability only needs primary. Eventual consistency, data loss possible if primary fails before replication.
 - **Semi-Synchronous (Quorum)**: Write completes after MAJORITY acknowledges. Balances consistency and performance, tolerates some replica failures. Still has some latency for quorum.
@@ -349,6 +351,8 @@ sequenceDiagram
 
 Once you've seen a value, you shouldn't see an older one. Time shouldn't "go backwards."
 If Read 1 returns `X=2` (from a fully replicated node) and Read 2 returns `X=1` (from a lagging node), the user experiences a jarring rewind in state.
+
+> **Stop and think**: How would a jarring "rewind in state" (like seeing a deleted item reappear temporarily) affect user trust in an application?
 
 **Solutions:**
 - Session affinity to the same replica.
