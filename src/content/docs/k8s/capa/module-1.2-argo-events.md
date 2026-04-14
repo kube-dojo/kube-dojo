@@ -1,5 +1,5 @@
 ---
-title: "Module 1.2: Argo Events \u2014 Event-Driven Automation for Kubernetes"
+title: "Module 1.2: Argo Events — Event-Driven Automation for Kubernetes"
 slug: k8s/capa/module-1.2-argo-events
 sidebar:
   order: 3
@@ -94,19 +94,89 @@ The comprehensive architecture of Argo Events is built entirely around four logi
 
 To visualize the system, here is the architectural diagram mapping the journey from EventSource to Trigger Action. 
 
-*(Legacy layout preservation format)*
-```text
-┌──────────────────────────────────────────────────────────────────────┐
-│                        ARGO EVENTS ARCHITECTURE                      │
-│                                                                      │
-│  ┌────────────────┐    ┌────────────────┐    ┌────────────────────┐  │
-│  │  EventSource   │    │   EventBus     │    │     Sensor         │  │
-│  │                │    │  (NATS         │    │                    │  │
-│  │  - Webhook     │───▶│   JetStream)   │───▶│  - Dependencies   │  │
-│  │  - GitHub      │    │                │    │  - Filters         │  │
-│  │  - S3          │    │  Namespace-    │    │  - Trigger         │  │
-│  │  - Cron        │    │  scoped msg    │    │    templates       │  │
-│  │  - Kafka       │    │  broker        │    │                    │  │
-│  │  - SNS/SQS     │    │                │    │                    │  │
-│  └────────────────┘    └────────────────┘    └───────┬────────────┘  │
-│                                                      │
+```mermaid
+flowchart LR
+    subgraph ARGO EVENTS ARCHITECTURE
+        direction LR
+        ES["EventSource<br/><br/>- Webhook<br/>- GitHub<br/>- S3<br/>- Cron<br/>- Kafka<br/>- SNS/SQS"]
+        EB["EventBus<br/><br/>(NATS JetStream)<br/><br/>Namespace-scoped<br/>msg broker"]
+        S["Sensor<br/><br/>- Dependencies<br/>- Filters<br/>- Trigger templates"]
+        T["Trigger Action<br/><br/>- Argo Workflows<br/>- K8s Objects<br/>- HTTP/serverless<br/>- Slack/Kafka"]
+        
+        ES --> EB
+        EB --> S
+        S --> T
+    end
+```
+
+### 2.1 The Components in Detail
+
+**EventSource**
+The EventSource catalog currently includes AMQP, AWS SNS, AWS SQS, Azure Events Hub, Azure Queue Storage, Calendar, File, GCP PubSub, GitHub, GitLab, Kafka, NATS, Slack, Stripe, Webhooks, and other named connectors. EventSources sit at the edge of your cluster and listen for these specific external payloads.
+
+**EventBus**
+Argo Events supports three EventBus implementations (NATS, JetStream, and Kafka), with NATS Streaming (STAN) explicitly noted as deprecated. A NATS-backed EventBus is documented as supported via either NATS Streaming or JetStream, but modern deployments should always favor JetStream. The EventBus acts as the internal transport layer within a given namespace.
+
+> **Stop and think**: If STAN is deprecated, what operational risks do you take by deploying it on a modern Kubernetes cluster? Consider the support lifecycle of both Argo Events and the underlying message broker.
+
+**Sensor and Triggers**
+Sensors define event dependencies, subscribe to the EventBus, and execute triggers when those dependencies resolve. Trigger resources executed by a Sensor include Argo Workflows, Kubernetes object creation, HTTP/serverless, NATS/Kafka messages, Slack, Azure Event Hubs, Custom triggers, and OpenWhisk.
+
+---
+
+## Part 3: Installation and Lifecycle Management
+
+### 3.1 Installation Flow
+
+The documented installation flow requires creating the `argo-events` namespace, applying the core installation manifests, and then creating the EventBus via the native example manifest.
+
+```bash
+# Note: Always execute these against a modern Kubernetes v1.35+ cluster
+kubectl create namespace argo-events
+kubectl apply -f https://raw.githubusercontent.com/argoproj/argo-events/stable/manifests/install.yaml
+kubectl apply -f https://raw.githubusercontent.com/argoproj/argo-events/stable/examples/eventbus/native.yaml -n argo-events
+```
+
+### 3.2 Namespace Scoping and Architecture
+
+For Argo Events v1.7 and above, namespace-scoped installs must use the `--namespaced` flag on the unified controller deployment, with an optional `--managed-namespace` flag if you want to watch a specific target namespace. Historically, pre-v1.7 setups required you to deploy three separate controllers with per-controller `--namespaced` flags, but the architecture is now effectively consolidated.
+
+### 3.3 Versioning and Helm Considerations
+
+When operating Argo Events in production, version drift can cause controller failures. The project's release policy requires matching image versions across all components: `eventsource-controller`, `sensor-controller`, `eventbus-controller`, and `events-webhook`. 
+
+Furthermore, the release policy strictly follows semantic versioning (x.y.z) with only the two most recent minor branches maintained. If you manage your deployments using Helm, be aware that the Argo Helm chart documentation explicitly states that only the latest upstream versions are officially supported; older versions are not guaranteed to receive bug or security patching.
+
+---
+
+## Part 4: Knowledge Check
+
+**Quiz 1**
+**Scenario:** You are tasked with migrating a legacy polling application to an event-driven architecture on a Kubernetes v1.35 cluster. You decide to use Argo Events. The application needs to process incoming webhooks from Stripe, filter the events based on the payload, and launch an Argo Workflow only if the payment is successful. Which combination of Argo Events Custom Resources will you need to deploy?
+A) EventSource, Sensor, and Trigger
+B) WebhookSource, EventBus, and WorkflowTrigger
+C) EventSource, EventBus, and Sensor
+D) EventBus, EventSource, and Trigger template
+
+**Answer:** C
+**Explanation:** To build a complete event-driven pipeline in Argo Events, you must deploy an EventSource, an EventBus, and a Sensor. The EventSource is responsible for receiving the external Stripe webhooks and converting them into standardized CloudEvents. The EventBus acts as the transport layer (often backed by JetStream) that routes these events within the namespace. Finally, the Sensor defines the dependency logic (e.g., filtering for successful payments) and contains the embedded Trigger template that actually launches the Argo Workflow.
+
+**Quiz 2**
+**Scenario:** Your platform engineering team is upgrading an older Kubernetes cluster to v1.35. During the upgrade, they notice that the Argo Events installation is using a NATS Streaming (STAN) EventBus. According to current Argo Events architecture guidelines, what action should the team take regarding the EventBus?
+A) No action is needed; STAN is the recommended default for v1.35.
+B) Migrate the EventBus from STAN to JetStream or Kafka, as STAN is deprecated.
+C) Downgrade the cluster to Kubernetes v1.33 to maintain STAN compatibility.
+D) Replace the EventBus with an EventSource configured for NATS.
+
+**Answer:** B
+**Explanation:** The team must migrate the EventBus to either JetStream or Kafka. Argo Events supports three EventBus implementations (NATS, JetStream, and Kafka), but explicitly notes that NATS Streaming (STAN) is deprecated. JetStream is the modern, supported NATS-backed implementation designed to replace STAN, offering better performance and reliability. Keeping a deprecated technology in a freshly upgraded cluster poses operational and support risks, particularly since Argo only maintains the two most recent minor release branches.
+
+**Quiz 3**
+**Scenario:** You are deploying Argo Events v1.9.10 to a locked-down enterprise cluster where administrators enforce strict namespace isolation. You need the Argo Events controllers to only watch and process resources within a specific tenant namespace (`tenant-a`), rather than at the cluster scope. How should you configure the installation?
+A) Deploy three separate controllers and pass `--namespaced` to each.
+B) Apply the standard cluster-wide manifests and use RBAC to restrict access.
+C) Use the `--namespaced` flag on the controller, optionally along with `--managed-namespace`.
+D) Install a dedicated EventBus in `tenant-a` and disable the controller.
+
+**Answer:** C
+**Explanation:** For Argo Events v1.7 and newer, namespace-scoped installations are handled by applying the `--namespaced` flag to the unified controller deployment. You can also specify `--managed-namespace` if the controller needs to watch a different specific namespace. Earlier versions (pre-v1.7) required deploying three separate controllers with individual flags, but the modern architecture consolidates this into a single deployment. Relying solely on cluster-wide manifests and RBAC (Option B) violates the requirement for strict controller-level namespace isolation, and an EventBus alone (Option D) cannot process resources without an active controller.
