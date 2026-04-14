@@ -35,25 +35,25 @@ Azure DevOps is Microsoft's integrated DevOps platform providing source control 
 
 Azure Pipelines uses YAML files (typically `azure-pipelines.yml`) to define build and deployment workflows. A pipeline consists of **stages**, **jobs**, and **steps**.
 
-```text
-    Pipeline Structure:
+```mermaid
+graph TD
+    Pipeline --> StageBuild[Stage: Build]
+    Pipeline --> StageDeploy[Stage: Deploy]
 
-    Pipeline
-    ├── Stage: Build
-    │   └── Job: BuildAndTest
-    │       ├── Step: Checkout code
-    │       ├── Step: Run tests
-    │       ├── Step: Build Docker image
-    │       └── Step: Push to ACR
-    │
-    └── Stage: Deploy
-        ├── Job: DeployStaging
-        │   ├── Step: Deploy to staging
-        │   └── Step: Run smoke tests
-        │
-        └── Job: DeployProduction
-            ├── Step: Manual approval gate
-            └── Step: Deploy to production
+    StageBuild --> JobBuild[Job: BuildAndTest]
+    JobBuild --> Step1[Step: Checkout code]
+    JobBuild --> Step2[Step: Run tests]
+    JobBuild --> Step3[Step: Build Docker image]
+    JobBuild --> Step4[Step: Push to ACR]
+
+    StageDeploy --> JobStaging[Job: DeployStaging]
+    StageDeploy --> JobProd[Job: DeployProduction]
+
+    JobStaging --> Step5[Step: Deploy to staging]
+    JobStaging --> Step6[Step: Run smoke tests]
+
+    JobProd --> Step7[Step: Manual approval gate]
+    JobProd --> Step8[Step: Deploy to production]
 ```
 
 ```yaml
@@ -134,33 +134,17 @@ stages:
 
 Service Connections are how Azure DevOps authenticates with Azure. The modern approach uses **Workload Identity Federation** (OIDC), which eliminates client secrets entirely.
 
-```text
-    Legacy Approach (Service Principal + Secret):
-    ┌──────────────────┐    Client Secret     ┌─────────────┐
-    │  Azure DevOps    │ ──────────────────── │  Entra ID   │
-    │  Pipeline        │    (stored in ADO)    │             │
-    └──────────────────┘                       └──────┬──────┘
-                                                      │ Access Token
-                                                      ▼
-                                               ┌─────────────┐
-                                               │  Azure       │
-                                               │  Resources   │
-                                               └─────────────┘
-    Problem: Secret can leak, must be rotated, visible in pipeline settings.
+```mermaid
+flowchart TD
+    subgraph Legacy [Legacy Approach: Service Principal + Secret]
+        ADO1[Azure DevOps Pipeline] -- "Client Secret\n(stored in ADO)" --> EID1[Entra ID]
+        EID1 -- "Access Token" --> AR1[Azure Resources]
+    end
 
-    Modern Approach (Workload Identity Federation / OIDC):
-    ┌──────────────────┐    OIDC Token         ┌─────────────┐
-    │  Azure DevOps    │ ──────────────────── │  Entra ID   │
-    │  Pipeline        │    (short-lived,      │  (trusts ADO │
-    │                  │     auto-generated)   │   as issuer) │
-    └──────────────────┘                       └──────┬──────┘
-                                                      │ Access Token
-                                                      ▼
-                                               ┌─────────────┐
-                                               │  Azure       │
-                                               │  Resources   │
-                                               └─────────────┘
-    No secrets stored anywhere. Token is generated per pipeline run.
+    subgraph Modern [Modern Approach: Workload Identity Federation / OIDC]
+        ADO2[Azure DevOps Pipeline] -- "OIDC Token\n(short-lived, auto-generated)" --> EID2["Entra ID\n(trusts ADO as issuer)"]
+        EID2 -- "Access Token" --> AR2[Azure Resources]
+    end
 ```
 
 To create a Workload Identity Federation service connection in Azure DevOps:
@@ -420,17 +404,18 @@ For production, use the official **Actions Runner Controller (ARC)** on AKS, whi
 
 ## Pipeline Security Best Practices
 
-```text
-    Security Layers for CI/CD:
-
-    ┌────────────────────────────────────────────────────────────┐
-    │  1. Authentication: OIDC (no static credentials)          │
-    │  2. Authorization: Least privilege RBAC                    │
-    │  3. Secrets: Key Vault references (not pipeline variables) │
-    │  4. Approval: Environment protection rules                 │
-    │  5. Supply chain: Image signing + SBOM                     │
-    │  6. Audit: Pipeline run logs + Azure activity logs         │
-    └────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Security_Layers [Security Layers for CI/CD]
+        direction TB
+        L1["1. Authentication: OIDC (no static credentials)"]
+        L2["2. Authorization: Least privilege RBAC"]
+        L3["3. Secrets: Key Vault references (not pipeline variables)"]
+        L4["4. Approval: Environment protection rules"]
+        L5["5. Supply chain: Image signing + SBOM"]
+        L6["6. Audit: Pipeline run logs + Azure activity logs"]
+        L1 --> L2 --> L3 --> L4 --> L5 --> L6
+    end
 ```
 
 | Practice | Why | Implementation |
