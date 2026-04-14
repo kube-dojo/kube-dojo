@@ -16,7 +16,7 @@ sidebar:
 
 After this module, you will be able to:
 - **Recognize** the warning signs of a dying technology (declining community, vendor pivot, ecosystem shrinkage)
-- **Explain** why Docker Swarm, Mesos, rkt, and other technologies lost to their alternatives
+- **Explain** why Docker Swarm, Mesos, Cloud Foundry, and other technologies lost to their alternatives
 - **Evaluate** new container/orchestration tools by checking adoption, governance, and cloud provider support
 - **Avoid** betting your career on technology that shows signs of decline
 
