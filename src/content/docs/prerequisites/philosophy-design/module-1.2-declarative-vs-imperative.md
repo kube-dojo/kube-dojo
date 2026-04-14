@@ -87,41 +87,18 @@ Kubernetes is the control loop. It observes, decides, and acts—continuously.
 
 This is Kubernetes' core mechanism:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              THE RECONCILIATION LOOP                        │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│    ┌──────────────┐                                        │
-│    │              │                                        │
-│    │  DESIRED     │◄───── You define this (YAML)          │
-│    │  STATE       │                                        │
-│    │              │                                        │
-│    └──────┬───────┘                                        │
-│           │                                                 │
-│           │  Compare                                        │
-│           ▼                                                 │
-│    ┌──────────────┐                                        │
-│    │              │                                        │
-│    │  CURRENT     │◄───── K8s observes this                │
-│    │  STATE       │                                        │
-│    │              │                                        │
-│    └──────┬───────┘                                        │
-│           │                                                 │
-│           │  If different...                               │
-│           ▼                                                 │
-│    ┌──────────────┐                                        │
-│    │              │                                        │
-│    │  TAKE        │◄───── K8s acts to reconcile           │
-│    │  ACTION      │                                        │
-│    │              │                                        │
-│    └──────┬───────┘                                        │
-│           │                                                 │
-│           └─────────────────────────────────────────┐      │
-│                                                     │      │
-│           Loop forever ◄────────────────────────────┘      │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Desired["DESIRED STATE<br/>(You define this in YAML)"]
+    Current["CURRENT STATE<br/>(K8s observes this)"]
+    Compare{"Compare"}
+    Action["TAKE ACTION<br/>(K8s acts to reconcile)"]
+
+    Desired --> Compare
+    Current --> Compare
+    Compare -- "If different..." --> Action
+    Action --> Current
+    Current -- "Loop forever" --> Compare
 ```
 
 **This loop runs constantly.** Not once when you run `kubectl apply`—forever.
@@ -229,7 +206,7 @@ Kubernetes has imperative commands:
 # These work, but...
 kubectl run nginx --image=nginx
 kubectl scale deployment nginx --replicas=5
-kubectl set image deployment/nginx nginx=nginx:1.19
+kubectl set image deployment/nginx nginx=nginx:1.26
 ```
 
 **Why they're dangerous:**
@@ -257,45 +234,26 @@ kubectl apply -f deployment.yaml
 
 ## Visualization: State Over Time
 
+```mermaid
+flowchart LR
+    subgraph Imperative ["Imperative Operations (Constant Firefighting)"]
+        direction LR
+        I1[Healthy] -- "Drift / Failure" --> I2[Broken]
+        I2 -- "Manual Fix Required" --> I3[Healthy]
+        I3 -- "Drift / Failure" --> I4[Broken]
+        I4 -- "Manual Fix Required" --> I5[Healthy]
+    end
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                   IMPERATIVE OPERATIONS                     │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  State                                                      │
-│    ▲                                                        │
-│    │       Manual intervention required                     │
-│    │              │         │         │                     │
-│    │    ┌─────────┼─────────┼─────────┼─────────┐          │
-│    │    │         ▼         ▼         ▼         │          │
-│    │ ───┴─────────X─────────X─────────X─────────┴───       │
-│    │              Failures / Drift                          │
-│    │                                                        │
-│    └────────────────────────────────────────────────► Time  │
-│                                                             │
-│  Result: Constant firefighting, unpredictable state        │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
 
-┌─────────────────────────────────────────────────────────────┐
-│                   DECLARATIVE OPERATIONS                    │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  State                                                      │
-│    ▲                                                        │
-│    │                                                        │
-│    │    ┌─────────────────────────────────────────┐        │
-│    │    │ Desired state (defined in YAML)         │        │
-│    │ ───┴─────────────────────────────────────────┴───     │
-│    │         ▲     ▲     ▲     ▲     ▲                     │
-│    │         │     │     │     │     │                     │
-│    │       Auto-healing by reconciliation loop             │
-│    │                                                        │
-│    └────────────────────────────────────────────────► Time  │
-│                                                             │
-│  Result: Self-healing, predictable, sleep at night         │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph Declarative ["Declarative Operations (Self-Healing)"]
+        direction LR
+        D1[Desired State] -- "Drift / Failure" --> D2[Broken]
+        D2 -- "Auto-healing (Reconciliation Loop)" --> D3[Desired State]
+        D3 -- "Drift / Failure" --> D4[Broken]
+        D4 -- "Auto-healing (Reconciliation Loop)" --> D5[Desired State]
+    end
 ```
 
 ---
@@ -365,13 +323,13 @@ kubectl apply -f deployment.yaml
 2. **During a high-traffic event, an engineer quickly runs `kubectl scale deployment web --replicas=10` to handle the load. Two days later, a junior developer merges a PR updating the application image, and the deployment suddenly drops back to 3 replicas, causing an outage. What caused this, and why did the imperative command create a trap?**
    <details>
    <summary>Answer</summary>
-   The imperative `kubectl scale` command changed the live cluster state without updating the source of truth in Git, creating what is known as configuration drift. When the junior developer applied the updated YAML from Git, Kubernetes saw the declared state was 3 replicas and dutifully "corrected" the cluster back to 3, unaware of the manual scaling. Imperative commands are dangerous because they leave no audit trail in version control, bypass peer review, and create a false reality that will inevitably be overwritten the next time declarative configurations are applied.
+   The imperative `kubectl scale` command changed the live cluster state without updating the source of truth in Git, creating what is known as configuration drift. When the junior developer applied the updated YAML from Git, Kubernetes saw the declared state was 3 replicas and dutifully "corrected" the cluster back to 3, unaware of the manual scaling. Imperative commands are dangerous because they leave no audit trail in version control, bypass peer review, and create a false reality that will inevitably be overwritten the next time declarative configurations are applied. This incident highlights exactly why manual overrides should only be used in true emergencies and must immediately be followed by a commit.
    </details>
 
 3. **Your CI/CD pipeline is configured to run `kubectl apply -f deployment.yaml` every time a commit is merged to the main branch. A developer accidentally triggers the pipeline 5 times in a row without changing the deployment file. What happens to the cluster, and what property of declarative systems makes this safe?**
    <details>
    <summary>Answer</summary>
-   The cluster state remains exactly the same, with no duplicate pods or resources created, thanks to the property of idempotency. An operation is idempotent if applying it multiple times yields the exact same result as applying it once. In a declarative system, `kubectl apply` simply tells Kubernetes what the end state should be; if the cluster already matches that state, Kubernetes takes no action. This makes automation inherently safe and predictable, allowing pipelines to run repeatedly without risking destructive side effects.
+   The cluster state remains exactly the same, with no duplicate pods or resources created, thanks to the property of idempotency. An operation is idempotent if applying it multiple times yields the exact same result as applying it once. In a declarative system, `kubectl apply` simply tells Kubernetes what the end state should be; if the cluster already matches that state, Kubernetes takes no action. This makes automation inherently safe and predictable, allowing pipelines to run repeatedly without risking destructive side effects or resource exhaustion.
    </details>
 
 4. **A rogue script accidentally runs `kubectl delete pod` on a database pod managed by a StatefulSet. Before the on-call engineer can even open their laptop to investigate the alert, the pod is already restarting. Why didn't the system wait for human intervention?**
