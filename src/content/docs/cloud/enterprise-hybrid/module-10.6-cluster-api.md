@@ -514,6 +514,8 @@ spec:
 
 Enterprise clusters often need custom node images with pre-installed agents, specific kernel modules, or hardened OS configurations.
 
+> **Stop and think**: Why is baking agents into the custom machine image (BYOI) often preferred over using a DaemonSet for security tools like Falco?
+
 ```bash
 # Build a custom AMI for EKS nodes using Packer
 cat <<'EOF' > eks-node.pkr.hcl
@@ -601,6 +603,8 @@ spec:
 
 ### Management Cluster High Availability
 
+> **Pause and predict**: If the management cluster requires etcd to store all CAPI objects, what happens if etcd corruption occurs and you have no backups?
+
 ```mermaid
 flowchart TD
     subgraph Management_Cluster_HA_Architecture [MANAGEMENT CLUSTER HA ARCHITECTURE]
@@ -647,6 +651,8 @@ kubectl --kubeconfig new-mgmt.kubeconfig get clusters -n fleet
 ### Multi-Tenancy in CAPI
 
 For enterprises with multiple teams managing their own clusters:
+
+> **Stop and think**: How does namespace isolation in the management cluster translate to the workload clusters? Can Team Alpha manage Team Beta's clusters if they are in different namespaces?
 
 ```yaml
 # Namespace per team with RBAC
@@ -756,7 +762,7 @@ By building a custom AMI or VM image that includes the CIS-hardened OS, the root
 <summary>Question 6: To reduce infrastructure costs, a junior engineer suggests running the CAPI management cluster as a workload on your largest production EKS cluster. Explain why this architectural decision introduces an unacceptable operational risk.</summary>
 
 **This architecture creates a circular dependency and a critical correlated failure risk.**
-If the AWS region hosting your production EKS cluster experiences an outage, or if the EKS cluster itself goes down, you lose the management cluster at the exact moment you need it to repair or rebuild your infrastructure. Without the management cluster, you cannot provision new clusters in a different region, auto-remediate failed nodes via MachineHealthChecks, or perform lifecycle operations to recover the environment. Best practices dictate that the management cluster must be decoupled from the infrastructure it manages, typically by running it on a different cloud provider, a dedicated highly available VM (using `kind` or `k3s`), or an on-premises environment.
+If the AWS region hosting your production EKS cluster experiences an outage, or if the EKS cluster itself goes down, you lose the management cluster at the exact moment you need it to repair or rebuild your infrastructure. Without the management cluster, you cannot provision new clusters in a different region, auto-remediate failed nodes via MachineHealthChecks, or perform lifecycle operations to recover the environment. By coupling the management plane to the data plane it manages, you create a scenario where a single failure domain can compromise your entire recovery strategy. Best practices dictate that the management cluster must be decoupled from the infrastructure it manages, typically by running it on a different cloud provider, a dedicated highly available VM (using `kind` or `k3s`), or an on-premises environment.
 </details>
 
 ---
