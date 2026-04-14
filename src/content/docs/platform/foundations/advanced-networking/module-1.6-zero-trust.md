@@ -246,11 +246,11 @@ KEY CONCEPTS
     4. CONTEXT-AWARE ACCESS. Same user, different decisions:
 
        Request from: Managed laptop, office network, MFA today
-       → Full access to engineering systems ✓
+       → Full access to engineering systems [+]
 
        Request from: Personal phone, coffee shop WiFi, no MFA
-       → Read-only access to documentation ✓
-       → NO access to engineering systems ✗
+       → Read-only access to documentation [+]
+       → NO access to engineering systems [-]
 
 IMPACT
 ─────────────────────────────────────────────────────────────
@@ -290,7 +290,7 @@ sequenceDiagram
     User->>IdP: Auth at IdP
     IdP-->>User: Redirect back with token
     User->>IAP: 2. Auth callback (Verify JWT/SAML)
-    Note over IAP: 3. Check policy:<br/>User: jane@co.com<br/>Groups: [eng]<br/>Device: managed<br/>App: k8s-dash<br/>→ ALLOW ✓
+    Note over IAP: 3. Check policy:<br/>User: jane@co.com<br/>Groups: [eng]<br/>Device: managed<br/>App: k8s-dash<br/>→ ALLOW
     IAP->>Backend: 4. Proxy to backend<br/>Add headers:<br/>X-Auth-User: jane<br/>X-Auth-Groups: eng
     Backend-->>IAP: Application Response
     IAP-->>User: Application Response
@@ -356,11 +356,11 @@ POMERIUM (Open Source)
     License:        Apache 2.0 (core), Enterprise add-ons
 
     Strengths:
-    ✓ Fully self-hosted (data sovereignty)
-    ✓ Kubernetes-native deployment
-    ✓ TCP tunnel support (SSH, databases)
-    ✓ Per-route policies with group-based access
-    ✗ More operational overhead than managed solutions
+    [+] Fully self-hosted (data sovereignty)
+    [+] Kubernetes-native deployment
+    [+] TCP tunnel support (SSH, databases)
+    [+] Per-route policies with group-based access
+    [-] More operational overhead than managed solutions
 
 CLOUDFLARE ACCESS (Managed)
 ─────────────────────────────────────────────────────────────
@@ -372,11 +372,11 @@ CLOUDFLARE ACCESS (Managed)
     Pricing:        Free (up to 50 users), then per-seat
 
     Strengths:
-    ✓ No infrastructure to manage
-    ✓ Global edge deployment (300+ PoPs)
-    ✓ Cloudflare Tunnel = no public IPs needed
-    ✓ Browser-based SSH and VNC
-    ✗ Data traverses Cloudflare's network
+    [+] No infrastructure to manage
+    [+] Global edge deployment (300+ PoPs)
+    [+] Cloudflare Tunnel = no public IPs needed
+    [+] Browser-based SSH and VNC
+    [-] Data traverses Cloudflare's network
 
     Cloudflare Tunnel architecture:
     ─────────────────────────────────────────────
@@ -440,12 +440,12 @@ flowchart LR
       ]
     }
 
-    ✓ True peer-to-peer (no traffic through central server)
-    ✓ Works for ANY protocol (not just HTTP)
-    ✓ NAT traversal built-in (works from any network)
-    ✓ MagicDNS (hostname resolution for all devices)
-    ✗ Requires agent on every device
-    ✗ Network-level access (not application-level)
+    [+] True peer-to-peer (no traffic through central server)
+    [+] Works for ANY protocol (not just HTTP)
+    [+] NAT traversal built-in (works from any network)
+    [+] MagicDNS (hostname resolution for all devices)
+    [-] Requires agent on every device
+    [-] Network-level access (not application-level)
 
 GOOGLE IAP (Cloud-Native)
 ─────────────────────────────────────────────────────────────
@@ -456,9 +456,9 @@ GOOGLE IAP (Cloud-Native)
 
     Used with: Cloud Run, App Engine, GKE, Compute Engine
 
-    ✓ Zero infrastructure (built into GCP LB)
-    ✓ Tight integration with Google Workspace
-    ✗ GCP-only (no multi-cloud)
+    [+] Zero infrastructure (built into GCP LB)
+    [+] Tight integration with Google Workspace
+    [-] GCP-only (no multi-cloud)
 
 ZSCALER PRIVATE ACCESS (ZPA) — Enterprise
 ─────────────────────────────────────────────────────────────
@@ -467,11 +467,11 @@ ZSCALER PRIVATE ACCESS (ZPA) — Enterprise
     Deployment:     App Connectors + Cloud broker
     Pricing:        Enterprise (per-seat)
 
-    ✓ Designed for large enterprises (10,000+ users)
-    ✓ Private app access without network access
-    ✓ User-to-app segmentation
-    ✗ Expensive
-    ✗ Complex to deploy
+    [+] Designed for large enterprises (10,000+ users)
+    [+] Private app access without network access
+    [+] User-to-app segmentation
+    [-] Expensive
+    [-] Complex to deploy
 ```
 
 ---
@@ -1150,7 +1150,7 @@ data:
     echo ""
     STATUS=$(wget -q -O /dev/null -S http://internal-dashboard 2>&1 | grep "HTTP/" | awk '{print $2}')
     echo "    Direct access: HTTP $STATUS"
-    echo "    ⚠ In production, internal-dashboard would NOT be"
+    echo "    WARNING: In production, internal-dashboard would NOT be"
     echo "    accessible without going through the IAP."
     echo "    NetworkPolicy would block direct access."
     echo ""
