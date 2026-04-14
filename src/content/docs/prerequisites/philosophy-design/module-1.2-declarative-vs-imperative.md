@@ -206,7 +206,7 @@ Kubernetes has imperative commands:
 # These work, but...
 kubectl run nginx --image=nginx
 kubectl scale deployment nginx --replicas=5
-kubectl set image deployment/nginx nginx=nginx:1.26
+kubectl set image deployment/nginx nginx=nginx:1.27
 ```
 
 **Why they're dangerous:**
