@@ -207,7 +207,7 @@ metadata:
 spec:
   parameters:
     storageGB: 50
-    version: "15"
+    version: "16"
     environment: production
   # Crossplane provisions actual RDS instance
   # Developer doesn't need AWS knowledge
@@ -582,6 +582,8 @@ buy_examples:
 | Custom abstractions | ✅ | ❌ | Your specific workflow |
 | Observability | ❌ | ✅ | Don't reinvent metrics |
 | Integration layer | ✅ | ❌ | Your systems, your glue |
+
+> **Pause and predict**: Which phase of IDP implementation typically consumes the most engineering time: selecting tools, deploying tools, or integrating tools?
 
 ### The Integration Reality
 
