@@ -5,29 +5,31 @@ sidebar:
   order: 12
 ---
 
+**Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: Module 2.6 (Artifact Registry), Module 2.7 (Cloud Run)
+
 ## What You'll Be Able to Do
 
 After completing this module, you will be able to:
 
-- **Design** sophisticated Cloud Build pipelines that orchestrate multi-step container image builds, execute parallel testing suites, and seamlessly integrate with Artifact Registry.
-- **Implement** automated build triggers for GitHub, GitLab, and Cloud Source Repositories, utilizing advanced branch and tag filtering patterns to align with specific organizational release workflows.
-- **Evaluate** and **diagnose** pipeline performance bottlenecks by analyzing build execution times, optimizing step parallelism, and implementing custom caching strategies.
-- **Design** declarative Cloud Deploy continuous delivery pipelines that execute progressive canary rollouts, enforce manual approval gates for production environments, and enable automated rollbacks for Google Kubernetes Engine (GKE) and Cloud Run.
-- **Debug** complex permission boundaries and secure CI/CD pipelines by enforcing the principle of least privilege through custom Workload Identity configurations and Secret Manager integrations.
+- **Design** multi-step Cloud Build pipelines that compile code, execute concurrent tests, and natively push container images to Artifact Registry using the declarative build configuration schema.
+- **Implement** 2nd generation Developer Connect build triggers to automate complex deployment workflows across GitHub, GitLab, and Bitbucket repositories using sophisticated inclusion and exclusion glob patterns.
+- **Evaluate** and generate SLSA Level 3 build provenance to ensure cryptographic supply chain security across your artifact lifecycle, ensuring compliance with modern security postures.
+- **Compare** default and private worker pools to optimize for concurrent scaling limits, VPC peering access to internal networks, and custom machine type requirements.
+- **Diagnose** CI/CD pipeline bottlenecks and security vulnerabilities related to service account impersonation and Google Secret Manager integration to enforce the principle of least privilege.
 
 ## Why This Module Matters
 
-In August 2012, Knight Capital Group, one of the largest market makers in the United States equities market, deployed a new version of their high-frequency trading software. The deployment process involved a technician manually logging into eight separate load-balanced servers to copy the new compiled code and restart the service. The technician successfully updated seven of the servers but inexplicably missed the eighth server. When the market opened, the outdated code on the eighth server began executing a dormant, highly aggressive test algorithm against live market data. Because the deployment process lacked an automated deployment pipeline, there was no uniform rollout, no automated verification, and no quick rollback mechanism. In exactly 45 minutes, Knight Capital Group lost $460 million---effectively bankrupting the company and forcing an emergency acquisition just to cover the clearing house obligations. 
+On August 1, 2012, Knight Capital Group, a leading American financial services firm, attempted to deploy a new high-frequency trading algorithm. The deployment was executed manually by an engineer running ad-hoc commands to copy compiled binaries and update configuration flags across their entire server fleet. Unfortunately, the engineer successfully updated only seven of their eight production servers. When the market opened, the eighth server—still running obsolete code but receiving new configuration flags intended for the updated system—began executing erratic and massive trades. In just 45 minutes, Knight Capital flooded the market with over four million erroneous trades, resulting in a staggering $460 million loss. This catastrophic failure effectively bankrupted the firm before lunchtime. The root cause was not a complex logical anomaly; it was the absence of an automated, deterministic deployment pipeline.
 
-While the Knight Capital incident occurred before the modern cloud era, the fundamental lesson remains universally critical: relying on human intervention for software delivery is an unacceptable business risk. Manual deployments are inherently fragile, subject to fatigue, oversight, and inconsistent execution. As your infrastructure scales from a single monolithic application to dozens or hundreds of microservices deployed across multiple regions, the operational overhead of manual building, testing, and deploying becomes mathematically impossible to sustain. You need a system that treats your deployment process with the exact same rigor, reproducibility, and immutability as the source code itself. 
+Continuous Integration and Continuous Deployment (CI/CD) is fundamentally about mitigating existential business risk. When deployments rely on human memory, bespoke shell scripts, and manual server interactions, catastrophic failures are a mathematical certainty over time. A human being will eventually type the wrong IP address, forget to run a critical database migration script, or inadvertently deploy from a local feature branch rather than the validated release branch. CI/CD transforms software delivery from a high-stakes, nerve-wracking event into a boring, routine, and fully auditable process. By codifying every step—from dependency resolution and security scanning to testing and production rollout—organizations ensure that what gets tested is exactly what gets deployed, every single time.
 
-Continuous Integration and Continuous Delivery (CI/CD) is the engineering discipline that solves this existential threat. In the Google Cloud ecosystem, **Cloud Build** and **Cloud Deploy** represent the state-of-the-art managed toolchain for implementing these practices. Cloud Build operates as a serverless execution engine, pulling your code, running it through a gauntlet of automated tests, and packaging it into immutable container images. Cloud Deploy then takes the baton, orchestrating the progressive delivery of those images across your environments (Dev, Staging, Production) with built-in safety nets like canary deployments, traffic shifting, and one-click rollbacks. Mastering these tools is not merely an operational optimization; it is the absolute prerequisite for operating cloud-native applications safely at scale.
+In the Google Cloud ecosystem, Cloud Build serves as the fully managed, serverless engine that executes these codified workflows. Combined with Cloud Deploy for multi-environment delivery orchestration, it provides a comprehensive platform that scales to zero, demands no infrastructure management, and integrates natively with GCP's stringent security perimeter. In this module, you will master the architecture of Cloud Build, design complex pipelines that handle modern supply chain security requirements, and implement automated delivery strategies that would have saved Knight Capital from its catastrophic half-billion-dollar manual typo.
 
-## Cloud Build Architecture
+## Cloud Build Architecture & Execution Model
 
 ### How Cloud Build Works
 
-At its core, Google Cloud Build is a fully managed, serverless continuous integration and continuous delivery platform that executes your builds on Google's global infrastructure. Unlike traditional CI servers (like a self-hosted Jenkins instance) where you must manage the underlying virtual machines, handle operating system patches, and scale the worker nodes to accommodate peak development hours, Cloud Build abstracts all of this infrastructure away. You simply declare a set of build steps, and Google provisions ephemeral, isolated virtual machines on demand to execute your instructions, tearing them down the moment the build completes.
+Cloud Build is a fully managed, serverless CI/CD service that executes builds on Google Cloud infrastructure. It operates on a simple but highly scalable premise: Cloud Build executes each build as a series of steps, where each step runs inside a Docker container. There is no persistent build server to patch, no Jenkins master node to secure, and no capacity planning required. 
 
 ```mermaid
 flowchart LR
@@ -49,15 +51,22 @@ flowchart LR
     S3 --> Target
 ```
 
-The architecture relies heavily on containerization. Every single step in your build pipeline is executed within a brand new, ephemeral Docker container. You specify the Docker image (known as a "builder") that should be used for each step. When a build is triggered, Cloud Build provisions a virtual machine, pulls down your source code, and then sequentially or concurrently launches the specified Docker containers to perform the work.
-
-A critical design feature of Cloud Build is the `/workspace` volume. Because each step runs in an entirely separate Docker container, you might assume that files generated in Step 1 would be lost before Step 2 begins. However, Cloud Build automatically mounts a shared network volume at `/workspace` into every container that participates in the build. The source code is initially cloned into this directory. When Step 1 compiles a binary or downloads node modules, those files reside on the `/workspace` volume. When Step 1 terminates and Step 2 spins up in a completely different container image (perhaps switching from a Java compilation image to a Docker build image), it mounts that exact same `/workspace` directory, inheriting all the compiled artifacts seamlessly.
+When a build is triggered, Cloud Build sets up a new virtual machine environment for every build and destroys it after the build completes. This ephemeral VM ensures that your build executes in a pristine state, completely free from the "it works on my machine" syndrome caused by lingering caching, leftover files, or configuration drift from previous executions. Currently, Cloud Build runs Docker engine version 20.10.24 on these ephemeral instances. Once the final pipeline step completes, or if the timeout limit is reached, the underlying virtual machine is immediately and securely wiped out.
 
 > **Pause and predict**: Cloud Build executes each step in a brand new, ephemeral Docker container. If Step 1 installs a custom software package globally using `apt-get install`, will Step 2 be able to use that software? Why or why not?
 
-### Key Concepts
+### The Shared Workspace
 
-To fully leverage the platform, you must internalize the vocabulary that Google Cloud uses to describe its CI/CD primitives:
+The architectural secret that makes Cloud Build highly efficient is the concept of the shared workspace. By default, Cloud Build executes all steps of a build serially on the same machine. During this process, Cloud Build automatically mounts a shared volume, located at `/workspace`, into every step's Docker container.
+
+Think of the virtual machine as a commercial kitchen, the `/workspace` as the central stainless-steel prep counter, and each build step as a highly specialized chef who enters the kitchen, performs one specific task at the counter, and leaves. Step 1 might be a Git container that clones the source repository onto the counter. Step 2 might be a Node.js container that compiles the code resting on that counter. Step 3 is a Docker container that takes the compiled binaries from the counter and packages them into an immutable image. Because the counter (`/workspace`) is shared and persists throughout the lifetime of the build execution, no network transfers, heavy caching, or artifact archiving are required between the individual steps. The state resides entirely in the file system.
+
+### Worker Pools: Default vs. Private
+
+Cloud Build offers two primary types of execution environments to accommodate different scaling, compliance, and networking security paradigms. Both default pools and private pools are fully managed by Google and scale to zero when no builds are executing.
+
+1. **Default Pools**: These are multi-tenant environments managed by Google. The default machine type for the default pool is `e2-standard-2` (2 vCPUs, 8 GB RAM). A critical constraint to be aware of is that the default pool supports a maximum of 30 concurrent builds per region; this limit cannot be increased. If you submit 40 builds simultaneously to the default pool, 10 will queue until capacity frees up.
+2. **Private Pools**: Designed for enterprise scaling and strict compliance perimeters, private pools offer greater customization over the build environment. Crucially, private pools support VPC peering to access resources in a private network—such as a private GKE cluster, an on-premises database via Cloud Interconnect, or an internal Artifact Registry—without ever traversing the public internet. Private pools support massive concurrency limits (100+ builds) and offer access to powerful custom hardware. For instance, C3 and N2D machine families reached general availability in private pools on August 15, 2025.
 
 | Concept | Description |
 | :--- | :--- |
@@ -68,15 +77,13 @@ To fully leverage the platform, you must internalize the vocabulary that Google 
 | **Substitution** | Variables you can pass into the build (e.g., `$SHORT_SHA`, `$BRANCH_NAME`) |
 | **Worker Pool** | The infrastructure that runs your builds (default or private) |
 
-Understanding the distinction between a Step and a Builder is paramount. A Builder is merely the environment (the Docker image) that contains the necessary toolchain—for example, the `npm` binary or the `kubectl` CLI. The Step is the actual execution of that Builder with a specific set of arguments against your source code. You might use the exact same Builder in multiple different Steps throughout your pipeline, passing different arguments each time.
-
 ## cloudbuild.yaml: The Build Configuration
+
+The authoritative blueprint for your deployment pipeline is the build configuration file. Build configuration files are written in YAML or JSON syntax (conventionally named `cloudbuild.yaml`), though YAML is vastly preferred across the industry for its readability and native support for inline comments. This declarative file defines exactly what steps to execute, in what order, and with what execution parameters.
 
 ### Basic Structure
 
-The lifeblood of your pipeline is the `cloudbuild.yaml` file. This YAML document is typically committed directly into the root of your source code repository alongside your application code, adhering to the "Infrastructure as Code" philosophy. By defining the build instructions in version control, you ensure that any changes to the build process are subject to the same peer review, linting, and historical auditing as your application logic.
-
-Let us examine a canonical, sequential pipeline that builds a container, pushes it to Artifact Registry, and deploys it to Cloud Run:
+Below is an example of a fundamental build configuration demonstrating a classic build, push, and deploy lifecycle using standard containerized builders.
 
 ```yaml
 # cloudbuild.yaml
@@ -112,13 +119,17 @@ options:
 timeout: '1200s'
 ```
 
-In this configuration, the `steps` array defines the sequential workflow. For each step, the `name` field dictates which Docker image to pull and run. The `args` array provides the command-line arguments that are passed to the container's entrypoint. Notice the use of the `images` field at the bottom. While we explicitly run a `docker push` in Step 2, defining the image in the `images` array instructs Cloud Build to automatically push the image upon successful completion of the build and, crucially, to generate proper build provenance metadata (Software Bill of Materials) which is vital for software supply chain security.
+### Limits and Constraints
 
-The `options` block allows you to request more powerful underlying hardware. By default, Cloud Build provisions standard virtual machines. If you are compiling a massive C++ application or building an intricate machine learning container, you can specify `machineType: 'E2_HIGHCPU_8'` to provision an 8-core machine, drastically reducing compilation times at the cost of higher per-minute billing.
+When designing CI/CD pipelines, you must architect within Cloud Build's enforced system limits to prevent unexpected failures and hanging executions:
+- **Maximum Steps**: A build configuration file supports a maximum of 300 build steps. This is a fixed, non-adjustable limit enforced by the API.
+- **Timeouts**: The default build timeout is 60 minutes and the maximum build timeout is 24 hours. For most modern microservices, you should explicitly set a much lower timeout (e.g., 15 minutes) to ensure stuck tests fail fast rather than burning build minutes.
+- **Queue Limits**: The `queueTtl` field (time a build can wait in the queue before being abandoned) defaults to 3,600 seconds (1 hour).
+- **Disk Size**: The maximum disk size for a build worker is 4,000 GB, providing immense capacity for monolithic repositories or heavy data-processing transformations without exhausting disk space.
 
-### Built-in Substitution Variables
+### Understanding Substitution Variables
 
-To make your `cloudbuild.yaml` dynamic and reusable across different environments, Google Cloud Build provides a suite of default substitution variables. These variables are automatically populated by the platform based on the Git context or the project environment when the build is triggered.
+Substitutions empower you to inject dynamic contextual data into your build at runtime, ensuring your `cloudbuild.yaml` remains highly reusable across different branches, projects, and deployment environments. Cloud Build provides several built-in variables that are populated automatically based on the trigger context.
 
 | Variable | Value | Example |
 | :--- | :--- | :--- |
@@ -131,13 +142,13 @@ To make your `cloudbuild.yaml` dynamic and reusable across different environment
 | `$REPO_NAME` | Repository name | `my-repo` |
 | `$REVISION_ID` | Revision ID | Same as `$COMMIT_SHA` for git |
 
-Utilizing these variables prevents hardcoding environment-specific values. For instance, using `$PROJECT_ID` allows the exact same `cloudbuild.yaml` file to be tested in a developer sandbox project and subsequently run in a production project without requiring any modifications to the file itself. 
-
 > **Stop and think**: You are using `$BRANCH_NAME` as part of your Docker image tag. If two developers commit to the same branch simultaneously, what race condition might occur in Artifact Registry, and how could using `$COMMIT_SHA` solve it?
 
 ### Custom Substitutions
 
-Beyond the built-in variables, you can define your own custom substitution variables. By convention, custom substitution variables must begin with an underscore `_` to distinguish them from the built-in variables. These act as default parameters that can be overridden at trigger time, providing immense flexibility for deploying to different regions or altering service names dynamically.
+You are not limited to built-in variables. Cloud Build allows you to define your own variables, but they are subject to specific quotas and syntactical rules. The maximum number of substitution parameters per build is 200 (fixed limit).
+
+Custom substitution variable names must begin with an underscore (e.g., `_MY_VAR`, `_REGION`). By default, builds fail on missing substitutions unless the `ALLOW_LOOSE` option is explicitly set in the configuration.
 
 ```yaml
 # cloudbuild.yaml with custom substitutions
@@ -164,7 +175,7 @@ steps:
       - '--region=${_REGION}'
 ```
 
-When invoking this build manually via the command line, you can pass the `--substitutions` flag to override the default values. This allows you to rapidly test deployments in alternative regions or deploy a completely separate instance of the application for integration testing:
+You can dynamically override these substitution values when submitting a build manually via the CLI, enabling powerful local testing workflows without hardcoding temporary values:
 
 ```bash
 # Override substitutions at build time
@@ -172,11 +183,13 @@ gcloud builds submit --config=cloudbuild.yaml \
   --substitutions=_REGION=europe-west1,_SERVICE_NAME=my-api-eu
 ```
 
-## Builders: The Tools in Your Pipeline
+## Builders: The Engines of Execution
+
+A "builder" is simply the Docker container image that executes a specific step in your pipeline. Because Cloud Build treats standard containers as the primary unit of execution, your pipeline has native access to virtually any software tool, script, compiler, or binary that can be packaged into a container.
 
 ### Google-Provided Builders
 
-Google maintains a highly optimized repository of standard builder images containing the most common toolchains required for software development. Because these images are cached directly on the Cloud Build worker nodes, pulling them incurs virtually zero network latency, ensuring your pipeline starts executing your code almost instantly.
+Google formally supports and maintains a library of cloud builders available at `gcr.io/cloud-builders/`. These images are heavily optimized for the Cloud Build environment, automatically inheriting the workspace mounts and credential contexts necessary to interface smoothly with other GCP services. Google-supported cloud builders include: `bazel`, `docker`, `git`, `gcloud`, `gke-deploy`, `gradle`, and `maven`.
 
 | Builder | Image | Use |
 | :--- | :--- | :--- |
@@ -190,11 +203,9 @@ Google maintains a highly optimized repository of standard builder images contai
 | **python** | `python` | Python scripts |
 | **git** | `gcr.io/cloud-builders/git` | Git operations |
 
-Using these standard builders simplifies your configuration. Instead of writing custom Dockerfiles that install Java, Maven, and all associated dependencies, you merely invoke the `mvn` builder and pass your testing arguments. 
+### Using Arbitrary Docker Images
 
-### Using Any Docker Image as a Builder
-
-One of the most powerful architectural decisions in Cloud Build is that there is absolutely nothing proprietary about a "builder." Any container image that can execute a shell command can function as a builder. This democratizes the pipeline, allowing you to seamlessly integrate third-party open-source tools, linting engines, security scanners, or infrastructure management CLI tools.
+You are not restricted to Google's official builders. Any container image publicly available on Docker Hub, Quay, or hosted securely in your private Artifact Registry, can serve as a builder. This flexibility is what makes Cloud Build infinitely extensible for teams operating esoteric or highly customized technology stacks.
 
 ```yaml
 steps:
@@ -216,13 +227,11 @@ steps:
     args: ['image', '--exit-code', '1', '--severity', 'CRITICAL', 'my-image:latest']
 ```
 
-In this example, we pull official images directly from Docker Hub (like `hashicorp/terraform` or `aquasec/trivy`). The `entrypoint` directive overrides the container's default startup command, allowing us to explicitly call the desired binary. 
-
 > **Pause and predict**: You need to run a proprietary, custom-built testing binary in your pipeline, but Google doesn't provide a builder image for it. What is the most efficient way to make this tool available to your Cloud Build steps?
 
 ### Creating Custom Builders
 
-While downloading public images is convenient, doing so heavily relies on the external registry's uptime and exposes your pipeline to potential upstream supply chain attacks if the public image is compromised. For enterprise-grade pipelines, the best practice is to construct custom builder images containing the precise, verified toolchain your organization requires, and store those images in your own private Artifact Registry.
+In advanced enterprise scenarios, you might require a highly specific combination of tools—for example, a single builder image containing Python, the AWS CLI, `jq`, and internal proprietary scripts for cross-cloud deployment routines. Instead of redundantly installing these dependencies via `apt-get` during every single pipeline execution (which drastically wastes precious build minutes and introduces network unreliability), you should pre-bake a custom builder image.
 
 ```bash
 # Build and push a custom builder image
@@ -240,13 +249,17 @@ docker build -t us-central1-docker.pkg.dev/my-project/builders/custom-tools:late
 docker push us-central1-docker.pkg.dev/my-project/builders/custom-tools:latest
 ```
 
-Once this custom builder is pushed, you simply reference `us-central1-docker.pkg.dev/my-project/builders/custom-tools:latest` as the `name` attribute in your `cloudbuild.yaml` step. This ensures complete control over the execution environment and eliminates external dependencies during the critical build phase.
+Once pushed to Artifact Registry, you simply reference `us-central1-docker.pkg.dev/my-project/builders/custom-tools:latest` as the `name` field in your `cloudbuild.yaml` step. 
 
-## Complete Pipeline Examples
+It is also highly useful to know that build dependencies can be specified in the build configuration file (a feature added May 27, 2025), granting further granular control over execution orchestration.
+
+## Complete Pipeline Examples and Optimization
+
+A robust CI/CD pipeline does significantly more than just blind image compilation. It acts as the authoritative gatekeeper for code quality. A complete pipeline will run stylistic linters, execute comprehensive unit tests, build the artifact, natively push it to a secure registry, and deploy it to a staging environment to facilitate integration testing against real databases.
 
 ### Build, Test, and Deploy to Cloud Run
 
-To illustrate the orchestration capabilities of Cloud Build, consider a comprehensive pipeline for a Python application. This pipeline does not merely build a container; it runs unit tests, enforces code quality via linting, builds the artifact, tags it correctly, deploys it to a staging environment without exposing it to public traffic, runs integration tests against that staging instance, and finally promotes the traffic to production upon successful verification.
+This pipeline demonstrates a mature workflow traversing unit testing, linting, packaging, and an automated canary rollout to a staging tier.
 
 ```yaml
 # cloudbuild.yaml
@@ -328,13 +341,11 @@ options:
 timeout: '1800s'
 ```
 
-Notice the progressive safety checks woven into this pipeline. If the unit tests in Step 1 fail, the entire build halts immediately, preventing a broken application from ever being packaged into an image. Step 5 introduces a sophisticated Cloud Run feature: it deploys the new revision but assigns it zero percent of the active traffic, attaching a custom `canary` URL tag instead. Step 6 uses a simple `curl` command against this isolated canary URL to verify that the application is responding healthily in the actual staging environment. Only if this empirical check passes does Step 7 execute the final traffic promotion.
+### Pipeline Optimization and Parallelism
 
-### Build with Parallel Steps
+Build steps run serially by default on the same machine; steps can run concurrently using the `waitFor` field. In a mature engineering pipeline containing extensive security scans, frontend asset compilation, and backend testing, serial execution leads to unacceptably long developer feedback loops. 
 
-As your application grows, running rigorous test suites, complex linting rules, and heavy Docker builds sequentially will inevitably slow down your feedback loop. Developer velocity is directly correlated to pipeline speed. Fortunately, Cloud Build natively supports Directed Acyclic Graph (DAG) execution, allowing independent steps to execute in parallel.
-
-By utilizing the `id` field to uniquely identify a step, and the `waitFor` array to declare dependencies, you can instruct the execution engine to orchestrate complex concurrent workflows. If a step defines `waitFor: ['-']`, it instructs Cloud Build to completely detach that step from the sequential order and execute it immediately upon pipeline initialization.
+You can drastically reduce your total pipeline duration by executing independent steps concurrently. When you assign an `id` to a step and set `waitFor: ['-']`, you instruct Cloud Build to launch that specific step instantaneously when the build begins, completely ignoring the completion status of any previous steps.
 
 ```yaml
 steps:
@@ -368,17 +379,42 @@ steps:
     args: ['push', 'my-image:$SHORT_SHA']
 ```
 
-In this optimized configuration, the Docker build, the Python unit tests, and the Ruff linting checks all launch simultaneously across separate containers. The final `push` step acts as the convergence point. It will idle in a pending state until all three preceding steps complete successfully. If the linting step fails rapidly, the pipeline will still abort, but by parallelizing the execution, the total pipeline duration is reduced to the time of the single longest running step, rather than the sum of all steps.
-
 > **Pause and predict**: If your unit tests take 5 minutes, linting takes 2 minutes, and building the image takes 4 minutes, what is the absolute minimum time your pipeline could take if you configure these steps to run in parallel using `waitFor: ['-']`?
 
-## Build Triggers
+## Artifacts and Supply Chain Security
 
-Writing a `cloudbuild.yaml` file is only the first half of the CI/CD equation; the second half is automating its execution. Build Triggers form the connective tissue between your version control system and the Cloud Build execution engine. Triggers constantly listen for webhook events originating from your source repositories and automatically spin up pipeline executions based on filtering rules.
+In the era of highly sophisticated cyberattacks against software supply chains, simply compiling source code into a binary is insufficient. You must cryptographically prove exactly how the artifact was built, what dependencies it contains, and verify that the CI system itself was not compromised during compilation.
+
+### Supported Artifact Types
+
+Cloud Build supports a wide ecosystem of artifact types natively. Beyond standard container images, Cloud Build supports the following artifact types: Cloud Storage objects, `goModules`, `mavenArtifacts`, `pythonPackages`, `npmPackages`, OCI images, and `genericArtifacts`. 
+
+Google continually enhances this native support matrix to accommodate modern package managers. Support for publishing Go modules to Artifact Registry was added on January 17, 2025. The `mavenArtifacts` field in build config files gained support for the `deployFolder` subfield on December 8, 2025, enabling critical batch upload operations for Java shops. OCI image upload to Artifact Registry during a build was added on March 16, 2026. Furthermore, generic artifact upload to and download from generic Artifact Registry repositories was added on March 30, 2026, granting immense flexibility for non-standard binary distribution.
+
+### Build Provenance and SLSA Assurance
+
+Cloud Build meets SLSA level 3 requirements for supply chain security. Upon successful completion of a build pipeline, Cloud Build generates unforgeable build provenance metadata. This metadata proves cryptographically that the artifact was built by a specific, verifiable trigger, from an exact source commit hash, utilizing an untampered pipeline definition.
+
+Cloud Build generates build provenance meeting both SLSA specification v0.1 and v1.0. However, there are fundamental operational caveats you must understand to secure your supply chain:
+- SLSA v1.0 provenance is only generated when builds are triggered via build triggers; manually triggered builds (gcloud CLI) produce only SLSA v0.1 provenance due to the inherently untrustworthy nature of client-side execution.
+- Cloud Build cannot generate build provenance if container images are pushed to Artifact Registry using an explicit docker push step in the build config. To ensure provenance generation, you must rely on the top-level `images:` or `artifacts:` YAML blocks.
+- Build provenance is stored as repository attachments in Artifact Registry and is deleted when the attached image is deleted, eliminating the need for complex, independent lifecycle retention policies.
+
+## Automating Execution: Build Triggers
+
+Pipelines provide maximum value when they execute automatically upon code integration. Cloud Build Triggers establish the critical webhook connections between your version control system and your pipeline definitions.
+
+### Repository Connections
+
+Historically, Google offered Cloud Source Repositories (CSR) alongside 1st generation repository connections. However, 1st gen Cloud Build repository connections are deprecated/superseded; 2nd gen is the current standard. Additionally, Cloud Source Repositories is not supported for new customers in either 1st or 2nd gen repository connections.
+
+The modern standard is the Developer Connect framework. Developer Connect build triggers reached general availability on September 29, 2025, supporting Google Cloud Console, gcloud, Cloud Build API, and Terraform. These 2nd gen repository connections support: GitHub, GitHub Enterprise, GitLab, GitLab Enterprise Edition, Bitbucket Data Center, and Bitbucket Cloud.
+
+Build triggers support three event types: push to a branch, push a new tag, and pull request. You can refine exactly when these triggers execute because build triggers support file inclusion and exclusion filters using glob patterns (Go match syntax plus `**` recursive matching). For sensitive operational workflows, build triggers support optional approval gates that require human approval before a build executes. Furthermore, custom Pub/Sub topic support for build notifications was added to build configuration files on March 21, 2025, enabling powerful external alerting integrations across ChatOps platforms.
+
+Be aware of hard system limits: The maximum number of build triggers per project is 600 (fixed, non-adjustable quota).
 
 ### GitHub Trigger
-
-For organizations utilizing GitHub, Cloud Build offers a deeply integrated, native application architecture. By installing the Google Cloud Build app in your GitHub organization, you can configure granular triggers that respond dynamically to different developer actions. A robust DevOps strategy generally utilizes multiple overlapping triggers to address different phases of the software development lifecycle.
 
 ```bash
 # Connect GitHub repository first (one-time setup via console)
@@ -414,11 +450,7 @@ gcloud builds triggers create github \
   --substitutions="_VERSION=$TAG_NAME"
 ```
 
-In this setup, a Pull Request trigger runs a subset of tasks defined in a separate `cloudbuild-ci.yaml` (likely omitting the deployment steps) to validate the integrity of proposed changes before they are permitted to merge. A branch trigger listens exclusively to `main` for continuous delivery. The tag trigger utilizes regular expression parsing (`^v[0-9]+\.[0-9]+\.[0-9]+$`) to capture strict semantic versioning tags (like `v1.2.4`) and execute immutable release packaging.
-
 ### GitLab Trigger
-
-For organizations operating enterprise instances of GitLab, Cloud Build facilitates seamless integration through the concept of "Connections." Rather than relying on a simple webhook, Cloud Build creates an authenticated, regional connection leveraging a Personal Access Token securely stored within Google Secret Manager.
 
 ```bash
 # Create a GitLab connection first
@@ -442,11 +474,9 @@ gcloud builds triggers create gitlab-enterprise \
   --region=us-central1
 ```
 
-This configuration strategy anchors the repository metadata strictly within a designated Google Cloud region, ensuring compliance with data sovereignty and location requirements.
-
 ### Manual Triggers
 
-While automated triggers drive the day-to-day continuous integration loop, manual triggers are indispensable for immediate debugging, disaster recovery, or executing ad-hoc operational tasks (like running database migrations). When you submit a build manually from your local terminal, the `gcloud` CLI packages your local directory into a compressed archive, uploads it to a temporary Cloud Storage bucket, and invokes the Cloud Build API to execute the pipeline using that uploaded artifact.
+While total automation is the ultimate goal, manual executions remain absolutely critical for debugging broken configurations, running one-off operational scripts, or executing pipelines locally against uncommitted code before pushing changes to the remote origin.
 
 ```bash
 # Submit a build manually (from local source)
@@ -468,13 +498,13 @@ gcloud builds list --limit=10 \
 gcloud builds log BUILD_ID
 ```
 
-## Cloud Build Service Account
+## Identity and Access Management
 
-A pipeline is fundamentally an automated process acting on behalf of your organization. When Cloud Build pushes an image to Artifact Registry or deploys a service to Cloud Run, it must authenticate and authorize those actions. It achieves this by assuming the identity of an IAM Service Account.
+### The Cloud Build Service Account
 
-By default, Cloud Build historically leveraged a single, powerful "legacy" service account (`[PROJECT_NUMBER]@cloudbuild.gserviceaccount.com`) which possessed sweeping administrative privileges across the entire project. Relying on this default account violates the core security tenet of least privilege. A compromised pipeline configuration could theoretically be used to alter routing configurations, delete databases, or modify core infrastructure far beyond the scope of a simple deployment.
+By default, Cloud Build previously executed its operations using a ubiquitous project-level service account. Historically, this default account possessed incredibly broad permissions, violating the core principle of least privilege. The modern, secure approach mandates explicitly attaching a dedicated, custom-scoped service account to each trigger. 
 
-Best practices dictate creating dedicated, custom service accounts explicitly tailored to the precise requirements of individual pipelines.
+Following a major security architecture overhaul, the Service Account User role was removed from the Cloud Build Permissions page on October 9, 2025; service account impersonation for managed services is now used instead. This pivotal shift significantly improved platform security and closed dangerous escalation vectors. Additionally, CVE-2026-3136, an authorization vulnerability in Cloud Build, was rapidly identified and fixed on March 3, 2026, further reinforcing Google's commitment to protecting continuous integration perimeters.
 
 ```bash
 # View the default Cloud Build service account
@@ -501,13 +531,36 @@ gcloud builds triggers update my-trigger \
   --service-account="projects/$PROJECT_ID/serviceAccounts/cloud-build-sa@${PROJECT_ID}.iam.gserviceaccount.com"
 ```
 
-By binding minimal permissions (like strictly `roles/run.admin` and `roles/artifactregistry.writer`) to a bespoke service account, and attaching that account directly to the trigger, you dramatically contain the blast radius. Even if malicious code were somehow injected into the execution phase, the pipeline simply lacks the IAM privileges to inflict structural damage on adjacent cloud resources.
+### Securing Secrets in Pipelines
 
-## Cloud Deploy: Continuous Delivery Pipelines
+Pipelines frequently require highly sensitive data to function, such as third-party API keys, database administrative passwords, or external package registry tokens. Hardcoding these in your YAML configuration or passing them as plaintext substitutions is a critical security failure that will permanently expose your secrets in the build history logs. Cloud Build integrates natively with Google Secret Manager to safely inject secrets directly into the container's isolated execution environment at runtime.
 
-While Cloud Build excels at continuous integration (compiling code and creating container artifacts), using it to handle complex, multi-environment deployments via raw bash scripts and `gcloud` commands quickly becomes unwieldy. The imperative "fire-and-forget" nature of running `kubectl apply` inside a build step lacks robust state tracking, visual representation of environments, and formal approval gates. 
+In the configuration below, notice the use of the double dollar sign (`$$`) in the argument `NPM_TOKEN=$$NPM_TOKEN`. This is the explicit secret escaping syntax in Cloud Build. If you were to use a single dollar sign (`$NPM_TOKEN`), the Cloud Build initialization engine would attempt to evaluate it as a standard substitution variable before the step even begins running. Since it is a secret and not a standard substitution, the build would immediately fail due to a missing variable error. The double dollar sign escapes the evaluation, safely passing the literal string `$NPM_TOKEN` directly into the container's environment. Once inside the execution environment, the underlying script or process can properly resolve the value using the secret securely injected from Google Secret Manager via the `secretEnv` declaration.
 
-To bridge this gap, Google introduced **Cloud Deploy**, a fully managed continuous delivery (CD) service specifically engineered to orchestrate declarative application deployments to Google Kubernetes Engine (GKE), Cloud Run, and Anthos. 
+```yaml
+# Accessing secrets from Secret Manager in Cloud Build
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '--build-arg'
+      - 'NPM_TOKEN=$$NPM_TOKEN'
+      - '-t'
+      - 'my-image:$SHORT_SHA'
+      - '.'
+    secretEnv: ['NPM_TOKEN']
+
+availableSecrets:
+  secretManager:
+    - versionName: projects/$PROJECT_ID/secrets/npm-token/versions/latest
+      env: 'NPM_TOKEN'
+```
+
+## Continuous Delivery with Cloud Deploy
+
+While Cloud Build excels at the continuous integration side of the equation (compiling, running unit tests, and packaging artifacts securely), it is fundamentally an imperative tool—it executes commands sequentially and exits. Continuous Delivery (CD) requires a profoundly different paradigm: declarative state management, multi-environment promotion orchestration, and instantaneous rollback capabilities.
+
+Cloud Deploy is a fully managed CD platform that seamlessly extends Cloud Build's capabilities. Instead of Cloud Build running a brute-force `kubectl apply` or `gcloud run deploy` command directly against a production environment, Cloud Build simply creates a "Release" asset inside Cloud Deploy. Cloud Deploy then rigorously manages the lifecycle of that release across a strictly defined sequence of deployment targets.
 
 ```mermaid
 flowchart LR
@@ -516,15 +569,11 @@ flowchart LR
     Stg --> Prod["Prod\nTarget\n\nRequires\nApproval"]
 ```
 
-Cloud Deploy introduces a distinct ontological model. You define a **Delivery Pipeline** which outlines a sequential series of environments, known as **Targets**. When your CI tool (like Cloud Build) completes its work, it generates an immutable **Release** referencing specific container images. Cloud Deploy then assumes responsibility for orchestrating **Rollouts** of that release across your designated targets.
-
 ### Setting Up a Delivery Pipeline
 
 > **Stop and think**: In a multi-stage delivery pipeline, you notice that deployments to `prod` are causing a bottleneck because the QA team is overwhelmed with manual approvals. How could you leverage Cloud Deploy's `strategy.canary` feature (which automates traffic splitting and verification) to reduce the risk of production deployments and potentially reduce the reliance on human approval gates?
 
-A Cloud Deploy pipeline is defined using Kubernetes Resource Model (KRM) YAML syntax. The configuration distinctly separates the overarching pipeline definition from the individual environment targets. 
-
-To resolve parsing complexities, it is critical to supply these as independent, well-formed YAML files rather than concatenating them in a single stream. The architectural approach maps the conceptual pipeline explicitly: 
+The declarative configuration for Cloud Deploy is divided into the delivery pipeline definition and the target definitions. It is common practice to store these in the same repository as your application code. Below is a consolidated view of these configuration files. First, the `DeliveryPipeline` defines the progression of your software from the `dev` stage, to `staging`, and finally to `prod`. Crucially, the `prod` stage incorporates a `strategy.canary` block, which dictates that traffic should be split into 10 percent and 50 percent increments to limit the blast radius of a new release. Following the pipeline definition, the three `Target` manifests define the physical execution environments. Pay close attention to the `prod` target: the `requireApproval: true` parameter enforces a mandatory human quality gate. Cloud Deploy will halt the rollout to production until an authorized user explicitly approves it.
 
 ```yaml
 # deploy/pipeline.yaml
@@ -549,13 +598,7 @@ serialPipeline:
           canaryDeployment:
             percentages: [10, 50]
             verify: true
-```
-
-The pipeline configuration above maps out the promotional lifecycle: Dev -> Staging -> Prod. Crucially, the production stage incorporates an advanced `strategy.canary` block. Instead of abruptly shifting 100% of customer traffic to the newly released software, the canary strategy intelligently reroutes only 10% of traffic initially. It then pauses, performing an automated verification check against application metrics. If the error rates remain nominal, it progressively advances to 50% traffic before finally completing the rollout.
-
-The environments themselves are defined individually as target definitions, stipulating the regional coordinates of the actual infrastructure:
-
-```yaml
+---
 # deploy/dev-target.yaml
 apiVersion: deploy.cloud.google.com/v1
 kind: Target
@@ -564,9 +607,7 @@ metadata:
 description: "Dev environment"
 run:
   location: projects/my-project/locations/us-central1
-```
-
-```yaml
+---
 # deploy/staging-target.yaml
 apiVersion: deploy.cloud.google.com/v1
 kind: Target
@@ -575,11 +616,7 @@ metadata:
 description: "Staging environment"
 run:
   location: projects/my-project/locations/us-central1
-```
-
-The production target, holding the highest stakes, utilizes the `requireApproval: true` directive. This parameter natively halts the entire deployment machinery, suspending the release in a pending state until a designated administrator formally approves the rollout via the GCP Console or API.
-
-```yaml
+---
 # deploy/prod-target.yaml
 apiVersion: deploy.cloud.google.com/v1
 kind: Target
@@ -591,7 +628,7 @@ run:
   location: projects/my-project/locations/us-central1
 ```
 
-With the declarative configurations established, the operational lifecycle shifts to the command line, enabling the registration of these constructs and the execution of the release promotion lifecycle:
+Once defined, you apply these configurations using standard CLI commands and trigger release promotions iteratively.
 
 ```bash
 # Register the pipeline and targets
@@ -623,57 +660,25 @@ gcloud deploy targets rollback prod \
   --region=us-central1
 ```
 
-Cloud Deploy's true value proposition materializes during an incident. The `gcloud deploy targets rollback` command entirely bypasses the need to locate previous source code commits, revert git history, or rerun a lengthy pipeline build. It immediately re-applies the known-good container image artifacts from the previous successful release back onto the targeted environment, stabilizing production in seconds rather than minutes.
-
-## Secrets in Cloud Build
-
-Modern applications invariably interact with external dependencies—requiring API keys, private NPM tokens, database passwords, or third-party service credentials during the build or deployment phase. A catastrophic anti-pattern is attempting to inject these credentials using raw substitution variables or storing them as plaintext within the `cloudbuild.yaml` document. Cloud Build substitutions are thoroughly logged and visible in plain text throughout the build history and GCP console interface.
-
-The only acceptable architecture for secret management involves a tight integration with Google Cloud Secret Manager. 
-
-```yaml
-# Accessing secrets from Secret Manager in Cloud Build
-steps:
-  - name: 'gcr.io/cloud-builders/docker'
-    args:
-      - 'build'
-      - '--build-arg'
-      - 'NPM_TOKEN=$$NPM_TOKEN'
-      - '-t'
-      - 'my-image:$SHORT_SHA'
-      - '.'
-    secretEnv: ['NPM_TOKEN']
-
-availableSecrets:
-  secretManager:
-    - versionName: projects/$PROJECT_ID/secrets/npm-token/versions/latest
-      env: 'NPM_TOKEN'
-```
-
-In this configuration, the `availableSecrets` block references the highly secure cryptographic payload stored within Secret Manager. During execution, the Cloud Build engine utilizes its service account identity to request the decrypted payload from the API. The secret is then injected dynamically into the runtime environment of the executing Docker container via the `secretEnv` array. Crucially, the double-dollar sign `$$NPM_TOKEN` escapes the variable, ensuring it evaluates directly as a shell parameter inside the container instead of attempting a premature Cloud Build substitution evaluation, completely obscuring the secret from the visible logs and build output.
-
 ## Did You Know?
 
-1. **Cloud Build's default worker pool runs on Google-managed infrastructure** with no minimum fees. You only pay for the build minutes consumed. The first 120 build-minutes per day are free for the `e2-medium` machine type. For a team doing 10 builds per day averaging 5 minutes each, the CI/CD platform costs literally nothing.
-
-2. **Cloud Build steps share a `/workspace` volume** that persists across steps. This means step 1 can clone code, step 2 can compile it, and step 3 can test the compiled binaries---all without pushing/pulling artifacts between steps. The workspace is a mounted directory, not a Docker volume, so it performs at native filesystem speed.
-
-3. **Private worker pools run inside your VPC**, allowing builds to access private resources (private Artifact Registry, internal APIs, databases) without exposing them to the internet. They also support custom machine types up to 32 vCPUs for faster builds. Private pools are essential for enterprises with strict network security requirements.
-
-4. **Cloud Build supports build caching through `kaniko`**, a tool that builds Docker images without a Docker daemon. Kaniko can cache intermediate layers in Artifact Registry, so subsequent builds that share base layers skip the redundant steps. This can reduce build times by 50-80% for large Docker images with many dependencies.
+1. **Cloud Build provides 2,500 free build-minutes per month per billing account.** This allowance applies exclusively to the `e2-standard-2` machine type within the default pool. Furthermore, partial build minutes are billed at the actual number of seconds consumed, and queued build time is not charged. A subsequent pricing update for e2 machine types took effect November 1, 2025, which introduced 30-50 percent price decreases in private pool pricing.
+2. **Private pools offer massive hardware customization for heavy compilation.** C3 and N2D machine families reached general availability in private pools on August 15, 2025, drastically increasing the compute options available for enterprise workloads requiring specialized hardware.
+3. **The regional availability continues to rapidly scale globally.** Service availability expanded when Cloud Build became available in the `northamerica-south1` region on March 4, 2025, and shortly thereafter launched in the `asia-southeast3` region on February 12, 2026.
+4. **Kaniko Caching:** Cloud Build natively supports the Kaniko executor for building container images. By utilizing Kaniko caching, Cloud Build can cache individual image layers in Artifact Registry for up to 336 hours (14 days), frequently reducing subsequent build times by over 50 percent for large, dependency-heavy images.
 
 ## Common Mistakes
 
 | Mistake | Why It Happens | How to Fix It |
 | :--- | :--- | :--- |
-| Using the default Cloud Build SA for everything | Convenience; it has broad permissions | Create a custom SA per pipeline with minimal permissions |
-| Not using parallel steps | Steps run sequentially by default | Use `waitFor: ['-']` to run independent steps concurrently |
-| Hardcoding project IDs in cloudbuild.yaml | Works during initial development | Use `$PROJECT_ID` substitution for portability |
-| Not setting build timeouts | Default 10-minute timeout is too short for large builds | Set `timeout: '1800s'` (30 minutes) for complex pipelines |
-| Skipping tests in the CI pipeline | "We test locally" | Always run tests in CI; the pipeline is the source of truth |
-| Not using `images:` field for Docker pushes | Pushing images manually in steps | Use the `images:` field for automatic pushing and provenance |
-| Building everything on every commit | Simplest configuration | Use path filters in triggers to build only what changed |
-| Not encrypting build secrets | Storing secrets as plain substitutions | Use `availableSecrets` with Secret Manager |
+| Using the default Cloud Build SA for everything | Convenience; it has broad, overly permissive roles out-of-the-box | Create a custom Service Account per pipeline with minimal, granular IAM permissions |
+| Not using parallel steps | Steps execute sequentially by default, slowing down the feedback loop | Use `waitFor: ['-']` to explicitly run independent steps concurrently |
+| Hardcoding project IDs in cloudbuild.yaml | Works smoothly during initial local development | Use the `$PROJECT_ID` built-in substitution variable to ensure cross-project portability |
+| Not setting custom build timeouts | The default 60-minute timeout is a sledgehammer that can mask hanging scripts | Set explicit constraints like `timeout: '1800s'` (30 minutes) for tighter execution bounds |
+| Skipping exhaustive tests in the CI pipeline | Engineering culture claiming "we test it locally" before committing | Always run comprehensive tests in CI; the pipeline must be the ultimate source of truth |
+| Not using `images:` field for Docker pushes | Pushing images manually using brittle shell scripts inside steps | Use the declarative `images:` field to ensure automatic pushing and provenance generation |
+| Building the entire monolith on every commit | It is mathematically the simplest configuration to implement | Use explicit path filters within your triggers to build only the modules that actually changed |
+| Not encrypting sensitive build secrets | Storing API tokens and passwords as plain-text substitutions | Use the `availableSecrets` block deeply integrated directly with Google Secret Manager |
 
 ## Quiz
 
@@ -717,19 +722,17 @@ Passing secrets as substitution variables is highly insecure because substitutio
 
 ### Objective
 
-Create a complete CI/CD pipeline that autonomously orchestrates the building of a Docker image, rigorously evaluates unit tests, pushes the resulting artifact to Artifact Registry, and securely deploys the containerized service directly to Google Cloud Run.
+Create a complete CI/CD pipeline that builds a Docker image, runs tests, pushes to Artifact Registry, and deploys to Cloud Run.
 
 ### Prerequisites
 
-- `gcloud` CLI installed and authenticated locally against your development environment
-- A GCP project with active billing enabled
-- A local installation of Docker to verify components locally if necessary
+- `gcloud` CLI installed and authenticated
+- A GCP project with billing enabled
+- Docker installed locally
 
 ### Tasks
 
 **Task 1: Set Up the Application and Infrastructure**
-Initialize your project environment and generate a simple Python Flask API wrapped securely in a Docker container, complete with pytest validation logic.
-
 <details>
 <summary>Solution</summary>
 
@@ -810,8 +813,6 @@ DEOF
 </details>
 
 **Task 2: Write the cloudbuild.yaml**
-Construct the multi-step `cloudbuild.yaml` file leveraging directed dependencies. Ensure the deployment step strictly waits for the push step to complete, and incorporates proper dynamic substitutions.
-
 <details>
 <summary>Solution</summary>
 
@@ -879,8 +880,6 @@ echo "cloudbuild.yaml created."
 </details>
 
 **Task 3: Run the Build Manually**
-Invoke the `gcloud` command to execute the pipeline utilizing local files as the codebase snapshot, injecting an explicit commit short SHA variable.
-
 <details>
 <summary>Solution</summary>
 
@@ -908,8 +907,6 @@ curl -s $SERVICE_URL | python3 -m json.tool
 </details>
 
 **Task 4: Deploy a Second Version**
-Mutate the Flask API application logic directly, then trigger a secondary pipeline execution to dynamically apply the update to the running Cloud Run service.
-
 <details>
 <summary>Solution</summary>
 
@@ -952,8 +949,6 @@ curl -s $SERVICE_URL | python3 -m json.tool
 </details>
 
 **Task 5: View Build History and Logs**
-Audit your pipeline execution metadata locally using command-line filters to visualize execution parameters.
-
 <details>
 <summary>Solution</summary>
 
@@ -974,8 +969,6 @@ gcloud builds describe $BUILD_ID --format="yaml(steps, results, timing)"
 </details>
 
 **Task 6: Clean Up**
-Systematically dismantle all the resources provisioned during this exercise, preserving the hygiene of the GCP environment and halting unnecessary billing accruals.
-
 <details>
 <summary>Solution</summary>
 
@@ -1004,15 +997,15 @@ echo "Cleanup complete."
 
 ### Success Criteria
 
-- [ ] Application with tests created locally securely using standardized frameworks
-- [ ] `cloudbuild.yaml` with explicit test, build, push, and deploy steps fully implemented
-- [ ] Build execution submitted manually and completed processing successfully
-- [ ] Software reliability confirmed as tests pass fully in the CI pipeline execution layer
-- [ ] Docker artifact securely compiled and definitively pushed to regional Artifact Registry
-- [ ] Cloud Run service rapidly deployed and globally accessible via public HTTPS
-- [ ] Application safely mutated and a subsequent second version deployed successfully
-- [ ] All infrastructure components fully documented and completely cleaned up, zeroing cost implications
+- [ ] Application with tests created locally
+- [ ] `cloudbuild.yaml` with test, build, push, and deploy steps properly defined
+- [ ] Build submitted manually and completed successfully
+- [ ] Tests pass strictly inside the continuous integration pipeline environment
+- [ ] Immutable image pushed natively to Artifact Registry utilizing declarative blocks
+- [ ] Cloud Run service deployed and publicly accessible via URL
+- [ ] Second version deployed seamlessly over the first through dynamic substitutions
+- [ ] All lab resources, service accounts, and repositories safely cleaned up
 
 ## Next Module
 
-Now that you have established a reliable and immutable pathway for releasing code into production, you need an architectural blueprint to securely organize those applications at scale. Next up: **[Module 2.12: GCP Architectural Patterns](../module-2.12-patterns/)** --- Learn how to construct sophisticated project vending machines, design secure landing zones, configure Identity-Aware Proxy for zero-trust access, and survey Anthos and GKE for massive-scale container orchestration.
+Next up: **[Module 2.12: GCP Architectural Patterns](../module-2.12-patterns/)** — Learn about automated project vending machines, secure enterprise landing zones, Identity-Aware Proxy integration, and get a high-level overview of robust architectural strategies designed for massive scale environments.
