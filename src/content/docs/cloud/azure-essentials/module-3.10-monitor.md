@@ -289,6 +289,11 @@ Alerts proactively notify you when conditions are met. An alert has three compon
 | **Activity log alert** | Control plane events | Real-time | Resource deleted, role assigned |
 | **Smart detection** | AI-detected anomalies | Continuous | Unusual failure rate, performance degradation |
 
+### Multi-Resource and Dynamic Alerts
+
+- **Multi-Resource Alerts**: You can apply a single metric alert rule across multiple resources of the same type within a resource group or subscription, drastically reducing management overhead.
+- **Dynamic Thresholds**: Instead of hardcoding static limits (e.g., CPU > 85%), dynamic thresholds use machine learning to continuously analyze metric patterns, establishing a baseline and triggering alerts only when behavior deviates significantly from the norm.
+
 ```bash
 # Create an action group (email + webhook)
 az monitor action-group create \
@@ -612,9 +617,6 @@ az vm extension set \
   --name AzureMonitorLinuxAgent \
   --publisher Microsoft.Azure.Monitor \
   --enable-auto-upgrade true
-
-# Grant the VM's identity access to the DCR (Monitoring Metrics Publisher)
-VM_IDENTITY=$(az vm identity show -g "$RG" -n monitor-lab-vm --query principalId -o tsv)
 ```
 
 <details>
