@@ -453,24 +453,20 @@ journalctl -u nginx -o short-precise
 
 When something goes wrong with a service, here is the pattern experienced Linux admins follow:
 
-```
-Step 1: Is it running?
-    └── systemctl status myservice
+```mermaid
+flowchart TD
+    S1["Step 1: Is it running?<br/>systemctl status myservice"]
+    S2["Step 2: If not, what happened?<br/>journalctl -u myservice -n 50"]
+    S3["Step 3: Try to start it<br/>sudo systemctl start myservice"]
+    S4["Step 4: If it fails immediately, check logs again<br/>journalctl -u myservice -n 20 --no-pager"]
+    S5["Step 5: Fix the config/issue, then restart<br/>sudo systemctl restart myservice"]
+    S6["Step 6: Confirm it is healthy<br/>systemctl status myservice"]
 
-Step 2: If not, what happened?
-    └── journalctl -u myservice -n 50
-
-Step 3: Try to start it
-    └── sudo systemctl start myservice
-
-Step 4: If it fails immediately, check logs again
-    └── journalctl -u myservice -n 20 --no-pager
-
-Step 5: Fix the config/issue, then restart
-    └── sudo systemctl restart myservice
-
-Step 6: Confirm it is healthy
-    └── systemctl status myservice
+    S1 --> S2
+    S2 --> S3
+    S3 --> S4
+    S4 --> S5
+    S5 --> S6
 ```
 
 This workflow applies to debugging kubelet issues, containerd problems, etcd failures -- any systemd-managed service follows the same pattern.
