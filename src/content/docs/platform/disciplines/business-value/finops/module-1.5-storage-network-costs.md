@@ -213,6 +213,8 @@ flowchart TD
 
 ## S3 Storage Tiering
 
+> **Stop and think**: If you have 50 TB of application logs generated monthly, should you store them in S3 Standard? Logs are rarely read after the first week unless there is an incident, making them perfect candidates for S3 Glacier Instant Retrieval or Deep Archive via lifecycle policies.
+
 For object storage, choosing the right tier can save 50-90%:
 
 | Tier | Cost ($/GB/mo) | Retrieval Cost | Access Pattern |
@@ -339,17 +341,16 @@ kind: Service
 metadata:
   name: search-api
   namespace: search
-  annotations:
-    service.kubernetes.io/topology-mode: Auto
 spec:
   selector:
     app: search-api
   ports:
   - port: 80
     targetPort: 8080
+  trafficDistribution: PreferClose
 ```
 
-With `topology-mode: Auto`, Kubernetes routes traffic to same-zone endpoints when possible, falling back to cross-zone only when needed.
+With `trafficDistribution: PreferClose` (the standard in Kubernetes v1.31+), Kubernetes routes traffic to same-zone endpoints when possible, falling back to cross-zone only when needed.
 
 **Strategy 2: Pod Topology Spread with Zone Awareness**
 
@@ -526,7 +527,7 @@ Your distributed microservices architecture spans three Availability Zones (AZs)
 <details>
 <summary>Show Answer</summary>
 
-This happens because kube-proxy's default behavior is to load-balance service requests randomly across all available backend pods, regardless of their Availability Zone. Since AWS charges $0.01/GB for cross-AZ data transfer in each direction ($0.02/GB round-trip), an API pod in AZ-a calling a service will statistically send about 66% of its traffic across AZ boundaries. To mitigate this, you should implement topology-aware routing by adding the `service.kubernetes.io/topology-mode: Auto` annotation to your Services, which instructs kube-proxy to prefer endpoints in the same AZ. Additionally, you should configure Pod Topology Spread Constraints to ensure your deployments are evenly distributed across AZs, guaranteeing that local endpoints are always available to handle the routing requests.
+This happens because kube-proxy's default behavior is to load-balance service requests randomly across all available backend pods, regardless of their Availability Zone. Since AWS charges $0.01/GB for cross-AZ data transfer in each direction ($0.02/GB round-trip), an API pod in AZ-a calling a service will statistically send about 66% of its traffic across AZ boundaries. To mitigate this, you should implement topology-aware routing by setting the `trafficDistribution: PreferClose` field in your Services (the standard approach in Kubernetes v1.31+), which instructs kube-proxy to prefer endpoints in the same AZ. Additionally, you should configure Pod Topology Spread Constraints to ensure your deployments are evenly distributed across AZs, guaranteeing that local endpoints are always available to handle the routing requests.
 </details>
 
 ### Question 4
