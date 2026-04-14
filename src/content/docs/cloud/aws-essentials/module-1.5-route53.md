@@ -216,6 +216,48 @@ aws route53 change-resource-record-sets \
       }
     ]
   }'
+
+# Create an ALIAS record pointing to a CloudFront Distribution
+# Note: CloudFront always uses the fixed HostedZoneId Z2FDTNDATAQYW2
+aws route53 change-resource-record-sets \
+  --hosted-zone-id Z0123456789ABCDEFGHIJ \
+  --change-batch '{
+    "Changes": [
+      {
+        "Action": "UPSERT",
+        "ResourceRecordSet": {
+          "Name": "example.com",
+          "Type": "A",
+          "AliasTarget": {
+            "HostedZoneId": "Z2FDTNDATAQYW2",
+            "DNSName": "d111111abcdef8.cloudfront.net",
+            "EvaluateTargetHealth": false
+          }
+        }
+      }
+    ]
+  }'
+
+# Create an ALIAS record pointing to an S3 Static Website
+# Note: S3 HostedZoneId depends on the region of the bucket
+aws route53 change-resource-record-sets \
+  --hosted-zone-id Z0123456789ABCDEFGHIJ \
+  --change-batch '{
+    "Changes": [
+      {
+        "Action": "UPSERT",
+        "ResourceRecordSet": {
+          "Name": "www.example.com",
+          "Type": "A",
+          "AliasTarget": {
+            "HostedZoneId": "Z3AQBSTGFYJSTF",
+            "DNSName": "s3-website-us-east-1.amazonaws.com",
+            "EvaluateTargetHealth": false
+          }
+        }
+      }
+    ]
+  }'
 ```
 
 Notice the `UPSERT` action in the second example. This is idempotent -- it creates the record if it does not exist, or updates it if it does. Production automation should always prefer `UPSERT` over `CREATE` to avoid failures when re-running scripts.
@@ -420,6 +462,50 @@ aws route53 change-resource-record-sets \
         "Failover": "SECONDARY",
         "TTL": 60,
         "ResourceRecords": [{"Value": "52.86.200.34"}]
+      }
+    }]
+  }'
+```
+
+### Geolocation Routing
+
+Route traffic based on the geographic location of your users (continent, country, or US state). This is critical for compliance with data residency laws or delivering localized content.
+
+```bash
+# Geolocation routing: Default record (catch-all)
+aws route53 change-resource-record-sets \
+  --hosted-zone-id Z0123456789ABCDEFGHIJ \
+  --change-batch '{
+    "Changes": [{
+      "Action": "UPSERT",
+      "ResourceRecordSet": {
+        "Name": "app.example.com",
+        "Type": "A",
+        "SetIdentifier": "default",
+        "GeoLocation": {
+          "CountryCode": "*"
+        },
+        "TTL": 60,
+        "ResourceRecords": [{"Value": "54.231.128.12"}]
+      }
+    }]
+  }'
+
+# Geolocation routing: Europe-specific record
+aws route53 change-resource-record-sets \
+  --hosted-zone-id Z0123456789ABCDEFGHIJ \
+  --change-batch '{
+    "Changes": [{
+      "Action": "UPSERT",
+      "ResourceRecordSet": {
+        "Name": "app.example.com",
+        "Type": "A",
+        "SetIdentifier": "europe",
+        "GeoLocation": {
+          "ContinentCode": "EU"
+        },
+        "TTL": 60,
+        "ResourceRecords": [{"Value": "52.17.200.45"}]
       }
     }]
   }'
