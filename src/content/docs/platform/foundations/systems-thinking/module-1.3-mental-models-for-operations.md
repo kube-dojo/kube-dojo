@@ -449,6 +449,8 @@ When an incident occurs, use all three models in sequence:
 
 **Incident**: "All pods reporting database connection timeouts"
 
+> **Stop and think**: Before jumping to a fix, what is the highest leverage point you can affect in this system?
+
 **Step 1: Stock-and-Flow Analysis**
 
 ```mermaid
