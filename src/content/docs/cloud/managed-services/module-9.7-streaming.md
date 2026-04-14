@@ -400,6 +400,8 @@ if msg:
 
 ### Why StatefulSets for Kafka Streams?
 
+> **Stop and think**: What happens to a stream processing application's local state (like a RocksDB cache) if it is deployed as a standard Kubernetes Deployment instead of a StatefulSet during a pod restart? How would this affect recovery time?
+
 When using frameworks like Kafka Streams that maintain local state (e.g., using RocksDB to aggregate windowed data or join topics), Deployments are an anti-pattern. If a Deployment pod is restarted, its local state is wiped out. When the new pod joins the consumer group, it must download the entire state from Kafka's changelog topic before it can process a single new message, which can take hours for large states.
 
 Instead, stream processors with local state should be deployed as a `StatefulSet` with persistent volume claims:
