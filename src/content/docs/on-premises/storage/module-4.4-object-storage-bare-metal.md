@@ -26,8 +26,10 @@ On bare metal, providing S3-compatible object storage requires deploying a distr
 ### The Open-Source Landscape
 
 For modern, production-grade open-source deployments, platform teams typically evaluate CNCF-backed alternatives:
-*   **Ceph (via Rook):** Rook (a CNCF Graduated project, currently v1.19 supporting K8s v1.30–v1.35) orchestrates Ceph. The latest Ceph release (v20.2.1 Tentacle, April 2026) offers robust S3 compatibility via RADOS Gateway (RGW) and features zero-downtime background bucket resharding. A single Ceph cluster can simultaneously serve object (RGW), block (RBD), and file (CephFS) storage.
+*   **Ceph (via Rook):** Rook (a CNCF Graduated project, currently v1.19 supporting K8s v1.30–v1.35) orchestrates Ceph. The latest Ceph release (v20.2.1 Tentacle, April 2026) offers robust S3 compatibility via RADOS Gateway (RGW) and features zero-downtime background bucket resharding. It also adds support for the S3 `GetObjectAttributes` API, exact AWS S3 timestamp truncation, and first-class IAM API policy support. A single Ceph cluster can simultaneously serve object (RGW), block (RBD), and file (CephFS) storage.
 *   **SeaweedFS:** Licensed under Apache 2.0 (currently v4.18), SeaweedFS is a highly efficient distributed system that achieves O(1) disk seeks for blob retrieval by storing file-to-volume-offset mappings entirely in memory.
+*   **RustFS:** An open-source, S3-compatible object storage system written in Rust and licensed under Apache 2.0. It aims to provide a high-performance alternative to MinIO without the AGPLv3 restrictions. While the project's documentation claims it is 2.3x faster than MinIO for 4 KB object payloads, these figures originate from self-reported benchmarks and have not been independently verified.
+*   **Kubernetes COSI (Container Object Storage Interface):** Note that while COSI aims to standardize object storage provisioning in Kubernetes, it remains in pre-alpha status (v1alpha2) as of April 2026. Therefore, direct provisioning via operators and CSI drivers like DirectPV remains the current standard.
 
 Despite these industry shifts, MinIO's architectural primitives (Server Pools, direct-attached drives, and strict Erasure Coding) remain the clearest educational model for understanding distributed object storage mechanics. The following sections use MinIO as the reference architecture.
 
@@ -94,7 +96,7 @@ Always configure topologies so that a complete node failure does not violate the
 
 Operating a platform requires isolating workloads. Sharing root credentials across applications is an anti-pattern that leads to compromised data and auditing nightmares.
 
-> **Stop and think**: Why is creating one massive, multi-petabyte Tenant for an entire enterprise considered an operational anti-pattern compared to provisioning multiple smaller Tenants per business unit?
+> **Stop and think**: Why is creating one massive, multi-tenant Tenant for an entire enterprise considered an operational anti-pattern compared to provisioning multiple smaller Tenants per business unit?
 
 ### Tenants and Isolation
 
@@ -343,7 +345,7 @@ Important production data
 - C) Provision the 4 new servers as a new, distinct Server Pool and append this new pool to the Tenant manifest.
 - D) Deploy a second, separate Tenant and configure an ILM Transition policy to move data between them.
 <br>_Correct Answer: C_
-<br>_Explanation: Distributed object architectures rely on a deterministic hashing algorithm that is established at the time a Server Pool is initialized, meaning you cannot alter the geometry (number of nodes or drives) of an existing pool without corrupting the hash ring. Instead, capacity expansion is achieved horizontally by adding entirely new Server Pools to the deployment. When you append a new Server Pool to the Tenant configuration, the system automatically begins routing new object writes to the pool with the most available free space, effectively expanding the cluster without rebalancing legacy data._
+<br>_Explanation: Distributed object architectures rely on a deterministic hashing algorithm that is established at the time a Server Pool is initialized, meaning you cannot alter the geometry (number of nodes or drives) of an existing pool without corrupting the hash ring. Instead, capacity expansion is achieved horizontally by adding entirely new Server Pools to the deployment. When you append a new Server Pool to the Tenant configuration, the system automatically begins routing new object writes to the pool with the most available free space, effectively expanding the cluster without rebalancing legacy data. This ensures predictable performance and maintains the integrity of the data distribution algorithm across the entire cluster._
 
 **3. A healthcare organization uses your bare-metal object storage to archive patient records and compliance audit logs. A new regulatory mandate dictates that these specific audit logs must be retained for exactly 7 years and absolutely cannot be deleted, modified, or tampered with by any entity—including administrators possessing root credentials. What combination of storage features must you configure to enforce this mandate?**
 - A) Bucket Versioning and Object Lock with Compliance Mode.
@@ -351,7 +353,7 @@ Important production data
 - C) Server-Side Encryption (SSE-C) and an ILM Transition policy.
 - D) Bucket Quotas and a Legal Hold applied to the user account.
 <br>_Correct Answer: A_
-<br>_Explanation: To satisfy strict Write-Once-Read-Many (WORM) regulatory requirements, you must use Object Lock. Object Lock fundamentally requires Bucket Versioning to be enabled first, as it operates by locking specific object versions rather than the bucket as a whole. Crucially, it must be deployed in Compliance Mode rather than Governance Mode; Compliance Mode ensures that the retention period is immutable and cannot be bypassed or shortened by any user, including the root administrator, fulfilling the strict anti-tampering mandate._
+<br>_Explanation: To satisfy strict Write-Once-Read-Many (WORM) regulatory requirements, you must use Object Lock. Object Lock fundamentally requires Bucket Versioning to be enabled first, as it operates by locking specific object versions rather than the bucket as a whole. Crucially, it must be deployed in Compliance Mode rather than Governance Mode; Compliance Mode ensures that the retention period is immutable and cannot be bypassed or shortened by any user, including the root administrator, fulfilling the strict anti-tampering mandate. This guarantees that the audit logs remain intact for the full 7-year period, protecting the organization from both accidental deletion and malicious tampering._
 
 **4. Several internal microservices running in your Kubernetes cluster require read/write access to specific internal storage buckets. Currently, developers are hardcoding long-lived AWS-style Access Keys and storing them in standard Kubernetes Secrets, which recently failed a security audit due to credential sprawl and lack of rotation. You are tasked with migrating these microservices to a secure, dynamic, and credential-less authentication architecture. Which mechanism should you implement?**
 - A) Configure the storage system to scrape the Kubernetes Secret API every 5 minutes and rotate keys automatically.
