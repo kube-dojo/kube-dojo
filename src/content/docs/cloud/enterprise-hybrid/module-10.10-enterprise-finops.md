@@ -322,6 +322,7 @@ graph LR
 
 ```yaml
 # Install VPA and use it in recommendation-only mode
+# Validated for Kubernetes v1.35+
 apiVersion: autoscaling.k8s.io/v1
 kind: VerticalPodAutoscaler
 metadata:
@@ -533,7 +534,8 @@ In this exercise, you will deploy a cost analysis environment, calculate resourc
 <summary>Solution</summary>
 
 ```bash
-kind create cluster --name finops-lab
+# Validated for Kubernetes v1.35+
+kind create cluster --name finops-lab --image kindest/node:v1.35.0
 
 # Create team namespaces with cost labels
 for TEAM in payments identity search platform; do
