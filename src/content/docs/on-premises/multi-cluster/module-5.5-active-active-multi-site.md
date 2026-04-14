@@ -310,13 +310,13 @@ kind delete cluster --name multisite
 *   *Correct Answer: B*
 *   *Why:* BGP Anycast is a stateless routing mechanism that directs packets to the topologically closest destination advertising the IP address. When the routing path shifts, packets belonging to the client's established TCP connection are suddenly routed to the Ingress controller in Datacenter B instead of Datacenter A. Because the Ingress controller in Datacenter B has no memory of the initial TCP handshake or sequence numbers for this connection, it assumes the incoming packets are invalid. It responds with a TCP RST, abruptly terminating the client's connection and failing the download.
 
-**4. You are tasked with configuring K8gb for Global Server Load Balancing across two bare-metal Kubernetes clusters. When a client application queries the global domain name `api.global.internal`, how do the K8gb controllers ensure the client is routed to the healthiest datacenter?**
+**4. Your platform team has implemented K8gb for Global Server Load Balancing across two bare-metal Kubernetes clusters (DC-East and DC-West). When a client application queries the global domain name `api.global.internal` during a partial outage in DC-East, how do the K8gb controllers ensure the client is correctly routed to the healthiest datacenter?**
 *   A) By hijacking BGP routes from the Top-of-Rack switches.
 *   B) By acting as authoritative DNS Name Servers and dynamically returning A records based on cluster health data synchronized via Custom Resources.
 *   C) By deploying an Envoy proxy at the enterprise network edge to inspect HTTP headers.
 *   D) By modifying the client's local `/etc/hosts` file via a DaemonSet.
 *   *Correct Answer: B*
-*   *Why:* K8gb operates as a Cloud Native GSLB by running CoreDNS instances inside your Kubernetes clusters that act as authoritative nameservers for delegated subdomains. The K8gb controllers continuously monitor local Ingress health and exchange this state with other clusters using Custom Resource Definitions (CRDs) over the WAN. When a DNS query arrives, the K8gb CoreDNS instance evaluates the synchronized health data and returns the IP address (A record) of the optimal, healthy datacenter, ensuring clients are dynamically routed away from failed sites.
+*   *Why:* K8gb operates as a Cloud Native GSLB by running CoreDNS instances inside your Kubernetes clusters that act as authoritative nameservers for delegated subdomains. The K8gb controllers continuously monitor local Ingress health and exchange this state with other clusters using Custom Resource Definitions (CRDs) over the WAN. When a DNS query arrives, the K8gb CoreDNS instance evaluates the synchronized health data and returns the IP address (A record) of the optimal, healthy datacenter. This ensures clients are dynamically routed away from failed sites without relying on external cloud load balancers.
 
 **5. A development team is migrating an application to a multi-site Distributed SQL database (CockroachDB) spanning New York and London, with a known network Round Trip Time (RTT) of 80ms. While CockroachDB handles the replication, what architectural adjustments must the application developers make to ensure stability?**
 *   A) Nothing, CockroachDB masks all latency from the application layer.
@@ -324,7 +324,7 @@ kind delete cluster --name multisite
 *   C) Implement aggressive client-side connection pooling and increase application timeouts and retry budgets to accommodate the >80ms consensus latency per transaction.
 *   D) Switch the database to Galera to enforce local read/write speeds.
 *   *Correct Answer: C*
-*   *Why:* Distributed SQL databases like CockroachDB use consensus protocols (like Raft) to ensure strong consistency, which requires multiple network round trips to achieve a quorum for every write operation. Because the speed of light dictates an 80ms RTT between New York and London, a single transaction will inherently take significantly longer than a local database write. If the application is not tuned to expect this increased latency, it will prematurely timeout or exhaust its connection pool waiting for responses, leading to application-level instability despite the database functioning correctly.
+*   *Why:* Distributed SQL databases like CockroachDB use consensus protocols (like Raft) to ensure strong consistency, which requires multiple network round trips to achieve a quorum for every write operation. Because the speed of light dictates an 80ms RTT between New York and London, a single transaction will inherently take significantly longer than a local database write. If the application is not tuned to expect this increased latency, it will prematurely timeout or exhaust its connection pool waiting for responses. This leads to application-level instability and failed transactions despite the database functioning correctly under the hood.
 
 ## Further Reading
 
