@@ -516,7 +516,7 @@ The MLflow UI should load correctly, demonstrating that the frontend API server 
 
 **6. Your platform team is deploying Kubeflow Pipelines (KFP) v2, but the security team explicitly forbids installing Argo Workflows in the cluster. How does the KFP v2 architecture allow you to proceed?**
 - A) KFP v2 bypasses orchestrators and submits raw Pods directly to the Kubernetes API.
-- B) KFP v2 SDK compiles pipelines to a backend-agnostic IR YAML, allowing alternative orchestrators to execute them.
+- B) KFP v2 SDK compiles pipelines to a backend-agnostic Intermediate Representation (IR) YAML format, allowing alternative orchestrators to execute them.
 - C) KFP v2 relies exclusively on Tekton Pipelines as its default execution engine.
 - D) You cannot proceed; KFP v2 still has a hard dependency on Argo Workflows.
 
