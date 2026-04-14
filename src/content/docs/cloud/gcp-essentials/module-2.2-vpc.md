@@ -639,6 +639,8 @@ Create a host project with a custom VPC and two subnets.
 
 ```bash
 # Set variables
+# IMPORTANT: Replace YOUR_BILLING_ACCOUNT_ID with your actual billing ID (find via 'gcloud billing accounts list')
+export BILLING_ACCOUNT_ID="YOUR_BILLING_ACCOUNT_ID"
 export HOST_PROJECT="vpc-lab-host-$(date +%s | tail -c 7)"
 export SVC_PROJECT_A="vpc-lab-svc-a-$(date +%s | tail -c 7)"
 export SVC_PROJECT_B="vpc-lab-svc-b-$(date +%s | tail -c 7)"
@@ -651,7 +653,7 @@ gcloud projects create $SVC_PROJECT_B --name="VPC Lab Service B"
 
 # Link billing to all projects
 for P in $HOST_PROJECT $SVC_PROJECT_A $SVC_PROJECT_B; do
-  gcloud billing projects link $P --billing-account=BILLING_ACCOUNT_ID
+  gcloud billing projects link $P --billing-account=$BILLING_ACCOUNT_ID
 done
 
 # Enable compute API
@@ -679,6 +681,11 @@ gcloud compute networks subnets create app-tier \
   --region=$REGION \
   --range=10.10.1.0/24 \
   --enable-private-ip-google-access
+
+# Verify VPC and subnets were created successfully
+gcloud compute networks subnets list \
+  --project=$HOST_PROJECT \
+  --network=shared-vpc
 ```
 </details>
 
@@ -729,6 +736,12 @@ gcloud projects add-iam-binding $HOST_PROJECT \
 gcloud projects add-iam-binding $HOST_PROJECT \
   --member="serviceAccount:$APP_SA" \
   --role="roles/compute.networkUser"
+
+# Verify IAM bindings on the host project
+gcloud projects get-iam-policy $HOST_PROJECT \
+  --flatten="bindings[].members" \
+  --format="table(bindings.role,bindings.members)" \
+  --filter="bindings.role:roles/compute.networkUser"
 ```
 </details>
 
