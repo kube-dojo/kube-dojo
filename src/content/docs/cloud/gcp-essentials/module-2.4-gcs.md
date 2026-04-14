@@ -31,7 +31,7 @@ In this module, you will learn how GCS organizes data, how to choose the right s
 
 ### Buckets and Objects
 
-GCS has a flat namespace despite appearing hierarchical. There are no directories---object names like `logs/2024/01/app.log` are just strings that happen to contain slashes. The console and `gsutil` simulate folder-like navigation, but under the hood it is a flat key-value store.
+GCS has a flat namespace despite appearing hierarchical. There are no directories---object names like `logs/2024/01/app.log` are just strings that happen to contain slashes. The console and `gcloud storage` simulate folder-like navigation, but under the hood it is a flat key-value store.
 
 ```mermaid
 graph TD
@@ -87,7 +87,7 @@ gcloud storage rm -r gs://my-company-data-prod/temp/
 | Location Type | Example | Redundancy | Latency | Cost | Use Case |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Multi-region** | `US`, `EU`, `ASIA` | Geo-redundant (2+ regions) | Higher | Highest | Global apps, disaster recovery |
-| **Dual-region** | `US-CENTRAL1+US-EAST1` | 2 specific regions | Medium | Medium-high | Compliance + availability |
+| **Dual-region** | `NAM4`, custom | 2 specific regions | Medium | Medium-high | Compliance + availability |
 | **Region** | `us-central1` | Within one region | Lowest | Lowest | Co-located with compute, cost-sensitive |
 
 ```bash
@@ -95,9 +95,10 @@ gcloud storage rm -r gs://my-company-data-prod/temp/
 gcloud storage buckets create gs://my-logs-regional \
   --location=us-central1
 
-# Dual-region bucket (compliance + availability)
+# Custom dual-region bucket (compliance + availability)
 gcloud storage buckets create gs://my-backups-dual \
-  --location=us-central1+us-east1 \
+  --location=US \
+  --placement=us-central1,us-east1 \
   --default-storage-class=NEARLINE
 
 # Multi-region bucket (global access)
@@ -120,7 +121,7 @@ GCS offers four storage classes. The key insight is that **cheaper storage has h
 | **COLDLINE** | $0.004-0.006 | $0.02 | 90 days | 99.9% | Quarterly access (archives) |
 | **ARCHIVE** | $0.0012 | $0.05 | 365 days | 99.9% | Yearly access (compliance) |
 
-**Critical concept**: The minimum storage duration means you are **billed for the full period** even if you delete the object early. If you upload a file to COLDLINE and delete it after 10 days, you are still charged for 90 days of storage.
+**Critical concept**: The minimum storage duration means you are **billed for the full period** even if you delete the object early. If you upload a file to COLDLINE and delete it after 10 days, you are still charged for the remaining 80 days of storage as an early deletion fee.
 
 ```bash
 # Set storage class per object during upload
@@ -334,7 +335,7 @@ gcloud storage buckets get-iam-policy gs://my-bucket
 gcloud org-policies set-policy /tmp/prevent-public.yaml --organization=ORG_ID
 
 # /tmp/prevent-public.yaml:
-# constraint: constraints/storage.uniformBucketLevelAccess
+# constraint: constraints/storage.publicAccessPrevention
 # booleanPolicy:
 #   enforced: true
 
@@ -445,7 +446,7 @@ gcloud storage rsync gs://source-bucket/ gs://dest-bucket/ \
 
 3. **Cloud Storage has a hidden "requester pays" feature** that shifts download costs to the requester instead of the bucket owner. This is commonly used for public datasets where the dataset provider does not want to pay for bandwidth. The Human Genome Project and many scientific datasets on GCS use requester pays.
 
-4. **Object names that begin with a period (`.`) are not hidden**---GCS does not have a concept of hidden files. The name `.env` is just a regular object name. However, some tools (like `gsutil rsync`) have flags to skip dotfiles, which can cause confusion when `.env` files are not synced as expected.
+4. **Object names that begin with a period (`.`) are not hidden**---GCS does not have a concept of hidden files. The name `.env` is just a regular object name. However, some tools (like `gcloud storage rsync`) have flags to skip dotfiles, which can cause confusion when `.env` files are not synced as expected.
 
 ---
 
@@ -469,7 +470,7 @@ gcloud storage rsync gs://source-bucket/ gs://dest-bucket/ \
 <details>
 <summary>1. Your backup pipeline uploads a 5 TB database dump to a COLDLINE bucket on the 1st of the month. Due to a script error, a cleanup job deletes this dump on the 15th of the same month. Calculate the financial impact regarding storage duration and explain the billing mechanics.</summary>
 
-You will be billed for a full 90 days of storage for the 5 TB file, plus an early deletion penalty. Coldline storage has a strict minimum storage duration of 90 days built into its pricing model to offset the cheaper monthly rate. Even though the object only existed for 15 days, Google Cloud automatically calculates and applies an early deletion charge for the remaining 75 days. This penalty ensures that users do not exploit archival storage classes for short-lived temporary data. If a workload involves creating and deleting files within a month, Standard or Nearline storage will mathematically always be the cheaper option.
+You will be billed for the 15 days the object existed, plus an early deletion fee equivalent to the remaining 75 days of Coldline storage for the 5 TB file. Coldline storage has a strict minimum storage duration of 90 days built into its pricing model to offset the cheaper monthly rate. Even though the object only existed for 15 days, Google Cloud automatically calculates and applies this early deletion charge to ensure that users do not exploit archival storage classes for short-lived temporary data. If a workload involves creating and deleting files within a month, Standard or Nearline storage will mathematically always be the cheaper option because they have shorter or zero minimum duration requirements.
 </details>
 
 <details>
@@ -587,7 +588,7 @@ gcloud storage ls -a gs://$BUCKET_NAME/config.json
 
 # Get the generation number of the version you want to restore
 GENERATION=$(gcloud storage ls -a gs://$BUCKET_NAME/config.json \
-  --format="value(name)" | head -1 | grep -o '#[0-9]*' | tr -d '#')
+  --format="value(name)" | tail -1 | grep -o '#[0-9]*' | tr -d '#')
 
 echo "Restoring generation: $GENERATION"
 
