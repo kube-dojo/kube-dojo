@@ -350,6 +350,8 @@ pie title Cost-Optimized QoS Distribution (Target utilization: 55-70%)
 
 ---
 
+> **Pause and predict**: If a node runs out of memory, which Pod gets evicted first: a Burstable pod using 90% of its requested memory, or a BestEffort pod using 10% of its node's memory?
+
 ## Profiling vs Utilization-Based Rightsizing
 
 ### Utilization-Based (Reactive)
@@ -530,6 +532,8 @@ kubectl get events -n payments --field-selector reason=OOMKilling
 ```
 
 ---
+
+> **Stop and think**: Why is it dangerous to set memory requests equal to average usage instead of p95 or p99?
 
 ## Common Mistakes
 
