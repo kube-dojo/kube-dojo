@@ -65,71 +65,59 @@ This module teaches you the principles of authentication (proving identity) and 
 
 ### 1.1 What is Authentication?
 
-```
-AUTHENTICATION
-═══════════════════════════════════════════════════════════════
-
-Authentication answers: "WHO ARE YOU?"
+Authentication answers: **"WHO ARE YOU?"**
 
 It's the process of verifying that someone is who they claim to be.
 
-AUTHENTICATION FLOW
-─────────────────────────────────────────────────────────────
-1. CLAIM: "I am alice@example.com"
-2. PROOF: Provide password, certificate, or token
-3. VERIFY: System checks proof against stored credential
-4. RESULT: Authenticated (identity confirmed) or Rejected
+### Authentication Flow
 
-WHAT AUTHENTICATION IS NOT
-─────────────────────────────────────────────────────────────
-✗ Deciding what the user can do (that's authorization)
-✗ Tracking what the user did (that's auditing)
-✗ Protecting the communication (that's encryption)
+```mermaid
+flowchart TD
+    A["1. CLAIM: 'I am alice@example.com'"] --> B["2. PROOF: Provide password, certificate, or token"]
+    B --> C["3. VERIFY: System checks proof against stored credential"]
+    C --> D{"4. RESULT"}
+    D -->|Success| E["Authenticated (identity confirmed)"]
+    D -->|Failure| F["Rejected"]
+```
+
+### What Authentication Is Not
+- ✗ Deciding what the user can do (that's authorization)
+- ✗ Tracking what the user did (that's auditing)
+- ✗ Protecting the communication (that's encryption)
 
 Authentication just answers: "Is this really Alice?"
-```
 
 > **Stop and think**: If a user is successfully authenticated, does that mean they can modify any data in the system? Why or why not?
 
 ### 1.2 Authentication Factors
 
-```
-THE THREE AUTHENTICATION FACTORS
-═══════════════════════════════════════════════════════════════
+#### Something You Know
+Examples: Password, PIN, security questions
+- `+` Easy to implement
+- `-` Can be guessed, phished, stolen
+- `-` Users pick weak passwords, reuse them
 
-SOMETHING YOU KNOW
-    Password, PIN, security questions
+#### Something You Have
+Examples: Phone (SMS, TOTP), hardware key (YubiKey), smart card
+- `+` Harder to steal remotely
+- `+` Proves physical possession
+- `-` Can be lost, stolen, SIM-swapped
+- `-` Requires user to carry device
 
-    + Easy to implement
-    - Can be guessed, phished, stolen
-    - Users pick weak passwords, reuse them
+#### Something You Are
+Examples: Fingerprint, face, retina, voice
+- `+` Always with you
+- `+` Hard to forge (for now)
+- `-` Can't be changed if compromised
+- `-` Privacy concerns
+- `-` False positives/negatives
 
-SOMETHING YOU HAVE
-    Phone (SMS, TOTP), hardware key (YubiKey), smart card
-
-    + Harder to steal remotely
-    + Proves physical possession
-    - Can be lost, stolen, SIM-swapped
-    - Requires user to carry device
-
-SOMETHING YOU ARE
-    Fingerprint, face, retina, voice
-
-    + Always with you
-    + Hard to forge (for now)
-    - Can't be changed if compromised
-    - Privacy concerns
-    - False positives/negatives
-
-MULTI-FACTOR AUTHENTICATION (MFA)
-─────────────────────────────────────────────────────────────
+#### Multi-Factor Authentication (MFA)
 Combines two or more factors:
 
-    Password (know) + TOTP (have) = Much stronger
+**Password (know) + TOTP (have) = Much stronger**
 
-    Attacker needs to compromise BOTH factors,
-    which requires different attack techniques.
-```
+An attacker needs to compromise BOTH factors, which requires completely different attack techniques.
 
 ### 1.3 Authentication Methods
 
@@ -158,92 +146,69 @@ Combines two or more factors:
 
 ### 2.1 What is Authorization?
 
-```
-AUTHORIZATION
-═══════════════════════════════════════════════════════════════
+Authorization answers: **"WHAT CAN YOU DO?"**
 
-Authorization answers: "WHAT CAN YOU DO?"
+After authentication confirms identity, authorization decides what that identity is allowed to access.
 
-After authentication confirms identity, authorization decides
-what that identity is allowed to access.
+### Authorization Decision
 
-AUTHORIZATION DECISION
-─────────────────────────────────────────────────────────────
-INPUTS:
-    - WHO: Authenticated identity (alice@example.com)
-    - WHAT: Requested action (read, write, delete)
-    - WHICH: Target resource (/api/users/123)
-    - CONTEXT: Additional factors (time, location, risk)
+**Inputs:**
+- **WHO**: Authenticated identity (`alice@example.com`)
+- **WHAT**: Requested action (`read`, `write`, `delete`)
+- **WHICH**: Target resource (`/api/users/123`)
+- **CONTEXT**: Additional factors (time, location, risk)
 
-OUTPUT:
-    - ALLOW: Proceed with action
-    - DENY: Block action
+**Output:**
+- **ALLOW**: Proceed with action
+- **DENY**: Block action
 
-EXAMPLE:
-    Alice requests DELETE /api/users/123
-
-    Check: Does Alice have permission to delete users?
-    Check: Can Alice delete this specific user (123)?
-
-    Result: ALLOW or DENY
-```
+**Example:**
+Alice requests `DELETE /api/users/123`
+1. Check: Does Alice have permission to delete users?
+2. Check: Can Alice delete this specific user (123)?
+3. Result: ALLOW or DENY
 
 ### 2.2 Authorization Models
 
-```
-AUTHORIZATION MODELS
-═══════════════════════════════════════════════════════════════
-
-ACCESS CONTROL LIST (ACL)
-─────────────────────────────────────────────────────────────
+#### Access Control List (ACL)
 Permissions attached directly to resources.
-
-    /api/users:
-        alice: read, write
-        bob: read
-        carol: read, write, delete
-
-    Simple, but doesn't scale. Managing permissions on
-    thousands of resources is unwieldy.
-
-ROLE-BASED ACCESS CONTROL (RBAC)
-─────────────────────────────────────────────────────────────
-Users assigned to roles, roles have permissions.
-
-    Roles:
-        viewer: read
-        editor: read, write
-        admin: read, write, delete
-
-    Assignments:
-        alice → editor
-        bob → viewer
-        carol → admin
-
-    Scales better. Change role, all users update.
-
-ATTRIBUTE-BASED ACCESS CONTROL (ABAC)
-─────────────────────────────────────────────────────────────
-Policies evaluate attributes of user, resource, context.
-
-    Policy: "Allow if user.department == resource.owner.department
-             AND time.hour >= 9 AND time.hour < 17"
-
-    Very flexible. Can express complex rules.
-    Can become hard to understand and audit.
+```text
+/api/users:
+    alice: read, write
+    bob: read
+    carol: read, write, delete
 ```
+Simple, but doesn't scale. Managing permissions on thousands of resources is unwieldy.
+
+#### Role-Based Access Control (RBAC)
+Users assigned to roles, roles have permissions.
+```text
+Roles:
+    viewer: read
+    editor: read, write
+    admin: read, write, delete
+
+Assignments:
+    alice → editor
+    bob → viewer
+    carol → admin
+```
+Scales better. Change a role, and all users assigned to it update automatically.
+
+#### Attribute-Based Access Control (ABAC)
+Policies evaluate attributes of user, resource, context.
+```text
+Policy: "Allow if user.department == resource.owner.department AND time.hour >= 9 AND time.hour < 17"
+```
+Very flexible. Can express complex rules. Can become hard to understand and audit.
 
 > **Pause and predict**: If you have 500 users and 50 applications, how many permission assignments would you need to manage with ACLs compared to RBAC?
 
 ### 2.3 RBAC in Practice
 
-```
-RBAC DESIGN
-═══════════════════════════════════════════════════════════════
+#### Kubernetes RBAC Example
 
-KUBERNETES RBAC EXAMPLE
-─────────────────────────────────────────────────────────────
-
+```yaml
 # Define what actions are allowed (Role)
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -254,7 +219,7 @@ rules:
 - apiGroups: [""]
   resources: ["pods"]
   verbs: ["get", "list", "watch"]
-
+---
 # Bind role to identity (RoleBinding)
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -269,11 +234,12 @@ roleRef:
   kind: Role
   name: pod-reader
   apiGroup: rbac.authorization.k8s.io
-
-RESULT: Alice can read pods in production namespace.
-        Alice cannot write pods.
-        Alice cannot read pods in other namespaces.
 ```
+
+**Result:**
+- Alice can read pods in the production namespace.
+- Alice cannot write pods.
+- Alice cannot read pods in other namespaces.
 
 ---
 
@@ -281,65 +247,44 @@ RESULT: Alice can read pods in production namespace.
 
 ### 3.1 What is Least Privilege?
 
-```
-PRINCIPLE OF LEAST PRIVILEGE
-═══════════════════════════════════════════════════════════════
+Grant only the minimum permissions necessary to perform the required function—no more, no less.
 
-Grant only the minimum permissions necessary to perform
-the required function—no more, no less.
+#### Why It Matters
 
-WHY IT MATTERS
-─────────────────────────────────────────────────────────────
-Compromised Identity:
-    Without least privilege: Attacker has broad access
-    With least privilege: Attacker access is limited
+**Compromised Identity:**
+- Without least privilege: Attacker has broad access
+- With least privilege: Attacker access is limited
 
-Accidents:
-    Without least privilege: Mistake can affect anything
-    With least privilege: Mistake limited to allowed scope
+**Accidents:**
+- Without least privilege: Mistake can affect anything
+- With least privilege: Mistake limited to allowed scope
 
-Insider Threats:
-    Without least privilege: Employees can access anything
-    With least privilege: Access only what job requires
-```
+**Insider Threats:**
+- Without least privilege: Employees can access anything
+- With least privilege: Access only what job requires
 
 ### 3.2 Implementing Least Privilege
 
-```
-LEAST PRIVILEGE IMPLEMENTATION
-═══════════════════════════════════════════════════════════════
-
-1. START WITH ZERO
-─────────────────────────────────────────────────────────────
+#### 1. Start With Zero
 Default deny. No permissions until explicitly granted.
+- **Bad**: New user → Admin role (convenient!)
+- **Good**: New user → No roles → Request needed access
 
-    Bad:  New user → Admin role (convenient!)
-    Good: New user → No roles → Request needed access
-
-2. SCOPE PERMISSIONS
-─────────────────────────────────────────────────────────────
+#### 2. Scope Permissions
 Narrow by action, resource, and context.
+- **Too broad**: "admin" (can do anything)
+- **Better**: "editor" (can read and write)
+- **Best**: "orders-editor" (can edit orders only)
 
-    Too broad: "admin" (can do anything)
-    Better: "editor" (can read and write)
-    Best: "orders-editor" (can edit orders only)
-
-3. TIME-BOUND ACCESS
-─────────────────────────────────────────────────────────────
+#### 3. Time-Bound Access
 Temporary elevated permissions for specific tasks.
+- **Permanent**: Alice always has production access
+- **Time-bound**: Alice gets production access for 4 hours to debug a specific issue, then revoked
 
-    Permanent: alice always has production access
-    Time-bound: alice gets production access for 4 hours
-                to debug specific issue, then revoked
-
-4. SEPARATE CONCERNS
-─────────────────────────────────────────────────────────────
+#### 4. Separate Concerns
 Different roles for different functions.
-
-    Bad:  One service account for everything
-    Good: Separate accounts for app, monitoring, backup
-          Each with only its required permissions
-```
+- **Bad**: One service account for everything
+- **Good**: Separate accounts for app, monitoring, backup (each with only its required permissions)
 
 ### 3.3 Common Violations
 
@@ -371,53 +316,45 @@ Different roles for different functions.
 
 ### 4.1 How Tokens Work
 
+```mermaid
+sequenceDiagram
+    participant User
+    participant Server
+    participant DB as Database
+    
+    Note over User,DB: TRADITIONAL (Session-based)
+    User->>Server: 1. Logs in
+    Server->>DB: 2. Creates session & stores in DB
+    Server-->>User: 3. Sends session ID (cookie)
+    User->>Server: 4. Sends session ID with each request
+    Server->>DB: 5. Looks up session in DB
+    Note over Server,DB: Stateful. Server must store sessions.
+    
+    Note over User,DB: TOKEN-BASED (Stateless)
+    User->>Server: 1. Logs in
+    Server-->>User: 2. Creates & sends signed token (JWT)
+    User->>Server: 3. Sends token with each request
+    Server->>Server: 4. Validates signature & reads claims
+    Note over Server: Stateless. Scales easily.
 ```
-TOKEN-BASED AUTHENTICATION
-═══════════════════════════════════════════════════════════════
 
-TRADITIONAL (Session-based)
-─────────────────────────────────────────────────────────────
-1. User logs in
-2. Server creates session, stores in database
-3. Server sends session ID (cookie)
-4. Client sends session ID with each request
-5. Server looks up session in database
-
-    Problem: Stateful. Server must store sessions.
-    Problem: Doesn't scale well across servers.
-
-TOKEN-BASED (Stateless)
-─────────────────────────────────────────────────────────────
-1. User logs in
-2. Server creates signed token (JWT)
-3. Server sends token to client
-4. Client sends token with each request
-5. Server validates signature, reads claims
-
-    Benefit: Stateless. No session storage.
-    Benefit: Scales easily. Any server can validate.
-    Benefit: Can include claims (roles, permissions).
-```
+> **Stop and think**: If a stateless JWT is stolen, can the server invalidate it by simply deleting a session in the database? Why or why not?
 
 ### 4.2 JSON Web Tokens (JWT)
 
-```
-JWT STRUCTURE
-═══════════════════════════════════════════════════════════════
-
 Three parts, base64-encoded, separated by dots:
+`HEADER.PAYLOAD.SIGNATURE`
 
-HEADER.PAYLOAD.SIGNATURE
-
-HEADER
-─────────────────────────────────────────────────────────────
+#### Header
+```json
 {
   "alg": "RS256",    // Signing algorithm
   "typ": "JWT"       // Token type
 }
+```
 
-PAYLOAD (Claims)
-─────────────────────────────────────────────────────────────
+#### Payload (Claims)
+```json
 {
   "sub": "alice@example.com",  // Subject (who)
   "aud": "api.example.com",    // Audience (for whom)
@@ -425,14 +362,13 @@ PAYLOAD (Claims)
   "exp": 1700003600,           // Expires at
   "roles": ["editor"]          // Custom claims
 }
-
-SIGNATURE
-─────────────────────────────────────────────────────────────
-HMAC-SHA256 or RSA signature of header + payload.
-Server verifies signature to ensure token wasn't tampered.
-
-CRITICAL: Never trust claims without verifying signature!
 ```
+
+#### Signature
+HMAC-SHA256 or RSA signature of header + payload.
+Server verifies signature to ensure token wasn't tampered with.
+
+> **CRITICAL**: Never trust claims without verifying the signature!
 
 ### 4.3 OAuth 2.0 and OpenID Connect
 
@@ -465,39 +401,27 @@ sequenceDiagram
 
 ### 5.1 Machine-to-Machine Authentication
 
-```
-SERVICE AUTHENTICATION
-═══════════════════════════════════════════════════════════════
+**Humans vs. Services**
+- **Humans**: Password + MFA, interactive login, one person with many sessions, can verify manually.
+- **Services**: API Keys, automated/non-interactive, one service with many instances, must be automated.
 
-HUMANS                              SERVICES
-─────────────────────────────────────────────────────────────
-Password + MFA                      API Keys
-Interactive login                   Automated, non-interactive
-One person, many sessions           One service, many instances
-Can verify manually                 Must be automated
+#### Service Authentication Methods
 
-SERVICE AUTHENTICATION METHODS
-─────────────────────────────────────────────────────────────
+**API Keys**
+- Long-lived secret string
+- Simple but risky if leaked
+- Hard to rotate across many instances
 
-API KEYS
-    Long-lived secret string
-    Simple but risky if leaked
-    Hard to rotate across many instances
+**Client Certificates (mTLS)**
+- Cryptographic identity
+- Strong, hard to steal
+- Complex PKI management
 
-CLIENT CERTIFICATES (mTLS)
-    Cryptographic identity
-    Strong, hard to steal
-    Complex PKI management
-
-SHORT-LIVED TOKENS
-    Get token from identity provider
-    Token expires quickly (hours)
-    Even if leaked, limited window
-
-    Kubernetes: ServiceAccount tokens
-    AWS: IAM roles for pods (IRSA)
-    Cloud: Workload identity
-```
+**Short-Lived Tokens**
+- Get token from identity provider
+- Token expires quickly (hours)
+- Even if leaked, limited window
+- *Examples*: Kubernetes ServiceAccount tokens, AWS IAM roles for pods (IRSA), Cloud Workload identity
 
 ### 5.2 Kubernetes Service Accounts
 
