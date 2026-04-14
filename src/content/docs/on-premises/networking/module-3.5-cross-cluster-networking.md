@@ -19,10 +19,12 @@ sidebar:
 
 Before routing traffic, clusters must agree on how to discover services. The Kubernetes Multi-Cluster Services (MCS) API (KEP-1645) defines the standard for this. It introduces two Primary Custom Resource Definitions (CRDs):
 
-1. `ServiceExport`: Created in the exporting cluster to declare a service available globally.
+1. `ServiceExport`: Created in the exporting cluster to declare a service available globally. It maps a service by name.
 2. `ServiceImport`: Created automatically in importing clusters by the MCS controller to represent the remote service.
 
-When a `ServiceExport` is created, the cross-cluster control plane synchronizes the endpoint slices to all participating clusters. A global DNS record (typically `clusterset.local`) is provisioned.
+When a `ServiceExport` is created, the cross-cluster control plane synchronizes the endpoint slices to all participating clusters. A global DNS record (typically `svc.clusterset.local`) is provisioned.
+
+> **Stop and think**: If the MCS API defines the standard for service discovery, who is responsible for actually routing the packets between clusters? The MCS API documentation explicitly states it focuses on API and behavior, providing no reference implementation for the datapath. You still need an overlay or CNI to handle the traffic.
 
 :::note
 MCS does not handle the actual datapath routing. It only handles service discovery and endpoint synchronization. You still need an overlay, routing daemon, or CNI to push packets between the nodes of different clusters.
@@ -39,8 +41,8 @@ Cilium Cluster Mesh extends the eBPF datapath across multiple clusters. It is th
 - **Datapath**: eBPF-based VXLAN, Geneve, or direct routing (BGP).
 - **Encryption**: IPsec or WireGuard.
 - **Service Discovery**: Implements the MCS API natively.
-- **Constraint**: Requires non-overlapping Pod and Service CIDRs across all participating clusters.
-- **Control Plane**: Uses an internal etcd cluster (kvstore) to synchronize endpoints, or a dedicated Cluster Mesh API server.
+- **Constraint**: Requires consistent datapath mode and non-conflicting Pod and Service CIDRs across all participating clusters. Unique cluster IDs/names must be configured per cluster. By default, it supports 255 connected clusters, and this limit cannot be changed safely on running clusters.
+- **Control Plane**: Uses an internal etcd cluster (kvstore) to synchronize endpoints, or a dedicated Cluster Mesh API server. As of Cilium v1.16, `KVStoreMesh` is enabled by default to optimize scalability when enabling Cluster Mesh.
 
 ```mermaid
 graph TD
@@ -58,13 +60,15 @@ graph TD
 
 ### Submariner
 
-Submariner is a dedicated cross-cluster networking tool designed to work *alongside* your existing CNI (Flannel, Calico, Weave).
+Submariner is a dedicated cross-cluster networking tool designed to work *alongside* your existing CNI (Flannel, Calico, Weave). It is compatible with all currently-supported Kubernetes versions.
 
 - **Datapath**: Deploys a Gateway Engine pod on a designated gateway node in each cluster. All cross-cluster traffic is routed through these gateways.
 - **Encryption**: IPsec (via Libreswan) or WireGuard.
 - **Service Discovery**: Deploys Lighthouse, its own CoreDNS plugin for cross-cluster resolution.
 - **Constraint**: Gateway nodes can become bottlenecks. Active/Passive high availability is standard, meaning failover takes time.
-- **Advantage**: Supports Globalnet, which dynamically translates overlapping Pod/Service CIDRs using SNAT/DNAT, allowing connection of clusters with identical IP spaces.
+- **Advantage**: Assumes non-overlapping CIDRs by default, but supports Globalnet, which dynamically translates overlapping Pod/Service CIDRs using SNAT/DNAT, allowing connection of clusters with identical IP spaces.
+
+> **Pause and predict**: If Submariner relies on Gateway Nodes to route traffic across clusters, what happens to cross-cluster traffic if the active Gateway Node fails? Expect a temporary connectivity drop until the passive gateway takes over and re-establishes the tunnels.
 
 ### Liqo
 
@@ -130,7 +134,7 @@ In this lab, we will configure a two-cluster Cilium Cluster Mesh using `kind`. W
 
 ### Prerequisites
 - `kind` installed.
-- `cilium` CLI installed (v0.16.0+).
+- `cilium` CLI installed.
 - Docker or Podman.
 
 ### Step 1: Create the Clusters
@@ -268,50 +272,50 @@ kubectl --context kind-cluster1 exec curl -- curl -s http://nginx.default.svc.cl
 
 ## Quiz
 
-**1. You are tasked with connecting two bare-metal Kubernetes clusters that were both provisioned using identical default kubeadm subnets (`10.244.0.0/16`). Which technology is most appropriate without rebuilding the clusters?**
+**1. You are tasked with connecting two bare-metal Kubernetes clusters that were both provisioned using identical default kubeadm subnets (`10.244.0.0/16`). Your goal is to establish cross-cluster connectivity without completely rebuilding the existing clusters. Which technology is most appropriate?**
 - A) Cilium Cluster Mesh
 - B) Submariner with Globalnet enabled
 - C) Multi-Cluster Services (MCS) API standalone
 - D) BGP Peering via Calico
 
 **Answer: B**
-*Explanation: Submariner supports Globalnet, which performs SNAT/DNAT to handle overlapping CIDRs. Cilium requires non-overlapping CIDRs, and BGP cannot resolve identical IP spaces without complex VRF configurations.*
+*Explanation: Submariner supports Globalnet, which performs SNAT/DNAT to handle overlapping CIDRs. Cilium requires non-overlapping CIDRs across all connected clusters to route traffic natively via eBPF. BGP cannot resolve identical IP spaces without complex VRF configurations, and standard MCS does not handle datapath routing at all.*
 
-**2. A cross-cluster WireGuard tunnel is established, but developers report that while `ping` works between pods in different clusters, database queries return timeouts. What is the most likely cause?**
+**2. A cross-cluster WireGuard tunnel is successfully established, but developers report a strange issue: while a basic `ping` works between pods in different clusters, large database queries frequently return timeouts. What is the most likely cause?**
 - A) The `ServiceExport` resource is misconfigured.
 - B) WireGuard keys are mismatched.
 - C) Path MTU Discovery (PMTUD) is failing, causing an MTU blackhole for large packets.
 - D) The CoreDNS forwarder is caching stale IP addresses.
 
 **Answer: C**
-*Explanation: Small packets (like ICMP ping) pass through the tunnel, but large TCP packets (database payloads) exceed the physical MTU when WireGuard overhead is added. Without PMTUD, these large packets are silently dropped.*
+*Explanation: Small packets like an ICMP ping easily fit within the standard MTU and pass through the tunnel without issue. However, large TCP packets such as database payloads exceed the physical network's MTU when the 60-byte WireGuard overhead is added. Without Path MTU Discovery (PMTUD) functioning correctly on the underlay network, these large packets are silently dropped by intermediate switches. Configuring TCP MSS clamping on the CNI can mitigate this by forcing smaller segment sizes during the initial connection handshake.*
 
-**3. In a Cilium Cluster Mesh architecture, how does the datapath route traffic from a Pod in Cluster A to a Pod in Cluster B?**
+**3. You are troubleshooting a latency issue between a frontend pod in Cluster A and a backend pod in Cluster B within a Cilium Cluster Mesh environment. To trace the packets efficiently, you need to understand the exact datapath. How does Cilium route this traffic?**
 - A) Traffic is routed through a centralized Gateway Node in Cluster A, then to a Gateway Node in Cluster B.
 - B) Traffic goes through the Cluster Mesh API server, which proxies the connection.
 - C) Traffic is routed directly from the source Pod's host node in Cluster A to the destination Pod's host node in Cluster B.
 - D) Traffic is encapsulated in an HTTP/2 tunnel via the Ingress Controller.
 
 **Answer: C**
-*Explanation: Cilium establishes node-to-node tunnels (VXLAN, Geneve, or WireGuard) across clusters, avoiding the bottleneck of a centralized gateway node.*
+*Explanation: Cilium establishes direct node-to-node tunnels (using VXLAN, Geneve, or WireGuard) across the connected clusters. It does not funnel traffic through a centralized gateway node like Submariner does, which avoids single points of failure and prevents bottlenecks. The traffic leaves the source pod's host node and goes directly to the destination pod's host node. This node-to-node direct routing is possible because Cilium requires non-overlapping PodCIDRs to ensure global routing visibility.*
 
-**4. When implementing the standard Multi-Cluster Services (MCS) API, what action triggers the creation of a global DNS record for a service?**
+**4. Your team has deployed a new payment microservice in Cluster A and wants to make it discoverable to billing services running in Cluster B using the MCS API standard. What specific action must the team take to trigger the creation of a global DNS record for this service?**
 - A) Creating a `ServiceExport` resource in the cluster where the service resides.
 - B) Annotating the namespace with `mcs.k8s.io/enabled: true`.
 - C) Changing the `Service` type to `LoadBalancer`.
 - D) Creating a `ServiceImport` resource in the destination cluster.
 
 **Answer: A**
-*Explanation: The `ServiceExport` resource signals to the multi-cluster controller that the service should be exposed globally, triggering the creation of `ServiceImport` resources elsewhere and the provisioning of DNS.*
+*Explanation: The Multi-Cluster Services API uses the `ServiceExport` custom resource to signal intent. By creating a `ServiceExport` in the cluster where the service resides (Cluster A), the multi-cluster controller is notified that the service should be exposed globally. The controller then synchronizes the endpoint data and triggers the automatic creation of corresponding `ServiceImport` resources and DNS records (typically under `clusterset.local`) in the participating clusters.*
 
-**5. You configure MTU for your bare-metal CNI. The physical switch MTU is 1500. You are using VXLAN and IPsec. What is the maximum safe CNI MTU?**
+**5. Your infrastructure team has deployed a new bare-metal Kubernetes cluster. The physical switch MTU is configured strictly to 1500 bytes. Your security policy mandates IPsec encryption, and you are using VXLAN for the overlay network. To prevent packet fragmentation and blackholes, what is the maximum safe MTU you should configure for the CNI?**
 - A) 1500
 - B) 1450
 - C) 1370
 - D) 1200
 
 **Answer: C**
-*Explanation: You must subtract VXLAN overhead (50 bytes) and IPsec overhead (~73 bytes depending on suite). 1500 - 50 - 73 = 1377. 1370 is the safest standard conservative value provided in the options.*
+*Explanation: When calculating the safe CNI MTU, you must subtract all encapsulation and encryption overhead from the physical MTU. From the physical MTU of 1500 bytes, you must subtract the VXLAN overhead (50 bytes) and the IPsec overhead (approximately 73 bytes, depending on the specific cryptographic suite). Subtracting both (1500 - 50 - 73) yields 1377 bytes, making 1370 the safest standard conservative value to configure to avoid dropping packets.*
 
 ## Further Reading
 - [Kubernetes Multi-Cluster Services API (KEP-1645)](https://github.com/kubernetes/enhancements/tree/master/keps/sig-multicluster/1645-multi-cluster-services-api)
