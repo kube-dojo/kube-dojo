@@ -195,7 +195,7 @@ All of the following are covered in [Module 1.2: Instrumentation & Alerting](mod
 
 ## Study Strategy
 
-```
+```text
 PCA PREPARATION PATH (recommended order)
 ══════════════════════════════════════════════════════════════
 
@@ -211,7 +211,7 @@ Week 2: Prometheus Fundamentals (Domain 2 — 20%)
 ├── Understand TSDB internals (WAL, blocks, compaction)
 └── Practice relabel_configs
 
-Week 3-4: PromQL (Domain 3 — 28%!)
+Week 3-4: PromQL (Domain 3 — 28%)
 ├── Module 1.1: PromQL Deep Dive
 ├── Practice 20+ queries on a live Prometheus instance
 ├── Master rate() vs irate() vs increase()
@@ -289,7 +289,7 @@ KubeDojo's observability modules plus the two dedicated PCA modules provide comp
 
 ## Related Certifications
 
-```
+```text
 CERTIFICATION PATH
 ══════════════════════════════════════════════════════════════
 
