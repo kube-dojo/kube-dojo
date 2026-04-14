@@ -518,6 +518,8 @@ spec:
         name: function-go-templating
 ```
 
+> **Pause and predict**: If you only implement detective guardrails (like nightly cost reports), how might developers react when they are asked to delete resources they spent all week configuring?
+
 ### Cost Guardrails
 
 ```yaml
@@ -707,7 +709,7 @@ approvalPolicy:
 ```mermaid
 flowchart TD
     subgraph S1["1. DISCOVER"]
-        D["What do you need?<br/>[Database]<br/>○ PostgreSQL<br/>○ MongoDB<br/>○ Redis"]
+        D["What do you need?<br/>[Database]<br/>- PostgreSQL<br/>- MongoDB<br/>- Redis"]
     end
     
     subgraph S2["2. CONFIGURE"]
@@ -719,11 +721,11 @@ flowchart TD
     end
     
     subgraph S4["4. PROVISION"]
-        P["✓ Request submitted<br/>✓ Auto-approved<br/>◐ Provisioning... (2 min)<br/>Progress: 80%"]
+        P["[OK] Request submitted<br/>[OK] Auto-approved<br/>[...] Provisioning... (2 min)<br/>Progress: 80%"]
     end
     
     subgraph S5["5. READY"]
-        F["✅ Database Ready!<br/>Host: orders-db.staging.internal<br/>Port: 5432<br/>Secret: platform/orders-db-credentials"]
+        F["[Ready] Database Ready!<br/>Host: orders-db.staging.internal<br/>Port: 5432<br/>Secret: platform/orders-db-credentials"]
     end
     
     S1 --> S2 --> S3 --> S4 --> S5
@@ -763,25 +765,25 @@ flowchart LR
 # Scaling
 $ platform infra scale orders-db --size large
 Scaling orders-db from medium to large...
-✓ Approved (within quota)
-✓ Scaling in progress (maintenance window: 2:00 AM)
-✓ Estimated completion: ~15 minutes
+[OK] Approved (within quota)
+[OK] Scaling in progress (maintenance window: 2:00 AM)
+[OK] Estimated completion: ~15 minutes
 
 # Backup/Restore
 $ platform infra backup create orders-db --name pre-migration
 Creating backup pre-migration...
-✓ Backup created: s3://backups/orders-db/pre-migration
+[OK] Backup created: s3://backups/orders-db/pre-migration
 
 $ platform infra backup restore orders-db --from pre-migration --target orders-db-restore
 Restoring to new instance orders-db-restore...
-✓ Restore complete
+[OK] Restore complete
 
 # Version Upgrade
 $ platform infra upgrade orders-db --version 16
 Pre-upgrade checks:
-✓ Compatible application versions
-✓ Backup exists (less than 24h old)
-⚠ Breaking changes in PG16: [link to docs]
+[OK] Compatible application versions
+[OK] Backup exists (less than 24h old)
+[Warning] Breaking changes in PG16: [link to docs]
 
 Schedule upgrade for maintenance window? [Y/n]
 
@@ -789,11 +791,13 @@ Schedule upgrade for maintenance window? [Y/n]
 $ platform infra delete orders-db
 This will permanently delete orders-db and all data.
 Type 'orders-db' to confirm: orders-db
-✓ Final backup created
-✓ Dependent services notified
-✓ Resource deleted
-✓ Cost allocation updated
+[OK] Final backup created
+[OK] Dependent services notified
+[OK] Resource deleted
+[OK] Cost allocation updated
 ```
+
+> **Stop and think**: How does your organization currently handle the decommissioning of old infrastructure? Is it an automated process, or does it rely on someone remembering to click delete?
 
 ### Orphan Detection and Cleanup
 
