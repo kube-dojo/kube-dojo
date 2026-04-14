@@ -31,21 +31,21 @@ EKS offers two mechanisms for this: **IAM Roles for Service Accounts (IRSA)**, w
 
 Before IRSA and Pod Identity existed, the only way to give pods AWS access was through the node's IAM instance profile. This is still the default if you do nothing else.
 
-```text
-EC2 Instance (Node)
-IAM Role: eks-node-role
-Permissions: s3:*, dynamodb:*, sqs:*, secretsmanager:*
-
-┌─────────────────────────────────────────────┐
-│                                             │
-│  Pod A (web-frontend)     ← needs: nothing  │
-│  Pod B (order-service)    ← needs: dynamodb │
-│  Pod C (image-processor)  ← needs: s3       │
-│  Pod D (notification-svc) ← needs: sqs      │
-│                                             │
-│  ALL FOUR PODS GET: s3 + dynamodb + sqs +   │
-│  secretsmanager (full node role!)            │
-└─────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Node["EC2 Instance (Node)"]
+        Role["IAM Role: eks-node-role<br>Permissions: s3:*, dynamodb:*, sqs:*, secretsmanager:*"]
+        
+        subgraph Pods["Pods running on this node"]
+            direction TB
+            PodA["Pod A (web-frontend) ← needs: nothing"]
+            PodB["Pod B (order-service) ← needs: dynamodb"]
+            PodC["Pod C (image-processor) ← needs: s3"]
+            PodD["Pod D (notification-svc) ← needs: sqs"]
+        end
+        
+        Role -->|"ALL FOUR PODS GET:<br>s3 + dynamodb + sqs + secretsmanager<br>(full node role!)"| Pods
+    end
 ```
 
 > **Stop and think**: If Pod A only serves static frontend assets and needs no AWS access whatsoever, why does it pose a critical security risk when scheduled on a node with the `eks-node-role` shown above? Consider the perspective of an attacker who achieves remote code execution inside Pod A.
@@ -54,19 +54,20 @@ If an attacker exploits a vulnerability in Pod A (which should not need any AWS 
 
 Pod-level identity solves this:
 
-```text
-EC2 Instance (Node)
-IAM Role: eks-node-role (minimal: ECR pull, EBS CSI only)
-
-┌─────────────────────────────────────────────┐
-│                                             │
-│  Pod A (web-frontend)     → IAM: none       │
-│  Pod B (order-service)    → IAM: dynamodb   │
-│  Pod C (image-processor)  → IAM: s3-bucket  │
-│  Pod D (notification-svc) → IAM: sqs-queue  │
-│                                             │
-│  Each pod gets ONLY its own credentials     │
-└─────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph Node["EC2 Instance (Node)"]
+        direction TB
+        Role["IAM Role: eks-node-role<br>(minimal: ECR pull, EBS CSI only)"]
+        
+        subgraph Pods["Pods (Each pod gets ONLY its own credentials)"]
+            direction TB
+            PodA["Pod A (web-frontend)"] --> IAM_None["IAM: none"]
+            PodB["Pod B (order-service)"] --> IAM_DDB["IAM: dynamodb"]
+            PodC["Pod C (image-processor)"] --> IAM_S3["IAM: s3-bucket"]
+            PodD["Pod D (notification-svc)"] --> IAM_SQS["IAM: sqs-queue"]
+        end
+    end
 ```
 
 ---
@@ -79,31 +80,23 @@ IRSA was the first solution to pod-level identity on EKS. It works by leveraging
 
 The flow involves four components: the EKS OIDC provider, IAM, the pod's service account, and the AWS SDK inside the pod.
 
-```text
-Step 1: Cluster Setup (one-time)
-┌──────────────┐         ┌────────────┐
-│ EKS Cluster  │────────►│ IAM OIDC   │
-│ issues OIDC  │         │ Provider   │
-│ tokens       │         │ (trust)    │
-└──────────────┘         └────────────┘
+```mermaid
+flowchart TD
+    subgraph Step1["Step 1: Cluster Setup (one-time)"]
+        direction LR
+        EKS["EKS Cluster<br>(issues OIDC tokens)"] -->|"trust"| OIDC["IAM OIDC Provider"]
+    end
 
-Step 2: Pod Startup
-┌──────────────┐    projected token    ┌────────────┐
-│ kubelet      │──────────────────────►│ Pod        │
-│ injects:     │                       │            │
-│ - JWT token  │   AWS_ROLE_ARN env    │ /var/run/  │
-│ - Role ARN   │──────────────────────►│ secrets/   │
-│ - Token path │                       │ eks.amazonaws│
-└──────────────┘                       │ .com/...   │
-                                       └─────┬──────┘
+    subgraph Step2["Step 2: Pod Startup"]
+        direction LR
+        Kubelet["kubelet injects:<br>- JWT token<br>- Role ARN<br>- Token path"] -->|"projected token<br>AWS_ROLE_ARN env"| PodDir["Pod<br>(/var/run/secrets/eks.amazonaws.com/...)"]
+    end
 
-Step 3: AWS API Call
-┌──────────────┐    AssumeRoleWithWebIdentity    ┌────────────┐
-│ Pod (AWS SDK)│────────────────────────────────►│ AWS STS    │
-│ sends JWT +  │                                 │            │
-│ role ARN     │◄────────────────────────────────│ Returns    │
-│              │    Temporary credentials        │ creds      │
-└──────────────┘                                 └────────────┘
+    subgraph Step3["Step 3: AWS API Call"]
+        direction LR
+        PodSDK["Pod (AWS SDK)<br>sends JWT + role ARN"] -->|"AssumeRoleWithWebIdentity"| STS["AWS STS"]
+        STS -->|"Returns temporary credentials"| PodSDK
+    end
 ```
 
 ### Setting Up IRSA
@@ -228,35 +221,23 @@ EKS Pod Identity, launched in November 2023, replaces IRSA with a simpler, AWS-n
 
 ### How Pod Identity Works
 
-```text
-Step 1: Association (AWS API)
-┌──────────────┐         ┌────────────────────┐
-│ eks:          │────────►│ Pod Identity       │
-│ CreatePod    │         │ Association        │
-│ Identity     │         │ (cluster + SA +    │
-│ Association  │         │  namespace → Role) │
-└──────────────┘         └────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Step1["Step 1: Association (AWS API)"]
+        direction LR
+        EKSAPI["eks:CreatePodIdentityAssociation"] -->|"creates"| Assoc["Pod Identity Association<br>(cluster + SA + namespace → Role)"]
+    end
 
-Step 2: Pod Startup
-┌──────────────┐    projected token    ┌────────────────┐
-│ kubelet      │──────────────────────►│ Pod Identity   │
-│              │                       │ Agent (DaemonSet│
-│              │                       │ on node)       │
-│              │                       └───────┬────────┘
-│              │                               │
-│              │                       exchanges token
-│              │                       for credentials
-│              │                               │
-│              │                       ┌───────▼────────┐
-│              │                       │ AWS STS        │
-│              │                       │ (AssumeRole    │
-│              │                       │  ForPodIdentity│
-│              │                       │  )             │
-│              │                       └───────┬────────┘
-│              │                               │
-│              │     credentials injected      │
-│              │◄──────────────────────────────┘
-└──────────────┘
+    subgraph Step2["Step 2: Pod Startup"]
+        direction TB
+        Kubelet["kubelet"]
+        Agent["Pod Identity Agent<br>(DaemonSet on node)"]
+        STS["AWS STS<br>(AssumeRoleForPodIdentity)"]
+        
+        Kubelet -->|"projected token"| Agent
+        Agent -->|"exchanges token<br>for credentials"| STS
+        STS -->|"credentials injected"| Kubelet
+    end
 ```
 
 The key difference: Pod Identity does not require an OIDC provider, does not need role trust policy modifications with cluster-specific OIDC URLs, and is managed entirely through the AWS EKS API.
@@ -362,21 +343,20 @@ Both IRSA and Pod Identity support cross-account IAM role assumption, but the se
 
 > **Stop and think**: When configuring cross-account access, the trust policy in Account B specifically references the pod's IAM role ARN in Account A (`arn:aws:iam::111111111111:role/OrderServiceRole-PodIdentity`). What would be the security implications if Account B's trust policy simply trusted the entire Account A (`arn:aws:iam::111111111111:root`) instead?
 
-```text
-Account A (EKS Cluster)              Account B (DynamoDB)
-┌──────────────────────┐             ┌──────────────────────┐
-│ Pod with SA          │             │ DynamoDB Table       │
-│   │                  │             │                      │
-│   ▼                  │             │ Role: CrossAcctRole  │
-│ Pod Identity Agent   │             │ Trust: Account A     │
-│   │                  │             │ role ARN             │
-│   ▼                  │             └──────────────────────┘
-│ Assume Local Role    │                       ▲
-│   │                  │                       │
-│   ▼                  │                       │
-│ Chain: AssumeRole ───┼───────────────────────┘
-│ into Account B       │
-└──────────────────────┘
+```mermaid
+flowchart LR
+    subgraph AcctA["Account A (EKS Cluster)"]
+        direction TB
+        Pod["Pod with SA"] --> Agent["Pod Identity Agent"]
+        Agent --> LocalRole["Assume Local Role"]
+    end
+    
+    subgraph AcctB["Account B (DynamoDB)"]
+        direction TB
+        RoleB["Role: CrossAcctRole<br>Trust: Account A role ARN"] --> DDB["DynamoDB Table"]
+    end
+    
+    LocalRole -->|"Chain: AssumeRole<br>into Account B"| RoleB
 ```
 
 ```bash
@@ -654,25 +634,24 @@ In this exercise, you will deploy a simple application that reads from a DynamoD
 
 **What you will build:**
 
-```text
-┌────────────────────────────────────────────────────────────────┐
-│  EKS Cluster                                                   │
-│                                                                │
-│  Phase 1: IRSA                                                 │
-│  ┌──────────────────────────────────────┐                     │
-│  │ Pod (order-reader)                   │                     │
-│  │   SA: order-sa                       │                     │
-│  │   Annotation: eks.../role-arn: Role  │                     │
-│  │   → OIDC → STS → DynamoDB           │                     │
-│  └──────────────────────────────────────┘                     │
-│                                                                │
-│  Phase 2: Pod Identity                                         │
-│  ┌──────────────────────────────────────┐                     │
-│  │ Pod (order-reader)                   │                     │
-│  │   SA: order-sa                       │                     │
-│  │   Association → Agent → STS → DynamoDB│                    │
-│  └──────────────────────────────────────┘                     │
-└────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph EKS["EKS Cluster"]
+        subgraph Phase1["Phase 1: IRSA"]
+            direction LR
+            Pod1["Pod (order-reader)<br>SA: order-sa<br>Annotation: eks.../role-arn"] --> OIDC["OIDC"] --> STS1["STS"]
+        end
+        
+        subgraph Phase2["Phase 2: Pod Identity"]
+            direction LR
+            Pod2["Pod (order-reader)<br>SA: order-sa"] -->|"Association"| Agent["Pod Identity Agent"] --> STS2["STS"]
+        end
+    end
+    
+    DDB["DynamoDB"]
+    
+    STS1 --> DDB
+    STS2 --> DDB
 ```
 
 ### Task 1: Create a DynamoDB Table
