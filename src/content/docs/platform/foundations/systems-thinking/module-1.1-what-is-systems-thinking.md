@@ -252,7 +252,7 @@ flowchart TD
 
 *I want to tell you about the incident that taught me the iceberg model—the hard way.*
 
-A fintech company had "random" payment failures every Monday. They weren't truly random, of course, but nobody had connected the dots. Every Monday morning, the on-call engineer would get paged, restart some services, add some pods, and things would stabilize. They wrote a runbook. They scheduled extra capacity for Mondays. They were **world-class at managing the symptom**.
+A fintech company had "random" payment failures every Monday. They weren't truly random, of course, but nobody had connected the dots. Every Monday morning, the on-call engineer would get paged, restart some services, add some pods, and things stabilize. They wrote a runbook. They scheduled extra capacity for Mondays. They were **world-class at managing the symptom**.
 
 For eight months.
 
