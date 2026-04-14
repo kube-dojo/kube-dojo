@@ -236,6 +236,8 @@ The Platform Engineering community surveyed over 4,000 developers. Here is what 
 | 7 | Service catalog (what exists, who owns it) | 58% |
 | 8 | Cost visibility | 42% |
 
+> **Pause and predict**: Look at the capabilities developers actually want. Why do you think advanced features like "Service mesh configuration" or "Custom Kubernetes operators" are missing from the top 8?
+
 Notice what is **not** on this list: advanced service mesh, custom Kubernetes operators, or sophisticated multi-cloud abstraction. Developers want the basics to work well before you build anything fancy.
 
 ### Reducing Cognitive Load
@@ -388,7 +390,7 @@ Design a golden path for the most common developer workflow at your organization
 **Step 1**: Identify the workflow (e.g., "deploy a new microservice," "add a new API endpoint," "create a database migration")
 
 **Step 2**: Map the current steps:
-```
+```text
 Current workflow: [name]
 Steps:
 1. [step] — Time: ___ — Pain: Low/Med/High
@@ -400,7 +402,7 @@ Total steps: ___
 ```
 
 **Step 3**: Design the golden path:
-```
+```text
 Golden path: [name]
 Steps:
 1. [step] — Time: ___
@@ -418,27 +420,22 @@ What we abstracted: [list]
 
 ### Exercise 3: Cognitive Load Mapping (30 min)
 
-Pick one workflow your platform supports and map its cognitive load:
+Pick one workflow your platform supports and map its cognitive load. Identify and prioritize the reduction of Extraneous load items.
 
 For each step, classify the cognitive load:
-- **I** = Intrinsic (inherent complexity)
-- **E** = Extraneous (unnecessary complexity from tools/process)
-- **G** = Germane (productive learning)
+- **Intrinsic (I)** = Inherent complexity
+- **Extraneous (E)** = Unnecessary complexity from tools/process
+- **Germane (G)** = Productive learning
 
-```
-Workflow: Deploy a service to Kubernetes
-Step                              Load Type  Load Level (1-5)
-─────────────────────────────────────────────────────────
-Write Dockerfile                  I          2
-Write Kubernetes YAML             E          4  ← Target for reduction
-Configure CI pipeline             E          3  ← Target for reduction
-Set up monitoring                 E          3  ← Target for reduction
-Understand canary deployment      G          2
-Debug failing health check        I          3
-Update service mesh config        E          4  ← Target for reduction
-```
-
-**Goal**: Identify and prioritize the reduction of Extraneous load items.
+| Step | Load Type | Load Level (1-5) | Notes |
+|------|-----------|------------------|-------|
+| Write Dockerfile | Intrinsic (I) | 2 | |
+| Write Kubernetes YAML | Extraneous (E) | 4 | ← Target for reduction |
+| Configure CI pipeline | Extraneous (E) | 3 | ← Target for reduction |
+| Set up monitoring | Extraneous (E) | 3 | ← Target for reduction |
+| Understand canary deployment | Germane (G) | 2 | |
+| Debug failing health check | Intrinsic (I) | 3 | |
+| Update service mesh config | Extraneous (E) | 4 | ← Target for reduction |
 
 ---
 
@@ -449,6 +446,8 @@ Update service mesh config        E          4  ← Target for reduction
 **Situation**: The platform team spent 9 months building a "next-generation deployment platform" based on Kubernetes, ArgoCD, and a custom abstraction layer. It was technically excellent: blue-green deployments, automatic rollbacks, integrated monitoring, cost optimization. The CTO was excited. The platform team was proud.
 
 **The launch**: They announced the platform in an all-hands meeting. Created documentation. Ran two training sessions. Then waited for adoption.
+
+> **Stop and think**: Look closely at the launch strategy above. Before reading further, at what point should the platform team have realized their launch was failing, and what metric would have told them earlier?
 
 **What happened**:
 - **Month 1**: 3 teams migrated (out of 25). All were teams with a platform engineer friend who helped them personally.
