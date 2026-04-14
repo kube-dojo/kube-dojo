@@ -94,79 +94,41 @@ Here's the problem: when you say "tech debt," executives hear **"engineers want 
 
 The fix is simple: **stop talking about tech debt. Start talking about business risk.**
 
-```
-THE TRANSLATION TABLE
-======================================================================
-
-WHAT ENGINEERS SAY              WHAT EXECUTIVES HEAR
-──────────────────────────────  ────────────────────────────────────
-"We have tech debt"             "Engineers want to refactor for fun"
-
-"The code is messy"             "So? It works."
-
-"We need to refactor"           "They want to rewrite everything
-                                 again, didn't we do this last year?"
-
-"Our tests are flawed"          "Testing is an engineering concern,
-                                 not a business priority"
-
-"The architecture won't scale"  "It scales fine today. Let's worry
-                                 about it when we get there."
-```
+| What Engineers Say | What Executives Hear |
+|---|---|
+| "We have tech debt" | "Engineers want to refactor for fun" |
+| "The code is messy" | "So? It works." |
+| "We need to refactor" | "They want to rewrite everything again, didn't we do this last year?" |
+| "Our tests are flawed" | "Testing is an engineering concern, not a business priority" |
+| "The architecture won't scale" | "It scales fine today. Let's worry about it when we get there." |
 
 Now compare with business risk language:
 
-```
-THE TRANSLATION TABLE (FIXED)
-======================================================================
-
-BUSINESS RISK FRAMING           WHAT EXECUTIVES HEAR
-──────────────────────────────  ────────────────────────────────────
-"Shipping new features takes    "We're slower than competitors.
- 3x longer than last year"      This affects revenue."
-
-"We're one config change away   "We could lose customers and
- from a 4-hour outage"          face legal liability."
-
-"Each deployment has a 15%      "We're gambling with uptime
- chance of causing an incident"  every time we ship."
-
-"Customer-facing bugs increased "Customer satisfaction is dropping.
- 200% this quarter"              Churn risk is increasing."
-
-"We can't pass the SOC 2 audit  "Enterprise deals are blocked.
- with our current architecture"  Revenue is at risk."
-```
+| Business Risk Framing | What Executives Hear |
+|---|---|
+| "Shipping new features takes 3x longer than last year" | "We're slower than competitors. This affects revenue." |
+| "We're one config change away from a 4-hour outage" | "We could lose customers and face legal liability." |
+| "Each deployment has a 15% chance of causing an incident" | "We're gambling with uptime every time we ship." |
+| "Customer-facing bugs increased 200% this quarter" | "Customer satisfaction is dropping. Churn risk is increasing." |
+| "We can't pass the SOC 2 audit with our current architecture" | "Enterprise deals are blocked. Revenue is at risk." |
 
 ### The Business Risk Framework
 
 When you need to communicate a technical concern to business stakeholders, use this framework:
 
-```
-THE BUSINESS RISK FRAMEWORK
-======================================================================
-
-  1. IMPACT: What business outcome is at risk?
-     → Revenue, customer satisfaction, regulatory compliance,
-       competitive position, employee retention
-
-  2. PROBABILITY: How likely is the bad outcome?
-     → Use data: incident frequency, error rates, near-misses
-     → "We've had 3 near-misses in the last month" is more
-       compelling than "it could happen"
-
-  3. TIMELINE: When will this become critical?
-     → "This will block the Q3 enterprise launch" is urgent
-     → "This might cause problems someday" is ignorable
-
-  4. COST OF DELAY: What happens if we wait?
-     → "Fixing this now: 2 weeks. Fixing this after an outage:
-        6 weeks + incident cost + customer trust damage"
-
-  5. ASK: What specifically do you need?
-     → "We need 1 engineer for 3 sprints" is actionable
-     → "We need to address tech debt" is not
-```
+1. **IMPACT:** What business outcome is at risk?
+   - Revenue, customer satisfaction, regulatory compliance, competitive position, employee retention
+2. **PROBABILITY:** How likely is the bad outcome?
+   - Use data: incident frequency, error rates, near-misses
+   - "We've had 3 near-misses in the last month" is more compelling than "it could happen"
+3. **TIMELINE:** When will this become critical?
+   - "This will block the Q3 enterprise launch" is urgent
+   - "This might cause problems someday" is ignorable
+4. **COST OF DELAY:** What happens if we wait?
+   - "Fixing this now: 2 weeks. Fixing this after an outage: 6 weeks + incident cost + customer trust damage"
+5. **ASK:** What specifically do you need?
+   - "We need 1 engineer for 3 sprints" is actionable
+   - "We need to address tech debt" is not
 
 ### Worked Example: The Database That's Going to Fail
 
@@ -209,44 +171,25 @@ The result: engineers say "yes" to everything and then work nights and weekends 
 
 Never say "No." Say "Yes, and here's what that requires."
 
-```
-THE "YES, AND" TECHNIQUE
-======================================================================
+**Scenario:** VP of Product wants real-time analytics in 4 weeks. Your estimate is 10 weeks for full implementation.
 
-SCENARIO: VP of Product wants real-time analytics in 4 weeks.
-          Your estimate is 10 weeks for full implementation.
+**Bad Response:**
+"No, that's impossible. It'll take at least 10 weeks."
+- *Result:* You're now "the engineer who says no to everything"
 
-BAD RESPONSE:
-  "No, that's impossible. It'll take at least 10 weeks."
-  → You're now "the engineer who says no to everything"
+**Okay Response:**
+"We can try, but it might not be great quality."
+- *Result:* You've committed to something you can't deliver well. When it breaks, it's your fault.
 
-OKAY RESPONSE:
-  "We can try, but it might not be great quality."
-  → You've committed to something you can't deliver well.
-     When it breaks, it's your fault.
+**Good Response:**
+"Yes, we can ship analytics in 4 weeks. Here's what that looks like at different scopes:
+- **4 weeks:** Daily batch analytics. Pre-computed reports updated every 24 hours. Covers 80% of the use cases identified in user research.
+- **7 weeks:** Near-real-time analytics. 15-minute data freshness. Custom date ranges. Covers 95% of use cases.
+- **10 weeks:** True real-time analytics. Sub-second updates. Custom dashboards. Full feature set.
 
-GOOD RESPONSE:
-  "Yes, we can ship analytics in 4 weeks. Here's what that looks
-   like at different scopes:
+My recommendation: Ship the 4-week version, get user feedback, and iterate. Most users don't actually need sub-second updates for business analytics."
 
-   4 weeks:  Daily batch analytics. Pre-computed reports updated
-             every 24 hours. Covers 80% of the use cases identified
-             in user research.
-
-   7 weeks:  Near-real-time analytics. 15-minute data freshness.
-             Custom date ranges. Covers 95% of use cases.
-
-   10 weeks: True real-time analytics. Sub-second updates.
-             Custom dashboards. Full feature set.
-
-   My recommendation: Ship the 4-week version, get user feedback,
-   and iterate. Most users don't actually need sub-second updates
-   for business analytics."
-
-  → You've said "yes" to the timeline, given options, shown you
-    understand the business need, and steered toward a pragmatic
-    solution.
-```
+- *Result:* You've said "yes" to the timeline, given options, shown you understand the business need, and steered toward a pragmatic solution.
 
 ### Scope Negotiation Tactics
 
@@ -294,91 +237,68 @@ flowchart TB
 
 The goal of status updates is to give your manager enough information to represent your team's work accurately---without so much detail that they feel compelled to manage your execution.
 
-```
-THE STATUS UPDATE SPECTRUM
-======================================================================
+**Too Little:**
+"Everything's fine."
+- Your manager doesn't know what you're doing
+- They start asking more questions
+- You feel micromanaged
+- But YOU created the information vacuum
 
-TOO LITTLE:
-  "Everything's fine."
-  → Your manager doesn't know what you're doing
-  → They start asking more questions
-  → You feel micromanaged
-  → But YOU created the information vacuum
+**Too Much:**
+"We fixed 47 bugs, refactored the auth module, updated 12 dependencies, reviewed 23 PRs, and had 6 design discussions. The flaky test in CI was caused by a race condition in the connection pool initialization..."
+- Your manager's eyes glaze over
+- They don't know what's important
+- They start asking clarifying questions
+- You feel micromanaged
+- But YOU overwhelmed them with noise
 
-TOO MUCH:
-  "We fixed 47 bugs, refactored the auth module, updated 12
-   dependencies, reviewed 23 PRs, and had 6 design discussions.
-   The flaky test in CI was caused by a race condition in the
-   connection pool initialization..."
-  → Your manager's eyes glaze over
-  → They don't know what's important
-  → They start asking clarifying questions
-  → You feel micromanaged
-  → But YOU overwhelmed them with noise
-
-JUST RIGHT:
-  "On track for Q2 goals. Three things to know:
-   1. Analytics dashboard ships next Tuesday (demo available Friday)
-   2. Database scaling is 70% complete---on schedule
-   3. Risk: the auth service migration is blocked on the security
-      team's review. If we don't get approval by Thursday, the
-      Q2 deadline is at risk. I'll escalate if needed."
-  → Manager knows what matters
-  → They can represent your work accurately to THEIR stakeholders
-  → They trust you, so they don't dig deeper
-  → You feel trusted and autonomous
-```
+**Just Right:**
+"On track for Q2 goals. Three things to know:
+1. Analytics dashboard ships next Tuesday (demo available Friday)
+2. Database scaling is 70% complete---on schedule
+3. Risk: the auth service migration is blocked on the security team's review. If we don't get approval by Thursday, the Q2 deadline is at risk. I'll escalate if needed."
+- Manager knows what matters
+- They can represent your work accurately to THEIR stakeholders
+- They trust you, so they don't dig deeper
+- You feel trusted and autonomous
 
 ### The 3-3-3 Status Update Format
 
 Use this format for weekly updates to your manager or skip-level:
 
-```
-THE 3-3-3 FORMAT
-======================================================================
+**3 Things Completed** (what shipped or was finished)
+1. [Concrete outcome, not activity]
+2. [Concrete outcome, not activity]
+3. [Concrete outcome, not activity]
 
-3 THINGS COMPLETED (what shipped or was finished)
-  1. [Concrete outcome, not activity]
-  2. [Concrete outcome, not activity]
-  3. [Concrete outcome, not activity]
+**3 Things In Progress** (what's being worked on)
+1. [What + expected completion date]
+2. [What + expected completion date]
+3. [What + expected completion date]
 
-3 THINGS IN PROGRESS (what's being worked on)
-  1. [What + expected completion date]
-  2. [What + expected completion date]
-  3. [What + expected completion date]
-
-3 RISKS OR BLOCKERS (what might go wrong)
-  1. [Risk + impact if not resolved + what you're doing about it]
-  2. [Risk + impact if not resolved + what you're doing about it]
-  3. [Risk + impact if not resolved + what you're doing about it]
-```
+**3 Risks or Blockers** (what might go wrong)
+1. [Risk + impact if not resolved + what you're doing about it]
+2. [Risk + impact if not resolved + what you're doing about it]
+3. [Risk + impact if not resolved + what you're doing about it]
 
 **Example:**
 
-```
-WEEKLY UPDATE - Platform Team - Week of March 17
-
-COMPLETED:
-  1. Database read replica deployed to production - checkout latency
-     improved from 450ms to 180ms (p99)
-  2. SOC 2 evidence collection finished - all 47 controls documented
-  3. Hired Senior SRE (Priya) - starts April 1
-
-IN PROGRESS:
-  1. Kafka migration: consumer groups moving this week (ETA: March 21)
-  2. Kubernetes 1.35 upgrade: staging complete, prod scheduled for
-     March 25 maintenance window
-  3. Q2 OKR planning: draft ready for review by Friday
-
-RISKS:
-  1. Kafka migration may slip 1 week - discovered schema compatibility
-     issue in the order service. Impact: delays event-driven checkout.
-     Mitigation: pair programming session scheduled for Tuesday.
-  2. Priya's start date may shift - visa processing delayed.
-     Impact: SRE on-call rotation stays at 3 people (stretching thin).
-     Mitigation: none needed yet, monitoring the situation.
-  3. No risks for item 3.
-```
+> **Weekly Update - Platform Team - Week of March 17**
+>
+> **Completed:**
+> 1. Database read replica deployed to production - checkout latency improved from 450ms to 180ms (p99)
+> 2. SOC 2 evidence collection finished - all 47 controls documented
+> 3. Hired Senior SRE (Priya) - starts April 1
+>
+> **In Progress:**
+> 1. Kafka migration: consumer groups moving this week (ETA: March 21)
+> 2. Kubernetes 1.35 upgrade: staging complete, prod scheduled for March 25 maintenance window
+> 3. Q2 OKR planning: draft ready for review by Friday
+>
+> **Risks:**
+> 1. Kafka migration may slip 1 week - discovered schema compatibility issue in the order service. Impact: delays event-driven checkout. Mitigation: pair programming session scheduled for Tuesday.
+> 2. Priya's start date may shift - visa processing delayed. Impact: SRE on-call rotation stays at 3 people (stretching thin). Mitigation: none needed yet, monitoring the situation.
+> 3. No risks for item 3.
 
 ### Preventing Micromanagement
 
@@ -422,66 +342,37 @@ Executive response: "Can we do this next quarter?"
 
 Similar to security, reliability is invisible when it works.
 
-```
-FRAMING RELIABILITY INVESTMENTS
-======================================================================
-
-DON'T SAY:                         SAY:
-─────────────────────────────────  ────────────────────────────────────
-"We need to improve our            "Each hour of downtime costs us
- uptime"                            $47,000 in lost revenue. We had
-                                    6 hours of downtime last quarter.
-                                    That's $282,000."
-
-"We need better monitoring"        "Our average time to detect an
-                                    outage is 23 minutes. Industry
-                                    best practice is under 5 minutes.
-                                    Those 18 extra minutes cost us
-                                    $14,000 per incident."
-
-"We need to do chaos                "Netflix runs chaos experiments
- engineering"                        continuously. That's why they
-                                     survived the AWS outage that took
-                                     down their competitors. We want
-                                     the same resilience for our
-                                     customers."
-
-"Our infrastructure is              "We're spending 40% of engineering
- outdated"                           time on workarounds for infrastructure
-                                     limitations. That's 2.4 FTEs of
-                                     capacity we're wasting---equivalent
-                                     to $480,000/year in salary."
-```
+| Don't Say | Say |
+|---|---|
+| "We need to improve our uptime" | "Each hour of downtime costs us $47,000 in lost revenue. We had 6 hours of downtime last quarter. That's $282,000." |
+| "We need better monitoring" | "Our average time to detect an outage is 23 minutes. Industry best practice is under 5 minutes. Those 18 extra minutes cost us $14,000 per incident." |
+| "We need to do chaos engineering" | "Netflix runs chaos experiments continuously. That's why they survived the AWS outage that took down their competitors. We want the same resilience for our customers." |
+| "Our infrastructure is outdated" | "We're spending 40% of engineering time on workarounds for infrastructure limitations. That's 2.4 FTEs of capacity we're wasting---equivalent to $480,000/year in salary." |
 
 ### The "Three Options" Technique
 
 When facing pushback, never present a single proposal. Present three options that make the trade-offs visible:
 
-```
-THREE OPTIONS FOR ADDRESSING DATABASE SCALING
-======================================================================
+**Option 1: Do Nothing ($0)**
+- Database runs out of space in ~4 months
+- Checkout latency degrades within 2 months
+- High probability of production outage
+- Estimated incident cost: $150,000-$500,000
 
-OPTION 1: DO NOTHING ($0)
-  - Database runs out of space in ~4 months
-  - Checkout latency degrades within 2 months
-  - High probability of production outage
-  - Estimated incident cost: $150,000-$500,000
+**Option 2: Minimum Viable Fix ($15,000)**
+- Upgrade instance type (1 day of work)
+- Buys 12 months of runway
+- Does not solve the underlying scaling problem
+- We'll be back here in a year
 
-OPTION 2: MINIMUM VIABLE FIX ($15,000)
-  - Upgrade instance type (1 day of work)
-  - Buys 12 months of runway
-  - Does not solve the underlying scaling problem
-  - We'll be back here in a year
+**Option 3: Strategic Fix ($85,000)**
+- Table partitioning + read replicas (3 weeks)
+- Scales for 3+ years at projected growth
+- Reduces query latency by 60%
+- Enables real-time analytics feature (on product roadmap)
 
-OPTION 3: STRATEGIC FIX ($85,000)
-  - Table partitioning + read replicas (3 weeks)
-  - Scales for 3+ years at projected growth
-  - Reduces query latency by 60%
-  - Enables real-time analytics feature (on product roadmap)
-
-RECOMMENDATION: Option 2 immediately + Option 3 in Q2.
+**Recommendation:** Option 2 immediately + Option 3 in Q2.
 This addresses the urgent risk while allowing strategic planning.
-```
 
 Executives like options. It gives them the feeling of control and allows them to make an informed trade-off---which is their job.
 
@@ -493,56 +384,40 @@ Executives like options. It gives them the feeling of control and allows them to
 
 To communicate effectively with stakeholders, you need to understand what keeps them up at night.
 
-```
-THE STAKEHOLDER EMPATHY MAP
-======================================================================
+**Product Management**
+- **Primary concern:** Shipping features that users want
+- **Success metric:** User adoption, feature usage, NPS
+- **Fear:** Building the wrong thing, missing the market
+- **Frustration with engineering:** "Engineering always says things take longer than they should"
+- **How to help:** Give clear timelines, flag risks early, suggest creative alternatives to hard problems
 
-PRODUCT MANAGEMENT
-  Primary concern:  Shipping features that users want
-  Success metric:   User adoption, feature usage, NPS
-  Fear:             Building the wrong thing, missing the market
-  Frustration with  "Engineering always says things take longer
-   engineering:      than they should"
-  How to help:      Give clear timelines, flag risks early,
-                    suggest creative alternatives to hard problems
+**Sales**
+- **Primary concern:** Closing deals, hitting quota
+- **Success metric:** Revenue, deal size, win rate
+- **Fear:** Losing deals to competitors, missing quota
+- **Frustration with engineering:** "The product doesn't have [feature competitor has], and I can't get a timeline for it"
+- **How to help:** Be honest about timelines, explain what IS possible, help them set realistic expectations with prospects
 
-SALES
-  Primary concern:  Closing deals, hitting quota
-  Success metric:   Revenue, deal size, win rate
-  Fear:             Losing deals to competitors, missing quota
-  Frustration with  "The product doesn't have [feature competitor
-   engineering:      has], and I can't get a timeline for it"
-  How to help:      Be honest about timelines, explain what IS
-                    possible, help them set realistic expectations
-                    with prospects
+**Customer Success**
+- **Primary concern:** Keeping customers happy and renewing
+- **Success metric:** Churn rate, CSAT, expansion revenue
+- **Fear:** Customers leaving, escalations to executives
+- **Frustration with engineering:** "Engineering deprioritizes bugs that affect only a few customers"
+- **How to help:** Take customer-reported bugs seriously, provide root cause analysis, give ETAs for fixes
 
-CUSTOMER SUCCESS
-  Primary concern:  Keeping customers happy and renewing
-  Success metric:   Churn rate, CSAT, expansion revenue
-  Fear:             Customers leaving, escalations to executives
-  Frustration with  "Engineering deprioritizes bugs that affect
-   engineering:      only a few customers"
-  How to help:      Take customer-reported bugs seriously, provide
-                    root cause analysis, give ETAs for fixes
+**Finance**
+- **Primary concern:** Predictable spending, ROI on investments
+- **Success metric:** Budget variance, unit economics
+- **Fear:** Surprise costs, runaway cloud spend
+- **Frustration with engineering:** "Our cloud bill went up 40% and nobody can explain why"
+- **How to help:** Tag infrastructure costs, provide monthly cloud spend reports, explain cost drivers
 
-FINANCE
-  Primary concern:  Predictable spending, ROI on investments
-  Success metric:   Budget variance, unit economics
-  Fear:             Surprise costs, runaway cloud spend
-  Frustration with  "Our cloud bill went up 40% and nobody
-   engineering:      can explain why"
-  How to help:      Tag infrastructure costs, provide monthly
-                    cloud spend reports, explain cost drivers
-
-LEGAL / COMPLIANCE
-  Primary concern:  Regulatory compliance, reducing liability
-  Success metric:   Audit results, compliance certifications
-  Fear:             Data breaches, regulatory fines, lawsuits
-  Frustration with  "Engineering can't tell me where customer
-   engineering:      data is stored or who has access to it"
-  How to help:      Maintain data flow diagrams, document access
-                    controls, participate actively in audit prep
-```
+**Legal / Compliance**
+- **Primary concern:** Regulatory compliance, reducing liability
+- **Success metric:** Audit results, compliance certifications
+- **Fear:** Data breaches, regulatory fines, lawsuits
+- **Frustration with engineering:** "Engineering can't tell me where customer data is stored or who has access to it"
+- **How to help:** Maintain data flow diagrams, document access controls, participate actively in audit prep
 
 ### Building Bridges: Practical Actions
 
@@ -580,83 +455,63 @@ During an outage, you're communicating with two very different audiences simulta
 
 These audiences need completely different information.
 
-```
-INCIDENT COMMUNICATION: TWO TRACKS
-======================================================================
+**Track 1: Technical (Slack #incident channel)**
+- **Audience:** Engineers, SREs, on-call team
+- **Content:** Root cause analysis, commands being run, logs, metrics, deployment status
+- **Tone:** Direct, technical, fast
+- **Example:** "Identified: Order service OOM-killed due to memory leak in v2.4.3 connection pool. Rolling back to v2.4.2. ETA: 5 minutes for rollback, 10 minutes for recovery."
 
-TRACK 1: TECHNICAL (Slack #incident channel)
-  Audience:  Engineers, SREs, on-call team
-  Content:   Root cause analysis, commands being run, logs,
-             metrics, deployment status
-  Tone:      Direct, technical, fast
-  Example:   "Identified: Order service OOM-killed due to memory
-              leak in v2.4.3 connection pool. Rolling back to v2.4.2.
-              ETA: 5 minutes for rollback, 10 minutes for recovery."
-
-TRACK 2: STAKEHOLDER (email, status page, Slack #incidents-updates)
-  Audience:  Product, Sales, Support, Executives, Customers
-  Content:   Impact, estimated time to resolution, workarounds
-  Tone:      Calm, clear, empathetic, jargon-free
-  Example:   "We're experiencing an issue affecting order processing.
-              Some customers may see errors when placing orders.
-              Our team is actively working on a fix. Estimated
-              resolution: within 30 minutes. We'll update every
-              15 minutes."
-```
+**Track 2: Stakeholder (email, status page, Slack #incidents-updates)**
+- **Audience:** Product, Sales, Support, Executives, Customers
+- **Content:** Impact, estimated time to resolution, workarounds
+- **Tone:** Calm, clear, empathetic, jargon-free
+- **Example:** "We're experiencing an issue affecting order processing. Some customers may see errors when placing orders. Our team is actively working on a fix. Estimated resolution: within 30 minutes. We'll update every 15 minutes."
 
 ### Stakeholder Incident Communication Template
 
 Use this template for non-technical stakeholder updates during incidents:
 
-```
-INCIDENT UPDATE - [SEVERITY] - [TIME]
-
-WHAT'S HAPPENING:
-  [1-2 sentences. What users see. No technical jargon.]
-
-WHO'S AFFECTED:
-  [Which customers/features are impacted. Be specific.]
-
-WHAT WE'RE DOING:
-  [1-2 sentences. Action being taken. Show progress.]
-
-ESTIMATED RESOLUTION:
-  [Time estimate. If unknown, say when the next update will be.]
-
-WORKAROUND:
-  [If one exists, describe it in user terms.]
-
-NEXT UPDATE:
-  [When stakeholders will hear from you again.]
-```
+> **INCIDENT UPDATE - [SEVERITY] - [TIME]**
+>
+> **What's Happening:**
+> [1-2 sentences. What users see. No technical jargon.]
+>
+> **Who's Affected:**
+> [Which customers/features are impacted. Be specific.]
+>
+> **What We're Doing:**
+> [1-2 sentences. Action being taken. Show progress.]
+>
+> **Estimated Resolution:**
+> [Time estimate. If unknown, say when the next update will be.]
+>
+> **Workaround:**
+> [If one exists, describe it in user terms.]
+>
+> **Next Update:**
+> [When stakeholders will hear from you again.]
 
 **Example:**
 
-```
-INCIDENT UPDATE - HIGH - 2:45 PM EST
-
-WHAT'S HAPPENING:
-  Some customers are unable to complete checkout. Orders placed
-  in the last 30 minutes may not have been processed.
-
-WHO'S AFFECTED:
-  Approximately 15% of customers attempting checkout. The product
-  catalog, search, and account features are working normally.
-
-WHAT WE'RE DOING:
-  We've identified the cause and are deploying a fix. Orders that
-  failed will be automatically retried once the fix is in place.
-
-ESTIMATED RESOLUTION:
-  Within 30 minutes.
-
-WORKAROUND:
-  Customers can save items to their cart and complete checkout
-  after the fix is deployed.
-
-NEXT UPDATE:
-  3:00 PM EST, or sooner if the issue is resolved.
-```
+> **INCIDENT UPDATE - HIGH - 2:45 PM EST**
+>
+> **What's Happening:**
+> Some customers are unable to complete checkout. Orders placed in the last 30 minutes may not have been processed.
+>
+> **Who's Affected:**
+> Approximately 15% of customers attempting checkout. The product catalog, search, and account features are working normally.
+>
+> **What We're Doing:**
+> We've identified the cause and are deploying a fix. Orders that failed will be automatically retried once the fix is in place.
+>
+> **Estimated Resolution:**
+> Within 30 minutes.
+>
+> **Workaround:**
+> Customers can save items to their cart and complete checkout after the fix is deployed.
+>
+> **Next Update:**
+> 3:00 PM EST, or sooner if the issue is resolved.
 
 ### What NOT to Say During Outages
 
@@ -673,37 +528,28 @@ NEXT UPDATE:
 
 After the incident is resolved, send a brief summary to stakeholders. This is different from the technical post-incident review---it's focused on impact and prevention.
 
-```
-POST-INCIDENT SUMMARY
-======================================================================
-
-INCIDENT: Checkout Processing Failure
-DATE:     March 17, 2026, 2:15 PM - 3:02 PM EST
-DURATION: 26 minutes
-IMPACT:   ~2,400 customers were unable to complete checkout.
-          All affected orders have been successfully reprocessed.
-
-WHAT HAPPENED:
-  A software update caused the order processing system to slow
-  down under load, resulting in checkout failures during peak
-  afternoon traffic.
-
-WHAT WE'VE DONE:
-  1. Deployed an immediate fix (resolved within 26 minutes)
-  2. Reprocessed all affected orders (no customer action needed)
-  3. Added monitoring to detect similar issues within 2 minutes
-     (instead of the 18 minutes it took today)
-
-WHAT WE'RE DOING TO PREVENT RECURRENCE:
-  1. Adding automated load testing before every deployment
-  2. Implementing canary deployments (gradual rollout to 5% of
-     traffic before full deployment)
-  3. Review complete by March 24
-
-CUSTOMER COMMUNICATION:
-  Affected customers have been notified via email with
-  confirmation that their orders are being processed.
-```
+> **POST-INCIDENT SUMMARY**
+>
+> **Incident:** Checkout Processing Failure
+> **Date:** March 17, 2026, 2:15 PM - 3:02 PM EST
+> **Duration:** 26 minutes
+> **Impact:** ~2,400 customers were unable to complete checkout. All affected orders have been successfully reprocessed.
+>
+> **What Happened:**
+> A software update caused the order processing system to slow down under load, resulting in checkout failures during peak afternoon traffic.
+>
+> **What We've Done:**
+> 1. Deployed an immediate fix (resolved within 26 minutes)
+> 2. Reprocessed all affected orders (no customer action needed)
+> 3. Added monitoring to detect similar issues within 2 minutes (instead of the 18 minutes it took today)
+>
+> **What We're Doing To Prevent Recurrence:**
+> 1. Adding automated load testing before every deployment
+> 2. Implementing canary deployments (gradual rollout to 5% of traffic before full deployment)
+> 3. Review complete by March 24
+>
+> **Customer Communication:**
+> Affected customers have been notified via email with confirmation that their orders are being processed.
 
 ---
 
@@ -837,7 +683,7 @@ Your email will be evaluated on:
 
 ### Example Structure
 
-```
+```text
 Subject: v3.0 Launch - Security Risk and Options
 
 Hi [VP Name],
