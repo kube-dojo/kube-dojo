@@ -449,6 +449,8 @@ spec:
       port: 8080
 ```
 
+> **Stop and think**: Review the network policies in your cluster. Do you rely solely on application-level authentication, or are you enforcing network isolation as an independent layer?
+
 ---
 
 ## Did You Know?
