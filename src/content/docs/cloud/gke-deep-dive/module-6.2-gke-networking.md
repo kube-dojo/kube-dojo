@@ -286,14 +286,13 @@ GKE integrates tightly with Google Cloud Load Balancing. When you create a Kuber
 
 ### Service Types and Their Load Balancers
 
-```text
-  Kubernetes Concept          GCP Resource Created
-  ─────────────────          ────────────────────
-  Service type: ClusterIP  → Nothing (internal only)
-  Service type: NodePort   → Nothing (opens port on nodes)
-  Service type: LoadBalancer → Network Load Balancer (L4)
-  Ingress (external)        → Application Load Balancer (L7)
-  Gateway (external)        → Application Load Balancer (L7)
+```mermaid
+graph LR
+    CIP["Service type: ClusterIP"] --> N1["Nothing (internal only)"]
+    NP["Service type: NodePort"] --> N2["Nothing (opens port on nodes)"]
+    LB["Service type: LoadBalancer"] --> NLB["Network Load Balancer (L4)"]
+    ING["Ingress (external)"] --> ALB["Application Load Balancer (L7)"]
+    GW["Gateway (external)"] --> ALB
 ```
 
 | Service Type | Layer | Scope | Use Case |
