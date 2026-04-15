@@ -9,14 +9,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable
 
-from dispatch import dispatch_claude
+from dispatch import dispatch_codex
 
 from .control_plane import ControlPlane, Lease
 from .escalation import should_dead_letter_rewrite, should_escalate_patch
-from .review_worker import PATCH_MODEL, PRO_MODEL
+from .review_worker import PRO_MODEL
 
 
-PATCH_ESTIMATED_USD = 0.0400
+PATCH_ESTIMATED_USD = 0.0150
 PATCH_CONTEXT_WINDOW_LINES = 30
 REPEATED_EXCEPTION_WINDOW_SECONDS = 3600
 REPEATED_EXCEPTION_THRESHOLD = 3
@@ -40,7 +40,7 @@ class PatchWorker:
         control_plane: ControlPlane,
         *,
         worker_id: str = "patch-worker",
-        dispatch_fn: Callable[..., tuple[bool, str]] = dispatch_claude,
+        dispatch_fn: Callable[..., tuple[bool, str]] = dispatch_codex,
     ):
         self.control_plane = control_plane
         self.worker_id = worker_id
@@ -362,7 +362,6 @@ Relevant content slices:
 
 Return JSON only with anchored edits that fix the failed checks using the provided slices.
 """
-
 
 def _format_failed_checks(failed_checks: list[dict[str, Any]]) -> str:
     if not failed_checks:

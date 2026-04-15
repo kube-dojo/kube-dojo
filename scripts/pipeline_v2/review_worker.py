@@ -14,7 +14,7 @@ from .preflight import PreflightFinding, run_preflight
 
 FLASH_MODEL = "gemini-3-flash-preview"
 PRO_MODEL = "gemini-3.1-pro-preview"
-PATCH_MODEL = "claude-sonnet-4-6"
+PATCH_MODEL = "codex"
 CHECK_PRE_MODEL = "deterministic"
 SIMPLE_CHECK_IDS = ("PRES", "NO_EMOJI", "K8S_API")
 DEEP_CHECK_IDS = ("COV", "DEPTH", "WHY")

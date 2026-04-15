@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sqlite3
 from pathlib import Path
 from typing import Any
 
@@ -52,6 +53,9 @@ def build_parser() -> argparse.ArgumentParser:
     complete.add_argument("--actual-usd", type=float, default=0.0)
     complete.add_argument("--tokens-in", type=int, default=0)
     complete.add_argument("--tokens-out", type=int, default=0)
+
+    status = subparsers.add_parser("status", help="Show pipeline status summary")
+    status.add_argument("--json", action="store_true")
 
     show = subparsers.add_parser("show", help="Inspect control-plane state")
     show_subparsers = show.add_subparsers(dest="show_command", required=True)
@@ -193,6 +197,9 @@ def main(argv: list[str] | None = None) -> int:
         print("usage recorded" if inserted else "usage already recorded")
         return 0
 
+    if args.command == "status":
+        return _show_status(args.db, json_output=args.json)
+
     if args.command == "show":
         if args.show_command == "budget":
             return _show_budget(control_plane, json_output=args.json)
@@ -332,6 +339,151 @@ def main(argv: list[str] | None = None) -> int:
 
     parser.error(f"Unhandled command: {args.command}")
     return 1
+
+
+def _show_status(db_path: Path, *, json_output: bool) -> int:
+    report = _build_status_report(db_path)
+    if json_output:
+        print(json.dumps(report, indent=2, sort_keys=True))
+        return 0
+
+    phase_rows = [(phase, report["counts"][phase]) for phase in report["phase_order"]]
+    metric_rows = [
+        ("total_modules", report["total_modules"]),
+        ("convergence_rate", f"{report['convergence_rate']:.1f}%"),
+        ("flapping_count", report["flapping_count"]),
+        ("needs_human_count", report["needs_human_count"]),
+    ]
+
+    print(f"Pipeline status ({report['db_path']})")
+    _print_table(("Phase", "Count"), phase_rows)
+    print()
+    _print_table(("Metric", "Value"), metric_rows)
+    return 0
+
+
+def _build_status_report(db_path: Path) -> dict[str, Any]:
+    phase_order = [
+        "pending_review",
+        "pending_write",
+        "pending_patch",
+        "done",
+        "dead_letter",
+        "in_progress",
+    ]
+    counts = {phase: 0 for phase in phase_order}
+    modules: set[str] = set()
+    job_state_by_module: dict[str, dict[str, Any]] = {}
+    event_types_by_module: dict[str, set[str]] = {}
+    attempt_counts: dict[str, int] = {}
+    needs_human_modules: set[str] = set()
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        job_rows = conn.execute(
+            """
+            SELECT module_key, phase, queue_state
+            FROM jobs
+            WHERE module_key IS NOT NULL
+            ORDER BY id ASC
+            """
+        ).fetchall()
+        event_rows = conn.execute(
+            """
+            SELECT module_key, type
+            FROM events
+            WHERE module_key IS NOT NULL
+            ORDER BY id ASC
+            """
+        ).fetchall()
+    finally:
+        conn.close()
+
+    for row in job_rows:
+        module_key = str(row["module_key"])
+        phase = str(row["phase"])
+        queue_state = str(row["queue_state"])
+        modules.add(module_key)
+        state = job_state_by_module.setdefault(
+            module_key,
+            {
+                "pending_phases": set(),
+                "has_leased": False,
+                "has_failed": False,
+                "has_completed": False,
+            },
+        )
+        if queue_state == "pending":
+            state["pending_phases"].add(phase)
+        elif queue_state == "leased":
+            state["has_leased"] = True
+        elif queue_state == "failed":
+            state["has_failed"] = True
+        elif queue_state == "completed":
+            state["has_completed"] = True
+
+    for row in event_rows:
+        module_key = str(row["module_key"])
+        event_type = str(row["type"])
+        modules.add(module_key)
+        event_types_by_module.setdefault(module_key, set()).add(event_type)
+        if event_type == "attempt_started":
+            attempt_counts[module_key] = attempt_counts.get(module_key, 0) + 1
+        if event_type == "needs_human_intervention":
+            needs_human_modules.add(module_key)
+
+    for module_key in modules:
+        job_state = job_state_by_module.get(module_key)
+        event_types = event_types_by_module.get(module_key, set())
+        counts[_module_status(job_state, event_types)] += 1
+
+    total_modules = len(modules)
+    done_count = counts["done"]
+    convergence_rate = (done_count / total_modules * 100.0) if total_modules else 0.0
+    flapping_count = sum(1 for attempts in attempt_counts.values() if attempts > 3)
+
+    return {
+        "db_path": str(db_path),
+        "phase_order": phase_order,
+        "counts": counts,
+        "total_modules": total_modules,
+        "convergence_rate": convergence_rate,
+        "flapping_count": flapping_count,
+        "needs_human_count": len(needs_human_modules),
+    }
+
+
+def _module_status(job_state: dict[str, Any] | None, event_types: set[str]) -> str:
+    pending_phases = set(job_state["pending_phases"]) if job_state else set()
+    has_leased = bool(job_state and job_state["has_leased"])
+    has_failed = bool(job_state and job_state["has_failed"])
+    has_completed = bool(job_state and job_state["has_completed"])
+
+    if has_failed or "module_dead_lettered" in event_types or "needs_human_intervention" in event_types:
+        return "dead_letter"
+    if has_leased:
+        return "in_progress"
+    if "patch" in pending_phases:
+        return "pending_patch"
+    if pending_phases.intersection({"review", "check_pre"}):
+        return "pending_review"
+    if "write" in pending_phases:
+        return "pending_write"
+    if pending_phases:
+        return "pending_review"
+    if "done" in event_types or has_completed:
+        return "done"
+    return "pending_write"
+
+
+def _print_table(headers: tuple[str, str], rows: list[tuple[str, Any]]) -> None:
+    left_width = max(len(headers[0]), *(len(str(left)) for left, _ in rows))
+    right_width = max(len(headers[1]), *(len(str(right)) for _, right in rows))
+    print(f"{headers[0]:<{left_width}} | {headers[1]:>{right_width}}")
+    print(f"{'-' * left_width}-+-{'-' * right_width}")
+    for left, right in rows:
+        print(f"{str(left):<{left_width}} | {str(right):>{right_width}}")
 
 
 def _show_budget(control_plane: ControlPlane, *, json_output: bool) -> int:

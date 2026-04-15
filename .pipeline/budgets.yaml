@@ -1,6 +1,6 @@
-kill_switch_policy: CLAUDE_ONLY_PAUSE
+kill_switch_policy: GEMINI_ONLY_PAUSE
 models:
-  claude-sonnet-4-6:
+  codex:
     cooldown_after_rate_limit: 600
     hourly_calls: 50
     max_concurrent: 2
