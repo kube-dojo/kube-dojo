@@ -18,7 +18,7 @@ The curriculum is already strong in breadth and ambition. The main problem is no
 Current state:
 - the repo has substantial coverage across prerequisites, Linux, Kubernetes, cloud, on-prem, platform, and AI/ML
 - most big gaps are no longer raw module gaps
-- the largest explicit missing-module backlog is now certification-prep support content
+- the largest remaining explicit missing-module backlog is now deferred CKA mock exams
 - the largest pedagogical risk is not lack of topics, but weak guardrails between tracks
 
 High-confidence conclusions:
@@ -39,7 +39,10 @@ System-level finding:
 ### Explicit Missing Modules
 
 The deterministic active missing-module backlog is now:
-- `19` certification-prep modules under `k8s/lfcs`, `k8s/cnpe`, `k8s/cnpa`, and `k8s/cgoa`
+- `0` active exact missing modules
+
+Deferred explicit backlog:
+- `3-5` CKA mock exam modules under `k8s/cka/part6-mock-exams`
 
 Those are important, but they are not the main learner-path weakness for the site overall.
 
@@ -133,10 +136,7 @@ Why:
 ### What Still Needs To Be Written
 
 Active exact missing backlog:
-- `LFCS`: `4` remaining modules
-- `CNPE`: `5`
-- `CNPA`: `5`
-- `CGOA`: `5`
+- `0` active exact missing modules across the currently planned cert-prep tracks
 
 Deferred:
 - CKA mock exams remain intentionally deferred
@@ -152,7 +152,6 @@ Why:
 
 ### Gaps
 
-- missing certification-prep support modules weaken the newer cert subtracks
 - the top-level cert hub could better distinguish:
   - first cert
   - admin-first route
@@ -445,13 +444,12 @@ For large tracks, explicitly label whether a section is:
 
 ## Priority 5: Finish The Certification-Prep Backlog
 
-The main explicit missing-module backlog is still the certification-prep support content:
-- LFCS
-- CNPE
-- CNPA
-- CGOA
+The active certification-prep module backlog is now materially closed.
 
-That backlog matters because those tracks currently exist as route promises more than complete teaching paths.
+What remains:
+- review and hardening of the newer cert tracks
+- better top-level route guidance for choosing the right certification
+- the deferred CKA mock-exam backlog
 
 ## Suggested Canonical Learner Routes
 

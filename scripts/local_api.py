@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pipeline_v2.cli import _build_status_report as build_v2_status_report
 from status import (
     _build_lab_summary,
+    _build_missing_modules_summary,
     _extract_frontmatter,
     _git_head_for_file,
     build_repo_status,
@@ -369,7 +370,7 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
     <div class="toolbar">
       <div>
         <h1>KubeDojo Local Monitor</h1>
-        <p>Read-only dashboard over the deterministic local API. Refreshes repo status, worktree, ZTT, and feedback issue #{issue_number}.</p>
+        <p>Read-only dashboard over the deterministic local API. Refreshes repo status, worktree, missing-module queue, ZTT, and feedback issue #{issue_number}.</p>
       </div>
       <button id="refresh">Refresh</button>
     </div>
@@ -379,6 +380,10 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
         <section class="panel">
           <h2>Queue Summary</h2>
           <pre id="summary">Loading...</pre>
+        </section>
+        <section class="panel">
+          <h2>Missing Modules</h2>
+          <pre id="missing">Loading...</pre>
         </section>
         <section class="panel">
           <h2>Worktree</h2>
@@ -412,11 +417,14 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
     function renderCards(summary, worktree, feedback) {{
       const v2 = summary.v2_pipeline || {{ counts: {{}}, convergence_rate: 0, total_modules: 0 }};
       const t2 = summary.translation_v2_pipeline?.queue || {{ counts: {{}}, convergence_rate: 0, total_modules: 0 }};
+      const missing = summary.missing_modules || {{ active_exact: {{}}, deferred: {{}} }};
       const ztt = summary.zero_to_terminal || {{ ready: {{}}, theory: {{}}, labs: {{}}, ukrainian: {{}} }};
       const cards = [
         ['English Modules', summary.english_modules ?? 0, ''],
         ['V2 Convergence', `${{(v2.convergence_rate ?? 0).toFixed(1)}}%`, ''],
         ['Translation V2', `${{(t2.convergence_rate ?? 0).toFixed(1)}}%`, ''],
+        ['Active Missing', missing.active_exact?.missing ?? 0, (missing.active_exact?.missing ?? 0) === 0 ? 'good' : 'warn'],
+        ['Deferred Missing', `${{missing.deferred?.missing_min ?? 0}}-${{missing.deferred?.missing_max ?? 0}}`, ''],
         ['Worktree Dirty', worktree.dirty ? 'YES' : 'NO', worktree.dirty ? 'warn' : 'good'],
         ['ZTT English', ztt.ready?.english_production_bar ? 'READY' : 'NOT READY', ztt.ready?.english_production_bar ? 'good' : 'warn'],
         ['ZTT Ukrainian', ztt.ready?.ukrainian_sync_clean ? 'CLEAN' : 'DRIFT', ztt.ready?.ukrainian_sync_clean ? 'good' : 'warn'],
@@ -435,12 +443,14 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
       return JSON.stringify(obj, null, 2);
     }}
     async function refresh() {{
-      const [summary, worktree, ztt, feedback] = await Promise.all([
+      const [summary, missing, worktree, ztt, feedback] = await Promise.all([
         fetchJson('/api/status/summary'),
+        fetchJson('/api/missing-modules/status'),
         fetchJson('/api/git/worktree'),
         fetchJson('/api/ztt/status'),
         fetchJson(`/api/issue-watch/${{issueNumber}}`),
       ]);
+      summary.missing_modules = missing;
       renderCards(summary, worktree, feedback);
       document.getElementById('summary').textContent = pretty({{
         v2_pipeline: summary.v2_pipeline,
@@ -448,6 +458,7 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
         translations: summary.translations,
         labs: summary.labs,
       }});
+      document.getElementById('missing').textContent = pretty(summary.missing_modules);
       document.getElementById('worktree').textContent = pretty(worktree);
       document.getElementById('ztt').textContent = pretty(ztt);
       document.getElementById('feedback').textContent = pretty(feedback);
@@ -471,6 +482,8 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
         return 200, {"ok": True}, "application/json; charset=utf-8"
     if path == "/api/status/summary":
         return 200, build_repo_status(repo_root), "application/json; charset=utf-8"
+    if path == "/api/missing-modules/status":
+        return 200, _build_missing_modules_summary(repo_root), "application/json; charset=utf-8"
     if path == "/api/pipeline/v2/status":
         db_path = repo_root / ".pipeline" / "v2.db"
         if not db_path.exists():

@@ -211,6 +211,11 @@ def test_route_request_serves_summary_and_module_endpoints(tmp_path: Path) -> No
     assert status_code == 200
     assert content_type.startswith("application/json")
     assert summary["zero_to_terminal"]["ready"]["english_production_bar"] is True
+    assert "missing_modules" in summary
+
+    status_code, missing_modules, _ = local_api.route_request(repo_root, "/api/missing-modules/status")
+    assert status_code == 200
+    assert missing_modules["active_exact"]["missing"] > 0
 
     status_code, module_state, _ = local_api.route_request(
         repo_root, f"/api/module/{module_key}/state"
