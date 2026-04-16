@@ -12,6 +12,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 from pipeline_v2.cli import main as pipeline_main
+from pipeline_v2.cli import _build_status_report
 from pipeline_v2.control_plane import ControlPlane
 from pipeline_v2.watchdog import sweep_once
 
@@ -326,3 +327,64 @@ def test_budget_and_show_budget_are_cli_aliases(tmp_path, capsys):
     assert show_rc == 0
     assert json.loads(budget_out) == json.loads(show_out)
     watch_forever.assert_not_called()
+
+
+def test_recover_dead_letters_requeues_review_and_clears_module_level_dead_letter(tmp_path, capsys):
+    control_plane = _make_control_plane(tmp_path)
+    module_key = "docs/module-dead-letter.md"
+    job = control_plane.enqueue(module_key, phase="review", model="claude-sonnet-4-6")
+    lease = control_plane.lease_next_job("worker-1")
+    assert lease is not None
+    assert lease.job_id == job.job_id
+    assert control_plane.fail_lease_terminal(
+        lease.lease_id,
+        reason="rewrite_attempt_limit",
+        event_payload={"phase": "patch", "rewrite_attempts": 4},
+    )
+
+    before = _build_status_report(control_plane.db_path)
+    assert before["counts"]["dead_letter"] == 1
+    assert before["needs_human_count"] == 1
+
+    recover_rc = pipeline_main(
+        [
+            "--db",
+            str(control_plane.db_path),
+            "--budgets",
+            str(control_plane.budgets_path),
+            "recover-dead-letters",
+            "--json",
+        ]
+    )
+    recovered = json.loads(capsys.readouterr().out)
+
+    assert recover_rc == 0
+    assert recovered == [
+        {
+            "dry_run": False,
+            "job_id": 2,
+            "module_key": module_key,
+            "previous_reason": "rewrite_attempt_limit",
+            "requeue_model": "gpt-5.3-codex-spark",
+            "requeue_phase": "review",
+        }
+    ]
+
+    after = _build_status_report(control_plane.db_path)
+    assert after["counts"]["dead_letter"] == 0
+    assert after["counts"]["pending_review"] == 1
+    assert after["needs_human_count"] == 0
+
+    show_rc = pipeline_main(
+        [
+            "--db",
+            str(control_plane.db_path),
+            "--budgets",
+            str(control_plane.budgets_path),
+            "show",
+            "needs-human",
+            "--json",
+        ]
+    )
+    assert show_rc == 0
+    assert json.loads(capsys.readouterr().out) == []

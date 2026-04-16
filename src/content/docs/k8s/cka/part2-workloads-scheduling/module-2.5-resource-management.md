@@ -120,6 +120,7 @@ spec:
 ### 1.3 Resource Units
 
 **CPU** (measured in cores):
+
 | Value | Meaning |
 |-------|---------|
 | `1` | 1 CPU core |
@@ -128,6 +129,7 @@ spec:
 | `500m` | 0.5 CPU core |
 
 **Memory** (measured in bytes):
+
 | Value | Meaning |
 |-------|---------|
 | `128Mi` | 128 mebibytes (128 × 1024² bytes) |

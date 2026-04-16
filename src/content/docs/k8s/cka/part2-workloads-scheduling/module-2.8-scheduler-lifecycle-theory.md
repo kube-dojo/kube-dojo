@@ -1001,7 +1001,7 @@ Timed drills for CKA exam preparation. Practice until you can complete each with
 | # | Drill | Target Time |
 |---|---|---|
 | 1 | Create three pods (Guaranteed, Burstable, BestEffort) and verify their QoS class using jsonpath | 3 min |
-| 2 | Create two PriorityClasses (high=10000, low=100) and a pod using each. Verify with `k get pod -o yaml | grep priority` | 2 min |
+| 2 | Create two PriorityClasses (high=10000, low=100) and a pod using each. Verify with `k get pod -o yaml \| grep priority` | 2 min |
 | 3 | Create a 3-replica Deployment with a PDB (`maxUnavailable: 1`). Drain a node and verify only one pod is evicted at a time | 5 min |
 | 4 | A pod is Pending. Use `k describe pod` and `k describe node` to identify whether the issue is insufficient resources, taints, or affinity | 3 min |
 | 5 | Create a pod with a PreStop hook that writes to a log file, delete it with `--grace-period=60`, and verify the hook ran by checking the log | 4 min |

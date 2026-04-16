@@ -129,7 +129,7 @@ EOF
 
 TopoLVM uses LVM (Logical Volume Manager) to carve local disks into thin-provisioned volumes with actual capacity enforcement. It integrates with the Kubernetes scheduler via a mutating webhook to ensure pods land on nodes that have enough free space.
 
-### Architecture
+### Longhorn Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -283,7 +283,7 @@ Longhorn occupies a unique position: it provides cross-node replication (like Ce
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### Deployment
+### Longhorn Deployment
 
 ```bash
 # Install Longhorn via Helm

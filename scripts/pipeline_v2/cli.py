@@ -15,8 +15,8 @@ from .control_plane import (
 )
 from .patch_worker import PatchWorker
 from .preflight import run_preflight
-from .review_worker import ReviewWorker
-from .write_worker import WriteWorker
+from .review_worker import PATCH_MODEL, REVIEW_MODEL, ReviewWorker
+from .write_worker import WRITE_MODEL, WriteWorker
 from .watchdog import sweep_once, watch_forever
 
 
@@ -71,6 +71,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="Show modules with more than three attempts",
     )
     show_flapping.add_argument("--json", action="store_true")
+
+    recover_dead_letters = subparsers.add_parser(
+        "recover-dead-letters",
+        help="Requeue unresolved dead-letter modules after manual triage",
+    )
+    recover_dead_letters.add_argument("modules", nargs="*")
+    recover_dead_letters.add_argument(
+        "--phase",
+        choices=("review", "write", "patch"),
+        default="review",
+        help="Phase to enqueue for recovered modules",
+    )
+    recover_dead_letters.add_argument("--priority", type=int, default=100)
+    recover_dead_letters.add_argument("--dry-run", action="store_true")
+    recover_dead_letters.add_argument("--json", action="store_true")
 
     budget = subparsers.add_parser("budget", help="Alias for show budget; also supports edits")
     budget.add_argument("--json", action="store_true")
@@ -199,6 +214,16 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "status":
         return _show_status(args.db, json_output=args.json)
+
+    if args.command == "recover-dead-letters":
+        return _recover_dead_letters(
+            control_plane,
+            modules=args.modules,
+            phase=args.phase,
+            priority=args.priority,
+            dry_run=args.dry_run,
+            json_output=args.json,
+        )
 
     if args.command == "show":
         if args.show_command == "budget":
@@ -376,7 +401,7 @@ def _build_status_report(db_path: Path) -> dict[str, Any]:
     job_state_by_module: dict[str, dict[str, Any]] = {}
     event_types_by_module: dict[str, set[str]] = {}
     attempt_counts: dict[str, int] = {}
-    needs_human_modules: set[str] = set()
+    dead_letter_rows: list[dict[str, Any]] = []
 
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -391,7 +416,7 @@ def _build_status_report(db_path: Path) -> dict[str, Any]:
         ).fetchall()
         event_rows = conn.execute(
             """
-            SELECT module_key, type
+            SELECT id, module_key, type, payload_json, at
             FROM events
             WHERE module_key IS NOT NULL
             ORDER BY id ASC
@@ -430,13 +455,26 @@ def _build_status_report(db_path: Path) -> dict[str, Any]:
         event_types_by_module.setdefault(module_key, set()).add(event_type)
         if event_type == "attempt_started":
             attempt_counts[module_key] = attempt_counts.get(module_key, 0) + 1
-        if event_type == "needs_human_intervention":
-            needs_human_modules.add(module_key)
+        if event_type in {"needs_human_intervention", "module_dead_lettered", "dead_letter_recovered"}:
+            dead_letter_rows.append(
+                {
+                    "module_key": module_key,
+                    "id": int(row["id"]),
+                    "type": event_type,
+                    "payload_json": str(row["payload_json"] or "{}"),
+                    "at": int(row["at"]),
+                }
+            )
+
+    unresolved_dead_letters = {
+        row["module_key"]
+        for row in _current_dead_letter_rows(dead_letter_rows)
+    }
 
     for module_key in modules:
         job_state = job_state_by_module.get(module_key)
         event_types = event_types_by_module.get(module_key, set())
-        counts[_module_status(job_state, event_types)] += 1
+        counts[_module_status(job_state, event_types, dead_lettered=module_key in unresolved_dead_letters)] += 1
 
     total_modules = len(modules)
     done_count = counts["done"]
@@ -450,17 +488,21 @@ def _build_status_report(db_path: Path) -> dict[str, Any]:
         "total_modules": total_modules,
         "convergence_rate": convergence_rate,
         "flapping_count": flapping_count,
-        "needs_human_count": len(needs_human_modules),
+        "needs_human_count": len(unresolved_dead_letters),
     }
 
 
-def _module_status(job_state: dict[str, Any] | None, event_types: set[str]) -> str:
+def _module_status(
+    job_state: dict[str, Any] | None,
+    event_types: set[str],
+    *,
+    dead_lettered: bool,
+) -> str:
     pending_phases = set(job_state["pending_phases"]) if job_state else set()
     has_leased = bool(job_state and job_state["has_leased"])
-    has_failed = bool(job_state and job_state["has_failed"])
     has_completed = bool(job_state and job_state["has_completed"])
 
-    if has_failed or "module_dead_lettered" in event_types or "needs_human_intervention" in event_types:
+    if dead_lettered:
         return "dead_letter"
     if has_leased:
         return "in_progress"
@@ -508,17 +550,22 @@ def _show_budget(control_plane: ControlPlane, *, json_output: bool) -> int:
 
 
 def _show_needs_human(control_plane: ControlPlane, *, json_output: bool) -> int:
-    rows = []
-    for event in control_plane.iter_events("needs_human_intervention"):
-        payload = json.loads(event["payload_json"])
-        rows.append(
+    rows = _current_dead_letter_rows(
+        [
             {
-                "module_key": event["module_key"],
-                "reason": payload.get("reason"),
-                "rewrite_attempts": payload.get("rewrite_attempts"),
-                "at": event["at"],
+                "module_key": str(event["module_key"]),
+                "id": int(event["id"]),
+                "type": str(event["type"]),
+                "payload_json": str(event["payload_json"] or "{}"),
+                "at": int(event["at"]),
             }
-        )
+            for event in (
+                control_plane.iter_events("needs_human_intervention")
+                + control_plane.iter_events("module_dead_lettered")
+                + control_plane.iter_events("dead_letter_recovered")
+            )
+        ]
+    )
     if json_output:
         print(json.dumps(rows, indent=2, sort_keys=True))
         return 0
@@ -530,6 +577,78 @@ def _show_needs_human(control_plane: ControlPlane, *, json_output: bool) -> int:
         print(
             f"{row['module_key']}: {row['reason']} "
             f"(rewrite_attempts={row['rewrite_attempts']}, at={row['at']})"
+        )
+    return 0
+
+
+def _recover_dead_letters(
+    control_plane: ControlPlane,
+    *,
+    modules: list[str],
+    phase: str,
+    priority: int,
+    dry_run: bool,
+    json_output: bool,
+) -> int:
+    targets = _current_dead_letter_rows(
+        [
+            {
+                "module_key": str(event["module_key"]),
+                "id": int(event["id"]),
+                "type": str(event["type"]),
+                "payload_json": str(event["payload_json"] or "{}"),
+                "at": int(event["at"]),
+            }
+            for event in (
+                control_plane.iter_events("needs_human_intervention")
+                + control_plane.iter_events("module_dead_lettered")
+                + control_plane.iter_events("dead_letter_recovered")
+            )
+        ]
+    )
+    requested = set(modules)
+    if requested:
+        targets = [row for row in targets if row["module_key"] in requested]
+    model = _model_for_phase(phase)
+    results = []
+    for row in targets:
+        result = {
+            "module_key": row["module_key"],
+            "previous_reason": row["reason"],
+            "requeue_phase": phase,
+            "requeue_model": model,
+            "dry_run": dry_run,
+        }
+        if not dry_run:
+            control_plane.emit_event(
+                "dead_letter_recovered",
+                module_key=row["module_key"],
+                payload={
+                    "previous_reason": row["reason"],
+                    "rewrite_attempts": row.get("rewrite_attempts"),
+                    "requeue_phase": phase,
+                    "requeue_model": model,
+                },
+            )
+            job = control_plane.enqueue(
+                row["module_key"],
+                phase=phase,
+                model=model,
+                priority=priority,
+            )
+            result["job_id"] = job.job_id
+        results.append(result)
+
+    if json_output:
+        print(json.dumps(results, indent=2, sort_keys=True))
+        return 0
+    if not results:
+        print("(no dead-letter modules selected)")
+        return 0
+    for row in results:
+        suffix = " [dry-run]" if row["dry_run"] else ""
+        print(
+            f"recovered {row['module_key']} -> {row['requeue_phase']}/{row['requeue_model']}{suffix}"
         )
     return 0
 
@@ -554,6 +673,44 @@ def _show_flapping(control_plane: ControlPlane, *, json_output: bool) -> int:
     for row in rows:
         print(f"{row['module_key']}: {row['attempts']} attempts")
     return 0
+
+
+def _current_dead_letter_rows(event_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    latest_dead_by_module: dict[str, dict[str, Any]] = {}
+    latest_recovery_order: dict[str, tuple[int, int]] = {}
+    for event in sorted(event_rows, key=lambda row: (int(row["at"]), int(row.get("id", 0)))):
+        module_key = str(event["module_key"])
+        event_type = str(event["type"])
+        at = int(event["at"])
+        event_id = int(event.get("id", 0))
+        if event_type == "dead_letter_recovered":
+            latest_recovery_order[module_key] = (at, event_id)
+            continue
+        if event_type not in {"needs_human_intervention", "module_dead_lettered"}:
+            continue
+        payload = json.loads(str(event["payload_json"] or "{}"))
+        latest_dead_by_module[module_key] = {
+            "module_key": module_key,
+            "id": event_id,
+            "reason": payload.get("reason"),
+            "rewrite_attempts": payload.get("rewrite_attempts"),
+            "at": at,
+        }
+    unresolved = [
+        row
+        for module_key, row in latest_dead_by_module.items()
+        if latest_recovery_order.get(module_key, (-1, -1))
+        < (int(row["at"]), int(row.get("id", 0)))
+    ]
+    return sorted(unresolved, key=lambda row: (row["module_key"], int(row["at"])))
+
+
+def _model_for_phase(phase: str) -> str:
+    if phase == "review":
+        return REVIEW_MODEL
+    if phase == "patch":
+        return PATCH_MODEL
+    return WRITE_MODEL
 
 
 def _coerce_value(raw: str) -> Any:
