@@ -4,16 +4,31 @@ sidebar:
   order: 1
   label: "Fundamentals"
 ---
-**Start here if you're new to Kubernetes.**
 
-These tracks build foundational knowledge before diving into certifications or advanced topics.
+**Start here if you want the shortest path from beginner fundamentals to Kubernetes and platform work.**
+
+This hub is the front door to KubeDojo. It covers the terminal, containers, Kubernetes basics, declarative thinking, Git, and modern delivery practices.
+
+## Who This Is For
+
+- absolute beginners who need a real starting point
+- learners who want the shortest route into cloud-native systems
+- people who need enough fundamentals before choosing Linux, Kubernetes, cloud, platform, or AI/ML depth
+
+## Do Not Skip This If
+
+- you are still shaky on the terminal, files, SSH, or software installation
+- Kubernetes terminology still feels abstract
+- you are tempted to jump straight into advanced tracks because they look interesting
+
+Most confusion later in the curriculum comes from skipping this layer too early.
 
 ---
 
-## Tracks
+## Core Sections
 
-### [Zero to Terminal](zero-to-terminal/) — 10 modules
-*Never used a terminal before? Start here. From "what is a computer" to "I deployed a website."*
+### [Zero to Terminal](zero-to-terminal/) — 11 modules
+For absolute beginners. From "what is a computer?" to deploying your first server from the command line.
 
 | Module | Topic |
 |--------|-------|
@@ -22,36 +37,26 @@ These tracks build foundational knowledge before diving into certifications or a
 | 0.3 | [First Terminal Commands](zero-to-terminal/module-0.3-first-commands/) |
 | 0.4 | [Files and Directories](zero-to-terminal/module-0.4-files-and-directories/) |
 | 0.5 | [Editing Files](zero-to-terminal/module-0.5-editing-files/) |
-| 0.6 | [What is Networking?](/prerequisites/zero-to-terminal/module-0.7-what-is-networking/) |
-| 0.7 | [Servers and SSH](/prerequisites/zero-to-terminal/module-0.8-servers-and-ssh/) |
-| 0.8 | [Software and Packages](/prerequisites/zero-to-terminal/module-0.9-software-and-packages/) |
-| 0.9 | [What is the Cloud?](/prerequisites/zero-to-terminal/module-0.10-what-is-the-cloud/) |
-| 0.10 | [Your First Server](/prerequisites/zero-to-terminal/module-0.11-your-first-server/) |
-
-### [Everyday Linux](/linux/foundations/everyday-use/) — 5 modules
-*You learned the terminal. Now learn to USE Linux day-to-day: shell power tricks, permissions, processes, services, and networking tools.*
-
-| Module | Topic |
-|--------|-------|
-| 0.1 | [CLI Power User](/linux/foundations/everyday-use/module-0.1-cli-power-user/) |
-| 0.2 | [Environment & Permissions](/linux/foundations/everyday-use/module-0.2-environment-permissions/) |
-| 0.3 | [Processes & Resources](/linux/foundations/everyday-use/module-0.3-processes-resources/) |
-| 0.4 | [Services & Logs](/linux/foundations/everyday-use/module-0.4-services-logs/) |
-| 0.5 | [Networking Tools](/linux/foundations/everyday-use/module-0.5-networking-tools/) |
+| 0.6 | [Git Basics](zero-to-terminal/module-0.6-git-basics/) |
+| 0.7 | [What is Networking?](zero-to-terminal/module-0.7-what-is-networking/) |
+| 0.8 | [Servers and SSH](zero-to-terminal/module-0.8-servers-and-ssh/) |
+| 0.9 | [Software and Packages](zero-to-terminal/module-0.9-software-and-packages/) |
+| 0.10 | [What is the Cloud?](zero-to-terminal/module-0.10-what-is-the-cloud/) |
+| 0.11 | [Your First Server](zero-to-terminal/module-0.11-your-first-server/) |
 
 ### [Cloud Native 101](cloud-native-101/) — 5 modules
-*Containers, Docker, and the ecosystem.*
+Containers, Docker, Kubernetes, and the cloud-native ecosystem from first principles.
 
 | Module | Topic |
 |--------|-------|
 | 1.1 | [What Are Containers?](cloud-native-101/module-1.1-what-are-containers/) |
 | 1.2 | [Docker Fundamentals](cloud-native-101/module-1.2-docker-fundamentals/) |
-| 1.3 | [What is Kubernetes?](cloud-native-101/module-1.3-what-is-kubernetes/) |
+| 1.3 | [What Is Kubernetes?](cloud-native-101/module-1.3-what-is-kubernetes/) |
 | 1.4 | [Cloud Native Ecosystem](cloud-native-101/module-1.4-cloud-native-ecosystem/) |
 | 1.5 | [Monolith to Microservices](cloud-native-101/module-1.5-monolith-to-microservices/) |
 
 ### [Kubernetes Basics](kubernetes-basics/) — 8 modules
-*Hands-on fundamentals with kubectl.*
+The practical Kubernetes starter path with `kubectl`, Pods, Deployments, Services, config, and YAML.
 
 | Module | Topic |
 |--------|-------|
@@ -65,7 +70,7 @@ These tracks build foundational knowledge before diving into certifications or a
 | 1.8 | [YAML for Kubernetes](kubernetes-basics/module-1.8-yaml-kubernetes/) |
 
 ### [Philosophy & Design](philosophy-design/) — 4 modules
-*Now that you know what Kubernetes is, understand WHY it works the way it does.*
+Why Kubernetes works the way it does, and which legacy patterns are not worth your time.
 
 | Module | Topic |
 |--------|-------|
@@ -74,8 +79,24 @@ These tracks build foundational knowledge before diving into certifications or a
 | 1.3 | [What We Don't Cover](philosophy-design/module-1.3-what-we-dont-cover/) |
 | 1.4 | [Dead Ends - Technologies to Avoid](philosophy-design/module-1.4-dead-ends/) |
 
-### [Modern DevOps Practices](modern-devops/) — 6 modules
-*Infrastructure as Code, GitOps, and observability.*
+### [Git Deep Dive](git-deep-dive/) — 10 modules
+The professional Git path. Internals, rebasing, recovery, scale, collaboration, and the bridge into GitOps.
+
+| Module | Topic |
+|--------|-------|
+| 1 | [Git Internals](git-deep-dive/module-1-git-internals/) |
+| 2 | [Advanced Merging](git-deep-dive/module-2-advanced-merging/) |
+| 3 | [Interactive Rebasing](git-deep-dive/module-3-interactive-rebasing/) |
+| 4 | [Undo and Recovery](git-deep-dive/module-4-undo-recovery/) |
+| 5 | [Worktrees and Stashing](git-deep-dive/module-5-worktrees-stashing/) |
+| 6 | [Troubleshooting and Search](git-deep-dive/module-6-troubleshooting/) |
+| 7 | [Remotes and PRs](git-deep-dive/module-7-remotes-prs/) |
+| 8 | [Sparse Checkout and LFS](git-deep-dive/module-8-scale/) |
+| 9 | [Hooks and Rerere](git-deep-dive/module-9-hooks-rerere/) |
+| 10 | [Bridge to GitOps](git-deep-dive/module-10-gitops-bridge/) |
+
+### [Modern DevOps](modern-devops/) — 6 modules
+IaC, GitOps, CI/CD, observability, platform engineering, and DevSecOps.
 
 | Module | Topic |
 |--------|-------|
@@ -88,27 +109,57 @@ These tracks build foundational knowledge before diving into certifications or a
 
 ---
 
-## Suggested Order
+## Suggested Route
 
+```text
+Zero to Terminal
+   |
+   +--> Linux track (if you want deeper systems knowledge)
+   |
+Cloud Native 101
+   |
+Kubernetes Basics
+   |
+Philosophy & Design
+   |
+Git Deep Dive
+   |
+Modern DevOps
 ```
-Zero to Terminal → Everyday Linux → Cloud Native 101 → Kubernetes Basics → Philosophy & Design → Modern DevOps
-```
 
-Or jump directly to **Cloud Native 101** if you already know Linux, or to **Kubernetes Basics** if you already understand containers.
+Use `Git Deep Dive` after you are comfortable with basic Git from `Zero to Terminal`. It is not required before `Cloud Native 101`, but it becomes high-value before serious GitOps, CI/CD, and team workflows.
 
-Want to go deeper into Linux? Continue to the [Linux](/linux/) track (37 modules covering kernel internals, container primitives, networking, security, and operations — plus the LFCS certification path).
+## Common Next Routes
+
+- `Prerequisites -> Linux` if you want stronger systems depth before operations-heavy work
+- `Prerequisites -> Kubernetes Certifications` if you want external goals and hands-on pressure
+- `Prerequisites -> Cloud` if your main goal is hyperscaler fluency after cluster basics
+- `Prerequisites -> AI/ML Engineering` if you want local-first AI or MLOps, but still need an engineering foundation first
+
+`Platform Engineering` is usually not the immediate next stop for beginners. Most learners should reach it through Kubernetes, Linux, or Cloud first.
+
+---
+
+## Related Foundations
+
+These are not inside the `prerequisites/` section, but they are common next steps:
+
+| Path | Why It Matters |
+|------|----------------|
+| [Linux](../linux/) | Go deeper into processes, networking, storage, security, and operations |
+| [AI/ML Engineering](../ai-ml-engineering/) | Start the AI/ML track if your goal is LLMs, MLOps, or AI infrastructure |
 
 ---
 
 ## After Prerequisites
 
-Ready to continue? Choose your path:
+Ready to specialize? Choose your next track:
 
 | Goal | Next Step |
 |------|-----------|
-| Master Linux | [Linux](../linux/) (includes LFCS certification) |
+| Master Linux | [Linux](../linux/) |
 | Get certified | [Kubernetes Certifications](../k8s/) |
 | Learn cloud providers | [Cloud](../cloud/) |
-| Run on your own hardware | [On-Premises Kubernetes](../on-premises/) |
-| Go deeper | [Platform Engineering](../platform/) |
-| Explore cloud native tools | [Cloud Native Tools](../platform/toolkits/) |
+| Run Kubernetes on your own hardware | [On-Premises Kubernetes](../on-premises/) |
+| Go deeper into platform practices | [Platform Engineering](../platform/) |
+| Explore AI/ML systems | [AI/ML Engineering](../ai-ml-engineering/) |

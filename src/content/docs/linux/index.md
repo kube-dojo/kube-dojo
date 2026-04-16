@@ -13,6 +13,21 @@ Every container issue is ultimately a Linux issue. This track gives you the deep
 
 ---
 
+## Start Here If
+
+- you want stronger debugging and systems intuition
+- Kubernetes networking, storage, or security still feels like magic
+- you want to become reliable under pressure instead of memorizing commands
+
+## You Do Not Need All Of Linux Before Moving On
+
+Many learners should take Linux as a depth track, not as a complete blocker before every other path.
+
+If your goal is:
+- `Kubernetes admin`: prioritize Everyday Use, System Essentials, Networking, and Troubleshooting
+- `AI/ML engineering`: prioritize Everyday Use, Environment & Permissions, Services & Logs, and basic Networking
+- `On-prem operations`: take the full track or close to it
+
 ## Sections
 
 ### [Everyday Use](/linux/foundations/everyday-use/) — 5 modules
@@ -114,6 +129,13 @@ Everyday Use → System Essentials → Container Primitives → Networking → S
 ```
 
 Start with **Everyday Use** if you're new to Linux. Jump to **Container Primitives** if you already know the basics and want to understand how containers work under the hood.
+
+## Common Routes From Linux
+
+- go to [Kubernetes Certifications](/k8s/) if you want hands-on admin and developer paths
+- go to [On-Premises Kubernetes](/on-premises/) if private infrastructure is your target
+- go to [Platform Engineering](/platform/) if you want to turn systems knowledge into reliability and platform judgment
+- go to [AI/ML Engineering](/ai-ml-engineering/) if you need just enough systems depth to support serious ML or inference work
 
 ---
 

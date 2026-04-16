@@ -9,7 +9,7 @@
 #   ./services.sh status             # Show what's running
 #   ./services.sh logs dev           # Tail logs for a service
 #
-# Services: dev, api
+# Services: dev, api, feedback
 
 set -euo pipefail
 
@@ -33,7 +33,12 @@ SVC_PORT[api]=8767
 SVC_LOG[api]="$LOGS_DIR/api.log"
 SVC_DESC[api]="Deterministic Local API"
 
-ALL_SERVICES="dev api"
+SVC_CMD[feedback]="python3 scripts/issue_watch.py loop 248 --interval-seconds 1800"
+SVC_PORT[feedback]="-"
+SVC_LOG[feedback]="$LOGS_DIR/feedback.log"
+SVC_DESC[feedback]="GitHub Issue Feedback Watcher (#248)"
+
+ALL_SERVICES="dev api feedback"
 
 _pid_file() { echo "$PIDS_DIR/$1.pid"; }
 

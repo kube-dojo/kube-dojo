@@ -70,20 +70,39 @@ python scripts/local_api.py --host 0.0.0.0 --port 8767
 ```
 
 **First endpoints:**
-1. `/healthz`
-2. `/api/status/summary`
-3. `/api/pipeline/v2/status`
-4. `/api/translation/v2/status?section=prerequisites/zero-to-terminal`
-5. `/api/labs/status`
-6. `/api/ztt/status`
-7. `/api/git/worktree`
-8. `/api/module/<module-key>/state`
-9. `/api/module/<module-key>/orchestration/latest`
+1. `/` and `/dashboard` — lightweight local monitor UI
+2. `/healthz`
+3. `/api/status/summary`
+4. `/api/pipeline/v2/status`
+5. `/api/translation/v2/status?section=prerequisites/zero-to-terminal`
+6. `/api/labs/status`
+7. `/api/ztt/status`
+8. `/api/git/worktree`
+9. `/api/issue-watch/248`
+10. `/api/module/<module-key>/state`
+11. `/api/module/<module-key>/orchestration/latest`
 
 **Why it exists:**
 1. Reduces repeated shell/file probes for stable state
 2. Exposes deterministic JSON for pipeline, translation, labs, worktree, and module-level views
-3. Gives both humans and agents one cheap status surface before richer API work is added
+3. Adds a lightweight local dashboard so the API is easier to inspect without curl-only workflows
+
+---
+
+## issue_watch.py
+
+Watch GitHub issue comments into local state and log files.
+
+```bash
+python scripts/issue_watch.py run 248
+python scripts/issue_watch.py loop 248 --interval-seconds 1800
+```
+
+**What it does:**
+1. Polls `gh issue view` for the target issue
+2. Stores the latest snapshot under `.pipeline/issue-watch/<issue>.json`
+3. Appends newly seen comments to `.pipeline/issue-watch/<issue>.log`
+4. Gives long-running feedback review a durable local trail instead of relying on memory
 
 ---
 

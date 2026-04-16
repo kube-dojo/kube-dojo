@@ -13,7 +13,35 @@ A complete curriculum for engineers building AI and ML systems in production. Co
 
 This track is for engineers who need to understand AI/ML deeply enough to build, deploy, and operate it — not just call APIs.
 
+## Do Not Start Here First If
+
+- you still need basic terminal, Git, or software-installation confidence
+- Python environments and local tooling still drift out of control for you
+- you want platform or infrastructure depth before you understand AI/ML workflows themselves
+
+In those cases, strengthen [Prerequisites](../prerequisites/) or the AI/ML [Prerequisites](prerequisites/) phase first.
+
+## Start Here
+
+If you are unsure where to begin, use one of these entry routes:
+
+| Goal | Start With | Then Go To |
+|---|---|---|
+| Build AI apps with strong engineering habits | [Prerequisites](prerequisites/) | [AI-Native Development](ai-native-development/) -> [Generative AI](generative-ai/) -> [Vector Search & RAG](vector-rag/) |
+| Learn local-first AI from a laptop or workstation | [Prerequisites](prerequisites/) | [AI-Native Development](ai-native-development/) -> [AI Infrastructure](ai-infrastructure/) -> [Advanced GenAI & Safety](advanced-genai/) |
+| Move into MLOps / AI platform work | [Prerequisites](prerequisites/) | [MLOps & LLMOps](mlops/) -> [AI Infrastructure](ai-infrastructure/) -> [Platform Engineering: Data & AI](../platform/disciplines/data-ai/) |
+| Understand model training and tuning deeply | [Generative AI](generative-ai/) | [Deep Learning Foundations](deep-learning/) -> [Advanced GenAI & Safety](advanced-genai/) |
+
+## What Makes This Track Different
+
+- it treats local-first and home-scale AI as valid starting points
+- it teaches the bridge from notebooks to reproducible systems explicitly
+- it links application engineering, model work, and infrastructure instead of treating them as separate worlds
+- it cross-links into platform and on-prem sections instead of duplicating advanced ops material
+
 ## Phases
+
+The track is organized as one main spine with several valid learner routes.
 
 | # | Phase | Focus |
 |---|-------|-------|
@@ -29,6 +57,38 @@ This track is for engineers who need to understand AI/ML deeply enough to build,
 | 9 | [Deep Learning Foundations](deep-learning/) | PyTorch, neural networks, CNNs, transformers, backprop |
 | 10 | [Classical ML](classical-ml/) | Tabular ML, time-series, AutoML, feature stores |
 | A | [History of AI/ML](history/) | Historical context (appendix) |
+
+## Recommended Default Route
+
+For most learners, this is the safest progression:
+
+```text
+Prerequisites
+   |
+AI-Native Development
+   |
+Generative AI
+   |
+Vector Search & RAG
+   |
+Frameworks & Agents
+   |
+MLOps & LLMOps
+   |
+AI Infrastructure
+```
+
+After that, branch based on interest:
+- go to [Advanced GenAI & Safety](advanced-genai/) if you want tuning, evaluation, and alignment depth
+- go to [Deep Learning Foundations](deep-learning/) if you want stronger model-building fundamentals
+- go to [Platform Engineering: Data & AI](../platform/disciplines/data-ai/) if your focus is operating AI systems at scale
+
+## Common Persona Routes
+
+- `AI application builder`: Prerequisites -> AI-Native Development -> Generative AI -> Vector Search & RAG
+- `Local-first builder`: Prerequisites -> AI-Native Development -> AI Infrastructure -> Advanced GenAI
+- `MLOps / AI platform`: Prerequisites -> MLOps & LLMOps -> AI Infrastructure -> Platform Data & AI
+- `Model-focused learner`: Generative AI -> Deep Learning Foundations -> Advanced GenAI
 
 ## Who This Is For
 
@@ -50,6 +110,20 @@ This track is for engineers who need to understand AI/ML deeply enough to build,
 - **[Platform Engineering: Data & AI](../platform/disciplines/data-ai/)** — production deployment of ML systems
 - **[CKA / CKAD](../k8s/)** — Kubernetes fundamentals for the MLOps phases
 - **[On-Premises](../on-premises/)** — running ML infrastructure on bare metal
+
+## When To Leave This Track For Another One
+
+- go to [Platform Engineering](../platform/) when your main problem becomes operating systems and teams, not just building models or apps
+- go to [On-Premises](../on-premises/) when local-first or private AI work grows into real private infrastructure concerns
+- go to [Kubernetes Certifications](../k8s/) if your MLOps path is blocked by weak cluster fundamentals
+
+## Good First Clicks
+
+- [Home AI Workstation Fundamentals](prerequisites/module-1.2-home-ai-workstation-fundamentals/) if you want a realistic local setup path
+- [AI Coding Tools Landscape](ai-native-development/module-1.1-ai-coding-tools-landscape/) if you want to orient around the modern agent/tooling ecosystem
+- [Building RAG Systems](vector-rag/module-1.2-building-rag-systems/) if your goal is practical LLM applications
+- [Notebooks to Production for ML/LLMs](mlops/module-1.11-notebooks-to-production-for-ml-llms/) if you already experiment in notebooks and need a more serious workflow
+- [Local Inference Stack for Learners](ai-infrastructure/module-1.4-local-inference-stack-for-learners/) if you want to run models yourself without jumping straight into datacenter thinking
 
 
 *"The best AI engineers understand both the model and the infrastructure it runs on."*

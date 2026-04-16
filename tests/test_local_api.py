@@ -207,11 +207,12 @@ def test_route_request_serves_summary_and_module_endpoints(tmp_path: Path) -> No
     repo_root = tmp_path
     module_key, _ = _setup_repo(repo_root)
 
-    status_code, summary = local_api.route_request(repo_root, "/api/status/summary")
+    status_code, summary, content_type = local_api.route_request(repo_root, "/api/status/summary")
     assert status_code == 200
+    assert content_type.startswith("application/json")
     assert summary["zero_to_terminal"]["ready"]["english_production_bar"] is True
 
-    status_code, module_state = local_api.route_request(
+    status_code, module_state, _ = local_api.route_request(
         repo_root, f"/api/module/{module_key}/state"
     )
     assert status_code == 200
@@ -219,7 +220,7 @@ def test_route_request_serves_summary_and_module_endpoints(tmp_path: Path) -> No
     assert module_state["ukrainian_state"]["status"] == "synced"
     assert module_state["lab"]["state"]["severity"] == "clean"
 
-    status_code, latest = local_api.route_request(
+    status_code, latest, _ = local_api.route_request(
         repo_root, f"/api/module/{module_key}/orchestration/latest"
     )
     assert status_code == 200
@@ -231,7 +232,7 @@ def test_route_request_supports_translation_section_and_missing_db(tmp_path: Pat
     repo_root = tmp_path
     _setup_repo(repo_root)
 
-    status_code, translation = local_api.route_request(
+    status_code, translation, _ = local_api.route_request(
         repo_root,
         "/api/translation/v2/status?section=prerequisites/zero-to-terminal",
     )
@@ -239,9 +240,46 @@ def test_route_request_supports_translation_section_and_missing_db(tmp_path: Pat
     assert translation["freshness"]["section"] == "prerequisites/zero-to-terminal"
 
     (repo_root / ".pipeline" / "v2.db").unlink()
-    status_code, payload = local_api.route_request(repo_root, "/api/pipeline/v2/status")
+    status_code, payload, _ = local_api.route_request(repo_root, "/api/pipeline/v2/status")
     assert status_code == 404
     assert payload["error"] == "missing_db"
+
+
+def test_route_request_serves_dashboard_and_issue_watch(tmp_path: Path) -> None:
+    repo_root = tmp_path
+    _setup_repo(repo_root)
+    watch_path = repo_root / ".pipeline" / "issue-watch" / "248.json"
+    watch_path.parent.mkdir(parents=True, exist_ok=True)
+    watch_path.write_text(
+        json.dumps(
+            {
+                "number": 248,
+                "title": "Review batch",
+                "url": "https://example.test/issues/248",
+                "state": "OPEN",
+                "updatedAt": "2026-04-16T09:00:00Z",
+                "comments": [
+                    {
+                        "url": "https://example.test/issues/248#issuecomment-1",
+                        "createdAt": "2026-04-16T09:00:00Z",
+                        "author": {"login": "user1"},
+                        "body": "feedback",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    status_code, html, content_type = local_api.route_request(repo_root, "/")
+    assert status_code == 200
+    assert content_type.startswith("text/html")
+    assert "KubeDojo Local Monitor" in html
+
+    status_code, payload, content_type = local_api.route_request(repo_root, "/api/issue-watch/248")
+    assert status_code == 200
+    assert content_type.startswith("application/json")
+    assert payload["comments_count"] == 1
 
 
 def test_cli_starts_server_and_reports_host_port(tmp_path: Path) -> None:
