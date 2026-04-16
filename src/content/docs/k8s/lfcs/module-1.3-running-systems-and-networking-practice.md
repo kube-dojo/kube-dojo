@@ -25,6 +25,8 @@ After this module, you will be able to:
 - manage systemd units, targets, and logs from the CLI
 - schedule recurring or one-time tasks with `cron` and `at`
 - validate and repair basic networking state under exam pressure
+- load, inspect, and unload safe kernel modules with evidence
+- separate temporary route fixes from boot-persistent network configuration
 - work through a simple troubleshooting ladder instead of jumping straight to random fixes
 
 ## Why This Module Matters
@@ -77,7 +79,11 @@ systemctl set-default multi-user.target
 journalctl -u nginx
 journalctl -xe
 journalctl -b
+journalctl -b -1
 systemctl --failed
+systemctl isolate rescue.target
+shutdown -r +5 "LFCS practice reboot"
+shutdown -c
 ```
 
 ## Practice Drills
@@ -134,11 +140,70 @@ Useful commands:
 ```bash
 ip addr
 ip route
+ip route add 10.20.30.0/24 via 192.168.1.1
+ip route del 10.20.30.0/24 via 192.168.1.1
 ss -tulpen
 ping -c 3 8.8.8.8
 getent hosts example.com
 nmcli device status
+systemctl is-enabled NetworkManager
 ```
+
+### Kernel Module Workflow
+
+Most LFCS kernel-module tasks are operational, not magical. You need to identify the module, confirm what it does, load it, verify the result, and remove it cleanly when the task is done.
+
+```bash
+lsmod | head
+modinfo dummy
+sudo modprobe dummy
+lsmod | grep '^dummy'
+sudo modprobe -r dummy
+```
+
+### Drill 5: Static Routes and Network Services at Boot
+
+Practice the difference between "fixed right now" and "fixed after reboot":
+- identify which service manager owns networking on the machine
+- confirm whether that service is enabled at boot
+- add a temporary static route with `ip route`
+- verify the new route appears in the table
+- remove it cleanly
+- identify where a persistent route would be configured on your distro
+
+What this trains:
+- route-table fluency
+- service persistence awareness
+- temporary versus persistent networking changes
+
+### Drill 6: Kernel Module Practice
+
+Use a safe module such as `dummy` if it exists:
+- inspect it with `modinfo`
+- load it with `modprobe`
+- confirm it appears in `lsmod`
+- remove it
+- explain how you would make module loading persistent if the task required it
+
+What this trains:
+- kernel-module evidence gathering
+- safe load and unload workflow
+- runtime versus persistent module state
+
+### Drill 7: Shutdown and Recovery Discipline
+
+Practice the boot and recovery tasks candidates often avoid:
+- inspect the default target
+- switch to `multi-user.target`
+- isolate into `rescue.target` in a disposable practice environment
+- schedule a reboot
+- cancel the reboot
+- inspect both the current and previous boot logs
+
+What this trains:
+- target and recovery fluency
+- safe shutdown control
+- reading boot history instead of guessing
 
 ## SSH and Remote Access
 
@@ -160,7 +225,10 @@ Before you move on, confirm:
 - you can read `systemctl status` output without flinching
 - you can explain why a service is failing from the logs
 - you can change the default target and verify it
+- you can schedule and remove both `cron` and `at` jobs
+- you can load and unload a safe kernel module and prove the result
 - you can tell the difference between link, IP, route, DNS, and firewall problems
+- you can add and remove a temporary static route without leaving junk behind
 - you can remove a scheduled job after testing it
 
 ## Common Failure Modes
@@ -168,6 +236,8 @@ Before you move on, confirm:
 - restarting a service repeatedly without reading its logs
 - changing the wrong unit file or the wrong connection profile
 - assuming DNS is broken when the route is missing
+- editing persistent network config before proving the route change solves the problem
+- loading a module before checking what it is supposed to do
 - forgetting that scheduled tasks need cleanup after testing
 - rebooting too early instead of verifying state first
 

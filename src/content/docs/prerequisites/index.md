@@ -127,7 +127,16 @@ Git Deep Dive
 Modern DevOps
 ```
 
-Use `Git Deep Dive` after you are comfortable with basic Git from `Zero to Terminal`. It is not required before `Cloud Native 101`, but it becomes high-value before serious GitOps, CI/CD, and team workflows.
+Use `Git Deep Dive` after you are comfortable with basic Git from `Zero to Terminal`. It is not required before `Cloud Native 101` or `Kubernetes Basics`, but it should be treated as a practical prerequisite before serious IaC, GitOps, CI/CD, and team workflows.
+
+## Git Is Not Optional For Modern Infrastructure Work
+
+The sequence matters:
+- `0.6 Git Basics` in `Zero to Terminal` gives you the minimum viable workflow
+- `Git Deep Dive` turns Git into an operational tool rather than just a backup mechanism
+- only after that do `Modern DevOps`, `IaC`, and `GitOps` become much easier to use correctly
+
+If a learner skips the Git path, they can still read later modules, but they will be missing one of the core skills behind modern infrastructure practice.
 
 ## Common Next Routes
 
@@ -135,6 +144,7 @@ Use `Git Deep Dive` after you are comfortable with basic Git from `Zero to Termi
 - `Prerequisites -> Kubernetes Certifications` if you want external goals and hands-on pressure
 - `Prerequisites -> Cloud` if your main goal is hyperscaler fluency after cluster basics
 - `Prerequisites -> AI/ML Engineering` if you want local-first AI or MLOps, but still need an engineering foundation first
+- `Prerequisites -> Modern DevOps` should usually mean `Zero to Terminal -> Git Deep Dive -> Modern DevOps`, not a direct jump that skips Git maturity
 
 `Platform Engineering` is usually not the immediate next stop for beginners. Most learners should reach it through Kubernetes, Linux, or Cloud first.
 

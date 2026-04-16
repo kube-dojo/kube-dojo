@@ -23,6 +23,7 @@ Before starting this module:
 After this module, you will be able to:
 - create and manage users, groups, and sudo access cleanly
 - control permissions and ownership without breaking access
+- apply user resource limits and reason about where PAM participates
 - create filesystems, mount them persistently, and verify the result
 - expand storage with LVM when a basic partition is not enough
 - install, enable, and persist services in a way that survives reboot
@@ -65,6 +66,21 @@ setfacl -m u:alice:rw /srv/app/shared.txt
 - sudo access is actually effective
 - the target path has the intended ownership and mode
 - access survives a new shell session
+
+### Resource Limits and PAM Reality
+
+LFCS usually does not ask for a deep PAM design exercise. It asks whether you understand where login policy and user-session limits actually come from.
+
+```bash
+ulimit -a
+grep -v '^#' /etc/security/limits.conf
+grep pam_limits.so /etc/pam.d/common-session /etc/pam.d/common-session-noninteractive
+```
+
+Use this model:
+- `ulimit` shows the current shell's view
+- `/etc/security/limits.conf` and `limits.d/` express persistent limit policy
+- PAM decides whether those limits are applied during session setup
 
 ## Storage Skills LFCS Actually Wants
 
@@ -180,11 +196,27 @@ What this trains:
 - package to service workflow
 - persistence, not just launch
 
+### Drill 5: Resource Limits and PAM Checks
+
+Practice a minimal LFCS-oriented identity-admin task:
+- create a test user
+- inspect the current open-file limit with `su - testuser -c 'ulimit -n'`
+- add a limit entry in `/etc/security/limits.d/`
+- verify the relevant PAM session file includes `pam_limits.so`
+- start a fresh login shell and confirm the new limit is visible
+- remove the test configuration cleanly
+
+What this trains:
+- resource-limit administration
+- PAM-aware troubleshooting
+- verification through a fresh session instead of assumptions
+
 ## Verification Checklist
 
 Before you move on, confirm:
 - you can create and inspect users without guessing
 - you can distinguish ownership problems from permission problems
+- you can explain the difference between `ulimit` output and persistent limit configuration
 - you can mount and remount a filesystem safely
 - you know how to test `/etc/fstab` entries before a reboot surprises you
 - you can create a service that starts automatically
@@ -194,6 +226,7 @@ Before you move on, confirm:
 - editing `/etc/fstab` without testing it
 - changing permissions instead of fixing ownership, or vice versa
 - forgetting `-aG` when adding a user to a supplementary group
+- editing `limits.conf` and then checking the same old shell instead of a fresh login session
 - mounting the wrong block device because you did not verify `lsblk`
 - enabling a service but never confirming it actually starts
 
