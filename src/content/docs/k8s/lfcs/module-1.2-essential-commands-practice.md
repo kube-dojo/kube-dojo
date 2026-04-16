@@ -77,11 +77,65 @@ cat input.txt | sort | uniq -c | sort -nr
 
 ### Archives and Compression
 
+LFCS tests several archive formats. Know the flags cold — you will not have time to look them up.
+
+**tar with different compressors:**
+
 ```bash
-tar -czf backup.tgz /etc/myapp
-tar -xzf backup.tgz -C /tmp/restore
-gzip file.txt
-gunzip file.txt.gz
+# gzip (fastest, most common)
+tar -czf backup.tar.gz /etc/myapp
+tar -xzf backup.tar.gz -C /tmp/restore
+
+# bzip2 (smaller archives, slower)
+tar -cjf backup.tar.bz2 /etc/myapp
+tar -xjf backup.tar.bz2 -C /tmp/restore
+
+# xz (smallest archives, slowest)
+tar -cJf backup.tar.xz /etc/myapp
+tar -xJf backup.tar.xz -C /tmp/restore
+```
+
+**Standalone compression tools:**
+
+```bash
+gzip file.txt          # produces file.txt.gz, removes original
+gunzip file.txt.gz     # restores file.txt
+bzip2 file.txt         # produces file.txt.bz2
+bunzip2 file.txt.bz2
+xz file.txt            # produces file.txt.xz
+unxz file.txt.xz
+```
+
+**zip/unzip (sometimes tested):**
+
+```bash
+zip -r backup.zip /srv/data
+unzip backup.zip -d /tmp/restore
+```
+
+**cpio (rare but in the blueprint):**
+
+```bash
+find /etc/myapp -print | cpio -ov > backup.cpio
+cpio -idv < backup.cpio
+```
+
+**Quick reference — compression flag in tar:**
+
+| Flag | Compressor | Extension |
+|------|-----------|-----------|
+| `-z` | gzip | `.tar.gz` / `.tgz` |
+| `-j` | bzip2 | `.tar.bz2` |
+| `-J` | xz | `.tar.xz` |
+
+**Archive verification — always prove the archive before moving on:**
+
+```bash
+tar -tzf backup.tar.gz             # list contents without extracting
+tar -tjf backup.tar.bz2
+tar -tJf backup.tar.xz
+md5sum backup.tar.gz > backup.md5  # create checksum
+md5sum -c backup.md5               # verify later
 ```
 
 ## Practice Drills
@@ -112,18 +166,48 @@ What this trains:
 - text filtering
 - choosing the right tool instead of overcomplicating the task
 
-### Drill 3: Archive and Restore
+### Drill 3: Archive and Restore Under Time Pressure
 
-Create a backup, move it, and restore it:
-- archive a directory with `tar`
-- compress it
-- restore it to a new path
-- verify file count and a sample checksum or timestamp
+Practice the full backup lifecycle with each major format. Set a timer — 5 minutes total for all three.
+
+**Round 1 — gzip:**
+
+```bash
+mkdir -p /tmp/drill3/source && echo "data" > /tmp/drill3/source/file1.txt
+tar -czf /tmp/drill3/backup.tar.gz -C /tmp/drill3 source
+tar -tzf /tmp/drill3/backup.tar.gz
+tar -xzf /tmp/drill3/backup.tar.gz -C /tmp/drill3/restore-gz
+diff /tmp/drill3/source/file1.txt /tmp/drill3/restore-gz/source/file1.txt
+```
+
+**Round 2 — bzip2:**
+
+```bash
+tar -cjf /tmp/drill3/backup.tar.bz2 -C /tmp/drill3 source
+tar -tjf /tmp/drill3/backup.tar.bz2
+tar -xjf /tmp/drill3/backup.tar.bz2 -C /tmp/drill3/restore-bz2
+```
+
+**Round 3 — xz:**
+
+```bash
+tar -cJf /tmp/drill3/backup.tar.xz -C /tmp/drill3 source
+tar -tJf /tmp/drill3/backup.tar.xz
+tar -xJf /tmp/drill3/backup.tar.xz -C /tmp/drill3/restore-xz
+```
+
+**Verification pass (always do this):**
+
+```bash
+find /tmp/drill3/restore-gz -type f | wc -l
+md5sum /tmp/drill3/source/file1.txt /tmp/drill3/restore-gz/source/file1.txt
+```
 
 What this trains:
-- safe backup habits
-- archive creation and extraction
-- post-action verification
+- flag muscle memory for all three compression formats
+- list-before-extract habit
+- verification as the last step, not an afterthought
+- working fast without skipping proof
 
 ### Drill 4: Redirect Correctly
 

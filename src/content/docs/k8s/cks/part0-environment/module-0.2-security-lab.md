@@ -457,7 +457,7 @@ echo ""
 
 # Check Audit Logging
 echo "6. Audit Logging:"
-kubectl get pods -n kube-system kube-apiserver-* -o yaml 2>/dev/null | grep -q "audit-log-path" && echo "   Enabled" || echo "   Check API server config"
+kubectl get pods -n kube-system -l component=kube-apiserver -o yaml 2>/dev/null | grep -q "audit-log-path" && echo "   Enabled" || echo "   Check API server config"
 echo ""
 
 echo "=== Validation Complete ==="

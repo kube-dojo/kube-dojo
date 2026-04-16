@@ -67,20 +67,121 @@ setfacl -m u:alice:rw /srv/app/shared.txt
 - the target path has the intended ownership and mode
 - access survives a new shell session
 
-### Resource Limits and PAM Reality
+### Resource Limits — Hard vs. Soft, Types, and Exam Patterns
 
-LFCS usually does not ask for a deep PAM design exercise. It asks whether you understand where login policy and user-session limits actually come from.
+LFCS expects you to set and verify user resource limits. Know the difference between hard and soft limits and where the configuration lives.
+
+**Soft vs. hard:**
+- **Soft limit**: the current effective limit. Users can raise it up to the hard limit.
+- **Hard limit**: the ceiling. Only root can raise it.
+
+**Checking limits:**
 
 ```bash
-ulimit -a
-grep -v '^#' /etc/security/limits.conf
-grep pam_limits.so /etc/pam.d/common-session /etc/pam.d/common-session-noninteractive
+ulimit -a                   # all soft limits for current shell
+ulimit -Ha                  # all hard limits
+ulimit -n                   # soft open-file limit
+ulimit -Hn                  # hard open-file limit
+su - alice -c 'ulimit -a'  # check limits for another user
 ```
 
-Use this model:
-- `ulimit` shows the current shell's view
-- `/etc/security/limits.conf` and `limits.d/` express persistent limit policy
-- PAM decides whether those limits are applied during session setup
+**Common limit types the exam may test:**
+
+| Item | ulimit flag | limits.conf keyword |
+|------|------------|-------------------|
+| Open files | `-n` | `nofile` |
+| Max processes | `-u` | `nproc` |
+| Max file size | `-f` | `fsize` |
+| Core dump size | `-c` | `core` |
+| Max memory | `-m` | `rss` |
+
+**Setting persistent limits in `/etc/security/limits.conf` or `/etc/security/limits.d/`:**
+
+```bash
+# Format: <domain> <type> <item> <value>
+# Example: set alice's open-file limits
+alice    soft    nofile    4096
+alice    hard    nofile    8192
+
+# Set for a group (prefix with @)
+@ops     soft    nproc     2048
+@ops     hard    nproc     4096
+
+# Set for all users
+*        soft    nofile    1024
+*        hard    nofile    65536
+```
+
+Best practice: use drop-in files in `/etc/security/limits.d/` rather than editing the main file:
+
+```bash
+echo "alice soft nofile 4096" | sudo tee /etc/security/limits.d/90-alice.conf
+echo "alice hard nofile 8192" | sudo tee -a /etc/security/limits.d/90-alice.conf
+```
+
+### PAM — What LFCS Actually Tests
+
+LFCS does not ask for deep PAM design. It asks whether you understand where login policy and user-session limits actually come from, and whether the PAM stack is wired to enforce them.
+
+**The PAM mental model:**
+
+```
+Login → PAM stack → pam_limits.so reads limits.conf → session gets limits applied
+```
+
+**Verifying PAM is wired for limits:**
+
+```bash
+grep pam_limits.so /etc/pam.d/common-session
+grep pam_limits.so /etc/pam.d/common-session-noninteractive
+```
+
+If `pam_limits.so` is not listed, limits.conf entries will be silently ignored.
+
+**Common PAM modules you may encounter:**
+
+| Module | Purpose |
+|--------|---------|
+| `pam_limits.so` | Enforce resource limits from limits.conf |
+| `pam_unix.so` | Standard password authentication |
+| `pam_pwquality.so` | Password complexity enforcement |
+| `pam_access.so` | Login access control (/etc/security/access.conf) |
+| `pam_faildelay.so` | Delay after failed authentication |
+| `pam_nologin.so` | Block non-root login when /etc/nologin exists |
+
+**PAM configuration files:**
+
+```bash
+ls /etc/pam.d/                  # per-service PAM configs
+cat /etc/pam.d/common-auth      # authentication stack
+cat /etc/pam.d/common-session   # session setup stack
+cat /etc/pam.d/common-password  # password change rules
+cat /etc/pam.d/common-account   # account validation
+```
+
+**PAM line format:**
+
+```
+type    control    module-path    [module-arguments]
+```
+
+- **type**: `auth`, `account`, `password`, `session`
+- **control**: `required`, `requisite`, `sufficient`, `optional`
+- `required` — must pass, but continue checking other modules
+- `requisite` — must pass, fail immediately if not
+
+**Exam-relevant PAM task example — enforce password complexity:**
+
+```bash
+# Check if pam_pwquality is in the password stack
+grep pam_pwquality /etc/pam.d/common-password
+
+# If present, its config is in:
+cat /etc/security/pwquality.conf
+# minlen = 12
+# dcredit = -1    (require at least 1 digit)
+# ucredit = -1    (require at least 1 uppercase)
+```
 
 ## Storage Skills LFCS Actually Wants
 
@@ -114,7 +215,7 @@ mkfs.ext4 /dev/vg_data/lv_app
 mount /dev/vg_data/lv_app /srv/app
 ```
 
-### What To Verify
+### What To Verify After Storage Changes
 
 - `lsblk` shows the intended hierarchy
 - `findmnt` shows the expected mount point
@@ -198,18 +299,58 @@ What this trains:
 
 ### Drill 5: Resource Limits and PAM Checks
 
-Practice a minimal LFCS-oriented identity-admin task:
-- create a test user
-- inspect the current open-file limit with `su - testuser -c 'ulimit -n'`
-- add a limit entry in `/etc/security/limits.d/`
-- verify the relevant PAM session file includes `pam_limits.so`
-- start a fresh login shell and confirm the new limit is visible
-- remove the test configuration cleanly
+Practice a full LFCS-oriented resource-limit and PAM verification workflow:
+
+**Part A — set and verify resource limits:**
+
+```bash
+# Create a test user
+sudo useradd -m testlimits
+
+# Check default limits
+su - testlimits -c 'ulimit -n'    # open files
+su - testlimits -c 'ulimit -u'    # max processes
+
+# Set custom limits
+echo "testlimits soft nofile 4096" | sudo tee /etc/security/limits.d/90-testlimits.conf
+echo "testlimits hard nofile 8192" | sudo tee -a /etc/security/limits.d/90-testlimits.conf
+echo "testlimits soft nproc 512" | sudo tee -a /etc/security/limits.d/90-testlimits.conf
+
+# Verify PAM is wired (critical — limits won't apply without this)
+grep pam_limits.so /etc/pam.d/common-session
+
+# Start a FRESH login shell and verify (same shell won't show new limits)
+su - testlimits -c 'ulimit -n'    # should show 4096
+su - testlimits -c 'ulimit -Hn'   # should show 8192
+su - testlimits -c 'ulimit -u'    # should show 512
+```
+
+**Part B — PAM stack verification:**
+
+```bash
+# Inspect the full session PAM stack
+cat /etc/pam.d/common-session
+
+# Confirm pam_limits.so is present and required
+grep -n pam_limits /etc/pam.d/common-session
+
+# Check password complexity rules
+grep pam_pwquality /etc/pam.d/common-password
+cat /etc/security/pwquality.conf 2>/dev/null
+```
+
+**Part C — cleanup:**
+
+```bash
+sudo rm /etc/security/limits.d/90-testlimits.conf
+sudo userdel -r testlimits
+```
 
 What this trains:
-- resource-limit administration
-- PAM-aware troubleshooting
-- verification through a fresh session instead of assumptions
+- setting both hard and soft limits for specific users
+- the fresh-session verification habit (the most common exam mistake is checking the old shell)
+- PAM stack awareness — knowing where to look and what must be present
+- clean teardown after testing
 
 ## Verification Checklist
 
@@ -217,6 +358,9 @@ Before you move on, confirm:
 - you can create and inspect users without guessing
 - you can distinguish ownership problems from permission problems
 - you can explain the difference between `ulimit` output and persistent limit configuration
+- you know the difference between hard and soft limits and can set both
+- you can verify that `pam_limits.so` is in the session stack
+- you can check limits from a fresh login shell, not your current one
 - you can mount and remount a filesystem safely
 - you know how to test `/etc/fstab` entries before a reboot surprises you
 - you can create a service that starts automatically

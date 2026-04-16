@@ -304,9 +304,9 @@ A new pod `fraud-detector` (priority 1000000, needs 2 CPU) is created.
 **Preemption analysis**:
 - **node-1**: Evict batch-a (priority 100, 2 CPU) -- frees 2 CPU. Victim priority 100. One victim.
 - **node-2**: Evict web-api (priority 500, 3 CPU) -- frees 3 CPU. Victim priority 500. One victim, but higher priority.
-- **node-3**: Evict logger (priority 50, 1.5 CPU) -- frees 1.5 CPU. Not enough. Must also evict monitoring (priority 800, 2 CPU) -- frees 3.5 CPU. Two victims, one at priority 800.
+- **node-3**: 0.5 CPU is already free. Evict logger (priority 50, 1.5 CPU) and the node reaches 2 CPU available, which is enough for the pending pod. One victim, and that victim has the lowest priority in the cluster.
 
-**Decision**: node-1 wins. It requires only one victim, and that victim has the lowest priority (100). The scheduler sets `nominatedNodeName: node-1` on fraud-detector, terminates batch-a gracefully, and schedules fraud-detector in the next cycle.
+**Decision**: node-3 is the best candidate. It requires only one victim, and that victim has lower priority than node-1's best victim (50 vs 100). The scheduler sets `nominatedNodeName: node-3` on fraud-detector, terminates logger gracefully, and schedules fraud-detector in the next cycle.
 
 ### 2.4 PDB Interaction with Preemption
 
