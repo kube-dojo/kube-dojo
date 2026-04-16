@@ -139,11 +139,15 @@ Status summary:
 - section directory exists
 - index exists
 - module count is zero
+- deferred exact slots are now named for queue clarity
 - intentionally deferred for now
 
 | Item | Path | Status |
 |---|---|---|
 | CKA Part 6 Mock Exams | `src/content/docs/k8s/cka/part6-mock-exams/` | `planned-only` |
+| CKA Mock Exam: Cluster Architecture and Troubleshooting | `src/content/docs/k8s/cka/part6-mock-exams/module-6.1-cluster-architecture-and-troubleshooting.md` | `planned-only` |
+| CKA Mock Exam: Workloads, Networking, and Storage | `src/content/docs/k8s/cka/part6-mock-exams/module-6.2-workloads-networking-and-storage.md` | `planned-only` |
+| CKA Mock Exam: Full Mixed-Domain Exam | `src/content/docs/k8s/cka/part6-mock-exams/module-6.3-full-mixed-domain-mock-exam.md` | `planned-only` |
 
 Issue expectation:
 - 3 to 5 realistic mock exam modules

@@ -76,6 +76,24 @@ KCNA → CKAD → (stop here or continue to CKA)
 CKA → CKS → KCSA
 ```
 
+## Which Certification Should You Start With?
+
+Use this quick rule instead of staring at the full table:
+
+| If your goal is... | Start here | Why |
+|---|---|---|
+| understand Kubernetes and the CNCF landscape | [KCNA](kcna/) | lowest-pressure conceptual entry point |
+| become employable as a cluster administrator | [CKA](cka/) | the strongest admin-first hands-on route |
+| ship applications on Kubernetes | [CKAD](ckad/) | best developer-first route |
+| go deeper into cluster security | [CKA](cka/) then [CKS](cks/) | `CKS` assumes admin fluency and requires `CKA` |
+| understand security concepts before hardening clusters | [KCSA](kcsa/) | good conceptual security companion, not a replacement for `CKS` |
+| move toward platform engineering | [KCNA](kcna/) or [CKA](cka/) first, then [CNPA](cnpa/) or [CNPE](cnpe/) | platform certs make more sense once basic Kubernetes competence already exists |
+
+If you are unsure, the safest defaults are:
+- `KCNA` for conceptual learners
+- `CKA` for operations-minded learners
+- `CKAD` for application developers
+
 ## Start Here If
 
 - you want external certification goals and exam-shaped structure
@@ -102,6 +120,16 @@ CKAD / CKS / specialist certs
 
 Use `KCNA` if you want a conceptual entry point. Use `CKA` if you already want hands-on cluster administration pressure from day one.
 
+## Common Certification Routes
+
+- `Beginner -> operator`: `Prerequisites -> KCNA -> CKA -> CKS`
+- `Beginner -> developer`: `Prerequisites -> KCNA -> CKAD`
+- `Linux / ops -> admin`: `Linux -> CKA -> CKS`
+- `Kubernetes -> platform`: `KCNA or CKA -> CNPA -> CNPE`
+- `GitOps / platform specialist`: `KCNA or CKA -> CGOA / CNPA / CNPE`
+
+Specialist certifications are not a better first move than learning the core Kubernetes path. They make the most sense after you already understand how clusters, workloads, and operations fit together.
+
 ## Tool & Specialist Certifications
 
 Beyond Kubestronaut, CNCF offers tool-specific certifications. KubeDojo maps existing modules as learning paths for each:
@@ -119,6 +147,10 @@ Beyond Kubestronaut, CNCF offers tool-specific certifications. KubeDojo maps exi
 | [CNPE](cnpe/) | Cloud Native Platform Engineer | Cross-track learning path |
 | [CNPA](cnpa/) | Cloud Native Platform Associate | Platform fundamentals |
 | [FinOps](finops/) | FinOps Practitioner | Cloud cost optimization |
+
+These are best treated as specialization tracks, not replacements for a first Kubernetes foundation. For most learners:
+- `KCNA`, `CKA`, or `CKAD` should come first
+- specialist certs make more sense once you know whether your work is admin, developer, security, GitOps, or platform focused
 
 ## Extending Kubernetes
 

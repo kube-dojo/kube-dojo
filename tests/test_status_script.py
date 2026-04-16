@@ -185,7 +185,7 @@ def test_build_repo_status_combines_v2_translations_labs_and_ztt(tmp_path: Path)
     assert status["v2_pipeline"]["total_modules"] == 1
     assert status["translation_v2_pipeline"]["queue"]["total_modules"] == 1
     assert status["missing_modules"]["active_exact"]["missing"] > 0
-    assert status["missing_modules"]["deferred"]["missing_min"] >= 0
+    assert status["missing_modules"]["deferred"]["missing_min"] == 3
     assert status["zero_to_terminal"]["ready"]["english_production_bar"] is True
     assert status["ownership"]["translation"] == "translation v2 queue + uk_sync worker"
 

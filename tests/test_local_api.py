@@ -216,6 +216,11 @@ def test_route_request_serves_summary_and_module_endpoints(tmp_path: Path) -> No
     status_code, missing_modules, _ = local_api.route_request(repo_root, "/api/missing-modules/status")
     assert status_code == 200
     assert missing_modules["active_exact"]["missing"] > 0
+    assert missing_modules["deferred"]["missing_min"] == 3
+
+    status_code, services, _ = local_api.route_request(repo_root, "/api/runtime/services")
+    assert status_code == 200
+    assert services["stopped"] >= 1
 
     status_code, module_state, _ = local_api.route_request(
         repo_root, f"/api/module/{module_key}/state"

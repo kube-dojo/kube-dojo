@@ -45,6 +45,11 @@ PIPELINE_PREFIXES = (
     ".pids/",
 )
 DEFAULT_FEEDBACK_ISSUE = 248
+RUNTIME_SERVICES = (
+    {"name": "dev", "pid_file": ".pids/dev.pid", "port": 4333, "label": "Astro Dev Server"},
+    {"name": "api", "pid_file": ".pids/api.pid", "port": 8767, "label": "Deterministic Local API"},
+    {"name": "feedback", "pid_file": ".pids/feedback.pid", "port": None, "label": "GitHub Issue Watcher"},
+)
 
 
 def _json_default(value: Any) -> Any:
@@ -285,6 +290,43 @@ def build_issue_watch_state(repo_root: Path, issue_number: int) -> dict[str, Any
     }
 
 
+def build_runtime_services_status(repo_root: Path) -> dict[str, Any]:
+    services = []
+    running = 0
+    stopped = 0
+    for svc in RUNTIME_SERVICES:
+        pid_path = repo_root / svc["pid_file"]
+        pid = None
+        is_running = False
+        if pid_path.exists():
+            try:
+                pid = int(pid_path.read_text(encoding="utf-8").strip())
+            except ValueError:
+                pid = None
+            if pid is not None:
+                try:
+                    # Signal 0 checks existence without sending a real signal.
+                    import os
+
+                    os.kill(pid, 0)
+                    is_running = True
+                except OSError:
+                    is_running = False
+        running += int(is_running)
+        stopped += int(not is_running)
+        services.append(
+            {
+                "name": svc["name"],
+                "label": svc["label"],
+                "status": "running" if is_running else "stopped",
+                "pid": pid,
+                "port": svc["port"],
+                "pid_file": str(pid_path),
+            }
+        )
+    return {"running": running, "stopped": stopped, "services": services}
+
+
 def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
     return f"""<!doctype html>
 <html lang="en">
@@ -389,6 +431,10 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
           <h2>Worktree</h2>
           <pre id="worktree">Loading...</pre>
         </section>
+        <section class="panel">
+          <h2>Runtime Services</h2>
+          <pre id="services">Loading...</pre>
+        </section>
       </div>
       <div class="stack">
         <section class="panel">
@@ -425,6 +471,7 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
         ['Translation V2', `${{(t2.convergence_rate ?? 0).toFixed(1)}}%`, ''],
         ['Active Missing', missing.active_exact?.missing ?? 0, (missing.active_exact?.missing ?? 0) === 0 ? 'good' : 'warn'],
         ['Deferred Missing', `${{missing.deferred?.missing_min ?? 0}}-${{missing.deferred?.missing_max ?? 0}}`, ''],
+        ['Runtime Services', `${{summary.runtime_services?.running ?? 0}} up`, (summary.runtime_services?.stopped ?? 0) === 0 ? 'good' : 'warn'],
         ['Worktree Dirty', worktree.dirty ? 'YES' : 'NO', worktree.dirty ? 'warn' : 'good'],
         ['ZTT English', ztt.ready?.english_production_bar ? 'READY' : 'NOT READY', ztt.ready?.english_production_bar ? 'good' : 'warn'],
         ['ZTT Ukrainian', ztt.ready?.ukrainian_sync_clean ? 'CLEAN' : 'DRIFT', ztt.ready?.ukrainian_sync_clean ? 'good' : 'warn'],
@@ -443,14 +490,16 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
       return JSON.stringify(obj, null, 2);
     }}
     async function refresh() {{
-      const [summary, missing, worktree, ztt, feedback] = await Promise.all([
+      const [summary, missing, services, worktree, ztt, feedback] = await Promise.all([
         fetchJson('/api/status/summary'),
         fetchJson('/api/missing-modules/status'),
+        fetchJson('/api/runtime/services'),
         fetchJson('/api/git/worktree'),
         fetchJson('/api/ztt/status'),
         fetchJson(`/api/issue-watch/${{issueNumber}}`),
       ]);
       summary.missing_modules = missing;
+      summary.runtime_services = services;
       renderCards(summary, worktree, feedback);
       document.getElementById('summary').textContent = pretty({{
         v2_pipeline: summary.v2_pipeline,
@@ -459,6 +508,7 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
         labs: summary.labs,
       }});
       document.getElementById('missing').textContent = pretty(summary.missing_modules);
+      document.getElementById('services').textContent = pretty(summary.runtime_services);
       document.getElementById('worktree').textContent = pretty(worktree);
       document.getElementById('ztt').textContent = pretty(ztt);
       document.getElementById('feedback').textContent = pretty(feedback);
@@ -484,6 +534,8 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
         return 200, build_repo_status(repo_root), "application/json; charset=utf-8"
     if path == "/api/missing-modules/status":
         return 200, _build_missing_modules_summary(repo_root), "application/json; charset=utf-8"
+    if path == "/api/runtime/services":
+        return 200, build_runtime_services_status(repo_root), "application/json; charset=utf-8"
     if path == "/api/pipeline/v2/status":
         db_path = repo_root / ".pipeline" / "v2.db"
         if not db_path.exists():

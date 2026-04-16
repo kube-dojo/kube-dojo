@@ -75,11 +75,14 @@ These are real backlog items, but not on the active build path right now.
 #### CKA Mock Exams (`#183`)
 Status: `deferred 3-5 missing modules`
 
-Section:
-1. `k8s/cka/part6-mock-exams`
+Normalized deferred planned modules:
+1. `k8s/cka/part6-mock-exams/module-6.1-cluster-architecture-and-troubleshooting`
+2. `k8s/cka/part6-mock-exams/module-6.2-workloads-networking-and-storage`
+3. `k8s/cka/part6-mock-exams/module-6.3-full-mixed-domain-mock-exam`
 
 Issue expectation:
-- `3-5` realistic mock exam modules
+- `3` exact deferred slots are now named
+- the broader issue still allows future expansion if product direction changes
 
 ## Current Total
 

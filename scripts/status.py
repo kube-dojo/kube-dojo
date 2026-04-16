@@ -68,9 +68,11 @@ DEFERRED_MODULE_GROUPS = (
         "key": "cka_mock_exams",
         "issue": 183,
         "label": "CKA mock exams",
-        "directory": "src/content/docs/k8s/cka/part6-mock-exams",
-        "expected_min": 3,
-        "expected_max": 5,
+        "paths": (
+            "src/content/docs/k8s/cka/part6-mock-exams/module-6.1-cluster-architecture-and-troubleshooting.md",
+            "src/content/docs/k8s/cka/part6-mock-exams/module-6.2-workloads-networking-and-storage.md",
+            "src/content/docs/k8s/cka/part6-mock-exams/module-6.3-full-mixed-domain-mock-exam.md",
+        ),
     },
 )
 
@@ -265,10 +267,16 @@ def _build_missing_modules_summary(repo_root: Path) -> dict[str, Any]:
     deferred_min = 0
     deferred_max = 0
     for group in DEFERRED_MODULE_GROUPS:
-        directory = repo_root / group["directory"]
-        present = len(list(directory.glob("module-*.md"))) if directory.exists() else 0
-        missing_min = max(group["expected_min"] - present, 0)
-        missing_max = max(group["expected_max"] - present, 0)
+        items = []
+        present = 0
+        for rel_path in group["paths"]:
+            exists = (repo_root / rel_path).exists()
+            present += int(exists)
+            items.append({"path": rel_path, "exists": exists})
+        expected = len(group["paths"])
+        missing = expected - present
+        missing_min = max(missing, 0)
+        missing_max = max(missing, 0)
         deferred_min += missing_min
         deferred_max += missing_max
         deferred_groups.append(
@@ -276,10 +284,9 @@ def _build_missing_modules_summary(repo_root: Path) -> dict[str, Any]:
                 "key": group["key"],
                 "issue": group["issue"],
                 "label": group["label"],
-                "directory": group["directory"],
+                "total_expected": expected,
                 "present": present,
-                "expected_min": group["expected_min"],
-                "expected_max": group["expected_max"],
+                "items": items,
                 "missing_min": missing_min,
                 "missing_max": missing_max,
             }
