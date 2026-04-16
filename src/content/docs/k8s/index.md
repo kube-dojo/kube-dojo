@@ -76,6 +76,32 @@ KCNA → CKAD → (stop here or continue to CKA)
 CKA → CKS → KCSA
 ```
 
+## Start Here If
+
+- you want external certification goals and exam-shaped structure
+- you already finished [Prerequisites](../prerequisites/) or equivalent hands-on fundamentals
+- you want the shortest route into employable Kubernetes administration or application delivery skills
+
+## Do Not Start Here First If
+
+- you are still uncomfortable with the terminal, SSH, files, and packages
+- you have never deployed basic workloads to a cluster
+- you are looking for theory-first platform engineering rather than certification prep
+
+If that is your situation, start with [Prerequisites](../prerequisites/) first.
+
+## Safest Route Into This Track
+
+```text
+Prerequisites
+   |
+KCNA or CKA
+   |
+CKAD / CKS / specialist certs
+```
+
+Use `KCNA` if you want a conceptual entry point. Use `CKA` if you already want hands-on cluster administration pressure from day one.
+
 ## Tool & Specialist Certifications
 
 Beyond Kubestronaut, CNCF offers tool-specific certifications. KubeDojo maps existing modules as learning paths for each:
@@ -114,6 +140,12 @@ For hands-on exams (CKAD, CKA, CKS):
 - Master vim/nano for YAML editing
 - Use `kubectl explain` and `--dry-run=client -o yaml`
 - [killer.sh](https://killer.sh) included with exam purchase — use it
+
+## After This Track
+
+- go to [Cloud](../cloud/) if you want provider-specific production Kubernetes
+- go to [Platform Engineering](../platform/) if you want systems thinking, SRE, GitOps, and platform design beyond the exams
+- go to [On-Premises](../on-premises/) if your goal is private infrastructure and you already have Linux depth
 
 ---
 

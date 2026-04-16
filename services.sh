@@ -3,13 +3,13 @@
 #
 # Usage:
 #   ./services.sh start              # Start all services
-#   ./services.sh start dev          # Start specific service
+#   ./services.sh start dev api      # Start specific service
 #   ./services.sh stop               # Stop all services
 #   ./services.sh restart            # Restart all
 #   ./services.sh status             # Show what's running
 #   ./services.sh logs dev           # Tail logs for a service
 #
-# Services: dev, pipeline
+# Services: dev, api
 
 set -euo pipefail
 
@@ -28,7 +28,12 @@ SVC_PORT[dev]=4333
 SVC_LOG[dev]="$LOGS_DIR/dev.log"
 SVC_DESC[dev]="Astro Dev Server (hot reload)"
 
-ALL_SERVICES="dev"
+SVC_CMD[api]="python3 scripts/local_api.py --host 0.0.0.0 --port 8767"
+SVC_PORT[api]=8767
+SVC_LOG[api]="$LOGS_DIR/api.log"
+SVC_DESC[api]="Deterministic Local API"
+
+ALL_SERVICES="dev api"
 
 _pid_file() { echo "$PIDS_DIR/$1.pid"; }
 
@@ -59,6 +64,13 @@ _start_service() {
     # shellcheck disable=SC2086
     nohup ${SVC_CMD[$name]} >> "${SVC_LOG[$name]}" 2>&1 &
     local pid=$!
+
+    sleep 1
+    if ! kill -0 "$pid" 2>/dev/null; then
+        echo "  $name failed to start; check ${SVC_LOG[$name]}"
+        rm -f "$(_pid_file "$name")"
+        return 1
+    fi
 
     echo "$pid" > "$(_pid_file "$name")"
     echo "  $name started (PID $pid, port ${SVC_PORT[$name]}, log ${SVC_LOG[$name]})"
@@ -202,9 +214,10 @@ case "$action" in
         done
         echo ""
         echo "Examples:"
-        echo "  $0 start              # Start dev server"
-        echo "  $0 stop               # Stop dev server"
-        echo "  $0 restart            # Restart dev server"
+        echo "  $0 start              # Start dev server and local API"
+        echo "  $0 start api          # Start only the local API"
+        echo "  $0 stop               # Stop all services"
+        echo "  $0 restart api        # Restart the local API"
         echo "  $0 status             # Show status"
         echo "  $0 logs dev           # Tail dev server logs"
         ;;

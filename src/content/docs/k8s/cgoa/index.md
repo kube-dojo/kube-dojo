@@ -16,6 +16,18 @@ The CGOA (Certified GitOps Associate) validates your understanding of GitOps pri
 
 ---
 
+## Exam-Prep Modules
+
+| # | Module |
+|---|--------|
+| 1.1 | [CGOA Exam Strategy and Blueprint Review](./module-1.1-exam-strategy-and-blueprint-review/) |
+| 1.2 | [CGOA GitOps Principles Review](./module-1.2-gitops-principles-review/) |
+| 1.3 | [CGOA Patterns and Tooling Review](./module-1.3-patterns-and-tooling-review/) |
+| 1.4 | [CGOA Practice Questions Set 1](./module-1.4-practice-questions-set-1/) |
+| 1.5 | [CGOA Practice Questions Set 2](./module-1.5-practice-questions-set-2/) |
+
+---
+
 ## Exam Domains
 
 | Domain | Weight | KubeDojo Coverage |

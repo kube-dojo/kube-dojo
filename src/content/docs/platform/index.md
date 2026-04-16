@@ -16,6 +16,30 @@ This is for people who:
 
 > Looking for tool-specific guides? See **[Cloud Native Tools](toolkits/)**.
 
+## Do Not Start Here First If
+
+- you are still learning basic Kubernetes objects and workflows
+- you mostly need terminal, Linux, and first-cluster fundamentals
+- you want an exam-first path rather than a theory-and-practice systems path
+
+In those cases, start with [Prerequisites](../prerequisites/) or [Kubernetes Certifications](../k8s/) first.
+
+## Safest Route Into Platform
+
+```text
+Prerequisites
+   |
+Kubernetes fundamentals
+   |
+Cloud and/or Linux depth
+   |
+Platform Foundations
+   |
+Platform Disciplines
+```
+
+For most learners, `Platform` should come after basic cluster competence, not before it.
+
 ---
 
 ## Structure
@@ -118,6 +142,14 @@ Applied practices — how to do the work.
 |------------|---------|----------|
 | [FinOps](disciplines/business-value/finops/) | 6 | Cloud cost optimization |
 
+## Common Routes Through This Track
+
+- `SRE / reliability`: Foundations -> Reliability Engineering -> Observability Theory -> SRE
+- `Platform builder`: Foundations -> Systems Thinking -> Platform Engineering -> Platform Leadership
+- `Delivery automation`: Foundations -> Distributed Systems -> Release Engineering -> GitOps -> IaC
+- `Security-minded platform`: Foundations -> Security Principles -> DevSecOps -> Networking
+- `AI platform`: Foundations -> Distributed Systems -> Data Engineering / MLOps / AI Infrastructure
+
 ---
 
 ## Module Format
@@ -152,6 +184,12 @@ Before starting this track, you should have:
 - Kubernetes basics (or completed [Prerequisites](../prerequisites/))
 - Some production experience (helpful but not required)
 - Curiosity about "why" not just "how"
+
+## Where This Track Leads
+
+- into deeper [Cloud](../cloud/) architecture work
+- into serious [On-Premises](../on-premises/) operations and private-platform design
+- into [AI/ML Engineering](../ai-ml-engineering/) operations paths through the Data & AI disciplines
 
 ---
 

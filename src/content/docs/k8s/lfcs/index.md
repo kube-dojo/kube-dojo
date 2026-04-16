@@ -32,6 +32,18 @@ The LFCS is a **performance-based (hands-on) exam** that validates practical Lin
 
 ---
 
+## Exam-Prep Modules
+
+| # | Module |
+|---|--------|
+| 1.1 | [LFCS Exam Strategy and Workflow](./module-1.1-exam-strategy-and-workflow/) |
+| 1.2 | [LFCS Essential Commands Practice](./module-1.2-essential-commands-practice/) |
+| 1.3 | [LFCS Running Systems and Networking Practice](./module-1.3-running-systems-and-networking-practice/) |
+| 1.4 | [LFCS Storage, Services, and Users Practice](./module-1.4-storage-services-and-users-practice/) |
+| 1.5 | [LFCS Full Mock Exam](./module-1.5-full-mock-exam/) |
+
+---
+
 ## LFCS Domains & KubeDojo Coverage
 
 ### Domain 1: Essential Commands (20%)

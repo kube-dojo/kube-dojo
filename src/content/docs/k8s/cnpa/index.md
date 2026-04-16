@@ -16,6 +16,18 @@ The CNPA (Certified Cloud Native Platform Engineering Associate) validates found
 
 ---
 
+## Exam-Prep Modules
+
+| # | Module |
+|---|--------|
+| 1.1 | [CNPA Exam Strategy and Blueprint Review](./module-1.1-exam-strategy-and-blueprint-review/) |
+| 1.2 | [CNPA Core Platform Fundamentals Review](./module-1.2-core-platform-fundamentals-review/) |
+| 1.3 | [CNPA Delivery, APIs, and Observability Review](./module-1.3-delivery-apis-and-observability-review/) |
+| 1.4 | [CNPA Practice Questions Set 1](./module-1.4-practice-questions-set-1/) |
+| 1.5 | [CNPA Practice Questions Set 2](./module-1.5-practice-questions-set-2/) |
+
+---
+
 ## Exam Domains
 
 | Domain | Weight | KubeDojo Coverage |

@@ -34,6 +34,22 @@ Rosetta Stone (cross-provider concepts)
 
 **Pick your provider** — you don't need all three. Learn the essentials for the cloud you use, then go deep on its managed Kubernetes offering.
 
+## Safest Default Route
+
+```text
+Hyperscaler Rosetta Stone
+   |
+Pick one provider
+   |
+Provider Essentials
+   |
+Managed Kubernetes (EKS / GKE / AKS)
+   |
+Architecture & Enterprise
+```
+
+Do not try to learn all three providers at once unless you have a specific architecture reason. Most learners should go deep on one provider first.
+
 ---
 
 ## Sections
@@ -78,3 +94,8 @@ Rosetta Stone (cross-provider concepts)
 - [Fundamentals](../prerequisites/) — Cloud Native 101, Docker, basic K8s
 - [Linux](../linux/) — recommended for networking and security modules
 - [Certifications](../k8s/) — recommended (CKA/CKAD give hands-on K8s experience before cloud-specific deep dives)
+
+## Good Next Steps After Cloud
+
+- go to [Platform Engineering](../platform/) if you want SRE, GitOps, delivery automation, and platform design on top of cloud infrastructure
+- go to [On-Premises](../on-premises/) if you want to compare managed-cloud assumptions with private-infrastructure realities

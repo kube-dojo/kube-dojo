@@ -27,6 +27,88 @@ python scripts/check_site_health.py
 
 ---
 
+## ztt_status.py
+
+Unified `Zero to Terminal` readiness report.
+
+```bash
+python scripts/ztt_status.py
+python scripts/ztt_status.py --json
+```
+
+**What it reports:**
+1. English ZTT theory modules present and fact-ledger audited
+2. ZTT lab review state from `.pipeline/lab-state.yaml`
+3. Ukrainian ZTT file presence and commit-sync state against English source files
+
+---
+
+## status.py
+
+Unified repo-level operational status.
+
+```bash
+python scripts/status.py
+python scripts/status.py --json
+```
+
+**What it reports:**
+1. v2 pipeline queue/convergence state from `.pipeline/v2.db`
+2. Translation ownership and repo-wide Ukrainian sync state
+3. Lab review state from `.pipeline/lab-state.yaml`
+4. Zero to Terminal readiness snapshot
+
+---
+
+## local_api.py
+
+Read-only deterministic local API for repo and pipeline state.
+
+```bash
+python scripts/local_api.py
+python scripts/local_api.py --host 0.0.0.0 --port 8767
+```
+
+**First endpoints:**
+1. `/healthz`
+2. `/api/status/summary`
+3. `/api/pipeline/v2/status`
+4. `/api/translation/v2/status?section=prerequisites/zero-to-terminal`
+5. `/api/labs/status`
+6. `/api/ztt/status`
+7. `/api/git/worktree`
+8. `/api/module/<module-key>/state`
+9. `/api/module/<module-key>/orchestration/latest`
+
+**Why it exists:**
+1. Reduces repeated shell/file probes for stable state
+2. Exposes deterministic JSON for pipeline, translation, labs, worktree, and module-level views
+3. Gives both humans and agents one cheap status surface before richer API work is added
+
+---
+
+## translation_v2.py
+
+Queue-based Ukrainian sync control plane.
+
+```bash
+python scripts/translation_v2.py status --section prerequisites/zero-to-terminal
+python scripts/translation_v2.py enqueue-section prerequisites/zero-to-terminal --limit 3
+python scripts/translation_v2.py worker run --json
+python scripts/translation_v2.py verify-worker run --json
+python scripts/translation_v2.py watchdog sweep
+```
+
+**What it does:**
+1. Detects per-module Ukrainian freshness (`synced / stale / missing / unknown`)
+2. Enqueues translation jobs one module at a time on `.pipeline/translation_v2.db`
+3. Runs a `write -> review` flow:
+   - `worker`: translate or refresh the Ukrainian module
+   - `verify-worker`: run deterministic freshness + Ukrainian quality verification
+4. Retries failed modules without blocking whole-section progress
+
+---
+
 ## dispatch.py
 
 Direct CLI dispatch for Gemini and Claude — calls CLIs as subprocesses with no broker or database.

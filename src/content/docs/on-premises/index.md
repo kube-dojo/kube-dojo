@@ -53,6 +53,33 @@ Bare Metal Provisioning (4 modules)
 
 ---
 
+## Readiness Check
+
+This is an advanced track. You should already be comfortable with:
+- core Kubernetes concepts and troubleshooting
+- Linux networking, storage, and security basics
+- day-2 operational thinking such as upgrades, observability, and failure handling
+
+If you are not there yet, strengthen those areas first through [Prerequisites](../prerequisites/), [Linux](../linux/), [Kubernetes Certifications](../k8s/), and optionally [Platform Engineering](../platform/).
+
+## Safest Route Into On-Prem
+
+```text
+Prerequisites
+   |
+Linux
+   |
+CKA-level Kubernetes understanding
+   |
+Platform / SRE thinking
+   |
+On-Premises
+```
+
+You do not need to finish every module in those tracks first, but you do need the operational maturity they represent.
+
+---
+
 ## Prerequisites
 
 - [Fundamentals](../prerequisites/) — Cloud Native 101, K8s Basics
@@ -68,3 +95,8 @@ Bare Metal Provisioning (4 modules)
 - **SREs** operating bare metal or private cloud Kubernetes clusters
 - **Architects** designing multi-site, air-gapped, or hybrid environments
 - **Budget owners** calculating TCO and making build-vs-buy decisions
+
+## Common Next Steps
+
+- go to [Platform Engineering](../platform/) if you want deeper reliability, delivery, and platform-discipline context around private infrastructure
+- go to [AI/ML Engineering](../ai-ml-engineering/) if your on-prem goal includes private model training or local-first AI systems

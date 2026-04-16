@@ -16,6 +16,18 @@ The CNPE (Certified Cloud Native Platform Engineer) validates skills in designin
 
 ---
 
+## Exam-Prep Modules
+
+| # | Module |
+|---|--------|
+| 1.1 | [CNPE Exam Strategy and Environment](./module-1.1-exam-strategy-and-environment/) |
+| 1.2 | [CNPE GitOps and Delivery Lab](./module-1.2-gitops-and-delivery-lab/) |
+| 1.3 | [CNPE Platform APIs and Self-Service Lab](./module-1.3-platform-apis-and-self-service-lab/) |
+| 1.4 | [CNPE Observability, Security, and Operations Lab](./module-1.4-observability-security-and-operations-lab/) |
+| 1.5 | [CNPE Full Mock Exam](./module-1.5-full-mock-exam/) |
+
+---
+
 ## Exam Domains
 
 | Domain | Weight | KubeDojo Coverage |
