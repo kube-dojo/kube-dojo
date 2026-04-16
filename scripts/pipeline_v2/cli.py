@@ -506,6 +506,15 @@ def _build_status_report(db_path: Path) -> dict[str, Any]:
         event_types = event_types_by_module.get(module_key, set())
         counts[_module_status(job_state, event_types, dead_lettered=module_key in unresolved_dead_letters)] += 1
 
+    pending_review_list = sorted([
+        m for m in modules
+        if _module_status(job_state_by_module.get(m), event_types_by_module.get(m, set()), dead_lettered=m in unresolved_dead_letters) == "pending_review"
+    ])
+    pending_write_list = sorted([
+        m for m in modules
+        if _module_status(job_state_by_module.get(m), event_types_by_module.get(m, set()), dead_lettered=m in unresolved_dead_letters) == "pending_write"
+    ])
+
     total_modules = len(modules)
     done_count = counts["done"]
     convergence_rate = (done_count / total_modules * 100.0) if total_modules else 0.0
@@ -519,6 +528,8 @@ def _build_status_report(db_path: Path) -> dict[str, Any]:
         "convergence_rate": convergence_rate,
         "flapping_count": flapping_count,
         "needs_human_count": len(unresolved_dead_letters),
+        "pending_review": pending_review_list,
+        "pending_write": pending_write_list,
     }
 
 

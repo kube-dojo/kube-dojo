@@ -40,6 +40,21 @@ Platform Disciplines
 
 For most learners, `Platform` should come after basic cluster competence, not before it.
 
+## Choose Your Entry Route
+
+| Your background | Best first move inside Platform | Why |
+|---|---|---|
+| `CKA` / operations-minded | [Reliability Engineering](foundations/reliability-engineering/) -> [Observability Theory](foundations/observability-theory/) -> [SRE](disciplines/core-platform/sre/) | strongest route from cluster admin work into production operations |
+| cloud engineer | [Systems Thinking](foundations/systems-thinking/) -> [Release Engineering](disciplines/delivery-automation/release-engineering/) -> [GitOps](disciplines/delivery-automation/gitops/) | turns provider-specific experience into reusable platform practice |
+| developer moving toward platform work | [Systems Thinking](foundations/systems-thinking/) -> [Platform Engineering](disciplines/core-platform/platform-engineering/) | focuses on self-service, workflows, and developer experience first |
+| AI/ML engineer | [Distributed Systems](foundations/distributed-systems/) -> Data & AI disciplines | useful once the problem becomes operating pipelines, serving, and teams rather than building one app |
+
+## Common Failure Modes Entering Platform
+
+- treating this as a direct beginner next step after first-cluster learning
+- chasing tools before understanding reliability, delivery, and security tradeoffs
+- jumping into platform leadership or architecture topics without enough production pain behind you
+
 ---
 
 ## Structure
@@ -149,6 +164,17 @@ Applied practices — how to do the work.
 - `Delivery automation`: Foundations -> Distributed Systems -> Release Engineering -> GitOps -> IaC
 - `Security-minded platform`: Foundations -> Security Principles -> DevSecOps -> Networking
 - `AI platform`: Foundations -> Distributed Systems -> Data Engineering / MLOps / AI Infrastructure
+
+## Cross-Track Handoffs
+
+Use `Platform` when your problem changes from learning Kubernetes commands to designing systems and operating teams.
+
+| If you are coming from... | Come here when... | If not, stay in... |
+|---|---|---|
+| [Kubernetes Certifications](../k8s/) | you want SRE, GitOps, delivery, and platform design beyond exam prep | [Kubernetes Certifications](../k8s/) |
+| [Cloud](../cloud/) | you want reusable operating models rather than provider-specific services alone | [Cloud](../cloud/) |
+| [AI/ML Engineering](../ai-ml-engineering/) | your bottleneck is reproducibility, serving, orchestration, or team operations | [AI/ML Engineering](../ai-ml-engineering/) |
+| [On-Premises](../on-premises/) | you need stronger theory for reliability, security, and platform patterns around private infrastructure | [On-Premises](../on-premises/) |
 
 ---
 

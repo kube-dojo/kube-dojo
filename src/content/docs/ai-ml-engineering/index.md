@@ -90,6 +90,15 @@ After that, branch based on interest:
 - `MLOps / AI platform`: Prerequisites -> MLOps & LLMOps -> AI Infrastructure -> Platform Data & AI
 - `Model-focused learner`: Generative AI -> Deep Learning Foundations -> Advanced GenAI
 
+## When Another Track Becomes Necessary
+
+| If your blocker is... | Go to... | Why |
+|---|---|---|
+| weak cluster, YAML, or workload fundamentals | [Kubernetes Certifications](../k8s/) | the MLOps and infrastructure phases assume real Kubernetes comfort |
+| reproducibility, deployment workflow, service ownership, or team operations | [Platform Engineering](../platform/) | that is no longer just app-building; it is platform and operations work |
+| private GPUs, air-gapped environments, datacenter economics, or bare-metal serving | [On-Premises](../on-premises/) | local-first intuition does not automatically transfer to private infrastructure |
+| Linux process, package, and service management pain | [Linux](../linux/) | a surprising amount of AI/ML failure is really systems failure |
+
 ## Who This Is For
 
 - **AI/ML Engineers** building production ML systems
@@ -116,6 +125,12 @@ After that, branch based on interest:
 - go to [Platform Engineering](../platform/) when your main problem becomes operating systems and teams, not just building models or apps
 - go to [On-Premises](../on-premises/) when local-first or private AI work grows into real private infrastructure concerns
 - go to [Kubernetes Certifications](../k8s/) if your MLOps path is blocked by weak cluster fundamentals
+
+## Common Failure Modes In This Track
+
+- starting in advanced infrastructure before local environments and workflows are reproducible
+- treating notebooks as a permanent workflow when the real problem is packaging, deployment, or operations
+- jumping to private AI infrastructure because the hardware sounds interesting before the application path is solid
 
 ## Good First Clicks
 

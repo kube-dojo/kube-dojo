@@ -182,6 +182,32 @@ def _setup_repo(repo_root: Path) -> tuple[str, Path]:
     module_key = "prerequisites/zero-to-terminal/module-0.1-alpha"
     _init_v2_db(repo_root / ".pipeline/v2.db", module_key=module_key)
     _init_translation_v2_db(repo_root / ".pipeline/translation_v2.db", module_key=module_key)
+
+    # Add pending modules for list verification
+    conn_v2 = sqlite3.connect(repo_root / ".pipeline/v2.db")
+    conn_v2.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state) VALUES (?, ?, ?)",
+        ("pending/v2/review", "review", "pending"),
+    )
+    conn_v2.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state) VALUES (?, ?, ?)",
+        ("pending/v2/write", "write", "pending"),
+    )
+    conn_v2.commit()
+    conn_v2.close()
+
+    conn_trans = sqlite3.connect(repo_root / ".pipeline/translation_v2.db")
+    conn_trans.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state) VALUES (?, ?, ?)",
+        ("pending/trans/review", "review", "pending"),
+    )
+    conn_trans.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state) VALUES (?, ?, ?)",
+        ("pending/trans/write", "write", "pending"),
+    )
+    conn_trans.commit()
+    conn_trans.close()
+
     return module_key, en_path
 
 
@@ -248,6 +274,13 @@ def test_route_request_supports_translation_section_and_missing_db(tmp_path: Pat
     )
     assert status_code == 200
     assert translation["freshness"]["section"] == "prerequisites/zero-to-terminal"
+    assert "pending/trans/review" in translation["queue"]["pending_review"]
+    assert "pending/trans/write" in translation["queue"]["pending_write"]
+
+    status_code, v2, _ = local_api.route_request(repo_root, "/api/pipeline/v2/status")
+    assert status_code == 200
+    assert "pending/v2/review" in v2["pending_review"]
+    assert "pending/v2/write" in v2["pending_write"]
 
     (repo_root / ".pipeline" / "v2.db").unlink()
     status_code, payload, _ = local_api.route_request(repo_root, "/api/pipeline/v2/status")

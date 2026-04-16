@@ -179,6 +179,21 @@ For hands-on exams (CKAD, CKA, CKS):
 - go to [Platform Engineering](../platform/) if you want systems thinking, SRE, GitOps, and platform design beyond the exams
 - go to [On-Premises](../on-premises/) if your goal is private infrastructure and you already have Linux depth
 
+## Choose Your Next Track After Core Kubernetes
+
+| If Kubernetes leads you toward... | Next track | Why |
+|---|---|---|
+| managed production clusters on AWS, GCP, or Azure | [Cloud](../cloud/) | provider-specific networking, identity, and managed-control-plane patterns live there |
+| SRE, GitOps, delivery automation, and internal platforms | [Platform Engineering](../platform/) | that is the systems-and-organization layer above the exams |
+| private clusters, bare metal, and datacenter operations | [On-Premises](../on-premises/) | those assumptions diverge sharply from managed-cloud Kubernetes |
+| ML workloads, serving, and AI infrastructure | [AI/ML Engineering](../ai-ml-engineering/) | the Kubernetes track is a prerequisite there, not the full workflow |
+
+## Common Failure Modes After This Track
+
+- assuming certification completion automatically means platform-engineering readiness
+- jumping into on-prem operations without enough Linux depth
+- treating specialist certifications as a substitute for choosing a real next operating context
+
 ---
 
 ## Curriculum Sources

@@ -78,6 +78,23 @@ On-Premises
 
 You do not need to finish every module in those tracks first, but you do need the operational maturity they represent.
 
+## Red Flags That You Are Entering Too Early
+
+- you still struggle with Linux networking, storage, or service management basics
+- you have not yet operated Kubernetes under failure, upgrade, or capacity pressure
+- you mainly want a simpler first cluster rather than private-platform design
+
+If those are true, stay in [Prerequisites](../prerequisites/), [Linux](../linux/), or [Kubernetes Certifications](../k8s/) a bit longer.
+
+## Common Bridge Routes Into On-Prem
+
+| Coming from | Safest bridge | What to prove before going deeper |
+|---|---|---|
+| [Kubernetes Certifications](../k8s/) | `CKA -> Linux depth -> On-Prem Planning/Provisioning` | kubeadm, networking, storage, and troubleshooting are not fragile for you |
+| [Cloud](../cloud/) | `managed Kubernetes -> Architecture Patterns -> On-Prem Planning` | you can reason about tradeoffs without assuming the cloud will always provide the control plane around you |
+| [Platform Engineering](../platform/) | `SRE / GitOps / Networking -> On-Prem Operations` | you already think in day-2 systems, not only cluster setup |
+| [AI/ML Engineering](../ai-ml-engineering/) | `local-first AI -> AI Infrastructure -> On-Prem AI/ML Infrastructure` | you understand the jump from a workstation or notebook workflow to private GPU fleet operations |
+
 ---
 
 ## Prerequisites
@@ -100,3 +117,4 @@ You do not need to finish every module in those tracks first, but you do need th
 
 - go to [Platform Engineering](../platform/) if you want deeper reliability, delivery, and platform-discipline context around private infrastructure
 - go to [AI/ML Engineering](../ai-ml-engineering/) if your on-prem goal includes private model training or local-first AI systems
+- go back to [Cloud](../cloud/) if you need a cleaner contrast between managed-cloud assumptions and private-infrastructure tradeoffs before committing to this path

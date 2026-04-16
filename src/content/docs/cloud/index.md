@@ -99,3 +99,17 @@ Do not try to learn all three providers at once unless you have a specific archi
 
 - go to [Platform Engineering](../platform/) if you want SRE, GitOps, delivery automation, and platform design on top of cloud infrastructure
 - go to [On-Premises](../on-premises/) if you want to compare managed-cloud assumptions with private-infrastructure realities
+
+## Choose Your Exit Ramp
+
+| After Cloud, if you want to... | Go to... | Why |
+|---|---|---|
+| run internal platforms, improve delivery, and standardize operations | [Platform Engineering](../platform/) | cloud skill alone does not teach platform discipline |
+| evaluate private infrastructure, repatriation, or hybrid tradeoffs | [On-Premises](../on-premises/) | managed services hide many concerns that become explicit on private infrastructure |
+| support ML workloads and AI systems on cloud Kubernetes | [AI/ML Engineering](../ai-ml-engineering/) | the AI/ML track gives the application and model layer this track does not |
+
+## Common Failure Modes In Cloud
+
+- trying to learn all three providers before you can operate one of them well
+- jumping into enterprise/hybrid sections before a provider essentials path is solid
+- confusing provider familiarity with platform-engineering depth

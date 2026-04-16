@@ -390,6 +390,35 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
       grid-template-columns: 1.2fr 1fr;
       gap: 16px;
     }}
+    .queue-grid {{
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 12px;
+    }}
+    .queue-box {{
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px;
+    }}
+    .queue-box h3 {{
+      margin: 0 0 8px;
+      font-size: 14px;
+      color: var(--accent);
+    }}
+    .queue-box ul {{
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      font-size: 11px;
+      max-height: 150px;
+      overflow-y: auto;
+    }}
+    .queue-box li {{
+      padding: 2px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }}
     .stack {{ display: grid; gap: 16px; }}
     pre {{
       background: rgba(8, 16, 25, 0.55);
@@ -419,6 +448,27 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
     <div class="grid" id="cards"></div>
     <div class="two-col">
       <div class="stack">
+        <section class="panel">
+          <h2>Queue Dashboard</h2>
+          <div class="queue-grid">
+            <div class="queue-box">
+              <h3>V2: Pending Review</h3>
+              <ul id="v2-review"></ul>
+            </div>
+            <div class="queue-box">
+              <h3>V2: Pending Write</h3>
+              <ul id="v2-write"></ul>
+            </div>
+            <div class="queue-box">
+              <h3>Trans: Pending Review</h3>
+              <ul id="trans-review"></ul>
+            </div>
+            <div class="queue-box">
+              <h3>Trans: Pending Write</h3>
+              <ul id="trans-write"></ul>
+            </div>
+          </div>
+        </section>
         <section class="panel">
           <h2>Queue Summary</h2>
           <pre id="summary">Loading...</pre>
@@ -490,17 +540,34 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
       return JSON.stringify(obj, null, 2);
     }}
     async function refresh() {{
-      const [summary, missing, services, worktree, ztt, feedback] = await Promise.all([
+      const [summary, missing, services, worktree, ztt, feedback, v2Status, transStatus] = await Promise.all([
         fetchJson('/api/status/summary'),
         fetchJson('/api/missing-modules/status'),
         fetchJson('/api/runtime/services'),
         fetchJson('/api/git/worktree'),
         fetchJson('/api/ztt/status'),
         fetchJson(`/api/issue-watch/${{issueNumber}}`),
+        fetchJson('/api/pipeline/v2/status'),
+        fetchJson('/api/translation/v2/status'),
       ]);
       summary.missing_modules = missing;
       summary.runtime_services = services;
       renderCards(summary, worktree, feedback);
+
+      const renderList = (id, list) => {{
+        const el = document.getElementById(id);
+        if (!list || list.length === 0) {{
+          el.innerHTML = '<li class="meta">None</li>';
+        }} else {{
+          el.innerHTML = list.map(m => `<li>${{m}}</li>`).join('');
+        }}
+      }};
+
+      renderList('v2-review', v2Status.pending_review);
+      renderList('v2-write', v2Status.pending_write);
+      renderList('trans-review', transStatus.queue?.pending_review);
+      renderList('trans-write', transStatus.queue?.pending_write);
+
       document.getElementById('summary').textContent = pretty({{
         v2_pipeline: summary.v2_pipeline,
         translation_v2_pipeline: summary.translation_v2_pipeline,
