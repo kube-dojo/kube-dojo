@@ -6,6 +6,53 @@ sidebar:
   label: "What's New"
 ---
 
+## April 16, 2026 — ZTT, AI/ML, Cert Prep, and Curriculum Routing
+
+### Zero to Terminal Hardened
+- `Zero to Terminal` theory converged to the stricter review bar
+- early labs were audited and tightened instead of left as implicit backlog
+- Ukrainian sync for ZTT was brought under the new translation-v2 control flow
+
+### AI/ML Learner Path Expanded
+The AI/ML track now has a clear local-first path instead of jumping straight into large-scale infrastructure.
+
+New learner-facing modules include:
+- Home AI Workstation Fundamentals
+- Reproducible Python, CUDA, and ROCm Environments
+- Notebooks, Scripts, and Project Layouts
+- Home-Scale RAG Systems
+- Notebooks to Production for ML/LLMs
+- Small-Team Private AI Platform
+- Single-GPU Local Fine-Tuning
+- Multi-GPU Home-Lab Fine-Tuning
+- Local Inference Stack for Learners
+- Home AI Operations and Cost Model
+
+### Certification Prep Gaps Closed
+Dedicated exam-prep modules were added for:
+- `LFCS`
+- `CNPE`
+- `CNPA`
+- `CGOA`
+
+This work also removed a lot of quiet `partial coverage elsewhere` debt from the learner experience.
+
+### Route Guidance Improved
+Major hub pages were refreshed so learners can move between tracks more intentionally:
+- homepage
+- Kubernetes certifications
+- Cloud
+- Platform Engineering
+- On-Premises
+- AI/ML Engineering
+
+### Internal Delivery Infrastructure Improved
+- v2 review / patch routing was hardened and aligned to the actual contract
+- translation-v2 now handles Ukrainian sync with queue-style control
+- the local monitor/API shows more deterministic queue state instead of only summary counts
+
+---
+
 ## March 28, 2026 — Theme Overhaul + New Tracks
 
 ### Custom Design System
@@ -89,8 +136,8 @@ KubeDojo launched with 311 modules covering CKA, CKAD, CKS, KCNA, KCSA, Platform
 
 | Metric | Count |
 |--------|-------|
-| Total modules | 568 |
-| Tracks | 6 (Fundamentals, Linux, Cloud, Certifications, Platform, On-Premises) |
-| Certifications covered | 21 |
-| Ukrainian translations | 115 pages |
-| Build time | ~25s for 1,437 pages |
+| Total modules | 700+ |
+| Tracks | 7 (Fundamentals, Linux, Cloud, Certifications, Platform, On-Premises, AI/ML) |
+| Certification paths | 18+ |
+| Ukrainian translations | 300+ pages |
+| Build time | ~30s for ~1,700 pages |

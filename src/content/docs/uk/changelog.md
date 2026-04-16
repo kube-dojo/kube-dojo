@@ -4,6 +4,50 @@ template: splash
 sidebar:
   order: 2
 ---
+## 16 квітня 2026 — ZTT, AI/ML, підготовка до сертифікацій і маршрути навчання
+
+### Zero to Terminal посилено
+- теоретичну частину `Zero to Terminal` доведено до суворішого стандарту рев’ю
+- ранні лабораторні роботи перевірено й підтягнуто, а не залишено прихованим боргом
+- українську синхронізацію ZTT переведено на `translation-v2`
+
+### Розширено шлях AI/ML для learner-ів
+Трек AI/ML тепер має чіткий local-first шлях, а не стрибок одразу в велику інфраструктуру.
+
+Нові модулі:
+- Home AI Workstation Fundamentals
+- Reproducible Python, CUDA, and ROCm Environments
+- Notebooks, Scripts, and Project Layouts
+- Home-Scale RAG Systems
+- Notebooks to Production for ML/LLMs
+- Small-Team Private AI Platform
+- Single-GPU Local Fine-Tuning
+- Multi-GPU Home-Lab Fine-Tuning
+- Local Inference Stack for Learners
+- Home AI Operations and Cost Model
+
+### Закрито прогалини у сертифікаційній підготовці
+Додано окремі exam-prep модулі для:
+- `LFCS`
+- `CNPE`
+- `CNPA`
+- `CGOA`
+
+### Поліпшено навігацію між треками
+Оновлено ключові хаби, щоб learner-и могли переходити між треками без здогадок:
+- головна сторінка
+- сертифікації Kubernetes
+- Cloud
+- Platform Engineering
+- On-Premises
+- AI/ML Engineering
+
+### Поліпшено внутрішню інфраструктуру доставки
+- посилено маршрутизацію review/patch у v2 pipeline
+- `translation-v2` тепер керує українською синхронізацією через чергу
+- локальний monitor/API показує детальніший стан черг, а не лише підсумкові лічильники
+
+---
 ## Березень 2026 — Переклад передумов + Оновлення екосистеми + 21 сертифікація
 
 ### Переклад українською — Передумови завершено!

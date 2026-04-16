@@ -91,7 +91,7 @@ const p = t.prefix; // URL prefix: '' or '/uk'
     .section .desc { color: var(--g500); font-size: 0.95rem; margin-bottom: 2rem; }
 
     /* Track cards */
-    .tracks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; }
+    .tracks { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.25rem; }
     @media (max-width: 72rem) { .tracks { grid-template-columns: repeat(2, 1fr); } }
     @media (max-width: 50rem) { .tracks { grid-template-columns: 1fr; } }
     .track { background: white; border: 1px solid var(--g200); border-radius: 0.75rem; padding: 1.5rem; transition: all 0.25s; text-decoration: none; color: inherit; display: block; position: relative; overflow: hidden; }
@@ -99,11 +99,11 @@ const p = t.prefix; // URL prefix: '' or '/uk'
     .track::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
     .t-fund::before { background: var(--terminal-green); } .t-linux::before { background: var(--warning-amber); }
     .t-cloud::before { background: var(--deploy-purple); } .t-cert::before { background: var(--kube-blue); }
-    .t-plat::before { background: var(--pod-orange); } .t-prem::before { background: var(--node-teal); }
+    .t-plat::before { background: var(--pod-orange); } .t-prem::before { background: var(--node-teal); } .t-ai::before { background: #d97706; }
     .track-icon { width: 2.75rem; height: 2.75rem; border-radius: 0.625rem; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; margin-bottom: 1rem; }
     .t-fund .track-icon { background: var(--terminal-green-light); } .t-linux .track-icon { background: var(--warning-amber-light); }
     .t-cloud .track-icon { background: var(--deploy-purple-light); } .t-cert .track-icon { background: var(--kube-blue-light); }
-    .t-plat .track-icon { background: var(--pod-orange-light); } .t-prem .track-icon { background: var(--node-teal-light); }
+    .t-plat .track-icon { background: var(--pod-orange-light); } .t-prem .track-icon { background: var(--node-teal-light); } .t-ai .track-icon { background: #fff3e0; }
     .track h3 { font-size: 1rem; font-weight: 700; margin-bottom: 0.375rem; }
     .track p { font-size: 0.8rem; color: var(--g500); margin-bottom: 1rem; line-height: 1.5; }
     .track-meta { font-size: 0.75rem; color: var(--g400); }
@@ -179,10 +179,10 @@ const p = t.prefix; // URL prefix: '' or '/uk'
       <a class="btn-secondary" href={`${p}/progress/`}>{t.ctaProgress}</a>
     </div>
     <div class="hero-stats">
-      <div><span class="stat-num">568</span><span class="stat-label">{t.statModules}</span></div>
-      <div><span class="stat-num">6</span><span class="stat-label">{t.statTracks}</span></div>
-      <div><span class="stat-num">21</span><span class="stat-label">{t.statCerts}</span></div>
-      <div><span class="stat-num">115</span><span class="stat-label">{t.statTranslations}</span></div>
+      <div><span class="stat-num">700+</span><span class="stat-label">{t.statModules}</span></div>
+      <div><span class="stat-num">7</span><span class="stat-label">{t.statTracks}</span></div>
+      <div><span class="stat-num">18+</span><span class="stat-label">{t.statCerts}</span></div>
+      <div><span class="stat-num">300+</span><span class="stat-label">{t.statTranslations}</span></div>
     </div>
   </div>
   <div class="hero-terminal">
@@ -190,14 +190,15 @@ const p = t.prefix; // URL prefix: '' or '/uk'
     <div class="term-body">
       <span class="tp">$</span> <span class="tc">kubectl get tracks</span><br/>
       <span class="to">NAME              MODULES   STATUS</span><br/>
-      <span class="th">fundamentals</span>      <span class="ts">33</span>        Ready<br/>
+      <span class="th">fundamentals</span>      <span class="ts">47</span>        Ready<br/>
       <span class="th">linux</span>             <span class="ts">37</span>        Ready<br/>
-      <span class="th">cloud</span>             <span class="ts">84</span>        Ready<br/>
-      <span class="th">certifications</span>    <span class="ts">175</span>       Ready<br/>
-      <span class="th">platform</span>          <span class="ts">209</span>       Ready<br/>
-      <span class="th">on-premises</span>       <span class="ts">30</span>        Ready<br/><br/>
-      <span class="tp">$</span> <span class="tc">kubectl apply -f learning-path.yaml</span><br/>
-      <span class="ts">&#10003;</span> <span class="to">learningpath/cka-track configured</span>
+      <span class="th">cloud</span>             <span class="ts">116</span>       Ready<br/>
+      <span class="th">certifications</span>    <span class="ts">200+</span>      Ready<br/>
+      <span class="th">platform</span>          <span class="ts">220</span>       Ready<br/>
+      <span class="th">on-premises</span>       <span class="ts">59</span>        Ready<br/>
+      <span class="th">ai-ml-engineering</span> <span class="ts">117</span>       Ready<br/><br/>
+      <span class="tp">$</span> <span class="tc">kubectl get status ztt ai-ml certs</span><br/>
+      <span class="ts">&#10003;</span> <span class="to">ztt=ready  ai-ml=expanded  cert-prep=live</span>
     </div>
   </div>
 </div>
@@ -213,6 +214,7 @@ const p = t.prefix; // URL prefix: '' or '/uk'
     <a class="track t-cert" href={`${p}/k8s/`}><div class="track-icon">&#127942;</div><h3>{t.trackCertTitle}</h3><p>{t.trackCertDesc}</p><span class="track-meta">{t.trackCertMeta}</span></a>
     <a class="track t-plat" href={`${p}/platform/`}><div class="track-icon">&#128736;</div><h3>{t.trackPlatTitle}</h3><p>{t.trackPlatDesc}</p><span class="track-meta">{t.trackPlatMeta}</span></a>
     <a class="track t-prem" href={`${p}/on-premises/`}><div class="track-icon">&#127959;</div><h3>{t.trackPremTitle}</h3><p>{t.trackPremDesc}</p><span class="track-meta">{t.trackPremMeta}</span></a>
+    <a class="track t-ai" href={`${p}/ai-ml-engineering/`}><div class="track-icon">&#129302;</div><h3>{t.trackAiTitle}</h3><p>{t.trackAiDesc}</p><span class="track-meta">{t.trackAiMeta}</span></a>
   </div>
 
   <h2 style="margin-top:3rem;">{t.pathTitle}</h2>
