@@ -2,6 +2,18 @@
 
 KubeDojo — free, open-source cloud native curriculum.
 
+## Agent Orientation (first call on a cold start)
+
+Before `cat`-ing `STATUS.md` or running `git log`, hit the local API — it returns the same orientation in ~65 % fewer tokens.
+
+```
+curl -s http://127.0.0.1:8768/api/briefing/session             # ~1.5K tokens, full
+curl -s http://127.0.0.1:8768/api/briefing/session?compact=1   # ~0.7K tokens, compact
+curl -s http://127.0.0.1:8768/api/schema                       # endpoint index
+```
+
+The briefing covers: current branch + dirty summary, all worktrees, runtime services, pipeline v2 queue head, recent commits, top TODO bullets, blockers, and alerts. Drill-down URLs are listed in `next_reads`. Responses carry a weak ETag — send `If-None-Match` for 304 on repeat polls. If the API is down, fall back to reading `STATUS.md` + `CLAUDE.md`.
+
 ## Agent Usage
 
 - Don't spawn agents for work a single Grep/Read/Glob can do — it's slower and wasteful.

@@ -2,34 +2,27 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
 import sqlite3
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import asdict, is_dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import parse_qs, unquote, urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from pipeline_v2.cli import _build_status_report as build_v2_status_report
-from status import (
-    _build_lab_summary,
-    _build_missing_modules_summary,
-    _enrich_translation_v2_with_per_track,
-    _enrich_v2_with_per_track,
-    _extract_frontmatter,
-    _git_head_for_file,
-    build_repo_status,
-)
-from translation_v2 import build_status as build_translation_status
-from translation_v2 import detect_module_state
-from ztt_status import build_status as build_ztt_status
+# Heavy imports (pipeline_v2, status, translation_v2, ztt_status) are deferred
+# into the handlers that actually need them. Measured: moving these out of the
+# module top saves ~150 ms from server startup and keeps /healthz and
+# /api/runtime/services paths dependency-free. See issue #258.
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -107,6 +100,397 @@ def _load_json(text: str) -> Any:
         return json.loads(text)
     except json.JSONDecodeError:
         return text
+
+
+# ============================================================
+# Response cache + ETag + background snapshot
+# ============================================================
+#
+# Design notes (per reviewer feedback on issue #258):
+#   - Cache stores response BYTES, not payload dicts. ETag = weak hash of
+#     bytes. Reusing cached bytes makes ETag stable and 304 cheap.
+#   - Cache key = normalized (repo_root, path, sorted-query). Avoids
+#     cross-repo contamination when two repos share one process.
+#   - Invalidation combines TTL + per-endpoint dependency versions. For
+#     sqlite deps the version is ``PRAGMA data_version`` on a persistent
+#     per-path read-only connection (the documented/reliable usage — see
+#     _sqlite_version_key). The connection is also probed for inode/device
+#     changes so a replaced DB file is detected.
+#   - Background snapshots use fixed-*delay* (not fixed-interval): sleep
+#     runs AFTER the refresh completes, so an overrun does not cause
+#     overlapping runs. A per-instance build lock enforces single-in-
+#     flight across refresh_blocking() and the daemon thread.
+
+
+_CACHE_LOCK = threading.Lock()
+_CACHE: dict[str, "_CacheEntry"] = {}
+
+
+class _CacheEntry:
+    __slots__ = (
+        "body_bytes",
+        "content_type",
+        "etag",
+        "expires_at",
+        "version_key",
+        "built_at",
+    )
+
+    def __init__(
+        self,
+        body_bytes: bytes,
+        content_type: str,
+        etag: str,
+        expires_at: float,
+        version_key: tuple,
+        built_at: float,
+    ) -> None:
+        self.body_bytes = body_bytes
+        self.content_type = content_type
+        self.etag = etag
+        self.expires_at = expires_at
+        self.version_key = version_key
+        self.built_at = built_at
+
+
+def _weak_etag(body_bytes: bytes) -> str:
+    return 'W/"sha256:' + hashlib.sha256(body_bytes).hexdigest()[:16] + '"'
+
+
+def _path_mtime(p: Path) -> float:
+    try:
+        return p.stat().st_mtime
+    except OSError:
+        return 0.0
+
+
+# Persistent read-only sqlite connections keyed by absolute db path.
+# ``PRAGMA data_version`` returns a monotonic counter on a specific
+# connection that increments whenever ANOTHER connection commits a
+# write. So a single persistent connection, queried repeatedly, is a
+# reliable change signal — unlike round-1's fresh-connection misuse.
+# The dict lock serializes access; sqlite itself is single-writer,
+# and we only keep one persistent reader per db for bookkeeping.
+#
+# We also cache ``(st_dev, st_ino)`` alongside each connection. If the
+# DB file is REPLACED (rename/copy rather than in-place modify) the
+# inode changes and we must drop the cached connection — otherwise it
+# stays attached to the old inode and keeps reporting the old version.
+_SQLITE_VERSION_CONNECTIONS: dict[str, tuple[sqlite3.Connection, tuple]] = {}
+_SQLITE_VERSION_LOCK = threading.Lock()
+
+
+def _close_all_sqlite_version_connections() -> None:
+    """Test helper: drop cached read-only connections (e.g. between
+    tests that recreate DB files at the same path)."""
+    with _SQLITE_VERSION_LOCK:
+        for conn, _ident in _SQLITE_VERSION_CONNECTIONS.values():
+            try:
+                conn.close()
+            except sqlite3.Error:
+                pass
+        _SQLITE_VERSION_CONNECTIONS.clear()
+
+
+def _file_identity(path: Path) -> tuple:
+    """Return ``(st_dev, st_ino)`` or ``None`` fallback. Used to detect
+    whether a file at the same path is the *same* file or a replacement."""
+    try:
+        s = path.stat()
+    except OSError:
+        return (0, 0)
+    return (s.st_dev, s.st_ino)
+
+
+def _sqlite_version_key(db_path: Path) -> tuple:
+    """Fingerprint a sqlite DB using ``PRAGMA data_version`` on a
+    persistent read-only connection.
+
+    Contract: two calls return the same key iff no other connection
+    has committed between them *and* the file at ``db_path`` is the
+    same inode. If the file has been replaced (different inode), the
+    cached connection is dropped and reopened. This catches every
+    form of write (WAL append, WAL reuse after checkpoint, in-place
+    DELETE/MEMORY writes, rapid same-size writes inside one mtime
+    granule) plus DB replacement — none of which ``(mtime, size)``
+    alone can distinguish.
+    """
+    if not db_path.exists():
+        return ("absent",)
+
+    key = str(db_path.resolve())
+    identity = _file_identity(db_path)
+    with _SQLITE_VERSION_LOCK:
+        cached = _SQLITE_VERSION_CONNECTIONS.get(key)
+        if cached is not None:
+            conn, cached_identity = cached
+            if cached_identity != identity:
+                # File was replaced (different inode). Close the stale
+                # handle and open a new one below.
+                try:
+                    conn.close()
+                except sqlite3.Error:
+                    pass
+                _SQLITE_VERSION_CONNECTIONS.pop(key, None)
+                cached = None
+        if cached is None:
+            try:
+                conn = sqlite3.connect(
+                    f"file:{db_path}?mode=ro",
+                    uri=True,
+                    timeout=1.0,
+                    check_same_thread=False,
+                )
+            except sqlite3.Error:
+                return ("open_failed", _path_mtime(db_path))
+            _SQLITE_VERSION_CONNECTIONS[key] = (conn, identity)
+        else:
+            conn, _ = cached
+
+        try:
+            row = conn.execute("PRAGMA data_version").fetchone()
+            data_version = int(row[0]) if row is not None else 0
+        except sqlite3.Error:
+            # Connection poisoned — drop so the next call opens fresh.
+            _SQLITE_VERSION_CONNECTIONS.pop(key, None)
+            try:
+                conn.close()
+            except sqlite3.Error:
+                pass
+            return ("error", _path_mtime(db_path))
+
+    return ("v", identity, data_version)
+
+
+def _normalized_cache_key(
+    path: str,
+    query: dict[str, list[str]],
+    repo_root: Path | None = None,
+) -> str:
+    """Normalize (repo_root, path, sorted-query) for stable cache/ETag keys.
+
+    ``repo_root`` is included so two different repos sharing one Python
+    process (e.g. the test suite) don't cross-contaminate each other's
+    cache. The default of ``None`` keeps backward-compat for callers that
+    only key by path + query.
+    """
+    prefix = f"{Path(repo_root).resolve()}::" if repo_root is not None else ""
+    if not query:
+        return prefix + path
+    parts = []
+    for k in sorted(query):
+        for v in query[k]:
+            parts.append(f"{k}={v}")
+    return prefix + path + "?" + "&".join(parts)
+
+
+def _serialize_payload(payload: Any, content_type: str) -> bytes:
+    if content_type.startswith("application/json"):
+        return json.dumps(payload, indent=2, sort_keys=True, default=_json_default).encode("utf-8")
+    if content_type.startswith("text/html"):
+        return str(payload).encode("utf-8")
+    return str(payload).encode("utf-8")
+
+
+def cached_response(
+    cache_key: str,
+    ttl_seconds: float,
+    version_fn: Callable[[], tuple],
+    builder: Callable[[], tuple[int, Any, str]],
+) -> tuple[int, bytes, str, str]:
+    """Serve a response through the cache. Returns (status, body_bytes, content_type, etag).
+
+    Cache is skipped on non-2xx responses.
+    """
+    now = time.time()
+    version_key = version_fn()
+    with _CACHE_LOCK:
+        entry = _CACHE.get(cache_key)
+        if (
+            entry is not None
+            and entry.expires_at > now
+            and entry.version_key == version_key
+        ):
+            return 200, entry.body_bytes, entry.content_type, entry.etag
+
+    status_code, payload, content_type = builder()
+    body_bytes = _serialize_payload(payload, content_type)
+    etag = _weak_etag(body_bytes)
+
+    if 200 <= status_code < 300:
+        with _CACHE_LOCK:
+            _CACHE[cache_key] = _CacheEntry(
+                body_bytes=body_bytes,
+                content_type=content_type,
+                etag=etag,
+                expires_at=now + ttl_seconds,
+                version_key=version_key,
+                built_at=now,
+            )
+    return status_code, body_bytes, content_type, etag
+
+
+def _cache_stats() -> dict[str, Any]:
+    with _CACHE_LOCK:
+        return {
+            "entries": len(_CACHE),
+            "keys": sorted(_CACHE.keys()),
+        }
+
+
+# --- Background snapshot ---
+
+
+class BackgroundSnapshot:
+    """Fixed-delay background refresher for an expensive builder.
+
+    Guarantees:
+        - Never more than one refresh in flight.
+        - Atomic snapshot swap: callers see either the old or new snapshot,
+          never a partial one.
+        - Exposes freshness metadata so callers can detect staleness.
+    """
+
+    def __init__(
+        self,
+        key: str,
+        interval_seconds: float,
+        builder: Callable[[], Any],
+        stale_threshold_seconds: float | None = None,
+    ) -> None:
+        self.key = key
+        self.interval_seconds = interval_seconds
+        self.builder = builder
+        # Default stale threshold: 5x refresh interval, min 60s.
+        self.stale_threshold_seconds = (
+            stale_threshold_seconds
+            if stale_threshold_seconds is not None
+            else max(60.0, interval_seconds * 5)
+        )
+        # ``_lock`` protects metadata reads; ``_build_lock`` enforces
+        # single-in-flight so ``refresh_blocking()`` and the background
+        # thread cannot overlap each other's build.
+        self._lock = threading.Lock()
+        self._build_lock = threading.Lock()
+        self._snapshot: Any = None
+        self._started_at: float | None = None
+        self._completed_at: float | None = None
+        self._duration_ms: float | None = None
+        self._last_error: str | None = None
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        if self._thread is not None:
+            return
+        self._thread = threading.Thread(
+            target=self._run,
+            name=f"snapshot-{self.key}",
+            daemon=True,
+        )
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+
+    def _run(self) -> None:
+        while not self._stop.is_set():
+            self._refresh_once()
+            # Fixed-delay: sleep AFTER completion so overruns never overlap.
+            self._stop.wait(self.interval_seconds)
+
+    def _refresh_once_locked(self) -> None:
+        """Core refresh, assuming ``_build_lock`` is already held."""
+        started = time.time()
+        with self._lock:
+            self._started_at = started
+        try:
+            snapshot = self.builder()
+            err: str | None = None
+        except Exception as exc:  # noqa: BLE001
+            snapshot = None
+            err = f"{type(exc).__name__}: {exc}"
+        completed = time.time()
+        with self._lock:
+            if snapshot is not None:
+                self._snapshot = snapshot
+            self._completed_at = completed
+            self._duration_ms = (completed - started) * 1000.0
+            self._last_error = err
+
+    def _refresh_once(self) -> None:
+        """Serialize all builders through ``_build_lock``. The real
+        enforcement of the "single in-flight" guarantee."""
+        with self._build_lock:
+            self._refresh_once_locked()
+
+    def refresh_blocking(self, timeout: float | None = None) -> bool:
+        """Trigger one refresh in the calling thread. Returns True if
+        the refresh ran, False if ``timeout`` elapsed while waiting
+        for the build lock. ``timeout=None`` waits forever."""
+        lock_timeout = -1.0 if timeout is None else float(timeout)
+        acquired = self._build_lock.acquire(timeout=lock_timeout)
+        if not acquired:
+            return False
+        try:
+            self._refresh_once_locked()
+        finally:
+            self._build_lock.release()
+        return True
+
+    def get(self) -> tuple[Any, dict[str, Any]]:
+        now = time.time()
+        with self._lock:
+            snapshot = self._snapshot
+            started = self._started_at
+            completed = self._completed_at
+            duration = self._duration_ms
+            error = self._last_error
+        stale_seconds = (now - completed) if completed is not None else None
+        in_flight = (
+            started is not None and (completed is None or started > completed)
+        )
+        if snapshot is None and completed is None:
+            # Never completed a refresh — the caller will have to build sync.
+            state = "refreshing"
+        elif snapshot is None and error is not None:
+            state = "degraded"
+        elif stale_seconds is not None and stale_seconds > self.stale_threshold_seconds:
+            state = "stale"
+        else:
+            state = "fresh"
+        meta = {
+            "refresh_started_at": started,
+            "refresh_completed_at": completed,
+            "refresh_duration_ms": duration,
+            "refresh_error": error,
+            "stale_seconds": stale_seconds,
+            "stale_threshold_seconds": self.stale_threshold_seconds,
+            "freshness_state": state,
+            "refresh_in_flight": in_flight,
+        }
+        return snapshot, meta
+
+
+# Registry of background snapshots. Started lazily on first access so that
+# unit tests and `--help` invocations don't spawn threads.
+_SNAPSHOTS: dict[str, BackgroundSnapshot] = {}
+_SNAPSHOTS_LOCK = threading.Lock()
+
+
+def _register_snapshot(
+    key: str,
+    interval_seconds: float,
+    builder: Callable[[], Any],
+    stale_threshold_seconds: float | None = None,
+) -> BackgroundSnapshot:
+    with _SNAPSHOTS_LOCK:
+        existing = _SNAPSHOTS.get(key)
+        if existing is not None:
+            return existing
+        snap = BackgroundSnapshot(key, interval_seconds, builder, stale_threshold_seconds)
+        _SNAPSHOTS[key] = snap
+    return snap
 
 
 def _classify_path(path: str) -> str:
@@ -210,6 +594,75 @@ def build_worktree_status(repo_root: Path) -> dict[str, Any]:
     }
 
 
+def build_worktrees_list(repo_root: Path) -> dict[str, Any]:
+    """List every worktree attached to the primary repo.
+
+    Parses ``git worktree list --porcelain``. Returns a compact payload
+    suitable for agent cold-start: agents need to know about sibling
+    worktrees (e.g. ``codex-wt-*``) to avoid colliding on the same branch.
+    """
+    result = subprocess.run(
+        ["git", "worktree", "list", "--porcelain"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return {
+            "ok": False,
+            "error": result.stderr.strip() or "git worktree list failed",
+            "worktrees": [],
+        }
+
+    worktrees: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
+    for line in result.stdout.splitlines():
+        if not line:
+            if current is not None:
+                worktrees.append(current)
+                current = None
+            continue
+        if line.startswith("worktree "):
+            if current is not None:
+                worktrees.append(current)
+            current = {
+                "path": line[len("worktree ") :],
+                "branch": None,
+                "head": None,
+                "detached": False,
+                "locked": False,
+                "prunable": False,
+            }
+        elif current is None:
+            continue
+        elif line.startswith("HEAD "):
+            current["head"] = line[len("HEAD ") :]
+        elif line.startswith("branch "):
+            # Format: ``branch refs/heads/<name>``.
+            ref = line[len("branch ") :]
+            if ref.startswith("refs/heads/"):
+                current["branch"] = ref[len("refs/heads/") :]
+            else:
+                current["branch"] = ref
+        elif line == "detached":
+            current["detached"] = True
+        elif line.startswith("locked"):
+            current["locked"] = True
+        elif line.startswith("prunable"):
+            current["prunable"] = True
+    if current is not None:
+        worktrees.append(current)
+
+    primary_path = str(repo_root)
+    return {
+        "ok": True,
+        "primary": primary_path,
+        "count": len(worktrees),
+        "worktrees": worktrees,
+    }
+
+
 def _db_latest_for_module(db_path: Path, module_key: str) -> dict[str, Any] | None:
     if not db_path.exists():
         return None
@@ -251,6 +704,9 @@ def _db_latest_for_module(db_path: Path, module_key: str) -> dict[str, Any] | No
 
 
 def build_module_state(repo_root: Path, module_key: str) -> dict[str, Any]:
+    from status import _build_lab_summary, _extract_frontmatter, _git_head_for_file
+    from translation_v2 import detect_module_state
+
     normalized = module_key[:-3] if module_key.endswith(".md") else module_key
     en_path = repo_root / "src" / "content" / "docs" / f"{normalized}.md"
     uk_path = repo_root / "src" / "content" / "docs" / "uk" / f"{normalized}.md"
@@ -1562,6 +2018,268 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
 </html>"""
 
 
+# ============================================================
+# Agent orientation: /api/briefing/session + /api/schema
+# ============================================================
+
+
+# Keyed by resolved path so different repos' STATUS.md files never alias.
+_STATUS_MD_CACHE: dict[str, dict[str, Any]] = {}
+_STATUS_MD_CACHE_LOCK = threading.Lock()
+
+
+def _parse_status_md(status_path: Path) -> dict[str, Any]:
+    """Extract focus + blockers + a light summary from STATUS.md.
+
+    Caches by absolute path + mtime to keep briefing cheap and to stay
+    safe when multiple repos share one Python process.
+    """
+    try:
+        mtime = status_path.stat().st_mtime
+    except OSError:
+        return {"focus": [], "blockers": [], "exists": False}
+
+    cache_key = str(status_path.resolve())
+    with _STATUS_MD_CACHE_LOCK:
+        entry = _STATUS_MD_CACHE.get(cache_key)
+        if entry is not None and entry["mtime"] == mtime:
+            return entry["data"]
+
+    try:
+        text = status_path.read_text(encoding="utf-8")
+    except OSError:
+        return {"focus": [], "blockers": [], "exists": False}
+
+    focus: list[str] = []
+    blockers: list[str] = []
+    section = None
+    for raw_line in text.splitlines():
+        line = raw_line.rstrip()
+        if line.startswith("## "):
+            heading = line[3:].strip().lower()
+            if heading.startswith("todo"):
+                section = "todo"
+            elif heading.startswith("blocker"):
+                section = "blocker"
+            else:
+                section = None
+            continue
+        if section == "todo":
+            # Only collect unchecked items: - [ ] ...
+            if line.lstrip().startswith("- [ ]"):
+                bullet = line.lstrip()[5:].strip()
+                if bullet and len(focus) < 10:
+                    focus.append(bullet)
+        elif section == "blocker":
+            if line.lstrip().startswith("- "):
+                bullet = line.lstrip()[2:].strip()
+                if bullet and len(blockers) < 10:
+                    blockers.append(bullet)
+
+    data = {"focus": focus, "blockers": blockers, "exists": True}
+    with _STATUS_MD_CACHE_LOCK:
+        _STATUS_MD_CACHE[cache_key] = {"mtime": mtime, "data": data}
+    return data
+
+
+def _recent_commits(repo_root: Path, limit: int = 5) -> list[dict[str, Any]]:
+    result = subprocess.run(
+        ["git", "log", f"-n{limit}", "--pretty=format:%h%x09%s"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=5,
+    )
+    if result.returncode != 0:
+        return []
+    commits: list[dict[str, Any]] = []
+    for line in result.stdout.splitlines():
+        if "\t" in line:
+            sha, subject = line.split("\t", 1)
+        else:
+            sha, subject = line[:8], line[8:].lstrip()
+        commits.append({"sha": sha, "subject": subject})
+    return commits
+
+
+def _pipeline_summary_safe(repo_root: Path) -> dict[str, Any] | None:
+    """Return pipeline v2 summary. None if DB absent; error dict if broken."""
+    db_path = repo_root / ".pipeline" / "v2.db"
+    if not db_path.exists():
+        return None
+    try:
+        from pipeline_v2.cli import _build_status_report as build_v2_status_report
+        report = build_v2_status_report(db_path)
+    except Exception as exc:  # noqa: BLE001
+        return {"error": f"{type(exc).__name__}: {exc}"}
+    # Keep compact — only head counts, not per-module listings.
+    summary = report.get("summary") if isinstance(report, dict) else None
+    queue = report.get("queue") if isinstance(report, dict) else None
+    return {
+        "summary": summary,
+        "queue_head": {k: v for k, v in (queue or {}).items() if k in ("in_flight", "ready", "blocked", "rejected")},
+    }
+
+
+def build_session_briefing(repo_root: Path) -> dict[str, Any]:
+    """Compact control-plane snapshot for agent orientation.
+
+    Target: ≤ 2K tokens. Designed to be the *first* call a fresh agent
+    makes, replacing the usual ``cat STATUS.md + git log + ls`` crawl.
+    See issue #258.
+    """
+    status_md = _parse_status_md(repo_root / "STATUS.md")
+    worktree = build_worktree_status(repo_root)
+    worktrees = build_worktrees_list(repo_root)
+    services = build_runtime_services_status(repo_root)
+    commits = _recent_commits(repo_root, limit=5)
+    pipeline = _pipeline_summary_safe(repo_root)
+
+    alerts: list[str] = []
+    if services.get("stale", 0):
+        alerts.append(f"{services['stale']} stale pid file(s) — process exited without cleanup")
+    if isinstance(pipeline, dict) and "error" in pipeline:
+        alerts.append(f"pipeline v2 status unavailable: {pipeline['error']}")
+
+    return {
+        "snapshot": {
+            "generated_at": time.time(),
+            "generator": "local_api.build_session_briefing",
+            "version": 1,
+        },
+        "workspace": {
+            "primary_branch": worktree.get("branch") if worktree.get("ok") else None,
+            "dirty": worktree.get("dirty") if worktree.get("ok") else None,
+            "counts": worktree.get("counts") if worktree.get("ok") else None,
+            "ahead": worktree.get("ahead") if worktree.get("ok") else None,
+            "behind": worktree.get("behind") if worktree.get("ok") else None,
+            "worktrees_total": worktrees.get("count", 0),
+            "worktrees": [
+                {
+                    "path": wt.get("path"),
+                    "branch": wt.get("branch"),
+                    "detached": wt.get("detached", False),
+                }
+                for wt in (worktrees.get("worktrees") or [])
+            ],
+        },
+        "services": {
+            "running": services["running"],
+            "stopped": services["stopped"],
+            "stale": services["stale"],
+            "total": services["total"],
+        },
+        "pipelines": {"v2": pipeline},
+        "recent_commits": commits,
+        "focus": status_md.get("focus", []),
+        "blockers": status_md.get("blockers", []),
+        "alerts": alerts,
+        "next_reads": [
+            {"rel": "schema", "endpoint": "/api/schema", "desc": "Full endpoint index"},
+            {"rel": "status", "endpoint": "/api/status/summary", "desc": "Full repo status"},
+            {"rel": "pipeline", "endpoint": "/api/pipeline/v2/status", "desc": "Pipeline v2 queue"},
+            {"rel": "translation", "endpoint": "/api/translation/v2/status", "desc": "UK translation queue"},
+            {"rel": "services", "endpoint": "/api/runtime/services", "desc": "Runtime pids / ports"},
+            {"rel": "worktrees", "endpoint": "/api/git/worktrees", "desc": "All attached worktrees"},
+            {"rel": "module-state", "endpoint": "/api/module/{key}/state", "desc": "Per-module EN+UK+lab+frontmatter"},
+            {"rel": "module-orchestration", "endpoint": "/api/module/{key}/orchestration/latest", "desc": "Per-module latest pipeline job/event"},
+        ],
+        "links": {
+            "status_md": "STATUS.md",
+            "claude_md": "CLAUDE.md",
+            "dashboard": "/",
+        },
+    }
+
+
+def _compact_briefing(briefing: dict[str, Any]) -> dict[str, Any]:
+    """Drop fields that aren't actionable for agents to shave tokens further."""
+    compact = dict(briefing)
+    compact.pop("next_reads", None)
+    compact.pop("links", None)
+    if "workspace" in compact and isinstance(compact["workspace"], dict):
+        ws = dict(compact["workspace"])
+        ws.pop("worktrees", None)  # keep count, drop list
+        compact["workspace"] = ws
+    return compact
+
+
+# Registry keyed by resolved ``repo_root`` so multiple repos sharing one
+# Python process (test suite, multi-repo servers) never cross-contaminate.
+_SESSION_BRIEFING_SNAPSHOTS: dict[str, BackgroundSnapshot] = {}
+_SESSION_BRIEFING_SNAPSHOT_LOCK = threading.Lock()
+
+
+def get_or_build_session_briefing(repo_root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Return (briefing, freshness_meta). Uses a background snapshot so
+    the briefing endpoint is always cheap."""
+    key = str(repo_root.resolve())
+    with _SESSION_BRIEFING_SNAPSHOT_LOCK:
+        snap = _SESSION_BRIEFING_SNAPSHOTS.get(key)
+        if snap is None:
+            snap = _register_snapshot(
+                f"briefing_session::{key}",
+                interval_seconds=15.0,
+                builder=lambda: build_session_briefing(repo_root),
+            )
+            # Prime synchronously on the first request so the first caller
+            # sees real data instead of ``freshness_state=refreshing``.
+            snap.refresh_blocking()
+            snap.start()
+            _SESSION_BRIEFING_SNAPSHOTS[key] = snap
+    payload, freshness = snap.get()
+    if payload is None:
+        # Degraded path — build synchronously once.
+        payload = build_session_briefing(repo_root)
+    return payload, freshness
+
+
+# ---- /api/schema ----
+
+
+def build_api_schema() -> dict[str, Any]:
+    """Machine-readable endpoint index. Lets agents discover the API
+    without reading this 1.7K-LOC file."""
+    return {
+        "version": 1,
+        "conventions": {
+            "errors": 'JSON envelope: {"error": "<code>", ...optional context}.',
+            "cache": "Weak ETag returned on cacheable responses; send If-None-Match to get 304.",
+            "compact": "/api/briefing/session supports ?compact=1 to drop non-actionable fields.",
+            "freshness": "Background-refreshed endpoints embed a 'freshness' dict with freshness_state and stale_seconds.",
+        },
+        "endpoints": [
+            {"path": "/", "desc": "HTML dashboard", "content_type": "text/html"},
+            {"path": "/healthz", "desc": "Liveness probe"},
+            {"path": "/api/schema", "desc": "This document"},
+            {
+                "path": "/api/briefing/session",
+                "desc": "Agent cold-start orientation snapshot. First call for fresh agents.",
+                "query": ["compact=1"],
+                "freshness": "background-refreshed every 15s",
+            },
+            {"path": "/api/status/summary", "desc": "Repo status (fast)"},
+            {"path": "/api/missing-modules/status", "desc": "Modules missing from nav/sidebar"},
+            {"path": "/api/runtime/services", "desc": "Runtime services (pids, uptime, ports)"},
+            {"path": "/api/pipeline/v2/status", "desc": "Pipeline v2 queue + per-track"},
+            {
+                "path": "/api/translation/v2/status",
+                "desc": "UK translation queue",
+                "query": ["section=...", "freshness=1 (slow git walk)"],
+            },
+            {"path": "/api/labs/status", "desc": "Labs summary"},
+            {"path": "/api/ztt/status", "desc": "Zero-to-Terminal pilot status"},
+            {"path": "/api/git/worktree", "desc": "Dirty entries in the PRIMARY repo only"},
+            {"path": "/api/git/worktrees", "desc": "All attached worktrees (plural)"},
+            {"path": "/api/issue-watch/{n}", "desc": "Single watched GH issue state"},
+            {"path": "/api/module/{key}/state", "desc": "Per-module EN+UK+lab+frontmatter"},
+            {"path": "/api/module/{key}/orchestration/latest", "desc": "Per-module latest pipeline job+event"},
+            {"path": "/api/cache/stats", "desc": "Response-cache introspection"},
+        ],
+    }
+
+
 def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
     parsed = urlsplit(raw_path)
     path = parsed.path.rstrip("/") or "/"
@@ -1575,8 +2293,10 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
         # Dashboard hot path: skip the git-per-file translation + ZTT passes
         # (~2min total). Full versions served by /api/translation/v2/status
         # and /api/ztt/status.
+        from status import build_repo_status
         return 200, build_repo_status(repo_root, fast=True), "application/json; charset=utf-8"
     if path == "/api/missing-modules/status":
+        from status import _build_missing_modules_summary
         return 200, _build_missing_modules_summary(repo_root), "application/json; charset=utf-8"
     if path == "/api/runtime/services":
         return 200, build_runtime_services_status(repo_root), "application/json; charset=utf-8"
@@ -1584,6 +2304,8 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
         db_path = repo_root / ".pipeline" / "v2.db"
         if not db_path.exists():
             return 404, {"error": "missing_db", "db_path": str(db_path)}, "application/json; charset=utf-8"
+        from pipeline_v2.cli import _build_status_report as build_v2_status_report
+        from status import _enrich_v2_with_per_track
         return 200, _enrich_v2_with_per_track(build_v2_status_report(db_path)), "application/json; charset=utf-8"
     if path == "/api/translation/v2/status":
         section = query.get("section", [None])[0]
@@ -1591,7 +2313,9 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
         # that need it can pass ?freshness=1.
         want_freshness = query.get("freshness", ["0"])[0] not in ("0", "false", "")
         db_path = repo_root / ".pipeline" / "translation_v2.db"
+        from status import _enrich_translation_v2_with_per_track
         if want_freshness:
+            from translation_v2 import build_status as build_translation_status
             t2 = build_translation_status(repo_root, db_path=db_path, section=section)
         else:
             from translation_v2 import _build_translation_queue_status
@@ -1604,11 +2328,27 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
             }
         return 200, _enrich_translation_v2_with_per_track(t2), "application/json; charset=utf-8"
     if path == "/api/labs/status":
+        from status import _build_lab_summary
         return 200, _build_lab_summary(repo_root), "application/json; charset=utf-8"
     if path == "/api/ztt/status":
+        from ztt_status import build_status as build_ztt_status
         return 200, build_ztt_status(repo_root), "application/json; charset=utf-8"
     if path == "/api/git/worktree":
         return 200, build_worktree_status(repo_root), "application/json; charset=utf-8"
+    if path == "/api/git/worktrees":
+        return 200, build_worktrees_list(repo_root), "application/json; charset=utf-8"
+    if path == "/api/schema":
+        return 200, build_api_schema(), "application/json; charset=utf-8"
+    if path == "/api/briefing/session":
+        compact = query.get("compact", ["0"])[0] not in ("0", "false", "")
+        briefing, freshness = get_or_build_session_briefing(repo_root)
+        briefing = dict(briefing)
+        briefing["freshness"] = freshness
+        if compact:
+            briefing = _compact_briefing(briefing)
+        return 200, briefing, "application/json; charset=utf-8"
+    if path == "/api/cache/stats":
+        return 200, _cache_stats(), "application/json; charset=utf-8"
     if path.startswith("/api/issue-watch/"):
         try:
             issue_number = int(path.split("/")[-1])
@@ -1637,11 +2377,104 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
     return 404, {"error": "not_found", "path": path}, "application/json; charset=utf-8"
 
 
+# ============================================================
+# Cache policy + request pipeline
+# ============================================================
+#
+# TTLs are tuned for the dashboard (60s refresh) and agent polling. They are
+# short enough that human interactivity never sees stale state beyond a few
+# seconds, but long enough to absorb thundering-herd polls. sqlite-backed
+# routes add a ``PRAGMA data_version``-based dep check so a write from the
+# pipeline supervisor invalidates the cache immediately.
+
+
+def _v_v2_db(repo_root: Path) -> tuple:
+    return ("v2", _sqlite_version_key(repo_root / ".pipeline" / "v2.db"))
+
+
+def _v_translation_db(repo_root: Path) -> tuple:
+    return ("t2", _sqlite_version_key(repo_root / ".pipeline" / "translation_v2.db"))
+
+
+def _v_always_fresh(_: Path) -> tuple:
+    # Placeholder for TTL-only policies.
+    return ("ttl",)
+
+
+# Map fixed paths (query-independent beyond ``?compact=1``) to policies.
+# (ttl_seconds, version_fn_or_None)
+CACHE_POLICY: dict[str, tuple[float, Callable[[Path], tuple] | None]] = {
+    "/healthz": (60.0, None),
+    "/api/schema": (600.0, None),
+    "/api/status/summary": (10.0, _v_v2_db),
+    "/api/missing-modules/status": (30.0, None),
+    "/api/runtime/services": (2.0, None),
+    "/api/pipeline/v2/status": (5.0, _v_v2_db),
+    "/api/translation/v2/status": (5.0, _v_translation_db),
+    "/api/labs/status": (10.0, None),
+    "/api/ztt/status": (30.0, None),
+    "/api/git/worktree": (2.0, None),
+    "/api/git/worktrees": (5.0, None),
+    "/api/briefing/session": (5.0, None),  # background-refreshed; TTL just caps rebuild rate
+}
+
+
+def _match_etag(if_none_match: str, etag: str) -> bool:
+    """Return True if the client's If-None-Match header matches our ETag.
+
+    Handles comma-separated lists and leading ``W/`` weak marker.
+    """
+    if not if_none_match:
+        return False
+    candidates = [tok.strip() for tok in if_none_match.split(",") if tok.strip()]
+    # Strip W/ prefix on both sides for weak-compare semantics.
+    our = etag[2:] if etag.startswith("W/") else etag
+    for cand in candidates:
+        if cand == "*":
+            return True
+        normalized = cand[2:] if cand.startswith("W/") else cand
+        if normalized == our:
+            return True
+    return False
+
+
+def serve_request(
+    repo_root: Path, raw_path: str
+) -> tuple[int, bytes, str, str]:
+    """Compute ``(status, body_bytes, content_type, etag)`` for ``raw_path``.
+
+    Serves from cache for paths registered in ``CACHE_POLICY``. Builds on miss.
+    ETag is always set from the response bytes so 304 works for every 2xx
+    response, cached or not.
+    """
+    parsed = urlsplit(raw_path)
+    path = parsed.path.rstrip("/") or "/"
+    query = parse_qs(parsed.query)
+
+    policy = CACHE_POLICY.get(path)
+    if policy is not None:
+        ttl, version_fn = policy
+        cache_key = _normalized_cache_key(path, query, repo_root=repo_root)
+
+        def _version() -> tuple:
+            return version_fn(repo_root) if version_fn is not None else ("ttl",)
+
+        def _build() -> tuple[int, Any, str]:
+            return route_request(repo_root, raw_path)
+
+        return cached_response(cache_key, ttl, _version, _build)
+
+    status_code, payload, content_type = route_request(repo_root, raw_path)
+    body_bytes = _serialize_payload(payload, content_type)
+    etag = _weak_etag(body_bytes)
+    return status_code, body_bytes, content_type, etag
+
+
 def make_handler(repo_root: Path) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:  # noqa: N802
             try:
-                status_code, payload, content_type = route_request(repo_root, self.path)
+                status_code, body, content_type, etag = serve_request(repo_root, self.path)
             except sqlite3.Error as exc:
                 status_code = 500
                 payload = {
@@ -1651,6 +2484,8 @@ def make_handler(repo_root: Path) -> type[BaseHTTPRequestHandler]:
                     "path": self.path,
                 }
                 content_type = "application/json; charset=utf-8"
+                body = _serialize_payload(payload, content_type)
+                etag = _weak_etag(body)
             except Exception as exc:  # noqa: BLE001 - surface all read failures as JSON
                 status_code = 500
                 payload = {
@@ -1660,13 +2495,23 @@ def make_handler(repo_root: Path) -> type[BaseHTTPRequestHandler]:
                     "path": self.path,
                 }
                 content_type = "application/json; charset=utf-8"
-            if content_type.startswith("text/html"):
-                body = str(payload).encode("utf-8")
-            else:
-                body = json.dumps(payload, indent=2, sort_keys=True, default=_json_default).encode("utf-8")
+                body = _serialize_payload(payload, content_type)
+                etag = _weak_etag(body)
+
+            if 200 <= status_code < 300:
+                inm = self.headers.get("If-None-Match", "")
+                if _match_etag(inm, etag):
+                    self.send_response(304)
+                    self.send_header("ETag", etag)
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
+
             self.send_response(status_code)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
+            if 200 <= status_code < 300:
+                self.send_header("ETag", etag)
             self.end_headers()
             self.wfile.write(body)
 

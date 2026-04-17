@@ -501,6 +501,478 @@ def test_pid_reuse_helper_handles_missing_process() -> None:
     assert local_api._process_age_seconds(999_999) is None
 
 
+def test_api_schema_advertises_new_endpoints() -> None:
+    schema = local_api.build_api_schema()
+    assert schema["version"] == 1
+    paths = {e["path"] for e in schema["endpoints"]}
+    # Must advertise new endpoints so agents can discover them without
+    # reading this file.
+    assert "/api/briefing/session" in paths
+    assert "/api/schema" in paths
+    assert "/api/git/worktrees" in paths
+    assert "/api/git/worktree" in paths  # singular still there
+    assert "conventions" in schema
+    assert "errors" in schema["conventions"]
+
+
+def test_weak_etag_stable_for_identical_bytes() -> None:
+    a = local_api._weak_etag(b"hello world")
+    b = local_api._weak_etag(b"hello world")
+    c = local_api._weak_etag(b"hello worlds")
+    assert a == b
+    assert a != c
+    assert a.startswith('W/"sha256:')
+
+
+def test_match_etag_handles_list_weak_and_star() -> None:
+    etag = 'W/"sha256:abc123"'
+    assert local_api._match_etag(etag, etag) is True
+    assert local_api._match_etag("*", etag) is True
+    assert local_api._match_etag('W/"sha256:nope"', etag) is False
+    # Strong/weak equivalence for comparison.
+    assert local_api._match_etag('"sha256:abc123"', etag) is True
+    # Comma-separated list.
+    assert local_api._match_etag(f'"other", {etag}, "other2"', etag) is True
+    assert local_api._match_etag("", etag) is False
+
+
+def test_normalized_cache_key_is_order_invariant() -> None:
+    k1 = local_api._normalized_cache_key("/x", {"a": ["1"], "b": ["2"]})
+    k2 = local_api._normalized_cache_key("/x", {"b": ["2"], "a": ["1"]})
+    assert k1 == k2
+    assert local_api._normalized_cache_key("/x", {}) == "/x"
+
+
+def test_sqlite_version_key_changes_on_write(tmp_path: Path) -> None:
+    db_path = tmp_path / "test.db"
+    # Absent DB has an absent sentinel.
+    absent = local_api._sqlite_version_key(db_path)
+    assert absent[0] == "absent"
+    # Create + insert = new version key.
+    conn = sqlite3.connect(db_path)
+    conn.execute("CREATE TABLE t (x INTEGER)")
+    conn.commit()
+    conn.close()
+    v1 = local_api._sqlite_version_key(db_path)
+    conn = sqlite3.connect(db_path)
+    conn.execute("INSERT INTO t VALUES (1)")
+    conn.commit()
+    conn.close()
+    v2 = local_api._sqlite_version_key(db_path)
+    assert v1 != v2
+    assert v1[0] != "absent"
+
+
+def test_cached_response_reuses_entry_until_version_bump(tmp_path: Path) -> None:
+    # Use a unique key so test isolation holds across tests.
+    key = f"/test/cache/{id(tmp_path)}"
+    calls = {"n": 0}
+
+    def builder():
+        calls["n"] += 1
+        return 200, {"hits": calls["n"]}, "application/json; charset=utf-8"
+
+    version_state = {"v": 1}
+
+    def version():
+        return ("v", version_state["v"])
+
+    code_a, body_a, _ct, etag_a = local_api.cached_response(
+        key, ttl_seconds=60, version_fn=version, builder=builder
+    )
+    assert code_a == 200
+    assert calls["n"] == 1
+
+    # Second call within TTL + same version -> cached.
+    code_b, body_b, _ct, etag_b = local_api.cached_response(
+        key, ttl_seconds=60, version_fn=version, builder=builder
+    )
+    assert calls["n"] == 1
+    assert body_b is body_a or body_b == body_a
+    assert etag_b == etag_a
+
+    # Version bump -> rebuild.
+    version_state["v"] = 2
+    code_c, body_c, _ct, etag_c = local_api.cached_response(
+        key, ttl_seconds=60, version_fn=version, builder=builder
+    )
+    assert calls["n"] == 2
+    assert etag_c != etag_a
+
+
+def test_cached_response_does_not_cache_errors(tmp_path: Path) -> None:
+    key = f"/test/errors/{id(tmp_path)}"
+    calls = {"n": 0}
+
+    def builder():
+        calls["n"] += 1
+        return 500, {"error": "boom"}, "application/json; charset=utf-8"
+
+    code, _body, _ct, _etag = local_api.cached_response(
+        key, ttl_seconds=60, version_fn=lambda: ("v",), builder=builder
+    )
+    assert code == 500
+    # Second call should also go through the builder (no poisoning).
+    local_api.cached_response(key, ttl_seconds=60, version_fn=lambda: ("v",), builder=builder)
+    assert calls["n"] == 2
+
+
+def test_build_worktrees_list_returns_primary(tmp_path: Path) -> None:
+    repo_root = tmp_path
+    _init_repo(repo_root)
+    _write(repo_root / "README.md", "hi\n")
+    _git(repo_root, "add", ".")
+    _git(repo_root, "commit", "-m", "initial")
+    result = local_api.build_worktrees_list(repo_root)
+    assert result["ok"] is True
+    assert result["count"] >= 1
+    paths = [w["path"] for w in result["worktrees"]]
+    assert str(repo_root) in paths
+
+
+def test_session_briefing_serves_compact_snapshot(tmp_path: Path) -> None:
+    _setup_repo(tmp_path)
+    # Write a STATUS.md that the briefing will parse.
+    _write(
+        tmp_path / "STATUS.md",
+        "# status\n\n## TODO\n\n- [ ] finish alpha\n- [ ] finish beta\n\n"
+        "## Blockers\n\n- slow CI\n",
+    )
+    briefing = local_api.build_session_briefing(tmp_path)
+    assert set(briefing).issuperset(
+        {"snapshot", "workspace", "services", "pipelines", "focus", "blockers", "next_reads"}
+    )
+    assert briefing["focus"][:2] == ["finish alpha", "finish beta"]
+    assert briefing["blockers"] == ["slow CI"]
+
+    # Compact drops next_reads, links, and the worktrees list.
+    compact = local_api._compact_briefing(briefing)
+    assert "next_reads" not in compact
+    assert "links" not in compact
+    assert "worktrees" not in compact["workspace"]
+    assert compact["workspace"]["worktrees_total"] == briefing["workspace"]["worktrees_total"]
+
+
+def test_serve_request_sets_etag_and_matches_on_replay(tmp_path: Path) -> None:
+    _setup_repo(tmp_path)
+    _write(
+        tmp_path / "STATUS.md",
+        "# status\n\n## TODO\n\n- [ ] task one\n",
+    )
+    code1, body1, _ct1, etag1 = local_api.serve_request(tmp_path, "/api/schema")
+    assert code1 == 200
+    assert etag1.startswith('W/"sha256:')
+    # Replay should return the same bytes + same etag (cache hit).
+    code2, body2, _ct2, etag2 = local_api.serve_request(tmp_path, "/api/schema")
+    assert code2 == 200
+    assert etag2 == etag1
+    assert body1 == body2
+    # And If-None-Match match semantics should accept it.
+    assert local_api._match_etag(etag1, etag2)
+
+
+def test_background_snapshot_exposes_freshness_metadata() -> None:
+    calls = {"n": 0}
+
+    def builder():
+        calls["n"] += 1
+        return {"value": calls["n"]}
+
+    snap = local_api.BackgroundSnapshot(
+        key="test-snap-1",
+        interval_seconds=60.0,
+        builder=builder,
+    )
+    # Before any refresh runs.
+    data, meta = snap.get()
+    assert data is None
+    assert meta["freshness_state"] == "refreshing"
+
+    snap.refresh_blocking()
+    data, meta = snap.get()
+    assert data == {"value": 1}
+    assert meta["freshness_state"] == "fresh"
+    assert meta["refresh_error"] is None
+    assert meta["refresh_duration_ms"] is not None
+    assert meta["refresh_in_flight"] is False
+
+
+def test_sqlite_version_key_detects_wal_only_write(tmp_path: Path) -> None:
+    """Regression: PR #259 round 1 used PRAGMA data_version which is a
+    per-connection counter and therefore unreliable across fresh
+    connections. Version key must change on a WAL-mode write."""
+    db_path = tmp_path / "wal.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("CREATE TABLE t (x INTEGER)")
+    conn.commit()
+    conn.close()
+    local_api._close_all_sqlite_version_connections()
+    v1 = local_api._sqlite_version_key(db_path)
+
+    conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("INSERT INTO t VALUES (42)")
+    conn.commit()
+    conn.close()
+    v2 = local_api._sqlite_version_key(db_path)
+
+    assert v1 != v2, "WAL-mode write must change the version key"
+
+
+def test_sqlite_version_key_detects_same_size_write(tmp_path: Path) -> None:
+    """Codex round-2 blocker: (mtime, size) missed same-size writes.
+    The fix uses PRAGMA data_version on a persistent connection, which
+    increments on every commit regardless of file-level changes.
+
+    Write, then UPDATE a row in place so the file size is unchanged.
+    Without a reliable detector, the version key would collide.
+    """
+    db_path = tmp_path / "same_size.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute("CREATE TABLE t (x INTEGER)")
+    conn.execute("INSERT INTO t VALUES (1)")
+    conn.commit()
+    conn.close()
+    local_api._close_all_sqlite_version_connections()
+    size_before = db_path.stat().st_size
+    v1 = local_api._sqlite_version_key(db_path)
+
+    # In-place update: row count and stored int width are both unchanged.
+    conn = sqlite3.connect(db_path)
+    conn.execute("UPDATE t SET x = 2")
+    conn.commit()
+    conn.close()
+    size_after = db_path.stat().st_size
+    v2 = local_api._sqlite_version_key(db_path)
+
+    # The whole point of this test is the "same size" case; prove it.
+    assert size_before == size_after, (
+        f"test presumption broken: size changed {size_before}->{size_after}"
+    )
+    assert v1 != v2, "in-place UPDATE must change the version key"
+
+
+def test_sqlite_version_key_detects_db_replacement(tmp_path: Path) -> None:
+    """Non-blocking polish from Codex round-3: if the DB file is
+    REPLACED (different inode) rather than modified in place, the
+    cached persistent connection would otherwise keep reporting the
+    old counter until TTL rebuilt the cache. The inode check drops
+    the stale handle so the first call after replacement gives a
+    fresh, correct key.
+    """
+    db_path = tmp_path / "rotated.db"
+    other = tmp_path / "other.db"
+
+    # DB A — one row, version V_a.
+    conn = sqlite3.connect(db_path)
+    conn.execute("CREATE TABLE t (x INTEGER)")
+    conn.execute("INSERT INTO t VALUES (1)")
+    conn.commit()
+    conn.close()
+    local_api._close_all_sqlite_version_connections()
+    v_a = local_api._sqlite_version_key(db_path)
+
+    # DB B — different physical file, then rename over db_path.
+    conn = sqlite3.connect(other)
+    conn.execute("CREATE TABLE t (x INTEGER, y TEXT)")
+    conn.execute("INSERT INTO t VALUES (42, 'b')")
+    conn.execute("INSERT INTO t VALUES (43, 'bb')")
+    conn.commit()
+    conn.close()
+    # Rename replaces the inode at db_path without going through
+    # sqlite's own rewrite path.
+    other.replace(db_path)
+
+    v_b = local_api._sqlite_version_key(db_path)
+    assert v_a != v_b, "DB replacement must change the version key"
+
+
+def test_sqlite_version_key_stable_without_writes(tmp_path: Path) -> None:
+    """Repeated calls with no intervening write must return the same key."""
+    db_path = tmp_path / "stable.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute("CREATE TABLE t (x INTEGER)")
+    conn.execute("INSERT INTO t VALUES (1)")
+    conn.commit()
+    conn.close()
+    local_api._close_all_sqlite_version_connections()
+    v1 = local_api._sqlite_version_key(db_path)
+    v2 = local_api._sqlite_version_key(db_path)
+    v3 = local_api._sqlite_version_key(db_path)
+    assert v1 == v2 == v3
+
+
+def test_cache_keyed_by_repo_root(tmp_path: Path) -> None:
+    """Regression: PR #259 round 1 used process-global caches that
+    ignored repo_root. Two repos hitting the same URL path would share
+    a cache entry.
+    """
+    repo_a = tmp_path / "repo_a"
+    repo_b = tmp_path / "repo_b"
+    repo_a.mkdir()
+    repo_b.mkdir()
+    key_a = local_api._normalized_cache_key("/api/schema", {}, repo_root=repo_a)
+    key_b = local_api._normalized_cache_key("/api/schema", {}, repo_root=repo_b)
+    assert key_a != key_b
+    # With no repo_root the key falls back to path only (backward-compat).
+    assert local_api._normalized_cache_key("/api/schema", {}) == "/api/schema"
+
+
+def test_status_md_cache_isolates_per_path(tmp_path: Path) -> None:
+    """Regression: STATUS.md cache was process-global, one entry.
+    Different repos' STATUS.md files must resolve independently.
+    """
+    status_a = tmp_path / "a" / "STATUS.md"
+    status_b = tmp_path / "b" / "STATUS.md"
+    status_a.parent.mkdir()
+    status_b.parent.mkdir()
+    status_a.write_text(
+        "# a\n\n## TODO\n\n- [ ] task from A\n", encoding="utf-8"
+    )
+    status_b.write_text(
+        "# b\n\n## TODO\n\n- [ ] task from B\n", encoding="utf-8"
+    )
+    data_a = local_api._parse_status_md(status_a)
+    data_b = local_api._parse_status_md(status_b)
+    assert data_a["focus"] == ["task from A"]
+    assert data_b["focus"] == ["task from B"]
+
+
+def test_background_snapshot_serializes_concurrent_builds() -> None:
+    """Regression: the "single in-flight" guarantee required a build
+    lock. refresh_blocking() called from one thread while the daemon
+    thread also tries to refresh must not produce overlapping builders.
+
+    Deterministic — no sleeps. An instrumented build lock signals when
+    the second caller reaches lock contention, so the test proves that
+    B actually attempted entry before A released (not just that B
+    happened not to finish first).
+    """
+    import threading
+
+    class _InstrumentedLock:
+        """Substitute for ``BackgroundSnapshot._build_lock`` that records
+        a ``waiter_entered`` event the second time ``acquire`` is called
+        while the lock is held, so the test can synchronize on ``B is
+        now waiting`` without sleeping."""
+
+        def __init__(self) -> None:
+            self._inner = threading.Lock()
+            self.waiter_entered = threading.Event()
+            self._acquire_attempts = 0
+            self._counter_lock = threading.Lock()
+
+        def acquire(self, timeout: float = -1.0) -> bool:
+            with self._counter_lock:
+                self._acquire_attempts += 1
+                attempt = self._acquire_attempts
+            if attempt >= 2 and self._inner.locked():
+                # Signal BEFORE the blocking acquire so the driver can
+                # release A after confirming B has reached contention.
+                self.waiter_entered.set()
+            if timeout < 0:
+                self._inner.acquire()
+                return True
+            return self._inner.acquire(timeout=timeout)
+
+        def release(self) -> None:
+            self._inner.release()
+
+    running_now = {"n": 0}
+    max_concurrent = {"n": 0}
+    release_builder = threading.Event()
+    in_builder = threading.Event()
+    counter_lock = threading.Lock()
+
+    def slow_builder():
+        with counter_lock:
+            running_now["n"] += 1
+            max_concurrent["n"] = max(max_concurrent["n"], running_now["n"])
+        in_builder.set()
+        # Park inside the builder until the test explicitly releases.
+        release_builder.wait(timeout=5.0)
+        with counter_lock:
+            running_now["n"] -= 1
+        return {"ok": True}
+
+    snap = local_api.BackgroundSnapshot(
+        key="concurrency-test",
+        interval_seconds=60.0,
+        builder=slow_builder,
+    )
+    instrumented = _InstrumentedLock()
+    snap._build_lock = instrumented  # type: ignore[assignment]
+
+    # Thread A enters the builder and parks there.
+    t_a = threading.Thread(target=snap.refresh_blocking)
+    t_a.start()
+    assert in_builder.wait(timeout=3.0), "builder A never entered"
+
+    # Thread B also attempts to acquire the build lock. It must block.
+    t_b = threading.Thread(target=snap.refresh_blocking)
+    t_b.start()
+    assert instrumented.waiter_entered.wait(timeout=3.0), (
+        "B did not reach lock contention before A released — test invalid"
+    )
+
+    # Release A; B proceeds into the builder sequentially.
+    release_builder.set()
+    t_a.join(timeout=3.0)
+    t_b.join(timeout=3.0)
+    assert not t_a.is_alive() and not t_b.is_alive()
+    assert max_concurrent["n"] == 1, "two builders ran concurrently"
+
+
+def test_refresh_blocking_honors_timeout() -> None:
+    """refresh_blocking(timeout=...) must return False if the build
+    lock cannot be acquired before the timeout elapses."""
+    import threading
+
+    release = threading.Event()
+    in_builder = threading.Event()
+
+    def slow_builder():
+        in_builder.set()
+        release.wait(timeout=3.0)
+        return {"ok": True}
+
+    snap = local_api.BackgroundSnapshot(
+        key="timeout-test",
+        interval_seconds=60.0,
+        builder=slow_builder,
+    )
+    # Thread A holds the build lock.
+    t_a = threading.Thread(target=snap.refresh_blocking)
+    t_a.start()
+    assert in_builder.wait(timeout=3.0)
+
+    # Caller B asks with a small timeout. Lock is held; return False fast.
+    ok = snap.refresh_blocking(timeout=0.05)
+    assert ok is False, "timeout path must return False"
+
+    release.set()
+    t_a.join(timeout=3.0)
+    # Once A releases, a follow-up call succeeds.
+    assert snap.refresh_blocking(timeout=3.0) is True
+
+
+def test_background_snapshot_reports_degraded_on_builder_error() -> None:
+    def builder():
+        raise RuntimeError("boom")
+
+    snap = local_api.BackgroundSnapshot(
+        key="test-snap-2",
+        interval_seconds=60.0,
+        builder=builder,
+    )
+    snap.refresh_blocking()
+    data, meta = snap.get()
+    assert data is None
+    assert meta["freshness_state"] == "degraded"
+    assert "RuntimeError: boom" in (meta["refresh_error"] or "")
+
+
 def test_cli_starts_server_and_reports_host_port(tmp_path: Path) -> None:
     repo_root = tmp_path
     _init_repo(repo_root)
