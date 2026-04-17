@@ -654,12 +654,84 @@ def build_worktrees_list(repo_root: Path) -> dict[str, Any]:
     if current is not None:
         worktrees.append(current)
 
+    # Enrich each entry with a dirty-counts summary. This is the
+    # signal operators actually want ("which worktree is lively?")
+    # and without it agents had to shell into every worktree.
+    #
+    # ``dirty`` is tri-state: True/False when counts were obtained,
+    # ``None`` when we couldn't read the worktree (missing path,
+    # permission error, prunable ref). "unknown" and "clean" are
+    # materially different; a False here would be a false negative.
+    for wt in worktrees:
+        wt_path = Path(wt["path"])
+        counts = _worktree_dirty_counts(wt_path) if wt_path.exists() else None
+        wt["counts"] = counts
+        if counts is None:
+            wt["dirty"] = None
+        else:
+            wt["dirty"] = bool(counts.get("total", 0))
+
     primary_path = str(repo_root)
     return {
         "ok": True,
         "primary": primary_path,
         "count": len(worktrees),
         "worktrees": worktrees,
+    }
+
+
+def _worktree_dirty_counts(worktree_path: Path) -> dict[str, Any] | None:
+    """Run ``git status --porcelain=v1`` inside ``worktree_path`` and
+    return a summary of counts. Returns ``None`` on failure so callers
+    can distinguish "unknown" from "clean".
+
+    ``total`` counts each PATH once (matching the primary-worktree
+    ``build_worktree_status`` semantics), so a file that is both
+    staged and unstaged adds 1, not 2. ``staged`` / ``unstaged`` /
+    ``untracked`` remain per-status counts for operators who want
+    breakdowns — those may overlap.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain=v1"],
+            cwd=worktree_path,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    staged = unstaged = untracked = conflicted = 0
+    total_paths = 0
+    for line in result.stdout.splitlines():
+        if not line:
+            continue
+        total_paths += 1
+        if line.startswith("?? "):
+            untracked += 1
+            continue
+        idx = line[0] if line else " "
+        wt = line[1] if len(line) > 1 else " "
+        if idx == "U" or wt == "U":
+            conflicted += 1
+        if idx not in (" ", "?"):
+            staged += 1
+        if wt not in (" ", "?"):
+            unstaged += 1
+    return {
+        # ``total`` is unique-path count (matches primary-worktree
+        # ``build_worktree_status``). staged/unstaged/untracked are
+        # per-status counts and may overlap — a file with both a
+        # staged and an unstaged change is in both sub-counts but
+        # contributes 1 to total.
+        "total": total_paths,
+        "staged": staged,
+        "unstaged": unstaged,
+        "untracked": untracked,
+        "conflicted": conflicted,
     }
 
 
@@ -745,7 +817,49 @@ def build_module_state(repo_root: Path, module_key: str) -> dict[str, Any]:
             "state": lab_state,
         },
     }
+
+    # Fold orchestration + lease inline so "why is X blocked" is one
+    # call (the /api/module/{key}/orchestration/latest and /lease
+    # endpoints remain for back-compat and for callers who only want
+    # that slice).
+    state["orchestration"] = build_module_orchestration_latest(repo_root, normalized)
+    state["lease"] = build_module_lease(repo_root, normalized)
+
     state["diagnostics"] = build_module_diagnostics(repo_root, normalized, state)
+
+    # Add orchestration-derived diagnostics. We do this AFTER the
+    # base diagnostics so pipeline signals append rather than
+    # duplicate what ``build_module_diagnostics`` already produced.
+    latest_job = (state["orchestration"].get("v2") or {}).get("latest_job") or {}
+    queue_state = latest_job.get("queue_state")
+    if queue_state == "rejected":
+        state["diagnostics"].append(_diag(
+            severity="critical",
+            code="pipeline_rejected",
+            summary="Pipeline v2 rejected the last run",
+            source="pipeline_v2.jobs",
+            next_action=f"GET /api/pipeline/v2/events?module={normalized}",
+        ))
+    elif queue_state == "dead_letter":
+        state["diagnostics"].append(_diag(
+            severity="critical",
+            code="pipeline_dead_letter",
+            summary="Module is in pipeline dead-letter",
+            source="pipeline_v2.jobs",
+            next_action=f"GET /api/pipeline/v2/events?module={normalized}",
+        ))
+    if state["lease"].get("held"):
+        lease_info = state["lease"].get("lease") or {}
+        leased_by = lease_info.get("leased_by", "unknown")
+        secs = lease_info.get("seconds_to_expiry")
+        state["diagnostics"].append(_diag(
+            severity="info",
+            code="lease_held",
+            summary=f"Leased by {leased_by} ({secs}s to expiry)" if secs else f"Leased by {leased_by}",
+            source="pipeline_v2.jobs",
+            next_action="wait for lease to release before claiming work",
+        ))
+
     return state
 
 
@@ -942,21 +1056,33 @@ def build_pipeline_stuck(
     threshold_seconds: int = _DEFAULT_STUCK_THRESHOLD_SECONDS,
     now_seconds: int | None = None,
 ) -> dict[str, Any]:
-    """Dead-letter view — jobs stuck at a phase longer than ``threshold_seconds``.
+    """Stuck/dead-letter view of pipeline v2.
 
-    Two signals are surfaced:
+    Three signals are surfaced:
 
     - ``stuck_leased``: jobs whose lease has expired OR whose
       ``leased_at`` is older than the threshold.
     - ``stuck_in_state``: jobs in an in-flight ``queue_state`` with no
       recent event *for the current attempt*. Events are correlated
       to the job's current ``lease_id`` — a recent event from an
-      earlier lease for the same module must not mask a hung current
-      lease.
+      earlier lease for the same module must not mask a hung
+      current lease.
+    - ``dead_lettered``: modules with a ``module_dead_lettered``
+      event that has not been superseded by a later
+      ``dead_letter_recovered`` event. These are modules the
+      pipeline explicitly gave up on and need human triage or
+      ``pipeline_v2 recover-dead-letters`` before they will make
+      progress.
     """
     db_path = repo_root / ".pipeline" / "v2.db"
     if not db_path.exists():
-        return {"db_path": str(db_path), "exists": False, "stuck_leased": [], "stuck_in_state": []}
+        return {
+            "db_path": str(db_path),
+            "exists": False,
+            "stuck_leased": [],
+            "stuck_in_state": [],
+            "dead_lettered": [],
+        }
 
     now_seconds = now_seconds if now_seconds is not None else int(time.time())
     cutoff = now_seconds - threshold_seconds
@@ -1006,6 +1132,42 @@ def build_pipeline_stuck(
         if (row.get("last_event_at") or 0) < cutoff
     ]
 
+    # Dead-lettered modules. We defer to ``pipeline_v2.cli.
+    # _current_dead_letter_rows`` for the reducer so this endpoint
+    # agrees with the pipeline's own needs_human_count. That helper
+    # sorts by ``(at, id)`` and compares recovery-event order against
+    # dead-letter-event order, so out-of-order ``at`` timestamps or
+    # ``(id)`` vs ``(at)`` skew don't cause this endpoint to
+    # disagree with the source of truth.
+    dead_events = _query_sqlite_rows(
+        db_path,
+        """
+        SELECT id, module_key, type, payload_json, at
+        FROM events
+        WHERE type IN (
+            'module_dead_lettered',
+            'needs_human_intervention',
+            'dead_letter_recovered'
+        )
+        """,
+    )
+    # Only swallow the "pipeline_v2 not installed at all" case,
+    # narrowed by ``exc.name`` so a transitive import failure inside
+    # pipeline_v2.cli (broken install, missing dep) doesn't silently
+    # degrade to ``dead_lettered = []`` and hide modules that need
+    # human triage. A renamed/removed ``_current_dead_letter_rows``
+    # raises ImportError (not ModuleNotFoundError) and propagates.
+    _current_dead_letter_rows = None
+    try:
+        from pipeline_v2.cli import _current_dead_letter_rows
+    except ModuleNotFoundError as exc:
+        if exc.name not in {"pipeline_v2", "pipeline_v2.cli"}:
+            raise
+    if _current_dead_letter_rows is not None and dead_events:
+        dead_lettered = _current_dead_letter_rows(dead_events)
+    else:
+        dead_lettered = []
+
     return {
         "db_path": str(db_path),
         "exists": True,
@@ -1015,6 +1177,8 @@ def build_pipeline_stuck(
         "stuck_leased": stuck_leased,
         "stuck_in_state_count": len(stuck_in_state),
         "stuck_in_state": stuck_in_state,
+        "dead_lettered_count": len(dead_lettered),
+        "dead_lettered": dead_lettered,
     }
 
 
@@ -1308,65 +1472,135 @@ def build_quality_scores(repo_root: Path) -> dict[str, Any]:
 # ---- module diagnostics ----
 
 
+def _diag(
+    severity: str,
+    code: str,
+    summary: str,
+    source: str,
+    next_action: str | None = None,
+) -> dict[str, Any]:
+    """Build a structured diagnostic entry.
+
+    Shape per Codex round-5 review: ``severity`` (info|warn|critical),
+    ``code`` (stable string agents can switch on), ``summary`` (human-
+    readable one-liner), ``source`` (which subsystem flagged it), and
+    ``next_action`` (suggested drill-down command or endpoint). The
+    dict shape is richer than a plain string tag and lets agents both
+    triage and act without a second lookup.
+    """
+    entry: dict[str, Any] = {
+        "severity": severity,
+        "code": code,
+        "summary": summary,
+        "source": source,
+    }
+    if next_action is not None:
+        entry["next_action"] = next_action
+    return entry
+
+
 def build_module_diagnostics(
     repo_root: Path,
     module_key: str,
     base_state: dict[str, Any],
-) -> list[str]:
-    """Compute a short list of actionable diagnostic tags for a module.
+) -> list[dict[str, Any]]:
+    """Actionable diagnostics for a module.
 
-    These are cheap signals that let an agent skip a discovery round:
-    if the module already has ``i18n_parity_fail`` set, there's no
-    need to re-check what's broken.
+    Each entry is a dict ``{severity, code, summary, source, next_action?}``
+    so agents can triage by severity, switch on the stable ``code``, and
+    follow ``next_action`` without guessing where to look next.
     """
-    tags: list[str] = []
+    diagnostics: list[dict[str, Any]] = []
+
     if not base_state.get("english_exists"):
-        tags.append("english_missing")
-        return tags  # Without EN content the rest is moot.
+        diagnostics.append(_diag(
+            severity="critical",
+            code="english_missing",
+            summary="Module path has no EN source file",
+            source="filesystem",
+            next_action="git log -- src/content/docs/<module>",
+        ))
+        return diagnostics
 
     frontmatter = base_state.get("frontmatter") or {}
     if not isinstance(frontmatter, dict) or not frontmatter:
-        tags.append("frontmatter_missing")
-    else:
-        if not frontmatter.get("title"):
-            tags.append("frontmatter_no_title")
+        diagnostics.append(_diag(
+            severity="warn",
+            code="frontmatter_missing",
+            summary="EN file parses with empty/invalid frontmatter",
+            source="frontmatter",
+            next_action="read the first ~10 lines of english_path",
+        ))
+    elif not frontmatter.get("title"):
+        diagnostics.append(_diag(
+            severity="warn",
+            code="frontmatter_no_title",
+            summary="Frontmatter is missing a `title:` key",
+            source="frontmatter",
+            next_action="read the first ~10 lines of english_path",
+        ))
 
     lab = base_state.get("lab") or {}
     if not lab.get("lab_id"):
-        tags.append("no_lab")
+        diagnostics.append(_diag(
+            severity="info",
+            code="no_lab",
+            summary="Module has no killercoda/lab attached",
+            source="frontmatter.lab",
+            next_action="GET /api/labs/status",
+        ))
 
     fact = base_state.get("fact_ledger") or {}
     if not fact.get("exists"):
-        tags.append("no_fact_ledger")
+        diagnostics.append(_diag(
+            severity="info",
+            code="no_fact_ledger",
+            summary="Module has no .pipeline/fact-ledgers/ entry yet",
+            source="pipeline_v2",
+            next_action="pipeline enqueue — scripts/pipeline_v2 CLI",
+        ))
 
     if not base_state.get("ukrainian_exists"):
-        tags.append("uk_translation_missing")
+        diagnostics.append(_diag(
+            severity="info",
+            code="uk_translation_missing",
+            summary="No Ukrainian translation present",
+            source="filesystem",
+            next_action="GET /api/translation/v2/status",
+        ))
     else:
         uk_state = base_state.get("ukrainian_state") or {}
-        # ``detect_module_state`` returns dict-like structures; flag any
-        # non-happy state so agents can drill in. ``synced`` is the
-        # happy path in translation_v2.
         if isinstance(uk_state, dict):
             status = uk_state.get("status") or uk_state.get("state")
             happy = {"ok", "current", "fresh", "synced"}
             if status and status not in happy:
-                tags.append(f"uk_state:{status}")
+                diagnostics.append(_diag(
+                    severity="warn",
+                    code=f"uk_state_{status}",
+                    summary=f"Ukrainian translation state: {status}",
+                    source="translation_v2",
+                    next_action=f"GET /api/translation/v2/status (filter for {status})",
+                ))
 
     # Rubric severity from docs/quality-audit-results.md.
     try:
         quality = build_quality_scores(repo_root)
     except Exception:  # noqa: BLE001
         quality = {"modules": []}
-    # Map module path (e.g. "k8s/cka/part2-workloads-scheduling/
-    # module-2.8-scheduler-lifecycle-theory") to audit labels like
-    # "CKA 2.8: Scheduler Lifecycle Theory" using (track, number)
-    # extracted from the path. Substring matching alone fails because
-    # the audit uses human-readable names, not slugs.
     sev = _rubric_severity_for_module(module_key, quality.get("modules", []))
     if sev in ("critical", "poor"):
-        tags.append(f"rubric_{sev}")
+        diagnostics.append(_diag(
+            severity="critical" if sev == "critical" else "warn",
+            code=f"rubric_{sev}",
+            summary=f"Rubric score marks this module as {sev}",
+            source="docs/quality-audit-results.md",
+            next_action="GET /api/quality/scores",
+        ))
 
-    return tags
+    # Orchestration-driven diagnostics (pipeline stuck / dead-letter)
+    # are attached by ``build_module_state`` after orchestration data
+    # is fetched, so we don't duplicate the sqlite round-trip here.
+    return diagnostics
 
 
 _MODULE_NUMBER_RE = re.compile(r"module-([0-9]+(?:\.[0-9]+)*)")
@@ -2922,7 +3156,20 @@ def _recent_commits(repo_root: Path, limit: int = 5) -> list[dict[str, Any]]:
 
 
 def _pipeline_summary_safe(repo_root: Path) -> dict[str, Any] | None:
-    """Return pipeline v2 summary. None if DB absent; error dict if broken."""
+    """Return pipeline v2 summary. None if DB absent; error dict if broken.
+
+    Shape map from ``pipeline_v2.cli._build_status_report``:
+      - ``counts``: {pending_review, pending_write, pending_patch,
+                     in_progress, dead_letter, done}
+      - ``needs_human_count``: dead-letter count after resolution
+      - ``total_modules``, ``convergence_rate``, ``flapping_count``
+
+    ``queue_head`` collapses those into actionable buckets callers can
+    promote into briefing actions:
+      - ``ready`` = pending_review + pending_write + pending_patch
+      - ``in_progress`` = ``counts.in_progress``
+      - ``dead_letter`` = ``counts.dead_letter`` (a.k.a. needs-human)
+    """
     db_path = repo_root / ".pipeline" / "v2.db"
     if not db_path.exists():
         return None
@@ -2931,12 +3178,27 @@ def _pipeline_summary_safe(repo_root: Path) -> dict[str, Any] | None:
         report = build_v2_status_report(db_path)
     except Exception as exc:  # noqa: BLE001
         return {"error": f"{type(exc).__name__}: {exc}"}
-    # Keep compact — only head counts, not per-module listings.
-    summary = report.get("summary") if isinstance(report, dict) else None
-    queue = report.get("queue") if isinstance(report, dict) else None
+    if not isinstance(report, dict):
+        return {"error": "non_dict_report"}
+
+    counts = report.get("counts") or {}
+    ready = sum(
+        int(counts.get(k, 0))
+        for k in ("pending_review", "pending_write", "pending_patch")
+    )
+    queue_head = {
+        "ready": ready,
+        "in_progress": int(counts.get("in_progress", 0)),
+        "dead_letter": int(counts.get("dead_letter", 0)),
+    }
+    # Briefing is a cold-start hot path; keep the payload compact.
+    # Full ``counts`` / ``convergence_rate`` live on
+    # /api/pipeline/v2/status; here we expose only the actionable
+    # summary an agent needs before deciding what to do.
     return {
-        "summary": summary,
-        "queue_head": {k: v for k, v in (queue or {}).items() if k in ("in_flight", "ready", "blocked", "rejected")},
+        "total_modules": report.get("total_modules"),
+        "needs_human_count": report.get("needs_human_count"),
+        "queue_head": queue_head,
     }
 
 
@@ -2969,10 +3231,15 @@ def build_session_briefing(repo_root: Path) -> dict[str, Any]:
     if isinstance(stuck, dict) and stuck.get("exists"):
         leased = stuck.get("stuck_leased_count", 0)
         in_state = stuck.get("stuck_in_state_count", 0)
+        dead_letter_stuck = stuck.get("dead_lettered_count", 0)
         if leased:
             alerts.append(f"{leased} job(s) with expired/stale lease — worker may have crashed")
         if in_state:
             alerts.append(f"{in_state} job(s) stuck in-flight with no recent event")
+        if dead_letter_stuck:
+            alerts.append(
+                f"{dead_letter_stuck} module(s) dead-lettered (unresolved) — need human triage"
+            )
 
     try:
         quality = build_quality_scores(repo_root)
@@ -2988,6 +3255,104 @@ def build_session_briefing(repo_root: Path) -> dict[str, Any]:
             f"{m['module']} [{m['track']}] score {m['score']}"
             for m in (quality.get("critical") or [])[:5]
         ]
+
+    # Action-oriented triage lists. Agents ask "what should I touch"
+    # not "what's the global state"; the lists below answer that in
+    # the same call as the briefing.
+    #
+    # ``active``  — what is CURRENTLY owned / in flight. Read-only from
+    #               a deciding-agent's view; you don't grab these.
+    # ``blocked`` — things the pipeline can't make progress on without
+    #               a human or a re-enqueue.
+    # ``next``    — things ready to pick up right now.
+    #
+    # Every row that names a module is mirrored in ``top_modules[]``
+    # with a reason + drill-down endpoint.
+    actions_active: list[str] = []
+    actions_blocked: list[str] = []
+    actions_next: list[str] = []
+    top_modules: list[dict[str, Any]] = []
+
+    try:
+        leases = build_pipeline_leases(repo_root)
+    except Exception:  # noqa: BLE001
+        leases = None
+    if isinstance(leases, dict) and leases.get("exists"):
+        for lease in (leases.get("active") or [])[:5]:
+            secs = lease.get("seconds_to_expiry")
+            actions_active.append(
+                f"{lease.get('leased_by','?')} → {lease.get('module_key','?')} "
+                f"({lease.get('phase','?')}, {secs}s left)"
+            )
+            top_modules.append({
+                "module_key": lease.get("module_key"),
+                "phase": lease.get("phase"),
+                "reason": "active_lease",
+                "endpoint": f"/api/module/{lease.get('module_key')}/state",
+            })
+
+    if isinstance(stuck, dict) and stuck.get("exists"):
+        for job in (stuck.get("stuck_leased") or [])[:5]:
+            actions_blocked.append(
+                f"{job.get('module_key','?')} stale lease "
+                f"(held by {job.get('leased_by','?')})"
+            )
+            top_modules.append({
+                "module_key": job.get("module_key"),
+                "phase": job.get("phase"),
+                "reason": "stale_lease",
+                "endpoint": f"/api/pipeline/v2/events?module={job.get('module_key')}",
+            })
+        for job in (stuck.get("stuck_in_state") or [])[:5]:
+            actions_blocked.append(
+                f"{job.get('module_key','?')} stuck in {job.get('queue_state','?')}"
+            )
+            top_modules.append({
+                "module_key": job.get("module_key"),
+                "phase": job.get("phase"),
+                "reason": "stuck_in_state",
+                "endpoint": f"/api/pipeline/v2/events?module={job.get('module_key')}",
+            })
+
+    if isinstance(quality, dict) and quality.get("exists"):
+        for m in (quality.get("critical") or [])[:5]:
+            actions_next.append(
+                f"rubric-critical rewrite: {m.get('module','?')} "
+                f"({m.get('track','?')}) score {m.get('score','?')}"
+            )
+            # Rubric rows don't carry a real ``module_key`` (the
+            # audit uses human-readable labels), so we store the
+            # label itself as the key and point at /api/quality/
+            # scores for drill-down. Agents can cross-reference.
+            top_modules.append({
+                "module_key": m.get("module"),
+                "phase": None,
+                "reason": "critical_quality",
+                "endpoint": "/api/quality/scores",
+            })
+
+    if isinstance(pipeline, dict) and pipeline.get("queue_head"):
+        queue_head = pipeline["queue_head"] or {}
+        ready = int(queue_head.get("ready") or 0)
+        if ready:
+            actions_next.append(f"{ready} job(s) ready to pick up in pipeline v2")
+            top_modules.append({
+                "module_key": None,
+                "phase": None,
+                "reason": "ready_queue",
+                "endpoint": "/api/pipeline/v2/status",
+            })
+        dead_letter = int(queue_head.get("dead_letter") or 0)
+        if dead_letter:
+            actions_blocked.append(
+                f"{dead_letter} job(s) in dead-letter — needs human or re-enqueue"
+            )
+            top_modules.append({
+                "module_key": None,
+                "phase": None,
+                "reason": "pipeline_dead_letter",
+                "endpoint": "/api/pipeline/v2/stuck",
+            })
 
     return {
         "snapshot": {
@@ -3023,6 +3388,15 @@ def build_session_briefing(repo_root: Path) -> dict[str, Any]:
         "blockers": status_md.get("blockers", []),
         "alerts": alerts,
         "critical_quality": critical_quality,
+        "actions": {
+            # ``active`` — currently owned / in flight (read-only).
+            # ``blocked`` — needs human or re-enqueue.
+            # ``next`` — ready to pick up.
+            "active": actions_active,
+            "blocked": actions_blocked,
+            "next": actions_next,
+        },
+        "top_modules": top_modules,
         "next_reads": [
             {"rel": "schema", "endpoint": "/api/schema", "desc": "Full endpoint index"},
             {"rel": "status", "endpoint": "/api/status/summary", "desc": "Full repo status"},
@@ -3042,13 +3416,18 @@ def build_session_briefing(repo_root: Path) -> dict[str, Any]:
 
 
 def _compact_briefing(briefing: dict[str, Any]) -> dict[str, Any]:
-    """Drop fields that aren't actionable for agents to shave tokens further."""
+    """Drop fields that aren't actionable for agents to shave tokens further.
+
+    Keeps ``actions`` and ``top_modules`` — those are THE actionable
+    fields — and drops navigation aids (``next_reads``, ``links``) and
+    the full worktrees list (``worktrees_total`` is enough).
+    """
     compact = dict(briefing)
     compact.pop("next_reads", None)
     compact.pop("links", None)
     if "workspace" in compact and isinstance(compact["workspace"], dict):
         ws = dict(compact["workspace"])
-        ws.pop("worktrees", None)  # keep count, drop list
+        ws.pop("worktrees", None)
         compact["workspace"] = ws
     return compact
 

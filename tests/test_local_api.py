@@ -1104,6 +1104,156 @@ def test_pipeline_stuck_catches_expired_and_silent_jobs_in_seconds(tmp_path: Pat
     assert "fresh/one" not in stuck_in_state_keys
 
 
+def test_pipeline_stuck_surfaces_unresolved_dead_letters(tmp_path: Path) -> None:
+    """Codex round-3 bug: briefing's ``pipeline_dead_letter`` reason
+    in top_modules pointed at /api/pipeline/v2/stuck, but that
+    endpoint only returned stuck_leased + stuck_in_state. The drill-
+    down was half-wired. Now /api/pipeline/v2/stuck also returns a
+    ``dead_lettered`` section derived from events."""
+    _setup_repo(tmp_path)
+    conn = sqlite3.connect(tmp_path / ".pipeline/v2.db")
+    # Unresolved dead-letter: module_dead_lettered with no recovery.
+    conn.execute(
+        "INSERT INTO events (module_key, type, payload_json, at) VALUES (?, ?, ?, ?)",
+        ("still/dead", "module_dead_lettered", '{"reason":"quality"}', 1),
+    )
+    # Resolved: dead-lettered then recovered — must NOT appear.
+    conn.execute(
+        "INSERT INTO events (module_key, type, payload_json, at) VALUES (?, ?, ?, ?)",
+        ("was/dead", "module_dead_lettered", "{}", 2),
+    )
+    conn.execute(
+        "INSERT INTO events (module_key, type, payload_json, at) VALUES (?, ?, ?, ?)",
+        ("was/dead", "dead_letter_recovered", "{}", 3),
+    )
+    conn.commit()
+    conn.close()
+    r = local_api.build_pipeline_stuck(tmp_path, threshold_seconds=60, now_seconds=100)
+    dead_keys = {row["module_key"] for row in r["dead_lettered"]}
+    assert "still/dead" in dead_keys
+    assert "was/dead" not in dead_keys
+    assert r["dead_lettered_count"] == len(r["dead_lettered"])
+
+
+def test_pipeline_stuck_reraises_unrelated_module_not_found(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Codex round-6 bug: ``except ModuleNotFoundError`` also caught
+    transitive missing-import errors from inside pipeline_v2.cli
+    (broken install, missing dep). A dead-letter endpoint that
+    quietly returns ``[]`` on a broken install would hide modules
+    needing human triage. Narrowed by ``exc.name`` so only
+    "pipeline_v2[.cli] not installed" is tolerated; everything else
+    must propagate."""
+    _setup_repo(tmp_path)
+    # Plant a real dead-letter event so the import branch is reached.
+    conn = sqlite3.connect(tmp_path / ".pipeline/v2.db")
+    conn.execute(
+        "INSERT INTO events (module_key, type, payload_json, at) VALUES (?, ?, ?, ?)",
+        ("dead/one", "module_dead_lettered", "{}", 1),
+    )
+    conn.commit()
+    conn.close()
+
+    import builtins as _builtins
+    real_import = _builtins.__import__
+
+    def _broken_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "pipeline_v2.cli" or (name == "pipeline_v2" and fromlist and "cli" in fromlist):
+            raise ModuleNotFoundError(
+                "No module named 'some_unrelated_dep'",
+                name="some_unrelated_dep",
+            )
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(_builtins, "__import__", _broken_import)
+
+    import pytest as _pytest
+    with _pytest.raises(ModuleNotFoundError) as exc_info:
+        local_api.build_pipeline_stuck(tmp_path, threshold_seconds=60, now_seconds=100)
+    assert exc_info.value.name == "some_unrelated_dep"
+
+
+def test_pipeline_stuck_tolerates_missing_pipeline_v2(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """The flip side of the narrowing: when pipeline_v2 itself is
+    genuinely not installed, the endpoint still returns gracefully
+    with an empty dead-letter list (the rest of the stuck payload is
+    unaffected)."""
+    _setup_repo(tmp_path)
+    conn = sqlite3.connect(tmp_path / ".pipeline/v2.db")
+    conn.execute(
+        "INSERT INTO events (module_key, type, payload_json, at) VALUES (?, ?, ?, ?)",
+        ("dead/two", "module_dead_lettered", "{}", 1),
+    )
+    conn.commit()
+    conn.close()
+
+    import builtins as _builtins
+    import sys
+    real_import = _builtins.__import__
+
+    def _missing_top_level(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "pipeline_v2.cli" or (name == "pipeline_v2" and fromlist and "cli" in fromlist):
+            raise ModuleNotFoundError(
+                "No module named 'pipeline_v2'",
+                name="pipeline_v2",
+            )
+        return real_import(name, globals, locals, fromlist, level)
+
+    # Remove any cached import so the __import__ hook is actually hit.
+    for k in list(sys.modules):
+        if k.startswith("pipeline_v2"):
+            monkeypatch.delitem(sys.modules, k, raising=False)
+    monkeypatch.setattr(_builtins, "__import__", _missing_top_level)
+
+    r = local_api.build_pipeline_stuck(tmp_path, threshold_seconds=60, now_seconds=100)
+    assert r["dead_lettered"] == []
+    assert r["dead_lettered_count"] == 0
+    assert r["exists"] is True  # rest of the endpoint still works
+
+
+def test_pipeline_stuck_dead_letter_honors_at_timestamp_not_just_id(
+    tmp_path: Path,
+) -> None:
+    """Codex round-4 bug: the reducer walked events in id-ASC order
+    (sqlite default). If events are inserted with out-of-order ``at``
+    timestamps (backfill, clock drift, multi-writer skew), a later-
+    id-but-earlier-at dead-letter could be wrongly cancelled by an
+    earlier-id-but-later-at recovery. Source of truth in
+    pipeline_v2.cli._current_dead_letter_rows sorts by (at, id); this
+    endpoint must agree.
+
+    Scenario: module was recovered at at=1 (id=1) then dead-lettered
+    AGAIN at at=10 (id=2). id-ordered walk would see recovery first,
+    then dead-letter → unresolved (correct). But the reverse order
+    (id=1 dead-letter at=10, id=2 recovery at=1) should NOT cancel
+    the dead-letter because the recovery is chronologically earlier.
+    """
+    _setup_repo(tmp_path)
+    conn = sqlite3.connect(tmp_path / ".pipeline/v2.db")
+    # id=1 is a dead-letter at at=10.
+    conn.execute(
+        "INSERT INTO events (id, module_key, type, payload_json, at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (1001, "backfilled/dead", "module_dead_lettered", "{}", 10),
+    )
+    # id=2 is a recovery at at=1 — EARLIER than the dead-letter.
+    # In a (at, id)-sorted walk the recovery happens first and the
+    # dead-letter remains unresolved.
+    conn.execute(
+        "INSERT INTO events (id, module_key, type, payload_json, at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (1002, "backfilled/dead", "dead_letter_recovered", "{}", 1),
+    )
+    conn.commit()
+    conn.close()
+    r = local_api.build_pipeline_stuck(tmp_path, threshold_seconds=60, now_seconds=100)
+    dead_keys = {row["module_key"] for row in r["dead_lettered"]}
+    assert "backfilled/dead" in dead_keys
+
+
 def test_pipeline_stuck_correlates_events_by_lease_id(tmp_path: Path) -> None:
     """Codex round-4 bug: correlating events by module_key alone let
     a fresh event from an EARLIER lease mask a hung current lease."""
@@ -1268,18 +1418,30 @@ def test_quality_scores_parses_audit_markdown(tmp_path: Path) -> None:
     assert scores["Gamma Module"]["severity"] == "good"
 
 
-def test_module_state_includes_diagnostics(tmp_path: Path) -> None:
+def _diag_codes(diagnostics: list[dict[str, object]]) -> set[str]:
+    """Helper: extract the stable ``code`` field from a diagnostics list."""
+    return {str(entry.get("code")) for entry in diagnostics if isinstance(entry, dict)}
+
+
+def test_module_state_diagnostics_are_structured_dicts(tmp_path: Path) -> None:
+    """Schema-tweak #263: diagnostics changed from ``list[str]`` to
+    ``list[dict]`` with ``{severity, code, summary, source, next_action?}``.
+    Agents switch on ``severity`` / ``code`` and drill in via
+    ``next_action``, which the old string tags could not carry."""
     module_key, _ = _setup_repo(tmp_path)
     state = local_api.build_module_state(tmp_path, module_key)
     diagnostics = state.get("diagnostics")
     assert isinstance(diagnostics, list)
-    # The fixture module has lab + fact_ledger + UK + frontmatter, so
-    # the only nits come from the UK state if it's not "synced". We
-    # don't assert an exact set — just that the field is present and a
-    # list of short strings.
-    for tag in diagnostics:
-        assert isinstance(tag, str) and tag
-        assert len(tag) < 80
+    for entry in diagnostics:
+        assert isinstance(entry, dict)
+        # Required fields.
+        assert entry.get("severity") in {"info", "warn", "critical"}
+        assert isinstance(entry.get("code"), str) and entry["code"]
+        assert isinstance(entry.get("summary"), str) and entry["summary"]
+        assert isinstance(entry.get("source"), str) and entry["source"]
+        # next_action is optional but when present must be a string.
+        if "next_action" in entry:
+            assert isinstance(entry["next_action"], str)
 
 
 def test_module_state_flags_missing_lab_and_ledger(tmp_path: Path) -> None:
@@ -1293,10 +1455,10 @@ def test_module_state_flags_missing_lab_and_ledger(tmp_path: Path) -> None:
     _git(repo, "add", ".")
     _git(repo, "commit", "-m", "init")
     state = local_api.build_module_state(repo, "k8s/cka/module-X-stub")
-    diag = state["diagnostics"]
-    assert "no_lab" in diag
-    assert "no_fact_ledger" in diag
-    assert "uk_translation_missing" in diag
+    codes = _diag_codes(state["diagnostics"])
+    assert "no_lab" in codes
+    assert "no_fact_ledger" in codes
+    assert "uk_translation_missing" in codes
 
 
 def test_rubric_diagnostics_matches_by_track_and_number(tmp_path: Path) -> None:
@@ -1327,7 +1489,7 @@ def test_rubric_diagnostics_matches_by_track_and_number(tmp_path: Path) -> None:
     state = local_api.build_module_state(
         tmp_path, "k8s/cka/part2-workloads-scheduling/module-2.8-scheduler-lifecycle-theory"
     )
-    assert "rubric_critical" in state["diagnostics"]
+    assert "rubric_critical" in _diag_codes(state["diagnostics"])
 
 
 def test_rubric_diagnostics_matches_non_numbered_entry(tmp_path: Path) -> None:
@@ -1497,7 +1659,7 @@ def test_rubric_diagnostics_no_false_match_for_different_track(tmp_path: Path) -
     _git(tmp_path, "add", ".")
     _git(tmp_path, "commit", "-m", "init")
     state = local_api.build_module_state(tmp_path, "k8s/kcna/module-2.8-something-unrelated")
-    assert "rubric_critical" not in state["diagnostics"]
+    assert "rubric_critical" not in _diag_codes(state["diagnostics"])
 
 
 def test_query_sqlite_rows_propagates_schema_drift(tmp_path: Path) -> None:
@@ -1522,6 +1684,204 @@ def test_query_sqlite_rows_tolerates_missing_table(tmp_path: Path) -> None:
     conn.close()
     result = local_api._query_sqlite_rows(db_path, "SELECT * FROM does_not_exist")
     assert result == []
+
+
+def test_module_state_includes_orchestration_and_lease_inline(tmp_path: Path) -> None:
+    """Schema-tweak #263: ``build_module_state`` folds in orchestration
+    + lease so "why is X blocked" is one call, not three.
+
+    The individual endpoints stay for callers that only want a slice,
+    but the one-call path is the happy path for agent drill-down."""
+    module_key, _ = _setup_repo(tmp_path)
+    state = local_api.build_module_state(tmp_path, module_key)
+    assert "orchestration" in state
+    assert "lease" in state
+    # Orchestration has the two sub-keys mirroring the dedicated endpoint.
+    orch = state["orchestration"]
+    assert "v2" in orch
+    assert "translation_v2" in orch
+    # Lease returns ``{held: bool, ...}``.
+    assert "held" in state["lease"]
+
+
+def test_module_state_orchestration_surfaces_pipeline_rejection(tmp_path: Path) -> None:
+    """A pipeline-rejected module must get a ``pipeline_rejected``
+    diagnostic so agents see the reason without fetching the events
+    endpoint separately."""
+    module_key, _ = _setup_repo(tmp_path)
+    conn = sqlite3.connect(tmp_path / ".pipeline/v2.db")
+    # Overwrite the fixture's first job with rejected state.
+    conn.execute(
+        "UPDATE jobs SET queue_state = ? WHERE module_key = ?",
+        ("rejected", module_key),
+    )
+    # Add a second, newer rejected job so ORDER BY id DESC picks it.
+    conn.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state, model) "
+        "VALUES (?, ?, ?, ?)",
+        (module_key, "review", "rejected", "gemini"),
+    )
+    conn.commit()
+    conn.close()
+    state = local_api.build_module_state(tmp_path, module_key)
+    codes = _diag_codes(state["diagnostics"])
+    assert "pipeline_rejected" in codes
+
+
+def test_briefing_has_actions_and_top_modules(tmp_path: Path) -> None:
+    """Schema-tweak #263: briefing gains ``actions.active/blocked/next``
+    and ``top_modules`` so Codex and Claude both see what to touch next."""
+    _setup_repo(tmp_path)
+    _write(
+        tmp_path / "STATUS.md",
+        "# status\n\n## TODO\n\n- [ ] task one\n",
+    )
+    import time as _time
+    now_s = int(_time.time())
+    conn = sqlite3.connect(tmp_path / ".pipeline/v2.db")
+    conn.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state, leased_by, lease_id, "
+        "leased_at, lease_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("active/module", "write", "leased", "codex", "l-live", now_s - 10, now_s + 300),
+    )
+    conn.commit()
+    conn.close()
+    briefing = local_api.build_session_briefing(tmp_path)
+    assert "actions" in briefing
+    # Codex round-2 request: ``active`` instead of ``now`` — that bucket
+    # is read-only ("currently owned"), not "what I should touch".
+    assert set(briefing["actions"].keys()) == {"active", "blocked", "next"}
+    assert any("codex" in entry for entry in briefing["actions"]["active"])
+    assert "top_modules" in briefing
+    reasons = {m.get("reason") for m in briefing["top_modules"]}
+    assert "active_lease" in reasons
+
+
+def test_briefing_top_modules_surfaces_pipeline_dead_letter(
+    tmp_path: Path,
+) -> None:
+    """Codex round-2 comment: briefing should surface pipeline
+    dead-letter count as a structured reason in top_modules, not
+    buried in pipelines.v2."""
+    _setup_repo(tmp_path)
+    _write(tmp_path / "STATUS.md", "# s\n\n## TODO\n\n- [ ] x\n")
+
+    # The v2 pipeline classifies a module as dead-letter when it has
+    # seen a ``module_dead_lettered`` event and no ``dead_letter_
+    # recovered`` since. Fixture a minimal job + event pair so
+    # ``_build_status_report`` returns ``counts.dead_letter == 1``.
+    conn = sqlite3.connect(tmp_path / ".pipeline/v2.db")
+    conn.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state) VALUES (?, ?, ?)",
+        ("dead/one", "write", "failed"),
+    )
+    conn.execute(
+        "INSERT INTO events (module_key, type, payload_json, at) VALUES (?, ?, ?, ?)",
+        ("dead/one", "module_dead_lettered", "{}", 1),
+    )
+    conn.commit()
+    conn.close()
+
+    briefing = local_api.build_session_briefing(tmp_path)
+    reasons = {m.get("reason") for m in briefing["top_modules"]}
+    assert "pipeline_dead_letter" in reasons
+
+
+def test_briefing_top_modules_covers_critical_quality(tmp_path: Path) -> None:
+    """Codex round-2 gap: top_modules was missing critical_quality
+    and ready_queue categories. Rubric-critical rows must surface as
+    drillable entries, not just stringified actions.next lines."""
+    _setup_repo(tmp_path)
+    _write(tmp_path / "STATUS.md", "# s\n\n## TODO\n\n- [ ] x\n")
+    audit = tmp_path / "docs" / "quality-audit-results.md"
+    audit.parent.mkdir(exist_ok=True)
+    audit.write_text(
+        "## All Scored Modules\n\n"
+        "| Module | Track | Lines | Score | Action | Issue |\n"
+        "|---|---|---|---|---|---|\n"
+        "| CKA 2.8: Bad Stub | CKA | 55 | **1.3** | Critical | stub |\n",
+        encoding="utf-8",
+    )
+    with local_api._QUALITY_AUDIT_CACHE_LOCK:
+        local_api._QUALITY_AUDIT_CACHE.clear()
+    briefing = local_api.build_session_briefing(tmp_path)
+    reasons = {m.get("reason") for m in briefing["top_modules"]}
+    assert "critical_quality" in reasons
+    # Critical rubric entries must point at the scores endpoint.
+    cq = [m for m in briefing["top_modules"] if m.get("reason") == "critical_quality"]
+    assert cq and cq[0]["endpoint"] == "/api/quality/scores"
+
+
+def test_compact_briefing_keeps_actions_and_top_modules(tmp_path: Path) -> None:
+    """Compact mode strips navigation aids but MUST keep the
+    actionable fields — that's the whole point."""
+    _setup_repo(tmp_path)
+    _write(tmp_path / "STATUS.md", "# status\n\n## TODO\n\n- [ ] x\n")
+    briefing = local_api.build_session_briefing(tmp_path)
+    compact = local_api._compact_briefing(briefing)
+    assert "actions" in compact
+    assert "top_modules" in compact
+    assert "next_reads" not in compact
+    assert "links" not in compact
+
+
+def test_worktrees_list_includes_dirty_counts(tmp_path: Path) -> None:
+    """Schema-tweak #263: each worktree entry now carries a ``counts``
+    dict so operators see which worktree is lively without shelling
+    into each one."""
+    repo = tmp_path
+    _init_repo(repo)
+    _write(repo / "README.md", "hi\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-m", "initial")
+    _write(repo / "README.md", "hi\n\nmore\n")
+
+    result = local_api.build_worktrees_list(repo)
+    assert result["ok"] is True
+    assert result["count"] >= 1
+    first = result["worktrees"][0]
+    assert "counts" in first
+    counts = first["counts"]
+    assert counts is not None
+    assert counts["total"] >= 1
+    assert counts["unstaged"] >= 1
+    assert first["dirty"] is True
+
+
+def test_worktree_counts_total_counts_paths_not_statuses(tmp_path: Path) -> None:
+    """Codex round-2 bug: counts.total used staged+unstaged+untracked,
+    which double-counts a file that is both staged AND unstaged. That
+    made sibling-worktree counts incomparable with the primary
+    worktree's. Fix: total is the number of unique paths reported by
+    ``git status --porcelain=v1``."""
+    repo = tmp_path
+    _init_repo(repo)
+    _write(repo / "README.md", "v1\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-m", "initial")
+
+    # Stage a change, then edit the same file again so git reports
+    # both a staged and an unstaged modification for one path.
+    _write(repo / "README.md", "v2\n")
+    _git(repo, "add", "README.md")
+    _write(repo / "README.md", "v3\n")
+
+    counts = local_api._worktree_dirty_counts(repo)
+    assert counts is not None
+    assert counts["total"] == 1  # one path, not two
+    assert counts["staged"] >= 1
+    assert counts["unstaged"] >= 1
+
+
+def test_worktree_counts_dirty_is_none_when_unreadable(tmp_path: Path) -> None:
+    """Codex round-2 bug: a failed ``git status`` was folded into
+    dirty=False, which is a false negative. Unreadable worktrees must
+    surface as dirty=None so "unknown" and "clean" are distinguishable."""
+    # Path that exists but isn't a git repo.
+    non_repo = tmp_path / "not-a-repo"
+    non_repo.mkdir()
+    counts = local_api._worktree_dirty_counts(non_repo)
+    assert counts is None
 
 
 def test_schema_lists_phase_c_endpoints() -> None:

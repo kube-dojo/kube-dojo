@@ -1,5 +1,16 @@
 # KubeDojo — Shared Agent Context
 
+## First call on a cold start
+Hit the local API before reading STATUS.md or grepping:
+```
+curl -s http://127.0.0.1:8768/api/briefing/session?compact=1  # ~0.7K tokens
+curl -s http://127.0.0.1:8768/api/schema                      # endpoint index
+```
+`/api/briefing/session` returns `actions.now | blocked | next` + `top_modules`
+so you know what to touch. `/api/module/{key}/state` is a one-call drill-down
+(includes orchestration + lease + structured diagnostics). Fall back to
+STATUS.md only when the API is down.
+
 ## Project
 Free, open-source cloud native curriculum. 670 modules across 7 tracks.
 Site: https://kube-dojo.github.io/ (Starlight/Astro)
