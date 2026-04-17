@@ -1400,11 +1400,68 @@ _TRACK_ALIASES: dict[str, tuple[str, ...]] = {
 }
 
 # Tokens that are too generic to contribute to the name-overlap match
-# (e.g. "module", "basics", "intro").
+# (e.g. "module", "part", "intro"). ``basics`` was removed in round-3:
+# it can be the only distinguishing token in short unnumbered labels.
 _NAME_TOKEN_STOPLIST = frozenset({
     "module", "part", "the", "a", "an", "and", "of", "to", "for", "with",
-    "intro", "introduction", "basics", "overview",
+    "intro", "introduction", "overview",
 })
+
+
+# Labels typically look like ``<Track>[ <number>][:-] <Name>``.
+# Capture the leading track prefix so we can match even when the
+# audit ``Track`` column is a subtrack like "Workloads" or "AWS".
+_LABEL_TRACK_PREFIX_RE = re.compile(
+    r"^\s*(?P<track>[A-Za-z][A-Za-z/\- ]*?)\s*(?:[0-9]+(?:\.[0-9]+)*)?\s*[:\-]"
+)
+
+
+def _audit_row_track_tokens(row: dict[str, Any]) -> set[str]:
+    """Return every track-like string attached to an audit row.
+
+    Combines the ``Track`` column (typically a subtrack like
+    ``Workloads`` or ``AWS``) with the ``Track:`` prefix of the
+    ``Module`` label (``CKA 2.8: ...``, ``Platform: ...``).
+    """
+    out: set[str] = set()
+    track_col = str(row.get("track", "")).strip().lower()
+    if track_col:
+        out.add(track_col)
+    module_label = str(row.get("module", ""))
+    m = _LABEL_TRACK_PREFIX_RE.match(module_label)
+    if m:
+        out.add(m.group("track").strip().lower())
+    return out
+
+
+def _alias_matches(alias: str, candidates: set[str]) -> bool:
+    """Whole-word check so ``cka`` doesn't match ``ckad``."""
+    pattern = re.compile(r"\b" + re.escape(alias) + r"\b")
+    return any(pattern.search(c) for c in candidates)
+
+
+_CERT_TRACKS = frozenset({"cka", "ckad", "cks", "kcna", "kcsa"})
+
+
+def _track_word_set(track_slug: str | None, aliases: tuple[str, ...]) -> set[str]:
+    """Tokens that should NOT count as a non-track overlap signal.
+
+    Used to make the name-overlap match meaningful: an overlap of
+    ``{platform, sre}`` between a module path and a "Platform: SRE…"
+    label is vacuous when both are track tokens for this module.
+    """
+    out: set[str] = set()
+    if track_slug:
+        out |= _normalize_name_tokens(track_slug)
+    for alias in aliases:
+        out |= _normalize_name_tokens(alias)
+    # Cert paths share a ``k8s/`` parent segment that's structural,
+    # not semantic. Without this the label "CKA: k8s.io Navigation"
+    # matches any k8s/cka/* module via the vacuous ``{cka, k8s}``
+    # overlap.
+    if track_slug in _CERT_TRACKS:
+        out.add("k8s")
+    return out
 
 
 def _normalize_name_tokens(text: str) -> set[str]:
@@ -1461,56 +1518,59 @@ def _rubric_severity_for_module(
     aliases = _TRACK_ALIASES.get(track_slug, ()) if track_slug else ()
 
     if not aliases:
-        # Without a recognized track, matching is too risky
-        # (round-2 caught "any row wins" false positives).
+        # Unknown track → no match (round-2 caught "any row wins"
+        # false positives).
         return None
 
-    def _row_track_matches(row_track: str) -> bool:
-        rt = row_track.lower()
-        return any(alias in rt for alias in aliases)
+    # Track tokens for THIS module. Used both to filter audit rows
+    # (whole-word match to avoid cka/ckad collision) and to compute
+    # "non-track overlap" in stage 2.
+    track_word_set = _track_word_set(track_slug, aliases)
+
+    def _row_track_matches(row: dict[str, Any]) -> bool:
+        candidates = _audit_row_track_tokens(row)
+        return any(_alias_matches(alias, candidates) for alias in aliases)
 
     # ----- stage 1: numbered match -----
     if number:
-        # Numbers in audit labels usually appear flanked by space or
-        # punctuation. Match a word boundary on both sides of the
-        # number so "2.8" can't match "12.8" or "2.80".
         number_re = re.compile(
-            r"(?:^|[\s\(])" + re.escape(number) + r"(?=[\s:\-\)—.,])"
+            r"(?:^|[\s(])" + re.escape(number) + r"(?=[\s:\-\)—.,])"
         )
         for entry in audit_modules:
             label = str(entry.get("module", ""))
             if not number_re.search(label):
                 continue
-            if _row_track_matches(str(entry.get("track", ""))):
+            if _row_track_matches(entry):
                 return entry.get("severity")
 
     # ----- stage 2: name-overlap match -----
-    # Build the path slug's tokens by stripping the module-number
-    # prefix and any "partN" container, then splitting on dashes.
     name_slug = _MODULE_NUMBER_PREFIX_RE.sub("", last)
     path_tokens = _normalize_name_tokens(name_slug)
-    # Also fold in the parent segment (excluding "part<N>" wrappers)
-    # so "foundations" from ``platform/foundations/...`` is considered.
     for seg in segments[:-1]:
         if _PART_PREFIX_RE.match(seg):
             continue
         path_tokens |= _normalize_name_tokens(seg)
-    # NOTE: we keep track-name tokens in the path set on purpose. The
-    # audit label often includes the track name too ("Prerequisites:
-    # GitOps", "Platform: Systems Thinking"), so that overlap is a
-    # legitimate signal alongside the ``_row_track_matches`` filter.
     if not path_tokens:
         return None
 
     best: tuple[int, str | None] = (0, None)
     for entry in audit_modules:
-        label = str(entry.get("module", ""))
-        if not _row_track_matches(str(entry.get("track", ""))):
+        if not _row_track_matches(entry):
             continue
-        label_tokens = _normalize_name_tokens(label)
-        overlap = len(path_tokens & label_tokens)
-        if overlap >= 2 and overlap > best[0]:
-            best = (overlap, entry.get("severity"))
+        label_tokens = _normalize_name_tokens(str(entry.get("module", "")))
+        overlap = path_tokens & label_tokens
+        # Require ≥ 2 overlap AND at least one NON-track-alias token
+        # in the overlap; otherwise ``{platform, sre}`` alone would
+        # attach any "Platform: ... SRE ..." row to every platform
+        # module containing "sre".
+        if len(overlap) < 2:
+            continue
+        non_track = overlap - track_word_set
+        if not non_track:
+            continue
+        score = len(overlap) + len(non_track)
+        if score > best[0]:
+            best = (score, entry.get("severity"))
     return best[1]
 
 

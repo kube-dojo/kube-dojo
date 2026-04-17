@@ -1370,6 +1370,87 @@ def test_rubric_diagnostics_matches_non_numbered_entry(tmp_path: Path) -> None:
     assert sev2 == "needs_work"
 
 
+def test_rubric_diagnostics_matches_via_label_prefix(tmp_path: Path) -> None:
+    """Codex round-3 bug: the Track column is often a SUBtrack
+    ('Workloads', 'AWS', 'Foundations'). The top-level track is in
+    the Module label prefix ('CKA:', 'Platform:', 'Prerequisites:').
+    The matcher must consult both."""
+    audit = tmp_path / "docs" / "quality-audit-results.md"
+    audit.parent.mkdir()
+    audit.write_text(
+        """## All Scored Modules\n\n"""
+        """| Module | Track | Lines | Score | Action | Issue |\n"""
+        """|---|---|---|---|---|---|\n"""
+        """| CKA: Autoscaling | Workloads | 450 | **2.2** | Poor | dry |\n""",
+        encoding="utf-8",
+    )
+    with local_api._QUALITY_AUDIT_CACHE_LOCK:
+        local_api._QUALITY_AUDIT_CACHE.clear()
+    quality = local_api.build_quality_scores(tmp_path)
+    sev = local_api._rubric_severity_for_module(
+        "k8s/cka/part2-workloads-scheduling/module-6-autoscaling",
+        quality["modules"],
+    )
+    # Track col is "Workloads" (no CKA alias) but the label prefix
+    # carries "CKA:" — the matcher must see it.
+    assert sev == "poor"
+
+
+def test_rubric_diagnostics_cka_does_not_match_ckad(tmp_path: Path) -> None:
+    """Codex round-3 bug: raw substring ``'cka' in 'CKAD'`` is True,
+    letting a CKAD audit row attach to a CKA module path. Matcher
+    must use word boundaries."""
+    audit = tmp_path / "docs" / "quality-audit-results.md"
+    audit.parent.mkdir()
+    audit.write_text(
+        """## All Scored Modules\n\n"""
+        """| Module | Track | Lines | Score | Action | Issue |\n"""
+        """|---|---|---|---|---|---|\n"""
+        """| CKAD 3.5: API Deprecations | CKAD | 433 | **2.4** | Poor | reference |\n""",
+        encoding="utf-8",
+    )
+    with local_api._QUALITY_AUDIT_CACHE_LOCK:
+        local_api._QUALITY_AUDIT_CACHE.clear()
+    quality = local_api.build_quality_scores(tmp_path)
+    sev = local_api._rubric_severity_for_module(
+        "k8s/cka/part3-services-networking/module-3.5-gateway-api",
+        quality["modules"],
+    )
+    assert sev is None  # CKA module must NOT pick up the CKAD row.
+
+    # And the CKAD path DOES match.
+    sev_ckad = local_api._rubric_severity_for_module(
+        "k8s/ckad/module-3.5-api-deprecations",
+        quality["modules"],
+    )
+    assert sev_ckad == "poor"
+
+
+def test_rubric_diagnostics_track_only_overlap_is_not_a_match(tmp_path: Path) -> None:
+    """Codex round-3 bug: overlap of ``{platform, sre}`` — both track
+    tokens — must NOT match. Matcher requires ≥ 1 NON-track token in
+    the overlap."""
+    audit = tmp_path / "docs" / "quality-audit-results.md"
+    audit.parent.mkdir()
+    audit.write_text(
+        """## All Scored Modules\n\n"""
+        """| Module | Track | Lines | Score | Action | Issue |\n"""
+        """|---|---|---|---|---|---|\n"""
+        """| Platform: Site Reliability Engineering (SRE) | Platform | 400 | **2.2** | Poor | generic |\n""",
+        encoding="utf-8",
+    )
+    with local_api._QUALITY_AUDIT_CACHE_LOCK:
+        local_api._QUALITY_AUDIT_CACHE.clear()
+    quality = local_api.build_quality_scores(tmp_path)
+    # A platform module whose name just says "sre basics" shouldn't
+    # inherit the severity from a generic "Platform: ... SRE" row.
+    sev = local_api._rubric_severity_for_module(
+        "platform/foundations/module-1-sre-basics",
+        quality["modules"],
+    )
+    assert sev is None
+
+
 def test_rubric_diagnostics_unrecognized_track_never_matches(tmp_path: Path) -> None:
     """Codex round-2 bug: when the path's track wasn't in the alias
     table, matching silently became permissive and could attach a
