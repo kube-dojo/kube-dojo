@@ -87,13 +87,15 @@ su - alice -c 'ulimit -a'  # check limits for another user
 
 **Common limit types the exam may test:**
 
-| Item | ulimit flag | limits.conf keyword |
-|------|------------|-------------------|
+| Item | `ulimit` flag | `limits.conf` keyword |
+|------|----------------|-----------------------|
 | Open files | `-n` | `nofile` |
 | Max processes | `-u` | `nproc` |
 | Max file size | `-f` | `fsize` |
 | Core dump size | `-c` | `core` |
-| Max memory | `-m` | `rss` |
+| Address space | `-v` | `as` |
+
+On modern Linux, avoid treating `rss` / `ulimit -m` as a reliable memory-control tool. If LFCS asks you to set a real limit, `nofile`, `nproc`, and `as` are clearer and more defensible targets.
 
 **Setting persistent limits in `/etc/security/limits.conf` or `/etc/security/limits.d/`:**
 
@@ -205,6 +207,11 @@ echo "UUID=$UUID /data ext4 defaults 0 2" | sudo tee -a /etc/fstab
 mount -a
 ```
 
+Why use the UUID instead of `/dev/sdb1` directly?
+- device names can change if disks appear in a different order after reboot
+- UUIDs keep the mount stable even when the kernel renumbers devices
+- LFCS cares about persistence, not just a mount that happened to work once
+
 ### LVM Basics
 
 ```bash
@@ -214,6 +221,37 @@ lvcreate -n lv_app -L 10G vg_data
 mkfs.ext4 /dev/vg_data/lv_app
 mount /dev/vg_data/lv_app /srv/app
 ```
+
+Why reach for LVM instead of a fixed partition?
+- a plain partition is simple, but resizing later is more rigid
+- LVM gives you a pool (`VG`) plus logical volumes you can extend without rebuilding the mount workflow
+- LFCS often tests whether you understand that abstraction well enough to grow storage safely
+
+### Extend an Existing Logical Volume
+
+LFCS does not stop at creating an LV. You should be able to grow it and then grow the filesystem that sits on top of it.
+
+```bash
+lvextend -L +5G /dev/vg_data/lv_app
+resize2fs /dev/vg_data/lv_app
+lvs
+lsblk
+df -h /srv/app
+```
+
+If the filesystem is XFS, the grow step changes:
+
+```bash
+lvextend -L +5G /dev/vg_data/lv_app
+xfs_growfs /srv/app
+lvs
+df -h /srv/app
+```
+
+Why the two different resize commands?
+- `resize2fs` works with ext2/3/4 filesystems
+- XFS growth is done against the mounted filesystem path with `xfs_growfs`
+- LFCS does not need deep filesystem theory here, but it does expect you to choose the right tool for the filesystem you created
 
 ### What To Verify After Storage Changes
 
@@ -240,6 +278,8 @@ For LFCS, service work is rarely about exotic tuning. It is about:
 - starting the unit
 - enabling it at boot
 - proving it stays active
+
+If you edit a unit file or drop-in, `systemctl daemon-reload` matters because systemd does not automatically re-read unit definitions from disk. Restarting a service without reloading can leave you testing the old configuration and thinking your change failed.
 
 ## Practice Drills
 
