@@ -697,6 +697,124 @@ def test_background_snapshot_exposes_freshness_metadata() -> None:
     assert meta["refresh_in_flight"] is False
 
 
+def test_sqlite_version_key_detects_wal_only_write(tmp_path: Path) -> None:
+    """Regression: PR #259 round 1 used PRAGMA data_version which is a
+    per-connection counter and therefore unreliable across fresh
+    connections. Version key must change on a WAL-mode write, measured
+    across fresh lookups.
+    """
+    db_path = tmp_path / "wal.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("CREATE TABLE t (x INTEGER)")
+    conn.commit()
+    conn.close()
+    v1 = local_api._sqlite_version_key(db_path)
+
+    # Open a separate connection, insert (this write lands in the WAL),
+    # and close. The main .db file may not be touched if checkpoint has
+    # not run yet.
+    conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA journal_mode=WAL")
+    # Force a small, quick write that is likely to stay in the WAL.
+    conn.execute("INSERT INTO t VALUES (42)")
+    conn.commit()
+    conn.close()
+    v2 = local_api._sqlite_version_key(db_path)
+
+    assert v1 != v2, "WAL-mode write must change the version key"
+
+
+def test_cache_keyed_by_repo_root(tmp_path: Path) -> None:
+    """Regression: PR #259 round 1 used process-global caches that
+    ignored repo_root. Two repos hitting the same URL path would share
+    a cache entry.
+    """
+    repo_a = tmp_path / "repo_a"
+    repo_b = tmp_path / "repo_b"
+    repo_a.mkdir()
+    repo_b.mkdir()
+    key_a = local_api._normalized_cache_key("/api/schema", {}, repo_root=repo_a)
+    key_b = local_api._normalized_cache_key("/api/schema", {}, repo_root=repo_b)
+    assert key_a != key_b
+    # With no repo_root the key falls back to path only (backward-compat).
+    assert local_api._normalized_cache_key("/api/schema", {}) == "/api/schema"
+
+
+def test_status_md_cache_isolates_per_path(tmp_path: Path) -> None:
+    """Regression: STATUS.md cache was process-global, one entry.
+    Different repos' STATUS.md files must resolve independently.
+    """
+    status_a = tmp_path / "a" / "STATUS.md"
+    status_b = tmp_path / "b" / "STATUS.md"
+    status_a.parent.mkdir()
+    status_b.parent.mkdir()
+    status_a.write_text(
+        "# a\n\n## TODO\n\n- [ ] task from A\n", encoding="utf-8"
+    )
+    status_b.write_text(
+        "# b\n\n## TODO\n\n- [ ] task from B\n", encoding="utf-8"
+    )
+    data_a = local_api._parse_status_md(status_a)
+    data_b = local_api._parse_status_md(status_b)
+    assert data_a["focus"] == ["task from A"]
+    assert data_b["focus"] == ["task from B"]
+
+
+def test_background_snapshot_serializes_concurrent_builds() -> None:
+    """Regression: the "single in-flight" guarantee required a build
+    lock. refresh_blocking() called from one thread while the daemon
+    thread also tries to refresh must not produce overlapping builders.
+    """
+    import threading
+
+    started = []
+    running_now = {"n": 0}
+    max_concurrent = {"n": 0}
+    lock = threading.Lock()
+    release = threading.Event()
+
+    def slow_builder():
+        with lock:
+            running_now["n"] += 1
+            max_concurrent["n"] = max(max_concurrent["n"], running_now["n"])
+            started.append(True)
+        # Block long enough for a second caller to race in.
+        release.wait(timeout=1.0)
+        with lock:
+            running_now["n"] -= 1
+        return {"iteration": len(started)}
+
+    snap = local_api.BackgroundSnapshot(
+        key="concurrency-test",
+        interval_seconds=60.0,
+        builder=slow_builder,
+    )
+
+    # Thread A: refresh_blocking holds the build lock.
+    t_a = threading.Thread(target=snap.refresh_blocking, args=(5.0,))
+    t_a.start()
+    # Wait until A is inside the builder.
+    for _ in range(50):
+        with lock:
+            if running_now["n"] >= 1:
+                break
+        import time as _t
+        _t.sleep(0.01)
+    # Thread B: concurrent refresh_blocking must BLOCK on the lock.
+    t_b = threading.Thread(target=snap.refresh_blocking, args=(5.0,))
+    t_b.start()
+    # Give B a moment to attempt entry.
+    import time as _t
+    _t.sleep(0.05)
+    # Release A, which lets B enter.
+    release.set()
+    t_a.join(timeout=3.0)
+    t_b.join(timeout=3.0)
+    assert not t_a.is_alive() and not t_b.is_alive()
+    assert max_concurrent["n"] == 1, "two builders ran concurrently"
+
+
 def test_background_snapshot_reports_degraded_on_builder_error() -> None:
     def builder():
         raise RuntimeError("boom")

@@ -164,40 +164,56 @@ def _path_mtime(p: Path) -> float:
 def _sqlite_version_key(db_path: Path) -> tuple:
     """Fingerprint a sqlite DB that is stable while data is unchanged.
 
-    Combines (data_version, db_mtime, wal_mtime). ``PRAGMA data_version``
-    increments on every write committed by another connection, so it
-    catches WAL-only updates that don't touch the main .db file. The
-    mtimes cover the small window before data_version is readable (e.g.
-    fresh handle after a hot rename).
+    Uses ``(db_mtime, db_size, wal_mtime, wal_size)``. We DO NOT use
+    ``PRAGMA data_version`` because it is documented as a per-connection
+    counter — opening a fresh read-only connection on every call would
+    not give us a reliable cross-process version. WAL writes always
+    touch ``<db>-wal`` and update both its mtime and size, so the tuple
+    catches them without opening sqlite at all.
+
+    Note: on filesystems with coarse mtime resolution (some NTFS, older
+    ext3) a sub-second write might share an mtime with the previous
+    one; ``size`` breaks that tie for any write that changes bytes.
     """
     if not db_path.exists():
-        return ("absent", 0.0, 0.0)
-    db_mtime = _path_mtime(db_path)
-    wal_mtime = _path_mtime(db_path.with_name(db_path.name + "-wal"))
-    data_version = 0
+        return ("absent",)
+
     try:
-        # Use URI mode=ro so we never accidentally write or spawn a WAL.
-        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=1.0)
-        try:
-            row = conn.execute("PRAGMA data_version").fetchone()
-            if row is not None:
-                data_version = int(row[0])
-        finally:
-            conn.close()
-    except sqlite3.Error:
-        pass
-    return (data_version, db_mtime, wal_mtime)
+        db_stat = db_path.stat()
+        db_mtime, db_size = db_stat.st_mtime, db_stat.st_size
+    except OSError:
+        db_mtime, db_size = 0.0, 0
+
+    wal_path = db_path.with_name(db_path.name + "-wal")
+    try:
+        wal_stat = wal_path.stat()
+        wal_mtime, wal_size = wal_stat.st_mtime, wal_stat.st_size
+    except OSError:
+        wal_mtime, wal_size = 0.0, 0
+
+    return (db_mtime, db_size, wal_mtime, wal_size)
 
 
-def _normalized_cache_key(path: str, query: dict[str, list[str]]) -> str:
-    """Normalize path+query for stable cache/ETag keys."""
+def _normalized_cache_key(
+    path: str,
+    query: dict[str, list[str]],
+    repo_root: Path | None = None,
+) -> str:
+    """Normalize (repo_root, path, sorted-query) for stable cache/ETag keys.
+
+    ``repo_root`` is included so two different repos sharing one Python
+    process (e.g. the test suite) don't cross-contaminate each other's
+    cache. The default of ``None`` keeps backward-compat for callers that
+    only key by path + query.
+    """
+    prefix = f"{Path(repo_root).resolve()}::" if repo_root is not None else ""
     if not query:
-        return path
+        return prefix + path
     parts = []
     for k in sorted(query):
         for v in query[k]:
             parts.append(f"{k}={v}")
-    return path + "?" + "&".join(parts)
+    return prefix + path + "?" + "&".join(parts)
 
 
 def _serialize_payload(payload: Any, content_type: str) -> bytes:
@@ -283,7 +299,11 @@ class BackgroundSnapshot:
             if stale_threshold_seconds is not None
             else max(60.0, interval_seconds * 5)
         )
+        # ``_lock`` protects metadata reads; ``_build_lock`` enforces
+        # single-in-flight so ``refresh_blocking()`` and the background
+        # thread cannot overlap each other's build.
         self._lock = threading.Lock()
+        self._build_lock = threading.Lock()
         self._snapshot: Any = None
         self._started_at: float | None = None
         self._completed_at: float | None = None
@@ -312,22 +332,26 @@ class BackgroundSnapshot:
             self._stop.wait(self.interval_seconds)
 
     def _refresh_once(self) -> None:
-        started = time.time()
-        with self._lock:
-            self._started_at = started
-        try:
-            snapshot = self.builder()
-            err: str | None = None
-        except Exception as exc:  # noqa: BLE001
-            snapshot = None
-            err = f"{type(exc).__name__}: {exc}"
-        completed = time.time()
-        with self._lock:
-            if snapshot is not None:
-                self._snapshot = snapshot
-            self._completed_at = completed
-            self._duration_ms = (completed - started) * 1000.0
-            self._last_error = err
+        # ``_build_lock`` serializes concurrent callers (background thread +
+        # ``refresh_blocking()``) so at most one builder runs at a time. This
+        # is the real enforcement of the "single in-flight" guarantee.
+        with self._build_lock:
+            started = time.time()
+            with self._lock:
+                self._started_at = started
+            try:
+                snapshot = self.builder()
+                err: str | None = None
+            except Exception as exc:  # noqa: BLE001
+                snapshot = None
+                err = f"{type(exc).__name__}: {exc}"
+            completed = time.time()
+            with self._lock:
+                if snapshot is not None:
+                    self._snapshot = snapshot
+                self._completed_at = completed
+                self._duration_ms = (completed - started) * 1000.0
+                self._last_error = err
 
     def refresh_blocking(self, timeout: float = 60.0) -> None:
         """Trigger one refresh in the calling thread. For first-call priming."""
@@ -1918,23 +1942,27 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
 # ============================================================
 
 
-_STATUS_MD_CACHE: dict[str, Any] = {"mtime": 0.0, "data": None}
+# Keyed by resolved path so different repos' STATUS.md files never alias.
+_STATUS_MD_CACHE: dict[str, dict[str, Any]] = {}
 _STATUS_MD_CACHE_LOCK = threading.Lock()
 
 
 def _parse_status_md(status_path: Path) -> dict[str, Any]:
     """Extract focus + blockers + a light summary from STATUS.md.
 
-    Caches by mtime to keep briefing cheap.
+    Caches by absolute path + mtime to keep briefing cheap and to stay
+    safe when multiple repos share one Python process.
     """
     try:
         mtime = status_path.stat().st_mtime
     except OSError:
         return {"focus": [], "blockers": [], "exists": False}
 
+    cache_key = str(status_path.resolve())
     with _STATUS_MD_CACHE_LOCK:
-        if _STATUS_MD_CACHE["mtime"] == mtime and _STATUS_MD_CACHE["data"] is not None:
-            return _STATUS_MD_CACHE["data"]
+        entry = _STATUS_MD_CACHE.get(cache_key)
+        if entry is not None and entry["mtime"] == mtime:
+            return entry["data"]
 
     try:
         text = status_path.read_text(encoding="utf-8")
@@ -1969,8 +1997,7 @@ def _parse_status_md(status_path: Path) -> dict[str, Any]:
 
     data = {"focus": focus, "blockers": blockers, "exists": True}
     with _STATUS_MD_CACHE_LOCK:
-        _STATUS_MD_CACHE["mtime"] = mtime
-        _STATUS_MD_CACHE["data"] = data
+        _STATUS_MD_CACHE[cache_key] = {"mtime": mtime, "data": data}
     return data
 
 
@@ -2097,18 +2124,21 @@ def _compact_briefing(briefing: dict[str, Any]) -> dict[str, Any]:
     return compact
 
 
-_SESSION_BRIEFING_SNAPSHOT: BackgroundSnapshot | None = None
+# Registry keyed by resolved ``repo_root`` so multiple repos sharing one
+# Python process (test suite, multi-repo servers) never cross-contaminate.
+_SESSION_BRIEFING_SNAPSHOTS: dict[str, BackgroundSnapshot] = {}
 _SESSION_BRIEFING_SNAPSHOT_LOCK = threading.Lock()
 
 
 def get_or_build_session_briefing(repo_root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     """Return (briefing, freshness_meta). Uses a background snapshot so
     the briefing endpoint is always cheap."""
-    global _SESSION_BRIEFING_SNAPSHOT
+    key = str(repo_root.resolve())
     with _SESSION_BRIEFING_SNAPSHOT_LOCK:
-        if _SESSION_BRIEFING_SNAPSHOT is None:
+        snap = _SESSION_BRIEFING_SNAPSHOTS.get(key)
+        if snap is None:
             snap = _register_snapshot(
-                "briefing_session",
+                f"briefing_session::{key}",
                 interval_seconds=15.0,
                 builder=lambda: build_session_briefing(repo_root),
             )
@@ -2116,8 +2146,7 @@ def get_or_build_session_briefing(repo_root: Path) -> tuple[dict[str, Any], dict
             # sees real data instead of ``freshness_state=refreshing``.
             snap.refresh_blocking()
             snap.start()
-            _SESSION_BRIEFING_SNAPSHOT = snap
-        snap = _SESSION_BRIEFING_SNAPSHOT
+            _SESSION_BRIEFING_SNAPSHOTS[key] = snap
     payload, freshness = snap.get()
     if payload is None:
         # Degraded path — build synchronously once.
@@ -2344,7 +2373,7 @@ def serve_request(
     policy = CACHE_POLICY.get(path)
     if policy is not None:
         ttl, version_fn = policy
-        cache_key = _normalized_cache_key(path, query)
+        cache_key = _normalized_cache_key(path, query, repo_root=repo_root)
 
         def _version() -> tuple:
             return version_fn(repo_root) if version_fn is not None else ("ttl",)
