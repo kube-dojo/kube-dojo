@@ -1188,6 +1188,7 @@ def build_pipeline_stuck(
         FROM jobs j
         WHERE j.leased_by IS NOT NULL
           AND (j.lease_expires_at IS NULL OR j.lease_expires_at >= ?)
+        ORDER BY j.leased_by ASC, j.lease_id ASC, j.id ASC
         """,
         (now_seconds,),
     )
@@ -1224,12 +1225,15 @@ def build_pipeline_stuck(
             bucket["idle_seconds"] = idle
             stale_workers.append(bucket)
     # Rank "never emitted" as strictly staler than any finite idle, then
-    # longest-idle first. Operators see the most concerning workers at
-    # the top of the list.
+    # longest-idle first, with ``leased_by`` as a deterministic tiebreaker
+    # so two workers at the same idle-seconds don't rearrange across
+    # calls. (Codex Phase D review: finite-idle ties were non-
+    # deterministic.)
     stale_workers.sort(
         key=lambda w: (
             0 if w.get("idle_seconds") is None else 1,
             -(w.get("idle_seconds") or 0),
+            str(w.get("leased_by") or ""),
         )
     )
 
@@ -2163,15 +2167,6 @@ _ACTIVITY_DEFAULT_SINCE_SECONDS = 86400  # 24h
 _ACTIVITY_MAX_LIMIT = 500
 
 
-def _epoch_to_iso_utc(epoch: int) -> str:
-    """Format Unix-epoch seconds as an ISO-8601 UTC timestamp with ``Z``.
-
-    Matches the string form stored in ``.bridge/messages.db.timestamp``,
-    so bridge-row filtering stays a plain string compare.
-    """
-    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(int(epoch)))
-
-
 def _iso_to_epoch(value: Any) -> int | None:
     """Parse an ISO-8601 timestamp to Unix-epoch seconds.
 
@@ -2287,14 +2282,32 @@ def build_activity_feed(
         })
         source_counts["commit"] += 1
 
+    # Pipeline events: order by ``at`` DESC (NOT ``id`` DESC). Event
+    # rows can be backfilled with an older ``at`` than their ``id`` —
+    # ``build_pipeline_events`` uses ``id`` ordering for its own
+    # purposes, but using that here would let a high-id/low-at
+    # backfill consume a per-source slot and push a genuinely newer
+    # event out of the merge candidates. See Codex Phase D review.
     try:
-        events = build_pipeline_events(
-            repo_root, None, since_seconds, limit=per_source_cap
-        )
+        db_path = repo_root / ".pipeline" / "v2.db"
+        if db_path.exists():
+            event_rows = _query_sqlite_rows(
+                db_path,
+                """
+                SELECT id, type, module_key, lease_id, at
+                FROM events
+                WHERE at >= ?
+                ORDER BY at DESC
+                LIMIT ?
+                """,
+                (int(since_seconds), int(per_source_cap)),
+            )
+        else:
+            event_rows = []
     except Exception as exc:  # noqa: BLE001
-        events = {"events": []}
+        event_rows = []
         errors["pipeline_event"] = f"{type(exc).__name__}: {exc}"
-    for e in (events.get("events") or []):
+    for e in event_rows:
         items.append({
             "source": "pipeline_event",
             "at": e.get("at"),
@@ -2305,15 +2318,20 @@ def build_activity_feed(
         })
         source_counts["pipeline_event"] += 1
 
-    since_iso = _epoch_to_iso_utc(since_seconds)
+    # Bridge messages: fetch newest-first WITHOUT a SQL ``since`` filter,
+    # then filter in Python via ``_iso_to_epoch``. The SQL filter is a
+    # lexical string compare against an ISO timestamp column that may
+    # contain fractional seconds or ``+00:00`` offsets — a ``...Z``
+    # cutoff lexically drops ``...0.500Z`` and ``...+00:00`` rows even
+    # when they represent later absolute times. See Codex Phase D review.
     try:
-        bridge = build_bridge_messages(repo_root, since_iso, limit=per_source_cap)
+        bridge = build_bridge_messages(repo_root, None, limit=per_source_cap)
     except Exception as exc:  # noqa: BLE001
         bridge = {"messages": []}
         errors["bridge_message"] = f"{type(exc).__name__}: {exc}"
     for m in (bridge.get("messages") or []):
         at = _iso_to_epoch(m.get("timestamp"))
-        if at is None:
+        if at is None or at < since_seconds:
             continue
         items.append({
             "source": "bridge_message",
@@ -2346,51 +2364,138 @@ def build_activity_feed(
 
 # ---- Phase D: per-section track readiness ----
 
-# Map raw ``queue_state`` → readiness bucket. Unknown states default to
-# in-flight rather than "cleared" so an unrecognized state doesn't
-# silently mark a module production-ready.
-_READINESS_BUCKET_FOR_STATE: dict[str, str] = {
+# Pipeline v2's ``jobs.queue_state`` is one of ``pending | leased |
+# completed | failed`` (control_plane.py:195-201). It is NOT the same
+# vocabulary as the status reducer's ``pending_write | pending_review |
+# pending_patch | in_progress | done | dead_letter`` (cli.py:536-560),
+# which is derived from a combination of job rows + events. Bucketing
+# naïvely off raw ``queue_state`` misclassifies dead-lettered modules
+# as in-flight. We reuse the pipeline's own reducer so this endpoint
+# stays in lock-step with ``/api/pipeline/v2/status``.
+_READINESS_BUCKET_FOR_STATUS: dict[str, str] = {
     "done": "cleared",
-    "completed": "cleared",
+    "dead_letter": "dead_letter",
+    "in_progress": "in_flight",
     "pending_write": "in_flight",
     "pending_review": "in_flight",
     "pending_patch": "in_flight",
-    "leased": "in_flight",
-    "running": "in_flight",
-    "in_progress": "in_flight",
-    "dead_letter": "dead_letter",
 }
 
 
-def _readiness_bucket(state: Any) -> str:
-    if not state:
+def _readiness_bucket_for_status(status: str | None) -> str:
+    if not status:
         return "not_yet_enqueued"
-    return _READINESS_BUCKET_FOR_STATE.get(str(state), "in_flight")
+    # Unknown statuses default to in_flight so a reducer extension
+    # doesn't silently mark new work cleared.
+    return _READINESS_BUCKET_FOR_STATUS.get(status, "in_flight")
 
 
-def _load_v2_module_states(repo_root: Path) -> dict[str, str]:
-    """Map ``module_key`` → latest ``queue_state`` from ``.pipeline/v2.db``.
+def _load_v2_module_statuses(repo_root: Path) -> dict[str, str]:
+    """Map ``module_key`` → reducer status from ``.pipeline/v2.db``.
 
-    A module can have several historical job rows (e.g. a ``done`` job
-    followed by a re-enqueued ``pending_review``). The latest ``id``
-    wins so readiness reflects the current state, not a stale row.
+    Uses the same ``_module_status`` reducer as
+    ``pipeline_v2.cli._build_status_report`` so the readiness grid
+    agrees with ``/api/pipeline/v2/status`` row-for-row. Dead-letter
+    detection flows through ``_current_dead_letter_rows``.
     """
     db_path = repo_root / ".pipeline" / "v2.db"
     if not db_path.exists():
         return {}
-    rows = _query_sqlite_rows(
+    # Import here so the module-level deferral pattern is preserved.
+    # Missing pipeline_v2 degrades to an empty map (same stance as
+    # ``build_pipeline_stuck`` around dead-letter rows).
+    try:
+        from pipeline_v2.cli import (
+            _current_dead_letter_rows,
+            _module_status,
+        )
+    except ModuleNotFoundError as exc:
+        if exc.name not in {"pipeline_v2", "pipeline_v2.cli"}:
+            raise
+        return {}
+
+    job_rows = _query_sqlite_rows(
         db_path,
         """
-        SELECT module_key, queue_state
+        SELECT module_key, phase, queue_state
         FROM jobs
-        WHERE id IN (SELECT MAX(id) FROM jobs GROUP BY module_key)
+        WHERE module_key IS NOT NULL
+        ORDER BY id ASC
         """,
     )
-    return {
-        str(r["module_key"]): str(r["queue_state"])
-        for r in rows
-        if r.get("module_key") and r.get("queue_state")
+    event_rows = _query_sqlite_rows(
+        db_path,
+        """
+        SELECT id, module_key, type, payload_json, at
+        FROM events
+        WHERE module_key IS NOT NULL
+        ORDER BY id ASC
+        """,
+    )
+
+    modules: set[str] = set()
+    job_state_by_module: dict[str, dict[str, Any]] = {}
+    event_types_by_module: dict[str, set[str]] = {}
+    dead_letter_rows: list[dict[str, Any]] = []
+
+    for row in job_rows:
+        module_key = str(row.get("module_key") or "")
+        if not module_key:
+            continue
+        phase = str(row.get("phase") or "")
+        queue_state = str(row.get("queue_state") or "")
+        modules.add(module_key)
+        state = job_state_by_module.setdefault(
+            module_key,
+            {
+                "pending_phases": set(),
+                "has_leased": False,
+                "has_failed": False,
+                "has_completed": False,
+            },
+        )
+        if queue_state == "pending":
+            state["pending_phases"].add(phase)
+        elif queue_state == "leased":
+            state["has_leased"] = True
+        elif queue_state == "failed":
+            state["has_failed"] = True
+        elif queue_state == "completed":
+            state["has_completed"] = True
+
+    for row in event_rows:
+        module_key = str(row.get("module_key") or "")
+        if not module_key:
+            continue
+        event_type = str(row.get("type") or "")
+        modules.add(module_key)
+        event_types_by_module.setdefault(module_key, set()).add(event_type)
+        if event_type in {
+            "needs_human_intervention",
+            "module_dead_lettered",
+            "dead_letter_recovered",
+        }:
+            dead_letter_rows.append({
+                "module_key": module_key,
+                "id": int(row.get("id") or 0),
+                "type": event_type,
+                "payload_json": str(row.get("payload_json") or "{}"),
+                "at": int(row.get("at") or 0),
+            })
+
+    unresolved_dead_letters = {
+        r["module_key"] for r in _current_dead_letter_rows(dead_letter_rows)
     }
+
+    statuses: dict[str, str] = {}
+    for module_key in modules:
+        status = _module_status(
+            job_state_by_module.get(module_key),
+            event_types_by_module.get(module_key, set()),
+            dead_lettered=module_key in unresolved_dead_letters,
+        )
+        statuses[module_key] = status
+    return statuses
 
 
 def _section_for_key(module_key: str) -> str:
@@ -2421,7 +2526,7 @@ def build_tracks_readiness(repo_root: Path) -> dict[str, Any]:
     """
     docs_root = repo_root / "src" / "content" / "docs"
     from status import TRACK_ORDER, _iter_en_modules, _track_for_key
-    pipeline_state = _load_v2_module_states(repo_root)
+    pipeline_status = _load_v2_module_statuses(repo_root)
 
     # track_slug -> section_slug -> counts
     grid: dict[str, dict[str, dict[str, int]]] = {}
@@ -2431,7 +2536,7 @@ def build_tracks_readiness(repo_root: Path) -> dict[str, Any]:
         module_key = rel[:-3] if rel.endswith(".md") else rel
         track = _track_for_key(module_key)
         section = _section_for_key(module_key)
-        bucket = _readiness_bucket(pipeline_state.get(module_key))
+        bucket = _readiness_bucket_for_status(pipeline_status.get(module_key))
         t = grid.setdefault(track, {})
         s = t.setdefault(
             section,
