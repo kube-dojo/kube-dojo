@@ -12,7 +12,14 @@ curl -s http://127.0.0.1:8768/api/briefing/session?compact=1   # ~0.7K tokens, c
 curl -s http://127.0.0.1:8768/api/schema                       # endpoint index
 ```
 
-The briefing covers: current branch + dirty summary, all worktrees, runtime services, pipeline v2 queue head, recent commits, top TODO bullets, blockers, and alerts. Drill-down URLs are listed in `next_reads`. Responses carry a weak ETag — send `If-None-Match` for 304 on repeat polls. If the API is down, fall back to reading `STATUS.md` + `CLAUDE.md`.
+The briefing covers: current branch + dirty summary, all worktrees, runtime services, pipeline v2 queue head, recent commits, top TODO bullets, blockers, and alerts. It also returns the actionable triage triple — `actions.{active, blocked, next}` plus `top_modules[{module_key, phase, reason, endpoint}]` — so a fresh agent decides *what to touch* in the same call. Responses carry a weak ETag — send `If-None-Match` for 304 on repeat polls. If the API is down, fall back to reading `STATUS.md` + `CLAUDE.md`.
+
+**Before you claim work**: `GET /api/pipeline/leases` (or `/api/module/{key}/lease`) to see if another worker already holds it — avoids concurrent re-writes.
+**Before you fix a module**: `GET /api/module/{key}/state` for the structured `diagnostics[]` (frontmatter, UK sync, rubric, lease, dead-letter).
+**Before you re-review**: `GET /api/reviews?module={key}` for the existing audit log.
+**For situational awareness**: `GET /api/tracks/readiness` (per-section cleared/in-flight/dead-letter/not-yet-enqueued) and `GET /api/activity?limit=30` (merged feed of commits + pipeline events + bridge messages, 24 h window by default). Both are also rendered in the Operator panel at the top of the dashboard (`http://127.0.0.1:8768/`).
+
+Full agent recipe: [`scripts/agent_onboarding.md`](scripts/agent_onboarding.md).
 
 ## Agent Usage
 

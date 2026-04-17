@@ -4,6 +4,18 @@ description: How to work with Gemini via direct CLI dispatch
 
 # Gemini Multi-Agent Workflow
 
+## Agent Orientation (first call)
+
+Before drafting or reviewing, pull the local-API briefing so Gemini's context is aligned with what's actually in flight:
+
+```bash
+curl -s http://127.0.0.1:8768/api/briefing/session?compact=1
+curl -s http://127.0.0.1:8768/api/module/{module_key}/state   # diagnostics[] before fixing
+curl -s http://127.0.0.1:8768/api/reviews?module={key}        # existing review log before re-reviewing
+```
+
+If the API is down, fall back to `STATUS.md` + `git log -20`. See [`scripts/agent_onboarding.md`](../../scripts/agent_onboarding.md) for the full recipe including lease checks and readiness/activity feeds.
+
 ## Dispatch Command
 ```bash
 # Simple review (stdout)

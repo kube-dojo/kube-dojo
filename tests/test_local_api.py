@@ -5,6 +5,7 @@ import json
 import sqlite3
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import yaml
@@ -1357,6 +1358,157 @@ def test_pipeline_stuck_correlates_events_by_lease_id(tmp_path: Path) -> None:
     assert any(j["module_key"] == "rolled/over" for j in r["stuck_in_state"])
 
 
+# ---- Phase D: stale-worker roll-up in /api/pipeline/v2/stuck ----
+
+
+def test_stale_workers_groups_active_leases_by_worker(tmp_path: Path) -> None:
+    """A worker holding multiple non-expired leases with no recent
+    events on ANY of them shows up once as a zombie, with every module
+    key it currently holds listed."""
+    _setup_repo(tmp_path)
+    now_s = 10_000
+    conn = sqlite3.connect(tmp_path / ".pipeline/v2.db")
+    # Two active (non-expired) leases for the same worker, both silent.
+    conn.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state, leased_by, lease_id, "
+        "leased_at, lease_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("k8s/cka/mod-a", "review", "running", "claude", "lex-a",
+         now_s - 5000, now_s + 3600),
+    )
+    conn.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state, leased_by, lease_id, "
+        "leased_at, lease_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("k8s/cka/mod-b", "review", "running", "claude", "lex-b",
+         now_s - 5000, now_s + 3600),
+    )
+    conn.commit()
+    conn.close()
+    r = local_api.build_pipeline_stuck(tmp_path, threshold_seconds=60, now_seconds=now_s)
+    assert r["stale_workers_count"] == 1
+    worker = r["stale_workers"][0]
+    assert worker["leased_by"] == "claude"
+    assert worker["active_lease_count"] == 2
+    assert set(worker["module_keys"]) == {"k8s/cka/mod-a", "k8s/cka/mod-b"}
+    # Never emitted any event -> idle_seconds = None.
+    assert worker["idle_seconds"] is None
+
+
+def test_stale_workers_uses_latest_event_across_leases(tmp_path: Path) -> None:
+    """A heartbeat on ONE of the worker's active leases must prevent the
+    worker from being flagged stale (idle_seconds < threshold)."""
+    _setup_repo(tmp_path)
+    now_s = 10_000
+    conn = sqlite3.connect(tmp_path / ".pipeline/v2.db")
+    conn.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state, leased_by, lease_id, "
+        "leased_at, lease_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("k8s/mod-a", "review", "running", "codex", "lex-a",
+         now_s - 5000, now_s + 3600),
+    )
+    conn.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state, leased_by, lease_id, "
+        "leased_at, lease_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("k8s/mod-b", "review", "running", "codex", "lex-b",
+         now_s - 5000, now_s + 3600),
+    )
+    # Recent event on lex-b keeps the worker alive.
+    conn.execute(
+        "INSERT INTO events (module_key, type, lease_id, payload_json, at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        ("k8s/mod-b", "attempt_progress", "lex-b", "{}", now_s - 10),
+    )
+    conn.commit()
+    conn.close()
+    r = local_api.build_pipeline_stuck(tmp_path, threshold_seconds=60, now_seconds=now_s)
+    assert r["stale_workers_count"] == 0
+
+
+def test_stale_workers_excludes_expired_leases(tmp_path: Path) -> None:
+    """Expired leases belong to ``stuck_leased``, not ``stale_workers``
+    — a worker whose only lease has already expired isn't a zombie, it's
+    just gone. Bucketing both makes the count meaningless."""
+    _setup_repo(tmp_path)
+    now_s = 10_000
+    conn = sqlite3.connect(tmp_path / ".pipeline/v2.db")
+    conn.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state, leased_by, lease_id, "
+        "leased_at, lease_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("k8s/expired", "review", "running", "gemini", "lex-exp",
+         now_s - 5000, now_s - 1),  # expired 1s ago
+    )
+    conn.commit()
+    conn.close()
+    r = local_api.build_pipeline_stuck(tmp_path, threshold_seconds=60, now_seconds=now_s)
+    assert r["stale_workers_count"] == 0
+    # And the expired lease still appears in stuck_leased.
+    assert any(j["module_key"] == "k8s/expired" for j in r["stuck_leased"])
+
+
+def test_stale_workers_ties_break_by_leased_by(tmp_path: Path) -> None:
+    """Codex Phase D review: ties on idle_seconds must break
+    deterministically (here: ``leased_by`` ASC) so a polling operator
+    doesn't see the order flip between otherwise-identical calls."""
+    _setup_repo(tmp_path)
+    now_s = 10_000
+    conn = sqlite3.connect(tmp_path / ".pipeline/v2.db")
+    # Two workers, same idle profile (never emitted, same leased_at).
+    conn.executemany(
+        "INSERT INTO jobs (module_key, phase, queue_state, leased_by, lease_id, "
+        "leased_at, lease_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [
+            ("k8s/a", "review", "leased", "worker-z", "lex-z",
+             now_s - 5000, now_s + 3600),
+            ("k8s/b", "review", "leased", "worker-a", "lex-a",
+             now_s - 5000, now_s + 3600),
+        ],
+    )
+    conn.commit()
+    conn.close()
+    r1 = local_api.build_pipeline_stuck(tmp_path, threshold_seconds=60, now_seconds=now_s)
+    r2 = local_api.build_pipeline_stuck(tmp_path, threshold_seconds=60, now_seconds=now_s)
+    assert [w["leased_by"] for w in r1["stale_workers"]] == ["worker-a", "worker-z"]
+    assert [w["leased_by"] for w in r1["stale_workers"]] == [
+        w["leased_by"] for w in r2["stale_workers"]
+    ]
+
+
+def test_stale_workers_sorts_never_emitted_before_finite_idle(tmp_path: Path) -> None:
+    """A worker that has never emitted an event is strictly more
+    concerning than one that emitted recently-ish. The former must sort
+    above the latter."""
+    _setup_repo(tmp_path)
+    now_s = 10_000
+    conn = sqlite3.connect(tmp_path / ".pipeline/v2.db")
+    # Worker A: long-idle but has emitted.
+    conn.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state, leased_by, lease_id, "
+        "leased_at, lease_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("k8s/a", "review", "running", "old-worker", "lex-a",
+         now_s - 9000, now_s + 3600),
+    )
+    conn.execute(
+        "INSERT INTO events (module_key, type, lease_id, payload_json, at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        ("k8s/a", "attempt_started", "lex-a", "{}", now_s - 500),
+    )
+    # Worker B: never emitted at all.
+    conn.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state, leased_by, lease_id, "
+        "leased_at, lease_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("k8s/b", "review", "running", "zombie-worker", "lex-b",
+         now_s - 9000, now_s + 3600),
+    )
+    conn.commit()
+    conn.close()
+    r = local_api.build_pipeline_stuck(tmp_path, threshold_seconds=60, now_seconds=now_s)
+    assert r["stale_workers_count"] == 2
+    # Never-emitted worker comes first.
+    assert r["stale_workers"][0]["leased_by"] == "zombie-worker"
+    assert r["stale_workers"][0]["idle_seconds"] is None
+    assert r["stale_workers"][1]["leased_by"] == "old-worker"
+    assert r["stale_workers"][1]["idle_seconds"] == 500
+
+
 def test_reviews_index_and_single(tmp_path: Path) -> None:
     reviews_dir = tmp_path / ".pipeline" / "reviews"
     reviews_dir.mkdir(parents=True)
@@ -1835,6 +1987,87 @@ def test_briefing_has_actions_and_top_modules(tmp_path: Path) -> None:
     assert "active_lease" in reasons
 
 
+def test_briefing_action_rows_carry_structured_bucket_and_endpoint(tmp_path: Path) -> None:
+    """Codex Phase D review round 3: the dashboard was reverse-parsing
+    label strings to find drill endpoints, which misroutes when the
+    same module appears in multiple buckets and drops links for
+    non-module rows. ``action_rows[]`` carries {bucket, label,
+    module_key, phase, reason, endpoint} per row so consumers render
+    directly."""
+    _setup_repo(tmp_path)
+    _write(tmp_path / "STATUS.md", "# s\n\n## TODO\n\n- [ ] x\n")
+    now_s = int(time.time())
+    conn = sqlite3.connect(tmp_path / ".pipeline/v2.db")
+    # Active lease -> action_rows entry in 'active' bucket with a
+    # /api/module/{key}/state endpoint.
+    conn.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state, leased_by, lease_id, "
+        "leased_at, lease_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("live/mod", "write", "leased", "codex", "l-1", now_s - 10, now_s + 600),
+    )
+    # Stale lease on a different module -> action_rows entry in
+    # 'blocked' bucket with a /api/pipeline/v2/events?module= endpoint.
+    conn.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state, leased_by, lease_id, "
+        "leased_at, lease_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("stale/mod", "review", "leased", "claude", "l-2",
+         now_s - 10_000, now_s + 600),
+    )
+    conn.commit()
+    conn.close()
+
+    briefing = local_api.build_session_briefing(tmp_path)
+    rows = briefing.get("action_rows")
+    assert isinstance(rows, list) and rows, "action_rows must be present"
+
+    active = [r for r in rows if r["bucket"] == "active"]
+    blocked = [r for r in rows if r["bucket"] == "blocked"]
+    assert any(r.get("module_key") == "live/mod" for r in active)
+    assert any(r.get("module_key") == "stale/mod" for r in blocked)
+
+    live_row = next(r for r in active if r.get("module_key") == "live/mod")
+    assert live_row.get("reason") == "active_lease"
+    assert live_row.get("endpoint") == "/api/module/live/mod/state"
+
+    stale_row = next(r for r in blocked if r.get("module_key") == "stale/mod")
+    assert stale_row.get("reason") in {"stale_lease", "stuck_in_state"}
+    # Must point at the events timeline, NOT the state endpoint.
+    assert "pipeline/v2/events" in (stale_row.get("endpoint") or "")
+
+    # Labels must equal the strings in actions.{bucket} so the old
+    # flat view is still derivable from action_rows.
+    active_labels = [r["label"] for r in active]
+    assert list(briefing["actions"]["active"]) == active_labels
+
+
+def test_briefing_action_rows_link_non_module_rows(tmp_path: Path) -> None:
+    """Codex Phase D review round 3 bug 2: rows with no ``module_key``
+    (e.g. ``N job(s) ready to pick up``) previously dropped their drill
+    endpoint in the dashboard because the JS only kept endpoints for
+    rows with a module key. ``action_rows[]`` must carry the endpoint
+    even when module_key is None."""
+    _setup_repo(tmp_path)
+    _write(tmp_path / "STATUS.md", "# s\n\n## TODO\n\n- [ ] x\n")
+    # Seed a pending job so queue_head.ready > 0 and the ``ready_queue``
+    # next row fires.
+    conn = sqlite3.connect(tmp_path / ".pipeline/v2.db")
+    conn.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state) VALUES (?, ?, ?)",
+        ("ready/one", "write", "pending"),
+    )
+    conn.commit()
+    conn.close()
+
+    briefing = local_api.build_session_briefing(tmp_path)
+    rows = briefing.get("action_rows") or []
+    ready_rows = [r for r in rows if r.get("reason") == "ready_queue"]
+    assert ready_rows, "ready_queue row must appear in action_rows"
+    r = ready_rows[0]
+    assert r["bucket"] == "next"
+    assert r.get("module_key") is None
+    assert r.get("endpoint") == "/api/pipeline/v2/status"
+
+
 def test_briefing_top_modules_surfaces_pipeline_dead_letter(
     tmp_path: Path,
 ) -> None:
@@ -1975,6 +2208,426 @@ def test_schema_lists_phase_c_endpoints() -> None:
         "/api/module/{key}/lease",
     ):
         assert expected in paths, f"/api/schema missing {expected}"
+
+
+def test_schema_lists_phase_d_endpoints() -> None:
+    schema = local_api.build_api_schema()
+    paths = {e["path"] for e in schema["endpoints"]}
+    for expected in ("/api/activity",):
+        assert expected in paths, f"/api/schema missing {expected}"
+
+
+# ---- Phase D: merged activity feed ----
+
+
+def test_activity_feed_empty_repo_returns_no_items(tmp_path: Path) -> None:
+    """Nothing committed, no pipeline v2 db, no bridge db — feed returns
+    empty items with zeroed source counts, not a crash."""
+    _init_repo(tmp_path)
+    result = local_api.build_activity_feed(tmp_path, limit=10)
+    assert result["count"] == 0
+    assert result["items"] == []
+    assert result["source_counts"] == {
+        "commit": 0,
+        "pipeline_event": 0,
+        "bridge_message": 0,
+    }
+
+
+def test_activity_feed_merges_commits_and_pipeline_events_sorted(tmp_path: Path) -> None:
+    """Commits + pipeline events must come back in a single newest-first
+    stream with the declared source labels."""
+    repo = tmp_path
+    _init_repo(repo)
+    _write(repo / "README.md", "v1\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-m", "first commit")
+    _write(repo / "README.md", "v2\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-m", "second commit")
+
+    db_path = repo / ".pipeline" / "v2.db"
+    _init_v2_db(db_path, module_key="k8s/cka/module-1.1-foo")
+    now = int(time.time())
+    # Re-timestamp the seeded event into the window so it shows up.
+    conn = sqlite3.connect(db_path)
+    conn.execute("UPDATE events SET at = ? WHERE module_key = ?",
+                 (now - 60, "k8s/cka/module-1.1-foo"))
+    conn.commit()
+    conn.close()
+
+    feed = local_api.build_activity_feed(repo, limit=20, now_seconds=now)
+    sources = [it["source"] for it in feed["items"]]
+    assert "commit" in sources
+    assert "pipeline_event" in sources
+    ats = [int(it["at"]) for it in feed["items"]]
+    assert ats == sorted(ats, reverse=True), "items must be newest-first"
+    assert feed["source_counts"]["commit"] >= 2
+    assert feed["source_counts"]["pipeline_event"] >= 1
+
+
+def test_activity_feed_since_filter_excludes_old_commits(tmp_path: Path) -> None:
+    """``since_seconds`` must be passed through to ``git log --since=@``
+    so a tight window doesn't return the entire repo history."""
+    repo = tmp_path
+    _init_repo(repo)
+    _write(repo / "README.md", "v1\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-m", "old commit")
+    future = int(time.time()) + 10_000
+    feed = local_api.build_activity_feed(
+        repo, since_seconds=future, limit=20, now_seconds=future + 60
+    )
+    assert feed["source_counts"]["commit"] == 0
+    assert feed["count"] == 0
+
+
+def test_activity_feed_rejects_invalid_since_via_route(tmp_path: Path) -> None:
+    """The /api/activity handler returns 400 for garbage ``since`` values
+    rather than anchoring the feed at epoch 0."""
+    _init_repo(tmp_path)
+    status, payload, _ = local_api.route_request(tmp_path, "/api/activity?since=not-a-date")
+    assert status == 400
+    assert payload["error"] == "invalid_since"
+
+
+def test_activity_feed_orders_pipeline_events_by_at_not_id(tmp_path: Path) -> None:
+    """Codex Phase D review: the activity feed must pull pipeline-event
+    candidates ordered by ``at`` DESC, not ``id`` DESC. Otherwise a
+    backfilled row (high ``id``, old ``at``) can fill the per-source
+    cap and push a genuinely newer event out of the candidate set, so
+    the merged top-N wouldn't actually be chronological."""
+    repo = tmp_path
+    _init_repo(repo)
+    db_path = repo / ".pipeline" / "v2.db"
+    _init_v2_db(db_path, module_key="seed/mod")
+
+    now = 1_000_000
+    # Stream three rows in (id-ascending) order:
+    #   id=1   at=now-100   ← oldest
+    #   id=2   at=now-3000  ← BACKFILL (high id, old at)
+    #   id=3   at=now-50    ← newest
+    # ``id DESC`` would yield [3, 2, 1]. With limit=2, that drops id=1
+    # but keeps the backfill. ``at DESC`` must yield [3, 1, 2], so
+    # limit=2 keeps [id=3, id=1] — the two truly newest rows.
+    conn = sqlite3.connect(db_path)
+    conn.execute("DELETE FROM events")
+    conn.executemany(
+        "INSERT INTO events (id, module_key, type, lease_id, payload_json, at) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        [
+            (101, "seed/mod", "attempt_started", None, "{}", now - 100),
+            (102, "seed/mod", "backfilled",      None, "{}", now - 3000),
+            (103, "seed/mod", "attempt_ended",   None, "{}", now - 50),
+        ],
+    )
+    conn.commit()
+    conn.close()
+
+    feed = local_api.build_activity_feed(
+        repo, since_seconds=now - 5000, limit=2, now_seconds=now
+    )
+    event_items = [it for it in feed["items"] if it["source"] == "pipeline_event"]
+    kinds = [it["kind"] for it in event_items]
+    # The newest two by ``at`` are id=103 (attempt_ended) and id=101
+    # (attempt_started). The backfill (id=102) must NOT win over them.
+    assert "attempt_ended" in kinds
+    assert "attempt_started" in kinds
+    assert "backfilled" not in kinds
+
+
+def test_activity_feed_bridge_filter_keeps_fractional_and_offset_iso(tmp_path: Path) -> None:
+    """Codex Phase D review: bridge-row filtering used a lexical string
+    compare against an ISO ``...Z`` cutoff. That drops rows whose
+    absolute time is LATER but whose ISO string sorts BEFORE (fractional
+    seconds, ``+00:00`` offsets). Filtering must run through
+    ``_iso_to_epoch`` on the Python side."""
+    repo = tmp_path
+    _init_repo(repo)
+    bridge_dir = repo / ".bridge"
+    bridge_dir.mkdir()
+    bdb = bridge_dir / "messages.db"
+    conn = sqlite3.connect(bdb)
+    conn.executescript(
+        """
+        CREATE TABLE messages (
+          id INTEGER PRIMARY KEY,
+          task_id TEXT,
+          from_llm TEXT,
+          to_llm TEXT,
+          message_type TEXT,
+          content TEXT,
+          timestamp TEXT,
+          acknowledged INTEGER DEFAULT 0,
+          status TEXT
+        );
+        """
+    )
+    # Cutoff is 2026-01-01T00:00:00Z (= epoch 1767225600). These two
+    # messages are at +0.5s and +0.000001s after the cutoff — both
+    # must be KEPT. A lexical compare against "2026-01-01T00:00:00Z"
+    # drops them because ``.``/``+`` sort before ``Z``.
+    conn.executemany(
+        "INSERT INTO messages (id, task_id, from_llm, to_llm, message_type, "
+        "content, timestamp, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+            (1, "t", "a", "b", "query", "hi", "2026-01-01T00:00:00.500Z", "delivered"),
+            (2, "t", "a", "b", "query", "hi", "2026-01-01T00:00:00.000001+00:00", "delivered"),
+            # This one IS before the cutoff and must be dropped.
+            (3, "t", "a", "b", "query", "hi", "2025-12-31T23:59:00Z", "delivered"),
+        ],
+    )
+    conn.commit()
+    conn.close()
+
+    cutoff = 1767225600  # 2026-01-01T00:00:00Z
+    feed = local_api.build_activity_feed(
+        repo, since_seconds=cutoff, limit=50, now_seconds=cutoff + 3600
+    )
+    bridge_ids = {it["ref"]["message_id"] for it in feed["items"] if it["source"] == "bridge_message"}
+    assert 1 in bridge_ids
+    assert 2 in bridge_ids
+    assert 3 not in bridge_ids
+
+
+def test_activity_feed_accepts_iso_since(tmp_path: Path) -> None:
+    """ISO-8601 ``since`` values should parse the same as epoch seconds."""
+    _init_repo(tmp_path)
+    _write(tmp_path / "README.md", "v1\n")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-m", "initial")
+    status, payload, _ = local_api.route_request(
+        tmp_path, "/api/activity?since=1970-01-01T00:00:00Z&limit=5"
+    )
+    assert status == 200
+    assert isinstance(payload, dict)
+    assert payload["since_seconds"] == 0
+
+
+# ---- Phase D: per-section track readiness ----
+
+
+def _seed_module(repo: Path, rel: str) -> None:
+    """Create a minimal ``module-*.md`` under ``src/content/docs/<rel>.md``.
+
+    ``rel`` is the docs-relative path without the ``.md`` suffix, e.g.
+    ``k8s/cka/module-1.1-foo``.
+    """
+    path = repo / "src" / "content" / "docs" / f"{rel}.md"
+    _write(path, "---\ntitle: t\n---\n\nbody\n")
+
+
+def _seed_v2_job(
+    db_path: Path,
+    *,
+    module_key: str,
+    queue_state: str,
+    phase: str = "review",
+    lease_id: str | None = None,
+    leased_by: str | None = None,
+    leased_at: int | None = None,
+) -> None:
+    """Insert a ``jobs`` row with the given state. Fixture DB must have
+    ``jobs`` + ``events`` tables already created (see ``_init_v2_db``).
+
+    Note: the fixture table doesn't enforce the production CHECK
+    constraint on ``queue_state``, but tests should still pass values
+    from the real vocabulary (``pending | leased | completed | failed``)
+    so the reducer-driven readiness endpoint exercises the same paths
+    as the live pipeline.
+    """
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            """
+            INSERT INTO jobs
+            (module_key, phase, model, queue_state, leased_by, lease_id,
+             leased_at, enqueued_at, requested_calls, estimated_usd, idempotency_key)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                module_key,
+                phase,
+                "codex",
+                queue_state,
+                leased_by,
+                lease_id,
+                leased_at,
+                int(time.time()),
+                1,
+                0.01,
+                f"{module_key}-{queue_state}-{time.time_ns()}",
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _seed_v2_event(
+    db_path: Path,
+    *,
+    module_key: str,
+    event_type: str,
+    at: int = 1,
+    payload_json: str = "{}",
+    lease_id: str | None = None,
+) -> None:
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            "INSERT INTO events (module_key, type, lease_id, payload_json, at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (module_key, event_type, lease_id, payload_json, at),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_tracks_readiness_empty_repo(tmp_path: Path) -> None:
+    """No docs directory, no v2.db — returns zeroed totals and no tracks."""
+    _init_repo(tmp_path)
+    result = local_api.build_tracks_readiness(tmp_path)
+    assert result["tracks"] == []
+    assert result["totals"]["total"] == 0
+    assert result["totals"]["readiness_pct"] == 0.0
+
+
+def test_tracks_readiness_buckets_cleared_vs_notenq(tmp_path: Path) -> None:
+    """A module with a ``completed`` job (the pipeline's real state
+    vocabulary — not ``done``) is cleared; a module with no job at all
+    is ``not_yet_enqueued``. Readiness % = cleared / total."""
+    _init_repo(tmp_path)
+    _seed_module(tmp_path, "k8s/cka/module-1.1-foo")
+    _seed_module(tmp_path, "k8s/cka/module-1.2-bar")
+
+    db = tmp_path / ".pipeline" / "v2.db"
+    _init_v2_db(db, module_key="k8s/cka/seed")
+    _seed_v2_job(db, module_key="k8s/cka/module-1.1-foo", queue_state="completed")
+
+    result = local_api.build_tracks_readiness(tmp_path)
+    k8s = next(t for t in result["tracks"] if t["slug"] == "k8s")
+    assert k8s["total"] == 2
+    assert k8s["cleared"] == 1
+    assert k8s["not_yet_enqueued"] == 1
+    assert k8s["readiness_pct"] == 50.0
+    cka = next(s for s in k8s["sections"] if s["slug"] == "cka")
+    assert cka["total"] == 2
+    assert cka["readiness_pct"] == 50.0
+
+
+def test_tracks_readiness_completed_plus_pending_counts_in_flight(tmp_path: Path) -> None:
+    """Codex Phase D review: the readiness grid must reuse the same
+    ``_module_status`` reducer as ``/api/pipeline/v2/status``. A module
+    that has BOTH a ``completed`` row and a fresh ``pending`` row must
+    count as in_flight (work has been re-enqueued), not cleared — that's
+    what the reducer says."""
+    _init_repo(tmp_path)
+    _seed_module(tmp_path, "k8s/ckad/module-2.1-quiz")
+
+    db = tmp_path / ".pipeline" / "v2.db"
+    _init_v2_db(db, module_key="k8s/ckad/seed")
+    _seed_v2_job(db, module_key="k8s/ckad/module-2.1-quiz",
+                 queue_state="completed", phase="write")
+    _seed_v2_job(db, module_key="k8s/ckad/module-2.1-quiz",
+                 queue_state="pending", phase="review")
+
+    result = local_api.build_tracks_readiness(tmp_path)
+    k8s = next(t for t in result["tracks"] if t["slug"] == "k8s")
+    ckad = next(s for s in k8s["sections"] if s["slug"] == "ckad")
+    assert ckad["cleared"] == 0
+    assert ckad["in_flight"] == 1
+
+
+def test_tracks_readiness_leased_job_counts_in_flight(tmp_path: Path) -> None:
+    """A ``leased`` job row (worker actively holding the module) must
+    bucket as in_flight via the reducer's ``in_progress`` status."""
+    _init_repo(tmp_path)
+    _seed_module(tmp_path, "k8s/cka/module-3.1-lease")
+
+    db = tmp_path / ".pipeline" / "v2.db"
+    _init_v2_db(db, module_key="k8s/cka/seed")
+    _seed_v2_job(
+        db,
+        module_key="k8s/cka/module-3.1-lease",
+        queue_state="leased",
+        phase="review",
+        lease_id="lease-abc",
+        leased_by="claude",
+        leased_at=1,
+    )
+    result = local_api.build_tracks_readiness(tmp_path)
+    k8s = next(t for t in result["tracks"] if t["slug"] == "k8s")
+    cka = next(s for s in k8s["sections"] if s["slug"] == "cka")
+    assert cka["in_flight"] == 1
+    assert cka["cleared"] == 0
+
+
+def test_tracks_readiness_dead_letter_from_event(tmp_path: Path) -> None:
+    """Codex Phase D review: the live pipeline surfaces dead-letter
+    state via an EVENT (``module_dead_lettered``), not a ``queue_state``
+    row. A ``module_dead_lettered`` event with no later
+    ``dead_letter_recovered`` must bucket as dead_letter — not
+    in_flight — and a recovered one must revert."""
+    _init_repo(tmp_path)
+    _seed_module(tmp_path, "platform/foundations/module-1.1-zzz")
+    _seed_module(tmp_path, "platform/foundations/module-1.2-recovered")
+
+    db = tmp_path / ".pipeline" / "v2.db"
+    _init_v2_db(db, module_key="platform/foundations/seed")
+    # Unresolved dead-letter.
+    _seed_v2_event(
+        db,
+        module_key="platform/foundations/module-1.1-zzz",
+        event_type="module_dead_lettered",
+        at=10,
+    )
+    # Dead-lettered then recovered -> should NOT count as dead_letter.
+    _seed_v2_event(
+        db,
+        module_key="platform/foundations/module-1.2-recovered",
+        event_type="module_dead_lettered",
+        at=20,
+    )
+    _seed_v2_event(
+        db,
+        module_key="platform/foundations/module-1.2-recovered",
+        event_type="dead_letter_recovered",
+        at=30,
+    )
+
+    result = local_api.build_tracks_readiness(tmp_path)
+    platform = next(t for t in result["tracks"] if t["slug"] == "platform")
+    assert platform["dead_letter"] == 1
+    # Recovered module falls back to "pending_write" via the reducer's
+    # default branch -> in_flight. Never dead_letter.
+    assert platform["in_flight"] >= 1
+
+
+def test_tracks_readiness_top_level_module_uses_root_section(tmp_path: Path) -> None:
+    """``prerequisites/module-*.md`` has no intermediate section directory
+    — it must land in a ``_root`` bucket rather than crashing."""
+    _init_repo(tmp_path)
+    _seed_module(tmp_path, "prerequisites/module-0-welcome")
+    result = local_api.build_tracks_readiness(tmp_path)
+    prereq = next(t for t in result["tracks"] if t["slug"] == "prerequisites")
+    root = next(s for s in prereq["sections"] if s["slug"] == "_root")
+    assert root["total"] == 1
+
+
+def test_schema_lists_tracks_readiness() -> None:
+    paths = {e["path"] for e in local_api.build_api_schema()["endpoints"]}
+    assert "/api/tracks/readiness" in paths
+
+
+def test_iso_to_epoch_round_trip() -> None:
+    """``_iso_to_epoch`` must accept both ``Z`` and ``+00:00`` forms."""
+    assert local_api._iso_to_epoch("1970-01-01T00:00:00Z") == 0
+    assert local_api._iso_to_epoch("1970-01-01T00:00:00+00:00") == 0
+    assert local_api._iso_to_epoch("bogus") is None
+    assert local_api._iso_to_epoch(None) is None
+    assert local_api._iso_to_epoch("") is None
 
 
 def test_cli_starts_server_and_reports_host_port(tmp_path: Path) -> None:

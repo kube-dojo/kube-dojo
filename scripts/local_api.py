@@ -1168,6 +1168,75 @@ def build_pipeline_stuck(
     else:
         dead_lettered = []
 
+    # Phase D stale-worker view: per-``leased_by`` roll-up. A worker may
+    # hold several non-expired leases but have gone silent across all of
+    # them — that's a zombie that the per-module ``stuck_in_state`` view
+    # doesn't surface cleanly because a bursty event on a sibling lease
+    # can hide it. We group by worker and take the most recent event
+    # from ANY of their current leases as the heartbeat. ``idle_seconds``
+    # = None means "never emitted" and ranks as strictly staler than any
+    # finite idle time.
+    active_lease_rows = _query_sqlite_rows(
+        db_path,
+        """
+        SELECT j.leased_by, j.lease_id, j.module_key, j.phase,
+               j.leased_at, j.lease_expires_at,
+               (
+                   SELECT MAX(at) FROM events e
+                   WHERE e.lease_id = j.lease_id
+               ) AS last_event_at
+        FROM jobs j
+        WHERE j.leased_by IS NOT NULL
+          AND (j.lease_expires_at IS NULL OR j.lease_expires_at >= ?)
+        ORDER BY j.leased_by ASC, j.lease_id ASC, j.id ASC
+        """,
+        (now_seconds,),
+    )
+    by_worker: dict[str, dict[str, Any]] = {}
+    for row in active_lease_rows:
+        worker = row.get("leased_by")
+        if not worker:
+            continue
+        bucket = by_worker.setdefault(str(worker), {
+            "leased_by": str(worker),
+            "active_lease_count": 0,
+            "module_keys": [],
+            "last_event_at": None,
+        })
+        bucket["active_lease_count"] += 1
+        mk = row.get("module_key")
+        if mk and mk not in bucket["module_keys"]:
+            bucket["module_keys"].append(mk)
+        le = row.get("last_event_at")
+        if isinstance(le, (int, float)):
+            if bucket["last_event_at"] is None or le > bucket["last_event_at"]:
+                bucket["last_event_at"] = int(le)
+
+    stale_workers: list[dict[str, Any]] = []
+    for bucket in by_worker.values():
+        le = bucket["last_event_at"]
+        if le is None:
+            idle: int | None = None
+        else:
+            idle = max(0, now_seconds - int(le))
+        # Stale if the worker has never emitted an event on any active
+        # lease, OR its most recent heartbeat is older than the threshold.
+        if idle is None or idle > threshold_seconds:
+            bucket["idle_seconds"] = idle
+            stale_workers.append(bucket)
+    # Rank "never emitted" as strictly staler than any finite idle, then
+    # longest-idle first, with ``leased_by`` as a deterministic tiebreaker
+    # so two workers at the same idle-seconds don't rearrange across
+    # calls. (Codex Phase D review: finite-idle ties were non-
+    # deterministic.)
+    stale_workers.sort(
+        key=lambda w: (
+            0 if w.get("idle_seconds") is None else 1,
+            -(w.get("idle_seconds") or 0),
+            str(w.get("leased_by") or ""),
+        )
+    )
+
     return {
         "db_path": str(db_path),
         "exists": True,
@@ -1179,6 +1248,8 @@ def build_pipeline_stuck(
         "stuck_in_state": stuck_in_state,
         "dead_lettered_count": len(dead_lettered),
         "dead_lettered": dead_lettered,
+        "stale_workers_count": len(stale_workers),
+        "stale_workers": stale_workers,
     }
 
 
@@ -2092,6 +2163,466 @@ def build_recent_activity(repo_root: Path) -> dict[str, Any]:
     }
 
 
+_ACTIVITY_DEFAULT_SINCE_SECONDS = 86400  # 24h
+_ACTIVITY_MAX_LIMIT = 500
+
+
+def _iso_to_epoch(value: Any) -> int | None:
+    """Parse an ISO-8601 timestamp to Unix-epoch seconds.
+
+    Accepts the bridge's ``YYYY-MM-DDTHH:MM:SS[.ffffff][Z|+00:00]`` shape.
+    Returns ``None`` on unparseable / absent input so the caller can drop
+    the item rather than anchoring the feed at epoch-0.
+    """
+    if not isinstance(value, str) or not value:
+        return None
+    from datetime import datetime, timezone
+    text = value.strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return int(dt.timestamp())
+
+
+def _recent_commits_with_time(
+    repo_root: Path,
+    *,
+    since_seconds: int | None = None,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Like ``_recent_commits`` but each row carries a committer-time ``at``.
+
+    Used by the merged activity feed so commits can be sorted against
+    pipeline events and bridge messages on a single axis. ``since_seconds``
+    is applied via ``git log --since=@<epoch>`` (inclusive).
+    """
+    capped = max(1, min(int(limit), 500))
+    cmd = ["git", "log", f"-n{capped}", "--pretty=format:%h%x09%ct%x09%s"]
+    if since_seconds is not None:
+        cmd.insert(2, f"--since=@{int(since_seconds)}")
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    if result.returncode != 0:
+        return []
+    commits: list[dict[str, Any]] = []
+    for line in result.stdout.splitlines():
+        parts = line.split("\t", 2)
+        if len(parts) != 3:
+            continue
+        sha, ct, subject = parts
+        try:
+            at = int(ct)
+        except ValueError:
+            continue
+        commits.append({"sha": sha, "at": at, "subject": subject})
+    return commits
+
+
+def build_activity_feed(
+    repo_root: Path,
+    *,
+    since_seconds: int | None = None,
+    limit: int = 50,
+    now_seconds: int | None = None,
+) -> dict[str, Any]:
+    """Merged chronological feed: git commits + pipeline v2 events + bridge messages.
+
+    Everything is normalized to one item shape so operators see a single
+    timeline. Each source is fetched with a per-source cap of ``4 * limit``
+    (min 50) before merging so a quiet source isn't crowded out at the
+    merge boundary. Items with an unparseable timestamp are dropped, not
+    anchored at 0 — otherwise they'd always rank last in ascending order
+    or first in descending, hiding real recent activity.
+
+    Defaults: ``since_seconds`` = now − 24 h, ``limit`` = 50 (max 500).
+    """
+    now_seconds = now_seconds if now_seconds is not None else int(time.time())
+    if since_seconds is None:
+        since_seconds = now_seconds - _ACTIVITY_DEFAULT_SINCE_SECONDS
+    capped = max(1, min(int(limit), _ACTIVITY_MAX_LIMIT))
+    per_source_cap = max(capped * 4, 50)
+
+    items: list[dict[str, Any]] = []
+    source_counts: dict[str, int] = {
+        "commit": 0,
+        "pipeline_event": 0,
+        "bridge_message": 0,
+    }
+    errors: dict[str, str] = {}
+
+    try:
+        commits = _recent_commits_with_time(
+            repo_root, since_seconds=since_seconds, limit=per_source_cap
+        )
+    except Exception as exc:  # noqa: BLE001
+        commits = []
+        errors["commit"] = f"{type(exc).__name__}: {exc}"
+    for c in commits:
+        items.append({
+            "source": "commit",
+            "at": c.get("at"),
+            "kind": "commit",
+            "module_key": None,
+            "summary": c.get("subject"),
+            "ref": {"sha": c.get("sha")},
+        })
+        source_counts["commit"] += 1
+
+    # Pipeline events: order by ``at`` DESC (NOT ``id`` DESC). Event
+    # rows can be backfilled with an older ``at`` than their ``id`` —
+    # ``build_pipeline_events`` uses ``id`` ordering for its own
+    # purposes, but using that here would let a high-id/low-at
+    # backfill consume a per-source slot and push a genuinely newer
+    # event out of the merge candidates. See Codex Phase D review.
+    try:
+        db_path = repo_root / ".pipeline" / "v2.db"
+        if db_path.exists():
+            event_rows = _query_sqlite_rows(
+                db_path,
+                """
+                SELECT id, type, module_key, lease_id, at
+                FROM events
+                WHERE at >= ?
+                ORDER BY at DESC
+                LIMIT ?
+                """,
+                (int(since_seconds), int(per_source_cap)),
+            )
+        else:
+            event_rows = []
+    except Exception as exc:  # noqa: BLE001
+        event_rows = []
+        errors["pipeline_event"] = f"{type(exc).__name__}: {exc}"
+    for e in event_rows:
+        items.append({
+            "source": "pipeline_event",
+            "at": e.get("at"),
+            "kind": e.get("type"),
+            "module_key": e.get("module_key"),
+            "summary": None,
+            "ref": {"event_id": e.get("id"), "lease_id": e.get("lease_id")},
+        })
+        source_counts["pipeline_event"] += 1
+
+    # Bridge messages: fetch newest-first WITHOUT a SQL ``since`` filter,
+    # then filter in Python via ``_iso_to_epoch``. The SQL filter is a
+    # lexical string compare against an ISO timestamp column that may
+    # contain fractional seconds or ``+00:00`` offsets — a ``...Z``
+    # cutoff lexically drops ``...0.500Z`` and ``...+00:00`` rows even
+    # when they represent later absolute times. See Codex Phase D review.
+    try:
+        bridge = build_bridge_messages(repo_root, None, limit=per_source_cap)
+    except Exception as exc:  # noqa: BLE001
+        bridge = {"messages": []}
+        errors["bridge_message"] = f"{type(exc).__name__}: {exc}"
+    for m in (bridge.get("messages") or []):
+        at = _iso_to_epoch(m.get("timestamp"))
+        if at is None or at < since_seconds:
+            continue
+        items.append({
+            "source": "bridge_message",
+            "at": at,
+            "kind": m.get("message_type"),
+            "module_key": None,
+            "summary": f"{m.get('from_llm') or '?'}→{m.get('to_llm') or '?'}",
+            "ref": {"message_id": m.get("id"), "task_id": m.get("task_id")},
+        })
+        source_counts["bridge_message"] += 1
+
+    # Drop items with no usable timestamp (would cluster at the top/bottom
+    # depending on sort direction and mislead operators).
+    items = [it for it in items if isinstance(it.get("at"), (int, float))]
+    items.sort(key=lambda it: int(it["at"]), reverse=True)
+    items = items[:capped]
+
+    payload: dict[str, Any] = {
+        "generated_at": now_seconds,
+        "since_seconds": since_seconds,
+        "limit": capped,
+        "count": len(items),
+        "source_counts": source_counts,
+        "items": items,
+    }
+    if errors:
+        payload["errors"] = errors
+    return payload
+
+
+# ---- Phase D: per-section track readiness ----
+
+# Pipeline v2's ``jobs.queue_state`` is one of ``pending | leased |
+# completed | failed`` (control_plane.py:195-201). It is NOT the same
+# vocabulary as the status reducer's ``pending_write | pending_review |
+# pending_patch | in_progress | done | dead_letter`` (cli.py:536-560),
+# which is derived from a combination of job rows + events. Bucketing
+# naïvely off raw ``queue_state`` misclassifies dead-lettered modules
+# as in-flight. We reuse the pipeline's own reducer so this endpoint
+# stays in lock-step with ``/api/pipeline/v2/status``.
+_READINESS_BUCKET_FOR_STATUS: dict[str, str] = {
+    "done": "cleared",
+    "dead_letter": "dead_letter",
+    "in_progress": "in_flight",
+    "pending_write": "in_flight",
+    "pending_review": "in_flight",
+    "pending_patch": "in_flight",
+}
+
+
+def _readiness_bucket_for_status(status: str | None) -> str:
+    if not status:
+        return "not_yet_enqueued"
+    # Unknown statuses default to in_flight so a reducer extension
+    # doesn't silently mark new work cleared.
+    return _READINESS_BUCKET_FOR_STATUS.get(status, "in_flight")
+
+
+def _load_v2_module_statuses(repo_root: Path) -> dict[str, str]:
+    """Map ``module_key`` → reducer status from ``.pipeline/v2.db``.
+
+    Uses the same ``_module_status`` reducer as
+    ``pipeline_v2.cli._build_status_report`` so the readiness grid
+    agrees with ``/api/pipeline/v2/status`` row-for-row. Dead-letter
+    detection flows through ``_current_dead_letter_rows``.
+    """
+    db_path = repo_root / ".pipeline" / "v2.db"
+    if not db_path.exists():
+        return {}
+    # Import here so the module-level deferral pattern is preserved.
+    # Missing pipeline_v2 degrades to an empty map (same stance as
+    # ``build_pipeline_stuck`` around dead-letter rows).
+    try:
+        from pipeline_v2.cli import (
+            _current_dead_letter_rows,
+            _module_status,
+        )
+    except ModuleNotFoundError as exc:
+        if exc.name not in {"pipeline_v2", "pipeline_v2.cli"}:
+            raise
+        return {}
+
+    job_rows = _query_sqlite_rows(
+        db_path,
+        """
+        SELECT module_key, phase, queue_state
+        FROM jobs
+        WHERE module_key IS NOT NULL
+        ORDER BY id ASC
+        """,
+    )
+    event_rows = _query_sqlite_rows(
+        db_path,
+        """
+        SELECT id, module_key, type, payload_json, at
+        FROM events
+        WHERE module_key IS NOT NULL
+        ORDER BY id ASC
+        """,
+    )
+
+    modules: set[str] = set()
+    job_state_by_module: dict[str, dict[str, Any]] = {}
+    event_types_by_module: dict[str, set[str]] = {}
+    dead_letter_rows: list[dict[str, Any]] = []
+
+    for row in job_rows:
+        module_key = str(row.get("module_key") or "")
+        if not module_key:
+            continue
+        phase = str(row.get("phase") or "")
+        queue_state = str(row.get("queue_state") or "")
+        modules.add(module_key)
+        state = job_state_by_module.setdefault(
+            module_key,
+            {
+                "pending_phases": set(),
+                "has_leased": False,
+                "has_failed": False,
+                "has_completed": False,
+            },
+        )
+        if queue_state == "pending":
+            state["pending_phases"].add(phase)
+        elif queue_state == "leased":
+            state["has_leased"] = True
+        elif queue_state == "failed":
+            state["has_failed"] = True
+        elif queue_state == "completed":
+            state["has_completed"] = True
+
+    for row in event_rows:
+        module_key = str(row.get("module_key") or "")
+        if not module_key:
+            continue
+        event_type = str(row.get("type") or "")
+        modules.add(module_key)
+        event_types_by_module.setdefault(module_key, set()).add(event_type)
+        if event_type in {
+            "needs_human_intervention",
+            "module_dead_lettered",
+            "dead_letter_recovered",
+        }:
+            dead_letter_rows.append({
+                "module_key": module_key,
+                "id": int(row.get("id") or 0),
+                "type": event_type,
+                "payload_json": str(row.get("payload_json") or "{}"),
+                "at": int(row.get("at") or 0),
+            })
+
+    unresolved_dead_letters = {
+        r["module_key"] for r in _current_dead_letter_rows(dead_letter_rows)
+    }
+
+    statuses: dict[str, str] = {}
+    for module_key in modules:
+        status = _module_status(
+            job_state_by_module.get(module_key),
+            event_types_by_module.get(module_key, set()),
+            dead_lettered=module_key in unresolved_dead_letters,
+        )
+        statuses[module_key] = status
+    return statuses
+
+
+def _section_for_key(module_key: str) -> str:
+    """Second path segment of a module key; ``_root`` for top-level modules.
+
+    Examples: ``k8s/cka/module-1.1-foo`` → ``cka``; ``prerequisites/
+    module-1.1-foo`` → ``_root``. Keeps top-level tracks from crashing
+    the grid while still bucketing them as a real section.
+    """
+    parts = str(module_key).split("/")
+    if len(parts) < 3:
+        return "_root"
+    return parts[1]
+
+
+def build_tracks_readiness(repo_root: Path) -> dict[str, Any]:
+    """Per-track, per-section readiness grid for the operator dashboard.
+
+    Buckets every English module on disk into one of:
+      - ``cleared`` — pipeline v2 latest state is ``done``/``completed``
+      - ``in_flight`` — pending_* / leased / running / in_progress
+      - ``dead_letter`` — pipeline gave up, needs human triage
+      - ``not_yet_enqueued`` — file exists but has no v2 job row
+
+    Readiness % = ``cleared / total``. Tracks come out in the canonical
+    ``TRACK_ORDER``; within a track, sections are alphabetical so the
+    grid layout is stable across calls.
+    """
+    docs_root = repo_root / "src" / "content" / "docs"
+    from status import TRACK_ORDER, _iter_en_modules, _track_for_key
+    pipeline_status = _load_v2_module_statuses(repo_root)
+
+    # track_slug -> section_slug -> counts
+    grid: dict[str, dict[str, dict[str, int]]] = {}
+
+    for path in _iter_en_modules(docs_root):
+        rel = path.relative_to(docs_root).as_posix()
+        module_key = rel[:-3] if rel.endswith(".md") else rel
+        track = _track_for_key(module_key)
+        section = _section_for_key(module_key)
+        bucket = _readiness_bucket_for_status(pipeline_status.get(module_key))
+        t = grid.setdefault(track, {})
+        s = t.setdefault(
+            section,
+            {
+                "total": 0,
+                "cleared": 0,
+                "in_flight": 0,
+                "dead_letter": 0,
+                "not_yet_enqueued": 0,
+            },
+        )
+        s["total"] += 1
+        s[bucket] += 1
+
+    track_labels = dict(TRACK_ORDER)
+    canonical_order = [slug for slug, _ in TRACK_ORDER]
+    # Preserve canonical order; append "other" and any unknown slugs at
+    # the tail so a surprise top-level directory isn't swallowed.
+    seen = set(canonical_order)
+    extras = [t for t in grid if t not in seen]
+    track_order = canonical_order + sorted(extras)
+
+    out_tracks: list[dict[str, Any]] = []
+    grand: dict[str, int] = {
+        "total": 0,
+        "cleared": 0,
+        "in_flight": 0,
+        "dead_letter": 0,
+        "not_yet_enqueued": 0,
+    }
+    for slug in track_order:
+        sections_map = grid.get(slug)
+        if not sections_map:
+            continue
+        sections: list[dict[str, Any]] = []
+        track_total = 0
+        track_cleared = 0
+        track_in_flight = 0
+        track_dead = 0
+        track_notenq = 0
+        for section_slug in sorted(sections_map.keys()):
+            counts = sections_map[section_slug]
+            total = counts["total"]
+            cleared = counts["cleared"]
+            readiness_pct = round(100.0 * cleared / total, 1) if total else 0.0
+            sections.append({
+                "slug": section_slug,
+                "total": total,
+                "cleared": cleared,
+                "in_flight": counts["in_flight"],
+                "dead_letter": counts["dead_letter"],
+                "not_yet_enqueued": counts["not_yet_enqueued"],
+                "readiness_pct": readiness_pct,
+            })
+            track_total += total
+            track_cleared += cleared
+            track_in_flight += counts["in_flight"]
+            track_dead += counts["dead_letter"]
+            track_notenq += counts["not_yet_enqueued"]
+        out_tracks.append({
+            "slug": slug,
+            "label": track_labels.get(slug, slug.replace("-", " ").title()),
+            "total": track_total,
+            "cleared": track_cleared,
+            "in_flight": track_in_flight,
+            "dead_letter": track_dead,
+            "not_yet_enqueued": track_notenq,
+            "readiness_pct": round(100.0 * track_cleared / track_total, 1) if track_total else 0.0,
+            "sections": sections,
+        })
+        grand["total"] += track_total
+        grand["cleared"] += track_cleared
+        grand["in_flight"] += track_in_flight
+        grand["dead_letter"] += track_dead
+        grand["not_yet_enqueued"] += track_notenq
+
+    grand["readiness_pct"] = (
+        round(100.0 * grand["cleared"] / grand["total"], 1) if grand["total"] else 0.0
+    )
+    return {
+        "generated_at": int(time.time()),
+        "totals": grand,
+        "tracks": out_tracks,
+    }
+
+
 def build_navigation_status(repo_root: Path) -> dict[str, Any]:
     """Detect route/nav surfaces that still require manual inspection.
 
@@ -2640,6 +3171,161 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
       .main {{ padding: 16px; }}
       .header-inner {{ padding: 0 16px; flex-wrap: wrap; }}
     }}
+
+    /* ---- Phase D: Operator panel ---- */
+    .op-hero {{
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      padding: 14px 18px 18px;
+      border-bottom: 1px solid var(--border-subtle);
+    }}
+    .op-hero-block {{ min-width: 0; }}
+    .op-hero-title {{
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--text-dim); margin-bottom: 6px;
+    }}
+    .op-hero-list {{
+      font-size: 13px; color: var(--text-secondary);
+      list-style: none; margin: 0; padding: 0;
+    }}
+    .op-hero-list li {{
+      padding: 4px 0;
+      border-bottom: 1px dashed var(--border-subtle);
+    }}
+    .op-hero-list li:last-child {{ border-bottom: 0; }}
+    .op-hero-list .alert {{ color: var(--amber); }}
+    .op-hero-list .blocker {{ color: var(--red); }}
+    .op-hero-empty {{ color: var(--text-dim); font-style: italic; font-size: 12px; }}
+
+    .op-cols {{
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 0;
+    }}
+    .op-col {{
+      border-right: 1px solid var(--border-subtle);
+      padding: 14px 18px;
+      min-height: 140px;
+    }}
+    .op-col:last-child {{ border-right: 0; }}
+    .op-col-title {{
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.06em; margin: 0 0 10px 0;
+    }}
+    .op-col-title.now {{ color: var(--accent); }}
+    .op-col-title.blocked {{ color: var(--red); }}
+    .op-col-title.next {{ color: var(--green); }}
+    .op-col-list {{ list-style: none; margin: 0; padding: 0; font-size: 13px; }}
+    .op-col-list li {{
+      padding: 6px 0;
+      border-bottom: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      word-break: break-word;
+    }}
+    .op-col-list li:last-child {{ border-bottom: 0; }}
+    .op-col-list a {{
+      color: var(--accent); text-decoration: none;
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+      font-size: 11px;
+    }}
+    .op-col-list a:hover {{ text-decoration: underline; }}
+
+    /* Section readiness grid */
+    .readiness-wrap {{ padding: 4px 0 0 0; }}
+    .readiness-track {{
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 12px 18px;
+    }}
+    .readiness-track:last-child {{ border-bottom: 0; }}
+    .readiness-track-header {{
+      display: flex; justify-content: space-between; align-items: baseline;
+      margin-bottom: 8px;
+    }}
+    .readiness-track-name {{
+      font-weight: 600; font-size: 14px;
+    }}
+    .readiness-track-sub {{
+      font-size: 12px; color: var(--text-dim);
+      font-variant-numeric: tabular-nums;
+    }}
+    .readiness-sections {{
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 8px;
+    }}
+    .readiness-section {{
+      background: var(--surface-1);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px 10px;
+      font-size: 12px;
+    }}
+    .readiness-section-head {{
+      display: flex; justify-content: space-between;
+      font-family: 'SF Mono', 'Fira Code', ui-monospace, monospace;
+      font-size: 11px;
+      margin-bottom: 6px;
+    }}
+    .readiness-section-slug {{ color: var(--text); font-weight: 600; }}
+    .readiness-section-pct {{
+      color: var(--green); font-variant-numeric: tabular-nums;
+    }}
+    .readiness-section-pct.mid {{ color: var(--amber); }}
+    .readiness-section-pct.low {{ color: var(--text-dim); }}
+    .readiness-section-bar {{
+      height: 4px; border-radius: 2px; background: var(--border);
+      overflow: hidden; margin-bottom: 6px;
+    }}
+    .readiness-section-fill {{
+      height: 100%; background: var(--green); transition: width 0.3s;
+    }}
+    .readiness-section-fill.mid {{ background: var(--amber); }}
+    .readiness-section-fill.low {{ background: var(--text-dim); }}
+    .readiness-section-counts {{
+      display: flex; gap: 8px;
+      color: var(--text-dim);
+      font-variant-numeric: tabular-nums;
+      font-family: 'SF Mono', 'Fira Code', ui-monospace, monospace;
+      font-size: 11px;
+    }}
+    .readiness-section-counts .dead {{ color: var(--red); }}
+    .readiness-section-counts .inflight {{ color: var(--amber); }}
+    .readiness-section-counts .cleared {{ color: var(--green); }}
+
+    /* Activity feed */
+    .activity-feed {{
+      list-style: none; margin: 0; padding: 0;
+      max-height: 420px; overflow-y: auto;
+    }}
+    .activity-feed li {{
+      display: grid;
+      grid-template-columns: 18px 80px 1fr;
+      gap: 10px; padding: 8px 18px;
+      font-size: 12px;
+      border-bottom: 1px solid var(--border-subtle);
+      align-items: center;
+    }}
+    .activity-feed li:last-child {{ border-bottom: 0; }}
+    .activity-src {{
+      width: 18px; height: 18px; border-radius: 4px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 10px;
+    }}
+    .activity-src.commit {{ background: var(--accent-muted); color: var(--accent); }}
+    .activity-src.pipeline_event {{ background: var(--teal-muted); color: var(--teal); }}
+    .activity-src.bridge_message {{ background: var(--amber-muted); color: var(--amber); }}
+    .activity-time {{
+      font-family: 'SF Mono', 'Fira Code', ui-monospace, monospace;
+      color: var(--text-dim); font-size: 11px;
+    }}
+    .activity-text {{ color: var(--text-secondary); word-break: break-word; min-width: 0; }}
+    .activity-text .mod {{ color: var(--accent); }}
+    @media (max-width: 900px) {{
+      .op-hero {{ grid-template-columns: 1fr; }}
+      .op-cols {{ grid-template-columns: 1fr; }}
+      .op-col {{ border-right: 0; border-bottom: 1px solid var(--border-subtle); }}
+      .op-col:last-child {{ border-bottom: 0; }}
+    }}
   </style>
 </head>
 <body>
@@ -2674,6 +3360,72 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
     </div>
 
     <div class="sections">
+      <div class="section-full">
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">
+              <span class="panel-icon" style="background:var(--accent-muted);color:var(--accent);">O</span>
+              Operator
+            </div>
+            <span class="panel-badge" id="op-badge" style="background:var(--accent-muted);color:var(--accent);">&nbsp;</span>
+          </div>
+          <div class="op-hero" id="op-hero">
+            <div class="op-hero-block">
+              <div class="op-hero-title">Alerts</div>
+              <div class="op-hero-empty">Loading&hellip;</div>
+            </div>
+            <div class="op-hero-block">
+              <div class="op-hero-title">Focus</div>
+              <div class="op-hero-empty">Loading&hellip;</div>
+            </div>
+          </div>
+          <div class="op-cols">
+            <div class="op-col">
+              <h4 class="op-col-title now">Now</h4>
+              <ul class="op-col-list" id="op-now"><li class="op-hero-empty">Loading&hellip;</li></ul>
+            </div>
+            <div class="op-col">
+              <h4 class="op-col-title blocked">Blocked</h4>
+              <ul class="op-col-list" id="op-blocked"><li class="op-hero-empty">Loading&hellip;</li></ul>
+            </div>
+            <div class="op-col">
+              <h4 class="op-col-title next">Next</h4>
+              <ul class="op-col-list" id="op-next"><li class="op-hero-empty">Loading&hellip;</li></ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-full">
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">
+              <span class="panel-icon" style="background:var(--teal-muted);color:var(--teal);">R</span>
+              Section Readiness
+            </div>
+            <span class="panel-badge" id="readiness-badge" style="background:var(--teal-muted);color:var(--teal);">&nbsp;</span>
+          </div>
+          <div class="panel-body-flush readiness-wrap" id="readiness-body">
+            <div class="empty-state">Loading&hellip;</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-full">
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">
+              <span class="panel-icon" style="background:var(--amber-muted);color:var(--amber);">A</span>
+              Activity (last 24 h)
+            </div>
+            <span class="panel-badge" id="activity-badge" style="background:var(--amber-muted);color:var(--amber);">&nbsp;</span>
+          </div>
+          <div class="panel-body-flush" id="activity-body">
+            <div class="empty-state">Loading&hellip;</div>
+          </div>
+        </div>
+      </div>
+
       <div class="section-full">
         <div class="panel">
           <div class="panel-header">
@@ -3234,6 +3986,192 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
       el.innerHTML = html;
     }}
 
+    // ---- Phase D: Operator / Readiness / Activity ----
+
+    function renderOperator(briefing) {{
+      const alerts = briefing?.alerts || [];
+      const focus = briefing?.focus || [];
+      const blockers = briefing?.blockers || [];
+
+      // Hero: alerts + focus (blockers appended to alerts visually).
+      const alertItems = [
+        ...blockers.map(s => `<li class="blocker">${{esc(s)}}</li>`),
+        ...alerts.map(s => `<li class="alert">${{esc(s)}}</li>`),
+      ];
+      const focusItems = focus.map(s => `<li>${{esc(s)}}</li>`);
+      $('#op-hero').innerHTML = `
+        <div class="op-hero-block">
+          <div class="op-hero-title">Alerts &amp; Blockers</div>
+          ${{alertItems.length
+            ? `<ul class="op-hero-list">${{alertItems.join('')}}</ul>`
+            : '<div class="op-hero-empty">None</div>'}}
+        </div>
+        <div class="op-hero-block">
+          <div class="op-hero-title">Focus</div>
+          ${{focusItems.length
+            ? `<ul class="op-hero-list">${{focusItems.join('')}}</ul>`
+            : '<div class="op-hero-empty">None</div>'}}
+        </div>`;
+
+      // Prefer the structured ``action_rows[]`` — each row carries its
+      // own bucket + endpoint + reason, so we don't have to reverse-
+      // parse the display string. Fall back to the ``actions.active`` /
+      // ``actions.blocked`` / ``actions.next`` string arrays for older
+      // briefings that don't have the new field.
+      const rowsSrc = Array.isArray(briefing?.action_rows) && briefing.action_rows.length
+        ? briefing.action_rows
+        : (() => {{
+            const bag = [];
+            for (const bucket of ['active', 'blocked', 'next']) {{
+              for (const label of (briefing?.actions?.[bucket] || [])) {{
+                bag.push({{bucket, label, module_key: null, phase: null, reason: null, endpoint: null}});
+              }}
+            }}
+            return bag;
+          }})();
+
+      const renderRow = (r) => {{
+        const label = esc(r.label || '');
+        const link = r.endpoint
+          ? ` <a href="${{esc(r.endpoint)}}" title="${{esc(r.endpoint)}}" target="_blank" rel="noopener">[drill]</a>`
+          : '';
+        return `<li>${{label}}${{link}}</li>`;
+      }};
+      const renderCol = (bucket) => {{
+        const rows = rowsSrc.filter(r => r.bucket === bucket);
+        return rows.length
+          ? rows.map(renderRow).join('')
+          : '<li class="op-hero-empty">Nothing here</li>';
+      }};
+
+      $('#op-now').innerHTML = renderCol('active');
+      $('#op-blocked').innerHTML = renderCol('blocked');
+      $('#op-next').innerHTML = renderCol('next');
+
+      const counts = {{active: 0, blocked: 0, next: 0}};
+      for (const r of rowsSrc) {{
+        if (counts[r.bucket] !== undefined) counts[r.bucket]++;
+      }}
+      const total = counts.active + counts.blocked + counts.next;
+      const badge = $('#op-badge');
+      badge.textContent = total ? `${{total}} items` : 'Idle';
+      if (counts.blocked) {{
+        badge.style.background = 'var(--red-muted)';
+        badge.style.color = 'var(--red)';
+      }} else if (total) {{
+        badge.style.background = 'var(--accent-muted)';
+        badge.style.color = 'var(--accent)';
+      }} else {{
+        badge.style.background = 'var(--green-muted)';
+        badge.style.color = 'var(--green)';
+      }}
+    }}
+
+    function readinessClass(pct) {{
+      if (pct >= 80) return '';
+      if (pct >= 40) return 'mid';
+      return 'low';
+    }}
+
+    function renderReadiness(data) {{
+      const el = $('#readiness-body');
+      const badge = $('#readiness-badge');
+      if (!data || data.error) {{
+        el.innerHTML = `<div class="empty-state">${{esc(data?.error || 'No data')}}</div>`;
+        badge.textContent = 'Unknown';
+        return;
+      }}
+      const tracks = data.tracks || [];
+      const totals = data.totals || {{}};
+      const pct = totals.readiness_pct ?? 0;
+      badge.textContent = `${{totals.cleared ?? 0}} / ${{totals.total ?? 0}} cleared · ${{pct}}%`;
+      if (tracks.length === 0) {{
+        el.innerHTML = '<div class="empty-state">No modules on disk</div>';
+        return;
+      }}
+      el.innerHTML = tracks.map(t => {{
+        const sections = (t.sections || []).map(s => {{
+          const scls = readinessClass(s.readiness_pct ?? 0);
+          const parts = [
+            `<span class="cleared">${{s.cleared ?? 0}}✓</span>`,
+            (s.in_flight ? `<span class="inflight">${{s.in_flight}}↻</span>` : ''),
+            (s.dead_letter ? `<span class="dead">${{s.dead_letter}}✗</span>` : ''),
+            (s.not_yet_enqueued ? `<span>${{s.not_yet_enqueued}}·</span>` : ''),
+          ].filter(Boolean).join(' ');
+          return `<div class="readiness-section">
+            <div class="readiness-section-head">
+              <span class="readiness-section-slug">${{esc(s.slug)}}</span>
+              <span class="readiness-section-pct ${{scls}}">${{s.readiness_pct}}%</span>
+            </div>
+            <div class="readiness-section-bar">
+              <div class="readiness-section-fill ${{scls}}" style="width:${{s.readiness_pct}}%"></div>
+            </div>
+            <div class="readiness-section-counts">${{parts}} <span>/ ${{s.total}}</span></div>
+          </div>`;
+        }}).join('');
+        return `<div class="readiness-track">
+          <div class="readiness-track-header">
+            <span class="readiness-track-name">${{esc(t.label)}}</span>
+            <span class="readiness-track-sub">${{t.cleared ?? 0}} / ${{t.total ?? 0}} · ${{t.readiness_pct ?? 0}}%</span>
+          </div>
+          <div class="readiness-sections">${{sections}}</div>
+        </div>`;
+      }}).join('');
+    }}
+
+    function formatRelTime(epoch, nowEpoch) {{
+      const dt = Math.max(0, nowEpoch - epoch);
+      if (dt < 60) return `${{dt}}s`;
+      if (dt < 3600) return `${{Math.floor(dt/60)}}m`;
+      if (dt < 86400) return `${{Math.floor(dt/3600)}}h`;
+      return `${{Math.floor(dt/86400)}}d`;
+    }}
+
+    function renderActivity(data) {{
+      const el = $('#activity-body');
+      const badge = $('#activity-badge');
+      if (!data || data.error) {{
+        el.innerHTML = `<div class="empty-state">${{esc(data?.error || 'No data')}}</div>`;
+        badge.textContent = 'Unknown';
+        return;
+      }}
+      const items = (data.items || []).slice(0, 60);
+      const counts = data.source_counts || {{}};
+      const parts = [];
+      if (counts.commit) parts.push(`${{counts.commit}} commits`);
+      if (counts.pipeline_event) parts.push(`${{counts.pipeline_event}} events`);
+      if (counts.bridge_message) parts.push(`${{counts.bridge_message}} msgs`);
+      badge.textContent = parts.length ? parts.join(' · ') : 'Quiet';
+      if (items.length === 0) {{
+        el.innerHTML = '<div class="empty-state">No recent activity</div>';
+        return;
+      }}
+      const now = data.generated_at || Math.floor(Date.now() / 1000);
+      const srcAbbrev = {{commit: 'C', pipeline_event: 'P', bridge_message: 'B'}};
+      const rows = items.map(it => {{
+        const srcCls = String(it.source || '');
+        const abbr = srcAbbrev[srcCls] || '?';
+        const t = formatRelTime(it.at, now);
+        let desc;
+        if (it.source === 'commit') {{
+          desc = `<span class="mono">${{esc(it.ref?.sha || '')}}</span> ${{esc(it.summary || '')}}`;
+        }} else if (it.source === 'pipeline_event') {{
+          const modPart = it.module_key
+            ? `<span class="mod mono">${{esc(shortenKey(it.module_key))}}</span> `
+            : '';
+          desc = `${{modPart}}${{esc(it.kind || '')}}`;
+        }} else {{
+          desc = `${{esc(it.summary || '')}} <span class="mono" style="color:var(--text-dim)">${{esc(it.kind || '')}}</span>`;
+        }}
+        return `<li>
+          <span class="activity-src ${{srcCls}}">${{abbr}}</span>
+          <span class="activity-time">${{t}} ago</span>
+          <span class="activity-text">${{desc}}</span>
+        </li>`;
+      }}).join('');
+      el.innerHTML = `<ul class="activity-feed">${{rows}}</ul>`;
+    }}
+
     let refreshing = false;
     async function refresh() {{
       if (refreshing) return;
@@ -3242,7 +4180,8 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
       btn.classList.add('loading');
 
       try {{
-        const [summary, missing, services, worktree, feedback, v2Status, transStatus] = await Promise.all([
+        const [summary, missing, services, worktree, feedback, v2Status, transStatus,
+               briefing, readiness, activity] = await Promise.all([
           fetchJson('/api/status/summary'),
           fetchJson('/api/missing-modules/status'),
           fetchJson('/api/runtime/services'),
@@ -3250,12 +4189,18 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
           fetchJson(`/api/issue-watch/${{ISSUE}}`),
           fetchJson('/api/pipeline/v2/status'),
           fetchJson('/api/translation/v2/status'),
+          fetchJson('/api/briefing/session?compact=1'),
+          fetchJson('/api/tracks/readiness'),
+          fetchJson('/api/activity?limit=60'),
         ]);
 
         summary.missing_modules = missing;
         summary.runtime_services = services;
 
         const t2Queue = transStatus.queue || transStatus;
+        renderOperator(briefing);
+        renderReadiness(readiness);
+        renderActivity(activity);
         renderMetrics(summary, worktree, feedback, t2Queue);
         renderServices(services);
         renderSiteTracks(summary, v2Status, t2Queue);
@@ -3453,6 +4398,7 @@ def build_session_briefing(repo_root: Path) -> dict[str, Any]:
         leased = stuck.get("stuck_leased_count", 0)
         in_state = stuck.get("stuck_in_state_count", 0)
         dead_letter_stuck = stuck.get("dead_lettered_count", 0)
+        stale_worker_count = stuck.get("stale_workers_count", 0)
         if leased:
             alerts.append(f"{leased} job(s) with expired/stale lease — worker may have crashed")
         if in_state:
@@ -3460,6 +4406,10 @@ def build_session_briefing(repo_root: Path) -> dict[str, Any]:
         if dead_letter_stuck:
             alerts.append(
                 f"{dead_letter_stuck} module(s) dead-lettered (unresolved) — need human triage"
+            )
+        if stale_worker_count:
+            alerts.append(
+                f"{stale_worker_count} worker(s) holding leases but silent — possible zombie"
             )
 
     try:
@@ -3487,12 +4437,41 @@ def build_session_briefing(repo_root: Path) -> dict[str, Any]:
     #               a human or a re-enqueue.
     # ``next``    — things ready to pick up right now.
     #
-    # Every row that names a module is mirrored in ``top_modules[]``
-    # with a reason + drill-down endpoint.
-    actions_active: list[str] = []
-    actions_blocked: list[str] = []
-    actions_next: list[str] = []
+    # Structured row shape per ``action_rows[]``:
+    #   ``{bucket, label, module_key, phase, reason, endpoint}``
+    # The dashboard reads this directly. Agents that want the old flat
+    # list view still get ``actions.{active,blocked,next}`` (derived
+    # from ``action_rows`` below) plus ``top_modules[]``, both preserved
+    # for backward compat.
+    action_rows: list[dict[str, Any]] = []
     top_modules: list[dict[str, Any]] = []
+
+    def _add_row(
+        bucket: str,
+        label: str,
+        *,
+        module_key: str | None = None,
+        phase: str | None = None,
+        reason: str | None = None,
+        endpoint: str | None = None,
+    ) -> None:
+        action_rows.append({
+            "bucket": bucket,
+            "label": label,
+            "module_key": module_key,
+            "phase": phase,
+            "reason": reason,
+            "endpoint": endpoint,
+        })
+        # ``top_modules[]`` keeps its historical shape (module_key may
+        # be None for repo-level rows like ``ready_queue``).
+        if reason and endpoint:
+            top_modules.append({
+                "module_key": module_key,
+                "phase": phase,
+                "reason": reason,
+                "endpoint": endpoint,
+            })
 
     try:
         leases = build_pipeline_leases(repo_root)
@@ -3501,79 +4480,76 @@ def build_session_briefing(repo_root: Path) -> dict[str, Any]:
     if isinstance(leases, dict) and leases.get("exists"):
         for lease in (leases.get("active") or [])[:5]:
             secs = lease.get("seconds_to_expiry")
-            actions_active.append(
-                f"{lease.get('leased_by','?')} → {lease.get('module_key','?')} "
-                f"({lease.get('phase','?')}, {secs}s left)"
+            mk = lease.get("module_key")
+            _add_row(
+                "active",
+                f"{lease.get('leased_by','?')} → {mk or '?'} "
+                f"({lease.get('phase','?')}, {secs}s left)",
+                module_key=mk,
+                phase=lease.get("phase"),
+                reason="active_lease",
+                endpoint=f"/api/module/{mk}/state" if mk else None,
             )
-            top_modules.append({
-                "module_key": lease.get("module_key"),
-                "phase": lease.get("phase"),
-                "reason": "active_lease",
-                "endpoint": f"/api/module/{lease.get('module_key')}/state",
-            })
 
     if isinstance(stuck, dict) and stuck.get("exists"):
         for job in (stuck.get("stuck_leased") or [])[:5]:
-            actions_blocked.append(
-                f"{job.get('module_key','?')} stale lease "
-                f"(held by {job.get('leased_by','?')})"
+            mk = job.get("module_key")
+            _add_row(
+                "blocked",
+                f"{mk or '?'} stale lease (held by {job.get('leased_by','?')})",
+                module_key=mk,
+                phase=job.get("phase"),
+                reason="stale_lease",
+                endpoint=f"/api/pipeline/v2/events?module={mk}" if mk else None,
             )
-            top_modules.append({
-                "module_key": job.get("module_key"),
-                "phase": job.get("phase"),
-                "reason": "stale_lease",
-                "endpoint": f"/api/pipeline/v2/events?module={job.get('module_key')}",
-            })
         for job in (stuck.get("stuck_in_state") or [])[:5]:
-            actions_blocked.append(
-                f"{job.get('module_key','?')} stuck in {job.get('queue_state','?')}"
+            mk = job.get("module_key")
+            _add_row(
+                "blocked",
+                f"{mk or '?'} stuck in {job.get('queue_state','?')}",
+                module_key=mk,
+                phase=job.get("phase"),
+                reason="stuck_in_state",
+                endpoint=f"/api/pipeline/v2/events?module={mk}" if mk else None,
             )
-            top_modules.append({
-                "module_key": job.get("module_key"),
-                "phase": job.get("phase"),
-                "reason": "stuck_in_state",
-                "endpoint": f"/api/pipeline/v2/events?module={job.get('module_key')}",
-            })
 
     if isinstance(quality, dict) and quality.get("exists"):
         for m in (quality.get("critical") or [])[:5]:
-            actions_next.append(
-                f"rubric-critical rewrite: {m.get('module','?')} "
-                f"({m.get('track','?')}) score {m.get('score','?')}"
-            )
             # Rubric rows don't carry a real ``module_key`` (the
             # audit uses human-readable labels), so we store the
             # label itself as the key and point at /api/quality/
             # scores for drill-down. Agents can cross-reference.
-            top_modules.append({
-                "module_key": m.get("module"),
-                "phase": None,
-                "reason": "critical_quality",
-                "endpoint": "/api/quality/scores",
-            })
+            _add_row(
+                "next",
+                f"rubric-critical rewrite: {m.get('module','?')} "
+                f"({m.get('track','?')}) score {m.get('score','?')}",
+                module_key=m.get("module"),
+                reason="critical_quality",
+                endpoint="/api/quality/scores",
+            )
 
     if isinstance(pipeline, dict) and pipeline.get("queue_head"):
         queue_head = pipeline["queue_head"] or {}
         ready = int(queue_head.get("ready") or 0)
         if ready:
-            actions_next.append(f"{ready} job(s) ready to pick up in pipeline v2")
-            top_modules.append({
-                "module_key": None,
-                "phase": None,
-                "reason": "ready_queue",
-                "endpoint": "/api/pipeline/v2/status",
-            })
+            _add_row(
+                "next",
+                f"{ready} job(s) ready to pick up in pipeline v2",
+                reason="ready_queue",
+                endpoint="/api/pipeline/v2/status",
+            )
         dead_letter = int(queue_head.get("dead_letter") or 0)
         if dead_letter:
-            actions_blocked.append(
-                f"{dead_letter} job(s) in dead-letter — needs human or re-enqueue"
+            _add_row(
+                "blocked",
+                f"{dead_letter} job(s) in dead-letter — needs human or re-enqueue",
+                reason="pipeline_dead_letter",
+                endpoint="/api/pipeline/v2/stuck",
             )
-            top_modules.append({
-                "module_key": None,
-                "phase": None,
-                "reason": "pipeline_dead_letter",
-                "endpoint": "/api/pipeline/v2/stuck",
-            })
+
+    actions_active = [r["label"] for r in action_rows if r["bucket"] == "active"]
+    actions_blocked = [r["label"] for r in action_rows if r["bucket"] == "blocked"]
+    actions_next = [r["label"] for r in action_rows if r["bucket"] == "next"]
 
     return {
         "snapshot": {
@@ -3617,6 +4593,13 @@ def build_session_briefing(repo_root: Path) -> dict[str, Any]:
             "blocked": actions_blocked,
             "next": actions_next,
         },
+        # Structured twin of ``actions.*``. Each row has {bucket,
+        # label, module_key, phase, reason, endpoint}. Dashboards and
+        # UI consumers read this directly — scanning ``label`` strings
+        # to infer drill-down endpoints is fragile and misroutes when
+        # the same module appears in multiple buckets (Codex Phase D
+        # review round 3).
+        "action_rows": action_rows,
         "top_modules": top_modules,
         "next_reads": [
             {"rel": "schema", "endpoint": "/api/schema", "desc": "Full endpoint index"},
@@ -3709,9 +4692,21 @@ def build_api_schema() -> dict[str, Any]:
             },
             {"path": "/api/status/summary", "desc": "Repo status (fast)"},
             {"path": "/api/missing-modules/status", "desc": "Modules missing from nav/sidebar"},
-            {"path": "/api/activity/recent", "desc": "Recent commits, pipeline events, bridge messages, watched issue"},
+            {"path": "/api/activity/recent", "desc": "Recent commits, pipeline events, bridge messages, watched issue (grouped by source)"},
+            {
+                "path": "/api/activity",
+                "desc": "Merged chronological feed (commits + pipeline events + bridge messages), newest-first",
+                "query": [
+                    "since=<Unix-epoch seconds | ISO-8601> (default: 24 h ago)",
+                    "limit=... (default 50, max 500)",
+                ],
+            },
             {"path": "/api/navigation/status", "desc": "Top-level route coverage and candidate-stale index pages"},
             {"path": "/api/delivery/status", "desc": "Build freshness and site-health status"},
+            {
+                "path": "/api/tracks/readiness",
+                "desc": "Per-track, per-section production-readiness grid (cleared/in_flight/dead_letter/not_yet_enqueued)",
+            },
             {"path": "/api/runtime/services", "desc": "Runtime services (pids, uptime, ports)"},
             {"path": "/api/pipeline/v2/status", "desc": "Pipeline v2 queue + per-track"},
             {
@@ -3739,7 +4734,7 @@ def build_api_schema() -> dict[str, Any]:
             },
             {
                 "path": "/api/pipeline/v2/stuck",
-                "desc": "Stuck/stalled jobs (expired leases + in-flight-with-stale-events)",
+                "desc": "Stuck/stalled jobs + dead-lettered modules + zombie-worker roll-up (stale_workers[])",
                 "query": ["threshold_seconds=... (default 3600)"],
             },
             {
@@ -3778,10 +4773,33 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
         return 200, _build_missing_modules_summary(repo_root), "application/json; charset=utf-8"
     if path == "/api/activity/recent":
         return 200, build_recent_activity(repo_root), "application/json; charset=utf-8"
+    if path == "/api/activity":
+        since_raw = query.get("since", [None])[0]
+        since_seconds: int | None = None
+        if since_raw:
+            try:
+                # Accept epoch seconds...
+                since_seconds = int(since_raw)
+            except (TypeError, ValueError):
+                # ...or an ISO-8601 timestamp.
+                since_seconds = _iso_to_epoch(since_raw)
+                if since_seconds is None:
+                    return 400, {"error": "invalid_since"}, "application/json; charset=utf-8"
+        try:
+            limit = int(query.get("limit", ["50"])[0])
+        except (TypeError, ValueError):
+            limit = 50
+        return (
+            200,
+            build_activity_feed(repo_root, since_seconds=since_seconds, limit=limit),
+            "application/json; charset=utf-8",
+        )
     if path == "/api/navigation/status":
         return 200, build_navigation_status(repo_root), "application/json; charset=utf-8"
     if path == "/api/delivery/status":
         return 200, build_delivery_status(repo_root), "application/json; charset=utf-8"
+    if path == "/api/tracks/readiness":
+        return 200, build_tracks_readiness(repo_root), "application/json; charset=utf-8"
     if path == "/api/runtime/services":
         return 200, build_runtime_services_status(repo_root), "application/json; charset=utf-8"
     if path == "/api/pipeline/v2/status":
