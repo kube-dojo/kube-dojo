@@ -28,6 +28,7 @@ It translates the audit into concrete repo work:
 ### Actions
 - preserve a single default route for beginners
 - keep Linux and AI/ML as visible next steps, but clearly optional
+- keep the new AI track visible as the beginner-friendly AI route
 - keep Git Deep Dive framed as high-value but not an early blocker
 
 ### Fix Type
@@ -120,14 +121,29 @@ It translates the audit into concrete repo work:
 - hub/index guidance
 - section-level hub improvements
 
-## 7. AI/ML Engineering
+## 7. AI
 
 ### Goal
-- keep the local-first route coherent as the track grows
+- keep the new AI track visible as the public, literacy-first front door for AI learners
+
+### Actions
+- route beginner learners to `AI` before `AI/ML Engineering` when they need literacy and workflow discipline rather than system-building depth
+- keep the bridge from `AI` to `AI/ML Engineering` explicit
+- avoid letting top-level hubs imply that AI literacy starts only inside advanced AI/ML content
+
+### Fix Type
+- hub/index guidance
+- bridge guidance into `AI/ML Engineering`
+
+## 8. AI/ML Engineering
+
+### Goal
+- keep the builder route coherent now that a separate AI front door exists
 
 ### Actions
 - keep explicit learner personas visible
 - keep later-phase branching from feeling like a maze
+- clarify that this track is for builders and operators, not first-time AI learners
 - clarify where Kubernetes, Platform, and On-Prem become necessary rather than optional
 
 ### Fix Type

@@ -13,7 +13,7 @@ This hub is the front door to KubeDojo. It covers the terminal, containers, Kube
 
 - absolute beginners who need a real starting point
 - learners who want the shortest route into cloud-native systems
-- people who need enough fundamentals before choosing Linux, Kubernetes, cloud, platform, or AI/ML depth
+- people who need enough fundamentals before choosing Linux, Kubernetes, cloud, platform, AI literacy, or AI/ML depth
 
 ## Do Not Skip This If
 
@@ -153,7 +153,8 @@ If a learner skips the Git path, they can still read later modules, but they wil
 - `Prerequisites -> Linux` if you want stronger systems depth before operations-heavy work
 - `Prerequisites -> Kubernetes Certifications` if you want external goals and hands-on pressure
 - `Prerequisites -> Cloud` if your main goal is hyperscaler fluency after cluster basics
-- `Prerequisites -> AI/ML Engineering` if you want local-first AI or MLOps, but still need an engineering foundation first
+- `Prerequisites -> AI` if you want a true beginner-friendly path into AI literacy and disciplined AI use
+- `Prerequisites -> AI/ML Engineering` if you already know you want to build AI systems, run local models, or move toward MLOps
 - `Prerequisites -> Modern DevOps` should usually mean `Zero to Terminal -> Git Deep Dive -> Modern DevOps`, not a direct jump that skips Git maturity
 
 `Platform Engineering` is usually not the immediate next stop for beginners. Most learners should reach it through Kubernetes, Linux, or Cloud first.
@@ -167,6 +168,7 @@ These are not inside the `prerequisites/` section, but they are common next step
 | Path | Why It Matters |
 |------|----------------|
 | [Linux](../linux/) | Go deeper into processes, networking, storage, security, and operations |
+| [AI](../ai/) | Build practical AI literacy and AI working habits before advanced engineering depth |
 | [AI/ML Engineering](../ai-ml-engineering/) | Start the AI/ML track if your goal is LLMs, MLOps, or AI infrastructure |
 
 ---
@@ -182,4 +184,5 @@ Ready to specialize? Choose your next track:
 | Learn cloud providers | [Cloud](../cloud/) |
 | Run Kubernetes on your own hardware | [On-Premises Kubernetes](../on-premises/) |
 | Go deeper into platform practices | [Platform Engineering](../platform/) |
+| Learn AI from zero | [AI](../ai/) |
 | Explore AI/ML systems | [AI/ML Engineering](../ai-ml-engineering/) |

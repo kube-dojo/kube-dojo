@@ -16,7 +16,7 @@ It focuses on:
 The curriculum is already strong in breadth and ambition. The main problem is no longer "we have no material." The main problem is route complexity.
 
 Current state:
-- the repo has substantial coverage across prerequisites, Linux, Kubernetes, cloud, on-prem, platform, and AI/ML
+- the repo has substantial coverage across prerequisites, Linux, Kubernetes, cloud, on-prem, platform, AI, and AI/ML
 - most big gaps are no longer raw module gaps
 - the largest remaining explicit missing-module backlog is now deferred CKA mock exams
 - the largest pedagogical risk is not lack of topics, but weak guardrails between tracks
@@ -28,6 +28,7 @@ High-confidence conclusions:
 - `Cloud` is broad and practical, but needs stronger transition guidance from Kubernetes into provider specialization
 - `On-Premises` is unusually valuable and coherent, but assumes a maturity jump that needs explicit bridges
 - `Platform` is intellectually strong, but it reads more like a senior-engineer library than a guided student path
+- `AI` now provides a real literacy-first front door and fixes a major learner-access gap
 - `AI/ML Engineering` is now much better for learners after the local-first additions, but still has route complexity at later phases
 
 System-level finding:
@@ -258,6 +259,41 @@ Why:
 ### Pedagogical Strength
 
 Status: `high-value but under-scaffolded`
+
+## 7. AI
+
+### What It Does Well
+
+- It creates a real beginner-friendly entry point for AI literacy without forcing learners into model-building too early
+- It separates everyday AI use from advanced AI/ML engineering
+- It introduces verification, trust, and human-in-the-loop discipline early instead of as an afterthought
+
+### What Still Needs To Be Written
+
+- No explicit missing-module gap blocks the initial AI track
+
+### Pedagogical Strength
+
+Status: `strong new front door`
+
+Why:
+- it is accessible from zero
+- it solves a real public-education gap in the repo
+- it gives learners a stopping point before advanced engineering depth
+- it provides a safer bridge into AI/ML Engineering for people who do want to continue
+
+### Gaps
+
+- the new AI track must be kept visible in hubs that still route directly from beginner fundamentals to AI/ML Engineering
+- long-term, a third section for domain-specific technical practice may become valuable, but it is not required for the initial public-literacy goal
+
+### Transition Risks
+
+- `Prerequisites -> AI` is now a strong route
+- `AI -> AI/ML Engineering` is strong if the learner wants to build systems
+- `AI -> Platform` or `AI -> On-Premises` should not be treated as a default jump
+
+## 8. AI/ML Engineering
 
 Why:
 - it is built more like a professional library than a guided school sequence
