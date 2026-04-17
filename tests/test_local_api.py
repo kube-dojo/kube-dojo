@@ -1645,7 +1645,82 @@ def test_quality_scores_parses_audit_markdown(tmp_path: Path) -> None:
     assert r["critical_count"] == 2
     scores = {m["module"]: m for m in r["modules"]}
     assert scores["Alpha Beta"]["severity"] == "critical"
+    assert scores["Alpha Beta"]["action"] == "Critical"
+    assert scores["Alpha Beta"]["primary_issue"] == "stub"
     assert scores["Gamma Module"]["severity"] == "good"
+
+
+def test_quality_upgrade_plan_groups_modules_below_target(tmp_path: Path) -> None:
+    _init_repo(tmp_path)
+    _seed_module(tmp_path, "ai/foundations/module-1.1-what-is-ai")
+    _seed_module(tmp_path, "ai/foundations/module-1.2-llms")
+    _seed_module(tmp_path, "ai/ai-building/module-1.1-from-chat-to-ai-systems")
+    audit = tmp_path / "docs" / "quality-audit-results.md"
+    audit.parent.mkdir(parents=True, exist_ok=True)
+    audit.write_text(
+        """# Audit\n\n## All Scored Modules\n\n"""
+        """| Module | Track | Lines | Score | Action | Issue |\n"""
+        """|---|---|---|---|---|---|\n"""
+        """| What Is AI? | AI Foundations | 200 | **2.1** | Rewrite | too abstract |\n"""
+        """| LLMs Explained | AI Foundations | 220 | **4.4** | Polish | examples thin |\n"""
+        """| From Chat to AI Systems | AI Building | 260 | **4.8** | Strong | none |\n""",
+        encoding="utf-8",
+    )
+    with local_api._QUALITY_AUDIT_CACHE_LOCK:
+        local_api._QUALITY_AUDIT_CACHE.clear()
+
+    plan = local_api.build_quality_upgrade_plan(tmp_path, target=4.0)
+    assert plan["target"] == 4.0
+    assert plan["epic_issue"] == 180
+    assert plan["total_repo_modules"] == 3
+    assert plan["scored_count"] == 3
+    assert plan["needs_upgrade_count"] == 1
+    assert plan["coverage_pct"] == 100.0
+    assert plan["severity_counts"]["poor"] == 1
+    assert plan["tracks"][0]["track"] == "AI Foundations"
+    module = plan["tracks"][0]["modules"][0]
+    assert module["module"] == "What Is AI?"
+    assert module["action"] == "Rewrite"
+    assert module["primary_issue"] == "too abstract"
+
+
+def test_route_request_serves_quality_upgrade_plan_and_target_5_maps_to_issue_181(tmp_path: Path) -> None:
+    _init_repo(tmp_path)
+    _seed_module(tmp_path, "ai/foundations/module-1.1-what-is-ai")
+    _seed_module(tmp_path, "ai/foundations/module-1.2-llms")
+    audit = tmp_path / "docs" / "quality-audit-results.md"
+    audit.parent.mkdir(parents=True, exist_ok=True)
+    audit.write_text(
+        """# Audit\n\n## All Scored Modules\n\n"""
+        """| Module | Track | Lines | Score | Action | Issue |\n"""
+        """|---|---|---|---|---|---|\n"""
+        """| What Is AI? | AI Foundations | 200 | **4.6** | Improve | add exercises |\n"""
+        """| LLMs Explained | AI Foundations | 220 | **3.9** | Rewrite | still dry |\n""",
+        encoding="utf-8",
+    )
+    with local_api._QUALITY_AUDIT_CACHE_LOCK:
+        local_api._QUALITY_AUDIT_CACHE.clear()
+
+    status_code, payload, content_type = local_api.route_request(
+        tmp_path,
+        "/api/quality/upgrade-plan?target=5.0",
+    )
+    assert status_code == 200
+    assert content_type == "application/json; charset=utf-8"
+    assert payload["target"] == 5.0
+    assert payload["epic_issue"] == 181
+    assert payload["needs_upgrade_count"] == 2
+    assert payload["top_worst"][0]["module"] == "LLMs Explained"
+
+
+def test_route_request_rejects_invalid_quality_upgrade_target(tmp_path: Path) -> None:
+    _init_repo(tmp_path)
+    status_code, payload, _ = local_api.route_request(
+        tmp_path,
+        "/api/quality/upgrade-plan?target=bogus",
+    )
+    assert status_code == 400
+    assert payload["error"] == "invalid_target"
 
 
 def _diag_codes(diagnostics: list[dict[str, object]]) -> set[str]:
@@ -2205,6 +2280,7 @@ def test_schema_lists_phase_c_endpoints() -> None:
         "/api/reviews",
         "/api/bridge/messages",
         "/api/quality/scores",
+        "/api/quality/upgrade-plan",
         "/api/module/{key}/lease",
     ):
         assert expected in paths, f"/api/schema missing {expected}"

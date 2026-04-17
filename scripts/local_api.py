@@ -1496,6 +1496,9 @@ def build_quality_scores(repo_root: Path) -> dict[str, Any]:
         track = match.group(2).strip()
         lines_str = match.group(3).strip()
         score = float(match.group(4))
+        cells = [c.strip() for c in line.strip("|").split("|")]
+        action = cells[4] if len(cells) >= 5 else None
+        primary_issue = cells[5] if len(cells) >= 6 else None
         try:
             lines_count = int(lines_str) if lines_str.isdigit() else None
         except ValueError:
@@ -1516,6 +1519,8 @@ def build_quality_scores(repo_root: Path) -> dict[str, Any]:
             "lines": lines_count,
             "score": score,
             "severity": severity,
+            "action": action,
+            "primary_issue": primary_issue,
         })
 
     scores = [m["score"] for m in modules]
@@ -1538,6 +1543,88 @@ def build_quality_scores(repo_root: Path) -> dict[str, Any]:
     with _QUALITY_AUDIT_CACHE_LOCK:
         _QUALITY_AUDIT_CACHE[key] = {"mtime": mtime, "data": data}
     return data
+
+
+def build_quality_upgrade_plan(repo_root: Path, *, target: float = 4.0) -> dict[str, Any]:
+    """Return an upgrade-planning view for modules below a rubric target.
+
+    This turns the historical audit into an actionable queue for the
+    4/5 and 5/5 upgrade epics:
+
+    - target < 5.0  -> issue #180
+    - target >= 5.0 -> issue #181
+
+    Only scored modules can be classified precisely; the response also
+    reports how many repo modules remain unscored/unknown.
+    """
+    try:
+        quality = build_quality_scores(repo_root)
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "exists": False,
+            "error": f"quality_scores_failed: {type(exc).__name__}",
+            "target": target,
+        }
+
+    docs_root = repo_root / "src" / "content" / "docs"
+    total_modules = 0
+    if docs_root.exists():
+        total_modules = sum(
+            1
+            for path in docs_root.glob("**/module-*.md")
+            if ".staging." not in path.name and not path.relative_to(docs_root).as_posix().startswith("uk/")
+        )
+
+    modules = list(quality.get("modules") or [])
+    scored_count = len(modules)
+    unscored_unknown_count = max(0, total_modules - scored_count)
+    needs_upgrade = [m for m in modules if float(m.get("score") or 0.0) < target]
+    needs_upgrade.sort(key=lambda m: (float(m.get("score") or 0.0), str(m.get("module") or "")))
+
+    by_track: dict[str, list[dict[str, Any]]] = {}
+    severity_counts: dict[str, int] = {}
+    for module in needs_upgrade:
+        track = str(module.get("track") or "Unknown")
+        by_track.setdefault(track, []).append(module)
+        sev = str(module.get("severity") or "unknown")
+        severity_counts[sev] = severity_counts.get(sev, 0) + 1
+
+    track_groups = [
+        {
+            "track": track,
+            "count": len(items),
+            "average_score": round(sum(float(i.get("score") or 0.0) for i in items) / len(items), 2),
+            "modules": items,
+        }
+        for track, items in sorted(
+            by_track.items(),
+            key=lambda kv: (
+                min(float(i.get("score") or 0.0) for i in kv[1]),
+                kv[0].lower(),
+            ),
+        )
+    ]
+
+    epic_issue = 181 if target >= 5.0 else 180
+    return {
+        "exists": bool(quality.get("exists")),
+        "audit_path": quality.get("audit_path"),
+        "target": target,
+        "epic_issue": epic_issue,
+        "epic_issue_url": f"https://github.com/kube-dojo/kube-dojo.github.io/issues/{epic_issue}",
+        "scored_count": scored_count,
+        "total_repo_modules": total_modules,
+        "unscored_unknown_count": unscored_unknown_count,
+        "coverage_pct": round(100.0 * scored_count / total_modules, 1) if total_modules else 0.0,
+        "needs_upgrade_count": len(needs_upgrade),
+        "severity_counts": severity_counts,
+        "tracks": track_groups,
+        "top_worst": needs_upgrade[:10],
+        "scope_note": (
+            "This plan is based on scored modules in docs/quality-audit-results.md; "
+            "unscored modules require future audit before precise upgrade planning."
+        ),
+    }
 
 
 # ---- module diagnostics ----
@@ -4748,6 +4835,11 @@ def build_api_schema() -> dict[str, Any]:
                 "query": ["since=<ISO-8601>", "limit=... (max 500)"],
             },
             {"path": "/api/quality/scores", "desc": "Rubric scores from docs/quality-audit-results.md"},
+            {
+                "path": "/api/quality/upgrade-plan",
+                "desc": "Upgrade queue derived from rubric scores for #180 (4/5) or #181 (5/5)",
+                "query": ["target=4.0|5.0"],
+            },
             {"path": "/api/cache/stats", "desc": "Response-cache introspection"},
         ],
     }
@@ -4896,6 +4988,14 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
         return 200, build_bridge_messages(repo_root, since, limit), "application/json; charset=utf-8"
     if path == "/api/quality/scores":
         return 200, build_quality_scores(repo_root), "application/json; charset=utf-8"
+    if path == "/api/quality/upgrade-plan":
+        try:
+            target = float(query.get("target", ["4.0"])[0])
+        except (TypeError, ValueError):
+            return 400, {"error": "invalid_target"}, "application/json; charset=utf-8"
+        if target <= 0:
+            return 400, {"error": "invalid_target"}, "application/json; charset=utf-8"
+        return 200, build_quality_upgrade_plan(repo_root, target=target), "application/json; charset=utf-8"
     if path.startswith("/api/module/") and path.endswith("/lease"):
         raw_key = unquote(path[len("/api/module/") : -len("/lease")]).strip("/")
         if not raw_key:
@@ -4970,6 +5070,7 @@ CACHE_POLICY: dict[str, tuple[float, Callable[[Path], tuple] | None]] = {
     "/api/pipeline/v2/status": (5.0, _v_v2_db),
     "/api/translation/v2/status": (5.0, _v_translation_db),
     "/api/labs/status": (10.0, None),
+    "/api/quality/upgrade-plan": (30.0, None),
     "/api/ztt/status": (30.0, None),
     "/api/git/worktree": (2.0, None),
     "/api/git/worktrees": (5.0, None),
