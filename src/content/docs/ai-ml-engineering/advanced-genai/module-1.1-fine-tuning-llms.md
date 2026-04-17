@@ -354,7 +354,7 @@ training_args = TrainingArguments(
     # Logging
     logging_steps=10,
     save_strategy="epoch",
-    eval_strategy="epoch",
+    evaluation_strategy="epoch",
 
     # Memory optimization
     fp16=True,                        # Mixed precision
@@ -362,7 +362,7 @@ training_args = TrainingArguments(
 )
 ```
 
-> **Version note**: The examples in this module assume a current Transformers release where `TrainingArguments` uses `eval_strategy`. If you pin an older release, verify the exact field names for `transformers`, `trl`, and `peft` together before copying the snippet into production training code.
+> **Version note**: The examples in this module use the canonical `TrainingArguments.evaluation_strategy` field name. If you pin older or heavily patched training stacks, verify the exact argument names across `transformers`, `trl`, and `peft` before copying snippets into production code.
 
 ### The Psychology of Learning Rate Selection
 

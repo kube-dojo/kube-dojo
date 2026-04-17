@@ -427,7 +427,9 @@ By actively using a Variational Autoencoder (VAE), Stable Diffusion effectively 
 def stable_diffusion_inference(prompt, num_steps=50, guidance_scale=7.5):
     """Complete Stable Diffusion inference."""
     # 1. Encode text
-    text_embeddings = clip_encoder(prompt)
+    prompt_embeddings = clip_encoder(prompt)
+    negative_embeddings = clip_encoder("")
+    text_embeddings = torch.cat([negative_embeddings, prompt_embeddings], dim=0)
 
     # 2. Start from random latent noise
     latents = torch.randn(1, 4, 64, 64)
@@ -436,6 +438,7 @@ def stable_diffusion_inference(prompt, num_steps=50, guidance_scale=7.5):
     for t in tqdm(scheduler.timesteps):
         # Expand latents for CFG (unconditional + conditional)
         latent_input = torch.cat([latents] * 2)
+        latent_input = scheduler.scale_model_input(latent_input, t)
 
         # Predict noise
         noise_pred = unet(latent_input, t, text_embeddings)
@@ -445,7 +448,7 @@ def stable_diffusion_inference(prompt, num_steps=50, guidance_scale=7.5):
         noise_pred = noise_uncond + guidance_scale * (noise_cond - noise_uncond)
 
         # Scheduler step (DDIM, etc.)
-        latents = scheduler.step(noise_pred, t, latents)
+        latents = scheduler.step(noise_pred, t, latents).prev_sample
 
     # 4. Decode latents to image
     image = vae.decode(latents)
