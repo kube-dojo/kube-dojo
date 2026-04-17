@@ -1164,32 +1164,45 @@ def test_reviews_index_and_single(tmp_path: Path) -> None:
 
 
 def test_resolve_bridge_db_path_precedence(tmp_path: Path, monkeypatch) -> None:
-    """Codex round-4 bug: we hardcoded .bridge/messages.db but the
+    """Codex round-1 bug: we hardcoded .bridge/messages.db but the
     Python bridge default is .mcp/servers/message-broker/messages.db.
     Resolution must honor $AB_DB_PATH first, then fall through."""
     repo = tmp_path
-    # No files, no env → convention path.
     monkeypatch.delenv("AB_DB_PATH", raising=False)
     p = local_api._resolve_bridge_db_path(repo)
     assert p == repo / ".bridge" / "messages.db"
 
-    # .mcp path exists → picked over the convention when .bridge is absent.
     mcp_path = repo / ".mcp" / "servers" / "message-broker" / "messages.db"
     mcp_path.parent.mkdir(parents=True)
     mcp_path.write_bytes(b"")
     assert local_api._resolve_bridge_db_path(repo) == mcp_path
 
-    # .bridge path wins over .mcp when both exist (repo convention).
     bridge_path = repo / ".bridge" / "messages.db"
     bridge_path.parent.mkdir(parents=True)
     bridge_path.write_bytes(b"")
     assert local_api._resolve_bridge_db_path(repo) == bridge_path
 
-    # Explicit env var wins over both.
     override = tmp_path / "custom.db"
     override.write_bytes(b"")
     monkeypatch.setenv("AB_DB_PATH", str(override))
     assert local_api._resolve_bridge_db_path(repo) == override
+
+
+def test_resolve_bridge_db_path_honors_nonexistent_override(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Codex round-2 bug: $AB_DB_PATH must win even when the override
+    file doesn't yet exist. Previously we only used it when present,
+    silently reading the wrong DB on a fresh override."""
+    repo = tmp_path
+    bridge_path = repo / ".bridge" / "messages.db"
+    bridge_path.parent.mkdir(parents=True)
+    bridge_path.write_bytes(b"")
+    not_yet_created = tmp_path / "future.db"
+    monkeypatch.setenv("AB_DB_PATH", str(not_yet_created))
+    resolved = local_api._resolve_bridge_db_path(repo)
+    assert resolved == not_yet_created
+    assert not resolved.exists()
 
 
 def test_bridge_messages_filters_and_previews(tmp_path: Path, monkeypatch) -> None:
@@ -1315,6 +1328,71 @@ def test_rubric_diagnostics_matches_by_track_and_number(tmp_path: Path) -> None:
         tmp_path, "k8s/cka/part2-workloads-scheduling/module-2.8-scheduler-lifecycle-theory"
     )
     assert "rubric_critical" in state["diagnostics"]
+
+
+def test_rubric_diagnostics_matches_non_numbered_entry(tmp_path: Path) -> None:
+    """Codex round-2 bug: audit entries like 'Platform: Systems Thinking'
+    (no module number) were never matched. Now resolved via name-token
+    overlap when ≥2 tokens are shared AND the track alias matches."""
+    audit = tmp_path / "docs" / "quality-audit-results.md"
+    audit.parent.mkdir()
+    audit.write_text(
+        """## All Scored Modules\n\n"""
+        """| Module | Track | Lines | Score | Action | Issue |\n"""
+        """|---|---|---|---|---|---|\n"""
+        """| Platform: Systems Thinking | Platform Foundations | 820 | **4.6** | Excellent | gold |\n"""
+        """| Prerequisites: GitOps | Modern DevOps | 543 | **2.9** | Medium | overloaded |\n""",
+        encoding="utf-8",
+    )
+    with local_api._QUALITY_AUDIT_CACHE_LOCK:
+        local_api._QUALITY_AUDIT_CACHE.clear()
+
+    _init_repo(tmp_path)
+    en = tmp_path / "src/content/docs/platform/foundations/module-1-systems-thinking.md"
+    _write(en, "---\ntitle: Systems Thinking\n---\nbody\n")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-m", "init")
+    # Severity is "excellent" so no rubric_* tag is expected. But the
+    # match must have happened; verify by directly probing the helper.
+    quality = local_api.build_quality_scores(tmp_path)
+    sev = local_api._rubric_severity_for_module(
+        "platform/foundations/module-1-systems-thinking",
+        quality["modules"],
+    )
+    assert sev == "excellent"
+
+    # Prerequisites: GitOps → "needs_work" (3.5 > 2.9 >= 2.5). Not
+    # critical/poor, so no tag in diagnostics either; probe the helper.
+    sev2 = local_api._rubric_severity_for_module(
+        "prerequisites/modern-devops/module-5-gitops",
+        quality["modules"],
+    )
+    assert sev2 == "needs_work"
+
+
+def test_rubric_diagnostics_unrecognized_track_never_matches(tmp_path: Path) -> None:
+    """Codex round-2 bug: when the path's track wasn't in the alias
+    table, matching silently became permissive and could attach a
+    random rubric row. Now unknown tracks always return None."""
+    audit = tmp_path / "docs" / "quality-audit-results.md"
+    audit.parent.mkdir()
+    audit.write_text(
+        """## All Scored Modules\n\n"""
+        """| Module | Track | Lines | Score | Action | Issue |\n"""
+        """|---|---|---|---|---|---|\n"""
+        """| CKA 2.8: Scheduler Lifecycle Theory | CKA | 55 | **1.3** | Critical | stub |\n""",
+        encoding="utf-8",
+    )
+    with local_api._QUALITY_AUDIT_CACHE_LOCK:
+        local_api._QUALITY_AUDIT_CACHE.clear()
+    quality = local_api.build_quality_scores(tmp_path)
+    # Path track "exotic" is not in _TRACK_ALIASES. Must not match
+    # ANY row, regardless of number overlap.
+    sev = local_api._rubric_severity_for_module(
+        "exotic/module-2.8-scheduler",
+        quality["modules"],
+    )
+    assert sev is None
 
 
 def test_rubric_diagnostics_no_false_match_for_different_track(tmp_path: Path) -> None:

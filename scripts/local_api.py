@@ -1119,17 +1119,22 @@ def build_module_reviews(
 def _resolve_bridge_db_path(repo_root: Path) -> Path:
     """Locate ``messages.db`` the same way the bridge CLI does.
 
-    Precedence: explicit ``$AB_DB_PATH`` → ``.bridge/messages.db``
-    (scripts/ab sets this as the repo convention) → the upstream
-    Python default at ``.mcp/servers/message-broker/messages.db``.
-    First existing file wins. If none exist, the first candidate is
-    returned so the caller can surface ``exists=False``.
+    Precedence:
+      1. ``$AB_DB_PATH`` — unconditional. An explicit override must
+         win even if the file doesn't yet exist; the caller surfaces
+         ``exists=False`` when that happens. (Codex round-2 caught that
+         previously we only honored AB_DB_PATH when the file already
+         existed — quietly reading the wrong DB on a fresh override.)
+      2. ``.bridge/messages.db`` — set by the ``scripts/ab`` wrapper
+         and by the repo setup guide; the repo convention.
+      3. ``.mcp/servers/message-broker/messages.db`` — the upstream
+         Python default when no wrapper is used.
+    Within 2 and 3, the first existing file wins; if neither exists,
+    the convention path (2) is returned.
     """
     explicit = os.environ.get("AB_DB_PATH")
     if explicit:
-        p = Path(explicit)
-        if p.exists():
-            return p
+        return Path(explicit)
     candidates = [
         repo_root / ".bridge" / "messages.db",
         repo_root / ".mcp" / "servers" / "message-broker" / "messages.db",
@@ -1137,7 +1142,6 @@ def _resolve_bridge_db_path(repo_root: Path) -> Path:
     for p in candidates:
         if p.exists():
             return p
-    # None exist. Surface the conventional path for the error message.
     return candidates[0]
 
 
@@ -1366,23 +1370,54 @@ def build_module_diagnostics(
 
 
 _MODULE_NUMBER_RE = re.compile(r"module-([0-9]+(?:\.[0-9]+)*)")
+# Used to strip ``module-X.Y-`` prefix from a slug to get a readable
+# name token set.
+_MODULE_NUMBER_PREFIX_RE = re.compile(r"^module-[0-9]+(?:\.[0-9]+)*-")
+_PART_PREFIX_RE = re.compile(r"^part[0-9]+-?")
 
-# Track slugs → strings likely to appear (case-insensitive) in the audit
-# doc's track column. Kept narrow so we don't false-match (e.g. "cka"
-# matching "kcna" substrings).
+# Track slugs → strings likely to appear (case-insensitive) in the
+# audit doc's track column. Kept narrow so we don't false-match
+# (e.g. "cka" matching "kcna" substrings).
 _TRACK_ALIASES: dict[str, tuple[str, ...]] = {
     "cka": ("cka",),
     "ckad": ("ckad",),
     "cks": ("cks",),
     "kcna": ("kcna",),
     "kcsa": ("kcsa",),
-    "prerequisites": ("prerequisites", "k8s basics", "cloud native 101", "modern devops", "zero to terminal"),
+    "prerequisites": (
+        "prerequisites", "k8s basics", "cloud native 101", "modern devops",
+        "zero to terminal", "philosophy", "design",
+    ),
     "linux": ("linux",),
     "cloud": ("cloud",),
-    "platform": ("platform", "toolkit"),
+    "platform": ("platform", "toolkit", "sre", "gitops", "devsecops", "mlops", "aiops"),
     "on-prem": ("on-prem", "on-premises"),
-    "ai-ml-engineering": ("ai/ml", "ai-ml", "ai/ml engineering"),
+    "on-premises": ("on-prem", "on-premises"),
+    "ai-ml-engineering": (
+        "ai/ml", "ai-ml", "ai/ml engineering", "mlops", "genai",
+        "advanced genai", "multimodal", "deep learning", "classical ml",
+    ),
 }
+
+# Tokens that are too generic to contribute to the name-overlap match
+# (e.g. "module", "basics", "intro").
+_NAME_TOKEN_STOPLIST = frozenset({
+    "module", "part", "the", "a", "an", "and", "of", "to", "for", "with",
+    "intro", "introduction", "basics", "overview",
+})
+
+
+def _normalize_name_tokens(text: str) -> set[str]:
+    """Split a string into a lowercase-alphanumeric token set suitable
+    for overlap comparison. Drops pure numbers and stop-words."""
+    tokens = re.split(r"[^a-z0-9]+", text.lower())
+    return {
+        tok
+        for tok in tokens
+        if tok
+        and not tok.isdigit()
+        and tok not in _NAME_TOKEN_STOPLIST
+    }
 
 
 def _rubric_severity_for_module(
@@ -1390,18 +1425,33 @@ def _rubric_severity_for_module(
 ) -> str | None:
     """Best-effort match from a module path to an audit-doc entry.
 
-    We extract (track, number) from the path — e.g. ``k8s/cka/part2/
-    module-2.8-scheduler-lifecycle-theory`` → ``("cka", "2.8")`` — and
-    look for an audit row whose ``track`` matches one of the aliases
-    and whose ``module`` label contains the number token. Falls back
-    to substring matching on the last segment as a last resort.
+    Matching has three stages, each requiring a STRICT track match
+    when the module path has a recognized track — we never fall back
+    to "any track matches" (that was a round-2 false-positive source).
+
+    1. Numbered match. Extract ``(track, number)`` from the path.
+       Require the audit ``track`` column to match a track alias
+       AND the audit ``module`` label to contain the number with
+       word boundaries (so "2.8" doesn't match "12.8"). Accepts
+       labels like "CKA 2.8: ...", "... 2.8 - ...", "... 2.8) ...".
+
+    2. Name-overlap match. For audit rows that have no module
+       number (e.g. ``Platform: Systems Thinking``), compute the
+       overlap between the module path's name tokens and the
+       label's tokens. Require ≥ 2 shared tokens plus a track-
+       alias match. This covers the non-numbered rubric entries
+       that round-2 flagged.
+
+    3. Return None. Unknown track → no match, to avoid the
+       "any row wins" false positive.
     """
     segments = module_key.split("/")
-    last = segments[-1]
-    match = _MODULE_NUMBER_RE.search(last)
-    number = match.group(1) if match else None
-    # Best guess at track = first segment that has an alias, or the
-    # second-to-last when the path has a ``part<X>`` container.
+    last_raw = segments[-1]
+    last = last_raw.lower()
+    num_match = _MODULE_NUMBER_RE.search(last)
+    number = num_match.group(1) if num_match else None
+
+    # Detect the track from the path.
     track_slug = None
     for seg in segments:
         key = seg.lower()
@@ -1410,33 +1460,58 @@ def _rubric_severity_for_module(
             break
     aliases = _TRACK_ALIASES.get(track_slug, ()) if track_slug else ()
 
+    if not aliases:
+        # Without a recognized track, matching is too risky
+        # (round-2 caught "any row wins" false positives).
+        return None
+
     def _row_track_matches(row_track: str) -> bool:
         rt = row_track.lower()
-        return any(alias in rt for alias in aliases) if aliases else True
+        return any(alias in rt for alias in aliases)
 
+    # ----- stage 1: numbered match -----
     if number:
-        # Accept "2.8:" or " 2.8 " or end-of-string; reject partial
-        # matches like "12.8" when looking for "2.8".
-        needle_patterns = (
-            f" {number}:",
-            f" {number} ",
-            f" {number}.",
+        # Numbers in audit labels usually appear flanked by space or
+        # punctuation. Match a word boundary on both sides of the
+        # number so "2.8" can't match "12.8" or "2.80".
+        number_re = re.compile(
+            r"(?:^|[\s\(])" + re.escape(number) + r"(?=[\s:\-\)—.,])"
         )
         for entry in audit_modules:
             label = str(entry.get("module", ""))
-            # Quick check: number appears flanked by space/colon.
-            if not any(p in label for p in needle_patterns) and not label.endswith(f" {number}"):
+            if not number_re.search(label):
                 continue
             if _row_track_matches(str(entry.get("track", ""))):
                 return entry.get("severity")
 
-    # Last-resort substring on the raw slug.
-    slug = last.lower().replace("module-", "").replace("-", " ")
+    # ----- stage 2: name-overlap match -----
+    # Build the path slug's tokens by stripping the module-number
+    # prefix and any "partN" container, then splitting on dashes.
+    name_slug = _MODULE_NUMBER_PREFIX_RE.sub("", last)
+    path_tokens = _normalize_name_tokens(name_slug)
+    # Also fold in the parent segment (excluding "part<N>" wrappers)
+    # so "foundations" from ``platform/foundations/...`` is considered.
+    for seg in segments[:-1]:
+        if _PART_PREFIX_RE.match(seg):
+            continue
+        path_tokens |= _normalize_name_tokens(seg)
+    # NOTE: we keep track-name tokens in the path set on purpose. The
+    # audit label often includes the track name too ("Prerequisites:
+    # GitOps", "Platform: Systems Thinking"), so that overlap is a
+    # legitimate signal alongside the ``_row_track_matches`` filter.
+    if not path_tokens:
+        return None
+
+    best: tuple[int, str | None] = (0, None)
     for entry in audit_modules:
-        label = str(entry.get("module", "")).lower()
-        if slug and slug in label:
-            return entry.get("severity")
-    return None
+        label = str(entry.get("module", ""))
+        if not _row_track_matches(str(entry.get("track", ""))):
+            continue
+        label_tokens = _normalize_name_tokens(label)
+        overlap = len(path_tokens & label_tokens)
+        if overlap >= 2 and overlap > best[0]:
+            best = (overlap, entry.get("severity"))
+    return best[1]
 
 
 def build_issue_watch_state(repo_root: Path, issue_number: int) -> dict[str, Any] | None:
