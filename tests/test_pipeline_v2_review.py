@@ -15,6 +15,7 @@ from pipeline_v2.control_plane import ControlPlane
 from pipeline_v2.review_worker import (
     CHECK_PRE_MODEL,
     DEEP_CHECK_IDS,
+    REVIEW_FALLBACK_MODEL,
     REVIEW_MODEL,
     ReviewWorker,
 )
@@ -251,6 +252,38 @@ def test_malformed_json_retries_once_then_attempt_failed(tmp_path):
     payload = json.loads(failed_event["payload_json"])
     assert payload["reason"] == "malformed_json"
     assert control_plane.fetch_value("SELECT COUNT(*) FROM jobs WHERE phase = 'patch'") == 0
+
+
+def test_review_usage_limit_falls_back_to_gpt_5_4(tmp_path):
+    control_plane = _make_control_plane(tmp_path)
+    module_path = _write_module(tmp_path)
+    control_plane.enqueue(str(module_path.relative_to(tmp_path)), phase="review", model=REVIEW_MODEL)
+    dispatch = Mock(
+        side_effect=[
+            (True, "ERROR: You've hit your usage limit for GPT-5.3-Codex-Spark."),
+            (True, _simple_response("PRES")),
+            (True, _simple_response("NO_EMOJI")),
+            (True, _simple_response("K8S_API")),
+            (True, _deep_response()),
+        ]
+    )
+    worker = ReviewWorker(control_plane, dispatch_fn=dispatch)
+
+    with patch("pipeline_v2.preflight.subprocess.run", side_effect=_preflight_side_effect), patch(
+        "pipeline_v2.preflight._resolve_link_statuses",
+        return_value={},
+    ):
+        outcome = worker.run_once()
+
+    assert outcome.status == "approved"
+    models = [call.kwargs["model"] for call in dispatch.call_args_list]
+    assert models == [
+        REVIEW_MODEL,
+        REVIEW_FALLBACK_MODEL,
+        REVIEW_FALLBACK_MODEL,
+        REVIEW_FALLBACK_MODEL,
+        REVIEW_FALLBACK_MODEL,
+    ]
 
 
 def test_approve_response_emits_check_passed_and_enqueues_check_pre(tmp_path):

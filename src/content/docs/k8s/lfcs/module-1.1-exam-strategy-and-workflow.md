@@ -5,10 +5,9 @@ sidebar:
   order: 101
 ---
 > **LFCS Track** | Complexity: `[MEDIUM]` | Time: 1-2
----
+
 **Reading Time**: 1-2 hours
 **Prerequisites**: Familiarity with the LFCS hub and the Linux track fundamentals
----
 
 ## What You'll Be Able to Do
 
@@ -20,8 +19,6 @@ By the end of this module, you will:
 - convert the broad Linux track into an exam-day operating method
 
 **Why this matters**: LFCS rewards working system administrators, not memorization collectors. If you already know some Linux but cannot pace yourself, verify changes quickly, or recover from mistakes under pressure, you can still underperform badly. Strategy matters because the exam is operational, not ornamental.
-
----
 
 ## What LFCS Actually Tests
 
@@ -45,8 +42,6 @@ Good preparation:
 
 The Linux Foundation also describes LFCS as distribution-independent rather than tied to one exact distro workflow. That matters because the exam is measuring Linux administration competence, not your loyalty to one packaging ecosystem.
 
----
-
 ## The Most Important Mental Shift
 
 Treat LFCS like a short on-call shift with a queue of tasks.
@@ -64,8 +59,6 @@ The test is:
 "Can you inspect, change, and verify service state without wasting time?"
 
 That is why your prep needs workflow discipline, not just topic coverage.
-
----
 
 ## The Three-Pass Strategy
 
@@ -120,8 +113,6 @@ Why:
 
 This approach is not about fear. It is about protecting throughput.
 
----
-
 ## Verification Is the Real Exam Skill
 
 Many candidates think the skill is "knowing the command."
@@ -146,8 +137,6 @@ Examples:
 A task is not done when you typed the command.
 A task is done when you can prove the result.
 
----
-
 ## Build a Tiny Task Journal
 
 During hands-on exams, cognitive load becomes the enemy.
@@ -166,8 +155,6 @@ Why it helps:
 
 Do not turn this into elaborate note-taking.
 It is just a control surface for your attention.
-
----
 
 ## What a Good Practice Session Looks Like
 
@@ -188,8 +175,6 @@ Examples of solid practice sets:
 
 The point is repetition under realistic conditions, not content consumption volume.
 
----
-
 ## Practice the Environment, Not Just the Topics
 
 The official LFCS experience includes exam simulation access, and that should tell you something: environment familiarity matters.
@@ -207,8 +192,6 @@ Recommended habits:
 - rehearse switching between inspection and execution without losing context
 
 If your prep only works in a highly assisted environment, the exam will feel harsher than it should.
-
----
 
 ## The Commands That Deserve Muscle Memory
 

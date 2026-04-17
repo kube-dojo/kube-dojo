@@ -13,11 +13,13 @@ from .preflight import PreflightFinding, run_preflight
 
 
 REVIEW_MODEL = "gpt-5.3-codex-spark"
+REVIEW_FALLBACK_MODEL = "gpt-5.4"
 PATCH_MODEL = "gpt-5.4"
 CHECK_PRE_MODEL = "deterministic"
 SIMPLE_CHECK_IDS = ("PRES", "NO_EMOJI", "K8S_API")
 DEEP_CHECK_IDS = ("COV", "DEPTH", "WHY", "FACT_CHECK")
 REVIEW_MODEL_ESTIMATED_USD = 0.0050
+REVIEW_FALLBACK_MODEL_ESTIMATED_USD = 0.0150
 
 
 @dataclass(frozen=True)
@@ -212,30 +214,31 @@ class ReviewWorker:
         feedback_parts: list[str] = []
         actual_calls = 0
         actual_usd = 0.0
+        active_review_model = REVIEW_MODEL
 
         for check_id in SIMPLE_CHECK_IDS:
-            result, calls_used = self._dispatch_with_retry(
+            result, calls_used, usd_used, active_review_model = self._dispatch_with_retry(
                 self._simple_prompt(module_text, module_path, check_id),
                 expected_checks={check_id},
-                model=REVIEW_MODEL,
+                model=active_review_model,
             )
             aggregated_checks.extend(result["checks"])
             if result["feedback"]:
                 feedback_parts.append(result["feedback"])
             actual_calls += calls_used
-            actual_usd += REVIEW_MODEL_ESTIMATED_USD * calls_used
+            actual_usd += usd_used
 
-        deep_result, deep_calls_used = self._dispatch_with_retry(
+        deep_result, deep_calls_used, deep_usd_used, active_review_model = self._dispatch_with_retry(
             self._deep_prompt(module_text, module_path),
             expected_checks=set(DEEP_CHECK_IDS),
-            model=REVIEW_MODEL,
+            model=active_review_model,
             use_search=True,
         )
         aggregated_checks.extend(deep_result["checks"])
         if deep_result["feedback"]:
             feedback_parts.append(deep_result["feedback"])
         actual_calls += deep_calls_used
-        actual_usd += REVIEW_MODEL_ESTIMATED_USD * deep_calls_used
+        actual_usd += deep_usd_used
 
         checks_by_id = {check["id"]: check for check in aggregated_checks}
         ordered_checks = [
@@ -260,22 +263,41 @@ class ReviewWorker:
         expected_checks: set[str],
         model: str,
         use_search: bool = False,
-    ) -> tuple[dict[str, Any], int]:
+    ) -> tuple[dict[str, Any], int, float, str]:
         last_error: Exception | None = None
         calls_used = 0
-        for attempt in range(2):
-            ok, output = self.dispatch_fn(
-                prompt, model=model, timeout=900, use_search=use_search
-            )
-            calls_used += 1
-            if not ok:
-                raise MalformedReviewerResponse(output.strip() or f"{model} dispatch failed")
-            try:
-                return _validate_review_payload(output, expected_checks=expected_checks), calls_used
-            except MalformedReviewerResponse as exc:
-                last_error = exc
-                if attempt == 1:
+        actual_usd = 0.0
+        candidate_models = [model]
+        if model == REVIEW_MODEL and REVIEW_FALLBACK_MODEL not in candidate_models:
+            candidate_models.append(REVIEW_FALLBACK_MODEL)
+        allow_fallback = False
+        for candidate_index, candidate_model in enumerate(candidate_models):
+            if candidate_index > 0 and not allow_fallback:
+                break
+            max_attempts = 2 if candidate_index == 0 else 1
+            for attempt in range(max_attempts):
+                ok, output = self.dispatch_fn(
+                    prompt, model=candidate_model, timeout=900, use_search=use_search
+                )
+                calls_used += 1
+                actual_usd += self._estimated_cost_for_model(candidate_model)
+                if _contains_quota_error(output):
+                    allow_fallback = True
+                    last_error = MalformedReviewerResponse(output.strip() or f"{candidate_model} quota exhausted")
                     break
+                if not ok:
+                    raise MalformedReviewerResponse(output.strip() or f"{candidate_model} dispatch failed")
+                try:
+                    return (
+                        _validate_review_payload(output, expected_checks=expected_checks),
+                        calls_used,
+                        round(actual_usd, 4),
+                        candidate_model,
+                    )
+                except MalformedReviewerResponse as exc:
+                    last_error = exc
+                    if attempt == max_attempts - 1:
+                        break
         assert last_error is not None
         raise last_error
 
@@ -287,6 +309,11 @@ class ReviewWorker:
 
     def _estimated_review_cost(self) -> float:
         return round((len(SIMPLE_CHECK_IDS) + 1) * REVIEW_MODEL_ESTIMATED_USD, 4)
+
+    def _estimated_cost_for_model(self, model: str) -> float:
+        if model == REVIEW_FALLBACK_MODEL:
+            return REVIEW_FALLBACK_MODEL_ESTIMATED_USD
+        return REVIEW_MODEL_ESTIMATED_USD
 
     def _simple_prompt(self, module_text: str, module_path: Path, check_id: str) -> str:
         return f"""You are a strict KubeDojo review worker.
@@ -410,6 +437,15 @@ def _validate_review_payload(raw: str, *, expected_checks: set[str]) -> dict[str
         "checks": normalized_checks,
         "feedback": feedback,
     }
+
+
+def _contains_quota_error(output: str) -> bool:
+    lowered = output.lower()
+    return (
+        "usage limit" in lowered
+        or "rate limit" in lowered
+        or "quota" in lowered
+    )
 
 
 def findings_to_review_checks(findings: list[PreflightFinding]) -> list[dict[str, Any]]:
