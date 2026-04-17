@@ -6,7 +6,7 @@ sidebar:
   label: "AI"
 ---
 
-> **AI Track** | 21 modules | 4 sections | ~35-52 hours
+> **AI Track** | 25 modules | 5 sections | ~43-64 hours
 
 ## Overview
 
@@ -72,6 +72,14 @@ The practical open-model path:
 - runtime choice across Ollama, MLX, Transformers, and vLLM
 - Gemma 4 as a current open-model comparison case
 
+### [AI for Kubernetes & Platform Work](ai-for-kubernetes-platform-work/) — 4 modules
+
+The practitioner differentiator:
+- manifest and config review
+- Kubernetes troubleshooting and triage
+- platform and SRE workflow support
+- trust boundaries for infrastructure AI use
+
 ## Recommended Route
 
 ```text
@@ -82,6 +90,8 @@ AI-Native Work
 AI Building
    |
 Open Models & Local Inference
+   |
+AI for Kubernetes & Platform Work
    |
 AI/ML Engineering (optional advanced path)
 ```
@@ -100,6 +110,7 @@ AI/ML Engineering (optional advanced path)
 - [Practical AI Tool Use](ai-native-work/module-1.1-practical-ai-tool-use/)
 - [From Chat To AI Systems](ai-building/module-1.1-from-chat-to-ai-systems/)
 - [Open Models and Model Hubs](open-models-local-inference/module-1.1-open-models-and-model-hubs/)
+- [AI for YAML, Manifests, and Config Review](ai-for-kubernetes-platform-work/module-1.1-ai-for-yaml-manifests-config-review/)
 
 ## After This Track
 

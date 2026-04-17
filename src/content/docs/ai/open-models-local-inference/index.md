@@ -23,7 +23,7 @@ The goal is to help learners understand:
 
 This is still part of the top-level `AI` track.
 
-It sits between [AI Building](../ai-building/) and the deeper [AI/ML Engineering](../../ai-ml-engineering/) sections.
+It sits between [AI Building](../ai-building/) and [AI for Kubernetes & Platform Work](../ai-for-kubernetes-platform-work/), before the deeper [AI/ML Engineering](../../ai-ml-engineering/) sections.
 
 ## Modules
 
@@ -57,6 +57,8 @@ AI Building
    |
 Open Models & Local Inference
    |
+AI for Kubernetes & Platform Work
+   |
 AI/ML Engineering (optional deeper path)
 ```
 
@@ -66,6 +68,7 @@ Choose the next route based on your goal:
 
 | Goal | Next Step |
 |---|---|
+| use AI safely in Kubernetes and platform workflows | [AI for Kubernetes & Platform Work](../ai-for-kubernetes-platform-work/) |
 | build practical local-first AI apps | [AI/ML Engineering: AI-Native Development](../../ai-ml-engineering/ai-native-development/) |
 | build retrieval-backed applications | [AI/ML Engineering: Vector Search & RAG](../../ai-ml-engineering/vector-rag/) |
 | study model behavior more deeply | [AI/ML Engineering: Generative AI](../../ai-ml-engineering/generative-ai/) |
