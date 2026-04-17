@@ -1104,6 +1104,37 @@ def test_pipeline_stuck_catches_expired_and_silent_jobs_in_seconds(tmp_path: Pat
     assert "fresh/one" not in stuck_in_state_keys
 
 
+def test_pipeline_stuck_surfaces_unresolved_dead_letters(tmp_path: Path) -> None:
+    """Codex round-3 bug: briefing's ``pipeline_dead_letter`` reason
+    in top_modules pointed at /api/pipeline/v2/stuck, but that
+    endpoint only returned stuck_leased + stuck_in_state. The drill-
+    down was half-wired. Now /api/pipeline/v2/stuck also returns a
+    ``dead_lettered`` section derived from events."""
+    _setup_repo(tmp_path)
+    conn = sqlite3.connect(tmp_path / ".pipeline/v2.db")
+    # Unresolved dead-letter: module_dead_lettered with no recovery.
+    conn.execute(
+        "INSERT INTO events (module_key, type, payload_json, at) VALUES (?, ?, ?, ?)",
+        ("still/dead", "module_dead_lettered", '{"reason":"quality"}', 1),
+    )
+    # Resolved: dead-lettered then recovered — must NOT appear.
+    conn.execute(
+        "INSERT INTO events (module_key, type, payload_json, at) VALUES (?, ?, ?, ?)",
+        ("was/dead", "module_dead_lettered", "{}", 2),
+    )
+    conn.execute(
+        "INSERT INTO events (module_key, type, payload_json, at) VALUES (?, ?, ?, ?)",
+        ("was/dead", "dead_letter_recovered", "{}", 3),
+    )
+    conn.commit()
+    conn.close()
+    r = local_api.build_pipeline_stuck(tmp_path, threshold_seconds=60, now_seconds=100)
+    dead_keys = {row["module_key"] for row in r["dead_lettered"]}
+    assert "still/dead" in dead_keys
+    assert "was/dead" not in dead_keys
+    assert r["dead_lettered_count"] == len(r["dead_lettered"])
+
+
 def test_pipeline_stuck_correlates_events_by_lease_id(tmp_path: Path) -> None:
     """Codex round-4 bug: correlating events by module_key alone let
     a fresh event from an EARLIER lease mask a hung current lease."""

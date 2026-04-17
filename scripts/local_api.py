@@ -1056,21 +1056,33 @@ def build_pipeline_stuck(
     threshold_seconds: int = _DEFAULT_STUCK_THRESHOLD_SECONDS,
     now_seconds: int | None = None,
 ) -> dict[str, Any]:
-    """Dead-letter view — jobs stuck at a phase longer than ``threshold_seconds``.
+    """Stuck/dead-letter view of pipeline v2.
 
-    Two signals are surfaced:
+    Three signals are surfaced:
 
     - ``stuck_leased``: jobs whose lease has expired OR whose
       ``leased_at`` is older than the threshold.
     - ``stuck_in_state``: jobs in an in-flight ``queue_state`` with no
       recent event *for the current attempt*. Events are correlated
       to the job's current ``lease_id`` — a recent event from an
-      earlier lease for the same module must not mask a hung current
-      lease.
+      earlier lease for the same module must not mask a hung
+      current lease.
+    - ``dead_lettered``: modules with a ``module_dead_lettered``
+      event that has not been superseded by a later
+      ``dead_letter_recovered`` event. These are modules the
+      pipeline explicitly gave up on and need human triage or
+      ``pipeline_v2 recover-dead-letters`` before they will make
+      progress.
     """
     db_path = repo_root / ".pipeline" / "v2.db"
     if not db_path.exists():
-        return {"db_path": str(db_path), "exists": False, "stuck_leased": [], "stuck_in_state": []}
+        return {
+            "db_path": str(db_path),
+            "exists": False,
+            "stuck_leased": [],
+            "stuck_in_state": [],
+            "dead_lettered": [],
+        }
 
     now_seconds = now_seconds if now_seconds is not None else int(time.time())
     cutoff = now_seconds - threshold_seconds
@@ -1120,6 +1132,45 @@ def build_pipeline_stuck(
         if (row.get("last_event_at") or 0) < cutoff
     ]
 
+    # Dead-lettered modules: those with a module_dead_lettered event
+    # that has not been followed by a dead_letter_recovered event.
+    # Grouped per module so an operator sees one row per unresolved
+    # incident.
+    dead_events = _query_sqlite_rows(
+        db_path,
+        """
+        SELECT module_key, type, payload_json, at
+        FROM events
+        WHERE type IN (
+            'module_dead_lettered',
+            'needs_human_intervention',
+            'dead_letter_recovered'
+        )
+        ORDER BY id ASC
+        """,
+    )
+    # Walk chronologically; a recover_event cancels an earlier dead-
+    # letter for the same module.
+    dead_latest: dict[str, dict[str, Any]] = {}
+    for e in dead_events:
+        mk = str(e.get("module_key") or "")
+        if not mk:
+            continue
+        kind = str(e.get("type"))
+        if kind == "dead_letter_recovered":
+            dead_latest.pop(mk, None)
+        else:
+            dead_latest[mk] = {
+                "module_key": mk,
+                "type": kind,
+                "at": int(e.get("at") or 0),
+                "payload_json": _load_json(str(e.get("payload_json") or "{}")),
+            }
+    dead_lettered = sorted(
+        dead_latest.values(),
+        key=lambda r: r.get("at") or 0,
+    )
+
     return {
         "db_path": str(db_path),
         "exists": True,
@@ -1129,6 +1180,8 @@ def build_pipeline_stuck(
         "stuck_leased": stuck_leased,
         "stuck_in_state_count": len(stuck_in_state),
         "stuck_in_state": stuck_in_state,
+        "dead_lettered_count": len(dead_lettered),
+        "dead_lettered": dead_lettered,
     }
 
 
@@ -3181,10 +3234,15 @@ def build_session_briefing(repo_root: Path) -> dict[str, Any]:
     if isinstance(stuck, dict) and stuck.get("exists"):
         leased = stuck.get("stuck_leased_count", 0)
         in_state = stuck.get("stuck_in_state_count", 0)
+        dead_letter_stuck = stuck.get("dead_lettered_count", 0)
         if leased:
             alerts.append(f"{leased} job(s) with expired/stale lease — worker may have crashed")
         if in_state:
             alerts.append(f"{in_state} job(s) stuck in-flight with no recent event")
+        if dead_letter_stuck:
+            alerts.append(
+                f"{dead_letter_stuck} module(s) dead-lettered (unresolved) — need human triage"
+            )
 
     try:
         quality = build_quality_scores(repo_root)
