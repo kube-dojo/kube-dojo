@@ -1268,18 +1268,30 @@ def test_quality_scores_parses_audit_markdown(tmp_path: Path) -> None:
     assert scores["Gamma Module"]["severity"] == "good"
 
 
-def test_module_state_includes_diagnostics(tmp_path: Path) -> None:
+def _diag_codes(diagnostics: list[dict[str, object]]) -> set[str]:
+    """Helper: extract the stable ``code`` field from a diagnostics list."""
+    return {str(entry.get("code")) for entry in diagnostics if isinstance(entry, dict)}
+
+
+def test_module_state_diagnostics_are_structured_dicts(tmp_path: Path) -> None:
+    """Schema-tweak #263: diagnostics changed from ``list[str]`` to
+    ``list[dict]`` with ``{severity, code, summary, source, next_action?}``.
+    Agents switch on ``severity`` / ``code`` and drill in via
+    ``next_action``, which the old string tags could not carry."""
     module_key, _ = _setup_repo(tmp_path)
     state = local_api.build_module_state(tmp_path, module_key)
     diagnostics = state.get("diagnostics")
     assert isinstance(diagnostics, list)
-    # The fixture module has lab + fact_ledger + UK + frontmatter, so
-    # the only nits come from the UK state if it's not "synced". We
-    # don't assert an exact set — just that the field is present and a
-    # list of short strings.
-    for tag in diagnostics:
-        assert isinstance(tag, str) and tag
-        assert len(tag) < 80
+    for entry in diagnostics:
+        assert isinstance(entry, dict)
+        # Required fields.
+        assert entry.get("severity") in {"info", "warn", "critical"}
+        assert isinstance(entry.get("code"), str) and entry["code"]
+        assert isinstance(entry.get("summary"), str) and entry["summary"]
+        assert isinstance(entry.get("source"), str) and entry["source"]
+        # next_action is optional but when present must be a string.
+        if "next_action" in entry:
+            assert isinstance(entry["next_action"], str)
 
 
 def test_module_state_flags_missing_lab_and_ledger(tmp_path: Path) -> None:
@@ -1293,10 +1305,10 @@ def test_module_state_flags_missing_lab_and_ledger(tmp_path: Path) -> None:
     _git(repo, "add", ".")
     _git(repo, "commit", "-m", "init")
     state = local_api.build_module_state(repo, "k8s/cka/module-X-stub")
-    diag = state["diagnostics"]
-    assert "no_lab" in diag
-    assert "no_fact_ledger" in diag
-    assert "uk_translation_missing" in diag
+    codes = _diag_codes(state["diagnostics"])
+    assert "no_lab" in codes
+    assert "no_fact_ledger" in codes
+    assert "uk_translation_missing" in codes
 
 
 def test_rubric_diagnostics_matches_by_track_and_number(tmp_path: Path) -> None:
@@ -1327,7 +1339,7 @@ def test_rubric_diagnostics_matches_by_track_and_number(tmp_path: Path) -> None:
     state = local_api.build_module_state(
         tmp_path, "k8s/cka/part2-workloads-scheduling/module-2.8-scheduler-lifecycle-theory"
     )
-    assert "rubric_critical" in state["diagnostics"]
+    assert "rubric_critical" in _diag_codes(state["diagnostics"])
 
 
 def test_rubric_diagnostics_matches_non_numbered_entry(tmp_path: Path) -> None:
@@ -1497,7 +1509,7 @@ def test_rubric_diagnostics_no_false_match_for_different_track(tmp_path: Path) -
     _git(tmp_path, "add", ".")
     _git(tmp_path, "commit", "-m", "init")
     state = local_api.build_module_state(tmp_path, "k8s/kcna/module-2.8-something-unrelated")
-    assert "rubric_critical" not in state["diagnostics"]
+    assert "rubric_critical" not in _diag_codes(state["diagnostics"])
 
 
 def test_query_sqlite_rows_propagates_schema_drift(tmp_path: Path) -> None:
@@ -1522,6 +1534,114 @@ def test_query_sqlite_rows_tolerates_missing_table(tmp_path: Path) -> None:
     conn.close()
     result = local_api._query_sqlite_rows(db_path, "SELECT * FROM does_not_exist")
     assert result == []
+
+
+def test_module_state_includes_orchestration_and_lease_inline(tmp_path: Path) -> None:
+    """Schema-tweak #263: ``build_module_state`` folds in orchestration
+    + lease so "why is X blocked" is one call, not three.
+
+    The individual endpoints stay for callers that only want a slice,
+    but the one-call path is the happy path for agent drill-down."""
+    module_key, _ = _setup_repo(tmp_path)
+    state = local_api.build_module_state(tmp_path, module_key)
+    assert "orchestration" in state
+    assert "lease" in state
+    # Orchestration has the two sub-keys mirroring the dedicated endpoint.
+    orch = state["orchestration"]
+    assert "v2" in orch
+    assert "translation_v2" in orch
+    # Lease returns ``{held: bool, ...}``.
+    assert "held" in state["lease"]
+
+
+def test_module_state_orchestration_surfaces_pipeline_rejection(tmp_path: Path) -> None:
+    """A pipeline-rejected module must get a ``pipeline_rejected``
+    diagnostic so agents see the reason without fetching the events
+    endpoint separately."""
+    module_key, _ = _setup_repo(tmp_path)
+    conn = sqlite3.connect(tmp_path / ".pipeline/v2.db")
+    # Overwrite the fixture's first job with rejected state.
+    conn.execute(
+        "UPDATE jobs SET queue_state = ? WHERE module_key = ?",
+        ("rejected", module_key),
+    )
+    # Add a second, newer rejected job so ORDER BY id DESC picks it.
+    conn.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state, model) "
+        "VALUES (?, ?, ?, ?)",
+        (module_key, "review", "rejected", "gemini"),
+    )
+    conn.commit()
+    conn.close()
+    state = local_api.build_module_state(tmp_path, module_key)
+    codes = _diag_codes(state["diagnostics"])
+    assert "pipeline_rejected" in codes
+
+
+def test_briefing_has_actions_and_top_modules(tmp_path: Path) -> None:
+    """Schema-tweak #263: briefing gains ``actions.now/blocked/next``
+    and ``top_modules`` so Codex and Claude both see what to touch
+    next — not just the global state."""
+    _setup_repo(tmp_path)
+    _write(
+        tmp_path / "STATUS.md",
+        "# status\n\n## TODO\n\n- [ ] task one\n",
+    )
+    # Plant an active lease so ``actions.now`` is populated.
+    import time as _time
+    now_s = int(_time.time())
+    conn = sqlite3.connect(tmp_path / ".pipeline/v2.db")
+    conn.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state, leased_by, lease_id, "
+        "leased_at, lease_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("active/module", "write", "leased", "codex", "l-live", now_s - 10, now_s + 300),
+    )
+    conn.commit()
+    conn.close()
+    briefing = local_api.build_session_briefing(tmp_path)
+    assert "actions" in briefing
+    assert set(briefing["actions"].keys()) == {"now", "blocked", "next"}
+    assert any("codex" in entry for entry in briefing["actions"]["now"])
+    assert "top_modules" in briefing
+    assert any(m.get("reason") == "active_lease" for m in briefing["top_modules"])
+
+
+def test_compact_briefing_keeps_actions_and_top_modules(tmp_path: Path) -> None:
+    """Compact mode strips navigation aids but MUST keep the
+    actionable fields — that's the whole point."""
+    _setup_repo(tmp_path)
+    _write(tmp_path / "STATUS.md", "# status\n\n## TODO\n\n- [ ] x\n")
+    briefing = local_api.build_session_briefing(tmp_path)
+    compact = local_api._compact_briefing(briefing)
+    assert "actions" in compact
+    assert "top_modules" in compact
+    assert "next_reads" not in compact
+    assert "links" not in compact
+
+
+def test_worktrees_list_includes_dirty_counts(tmp_path: Path) -> None:
+    """Schema-tweak #263: each worktree entry now carries a ``counts``
+    dict so operators see which worktree is lively without shelling
+    into each one. Only the primary worktree exists in this fixture;
+    the real repo has many, but one is enough to validate the shape."""
+    repo = tmp_path
+    _init_repo(repo)
+    _write(repo / "README.md", "hi\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-m", "initial")
+    # Make it dirty.
+    _write(repo / "README.md", "hi\n\nmore\n")
+
+    result = local_api.build_worktrees_list(repo)
+    assert result["ok"] is True
+    assert result["count"] >= 1
+    first = result["worktrees"][0]
+    assert "counts" in first
+    counts = first["counts"]
+    assert counts is not None
+    assert counts["total"] >= 1
+    assert counts["unstaged"] >= 1
+    assert first["dirty"] is True
 
 
 def test_schema_lists_phase_c_endpoints() -> None:

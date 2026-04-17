@@ -37,10 +37,10 @@ The briefing covers: current branch + dirty summary, all worktrees, runtime serv
 
 ## Session Workflow
 
-1. **READ `STATUS.md` FIRST** — instant context
+1. **Orient via `/api/briefing/session`** (see *Agent Orientation* above). `STATUS.md` is the fallback when the API is down.
 2. Use `scripts/prompts/module-writer.md` for new modules
 3. Send to Gemini for review before closing issues
-4. **UPDATE `STATUS.md`** before ending session
+4. **UPDATE `STATUS.md`** before ending session (the briefing parses it, so stale entries mislead the next session)
 
 ## Build & Serve
 
