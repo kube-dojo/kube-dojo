@@ -61,7 +61,8 @@ Choose the next route based on your goal:
 
 | Goal | Next Step |
 |---|---|
-| build practical applications first | [AI/ML Engineering: AI-Native Development](../../ai-ml-engineering/ai-native-development/) |
+| build practical applications first | [Open Models & Local Inference](../open-models-local-inference/) |
+| understand local models and runtimes before deeper engineering | [Open Models & Local Inference](../open-models-local-inference/) |
 | understand LLM internals better | [AI/ML Engineering: Generative AI](../../ai-ml-engineering/generative-ai/) |
 | design full agent systems | [AI/ML Engineering: Frameworks & Agents](../../ai-ml-engineering/frameworks-agents/) |
 | operate AI systems in production | [AI/ML Engineering: MLOps & LLMOps](../../ai-ml-engineering/mlops/) |

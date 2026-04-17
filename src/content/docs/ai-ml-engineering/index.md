@@ -23,7 +23,7 @@ If your goal is AI literacy, safer AI use, practical AI work habits, or a bridge
 
 In those cases, strengthen [Prerequisites](../prerequisites/) or the AI/ML [Prerequisites](prerequisites/) phase first.
 
-If you need a non-engineering front door first, use [AI Foundations](../ai/foundations/), [AI-Native Work](../ai/ai-native-work/), and [AI Building](../ai/ai-building/) before returning here.
+If you need a non-engineering front door first, use [AI Foundations](../ai/foundations/), [AI-Native Work](../ai/ai-native-work/), [AI Building](../ai/ai-building/), and [Open Models & Local Inference](../ai/open-models-local-inference/) before returning here.
 
 ## Start Here
 

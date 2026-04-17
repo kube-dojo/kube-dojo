@@ -4,7 +4,7 @@
 
 ## Current State
 
-**715 modules** across 8 published tracks. **115 Ukrainian translations** (~16% — certs + prereqs; AI/ML and AI not yet translated).
+**722 modules** across 8 published tracks. **115 Ukrainian translations** (~16% — certs + prereqs; AI/ML and AI not yet translated).
 
 **Website:** https://kube-dojo.github.io/ (Starlight/Astro, ~1,350 pages, ~30-40s build)
 
@@ -14,15 +14,15 @@
 
 | Track | Modules | Status |
 |-------|---------|--------|
-| Fundamentals | 33 | Complete |
+| Fundamentals | 44 | Complete |
 | Linux Deep Dive | 37 | Complete |
-| Cloud | 84 | Complete |
-| Certifications (CKA/CKAD/CKS/KCNA/KCSA/Extending + 12 learning paths) | 175 | Complete |
-| Platform Engineering | 209 | Complete |
-| On-Premises Kubernetes | 30 | Complete (needs Gemini review) |
-| AI | 14 | Bridge track added; needs production-quality upgrades |
+| Cloud | 85 | Complete |
+| Certifications (CKA/CKAD/CKS/KCNA/KCSA/Extending + 12 learning paths) | 195 | Complete |
+| Platform Engineering | 210 | Complete |
+| On-Premises Kubernetes | 51 | Complete (needs Gemini review) |
+| AI | 21 | Expanded bridge track; needs production-quality upgrades |
 | AI/ML Engineering | 79 | Complete (expanded beyond Phase 4b; needs ongoing quality upgrades) |
-| **Total** | **715** | **Complete** |
+| **Total** | **722** | **Complete** |
 
 ### Certifications Breakdown
 | Cert | Modules |
@@ -75,18 +75,28 @@ Migrated from neural-dojo + modernized with 8 new 2026 modules (#199, Phase 4b).
 
 | Section | Modules |
 |---------|---------|
-| Prerequisites | 1 |
-| AI-Native Development | 9 |
+| Prerequisites | 4 |
+| AI-Native Development | 10 |
 | Generative AI | 6 |
-| Vector DBs & RAG | 5 |
+| Vector DBs & RAG | 6 |
 | Frameworks & Agents | 10 |
-| AI Infrastructure | 3 |
-| Advanced GenAI | 9 |
+| AI Infrastructure | 5 |
+| Advanced GenAI | 11 |
 | Multimodal AI | 4 |
 | Deep Learning | 7 |
-| MLOps | 10 |
+| MLOps | 12 |
 | Classical ML | 3 |
 | History | 1 |
+
+### AI Breakdown
+Top-level learner-first AI track designed as the bridge from AI literacy into real AI building and then into AI/ML Engineering.
+
+| Section | Modules |
+|---------|---------|
+| Foundations | 6 |
+| AI-Native Work | 4 |
+| AI Building | 4 |
+| Open Models & Local Inference | 7 |
 
 ### Ukrainian Translations
 | Track | Translated | Total |

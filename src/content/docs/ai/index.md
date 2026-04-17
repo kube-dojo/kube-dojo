@@ -6,7 +6,7 @@ sidebar:
   label: "AI"
 ---
 
-> **AI Track** | 14 modules | 3 sections | ~22-32 hours
+> **AI Track** | 21 modules | 4 sections | ~35-52 hours
 
 ## Overview
 
@@ -61,6 +61,17 @@ The bridge into system-building:
 - retrieval, tools, and safe capability boundaries
 - evaluation, iteration, and shipping a sane v1
 
+### [Open Models & Local Inference](open-models-local-inference/) — 7 modules
+
+The practical open-model path:
+- model hubs and model cards
+- Hugging Face for learners
+- quantization and formats
+- MLX on Apple Silicon
+- Linux local inference
+- runtime choice across Ollama, MLX, Transformers, and vLLM
+- Gemma 4 as a current open-model comparison case
+
 ## Recommended Route
 
 ```text
@@ -69,6 +80,8 @@ AI Foundations
 AI-Native Work
    |
 AI Building
+   |
+Open Models & Local Inference
    |
 AI/ML Engineering (optional advanced path)
 ```
@@ -86,6 +99,7 @@ AI/ML Engineering (optional advanced path)
 - [How to Verify AI Output](foundations/module-1.4-how-to-verify-ai-output/)
 - [Practical AI Tool Use](ai-native-work/module-1.1-practical-ai-tool-use/)
 - [From Chat To AI Systems](ai-building/module-1.1-from-chat-to-ai-systems/)
+- [Open Models and Model Hubs](open-models-local-inference/module-1.1-open-models-and-model-hubs/)
 
 ## After This Track
 
