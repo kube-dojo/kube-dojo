@@ -115,6 +115,15 @@ export default defineConfig({
             { label: 'LFCS: Linux SysAdmin', autogenerate: { directory: 'k8s/lfcs' }, collapsed: true },
           ],
         },
+        {
+          label: 'AI',
+          collapsed: true,
+          items: [
+            { label: 'AI Hub', link: '/ai/' },
+            { label: 'AI Foundations', autogenerate: { directory: 'ai/foundations' }, collapsed: true },
+            { label: 'AI-Native Work', autogenerate: { directory: 'ai/ai-native-work' }, collapsed: true },
+          ],
+        },
 
         // ── 2. Certifications: core K8s knowledge (before cloud-specific) ──
 
