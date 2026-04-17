@@ -1168,6 +1168,71 @@ def build_pipeline_stuck(
     else:
         dead_lettered = []
 
+    # Phase D stale-worker view: per-``leased_by`` roll-up. A worker may
+    # hold several non-expired leases but have gone silent across all of
+    # them — that's a zombie that the per-module ``stuck_in_state`` view
+    # doesn't surface cleanly because a bursty event on a sibling lease
+    # can hide it. We group by worker and take the most recent event
+    # from ANY of their current leases as the heartbeat. ``idle_seconds``
+    # = None means "never emitted" and ranks as strictly staler than any
+    # finite idle time.
+    active_lease_rows = _query_sqlite_rows(
+        db_path,
+        """
+        SELECT j.leased_by, j.lease_id, j.module_key, j.phase,
+               j.leased_at, j.lease_expires_at,
+               (
+                   SELECT MAX(at) FROM events e
+                   WHERE e.lease_id = j.lease_id
+               ) AS last_event_at
+        FROM jobs j
+        WHERE j.leased_by IS NOT NULL
+          AND (j.lease_expires_at IS NULL OR j.lease_expires_at >= ?)
+        """,
+        (now_seconds,),
+    )
+    by_worker: dict[str, dict[str, Any]] = {}
+    for row in active_lease_rows:
+        worker = row.get("leased_by")
+        if not worker:
+            continue
+        bucket = by_worker.setdefault(str(worker), {
+            "leased_by": str(worker),
+            "active_lease_count": 0,
+            "module_keys": [],
+            "last_event_at": None,
+        })
+        bucket["active_lease_count"] += 1
+        mk = row.get("module_key")
+        if mk and mk not in bucket["module_keys"]:
+            bucket["module_keys"].append(mk)
+        le = row.get("last_event_at")
+        if isinstance(le, (int, float)):
+            if bucket["last_event_at"] is None or le > bucket["last_event_at"]:
+                bucket["last_event_at"] = int(le)
+
+    stale_workers: list[dict[str, Any]] = []
+    for bucket in by_worker.values():
+        le = bucket["last_event_at"]
+        if le is None:
+            idle: int | None = None
+        else:
+            idle = max(0, now_seconds - int(le))
+        # Stale if the worker has never emitted an event on any active
+        # lease, OR its most recent heartbeat is older than the threshold.
+        if idle is None or idle > threshold_seconds:
+            bucket["idle_seconds"] = idle
+            stale_workers.append(bucket)
+    # Rank "never emitted" as strictly staler than any finite idle, then
+    # longest-idle first. Operators see the most concerning workers at
+    # the top of the list.
+    stale_workers.sort(
+        key=lambda w: (
+            0 if w.get("idle_seconds") is None else 1,
+            -(w.get("idle_seconds") or 0),
+        )
+    )
+
     return {
         "db_path": str(db_path),
         "exists": True,
@@ -1179,6 +1244,8 @@ def build_pipeline_stuck(
         "stuck_in_state": stuck_in_state,
         "dead_lettered_count": len(dead_lettered),
         "dead_lettered": dead_lettered,
+        "stale_workers_count": len(stale_workers),
+        "stale_workers": stale_workers,
     }
 
 
@@ -2089,6 +2156,365 @@ def build_recent_activity(repo_root: Path) -> dict[str, Any]:
         "pipeline_events": pipeline_events,
         "bridge_messages": bridge_messages,
         "watched_issue": watched_issue,
+    }
+
+
+_ACTIVITY_DEFAULT_SINCE_SECONDS = 86400  # 24h
+_ACTIVITY_MAX_LIMIT = 500
+
+
+def _epoch_to_iso_utc(epoch: int) -> str:
+    """Format Unix-epoch seconds as an ISO-8601 UTC timestamp with ``Z``.
+
+    Matches the string form stored in ``.bridge/messages.db.timestamp``,
+    so bridge-row filtering stays a plain string compare.
+    """
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(int(epoch)))
+
+
+def _iso_to_epoch(value: Any) -> int | None:
+    """Parse an ISO-8601 timestamp to Unix-epoch seconds.
+
+    Accepts the bridge's ``YYYY-MM-DDTHH:MM:SS[.ffffff][Z|+00:00]`` shape.
+    Returns ``None`` on unparseable / absent input so the caller can drop
+    the item rather than anchoring the feed at epoch-0.
+    """
+    if not isinstance(value, str) or not value:
+        return None
+    from datetime import datetime, timezone
+    text = value.strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return int(dt.timestamp())
+
+
+def _recent_commits_with_time(
+    repo_root: Path,
+    *,
+    since_seconds: int | None = None,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Like ``_recent_commits`` but each row carries a committer-time ``at``.
+
+    Used by the merged activity feed so commits can be sorted against
+    pipeline events and bridge messages on a single axis. ``since_seconds``
+    is applied via ``git log --since=@<epoch>`` (inclusive).
+    """
+    capped = max(1, min(int(limit), 500))
+    cmd = ["git", "log", f"-n{capped}", "--pretty=format:%h%x09%ct%x09%s"]
+    if since_seconds is not None:
+        cmd.insert(2, f"--since=@{int(since_seconds)}")
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    if result.returncode != 0:
+        return []
+    commits: list[dict[str, Any]] = []
+    for line in result.stdout.splitlines():
+        parts = line.split("\t", 2)
+        if len(parts) != 3:
+            continue
+        sha, ct, subject = parts
+        try:
+            at = int(ct)
+        except ValueError:
+            continue
+        commits.append({"sha": sha, "at": at, "subject": subject})
+    return commits
+
+
+def build_activity_feed(
+    repo_root: Path,
+    *,
+    since_seconds: int | None = None,
+    limit: int = 50,
+    now_seconds: int | None = None,
+) -> dict[str, Any]:
+    """Merged chronological feed: git commits + pipeline v2 events + bridge messages.
+
+    Everything is normalized to one item shape so operators see a single
+    timeline. Each source is fetched with a per-source cap of ``4 * limit``
+    (min 50) before merging so a quiet source isn't crowded out at the
+    merge boundary. Items with an unparseable timestamp are dropped, not
+    anchored at 0 — otherwise they'd always rank last in ascending order
+    or first in descending, hiding real recent activity.
+
+    Defaults: ``since_seconds`` = now − 24 h, ``limit`` = 50 (max 500).
+    """
+    now_seconds = now_seconds if now_seconds is not None else int(time.time())
+    if since_seconds is None:
+        since_seconds = now_seconds - _ACTIVITY_DEFAULT_SINCE_SECONDS
+    capped = max(1, min(int(limit), _ACTIVITY_MAX_LIMIT))
+    per_source_cap = max(capped * 4, 50)
+
+    items: list[dict[str, Any]] = []
+    source_counts: dict[str, int] = {
+        "commit": 0,
+        "pipeline_event": 0,
+        "bridge_message": 0,
+    }
+    errors: dict[str, str] = {}
+
+    try:
+        commits = _recent_commits_with_time(
+            repo_root, since_seconds=since_seconds, limit=per_source_cap
+        )
+    except Exception as exc:  # noqa: BLE001
+        commits = []
+        errors["commit"] = f"{type(exc).__name__}: {exc}"
+    for c in commits:
+        items.append({
+            "source": "commit",
+            "at": c.get("at"),
+            "kind": "commit",
+            "module_key": None,
+            "summary": c.get("subject"),
+            "ref": {"sha": c.get("sha")},
+        })
+        source_counts["commit"] += 1
+
+    try:
+        events = build_pipeline_events(
+            repo_root, None, since_seconds, limit=per_source_cap
+        )
+    except Exception as exc:  # noqa: BLE001
+        events = {"events": []}
+        errors["pipeline_event"] = f"{type(exc).__name__}: {exc}"
+    for e in (events.get("events") or []):
+        items.append({
+            "source": "pipeline_event",
+            "at": e.get("at"),
+            "kind": e.get("type"),
+            "module_key": e.get("module_key"),
+            "summary": None,
+            "ref": {"event_id": e.get("id"), "lease_id": e.get("lease_id")},
+        })
+        source_counts["pipeline_event"] += 1
+
+    since_iso = _epoch_to_iso_utc(since_seconds)
+    try:
+        bridge = build_bridge_messages(repo_root, since_iso, limit=per_source_cap)
+    except Exception as exc:  # noqa: BLE001
+        bridge = {"messages": []}
+        errors["bridge_message"] = f"{type(exc).__name__}: {exc}"
+    for m in (bridge.get("messages") or []):
+        at = _iso_to_epoch(m.get("timestamp"))
+        if at is None:
+            continue
+        items.append({
+            "source": "bridge_message",
+            "at": at,
+            "kind": m.get("message_type"),
+            "module_key": None,
+            "summary": f"{m.get('from_llm') or '?'}→{m.get('to_llm') or '?'}",
+            "ref": {"message_id": m.get("id"), "task_id": m.get("task_id")},
+        })
+        source_counts["bridge_message"] += 1
+
+    # Drop items with no usable timestamp (would cluster at the top/bottom
+    # depending on sort direction and mislead operators).
+    items = [it for it in items if isinstance(it.get("at"), (int, float))]
+    items.sort(key=lambda it: int(it["at"]), reverse=True)
+    items = items[:capped]
+
+    payload: dict[str, Any] = {
+        "generated_at": now_seconds,
+        "since_seconds": since_seconds,
+        "limit": capped,
+        "count": len(items),
+        "source_counts": source_counts,
+        "items": items,
+    }
+    if errors:
+        payload["errors"] = errors
+    return payload
+
+
+# ---- Phase D: per-section track readiness ----
+
+# Map raw ``queue_state`` → readiness bucket. Unknown states default to
+# in-flight rather than "cleared" so an unrecognized state doesn't
+# silently mark a module production-ready.
+_READINESS_BUCKET_FOR_STATE: dict[str, str] = {
+    "done": "cleared",
+    "completed": "cleared",
+    "pending_write": "in_flight",
+    "pending_review": "in_flight",
+    "pending_patch": "in_flight",
+    "leased": "in_flight",
+    "running": "in_flight",
+    "in_progress": "in_flight",
+    "dead_letter": "dead_letter",
+}
+
+
+def _readiness_bucket(state: Any) -> str:
+    if not state:
+        return "not_yet_enqueued"
+    return _READINESS_BUCKET_FOR_STATE.get(str(state), "in_flight")
+
+
+def _load_v2_module_states(repo_root: Path) -> dict[str, str]:
+    """Map ``module_key`` → latest ``queue_state`` from ``.pipeline/v2.db``.
+
+    A module can have several historical job rows (e.g. a ``done`` job
+    followed by a re-enqueued ``pending_review``). The latest ``id``
+    wins so readiness reflects the current state, not a stale row.
+    """
+    db_path = repo_root / ".pipeline" / "v2.db"
+    if not db_path.exists():
+        return {}
+    rows = _query_sqlite_rows(
+        db_path,
+        """
+        SELECT module_key, queue_state
+        FROM jobs
+        WHERE id IN (SELECT MAX(id) FROM jobs GROUP BY module_key)
+        """,
+    )
+    return {
+        str(r["module_key"]): str(r["queue_state"])
+        for r in rows
+        if r.get("module_key") and r.get("queue_state")
+    }
+
+
+def _section_for_key(module_key: str) -> str:
+    """Second path segment of a module key; ``_root`` for top-level modules.
+
+    Examples: ``k8s/cka/module-1.1-foo`` → ``cka``; ``prerequisites/
+    module-1.1-foo`` → ``_root``. Keeps top-level tracks from crashing
+    the grid while still bucketing them as a real section.
+    """
+    parts = str(module_key).split("/")
+    if len(parts) < 3:
+        return "_root"
+    return parts[1]
+
+
+def build_tracks_readiness(repo_root: Path) -> dict[str, Any]:
+    """Per-track, per-section readiness grid for the operator dashboard.
+
+    Buckets every English module on disk into one of:
+      - ``cleared`` — pipeline v2 latest state is ``done``/``completed``
+      - ``in_flight`` — pending_* / leased / running / in_progress
+      - ``dead_letter`` — pipeline gave up, needs human triage
+      - ``not_yet_enqueued`` — file exists but has no v2 job row
+
+    Readiness % = ``cleared / total``. Tracks come out in the canonical
+    ``TRACK_ORDER``; within a track, sections are alphabetical so the
+    grid layout is stable across calls.
+    """
+    docs_root = repo_root / "src" / "content" / "docs"
+    from status import TRACK_ORDER, _iter_en_modules, _track_for_key
+    pipeline_state = _load_v2_module_states(repo_root)
+
+    # track_slug -> section_slug -> counts
+    grid: dict[str, dict[str, dict[str, int]]] = {}
+
+    for path in _iter_en_modules(docs_root):
+        rel = path.relative_to(docs_root).as_posix()
+        module_key = rel[:-3] if rel.endswith(".md") else rel
+        track = _track_for_key(module_key)
+        section = _section_for_key(module_key)
+        bucket = _readiness_bucket(pipeline_state.get(module_key))
+        t = grid.setdefault(track, {})
+        s = t.setdefault(
+            section,
+            {
+                "total": 0,
+                "cleared": 0,
+                "in_flight": 0,
+                "dead_letter": 0,
+                "not_yet_enqueued": 0,
+            },
+        )
+        s["total"] += 1
+        s[bucket] += 1
+
+    track_labels = dict(TRACK_ORDER)
+    canonical_order = [slug for slug, _ in TRACK_ORDER]
+    # Preserve canonical order; append "other" and any unknown slugs at
+    # the tail so a surprise top-level directory isn't swallowed.
+    seen = set(canonical_order)
+    extras = [t for t in grid if t not in seen]
+    track_order = canonical_order + sorted(extras)
+
+    out_tracks: list[dict[str, Any]] = []
+    grand: dict[str, int] = {
+        "total": 0,
+        "cleared": 0,
+        "in_flight": 0,
+        "dead_letter": 0,
+        "not_yet_enqueued": 0,
+    }
+    for slug in track_order:
+        sections_map = grid.get(slug)
+        if not sections_map:
+            continue
+        sections: list[dict[str, Any]] = []
+        track_total = 0
+        track_cleared = 0
+        track_in_flight = 0
+        track_dead = 0
+        track_notenq = 0
+        for section_slug in sorted(sections_map.keys()):
+            counts = sections_map[section_slug]
+            total = counts["total"]
+            cleared = counts["cleared"]
+            readiness_pct = round(100.0 * cleared / total, 1) if total else 0.0
+            sections.append({
+                "slug": section_slug,
+                "total": total,
+                "cleared": cleared,
+                "in_flight": counts["in_flight"],
+                "dead_letter": counts["dead_letter"],
+                "not_yet_enqueued": counts["not_yet_enqueued"],
+                "readiness_pct": readiness_pct,
+            })
+            track_total += total
+            track_cleared += cleared
+            track_in_flight += counts["in_flight"]
+            track_dead += counts["dead_letter"]
+            track_notenq += counts["not_yet_enqueued"]
+        out_tracks.append({
+            "slug": slug,
+            "label": track_labels.get(slug, slug.replace("-", " ").title()),
+            "total": track_total,
+            "cleared": track_cleared,
+            "in_flight": track_in_flight,
+            "dead_letter": track_dead,
+            "not_yet_enqueued": track_notenq,
+            "readiness_pct": round(100.0 * track_cleared / track_total, 1) if track_total else 0.0,
+            "sections": sections,
+        })
+        grand["total"] += track_total
+        grand["cleared"] += track_cleared
+        grand["in_flight"] += track_in_flight
+        grand["dead_letter"] += track_dead
+        grand["not_yet_enqueued"] += track_notenq
+
+    grand["readiness_pct"] = (
+        round(100.0 * grand["cleared"] / grand["total"], 1) if grand["total"] else 0.0
+    )
+    return {
+        "generated_at": int(time.time()),
+        "totals": grand,
+        "tracks": out_tracks,
     }
 
 
@@ -3453,6 +3879,7 @@ def build_session_briefing(repo_root: Path) -> dict[str, Any]:
         leased = stuck.get("stuck_leased_count", 0)
         in_state = stuck.get("stuck_in_state_count", 0)
         dead_letter_stuck = stuck.get("dead_lettered_count", 0)
+        stale_worker_count = stuck.get("stale_workers_count", 0)
         if leased:
             alerts.append(f"{leased} job(s) with expired/stale lease — worker may have crashed")
         if in_state:
@@ -3460,6 +3887,10 @@ def build_session_briefing(repo_root: Path) -> dict[str, Any]:
         if dead_letter_stuck:
             alerts.append(
                 f"{dead_letter_stuck} module(s) dead-lettered (unresolved) — need human triage"
+            )
+        if stale_worker_count:
+            alerts.append(
+                f"{stale_worker_count} worker(s) holding leases but silent — possible zombie"
             )
 
     try:
@@ -3709,9 +4140,21 @@ def build_api_schema() -> dict[str, Any]:
             },
             {"path": "/api/status/summary", "desc": "Repo status (fast)"},
             {"path": "/api/missing-modules/status", "desc": "Modules missing from nav/sidebar"},
-            {"path": "/api/activity/recent", "desc": "Recent commits, pipeline events, bridge messages, watched issue"},
+            {"path": "/api/activity/recent", "desc": "Recent commits, pipeline events, bridge messages, watched issue (grouped by source)"},
+            {
+                "path": "/api/activity",
+                "desc": "Merged chronological feed (commits + pipeline events + bridge messages), newest-first",
+                "query": [
+                    "since=<Unix-epoch seconds | ISO-8601> (default: 24 h ago)",
+                    "limit=... (default 50, max 500)",
+                ],
+            },
             {"path": "/api/navigation/status", "desc": "Top-level route coverage and candidate-stale index pages"},
             {"path": "/api/delivery/status", "desc": "Build freshness and site-health status"},
+            {
+                "path": "/api/tracks/readiness",
+                "desc": "Per-track, per-section production-readiness grid (cleared/in_flight/dead_letter/not_yet_enqueued)",
+            },
             {"path": "/api/runtime/services", "desc": "Runtime services (pids, uptime, ports)"},
             {"path": "/api/pipeline/v2/status", "desc": "Pipeline v2 queue + per-track"},
             {
@@ -3739,7 +4182,7 @@ def build_api_schema() -> dict[str, Any]:
             },
             {
                 "path": "/api/pipeline/v2/stuck",
-                "desc": "Stuck/stalled jobs (expired leases + in-flight-with-stale-events)",
+                "desc": "Stuck/stalled jobs + dead-lettered modules + zombie-worker roll-up (stale_workers[])",
                 "query": ["threshold_seconds=... (default 3600)"],
             },
             {
@@ -3778,10 +4221,33 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
         return 200, _build_missing_modules_summary(repo_root), "application/json; charset=utf-8"
     if path == "/api/activity/recent":
         return 200, build_recent_activity(repo_root), "application/json; charset=utf-8"
+    if path == "/api/activity":
+        since_raw = query.get("since", [None])[0]
+        since_seconds: int | None = None
+        if since_raw:
+            try:
+                # Accept epoch seconds...
+                since_seconds = int(since_raw)
+            except (TypeError, ValueError):
+                # ...or an ISO-8601 timestamp.
+                since_seconds = _iso_to_epoch(since_raw)
+                if since_seconds is None:
+                    return 400, {"error": "invalid_since"}, "application/json; charset=utf-8"
+        try:
+            limit = int(query.get("limit", ["50"])[0])
+        except (TypeError, ValueError):
+            limit = 50
+        return (
+            200,
+            build_activity_feed(repo_root, since_seconds=since_seconds, limit=limit),
+            "application/json; charset=utf-8",
+        )
     if path == "/api/navigation/status":
         return 200, build_navigation_status(repo_root), "application/json; charset=utf-8"
     if path == "/api/delivery/status":
         return 200, build_delivery_status(repo_root), "application/json; charset=utf-8"
+    if path == "/api/tracks/readiness":
+        return 200, build_tracks_readiness(repo_root), "application/json; charset=utf-8"
     if path == "/api/runtime/services":
         return 200, build_runtime_services_status(repo_root), "application/json; charset=utf-8"
     if path == "/api/pipeline/v2/status":

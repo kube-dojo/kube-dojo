@@ -5,6 +5,7 @@ import json
 import sqlite3
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import yaml
@@ -1357,6 +1358,129 @@ def test_pipeline_stuck_correlates_events_by_lease_id(tmp_path: Path) -> None:
     assert any(j["module_key"] == "rolled/over" for j in r["stuck_in_state"])
 
 
+# ---- Phase D: stale-worker roll-up in /api/pipeline/v2/stuck ----
+
+
+def test_stale_workers_groups_active_leases_by_worker(tmp_path: Path) -> None:
+    """A worker holding multiple non-expired leases with no recent
+    events on ANY of them shows up once as a zombie, with every module
+    key it currently holds listed."""
+    _setup_repo(tmp_path)
+    now_s = 10_000
+    conn = sqlite3.connect(tmp_path / ".pipeline/v2.db")
+    # Two active (non-expired) leases for the same worker, both silent.
+    conn.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state, leased_by, lease_id, "
+        "leased_at, lease_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("k8s/cka/mod-a", "review", "running", "claude", "lex-a",
+         now_s - 5000, now_s + 3600),
+    )
+    conn.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state, leased_by, lease_id, "
+        "leased_at, lease_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("k8s/cka/mod-b", "review", "running", "claude", "lex-b",
+         now_s - 5000, now_s + 3600),
+    )
+    conn.commit()
+    conn.close()
+    r = local_api.build_pipeline_stuck(tmp_path, threshold_seconds=60, now_seconds=now_s)
+    assert r["stale_workers_count"] == 1
+    worker = r["stale_workers"][0]
+    assert worker["leased_by"] == "claude"
+    assert worker["active_lease_count"] == 2
+    assert set(worker["module_keys"]) == {"k8s/cka/mod-a", "k8s/cka/mod-b"}
+    # Never emitted any event -> idle_seconds = None.
+    assert worker["idle_seconds"] is None
+
+
+def test_stale_workers_uses_latest_event_across_leases(tmp_path: Path) -> None:
+    """A heartbeat on ONE of the worker's active leases must prevent the
+    worker from being flagged stale (idle_seconds < threshold)."""
+    _setup_repo(tmp_path)
+    now_s = 10_000
+    conn = sqlite3.connect(tmp_path / ".pipeline/v2.db")
+    conn.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state, leased_by, lease_id, "
+        "leased_at, lease_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("k8s/mod-a", "review", "running", "codex", "lex-a",
+         now_s - 5000, now_s + 3600),
+    )
+    conn.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state, leased_by, lease_id, "
+        "leased_at, lease_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("k8s/mod-b", "review", "running", "codex", "lex-b",
+         now_s - 5000, now_s + 3600),
+    )
+    # Recent event on lex-b keeps the worker alive.
+    conn.execute(
+        "INSERT INTO events (module_key, type, lease_id, payload_json, at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        ("k8s/mod-b", "attempt_progress", "lex-b", "{}", now_s - 10),
+    )
+    conn.commit()
+    conn.close()
+    r = local_api.build_pipeline_stuck(tmp_path, threshold_seconds=60, now_seconds=now_s)
+    assert r["stale_workers_count"] == 0
+
+
+def test_stale_workers_excludes_expired_leases(tmp_path: Path) -> None:
+    """Expired leases belong to ``stuck_leased``, not ``stale_workers``
+    — a worker whose only lease has already expired isn't a zombie, it's
+    just gone. Bucketing both makes the count meaningless."""
+    _setup_repo(tmp_path)
+    now_s = 10_000
+    conn = sqlite3.connect(tmp_path / ".pipeline/v2.db")
+    conn.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state, leased_by, lease_id, "
+        "leased_at, lease_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("k8s/expired", "review", "running", "gemini", "lex-exp",
+         now_s - 5000, now_s - 1),  # expired 1s ago
+    )
+    conn.commit()
+    conn.close()
+    r = local_api.build_pipeline_stuck(tmp_path, threshold_seconds=60, now_seconds=now_s)
+    assert r["stale_workers_count"] == 0
+    # And the expired lease still appears in stuck_leased.
+    assert any(j["module_key"] == "k8s/expired" for j in r["stuck_leased"])
+
+
+def test_stale_workers_sorts_never_emitted_before_finite_idle(tmp_path: Path) -> None:
+    """A worker that has never emitted an event is strictly more
+    concerning than one that emitted recently-ish. The former must sort
+    above the latter."""
+    _setup_repo(tmp_path)
+    now_s = 10_000
+    conn = sqlite3.connect(tmp_path / ".pipeline/v2.db")
+    # Worker A: long-idle but has emitted.
+    conn.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state, leased_by, lease_id, "
+        "leased_at, lease_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("k8s/a", "review", "running", "old-worker", "lex-a",
+         now_s - 9000, now_s + 3600),
+    )
+    conn.execute(
+        "INSERT INTO events (module_key, type, lease_id, payload_json, at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        ("k8s/a", "attempt_started", "lex-a", "{}", now_s - 500),
+    )
+    # Worker B: never emitted at all.
+    conn.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state, leased_by, lease_id, "
+        "leased_at, lease_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("k8s/b", "review", "running", "zombie-worker", "lex-b",
+         now_s - 9000, now_s + 3600),
+    )
+    conn.commit()
+    conn.close()
+    r = local_api.build_pipeline_stuck(tmp_path, threshold_seconds=60, now_seconds=now_s)
+    assert r["stale_workers_count"] == 2
+    # Never-emitted worker comes first.
+    assert r["stale_workers"][0]["leased_by"] == "zombie-worker"
+    assert r["stale_workers"][0]["idle_seconds"] is None
+    assert r["stale_workers"][1]["leased_by"] == "old-worker"
+    assert r["stale_workers"][1]["idle_seconds"] == 500
+
+
 def test_reviews_index_and_single(tmp_path: Path) -> None:
     reviews_dir = tmp_path / ".pipeline" / "reviews"
     reviews_dir.mkdir(parents=True)
@@ -1975,6 +2099,245 @@ def test_schema_lists_phase_c_endpoints() -> None:
         "/api/module/{key}/lease",
     ):
         assert expected in paths, f"/api/schema missing {expected}"
+
+
+def test_schema_lists_phase_d_endpoints() -> None:
+    schema = local_api.build_api_schema()
+    paths = {e["path"] for e in schema["endpoints"]}
+    for expected in ("/api/activity",):
+        assert expected in paths, f"/api/schema missing {expected}"
+
+
+# ---- Phase D: merged activity feed ----
+
+
+def test_activity_feed_empty_repo_returns_no_items(tmp_path: Path) -> None:
+    """Nothing committed, no pipeline v2 db, no bridge db — feed returns
+    empty items with zeroed source counts, not a crash."""
+    _init_repo(tmp_path)
+    result = local_api.build_activity_feed(tmp_path, limit=10)
+    assert result["count"] == 0
+    assert result["items"] == []
+    assert result["source_counts"] == {
+        "commit": 0,
+        "pipeline_event": 0,
+        "bridge_message": 0,
+    }
+
+
+def test_activity_feed_merges_commits_and_pipeline_events_sorted(tmp_path: Path) -> None:
+    """Commits + pipeline events must come back in a single newest-first
+    stream with the declared source labels."""
+    repo = tmp_path
+    _init_repo(repo)
+    _write(repo / "README.md", "v1\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-m", "first commit")
+    _write(repo / "README.md", "v2\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-m", "second commit")
+
+    db_path = repo / ".pipeline" / "v2.db"
+    _init_v2_db(db_path, module_key="k8s/cka/module-1.1-foo")
+    now = int(time.time())
+    # Re-timestamp the seeded event into the window so it shows up.
+    conn = sqlite3.connect(db_path)
+    conn.execute("UPDATE events SET at = ? WHERE module_key = ?",
+                 (now - 60, "k8s/cka/module-1.1-foo"))
+    conn.commit()
+    conn.close()
+
+    feed = local_api.build_activity_feed(repo, limit=20, now_seconds=now)
+    sources = [it["source"] for it in feed["items"]]
+    assert "commit" in sources
+    assert "pipeline_event" in sources
+    ats = [int(it["at"]) for it in feed["items"]]
+    assert ats == sorted(ats, reverse=True), "items must be newest-first"
+    assert feed["source_counts"]["commit"] >= 2
+    assert feed["source_counts"]["pipeline_event"] >= 1
+
+
+def test_activity_feed_since_filter_excludes_old_commits(tmp_path: Path) -> None:
+    """``since_seconds`` must be passed through to ``git log --since=@``
+    so a tight window doesn't return the entire repo history."""
+    repo = tmp_path
+    _init_repo(repo)
+    _write(repo / "README.md", "v1\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-m", "old commit")
+    future = int(time.time()) + 10_000
+    feed = local_api.build_activity_feed(
+        repo, since_seconds=future, limit=20, now_seconds=future + 60
+    )
+    assert feed["source_counts"]["commit"] == 0
+    assert feed["count"] == 0
+
+
+def test_activity_feed_rejects_invalid_since_via_route(tmp_path: Path) -> None:
+    """The /api/activity handler returns 400 for garbage ``since`` values
+    rather than anchoring the feed at epoch 0."""
+    _init_repo(tmp_path)
+    status, payload, _ = local_api.route_request(tmp_path, "/api/activity?since=not-a-date")
+    assert status == 400
+    assert payload["error"] == "invalid_since"
+
+
+def test_activity_feed_accepts_iso_since(tmp_path: Path) -> None:
+    """ISO-8601 ``since`` values should parse the same as epoch seconds."""
+    _init_repo(tmp_path)
+    _write(tmp_path / "README.md", "v1\n")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-m", "initial")
+    status, payload, _ = local_api.route_request(
+        tmp_path, "/api/activity?since=1970-01-01T00:00:00Z&limit=5"
+    )
+    assert status == 200
+    assert isinstance(payload, dict)
+    assert payload["since_seconds"] == 0
+
+
+# ---- Phase D: per-section track readiness ----
+
+
+def _seed_module(repo: Path, rel: str) -> None:
+    """Create a minimal ``module-*.md`` under ``src/content/docs/<rel>.md``.
+
+    ``rel`` is the docs-relative path without the ``.md`` suffix, e.g.
+    ``k8s/cka/module-1.1-foo``.
+    """
+    path = repo / "src" / "content" / "docs" / f"{rel}.md"
+    _write(path, "---\ntitle: t\n---\n\nbody\n")
+
+
+def _seed_v2_job(
+    db_path: Path,
+    *,
+    module_key: str,
+    queue_state: str,
+    phase: str = "review",
+    lease_id: str | None = None,
+    leased_by: str | None = None,
+    leased_at: int | None = None,
+) -> None:
+    """Insert a ``jobs`` row with the given state. Fixture DB must have
+    ``jobs`` + ``events`` tables already created (see ``_init_v2_db``)."""
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            """
+            INSERT INTO jobs
+            (module_key, phase, model, queue_state, leased_by, lease_id,
+             leased_at, enqueued_at, requested_calls, estimated_usd, idempotency_key)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                module_key,
+                phase,
+                "codex",
+                queue_state,
+                leased_by,
+                lease_id,
+                leased_at,
+                int(time.time()),
+                1,
+                0.01,
+                f"{module_key}-{queue_state}-{time.time_ns()}",
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_tracks_readiness_empty_repo(tmp_path: Path) -> None:
+    """No docs directory, no v2.db — returns zeroed totals and no tracks."""
+    _init_repo(tmp_path)
+    result = local_api.build_tracks_readiness(tmp_path)
+    assert result["tracks"] == []
+    assert result["totals"]["total"] == 0
+    assert result["totals"]["readiness_pct"] == 0.0
+
+
+def test_tracks_readiness_buckets_cleared_vs_notenq(tmp_path: Path) -> None:
+    """A module with a ``done`` job is cleared; a module with no job at
+    all is ``not_yet_enqueued``. Readiness % is cleared/total."""
+    _init_repo(tmp_path)
+    _seed_module(tmp_path, "k8s/cka/module-1.1-foo")
+    _seed_module(tmp_path, "k8s/cka/module-1.2-bar")
+
+    db = tmp_path / ".pipeline" / "v2.db"
+    _init_v2_db(db, module_key="k8s/cka/seed")
+    _seed_v2_job(db, module_key="k8s/cka/module-1.1-foo", queue_state="done")
+
+    result = local_api.build_tracks_readiness(tmp_path)
+    k8s = next(t for t in result["tracks"] if t["slug"] == "k8s")
+    assert k8s["total"] == 2
+    assert k8s["cleared"] == 1
+    assert k8s["not_yet_enqueued"] == 1
+    assert k8s["readiness_pct"] == 50.0
+    cka = next(s for s in k8s["sections"] if s["slug"] == "cka")
+    assert cka["total"] == 2
+    assert cka["readiness_pct"] == 50.0
+
+
+def test_tracks_readiness_latest_state_wins(tmp_path: Path) -> None:
+    """Multiple job rows for one module — the highest ``id`` is the
+    current state. A superseded ``done`` followed by ``pending_review``
+    must count as in-flight, not cleared."""
+    _init_repo(tmp_path)
+    _seed_module(tmp_path, "k8s/ckad/module-2.1-quiz")
+
+    db = tmp_path / ".pipeline" / "v2.db"
+    _init_v2_db(db, module_key="k8s/ckad/seed")
+    _seed_v2_job(db, module_key="k8s/ckad/module-2.1-quiz", queue_state="done")
+    _seed_v2_job(db, module_key="k8s/ckad/module-2.1-quiz", queue_state="pending_review")
+
+    result = local_api.build_tracks_readiness(tmp_path)
+    k8s = next(t for t in result["tracks"] if t["slug"] == "k8s")
+    ckad = next(s for s in k8s["sections"] if s["slug"] == "ckad")
+    assert ckad["cleared"] == 0
+    assert ckad["in_flight"] == 1
+
+
+def test_tracks_readiness_dead_letter_separated_from_in_flight(tmp_path: Path) -> None:
+    """``dead_letter`` must NOT be folded into ``in_flight`` — operators
+    need to see stuck work distinctly from in-progress work."""
+    _init_repo(tmp_path)
+    _seed_module(tmp_path, "platform/foundations/module-1.1-zzz")
+
+    db = tmp_path / ".pipeline" / "v2.db"
+    _init_v2_db(db, module_key="platform/foundations/seed")
+    _seed_v2_job(db, module_key="platform/foundations/module-1.1-zzz", queue_state="dead_letter")
+
+    result = local_api.build_tracks_readiness(tmp_path)
+    platform = next(t for t in result["tracks"] if t["slug"] == "platform")
+    assert platform["dead_letter"] == 1
+    assert platform["in_flight"] == 0
+
+
+def test_tracks_readiness_top_level_module_uses_root_section(tmp_path: Path) -> None:
+    """``prerequisites/module-*.md`` has no intermediate section directory
+    — it must land in a ``_root`` bucket rather than crashing."""
+    _init_repo(tmp_path)
+    _seed_module(tmp_path, "prerequisites/module-0-welcome")
+    result = local_api.build_tracks_readiness(tmp_path)
+    prereq = next(t for t in result["tracks"] if t["slug"] == "prerequisites")
+    root = next(s for s in prereq["sections"] if s["slug"] == "_root")
+    assert root["total"] == 1
+
+
+def test_schema_lists_tracks_readiness() -> None:
+    paths = {e["path"] for e in local_api.build_api_schema()["endpoints"]}
+    assert "/api/tracks/readiness" in paths
+
+
+def test_iso_to_epoch_round_trip() -> None:
+    """``_iso_to_epoch`` must accept both ``Z`` and ``+00:00`` forms."""
+    assert local_api._iso_to_epoch("1970-01-01T00:00:00Z") == 0
+    assert local_api._iso_to_epoch("1970-01-01T00:00:00+00:00") == 0
+    assert local_api._iso_to_epoch("bogus") is None
+    assert local_api._iso_to_epoch(None) is None
+    assert local_api._iso_to_epoch("") is None
 
 
 def test_cli_starts_server_and_reports_host_port(tmp_path: Path) -> None:
