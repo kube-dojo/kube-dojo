@@ -116,7 +116,7 @@ Important principle:
 
 ### Domain 5: Storage Management (20%)
 
-**Coverage: Good** — storage is in the strongest position because dedicated Linux storage content already maps much more directly to LFCS tasks.
+**Coverage: Good** — storage is one of the stronger LFCS domains because dedicated Linux storage modules map directly to many exam tasks, but it is not uniquely "solved" and still depends on learners actually practicing the dedicated storage/admin exercises.
 
 | LFCS Topic | KubeDojo Module | Status |
 |-----------|-----------------|--------|
@@ -156,6 +156,8 @@ If you are specifically preparing for LFCS, follow this sequence through our Lin
 ### Phase 4: LFCS-Specific (Week 4-5)
 12. [**8.1 Storage Management**](../../linux/operations/module-8.1-storage-management/) — LVM, NFS, filesystems
 13. [**8.2 Network Administration**](../../linux/operations/module-8.2-network-administration/) — Firewall, NAT, bonding
+
+`8.1` and `8.2` matter here because they are the closest thing to LFCS-dedicated bridge modules inside the broader Linux track. They take topics that appear across Linux operations generally and package them in a way that maps much more directly to exam tasks such as filesystem setup, boot persistence, firewall rules, routing, and network service configuration.
 
 ### Phase 5: Performance & Polish (Week 5-6)
 14. [5.1 The USE Method](../../linux/operations/performance/module-5.1-use-method/)

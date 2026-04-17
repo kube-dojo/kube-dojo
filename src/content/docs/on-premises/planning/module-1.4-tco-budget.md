@@ -206,6 +206,20 @@ Your effective power cost = IT power cost × PUE
 └─────────────────────────────────────────────────────────────┘
 ```
 
+### Regional Staffing Reality Check
+
+The `3 engineers x $175K fully loaded` example is deliberately conservative for a US-centric mid-to-senior infrastructure team. Do not reuse it blindly.
+
+| Market | Typical fully loaded infrastructure engineer cost |
+|---|---|
+| Central / Eastern Europe | `$90K-130K` |
+| Western Europe | `$120K-180K` |
+| UK / Ireland | `$140K-200K` |
+| US non-coastal | `$150K-210K` |
+| US coastal / major tech hubs | `$175K-240K+` |
+
+If your staffing market is cheaper than the example, the on-prem model improves. If you need scarce specialists in a major metro or 24x7 coverage, it worsens. Always localize the staffing line before presenting the TCO model as a decision document.
+
 ---
 
 > **Pause and predict**: Before looking at the TCO model below, estimate what percentage of total 3-year on-premises cost is hardware vs. staffing for a 100-node cluster. Write down your guess, then check it against the model.
@@ -250,11 +264,13 @@ Your effective power cost = IT power cost × PUE
 │  TOTAL                                $2,314,400            │
 │  Per month                               $64,289            │
 │                                                               │
-│  CLOUD COMPARISON (100 x m6i.2xlarge @ $0.384/hr)           │
+│  CLOUD COMPARISON (illustrative AWS pricing check:          │
+│  2026-04-17, us-east-1, Linux, m6i.2xlarge equivalent)      │
 │  ────────────────────────────────────────                    │
 │  On-demand: 100 x $280/mo           $1,008,000 (3 yr)      │
 │  1-year RI (no upfront, ~35% off)      $655,000 (3 yr)     │
 │  3-year RI (all upfront, ~55% off)     $454,000 (3 yr)     │
+│  3-year RI (~40% off sensitivity)     $605,000 (3 yr)      │
 │  + EKS fee + storage + data xfer     ~$200,000 (3 yr)      │
 │                                                               │
 │  VERDICT at 100 nodes (13 servers):                          │
@@ -266,6 +282,11 @@ Your effective power cost = IT power cost × PUE
 │                                                               │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+Use that cloud block as a dated template, not a universal truth:
+- pricing assumptions drift, so stamp the provider, region, date, and instance family every time
+- compare against your real cloud bill when possible, not list pricing
+- always run at least one reserved-commit sensitivity test such as `40%` and `55%` discount cases, because the breakeven line moves materially
 
 ---
 
@@ -287,55 +308,70 @@ Years 4 and 5 are where teams either prove that a private platform has become ef
 | Staffing | fixed ratio | reflect whether automation improves the nodes-per-engineer ratio |
 | Opportunity cost | mostly qualitative | reassess whether the platform now accelerates or slows product work |
 
-### 5-Year Extension Template
+### 5-Year Carry-Forward Template
 
-Use the same 100-node / 13-server scenario, then extend it with explicit refresh and growth assumptions:
+Use the same 100-node / 13-server scenario, but carry the model forward year by year instead of multiplying the 3-year result by `5/3`.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                 5-YEAR EXTENSION MODEL                      │
+│               5-YEAR CARRY-FORWARD MODEL                    │
 │                                                             │
-│  START FROM 3-YEAR TOTAL                $2,314,400         │
-│                                                             │
-│  YEAR 4 ADJUSTMENTS                                          │
+│  ASSUMPTIONS                                                │
 │  ───────────────────────────────────────                    │
-│  Maintenance uplift (7% aging hardware)   $24,100          │
-│  Capacity growth (2 new servers)          $30,000          │
-│  Extra colo + power + network              $9,500          │
-│  Staff stays flat due to automation         $0             │
-│  Year 4 OpEx subtotal                     $687,900         │
+│  Workload growth                           15% per year     │
+│  Discount rate for NPV                      8%              │
+│  Hardware strategy          keep fleet through year 4,      │
+│                             partial refresh in year 5       │
+│  Support pricing           5% years 1-3, 7% on aging gear   │
 │                                                             │
-│  YEAR 5 ADJUSTMENTS                                          │
-│  ───────────────────────────────────────                    │
-│  Partial hardware refresh fund            $90,000          │
-│  Maintenance on mixed old/new fleet       $28,000          │
-│  Extra storage expansion                  $24,000          │
-│  Colo + power repricing uplift            $12,000          │
-│  Year 5 OpEx subtotal                     $720,800         │
+│  YEAR 0 (SETUP)                                              │
+│  CapEx                                  $344,000           │
 │                                                             │
-│  5-YEAR TOTAL                                               │
-│  ───────────────────────────────────────                    │
-│  3-Year baseline                        $2,314,400         │
-│  Year 4 total                             $687,900         │
-│  Year 5 total                             $720,800         │
-│  ───────────────────────────────────────                    │
-│  TOTAL                                  $3,723,100         │
+│  YEAR 1 (BASELINE)                                           │
+│  OpEx                                   $656,800           │
 │                                                             │
-│  Effective monthly average (5 years)      $62,052          │
+│  YEAR 2 (STEADY STATE)                                       │
+│  OpEx                                   $656,800           │
+│                                                             │
+│  YEAR 3 (STEADY STATE)                                       │
+│  OpEx                                   $656,800           │
+│                                                             │
+│  YEAR 4 (GROWTH WITHOUT FULL REFRESH)                        │
+│  2 new servers + optics + rack space      $41,000 CapEx    │
+│  Base Year 3 OpEx                        $656,800          │
+│  Maintenance uplift on aging hardware     $18,600          │
+│  Extra colo + power + network             $12,500          │
+│  Staffing flat due to automation           $0              │
+│  Year 4 OpEx subtotal                    $687,900          │
+│                                                             │
+│  YEAR 5 (PARTIAL REFRESH + RETIREMENT)                      │
+│  Refresh 6 oldest servers               $120,000           │
+│  Retirement / data-destruction credit   -$12,000           │
+│  Maintenance on mixed old/new fleet      $28,000           │
+│  Extra storage expansion                 $24,000           │
+│  Colo + power repricing uplift           $12,000           │
+│  Year 5 OpEx subtotal                    $720,800          │
+│                                                             │
+│  5-YEAR CASH TOTAL                                            │
+│  ───────────────────────────────────────                    │
+│  CapEx (years 0, 4, 5)                  $493,000          │
+│  OpEx (years 1-5)                     $3,379,100          │
+│  TOTAL                                 $3,872,100          │
+│  NPV @ 8%                              $3,132,000          │
+│                                                             │
+│  Effective monthly average (5 years)      $64,535          │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ### How To Use 5-Year Modeling Correctly
 
-- do not just multiply the 3-year OpEx by `5/3`; model refresh, growth, and repricing explicitly
-- decide whether year 4-5 economics assume sweating assets longer or refreshing earlier for performance and support stability
-- include at least one sensitivity branch:
-  - `staffing +20%`
-  - `power +25%`
-  - `cloud pricing -20%`
-  - `workload growth +30%`
-- show the board or budget owner both the optimistic and conservative paths, not a single "magic number"
+- build the 5-year sheet as separate yearly rows with CapEx, OpEx, and cumulative total instead of extrapolating from the 3-year total
+- tie utilization and growth to power, cooling, and rack density so a busier cluster increases PUE-adjusted facility cost rather than staying flat
+- make the asset decision explicit each year: keep, expand, refresh, or retire; maintenance and support pricing changes with that choice
+- include network switch lifecycle and OS / distribution subscription renewals if they are part of your operating model; those often show up after the "servers only" budget has already been approved
+- show both nominal cash total and discounted NPV so finance can compare on-prem spend with cloud reserved-commit terms
+- run at least three scenarios: base case, utilization `+20%`, and delayed refresh by 12 months
 
 ### Practical Interpretation
 
@@ -419,7 +455,7 @@ A vendor offers "free" Kubernetes distribution but charges $2,000/node/year for 
 <details>
 <summary>Answer</summary>
 
-**Probably not.** $2,000/node/year × 100 nodes = $200,000/year — almost the cost of an additional engineer.
+**Probably not.** $2,000/node/year × 100 nodes = $200,000/year — more than the `$175K` fully loaded engineer used in this example.
 
 Compare:
 - Vanilla Kubernetes (free) + 1 additional engineer ($175K/year): more flexible, builds internal expertise
@@ -482,23 +518,25 @@ Rule of thumb: if you need < 50 racks, colocation wins. If you need 200+ racks a
    - Apply realistic discounts (RI/CUD: 30-60%)
    - Include data transfer, managed K8s fees, storage
 
-5. **Extend the model to 5 years** with explicit assumptions for:
-   - hardware refresh or life extension
-   - maintenance uplift after year 3
-   - power / colo repricing
-   - workload growth and storage growth
+5. **Extend the model to 5 years** with one row per year and explicit assumptions for:
+   - maintenance renewals and higher support rates after year 3
+   - workload growth, storage growth, and the resulting power / colo increase
+   - hardware refresh, retirement, and certified disposal or resale credits
+   - discount rate / NPV for comparing owned hardware with cloud commitments
    - staffing change or automation gain
 
-6. **Compare and document** the breakeven point and how it changes between year 3 and year 5
+6. **Compare and document** the breakeven point in both the base case and a stressed case such as utilization `+20%` or a 12-month refresh delay
 
 ### Success Criteria
 - [ ] All CapEx categories populated
 - [ ] All OpEx categories populated (including staffing)
 - [ ] Power calculated with PUE
 - [ ] Cloud comparison uses discounted pricing (not list)
-- [ ] Both 3-year and 5-year models completed
+- [ ] 3-year baseline completed
+- [ ] 5-year carry-forward completed with separate Year 4 and Year 5 CapEx / OpEx rows
+- [ ] Refresh, retirement, and support-renewal assumptions documented
 - [ ] Breakeven point identified and re-checked at year 5
-- [ ] Sensitivity analysis: what if staffing costs +20%? What if cloud pricing -30%? What if hardware refresh happens in year 4?
+- [ ] Sensitivity analysis includes utilization `+20%`, cloud pricing `-30%`, and refresh timing changes
 
 ---
 

@@ -67,6 +67,7 @@ const p = t.prefix; // URL prefix: '' or '/uk'
     .hero h1 { font-size: 3rem; font-weight: 800; letter-spacing: -1.5px; line-height: 1.15; margin-bottom: 1rem; }
     .hero h1 .accent { color: var(--kube-blue); }
     .hero .subtitle { font-size: 1.125rem; color: rgba(255,255,255,0.7); max-width: 36rem; line-height: 1.6; margin-bottom: 2rem; }
+    .hero-meta { font-size: 0.8rem; color: rgba(255,255,255,0.55); font-family: var(--mono); margin: -1rem 0 1.75rem; }
     .hero-cta { display: flex; gap: 0.75rem; flex-wrap: wrap; }
     .btn-primary { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.5rem; background: var(--kube-blue); color: white; border: none; border-radius: 0.625rem; font-size: 0.875rem; font-weight: 600; text-decoration: none; transition: all 0.2s; }
     .btn-primary:hover { background: #2858c7; transform: translateY(-1px); text-decoration: none; }
@@ -173,16 +174,17 @@ const p = t.prefix; // URL prefix: '' or '/uk'
     <div class="hero-badge"><span class="pulse"></span> {t.heroBadge}</div>
     <h1>{t.heroTitle1}<span class="accent">{t.heroAccent}</span><br/>{t.heroTitle2}</h1>
     <p class="subtitle">{t.heroSubtitle}</p>
+    <div class="hero-meta">{t.heroUpdated}</div>
     <div class="hero-cta">
       <a class="btn-primary" href={`${p}/prerequisites/`}>{t.ctaStart}</a>
       <a class="btn-secondary" href={`${p}/changelog/`}>{t.ctaWhatsNew}</a>
       <a class="btn-secondary" href={`${p}/progress/`}>{t.ctaProgress}</a>
     </div>
     <div class="hero-stats">
-      <div><span class="stat-num">700+</span><span class="stat-label">{t.statModules}</span></div>
+      <div><span class="stat-num">803</span><span class="stat-label">{t.statModules}</span></div>
       <div><span class="stat-num">7</span><span class="stat-label">{t.statTracks}</span></div>
-      <div><span class="stat-num">18+</span><span class="stat-label">{t.statCerts}</span></div>
-      <div><span class="stat-num">300+</span><span class="stat-label">{t.statTranslations}</span></div>
+      <div><span class="stat-num">207</span><span class="stat-label">{t.statCerts}</span></div>
+      <div><span class="stat-num">312</span><span class="stat-label">{t.statTranslations}</span></div>
     </div>
   </div>
   <div class="hero-terminal">
@@ -193,7 +195,7 @@ const p = t.prefix; // URL prefix: '' or '/uk'
       <span class="th">fundamentals</span>      <span class="ts">47</span>        Ready<br/>
       <span class="th">linux</span>             <span class="ts">37</span>        Ready<br/>
       <span class="th">cloud</span>             <span class="ts">116</span>       Ready<br/>
-      <span class="th">certifications</span>    <span class="ts">200+</span>      Ready<br/>
+      <span class="th">certifications</span>    <span class="ts">207</span>       Ready<br/>
       <span class="th">platform</span>          <span class="ts">220</span>       Ready<br/>
       <span class="th">on-premises</span>       <span class="ts">59</span>        Ready<br/>
       <span class="th">ai-ml-engineering</span> <span class="ts">117</span>       Ready<br/><br/>

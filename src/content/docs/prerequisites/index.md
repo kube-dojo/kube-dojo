@@ -129,6 +129,16 @@ Modern DevOps
 
 Use `Git Deep Dive` after you are comfortable with basic Git from `Zero to Terminal`. It is not required before `Cloud Native 101` or `Kubernetes Basics`, but it should be treated as a practical prerequisite before serious IaC, GitOps, CI/CD, and team workflows.
 
+The practical rule is simple:
+
+```text
+0.6 Git Basics
+   |
+Git Deep Dive
+   |
+Modern DevOps / IaC / GitOps / CI-CD
+```
+
 ## Git Is Not Optional For Modern Infrastructure Work
 
 The sequence matters:

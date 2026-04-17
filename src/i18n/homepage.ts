@@ -25,6 +25,7 @@ export interface HomepageStrings {
 
   // Hero
   heroBadge: string;
+  heroUpdated: string;
   heroTitle1: string; // before accent
   heroAccent: string;
   heroTitle2: string; // after accent
@@ -130,6 +131,7 @@ export const translations: Record<string, HomepageStrings> = {
     langSwitchHref: '/uk/',
 
     heroBadge: 'Free & Open Source',
+    heroUpdated: 'Updated April 17, 2026',
     heroTitle1: 'Master ',
     heroAccent: 'Cloud Native',
     heroTitle2: 'from Zero to Production',
@@ -139,8 +141,8 @@ export const translations: Record<string, HomepageStrings> = {
     ctaProgress: 'My Progress',
     statModules: 'Modules',
     statTracks: 'Tracks',
-    statCerts: 'Certifications',
-    statTranslations: 'Ukrainian translations',
+    statCerts: 'K8s track modules',
+    statTranslations: 'Ukrainian modules',
 
     tracksTitle: 'Learning Tracks',
     tracksDesc: 'Seven structured tracks from absolute beginner to production systems, private infrastructure, and AI/ML engineering.',
@@ -155,7 +157,7 @@ export const translations: Record<string, HomepageStrings> = {
     trackCloudMeta: '📚 116 modules · ⏱ ~150h',
     trackCertTitle: 'Certifications',
     trackCertDesc: 'Core Kubernetes certs plus specialist and platform-oriented learning paths.',
-    trackCertMeta: '📚 200+ modules · ⏱ ~250h',
+    trackCertMeta: '📚 207 modules · ⏱ ~250h',
     trackPlatTitle: 'Platform Engineering',
     trackPlatDesc: 'SRE, GitOps, DevSecOps, MLOps, FinOps, Chaos Engineering. 96 toolkit modules.',
     trackPlatMeta: '📚 220 modules · ⏱ ~280h',
@@ -262,6 +264,7 @@ Remember also me.`,
     langSwitchHref: '/',
 
     heroBadge: 'Безкоштовний та відкритий код',
+    heroUpdated: 'Оновлено 17 квітня 2026',
     heroTitle1: 'Опануйте ',
     heroAccent: 'Cloud Native',
     heroTitle2: 'від нуля до продакшну',
@@ -271,8 +274,8 @@ Remember also me.`,
     ctaProgress: 'Мій прогрес',
     statModules: 'Модулів',
     statTracks: 'Треків',
-    statCerts: 'Сертифікацій',
-    statTranslations: 'Українських перекладів',
+    statCerts: 'Модулів K8s-треку',
+    statTranslations: 'Українських модулів',
 
     tracksTitle: 'Навчальні треки',
     tracksDesc: 'Сім структурованих треків від абсолютного початківця до продакшн-систем, приватної інфраструктури та AI/ML.',
@@ -287,7 +290,7 @@ Remember also me.`,
     trackCloudMeta: '📚 116 модулів · ⏱ ~150 год',
     trackCertTitle: 'Сертифікації',
     trackCertDesc: 'Базові Kubernetes-сертифікації плюс спеціалізовані та платформні навчальні шляхи.',
-    trackCertMeta: '📚 200+ модулів · ⏱ ~250 год',
+    trackCertMeta: '📚 207 модулів · ⏱ ~250 год',
     trackPlatTitle: 'Платформна інженерія',
     trackPlatDesc: 'SRE, GitOps, DevSecOps, MLOps, FinOps, Chaos Engineering. 96 модулів інструментарію.',
     trackPlatMeta: '📚 220 модулів · ⏱ ~280 год',

@@ -4,7 +4,7 @@ sidebar:
   order: 1
   label: "Certifications"
 ---
-**The Kubestronaut Path** — All 5 certifications required for [Kubestronaut](https://www.cncf.io/training/kubestronaut/) status.
+**The Kubestronaut Path** — All 5 certifications required for [Kubestronaut](https://www.cncf.io/training/kubestronaut/) status, CNCF's recognition for passing KCNA, KCSA, CKAD, CKA, and CKS.
 
 ---
 
@@ -56,6 +56,8 @@ sidebar:
 
 ## Suggested Order
 
+One hard rule applies regardless of the path below: **CKS requires prior CKA completion.** It is not just "security-flavored Kubernetes." It assumes you already know how to administer clusters under time pressure.
+
 **Option 1: Breadth First** (understand the landscape)
 ```
 KCNA → KCSA → CKAD → CKA → CKS
@@ -87,7 +89,7 @@ Use this quick rule instead of staring at the full table:
 | ship applications on Kubernetes | [CKAD](ckad/) | best developer-first route |
 | go deeper into cluster security | [CKA](cka/) then [CKS](cks/) | `CKS` assumes admin fluency and requires `CKA` |
 | understand security concepts before hardening clusters | [KCSA](kcsa/) | good conceptual security companion, not a replacement for `CKS` |
-| move toward platform engineering | [KCNA](kcna/) or [CKA](cka/) first, then [CNPA](cnpa/) or [CNPE](cnpe/) | platform certs make more sense once basic Kubernetes competence already exists |
+| move toward platform engineering | [KCNA](kcna/) or [CKA](cka/) first, then [CNPA](cnpa/) and later [CNPE](cnpe/) | platform certs are specialization tracks after core Kubernetes literacy, not substitutes for it |
 
 If you are unsure, the safest defaults are:
 - `KCNA` for conceptual learners
@@ -120,6 +122,8 @@ CKAD / CKS / specialist certs
 
 Use `KCNA` if you want a conceptual entry point. Use `CKA` if you already want hands-on cluster administration pressure from day one.
 
+If your long-term goal is `CNPA` or `CNPE`, treat them as **post-foundation** credentials. `CNPA` can follow `KCNA` for conceptual platform learners, but `CNPE` makes the most sense after you already have at least one real hands-on Kubernetes route such as `CKA` or `CKAD`.
+
 ## Common Certification Routes
 
 - `Beginner -> operator`: `Prerequisites -> KCNA -> CKA -> CKS`
@@ -150,7 +154,7 @@ Beyond Kubestronaut, CNCF offers tool-specific certifications. KubeDojo maps exi
 
 These are best treated as specialization tracks, not replacements for a first Kubernetes foundation. For most learners:
 - `KCNA`, `CKA`, or `CKAD` should come first
-- specialist certs make more sense once you know whether your work is admin, developer, security, GitOps, or platform focused
+- specialist certs and platform certs make more sense once you know whether your work is admin, developer, security, GitOps, or platform focused
 
 ## Extending Kubernetes
 
@@ -166,6 +170,12 @@ All exams share these characteristics:
 - **PSI Bridge proctoring** — Strict environment, webcam required
 - **kubernetes.io allowed** — Official docs are your friend
 - **Time pressure** — Speed matters as much as knowledge
+
+Typical pacing:
+- `KCNA` / `KCSA`: 4-8 weeks if you are already in the curriculum about `5-8 h/week`
+- `CKAD` / `CKA`: 2-4 months at about `8-10 h/week`
+- `CKS` after `CKA`: usually another `4-8 weeks`
+- full Kubestronaut path: commonly `3-6 months` for already-technical learners at roughly `10 h/week`
 
 For hands-on exams (CKAD, CKA, CKS):
 - Practice with `kubectl` until it's muscle memory
