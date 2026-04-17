@@ -1579,15 +1579,13 @@ def test_module_state_orchestration_surfaces_pipeline_rejection(tmp_path: Path) 
 
 
 def test_briefing_has_actions_and_top_modules(tmp_path: Path) -> None:
-    """Schema-tweak #263: briefing gains ``actions.now/blocked/next``
-    and ``top_modules`` so Codex and Claude both see what to touch
-    next — not just the global state."""
+    """Schema-tweak #263: briefing gains ``actions.active/blocked/next``
+    and ``top_modules`` so Codex and Claude both see what to touch next."""
     _setup_repo(tmp_path)
     _write(
         tmp_path / "STATUS.md",
         "# status\n\n## TODO\n\n- [ ] task one\n",
     )
-    # Plant an active lease so ``actions.now`` is populated.
     import time as _time
     now_s = int(_time.time())
     conn = sqlite3.connect(tmp_path / ".pipeline/v2.db")
@@ -1600,10 +1598,38 @@ def test_briefing_has_actions_and_top_modules(tmp_path: Path) -> None:
     conn.close()
     briefing = local_api.build_session_briefing(tmp_path)
     assert "actions" in briefing
-    assert set(briefing["actions"].keys()) == {"now", "blocked", "next"}
-    assert any("codex" in entry for entry in briefing["actions"]["now"])
+    # Codex round-2 request: ``active`` instead of ``now`` — that bucket
+    # is read-only ("currently owned"), not "what I should touch".
+    assert set(briefing["actions"].keys()) == {"active", "blocked", "next"}
+    assert any("codex" in entry for entry in briefing["actions"]["active"])
     assert "top_modules" in briefing
-    assert any(m.get("reason") == "active_lease" for m in briefing["top_modules"])
+    reasons = {m.get("reason") for m in briefing["top_modules"]}
+    assert "active_lease" in reasons
+
+
+def test_briefing_top_modules_covers_critical_quality(tmp_path: Path) -> None:
+    """Codex round-2 gap: top_modules was missing critical_quality
+    and ready_queue categories. Rubric-critical rows must surface as
+    drillable entries, not just stringified actions.next lines."""
+    _setup_repo(tmp_path)
+    _write(tmp_path / "STATUS.md", "# s\n\n## TODO\n\n- [ ] x\n")
+    audit = tmp_path / "docs" / "quality-audit-results.md"
+    audit.parent.mkdir(exist_ok=True)
+    audit.write_text(
+        "## All Scored Modules\n\n"
+        "| Module | Track | Lines | Score | Action | Issue |\n"
+        "|---|---|---|---|---|---|\n"
+        "| CKA 2.8: Bad Stub | CKA | 55 | **1.3** | Critical | stub |\n",
+        encoding="utf-8",
+    )
+    with local_api._QUALITY_AUDIT_CACHE_LOCK:
+        local_api._QUALITY_AUDIT_CACHE.clear()
+    briefing = local_api.build_session_briefing(tmp_path)
+    reasons = {m.get("reason") for m in briefing["top_modules"]}
+    assert "critical_quality" in reasons
+    # Critical rubric entries must point at the scores endpoint.
+    cq = [m for m in briefing["top_modules"] if m.get("reason") == "critical_quality"]
+    assert cq and cq[0]["endpoint"] == "/api/quality/scores"
 
 
 def test_compact_briefing_keeps_actions_and_top_modules(tmp_path: Path) -> None:
@@ -1622,14 +1648,12 @@ def test_compact_briefing_keeps_actions_and_top_modules(tmp_path: Path) -> None:
 def test_worktrees_list_includes_dirty_counts(tmp_path: Path) -> None:
     """Schema-tweak #263: each worktree entry now carries a ``counts``
     dict so operators see which worktree is lively without shelling
-    into each one. Only the primary worktree exists in this fixture;
-    the real repo has many, but one is enough to validate the shape."""
+    into each one."""
     repo = tmp_path
     _init_repo(repo)
     _write(repo / "README.md", "hi\n")
     _git(repo, "add", ".")
     _git(repo, "commit", "-m", "initial")
-    # Make it dirty.
     _write(repo / "README.md", "hi\n\nmore\n")
 
     result = local_api.build_worktrees_list(repo)
@@ -1642,6 +1666,42 @@ def test_worktrees_list_includes_dirty_counts(tmp_path: Path) -> None:
     assert counts["total"] >= 1
     assert counts["unstaged"] >= 1
     assert first["dirty"] is True
+
+
+def test_worktree_counts_total_counts_paths_not_statuses(tmp_path: Path) -> None:
+    """Codex round-2 bug: counts.total used staged+unstaged+untracked,
+    which double-counts a file that is both staged AND unstaged. That
+    made sibling-worktree counts incomparable with the primary
+    worktree's. Fix: total is the number of unique paths reported by
+    ``git status --porcelain=v1``."""
+    repo = tmp_path
+    _init_repo(repo)
+    _write(repo / "README.md", "v1\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-m", "initial")
+
+    # Stage a change, then edit the same file again so git reports
+    # both a staged and an unstaged modification for one path.
+    _write(repo / "README.md", "v2\n")
+    _git(repo, "add", "README.md")
+    _write(repo / "README.md", "v3\n")
+
+    counts = local_api._worktree_dirty_counts(repo)
+    assert counts is not None
+    assert counts["total"] == 1  # one path, not two
+    assert counts["staged"] >= 1
+    assert counts["unstaged"] >= 1
+
+
+def test_worktree_counts_dirty_is_none_when_unreadable(tmp_path: Path) -> None:
+    """Codex round-2 bug: a failed ``git status`` was folded into
+    dirty=False, which is a false negative. Unreadable worktrees must
+    surface as dirty=None so "unknown" and "clean" are distinguishable."""
+    # Path that exists but isn't a git repo.
+    non_repo = tmp_path / "not-a-repo"
+    non_repo.mkdir()
+    counts = local_api._worktree_dirty_counts(non_repo)
+    assert counts is None
 
 
 def test_schema_lists_phase_c_endpoints() -> None:

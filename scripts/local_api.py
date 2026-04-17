@@ -657,11 +657,19 @@ def build_worktrees_list(repo_root: Path) -> dict[str, Any]:
     # Enrich each entry with a dirty-counts summary. This is the
     # signal operators actually want ("which worktree is lively?")
     # and without it agents had to shell into every worktree.
+    #
+    # ``dirty`` is tri-state: True/False when counts were obtained,
+    # ``None`` when we couldn't read the worktree (missing path,
+    # permission error, prunable ref). "unknown" and "clean" are
+    # materially different; a False here would be a false negative.
     for wt in worktrees:
         wt_path = Path(wt["path"])
         counts = _worktree_dirty_counts(wt_path) if wt_path.exists() else None
         wt["counts"] = counts
-        wt["dirty"] = bool(counts and counts.get("total"))
+        if counts is None:
+            wt["dirty"] = None
+        else:
+            wt["dirty"] = bool(counts.get("total", 0))
 
     primary_path = str(repo_root)
     return {
@@ -674,10 +682,15 @@ def build_worktrees_list(repo_root: Path) -> dict[str, Any]:
 
 def _worktree_dirty_counts(worktree_path: Path) -> dict[str, Any] | None:
     """Run ``git status --porcelain=v1`` inside ``worktree_path`` and
-    return a summary of counts. Returns ``None`` on failure so the
-    caller can surface the absence. Kept intentionally cheap (no
-    per-file list) so enriching N worktrees stays O(N) cheap git
-    invocations."""
+    return a summary of counts. Returns ``None`` on failure so callers
+    can distinguish "unknown" from "clean".
+
+    ``total`` counts each PATH once (matching the primary-worktree
+    ``build_worktree_status`` semantics), so a file that is both
+    staged and unstaged adds 1, not 2. ``staged`` / ``unstaged`` /
+    ``untracked`` remain per-status counts for operators who want
+    breakdowns — those may overlap.
+    """
     try:
         result = subprocess.run(
             ["git", "status", "--porcelain=v1"],
@@ -692,9 +705,11 @@ def _worktree_dirty_counts(worktree_path: Path) -> dict[str, Any] | None:
     if result.returncode != 0:
         return None
     staged = unstaged = untracked = conflicted = 0
+    total_paths = 0
     for line in result.stdout.splitlines():
         if not line:
             continue
+        total_paths += 1
         if line.startswith("?? "):
             untracked += 1
             continue
@@ -707,7 +722,12 @@ def _worktree_dirty_counts(worktree_path: Path) -> dict[str, Any] | None:
         if wt not in (" ", "?"):
             unstaged += 1
     return {
-        "total": staged + unstaged + untracked,
+        # ``total`` is unique-path count (matches primary-worktree
+        # ``build_worktree_status``). staged/unstaged/untracked are
+        # per-status counts and may overlap — a file with both a
+        # staged and an unstaged change is in both sub-counts but
+        # contributes 1 to total.
+        "total": total_paths,
         "staged": staged,
         "unstaged": unstaged,
         "untracked": untracked,
@@ -3155,9 +3175,17 @@ def build_session_briefing(repo_root: Path) -> dict[str, Any]:
 
     # Action-oriented triage lists. Agents ask "what should I touch"
     # not "what's the global state"; the lists below answer that in
-    # the same call as the briefing. Empty lists mean "nothing in
-    # that bucket" — still useful for the dashboard.
-    actions_now: list[str] = []
+    # the same call as the briefing.
+    #
+    # ``active``  — what is CURRENTLY owned / in flight. Read-only from
+    #               a deciding-agent's view; you don't grab these.
+    # ``blocked`` — things the pipeline can't make progress on without
+    #               a human or a re-enqueue.
+    # ``next``    — things ready to pick up right now.
+    #
+    # Every row that names a module is mirrored in ``top_modules[]``
+    # with a reason + drill-down endpoint.
+    actions_active: list[str] = []
     actions_blocked: list[str] = []
     actions_next: list[str] = []
     top_modules: list[dict[str, Any]] = []
@@ -3169,7 +3197,7 @@ def build_session_briefing(repo_root: Path) -> dict[str, Any]:
     if isinstance(leases, dict) and leases.get("exists"):
         for lease in (leases.get("active") or [])[:5]:
             secs = lease.get("seconds_to_expiry")
-            actions_now.append(
+            actions_active.append(
                 f"{lease.get('leased_by','?')} → {lease.get('module_key','?')} "
                 f"({lease.get('phase','?')}, {secs}s left)"
             )
@@ -3209,12 +3237,28 @@ def build_session_briefing(repo_root: Path) -> dict[str, Any]:
                 f"rubric-critical rewrite: {m.get('module','?')} "
                 f"({m.get('track','?')}) score {m.get('score','?')}"
             )
+            # Rubric rows don't carry a real ``module_key`` (the
+            # audit uses human-readable labels), so we store the
+            # label itself as the key and point at /api/quality/
+            # scores for drill-down. Agents can cross-reference.
+            top_modules.append({
+                "module_key": m.get("module"),
+                "phase": None,
+                "reason": "critical_quality",
+                "endpoint": "/api/quality/scores",
+            })
 
     if isinstance(pipeline, dict) and pipeline.get("queue_head"):
         queue_head = pipeline["queue_head"] or {}
         ready = queue_head.get("ready") or 0
         if ready:
             actions_next.append(f"{ready} job(s) ready to pick up in pipeline v2")
+            top_modules.append({
+                "module_key": None,
+                "phase": None,
+                "reason": "ready_queue",
+                "endpoint": "/api/pipeline/v2/status",
+            })
 
     return {
         "snapshot": {
@@ -3251,7 +3295,10 @@ def build_session_briefing(repo_root: Path) -> dict[str, Any]:
         "alerts": alerts,
         "critical_quality": critical_quality,
         "actions": {
-            "now": actions_now,
+            # ``active`` — currently owned / in flight (read-only).
+            # ``blocked`` — needs human or re-enqueue.
+            # ``next`` — ready to pick up.
+            "active": actions_active,
             "blocked": actions_blocked,
             "next": actions_next,
         },
