@@ -161,37 +161,77 @@ def _path_mtime(p: Path) -> float:
         return 0.0
 
 
+# Persistent read-only sqlite connections keyed by absolute db path.
+# ``PRAGMA data_version`` returns a monotonic counter on a specific
+# connection that increments whenever ANOTHER connection commits a
+# write. So a single persistent connection, queried repeatedly, is a
+# reliable change signal — unlike the round-1 fresh-connection usage
+# that Codex flagged. The dict lock serializes sqlite per connection
+# (sqlite itself is single-writer; reads can concurrent on separate
+# connections, but we only keep one per db for bookkeeping).
+_SQLITE_VERSION_CONNECTIONS: dict[str, sqlite3.Connection] = {}
+_SQLITE_VERSION_LOCK = threading.Lock()
+
+
+def _close_all_sqlite_version_connections() -> None:
+    """Test helper: drop cached read-only connections (e.g. between
+    tests that recreate DB files at the same path)."""
+    with _SQLITE_VERSION_LOCK:
+        for conn in _SQLITE_VERSION_CONNECTIONS.values():
+            try:
+                conn.close()
+            except sqlite3.Error:
+                pass
+        _SQLITE_VERSION_CONNECTIONS.clear()
+
+
 def _sqlite_version_key(db_path: Path) -> tuple:
-    """Fingerprint a sqlite DB that is stable while data is unchanged.
+    """Fingerprint a sqlite DB using ``PRAGMA data_version`` on a
+    persistent read-only connection.
 
-    Uses ``(db_mtime, db_size, wal_mtime, wal_size)``. We DO NOT use
-    ``PRAGMA data_version`` because it is documented as a per-connection
-    counter — opening a fresh read-only connection on every call would
-    not give us a reliable cross-process version. WAL writes always
-    touch ``<db>-wal`` and update both its mtime and size, so the tuple
-    catches them without opening sqlite at all.
+    Contract: two calls return the same key iff no other connection
+    has committed between them. This catches every form of write
+    (WAL append, WAL reuse after checkpoint, in-place DELETE/MEMORY
+    writes, rapid same-size writes inside one mtime granule) — none
+    of which ``(mtime, size)`` can distinguish.
 
-    Note: on filesystems with coarse mtime resolution (some NTFS, older
-    ext3) a sub-second write might share an mtime with the previous
-    one; ``size`` breaks that tie for any write that changes bytes.
+    Falls back to ``("absent", ...)`` when the file is missing and
+    ``("open_failed", mtime)`` if the read-only handle can't be
+    opened (e.g. permissions). Filesystem stats are only a degraded
+    signal; the authoritative signal is the pragma counter.
     """
     if not db_path.exists():
         return ("absent",)
 
-    try:
-        db_stat = db_path.stat()
-        db_mtime, db_size = db_stat.st_mtime, db_stat.st_size
-    except OSError:
-        db_mtime, db_size = 0.0, 0
+    key = str(db_path.resolve())
+    with _SQLITE_VERSION_LOCK:
+        conn = _SQLITE_VERSION_CONNECTIONS.get(key)
+        if conn is None:
+            try:
+                conn = sqlite3.connect(
+                    f"file:{db_path}?mode=ro",
+                    uri=True,
+                    timeout=1.0,
+                    check_same_thread=False,
+                )
+            except sqlite3.Error:
+                return ("open_failed", _path_mtime(db_path))
+            _SQLITE_VERSION_CONNECTIONS[key] = conn
 
-    wal_path = db_path.with_name(db_path.name + "-wal")
-    try:
-        wal_stat = wal_path.stat()
-        wal_mtime, wal_size = wal_stat.st_mtime, wal_stat.st_size
-    except OSError:
-        wal_mtime, wal_size = 0.0, 0
+        try:
+            row = conn.execute("PRAGMA data_version").fetchone()
+            data_version = int(row[0]) if row is not None else 0
+        except sqlite3.Error:
+            # Connection poisoned (e.g. DB rotated out from under us).
+            # Drop it so the next call opens fresh.
+            _SQLITE_VERSION_CONNECTIONS.pop(key, None)
+            try:
+                conn.close()
+            except sqlite3.Error:
+                pass
+            return ("error", _path_mtime(db_path))
 
-    return (db_mtime, db_size, wal_mtime, wal_size)
+    return ("v", data_version)
 
 
 def _normalized_cache_key(
@@ -331,31 +371,44 @@ class BackgroundSnapshot:
             # Fixed-delay: sleep AFTER completion so overruns never overlap.
             self._stop.wait(self.interval_seconds)
 
-    def _refresh_once(self) -> None:
-        # ``_build_lock`` serializes concurrent callers (background thread +
-        # ``refresh_blocking()``) so at most one builder runs at a time. This
-        # is the real enforcement of the "single in-flight" guarantee.
-        with self._build_lock:
-            started = time.time()
-            with self._lock:
-                self._started_at = started
-            try:
-                snapshot = self.builder()
-                err: str | None = None
-            except Exception as exc:  # noqa: BLE001
-                snapshot = None
-                err = f"{type(exc).__name__}: {exc}"
-            completed = time.time()
-            with self._lock:
-                if snapshot is not None:
-                    self._snapshot = snapshot
-                self._completed_at = completed
-                self._duration_ms = (completed - started) * 1000.0
-                self._last_error = err
+    def _refresh_once_locked(self) -> None:
+        """Core refresh, assuming ``_build_lock`` is already held."""
+        started = time.time()
+        with self._lock:
+            self._started_at = started
+        try:
+            snapshot = self.builder()
+            err: str | None = None
+        except Exception as exc:  # noqa: BLE001
+            snapshot = None
+            err = f"{type(exc).__name__}: {exc}"
+        completed = time.time()
+        with self._lock:
+            if snapshot is not None:
+                self._snapshot = snapshot
+            self._completed_at = completed
+            self._duration_ms = (completed - started) * 1000.0
+            self._last_error = err
 
-    def refresh_blocking(self, timeout: float = 60.0) -> None:
-        """Trigger one refresh in the calling thread. For first-call priming."""
-        self._refresh_once()
+    def _refresh_once(self) -> None:
+        """Serialize all builders through ``_build_lock``. The real
+        enforcement of the "single in-flight" guarantee."""
+        with self._build_lock:
+            self._refresh_once_locked()
+
+    def refresh_blocking(self, timeout: float | None = None) -> bool:
+        """Trigger one refresh in the calling thread. Returns True if
+        the refresh ran, False if ``timeout`` elapsed while waiting
+        for the build lock. ``timeout=None`` waits forever."""
+        lock_timeout = -1.0 if timeout is None else float(timeout)
+        acquired = self._build_lock.acquire(timeout=lock_timeout)
+        if not acquired:
+            return False
+        try:
+            self._refresh_once_locked()
+        finally:
+            self._build_lock.release()
+        return True
 
     def get(self) -> tuple[Any, dict[str, Any]]:
         now = time.time()

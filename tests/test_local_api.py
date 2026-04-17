@@ -700,29 +700,66 @@ def test_background_snapshot_exposes_freshness_metadata() -> None:
 def test_sqlite_version_key_detects_wal_only_write(tmp_path: Path) -> None:
     """Regression: PR #259 round 1 used PRAGMA data_version which is a
     per-connection counter and therefore unreliable across fresh
-    connections. Version key must change on a WAL-mode write, measured
-    across fresh lookups.
-    """
+    connections. Version key must change on a WAL-mode write."""
     db_path = tmp_path / "wal.db"
     conn = sqlite3.connect(db_path)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("CREATE TABLE t (x INTEGER)")
     conn.commit()
     conn.close()
+    local_api._close_all_sqlite_version_connections()
     v1 = local_api._sqlite_version_key(db_path)
 
-    # Open a separate connection, insert (this write lands in the WAL),
-    # and close. The main .db file may not be touched if checkpoint has
-    # not run yet.
     conn = sqlite3.connect(db_path)
     conn.execute("PRAGMA journal_mode=WAL")
-    # Force a small, quick write that is likely to stay in the WAL.
     conn.execute("INSERT INTO t VALUES (42)")
     conn.commit()
     conn.close()
     v2 = local_api._sqlite_version_key(db_path)
 
     assert v1 != v2, "WAL-mode write must change the version key"
+
+
+def test_sqlite_version_key_detects_same_size_write(tmp_path: Path) -> None:
+    """Codex round-2 blocker: (mtime, size) missed same-size writes.
+    The fix uses PRAGMA data_version on a persistent connection, which
+    increments on every commit regardless of file-level changes.
+
+    Write, then UPDATE a row in place so the file size is unchanged.
+    Without a reliable detector, the version key would collide.
+    """
+    db_path = tmp_path / "same_size.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute("CREATE TABLE t (x INTEGER)")
+    conn.execute("INSERT INTO t VALUES (1)")
+    conn.commit()
+    conn.close()
+    local_api._close_all_sqlite_version_connections()
+    v1 = local_api._sqlite_version_key(db_path)
+
+    # In-place update: row count and stored int width are both unchanged.
+    conn = sqlite3.connect(db_path)
+    conn.execute("UPDATE t SET x = 2")
+    conn.commit()
+    conn.close()
+    v2 = local_api._sqlite_version_key(db_path)
+
+    assert v1 != v2, "in-place UPDATE must change the version key"
+
+
+def test_sqlite_version_key_stable_without_writes(tmp_path: Path) -> None:
+    """Repeated calls with no intervening write must return the same key."""
+    db_path = tmp_path / "stable.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute("CREATE TABLE t (x INTEGER)")
+    conn.execute("INSERT INTO t VALUES (1)")
+    conn.commit()
+    conn.close()
+    local_api._close_all_sqlite_version_connections()
+    v1 = local_api._sqlite_version_key(db_path)
+    v2 = local_api._sqlite_version_key(db_path)
+    v3 = local_api._sqlite_version_key(db_path)
+    assert v1 == v2 == v3
 
 
 def test_cache_keyed_by_repo_root(tmp_path: Path) -> None:
@@ -765,54 +802,118 @@ def test_background_snapshot_serializes_concurrent_builds() -> None:
     """Regression: the "single in-flight" guarantee required a build
     lock. refresh_blocking() called from one thread while the daemon
     thread also tries to refresh must not produce overlapping builders.
+
+    Deterministic — no sleeps. An instrumented build lock signals when
+    the second caller reaches lock contention, so the test proves that
+    B actually attempted entry before A released (not just that B
+    happened not to finish first).
     """
     import threading
 
-    started = []
+    class _InstrumentedLock:
+        """Substitute for ``BackgroundSnapshot._build_lock`` that records
+        a ``waiter_entered`` event the second time ``acquire`` is called
+        while the lock is held, so the test can synchronize on ``B is
+        now waiting`` without sleeping."""
+
+        def __init__(self) -> None:
+            self._inner = threading.Lock()
+            self.waiter_entered = threading.Event()
+            self._acquire_attempts = 0
+            self._counter_lock = threading.Lock()
+
+        def acquire(self, timeout: float = -1.0) -> bool:
+            with self._counter_lock:
+                self._acquire_attempts += 1
+                attempt = self._acquire_attempts
+            if attempt >= 2 and self._inner.locked():
+                # Signal BEFORE the blocking acquire so the driver can
+                # release A after confirming B has reached contention.
+                self.waiter_entered.set()
+            if timeout < 0:
+                self._inner.acquire()
+                return True
+            return self._inner.acquire(timeout=timeout)
+
+        def release(self) -> None:
+            self._inner.release()
+
     running_now = {"n": 0}
     max_concurrent = {"n": 0}
-    lock = threading.Lock()
-    release = threading.Event()
+    release_builder = threading.Event()
+    in_builder = threading.Event()
+    counter_lock = threading.Lock()
 
     def slow_builder():
-        with lock:
+        with counter_lock:
             running_now["n"] += 1
             max_concurrent["n"] = max(max_concurrent["n"], running_now["n"])
-            started.append(True)
-        # Block long enough for a second caller to race in.
-        release.wait(timeout=1.0)
-        with lock:
+        in_builder.set()
+        # Park inside the builder until the test explicitly releases.
+        release_builder.wait(timeout=5.0)
+        with counter_lock:
             running_now["n"] -= 1
-        return {"iteration": len(started)}
+        return {"ok": True}
 
     snap = local_api.BackgroundSnapshot(
         key="concurrency-test",
         interval_seconds=60.0,
         builder=slow_builder,
     )
+    instrumented = _InstrumentedLock()
+    snap._build_lock = instrumented  # type: ignore[assignment]
 
-    # Thread A: refresh_blocking holds the build lock.
-    t_a = threading.Thread(target=snap.refresh_blocking, args=(5.0,))
+    # Thread A enters the builder and parks there.
+    t_a = threading.Thread(target=snap.refresh_blocking)
     t_a.start()
-    # Wait until A is inside the builder.
-    for _ in range(50):
-        with lock:
-            if running_now["n"] >= 1:
-                break
-        import time as _t
-        _t.sleep(0.01)
-    # Thread B: concurrent refresh_blocking must BLOCK on the lock.
-    t_b = threading.Thread(target=snap.refresh_blocking, args=(5.0,))
+    assert in_builder.wait(timeout=3.0), "builder A never entered"
+
+    # Thread B also attempts to acquire the build lock. It must block.
+    t_b = threading.Thread(target=snap.refresh_blocking)
     t_b.start()
-    # Give B a moment to attempt entry.
-    import time as _t
-    _t.sleep(0.05)
-    # Release A, which lets B enter.
-    release.set()
+    assert instrumented.waiter_entered.wait(timeout=3.0), (
+        "B did not reach lock contention before A released — test invalid"
+    )
+
+    # Release A; B proceeds into the builder sequentially.
+    release_builder.set()
     t_a.join(timeout=3.0)
     t_b.join(timeout=3.0)
     assert not t_a.is_alive() and not t_b.is_alive()
     assert max_concurrent["n"] == 1, "two builders ran concurrently"
+
+
+def test_refresh_blocking_honors_timeout() -> None:
+    """refresh_blocking(timeout=...) must return False if the build
+    lock cannot be acquired before the timeout elapses."""
+    import threading
+
+    release = threading.Event()
+    in_builder = threading.Event()
+
+    def slow_builder():
+        in_builder.set()
+        release.wait(timeout=3.0)
+        return {"ok": True}
+
+    snap = local_api.BackgroundSnapshot(
+        key="timeout-test",
+        interval_seconds=60.0,
+        builder=slow_builder,
+    )
+    # Thread A holds the build lock.
+    t_a = threading.Thread(target=snap.refresh_blocking)
+    t_a.start()
+    assert in_builder.wait(timeout=3.0)
+
+    # Caller B asks with a small timeout. Lock is held; return False fast.
+    ok = snap.refresh_blocking(timeout=0.05)
+    assert ok is False, "timeout path must return False"
+
+    release.set()
+    t_a.join(timeout=3.0)
+    # Once A releases, a follow-up call succeeds.
+    assert snap.refresh_blocking(timeout=3.0) is True
 
 
 def test_background_snapshot_reports_degraded_on_builder_error() -> None:
