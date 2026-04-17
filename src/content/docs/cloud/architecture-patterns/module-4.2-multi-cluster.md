@@ -645,4 +645,4 @@ Cloud providers typically do not charge for data transfer between pods within th
 
 Now that you understand how to design and distribute workloads across multiple failure domains safely, it is time to explore how we secure the perimeters of those domains. In the next module, you will learn how to implement zero-trust architectures, enforce stringent network policies, and protect your clusters from lateral movement.
 
-**Continue to [Module 4.3: Zero-Trust Networking and Perimeter Security](../module-4.3-zero-trust/)**
+**Continue to [Module 4.3: Cloud IAM](./module-4.3-cloud-iam/)**

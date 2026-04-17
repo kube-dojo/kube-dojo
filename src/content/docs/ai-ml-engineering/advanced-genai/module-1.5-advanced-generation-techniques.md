@@ -486,7 +486,7 @@ Deploy a `constitutional-evaluator` Pod alongside the primary LLM Pod within a s
 
 ## Next Module
 
-Ready to scale these architectures globally? Proceed to [Module 1.6: Multi-Region Inference Routing](./module-1.6-multi-region-inference-routing.md).
+Ready to evaluate these techniques rigorously in practice? Proceed to [Module 1.6: LLM Evaluation](./module-1.6-llm-evaluation/).
 
 > **Teaser:** Discover how to maintain constitutional alignment and sub-100ms latency when your user base spans three continents and is subjected to conflicting international data sovereignty laws. We will explore advanced Istio routing, federated model deployments, and dynamic policy injection.
 ---

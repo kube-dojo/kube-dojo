@@ -1054,4 +1054,4 @@ Ensure your Kubernetes cluster is running at least v1.35, as the `RateLimitPolic
 
 Now that you understand how attackers critically subvert the contextual boundaries and mathematical weights of generative models, you must operationalize these defenses into a continuous, automated security lifecycle. 
 
-**Next Module:** [Module 1.8: LLM SecOps & Continuous Adversarial Testing](./module-1.8-llm-secops) — Learn how to integrate LLM vulnerability scanning, automated red-teaming pipelines, and drift detection directly into your GitOps workflows.
+**Next Module:** [Module 1.8: AI Safety & Alignment](./module-1.8-ai-safety-alignment/) — Learn how to turn red-team findings into durable safety policies, alignment practices, and higher-trust deployment patterns.

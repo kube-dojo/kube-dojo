@@ -881,7 +881,7 @@ This generates an AI-informed report suggesting exact YAML adjustments for your 
 
 You've successfully completed all the core technical infrastructure modules!
 
-**Up Next**: [Phase 12 - History of AI/ML](../history/module-55-foundations.md)
+**Up Next**: [History of AI/ML](../history/module-1.1-history-of-ai-machine-learning/)
 
 Learn the fascinating history behind the statistical models and algorithms you've just deployed:
 - Module 55: History of AI/ML - Foundations

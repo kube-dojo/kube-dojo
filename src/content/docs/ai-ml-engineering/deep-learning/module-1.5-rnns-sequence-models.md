@@ -1076,4 +1076,4 @@ The engineer completely forgot to call `model.eval()`. Without invoking this met
 
 ## Next Module
 
-Ready to move beyond static images? Proceed directly to **[Module 1.6: Transformers & Attention Mechanisms](./module-1.6-transformers-attention)** where you will discover why the phrase "Attention Is All You Need" permanently altered the trajectory of artificial intelligence, and how self-attention scales in ways that convolutions simply cannot.
+Ready to move from recurrent architectures into the modern transformer era? Proceed directly to **[Module 1.7: Transformers from Scratch](./module-1.7-transformers-from-scratch/)** where you will discover why the phrase "Attention Is All You Need" permanently altered the trajectory of artificial intelligence, and how self-attention scales in ways that recurrent networks cannot.

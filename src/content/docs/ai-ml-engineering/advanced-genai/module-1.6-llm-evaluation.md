@@ -1213,4 +1213,4 @@ To eliminate network latency, the guardrail system should be packaged as an opti
 
 ## Next Module
 
-Now that you have built rigorous evaluation pipelines and multi-layered safety guardrails, you must scale these architectures globally while maintaining state and continuous reliability. In the next module, **[Module 1.7: Stateful GenAI at Scale](./module-1.7-stateful-genai)**, we will explore distributed vector databases, multi-region context caching, and zero-downtime model rollouts to ensure your enterprise AI applications can survive extreme traffic spikes and hardware failures in Kubernetes v1.35 environments.
+Now that you have built rigorous evaluation pipelines and multi-layered safety guardrails, you must turn those findings into practical offensive testing. In the next module, **[Module 1.7: AI Red Teaming](./module-1.7-ai-red-teaming/)**, we will move from measurement into adversarial evaluation, jailbreak discovery, and real-world failure hunting.

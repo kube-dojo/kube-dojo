@@ -1292,4 +1292,4 @@ terraform test
 
 ## Next Module
 
-Return to the [Advanced Operations README](./README.md) for a summary of all modules in this phase and guidance on what to pursue next. You have comprehensively navigated the full lifecycle of advanced cloud operations: transitioning from monolithic state chaos toward modular GitOps automation, enabling your platform to safely scale without arbitrary operational ceilings.
+Return to the [Advanced Operations hub](/cloud/advanced-operations/) for a summary of all modules in this phase and guidance on what to pursue next. You have comprehensively navigated the full lifecycle of advanced cloud operations: transitioning from monolithic state chaos toward modular GitOps automation, enabling your platform to safely scale without arbitrary operational ceilings.

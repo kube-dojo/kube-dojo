@@ -497,4 +497,4 @@ You must set the `temperature` parameter to `0.0`. Temperature controls the rand
 
 ## Next Module
 
-Now that you can rigorously evaluate models and identify alignment failures, it's time to build systems that dynamically augment model capabilities with external, verifiable data. In **[Module 1.9: Advanced Retrieval-Augmented Generation (RAG) Architectures](./module-1.9-advanced-rag)**, we will explore vector database indexing strategies, semantic reranking, and multi-hop retrieval to effectively eliminate hallucinations by grounding models in real enterprise knowledge.
+Now that you can rigorously evaluate models and identify alignment failures, it's time to look at a more modern fine-tuning path. In **[Module 1.9: Modern PEFT - DoRA and PiSSA](./module-1.9-modern-peft-dora-pissa/)**, we will examine newer adaptation techniques that improve efficiency and quality beyond the standard LoRA workflow.
