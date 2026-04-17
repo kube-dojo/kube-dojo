@@ -975,31 +975,43 @@ class ControlPlane:
         module_key: str,
         event_type: str,
         since: int | None = None,
+        after_event_id: int | None = None,
     ) -> int:
+        clauses = ["module_key = ?", "type = ?"]
+        params: list[Any] = [module_key, event_type]
+        if since is not None:
+            clauses.append("at >= ?")
+            params.append(since)
+        if after_event_id is not None:
+            clauses.append("id > ?")
+            params.append(after_event_id)
+        sql = f"SELECT COUNT(*) FROM events WHERE {' AND '.join(clauses)}"
         conn = self._connect()
         try:
-            if since is None:
-                row = conn.execute(
-                    """
-                    SELECT COUNT(*)
-                    FROM events
-                    WHERE module_key = ?
-                      AND type = ?
-                    """,
-                    (module_key, event_type),
-                ).fetchone()
-            else:
-                row = conn.execute(
-                    """
-                    SELECT COUNT(*)
-                    FROM events
-                    WHERE module_key = ?
-                      AND type = ?
-                      AND at >= ?
-                    """,
-                    (module_key, event_type, since),
-                ).fetchone()
+            row = conn.execute(sql, params).fetchone()
             assert row is not None
+            return int(row[0])
+        finally:
+            conn.close()
+
+    def latest_event_id_for_module(
+        self,
+        module_key: str,
+        event_type: str,
+    ) -> int | None:
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                """
+                SELECT MAX(id)
+                FROM events
+                WHERE module_key = ?
+                  AND type = ?
+                """,
+                (module_key, event_type),
+            ).fetchone()
+            if row is None or row[0] is None:
+                return None
             return int(row[0])
         finally:
             conn.close()

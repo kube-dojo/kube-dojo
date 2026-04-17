@@ -74,15 +74,23 @@ class PatchWorker:
             failed_checks = review_payload.get("failed_checks") or review_payload.get("checks") or []
             feedback = str(review_payload.get("feedback", ""))
             module_text = module_path.read_text(encoding="utf-8")
+            cycle_floor_event_id = self.control_plane.latest_event_id_for_module(
+                lease.module_key,
+                "rewrite_escalated",
+            )
             decision = should_escalate_patch(
                 failed_checks=failed_checks,
                 feedback=feedback,
-                patch_attempts=self._patch_attempts_for_module(lease.module_key),
+                patch_attempts=self._patch_attempts_for_module(
+                    lease.module_key,
+                    after_event_id=cycle_floor_event_id,
+                ),
                 patch_apply_failed=False,
                 partial_apply=False,
                 patch_degraded=self.control_plane.count_events_for_module(
                     lease.module_key,
                     "patch_degraded",
+                    after_event_id=cycle_floor_event_id,
                 )
                 > 0,
             )
@@ -121,7 +129,10 @@ class PatchWorker:
                 decision = should_escalate_patch(
                     failed_checks=failed_checks,
                     feedback=feedback,
-                    patch_attempts=self._patch_attempts_for_module(lease.module_key),
+                    patch_attempts=self._patch_attempts_for_module(
+                        lease.module_key,
+                        after_event_id=cycle_floor_event_id,
+                    ),
                     patch_apply_failed=patch_apply_failed,
                     partial_apply=bool(applied),
                     patch_degraded=False,
@@ -234,10 +245,17 @@ class PatchWorker:
                 return payload
         raise MalformedPatchResponse(f"no check_failed event found for {module_key}")
 
-    def _patch_attempts_for_module(self, module_key: str) -> int:
+    def _patch_attempts_for_module(
+        self,
+        module_key: str,
+        *,
+        after_event_id: int | None = None,
+    ) -> int:
         attempts = 0
         for event in self.control_plane.iter_events("attempt_started"):
             if str(event["module_key"]) != module_key:
+                continue
+            if after_event_id is not None and int(event["id"]) <= after_event_id:
                 continue
             payload = json.loads(event["payload_json"])
             if isinstance(payload, dict) and payload.get("phase") == "patch":

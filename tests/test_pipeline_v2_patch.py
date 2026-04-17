@@ -394,6 +394,86 @@ def test_more_than_two_patch_attempts_escalates_before_dispatch(tmp_path):
     assert "patch_attempts>2" in payload["reasons"]
 
 
+def test_patch_attempts_counter_resets_after_rewrite(tmp_path):
+    """Regression: lifetime patch_attempts counter caused immediate escalation
+    on the first patch attempt of any post-rewrite cycle, breaking convergence."""
+    control_plane = _make_control_plane(tmp_path)
+    module_path = _write_module(tmp_path)
+    module_key = str(module_path.relative_to(tmp_path))
+    # Round 1 already exhausted: 3 patch attempts followed by a rewrite escalation.
+    _seed_patch_attempts(control_plane, module_key, 3)
+    _seed_rewrite_attempts(control_plane, module_key, 1)
+    # Fresh write completed; round 2 starts now.
+    _seed_patch_job(
+        control_plane,
+        module_key,
+        failed_checks=[_failed_check("DEPTH", [14, 14])],
+    )
+    dispatch = Mock(
+        return_value=(
+            True,
+            _patch_response(
+                [
+                    {
+                        "type": "replace",
+                        "find": "Paragraph B needs more depth.",
+                        "new": "Paragraph B now adds operational depth.",
+                        "reason": "DEPTH",
+                    }
+                ]
+            ),
+        )
+    )
+    worker = PatchWorker(control_plane, dispatch_fn=dispatch)
+
+    outcome = worker.run_once()
+
+    assert outcome.status == "patched", (
+        f"Expected first patch attempt of round 2 to dispatch, got {outcome.status}"
+    )
+    dispatch.assert_called_once()
+
+
+def test_patch_degraded_counter_resets_after_rewrite(tmp_path):
+    """Regression: lifetime patch_degraded counter caused immediate escalation
+    on the first patch attempt of any post-rewrite cycle."""
+    control_plane = _make_control_plane(tmp_path)
+    module_path = _write_module(tmp_path)
+    module_key = str(module_path.relative_to(tmp_path))
+    control_plane.emit_event(
+        "patch_degraded",
+        module_key=module_key,
+        payload={"reason": "round 1 patch introduced regression"},
+    )
+    _seed_rewrite_attempts(control_plane, module_key, 1)
+    _seed_patch_job(
+        control_plane,
+        module_key,
+        failed_checks=[_failed_check("DEPTH", [14, 14])],
+    )
+    dispatch = Mock(
+        return_value=(
+            True,
+            _patch_response(
+                [
+                    {
+                        "type": "replace",
+                        "find": "Paragraph B needs more depth.",
+                        "new": "Paragraph B now adds operational depth.",
+                        "reason": "DEPTH",
+                    }
+                ]
+            ),
+        )
+    )
+    worker = PatchWorker(control_plane, dispatch_fn=dispatch)
+
+    outcome = worker.run_once()
+
+    assert outcome.status == "patched"
+    dispatch.assert_called_once()
+
+
 def test_patch_degraded_event_escalates_before_dispatch(tmp_path):
     control_plane = _make_control_plane(tmp_path)
     module_path = _write_module(tmp_path)
