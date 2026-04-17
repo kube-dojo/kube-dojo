@@ -976,27 +976,27 @@ def test_background_snapshot_reports_degraded_on_builder_error() -> None:
 
 
 def test_pipeline_leases_lists_active_only(tmp_path: Path) -> None:
+    """Codex round-1 bug: we were using ms; the control-plane stores
+    Unix epoch SECONDS. Everything below is in seconds."""
     module_key, _ = _setup_repo(tmp_path)
-    now_ms = 1_000_000_000_000
+    now_s = 1_700_000_000  # Realistic seconds-since-epoch value.
 
     conn = sqlite3.connect(tmp_path / ".pipeline/v2.db")
-    # Active lease (expiry in future)
     conn.execute(
         "INSERT INTO jobs (module_key, phase, queue_state, leased_by, lease_id, "
         "leased_at, lease_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (module_key, "write", "leased", "codex", "lease-a", now_ms - 1000, now_ms + 60_000),
+        (module_key, "write", "leased", "codex", "lease-a", now_s - 1, now_s + 60),
     )
-    # Expired lease (must be filtered out)
     conn.execute(
         "INSERT INTO jobs (module_key, phase, queue_state, leased_by, lease_id, "
         "leased_at, lease_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
         ("other/module-stale", "write", "leased", "claude", "lease-b",
-         now_ms - 10_000_000, now_ms - 1_000),
+         now_s - 10_000, now_s - 1),
     )
     conn.commit()
     conn.close()
 
-    result = local_api.build_pipeline_leases(tmp_path, now_ms=now_ms)
+    result = local_api.build_pipeline_leases(tmp_path, now_seconds=now_s)
     assert result["exists"] is True
     assert result["count"] == 1
     assert result["active"][0]["lease_id"] == "lease-a"
@@ -1012,21 +1012,19 @@ def test_pipeline_leases_returns_empty_when_db_missing(tmp_path: Path) -> None:
 
 def test_module_lease_reports_held_vs_free(tmp_path: Path) -> None:
     module_key, _ = _setup_repo(tmp_path)
-    now_ms = 1_000_000_000_000
-    # Initially no lease -> held=False.
-    r = local_api.build_module_lease(tmp_path, module_key, now_ms=now_ms)
+    now_s = 1_700_000_000
+    r = local_api.build_module_lease(tmp_path, module_key, now_seconds=now_s)
     assert r["held"] is False
 
     conn = sqlite3.connect(tmp_path / ".pipeline/v2.db")
     conn.execute(
         "INSERT INTO jobs (module_key, phase, queue_state, leased_by, lease_id, "
         "leased_at, lease_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (module_key, "review", "leased", "gemini", "lease-x",
-         now_ms - 10, now_ms + 120_000),
+        (module_key, "review", "leased", "gemini", "lease-x", now_s - 1, now_s + 120),
     )
     conn.commit()
     conn.close()
-    r = local_api.build_module_lease(tmp_path, module_key, now_ms=now_ms)
+    r = local_api.build_module_lease(tmp_path, module_key, now_seconds=now_s)
     assert r["held"] is True
     assert r["lease"]["leased_by"] == "gemini"
     assert r["lease"]["seconds_to_expiry"] == 120
@@ -1047,60 +1045,88 @@ def test_pipeline_events_filters_and_limits(tmp_path: Path) -> None:
     conn.commit()
     conn.close()
 
-    scoped = local_api.build_pipeline_events(tmp_path, module_key=module_key, since_ms=None, limit=3)
+    scoped = local_api.build_pipeline_events(tmp_path, module_key=module_key, since_seconds=None, limit=3)
     assert scoped["count"] == 3
     assert all(e["module_key"] == module_key for e in scoped["events"])
-    # Newest-first -> ids descending
     ids = [e["id"] for e in scoped["events"]]
     assert ids == sorted(ids, reverse=True)
-    # payload_json should be decoded
     assert isinstance(scoped["events"][0]["payload_json"], dict)
 
-    windowed = local_api.build_pipeline_events(tmp_path, module_key=module_key, since_ms=1002, limit=10)
+    windowed = local_api.build_pipeline_events(tmp_path, module_key=module_key, since_seconds=1002, limit=10)
     ats = [e["at"] for e in windowed["events"]]
     assert all(a >= 1002 for a in ats)
 
 
-def test_pipeline_stuck_catches_expired_and_silent_jobs(tmp_path: Path) -> None:
+def test_pipeline_stuck_catches_expired_and_silent_jobs_in_seconds(tmp_path: Path) -> None:
+    """Bug-fix regression: Codex caught the ms-vs-seconds mismatch.
+    Threshold is now honored in seconds against seconds-valued
+    timestamps from the real control-plane."""
     module_key, _ = _setup_repo(tmp_path)
-    now_ms = 10_000_000
+    now_s = 10_000
     conn = sqlite3.connect(tmp_path / ".pipeline/v2.db")
     # Expired lease -> stuck_leased
     conn.execute(
         "INSERT INTO jobs (module_key, phase, queue_state, leased_by, lease_id, "
         "leased_at, lease_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        ("stuck/one", "write", "leased", "codex", "lex",
-         now_ms - 1_000_000, now_ms - 1000),
+        ("stuck/one", "write", "leased", "codex", "lex-1",
+         now_s - 1_000, now_s - 10),
     )
-    # In-flight with no recent event -> stuck_in_state
+    # In-flight with no recent event for current attempt -> stuck_in_state
     conn.execute(
-        "INSERT INTO jobs (module_key, phase, queue_state, leased_by, leased_at) "
+        "INSERT INTO jobs (module_key, phase, queue_state, leased_by, lease_id, leased_at) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        ("stuck/silent", "review", "running", "claude", "lex-silent", now_s - 10_000),
+    )
+    conn.execute(
+        "INSERT INTO events (module_key, type, lease_id, payload_json, at) "
         "VALUES (?, ?, ?, ?, ?)",
-        ("stuck/silent", "review", "running", "claude", now_ms - 10_000_000),
+        ("stuck/silent", "attempt_started", "lex-silent", "{}", now_s - 10_000),
+    )
+    # Fresh in-flight -> not stuck (has recent event for its lease)
+    conn.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state, leased_by, lease_id, leased_at) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        ("fresh/one", "review", "running", "claude", "lex-fresh", now_s),
     )
     conn.execute(
-        "INSERT INTO events (module_key, type, payload_json, at) VALUES (?, ?, ?, ?)",
-        ("stuck/silent", "attempt_started", "{}", now_ms - 10_000_000),
-    )
-    # Fresh in-flight -> not stuck (has recent event)
-    conn.execute(
-        "INSERT INTO jobs (module_key, phase, queue_state, leased_by, leased_at) "
+        "INSERT INTO events (module_key, type, lease_id, payload_json, at) "
         "VALUES (?, ?, ?, ?, ?)",
-        ("fresh/one", "review", "running", "claude", now_ms),
-    )
-    conn.execute(
-        "INSERT INTO events (module_key, type, payload_json, at) VALUES (?, ?, ?, ?)",
-        ("fresh/one", "attempt_started", "{}", now_ms - 10),
+        ("fresh/one", "attempt_started", "lex-fresh", "{}", now_s - 10),
     )
     conn.commit()
     conn.close()
 
-    r = local_api.build_pipeline_stuck(tmp_path, threshold_seconds=60, now_ms=now_ms)
+    r = local_api.build_pipeline_stuck(tmp_path, threshold_seconds=60, now_seconds=now_s)
     stuck_leased_keys = {j["module_key"] for j in r["stuck_leased"]}
     stuck_in_state_keys = {j["module_key"] for j in r["stuck_in_state"]}
     assert "stuck/one" in stuck_leased_keys
     assert "stuck/silent" in stuck_in_state_keys
     assert "fresh/one" not in stuck_in_state_keys
+
+
+def test_pipeline_stuck_correlates_events_by_lease_id(tmp_path: Path) -> None:
+    """Codex round-4 bug: correlating events by module_key alone let
+    a fresh event from an EARLIER lease mask a hung current lease."""
+    _setup_repo(tmp_path)
+    now_s = 10_000
+    conn = sqlite3.connect(tmp_path / ".pipeline/v2.db")
+    # Current (hung) lease: running, no event for THIS lease_id.
+    conn.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state, leased_by, lease_id, leased_at) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        ("rolled/over", "write", "running", "claude", "current-lease", now_s - 10_000),
+    )
+    # Old event from a PREVIOUS lease for the same module — should NOT
+    # make the current attempt look healthy.
+    conn.execute(
+        "INSERT INTO events (module_key, type, lease_id, payload_json, at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        ("rolled/over", "attempt_started", "previous-lease", "{}", now_s - 1),
+    )
+    conn.commit()
+    conn.close()
+    r = local_api.build_pipeline_stuck(tmp_path, threshold_seconds=60, now_seconds=now_s)
+    assert any(j["module_key"] == "rolled/over" for j in r["stuck_in_state"])
 
 
 def test_reviews_index_and_single(tmp_path: Path) -> None:
@@ -1124,16 +1150,50 @@ def test_reviews_index_and_single(tmp_path: Path) -> None:
     assert "**Writer**: gemini" in single["body"]
     assert single["truncated"] is False
 
-    # Truncation path.
+    # Truncation path. ``size`` is the actual on-disk size (per Codex
+    # round-4 polish: truncated responses must not lie about file
+    # size); ``max_bytes`` carries the cap applied.
     big_content = "x" * 50_000
     (reviews_dir / "big__one.md").write_text(big_content, encoding="utf-8")
     trunc = local_api.build_module_reviews(tmp_path, "big/one", max_bytes=1000)
     assert trunc is not None
     assert trunc["truncated"] is True
-    assert trunc["size"] == 1000
+    assert trunc["size"] == 50_000
+    assert trunc["max_bytes"] == 1000
+    assert trunc["body_size"] == 1000
 
 
-def test_bridge_messages_filters_and_previews(tmp_path: Path) -> None:
+def test_resolve_bridge_db_path_precedence(tmp_path: Path, monkeypatch) -> None:
+    """Codex round-4 bug: we hardcoded .bridge/messages.db but the
+    Python bridge default is .mcp/servers/message-broker/messages.db.
+    Resolution must honor $AB_DB_PATH first, then fall through."""
+    repo = tmp_path
+    # No files, no env → convention path.
+    monkeypatch.delenv("AB_DB_PATH", raising=False)
+    p = local_api._resolve_bridge_db_path(repo)
+    assert p == repo / ".bridge" / "messages.db"
+
+    # .mcp path exists → picked over the convention when .bridge is absent.
+    mcp_path = repo / ".mcp" / "servers" / "message-broker" / "messages.db"
+    mcp_path.parent.mkdir(parents=True)
+    mcp_path.write_bytes(b"")
+    assert local_api._resolve_bridge_db_path(repo) == mcp_path
+
+    # .bridge path wins over .mcp when both exist (repo convention).
+    bridge_path = repo / ".bridge" / "messages.db"
+    bridge_path.parent.mkdir(parents=True)
+    bridge_path.write_bytes(b"")
+    assert local_api._resolve_bridge_db_path(repo) == bridge_path
+
+    # Explicit env var wins over both.
+    override = tmp_path / "custom.db"
+    override.write_bytes(b"")
+    monkeypatch.setenv("AB_DB_PATH", str(override))
+    assert local_api._resolve_bridge_db_path(repo) == override
+
+
+def test_bridge_messages_filters_and_previews(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.delenv("AB_DB_PATH", raising=False)
     db_path = tmp_path / ".bridge" / "messages.db"
     db_path.parent.mkdir(parents=True)
     conn = sqlite3.connect(db_path)
@@ -1224,6 +1284,85 @@ def test_module_state_flags_missing_lab_and_ledger(tmp_path: Path) -> None:
     assert "no_lab" in diag
     assert "no_fact_ledger" in diag
     assert "uk_translation_missing" in diag
+
+
+def test_rubric_diagnostics_matches_by_track_and_number(tmp_path: Path) -> None:
+    """Codex round-4 bug: rubric matching compared raw slugs like
+    'module-2.8-scheduler-lifecycle-theory' to audit labels like
+    'CKA 2.8: Scheduler Lifecycle Theory' and never matched."""
+    audit = tmp_path / "docs" / "quality-audit-results.md"
+    audit.parent.mkdir()
+    audit.write_text(
+        """## All Scored Modules\n\n"""
+        """| Module | Track | Lines | Score | Action | Issue |\n"""
+        """|---|---|---|---|---|---|\n"""
+        """| CKA 2.8: Scheduler Lifecycle Theory | CKA | 55 | **1.3** | Critical | stub |\n""",
+        encoding="utf-8",
+    )
+    with local_api._QUALITY_AUDIT_CACHE_LOCK:
+        local_api._QUALITY_AUDIT_CACHE.clear()
+
+    # Build minimal EN file for the module under its real-world path.
+    en = (
+        tmp_path
+        / "src/content/docs/k8s/cka/part2-workloads-scheduling/module-2.8-scheduler-lifecycle-theory.md"
+    )
+    _init_repo(tmp_path)
+    _write(en, "---\ntitle: Scheduler\n---\nbody\n")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-m", "init")
+    state = local_api.build_module_state(
+        tmp_path, "k8s/cka/part2-workloads-scheduling/module-2.8-scheduler-lifecycle-theory"
+    )
+    assert "rubric_critical" in state["diagnostics"]
+
+
+def test_rubric_diagnostics_no_false_match_for_different_track(tmp_path: Path) -> None:
+    """A module path like k8s/kcna/module-2.8-... must not pick up a
+    'CKA 2.8:' rubric entry (track disambiguation)."""
+    audit = tmp_path / "docs" / "quality-audit-results.md"
+    audit.parent.mkdir()
+    audit.write_text(
+        """## All Scored Modules\n\n"""
+        """| Module | Track | Lines | Score | Action | Issue |\n"""
+        """|---|---|---|---|---|---|\n"""
+        """| CKA 2.8: Scheduler Lifecycle Theory | CKA | 55 | **1.3** | Critical | stub |\n""",
+        encoding="utf-8",
+    )
+    with local_api._QUALITY_AUDIT_CACHE_LOCK:
+        local_api._QUALITY_AUDIT_CACHE.clear()
+
+    en = tmp_path / "src/content/docs/k8s/kcna/module-2.8-something-unrelated.md"
+    _init_repo(tmp_path)
+    _write(en, "---\ntitle: KCNA\n---\nbody\n")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-m", "init")
+    state = local_api.build_module_state(tmp_path, "k8s/kcna/module-2.8-something-unrelated")
+    assert "rubric_critical" not in state["diagnostics"]
+
+
+def test_query_sqlite_rows_propagates_schema_drift(tmp_path: Path) -> None:
+    """Bug-fix regression: 'no such column' must NOT silently return
+    empty — that was how the priority-column bug stayed hidden."""
+    db_path = tmp_path / "schema.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute("CREATE TABLE jobs (id INTEGER, module_key TEXT)")
+    conn.commit()
+    conn.close()
+    import pytest as _pytest
+    with _pytest.raises(sqlite3.OperationalError) as exc_info:
+        local_api._query_sqlite_rows(db_path, "SELECT ghost_column FROM jobs")
+    assert "no such column" in str(exc_info.value)
+
+
+def test_query_sqlite_rows_tolerates_missing_table(tmp_path: Path) -> None:
+    db_path = tmp_path / "missing_table.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute("CREATE TABLE other (id INTEGER)")
+    conn.commit()
+    conn.close()
+    result = local_api._query_sqlite_rows(db_path, "SELECT * FROM does_not_exist")
+    assert result == []
 
 
 def test_schema_lists_phase_c_endpoints() -> None:

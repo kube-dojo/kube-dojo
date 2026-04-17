@@ -793,18 +793,23 @@ def _query_sqlite_rows(
         conn.close()
 
 
-def build_pipeline_leases(repo_root: Path, *, now_ms: int | None = None) -> dict[str, Any]:
+# Timestamps in .pipeline/v2.db are Unix epoch SECONDS (SQLite's
+# strftime('%s','now') — see scripts/pipeline_v2/control_plane.py). All
+# comparisons here must use the same unit.
+
+
+def build_pipeline_leases(repo_root: Path, *, now_seconds: int | None = None) -> dict[str, Any]:
     """Active pipeline leases (from ``jobs`` table).
 
     A lease is active when ``leased_by`` is set and ``lease_expires_at``
-    is in the future. The payload is ordered by expiry so the most-at-
-    risk leases are first.
+    is in the future. Payload ordered by expiry so the most-at-risk
+    leases are first.
     """
     db_path = repo_root / ".pipeline" / "v2.db"
     if not db_path.exists():
         return {"db_path": str(db_path), "active": [], "count": 0, "exists": False}
 
-    now_ms = now_ms if now_ms is not None else int(time.time() * 1000)
+    now_seconds = now_seconds if now_seconds is not None else int(time.time())
     rows = _query_sqlite_rows(
         db_path,
         """
@@ -816,23 +821,23 @@ def build_pipeline_leases(repo_root: Path, *, now_ms: int | None = None) -> dict
           AND lease_expires_at > ?
         ORDER BY lease_expires_at ASC
         """,
-        (now_ms,),
+        (now_seconds,),
     )
     for row in rows:
         exp = row.get("lease_expires_at")
         if isinstance(exp, (int, float)):
-            row["seconds_to_expiry"] = max(0, int((int(exp) - now_ms) / 1000))
+            row["seconds_to_expiry"] = max(0, int(exp) - now_seconds)
     return {
         "db_path": str(db_path),
         "exists": True,
         "count": len(rows),
         "active": rows,
-        "queried_at_ms": now_ms,
+        "queried_at_seconds": now_seconds,
     }
 
 
 def build_module_lease(
-    repo_root: Path, module_key: str, *, now_ms: int | None = None
+    repo_root: Path, module_key: str, *, now_seconds: int | None = None
 ) -> dict[str, Any]:
     """Lease state for one module. Returns ``{held: False}`` when no
     active lease exists (vs 404 semantics, which would be ambiguous
@@ -845,7 +850,7 @@ def build_module_lease(
             "reason": "missing_db",
             "db_path": str(db_path),
         }
-    now_ms = now_ms if now_ms is not None else int(time.time() * 1000)
+    now_seconds = now_seconds if now_seconds is not None else int(time.time())
     rows = _query_sqlite_rows(
         db_path,
         """
@@ -859,14 +864,14 @@ def build_module_lease(
         ORDER BY lease_expires_at DESC
         LIMIT 1
         """,
-        (module_key, now_ms),
+        (module_key, now_seconds),
     )
     if not rows:
         return {"module_key": module_key, "held": False}
     row = rows[0]
     exp = row.get("lease_expires_at")
     if isinstance(exp, (int, float)):
-        row["seconds_to_expiry"] = max(0, int((int(exp) - now_ms) / 1000))
+        row["seconds_to_expiry"] = max(0, int(exp) - now_seconds)
     return {"module_key": module_key, "held": True, "lease": row}
 
 
@@ -876,14 +881,14 @@ def build_module_lease(
 def build_pipeline_events(
     repo_root: Path,
     module_key: str | None,
-    since_ms: int | None,
+    since_seconds: int | None,
     limit: int = 200,
 ) -> dict[str, Any]:
     """Timeline view of ``.pipeline/v2.db`` events.
 
-    Filter by ``module_key`` (optional) and ``since_ms`` (optional,
-    inclusive). Newest-first, capped by ``limit`` (default 200, max
-    2000 to keep responses bounded).
+    Filter by ``module_key`` (optional) and ``since_seconds`` (optional,
+    inclusive Unix-epoch seconds to match the control-plane's time
+    unit). Newest-first, capped by ``limit`` (default 200, max 2000).
     """
     db_path = repo_root / ".pipeline" / "v2.db"
     if not db_path.exists():
@@ -894,9 +899,9 @@ def build_pipeline_events(
     if module_key:
         clauses.append("module_key = ?")
         params.append(module_key)
-    if since_ms is not None:
+    if since_seconds is not None:
         clauses.append("at >= ?")
-        params.append(int(since_ms))
+        params.append(int(since_seconds))
     where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
     rows = _query_sqlite_rows(
         db_path,
@@ -917,7 +922,7 @@ def build_pipeline_events(
         "db_path": str(db_path),
         "exists": True,
         "module_key": module_key,
-        "since_ms": since_ms,
+        "since_seconds": since_seconds,
         "limit": capped,
         "count": len(rows),
         "events": rows,
@@ -935,24 +940,26 @@ def build_pipeline_stuck(
     repo_root: Path,
     *,
     threshold_seconds: int = _DEFAULT_STUCK_THRESHOLD_SECONDS,
-    now_ms: int | None = None,
+    now_seconds: int | None = None,
 ) -> dict[str, Any]:
     """Dead-letter view — jobs stuck at a phase longer than ``threshold_seconds``.
 
     Two signals are surfaced:
 
     - ``stuck_leased``: jobs whose lease has expired OR whose
-      ``leased_at`` is older than the threshold. Implies a crashed
-      worker or a hung builder.
-    - ``stuck_in_state``: jobs in an in-flight queue_state with no
-      recent event (``MAX(events.at)`` older than threshold).
+      ``leased_at`` is older than the threshold.
+    - ``stuck_in_state``: jobs in an in-flight ``queue_state`` with no
+      recent event *for the current attempt*. Events are correlated
+      to the job's current ``lease_id`` — a recent event from an
+      earlier lease for the same module must not mask a hung current
+      lease.
     """
     db_path = repo_root / ".pipeline" / "v2.db"
     if not db_path.exists():
         return {"db_path": str(db_path), "exists": False, "stuck_leased": [], "stuck_in_state": []}
 
-    now_ms = now_ms if now_ms is not None else int(time.time() * 1000)
-    threshold_ms = threshold_seconds * 1000
+    now_seconds = now_seconds if now_seconds is not None else int(time.time())
+    cutoff = now_seconds - threshold_seconds
 
     stuck_leased = _query_sqlite_rows(
         db_path,
@@ -968,16 +975,21 @@ def build_pipeline_stuck(
         ORDER BY leased_at ASC
         LIMIT 500
         """,
-        (now_ms, now_ms - threshold_ms),
+        (now_seconds, cutoff),
     )
 
+    # Correlate events by lease_id (and fall back to module_key for
+    # jobs without a lease_id) so a fresh event from a previous
+    # attempt can't mask a hung current attempt.
     stuck_in_state = _query_sqlite_rows(
         db_path,
         f"""
         SELECT j.module_key, j.phase, j.queue_state, j.leased_by,
-               j.leased_at, (
+               j.lease_id, j.leased_at,
+               (
                    SELECT MAX(at) FROM events e
-                   WHERE e.module_key = j.module_key
+                   WHERE (j.lease_id IS NOT NULL AND e.lease_id = j.lease_id)
+                      OR (j.lease_id IS NULL AND e.module_key = j.module_key)
                ) AS last_event_at
         FROM jobs j
         WHERE j.queue_state IN ({','.join('?' for _ in _STUCK_IN_FLIGHT_STATES)})
@@ -986,17 +998,19 @@ def build_pipeline_stuck(
         """,
         tuple(_STUCK_IN_FLIGHT_STATES),
     )
-    # Keep only those whose last event is older than the threshold.
+    # Keep only those whose last event for the current attempt is
+    # older than the threshold (NULL/0 counts as stuck — a running
+    # job that has emitted zero events is stuck by definition).
     stuck_in_state = [
         row for row in stuck_in_state
-        if (row.get("last_event_at") or 0) < (now_ms - threshold_ms)
+        if (row.get("last_event_at") or 0) < cutoff
     ]
 
     return {
         "db_path": str(db_path),
         "exists": True,
         "threshold_seconds": threshold_seconds,
-        "queried_at_ms": now_ms,
+        "queried_at_seconds": now_seconds,
         "stuck_leased_count": len(stuck_leased),
         "stuck_leased": stuck_leased,
         "stuck_in_state_count": len(stuck_in_state),
@@ -1070,6 +1084,12 @@ def build_module_reviews(
     if not path.is_file():
         return None
     try:
+        stat = path.stat()
+        on_disk_size = stat.st_size
+        mtime = stat.st_mtime
+    except OSError:
+        on_disk_size, mtime = 0, 0.0
+    try:
         raw = path.read_bytes()
     except OSError:
         return None
@@ -1081,15 +1101,13 @@ def build_module_reviews(
         body = raw.decode("utf-8", errors="replace")
     except UnicodeDecodeError:
         body = raw.decode("latin-1", errors="replace")
-    try:
-        mtime = path.stat().st_mtime
-    except OSError:
-        mtime = 0.0
     return {
         "module_key": module_key,
         "path": str(path),
-        "size": len(raw) if not truncated else max_bytes,
+        "size": on_disk_size,
+        "body_size": len(body.encode("utf-8")),
         "truncated": truncated,
+        "max_bytes": max_bytes if truncated else None,
         "mtime": mtime,
         "body": body,
     }
@@ -1098,19 +1116,43 @@ def build_module_reviews(
 # ---- bridge messages ----
 
 
+def _resolve_bridge_db_path(repo_root: Path) -> Path:
+    """Locate ``messages.db`` the same way the bridge CLI does.
+
+    Precedence: explicit ``$AB_DB_PATH`` → ``.bridge/messages.db``
+    (scripts/ab sets this as the repo convention) → the upstream
+    Python default at ``.mcp/servers/message-broker/messages.db``.
+    First existing file wins. If none exist, the first candidate is
+    returned so the caller can surface ``exists=False``.
+    """
+    explicit = os.environ.get("AB_DB_PATH")
+    if explicit:
+        p = Path(explicit)
+        if p.exists():
+            return p
+    candidates = [
+        repo_root / ".bridge" / "messages.db",
+        repo_root / ".mcp" / "servers" / "message-broker" / "messages.db",
+    ]
+    for p in candidates:
+        if p.exists():
+            return p
+    # None exist. Surface the conventional path for the error message.
+    return candidates[0]
+
+
 def build_bridge_messages(
     repo_root: Path,
     since: str | None = None,
     limit: int = 100,
 ) -> dict[str, Any]:
-    """Recent agent-bridge messages from ``.bridge/messages.db``.
+    """Recent agent-bridge messages from the bridge DB.
 
     Filter ``since`` is an ISO-8601 timestamp (string comparison is
-    safe here because ``timestamp`` is stored as ISO-8601 UTC by the
-    bridge). ``limit`` caps at 500 rows to keep the payload bounded
-    for agents that just want a recent window.
+    safe — the bridge stores ISO-8601 UTC). ``limit`` caps at 500 rows
+    so a single call can't overwhelm a polling agent.
     """
-    db_path = repo_root / ".bridge" / "messages.db"
+    db_path = _resolve_bridge_db_path(repo_root)
     if not db_path.exists():
         return {"db_path": str(db_path), "exists": False, "count": 0, "messages": []}
     capped = max(1, min(int(limit), 500))
@@ -1311,18 +1353,90 @@ def build_module_diagnostics(
         quality = build_quality_scores(repo_root)
     except Exception:  # noqa: BLE001
         quality = {"modules": []}
-    # Match by suffix of module_key against the "module" label (the
-    # audit file uses human-readable names). Best-effort.
-    last_segment = module_key.split("/")[-1].lower()
-    for entry in quality.get("modules", []):
-        name = str(entry.get("module", "")).lower()
-        if last_segment in name or name.endswith(last_segment):
-            sev = entry.get("severity")
-            if sev in ("critical", "poor"):
-                tags.append(f"rubric_{sev}")
-            break
+    # Map module path (e.g. "k8s/cka/part2-workloads-scheduling/
+    # module-2.8-scheduler-lifecycle-theory") to audit labels like
+    # "CKA 2.8: Scheduler Lifecycle Theory" using (track, number)
+    # extracted from the path. Substring matching alone fails because
+    # the audit uses human-readable names, not slugs.
+    sev = _rubric_severity_for_module(module_key, quality.get("modules", []))
+    if sev in ("critical", "poor"):
+        tags.append(f"rubric_{sev}")
 
     return tags
+
+
+_MODULE_NUMBER_RE = re.compile(r"module-([0-9]+(?:\.[0-9]+)*)")
+
+# Track slugs → strings likely to appear (case-insensitive) in the audit
+# doc's track column. Kept narrow so we don't false-match (e.g. "cka"
+# matching "kcna" substrings).
+_TRACK_ALIASES: dict[str, tuple[str, ...]] = {
+    "cka": ("cka",),
+    "ckad": ("ckad",),
+    "cks": ("cks",),
+    "kcna": ("kcna",),
+    "kcsa": ("kcsa",),
+    "prerequisites": ("prerequisites", "k8s basics", "cloud native 101", "modern devops", "zero to terminal"),
+    "linux": ("linux",),
+    "cloud": ("cloud",),
+    "platform": ("platform", "toolkit"),
+    "on-prem": ("on-prem", "on-premises"),
+    "ai-ml-engineering": ("ai/ml", "ai-ml", "ai/ml engineering"),
+}
+
+
+def _rubric_severity_for_module(
+    module_key: str, audit_modules: list[dict[str, Any]]
+) -> str | None:
+    """Best-effort match from a module path to an audit-doc entry.
+
+    We extract (track, number) from the path — e.g. ``k8s/cka/part2/
+    module-2.8-scheduler-lifecycle-theory`` → ``("cka", "2.8")`` — and
+    look for an audit row whose ``track`` matches one of the aliases
+    and whose ``module`` label contains the number token. Falls back
+    to substring matching on the last segment as a last resort.
+    """
+    segments = module_key.split("/")
+    last = segments[-1]
+    match = _MODULE_NUMBER_RE.search(last)
+    number = match.group(1) if match else None
+    # Best guess at track = first segment that has an alias, or the
+    # second-to-last when the path has a ``part<X>`` container.
+    track_slug = None
+    for seg in segments:
+        key = seg.lower()
+        if key in _TRACK_ALIASES:
+            track_slug = key
+            break
+    aliases = _TRACK_ALIASES.get(track_slug, ()) if track_slug else ()
+
+    def _row_track_matches(row_track: str) -> bool:
+        rt = row_track.lower()
+        return any(alias in rt for alias in aliases) if aliases else True
+
+    if number:
+        # Accept "2.8:" or " 2.8 " or end-of-string; reject partial
+        # matches like "12.8" when looking for "2.8".
+        needle_patterns = (
+            f" {number}:",
+            f" {number} ",
+            f" {number}.",
+        )
+        for entry in audit_modules:
+            label = str(entry.get("module", ""))
+            # Quick check: number appears flanked by space/colon.
+            if not any(p in label for p in needle_patterns) and not label.endswith(f" {number}"):
+                continue
+            if _row_track_matches(str(entry.get("track", ""))):
+                return entry.get("severity")
+
+    # Last-resort substring on the raw slug.
+    slug = last.lower().replace("module-", "").replace("-", " ")
+    for entry in audit_modules:
+        label = str(entry.get("module", "")).lower()
+        if slug and slug in label:
+            return entry.get("severity")
+    return None
 
 
 def build_issue_watch_state(repo_root: Path, issue_number: int) -> dict[str, Any] | None:
@@ -2879,7 +2993,11 @@ def build_api_schema() -> dict[str, Any]:
             {
                 "path": "/api/pipeline/v2/events",
                 "desc": "Pipeline v2 event timeline",
-                "query": ["module=...", "since_ms=...", "limit=... (max 2000)"],
+                "query": [
+                    "module=...",
+                    "since_seconds=... (Unix epoch seconds; matches v2.db unit)",
+                    "limit=... (max 2000)",
+                ],
             },
             {
                 "path": "/api/pipeline/v2/stuck",
@@ -2988,14 +3106,14 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
             if module_key is None:
                 return 400, {"error": "invalid_module_key"}, "application/json; charset=utf-8"
         try:
-            since_ms = int(query.get("since_ms", ["0"])[0]) or None
+            since_seconds = int(query.get("since_seconds", ["0"])[0]) or None
         except (TypeError, ValueError):
-            since_ms = None
+            since_seconds = None
         try:
             limit = int(query.get("limit", ["200"])[0])
         except (TypeError, ValueError):
             limit = 200
-        return 200, build_pipeline_events(repo_root, module_key, since_ms, limit), "application/json; charset=utf-8"
+        return 200, build_pipeline_events(repo_root, module_key, since_seconds, limit), "application/json; charset=utf-8"
     if path == "/api/reviews":
         mk = query.get("module", [None])[0]
         if mk:
