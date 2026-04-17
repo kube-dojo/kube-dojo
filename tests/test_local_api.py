@@ -256,6 +256,13 @@ def test_route_request_serves_summary_and_module_endpoints(tmp_path: Path) -> No
     status_code, services, _ = local_api.route_request(repo_root, "/api/runtime/services")
     assert status_code == 200
     assert services["stopped"] >= 1
+    # New shape: total/running/stopped/stale always present; per-service fields include uptime + stale flag.
+    assert services["total"] == services["running"] + services["stopped"] + services["stale"]
+    api_entry = next(s for s in services["services"] if s["name"] == "api")
+    assert api_entry["status"] == "stopped"
+    assert api_entry["uptime_seconds"] is None
+    assert api_entry["stale_pid_file"] is False
+    assert api_entry["known"] is True
 
     status_code, module_state, _ = local_api.route_request(
         repo_root, f"/api/module/{module_key}/state"
@@ -271,6 +278,36 @@ def test_route_request_serves_summary_and_module_endpoints(tmp_path: Path) -> No
     assert status_code == 200
     assert latest["v2"]["latest_job"]["phase"] == "review"
     assert latest["translation_v2"]["latest_event"]["type"] == "translation_verified"
+
+
+def test_runtime_services_detects_stale_pid_and_discovers_unknown_workers(tmp_path: Path) -> None:
+    repo_root = tmp_path
+    pids_dir = repo_root / ".pids"
+    pids_dir.mkdir()
+
+    # Stale known service: pid file points at a PID that's definitely not alive.
+    (pids_dir / "api.pid").write_text("999999\n", encoding="utf-8")
+    # Running known service: use our own PID so the existence probe succeeds.
+    import os as _os
+    (pids_dir / "dev.pid").write_text(f"{_os.getpid()}\n", encoding="utf-8")
+    # Discovered (not in RUNTIME_SERVICES) stale worker.
+    (pids_dir / "adhoc-worker.pid").write_text("999998\n", encoding="utf-8")
+
+    payload = local_api.build_runtime_services_status(repo_root)
+
+    by_name = {s["name"]: s for s in payload["services"]}
+    assert by_name["api"]["status"] == "stale"
+    assert by_name["api"]["stale_pid_file"] is True
+    assert by_name["dev"]["status"] == "running"
+    assert by_name["dev"]["uptime_seconds"] is not None
+    assert by_name["dev"]["uptime_seconds"] >= 0
+    assert "adhoc-worker" in by_name
+    assert by_name["adhoc-worker"]["known"] is False
+    assert by_name["adhoc-worker"]["status"] == "stale"
+
+    assert payload["stale"] >= 2
+    assert payload["running"] >= 1
+    assert payload["total"] == payload["running"] + payload["stopped"] + payload["stale"]
 
 
 def test_route_request_supports_translation_section_and_missing_db(tmp_path: Path) -> None:

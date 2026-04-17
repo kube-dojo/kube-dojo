@@ -3,9 +3,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sqlite3
 import subprocess
 import sys
+import time
 from dataclasses import asdict, is_dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -51,7 +53,12 @@ RUNTIME_SERVICES = (
     {"name": "dev", "pid_file": ".pids/dev.pid", "port": 4333, "label": "Astro Dev Server"},
     {"name": "api", "pid_file": ".pids/api.pid", "port": 8768, "label": "Deterministic Local API"},
     {"name": "feedback", "pid_file": ".pids/feedback.pid", "port": None, "label": "GitHub Issue Watcher"},
+    {"name": "pipeline", "pid_file": ".pids/pipeline.pid", "port": None, "label": "Pipeline Supervisor"},
+    {"name": "v2-write-worker", "pid_file": ".pids/v2-write-worker.pid", "port": None, "label": "V2 Write Worker"},
+    {"name": "v2-review-worker", "pid_file": ".pids/v2-review-worker.pid", "port": None, "label": "V2 Review Worker"},
+    {"name": "v2-patch-worker", "pid_file": ".pids/v2-patch-worker.pid", "port": None, "label": "V2 Patch Worker"},
 )
+RUNTIME_SERVICE_ORDER = tuple(svc["name"] for svc in RUNTIME_SERVICES)
 
 
 def _json_default(value: Any) -> Any:
@@ -292,41 +299,127 @@ def build_issue_watch_state(repo_root: Path, issue_number: int) -> dict[str, Any
     }
 
 
+def _inspect_pid_file(pid_path: Path) -> dict[str, Any]:
+    """Read a pid file and probe the process. Returns pid, status, uptime, stale flag."""
+    pid: int | None = None
+    status = "stopped"
+    uptime_seconds: float | None = None
+    stale_pid_file = False
+    pid_file_mtime: float | None = None
+
+    if not pid_path.exists():
+        return {
+            "pid": None,
+            "status": "stopped",
+            "uptime_seconds": None,
+            "stale_pid_file": False,
+            "pid_file_mtime": None,
+        }
+
+    try:
+        stat_result = pid_path.stat()
+        pid_file_mtime = stat_result.st_mtime
+    except OSError:
+        pid_file_mtime = None
+
+    try:
+        pid = int(pid_path.read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        pid = None
+
+    if pid is not None:
+        try:
+            os.kill(pid, 0)  # Signal 0 probes existence without delivering a signal.
+            status = "running"
+            if pid_file_mtime is not None:
+                uptime_seconds = max(0.0, time.time() - pid_file_mtime)
+        except OSError:
+            status = "stale"
+            stale_pid_file = True
+    else:
+        status = "stale"
+        stale_pid_file = True
+
+    return {
+        "pid": pid,
+        "status": status,
+        "uptime_seconds": uptime_seconds,
+        "stale_pid_file": stale_pid_file,
+        "pid_file_mtime": pid_file_mtime,
+    }
+
+
+def _humanize_service_name(name: str) -> str:
+    return name.replace("-", " ").replace("_", " ").title()
+
+
 def build_runtime_services_status(repo_root: Path) -> dict[str, Any]:
-    services = []
+    services: list[dict[str, Any]] = []
     running = 0
     stopped = 0
+    stale = 0
+
+    seen_names: set[str] = set()
     for svc in RUNTIME_SERVICES:
         pid_path = repo_root / svc["pid_file"]
-        pid = None
-        is_running = False
-        if pid_path.exists():
-            try:
-                pid = int(pid_path.read_text(encoding="utf-8").strip())
-            except ValueError:
-                pid = None
-            if pid is not None:
-                try:
-                    # Signal 0 checks existence without sending a real signal.
-                    import os
-
-                    os.kill(pid, 0)
-                    is_running = True
-                except OSError:
-                    is_running = False
-        running += int(is_running)
-        stopped += int(not is_running)
+        probe = _inspect_pid_file(pid_path)
+        seen_names.add(svc["name"])
+        if probe["status"] == "running":
+            running += 1
+        elif probe["status"] == "stale":
+            stale += 1
+        else:
+            stopped += 1
         services.append(
             {
                 "name": svc["name"],
                 "label": svc["label"],
-                "status": "running" if is_running else "stopped",
-                "pid": pid,
+                "status": probe["status"],
+                "pid": probe["pid"],
                 "port": svc["port"],
                 "pid_file": str(pid_path),
+                "uptime_seconds": probe["uptime_seconds"],
+                "stale_pid_file": probe["stale_pid_file"],
+                "known": True,
             }
         )
-    return {"running": running, "stopped": stopped, "services": services}
+
+    # Auto-discover pid files not covered by the curated list so operators can
+    # see workers spawned by scripts that haven't been registered yet.
+    pids_dir = repo_root / ".pids"
+    if pids_dir.is_dir():
+        for pid_path in sorted(pids_dir.glob("*.pid")):
+            name = pid_path.stem
+            if name in seen_names:
+                continue
+            probe = _inspect_pid_file(pid_path)
+            if probe["status"] == "running":
+                running += 1
+            elif probe["status"] == "stale":
+                stale += 1
+            else:
+                stopped += 1
+            services.append(
+                {
+                    "name": name,
+                    "label": _humanize_service_name(name),
+                    "status": probe["status"],
+                    "pid": probe["pid"],
+                    "port": None,
+                    "pid_file": str(pid_path),
+                    "uptime_seconds": probe["uptime_seconds"],
+                    "stale_pid_file": probe["stale_pid_file"],
+                    "known": False,
+                }
+            )
+
+    return {
+        "running": running,
+        "stopped": stopped,
+        "stale": stale,
+        "total": running + stopped + stale,
+        "services": services,
+    }
 
 
 def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
@@ -495,9 +588,16 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
     .svc-dot {{ width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }}
     .svc-dot.running {{ background: var(--green); box-shadow: 0 0 8px rgba(74,222,128,0.4); }}
     .svc-dot.stopped {{ background: var(--text-dim); }}
-    .svc-info {{ min-width: 0; }}
-    .svc-name {{ font-size: 13px; font-weight: 500; }}
+    .svc-dot.stale {{ background: var(--red); box-shadow: 0 0 8px rgba(248,113,113,0.45); }}
+    .svc-info {{ min-width: 0; flex: 1; }}
+    .svc-name {{ font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px; }}
     .svc-detail {{ font-size: 11px; color: var(--text-dim); }}
+    .svc-chip {{
+      display: inline-block; padding: 1px 6px; border-radius: 4px;
+      font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+    }}
+    .svc-chip.stale {{ background: var(--red-muted); color: var(--red); }}
+    .svc-chip.discovered {{ background: var(--accent-muted); color: var(--accent); }}
 
     .queue-cols {{ display: grid; grid-template-columns: 1fr 1fr; gap: 0; }}
     .queue-col {{ border-right: 1px solid var(--border); }}
@@ -906,12 +1006,21 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
           cls: activeMissing === 0 ? 'good' : 'warn',
           sub: `${{missing.deferred?.missing_min ?? 0}}&ndash;${{missing.deferred?.missing_max ?? 0}} deferred`,
         }},
-        {{
-          label: 'Services',
-          value: `${{svc.running ?? 0}}/${{(svc.running ?? 0) + (svc.stopped ?? 0)}}`,
-          cls: (svc.stopped ?? 0) === 0 ? 'good' : 'warn',
-          sub: (svc.stopped ?? 0) === 0 ? 'All running' : `${{svc.stopped}} stopped`,
-        }},
+        (() => {{
+          const run = svc.running ?? 0;
+          const stop = svc.stopped ?? 0;
+          const st = svc.stale ?? 0;
+          const total = svc.total ?? (run + stop + st);
+          const bits = [];
+          if (stop) bits.push(`${{stop}} stopped`);
+          if (st) bits.push(`${{st}} stale`);
+          return {{
+            label: 'Services',
+            value: `${{run}}/${{total}}`,
+            cls: st ? 'bad' : (stop ? 'warn' : 'good'),
+            sub: bits.length ? bits.join(' · ') : 'All running',
+          }};
+        }})(),
         {{
           label: 'Worktree',
           value: worktree.dirty ? `${{worktree.counts?.total ?? 0}} files` : 'Clean',
@@ -930,27 +1039,62 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
       `).join('');
     }}
 
+    function formatUptime(seconds) {{
+      if (seconds == null || !isFinite(seconds) || seconds < 0) return '';
+      const s = Math.floor(seconds);
+      if (s < 60) return `${{s}}s`;
+      const m = Math.floor(s / 60);
+      if (m < 60) return `${{m}}m`;
+      const h = Math.floor(m / 60);
+      if (h < 48) return `${{h}}h ${{m % 60}}m`;
+      const d = Math.floor(h / 24);
+      return `${{d}}d ${{h % 24}}h`;
+    }}
+
     function renderServices(data) {{
       if (!data.services || data.services.length === 0) {{
         $('#services').innerHTML = '<div class="empty-state">No services configured</div>';
         return;
       }}
+      const total = data.total ?? (data.running + data.stopped + (data.stale || 0));
       const badge = $('#svc-badge');
-      badge.textContent = `${{data.running}} / ${{data.running + data.stopped}} running`;
-      badge.style.background = data.stopped === 0 ? 'var(--green-muted)' : 'var(--amber-muted)';
-      badge.style.color = data.stopped === 0 ? 'var(--green)' : 'var(--amber)';
+      const badgeBits = [`${{data.running}} / ${{total}} running`];
+      if (data.stale) badgeBits.push(`${{data.stale}} stale`);
+      badge.textContent = badgeBits.join(' · ');
+      if (data.stale) {{
+        badge.style.background = 'var(--red-muted)';
+        badge.style.color = 'var(--red)';
+      }} else if (data.stopped === 0) {{
+        badge.style.background = 'var(--green-muted)';
+        badge.style.color = 'var(--green)';
+      }} else {{
+        badge.style.background = 'var(--amber-muted)';
+        badge.style.color = 'var(--amber)';
+      }}
 
-      $('#services').innerHTML = data.services.map(s => `
+      $('#services').innerHTML = data.services.map(s => {{
+        const chips = [];
+        if (s.status === 'stale') chips.push('<span class="svc-chip stale">Stale PID</span>');
+        if (s.known === false) chips.push('<span class="svc-chip discovered">Discovered</span>');
+        let detail;
+        if (s.status === 'running') {{
+          const up = formatUptime(s.uptime_seconds);
+          detail = `PID ${{s.pid}}${{up ? ` &middot; up ${{up}}` : ''}}`;
+        }} else if (s.status === 'stale') {{
+          detail = s.pid != null ? `PID ${{s.pid}} not responding` : 'Unreadable PID file';
+        }} else {{
+          detail = 'Stopped';
+        }}
+        if (s.port) detail += ` &middot; :${{s.port}}`;
+        return `
         <div class="svc-item">
           <span class="svc-dot ${{s.status}}"></span>
           <div class="svc-info">
-            <div class="svc-name">${{esc(s.label)}}</div>
-            <div class="svc-detail mono">
-              ${{s.status === 'running' ? `PID ${{s.pid}}` : 'Stopped'}}${{s.port ? ` &middot; :${{s.port}}` : ''}}
-            </div>
+            <div class="svc-name">${{esc(s.label)}}${{chips.join('')}}</div>
+            <div class="svc-detail mono">${{detail}}</div>
           </div>
-        </div>
-      `).join('');
+        </div>`;
+      }}).join('');
     }}
 
     const TRACK_LABEL = {{
