@@ -73,6 +73,7 @@ def _init_v2_db(path: Path, *, module_key: str) -> None:
               module_key TEXT NOT NULL,
               phase TEXT NOT NULL,
               model TEXT,
+              priority INTEGER,
               queue_state TEXT NOT NULL,
               leased_by TEXT,
               lease_id TEXT,
@@ -87,6 +88,7 @@ def _init_v2_db(path: Path, *, module_key: str) -> None:
               id INTEGER PRIMARY KEY,
               module_key TEXT NOT NULL,
               type TEXT NOT NULL,
+              lease_id TEXT,
               payload_json TEXT DEFAULT '{}',
               at INTEGER
             );
@@ -971,6 +973,272 @@ def test_background_snapshot_reports_degraded_on_builder_error() -> None:
     assert data is None
     assert meta["freshness_state"] == "degraded"
     assert "RuntimeError: boom" in (meta["refresh_error"] or "")
+
+
+def test_pipeline_leases_lists_active_only(tmp_path: Path) -> None:
+    module_key, _ = _setup_repo(tmp_path)
+    now_ms = 1_000_000_000_000
+
+    conn = sqlite3.connect(tmp_path / ".pipeline/v2.db")
+    # Active lease (expiry in future)
+    conn.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state, leased_by, lease_id, "
+        "leased_at, lease_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (module_key, "write", "leased", "codex", "lease-a", now_ms - 1000, now_ms + 60_000),
+    )
+    # Expired lease (must be filtered out)
+    conn.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state, leased_by, lease_id, "
+        "leased_at, lease_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("other/module-stale", "write", "leased", "claude", "lease-b",
+         now_ms - 10_000_000, now_ms - 1_000),
+    )
+    conn.commit()
+    conn.close()
+
+    result = local_api.build_pipeline_leases(tmp_path, now_ms=now_ms)
+    assert result["exists"] is True
+    assert result["count"] == 1
+    assert result["active"][0]["lease_id"] == "lease-a"
+    assert result["active"][0]["seconds_to_expiry"] == 60
+
+
+def test_pipeline_leases_returns_empty_when_db_missing(tmp_path: Path) -> None:
+    result = local_api.build_pipeline_leases(tmp_path)
+    assert result["exists"] is False
+    assert result["count"] == 0
+    assert result["active"] == []
+
+
+def test_module_lease_reports_held_vs_free(tmp_path: Path) -> None:
+    module_key, _ = _setup_repo(tmp_path)
+    now_ms = 1_000_000_000_000
+    # Initially no lease -> held=False.
+    r = local_api.build_module_lease(tmp_path, module_key, now_ms=now_ms)
+    assert r["held"] is False
+
+    conn = sqlite3.connect(tmp_path / ".pipeline/v2.db")
+    conn.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state, leased_by, lease_id, "
+        "leased_at, lease_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (module_key, "review", "leased", "gemini", "lease-x",
+         now_ms - 10, now_ms + 120_000),
+    )
+    conn.commit()
+    conn.close()
+    r = local_api.build_module_lease(tmp_path, module_key, now_ms=now_ms)
+    assert r["held"] is True
+    assert r["lease"]["leased_by"] == "gemini"
+    assert r["lease"]["seconds_to_expiry"] == 120
+
+
+def test_pipeline_events_filters_and_limits(tmp_path: Path) -> None:
+    module_key, _ = _setup_repo(tmp_path)
+    conn = sqlite3.connect(tmp_path / ".pipeline/v2.db")
+    for i in range(5):
+        conn.execute(
+            "INSERT INTO events (module_key, type, payload_json, at) VALUES (?, ?, ?, ?)",
+            (module_key, f"type_{i}", f'{{"i":{i}}}', 1000 + i),
+        )
+    conn.execute(
+        "INSERT INTO events (module_key, type, payload_json, at) VALUES (?, ?, ?, ?)",
+        ("other/module", "x", "{}", 9999),
+    )
+    conn.commit()
+    conn.close()
+
+    scoped = local_api.build_pipeline_events(tmp_path, module_key=module_key, since_ms=None, limit=3)
+    assert scoped["count"] == 3
+    assert all(e["module_key"] == module_key for e in scoped["events"])
+    # Newest-first -> ids descending
+    ids = [e["id"] for e in scoped["events"]]
+    assert ids == sorted(ids, reverse=True)
+    # payload_json should be decoded
+    assert isinstance(scoped["events"][0]["payload_json"], dict)
+
+    windowed = local_api.build_pipeline_events(tmp_path, module_key=module_key, since_ms=1002, limit=10)
+    ats = [e["at"] for e in windowed["events"]]
+    assert all(a >= 1002 for a in ats)
+
+
+def test_pipeline_stuck_catches_expired_and_silent_jobs(tmp_path: Path) -> None:
+    module_key, _ = _setup_repo(tmp_path)
+    now_ms = 10_000_000
+    conn = sqlite3.connect(tmp_path / ".pipeline/v2.db")
+    # Expired lease -> stuck_leased
+    conn.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state, leased_by, lease_id, "
+        "leased_at, lease_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("stuck/one", "write", "leased", "codex", "lex",
+         now_ms - 1_000_000, now_ms - 1000),
+    )
+    # In-flight with no recent event -> stuck_in_state
+    conn.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state, leased_by, leased_at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        ("stuck/silent", "review", "running", "claude", now_ms - 10_000_000),
+    )
+    conn.execute(
+        "INSERT INTO events (module_key, type, payload_json, at) VALUES (?, ?, ?, ?)",
+        ("stuck/silent", "attempt_started", "{}", now_ms - 10_000_000),
+    )
+    # Fresh in-flight -> not stuck (has recent event)
+    conn.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state, leased_by, leased_at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        ("fresh/one", "review", "running", "claude", now_ms),
+    )
+    conn.execute(
+        "INSERT INTO events (module_key, type, payload_json, at) VALUES (?, ?, ?, ?)",
+        ("fresh/one", "attempt_started", "{}", now_ms - 10),
+    )
+    conn.commit()
+    conn.close()
+
+    r = local_api.build_pipeline_stuck(tmp_path, threshold_seconds=60, now_ms=now_ms)
+    stuck_leased_keys = {j["module_key"] for j in r["stuck_leased"]}
+    stuck_in_state_keys = {j["module_key"] for j in r["stuck_in_state"]}
+    assert "stuck/one" in stuck_leased_keys
+    assert "stuck/silent" in stuck_in_state_keys
+    assert "fresh/one" not in stuck_in_state_keys
+
+
+def test_reviews_index_and_single(tmp_path: Path) -> None:
+    reviews_dir = tmp_path / ".pipeline" / "reviews"
+    reviews_dir.mkdir(parents=True)
+    (reviews_dir / "cka__module-2.8-scheduler.md").write_text(
+        "# Review\n\n## 2026-01-01 — WRITE\n\n**Writer**: gemini\n",
+        encoding="utf-8",
+    )
+    (reviews_dir / "ztt__module-0.1.md").write_text("short", encoding="utf-8")
+
+    index = local_api.build_reviews_index(tmp_path)
+    assert index["exists"] is True
+    assert index["count"] == 2
+    keys = {r["module_key"] for r in index["reviews"]}
+    assert "cka/module-2.8-scheduler" in keys
+    assert "ztt/module-0.1" in keys
+
+    single = local_api.build_module_reviews(tmp_path, "cka/module-2.8-scheduler")
+    assert single is not None
+    assert "**Writer**: gemini" in single["body"]
+    assert single["truncated"] is False
+
+    # Truncation path.
+    big_content = "x" * 50_000
+    (reviews_dir / "big__one.md").write_text(big_content, encoding="utf-8")
+    trunc = local_api.build_module_reviews(tmp_path, "big/one", max_bytes=1000)
+    assert trunc is not None
+    assert trunc["truncated"] is True
+    assert trunc["size"] == 1000
+
+
+def test_bridge_messages_filters_and_previews(tmp_path: Path) -> None:
+    db_path = tmp_path / ".bridge" / "messages.db"
+    db_path.parent.mkdir(parents=True)
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        """
+        CREATE TABLE messages (
+          id INTEGER PRIMARY KEY,
+          task_id TEXT, from_llm TEXT, to_llm TEXT, message_type TEXT,
+          content TEXT, data TEXT, timestamp TEXT, acknowledged INTEGER,
+          status TEXT
+        )
+        """
+    )
+    long_content = "y" * 800
+    for i, ts in enumerate(["2026-01-01T00:00:00Z", "2026-02-01T00:00:00Z", "2026-03-01T00:00:00Z"]):
+        conn.execute(
+            "INSERT INTO messages (task_id, from_llm, to_llm, message_type, content, timestamp, "
+            "acknowledged, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (f"t{i}", "claude", "codex", "review", long_content, ts, 0, "sent"),
+        )
+    conn.commit()
+    conn.close()
+
+    all_ = local_api.build_bridge_messages(tmp_path, since=None, limit=10)
+    assert all_["count"] == 3
+    # Long content trimmed to preview.
+    first = all_["messages"][0]
+    assert "content" not in first  # replaced by preview
+    assert first["content_full_length"] == 800
+    assert first["content_preview"].endswith("(truncated)")
+
+    since = local_api.build_bridge_messages(tmp_path, since="2026-02-01T00:00:00Z", limit=10)
+    assert since["count"] == 2
+
+
+def test_quality_scores_parses_audit_markdown(tmp_path: Path) -> None:
+    audit = tmp_path / "docs" / "quality-audit-results.md"
+    audit.parent.mkdir()
+    audit.write_text(
+        """# Audit\n\n## All Scored Modules\n\n### Critical & High Priority\n\n"""
+        """| Module | Track | Lines | Score | Action | Issue |\n"""
+        """|---|---|---|---|---|---|\n"""
+        """| Alpha Beta | CKA | 55 | **1.3** | Critical | stub |\n"""
+        """| Gamma Module | CKAD | 500 | **3.7** | Good | ok |\n"""
+        """| Delta | KCNA | 74 | **1.7** | Critical | stub |\n""",
+        encoding="utf-8",
+    )
+    # Reset the cache so this test doesn't see a stale parse from
+    # another test's tmp_path.
+    with local_api._QUALITY_AUDIT_CACHE_LOCK:
+        local_api._QUALITY_AUDIT_CACHE.clear()
+
+    r = local_api.build_quality_scores(tmp_path)
+    assert r["exists"] is True
+    assert r["count"] == 3
+    assert r["critical_count"] == 2
+    scores = {m["module"]: m for m in r["modules"]}
+    assert scores["Alpha Beta"]["severity"] == "critical"
+    assert scores["Gamma Module"]["severity"] == "good"
+
+
+def test_module_state_includes_diagnostics(tmp_path: Path) -> None:
+    module_key, _ = _setup_repo(tmp_path)
+    state = local_api.build_module_state(tmp_path, module_key)
+    diagnostics = state.get("diagnostics")
+    assert isinstance(diagnostics, list)
+    # The fixture module has lab + fact_ledger + UK + frontmatter, so
+    # the only nits come from the UK state if it's not "synced". We
+    # don't assert an exact set — just that the field is present and a
+    # list of short strings.
+    for tag in diagnostics:
+        assert isinstance(tag, str) and tag
+        assert len(tag) < 80
+
+
+def test_module_state_flags_missing_lab_and_ledger(tmp_path: Path) -> None:
+    # Minimal repo: no lab, no fact ledger, no UK.
+    repo = tmp_path
+    _init_repo(repo)
+    _write(
+        repo / "src/content/docs/k8s/cka/module-X-stub.md",
+        "---\ntitle: stub\n---\nbody\n",
+    )
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-m", "init")
+    state = local_api.build_module_state(repo, "k8s/cka/module-X-stub")
+    diag = state["diagnostics"]
+    assert "no_lab" in diag
+    assert "no_fact_ledger" in diag
+    assert "uk_translation_missing" in diag
+
+
+def test_schema_lists_phase_c_endpoints() -> None:
+    schema = local_api.build_api_schema()
+    paths = {e["path"] for e in schema["endpoints"]}
+    for expected in (
+        "/api/pipeline/leases",
+        "/api/pipeline/v2/events",
+        "/api/pipeline/v2/stuck",
+        "/api/reviews",
+        "/api/bridge/messages",
+        "/api/quality/scores",
+        "/api/module/{key}/lease",
+    ):
+        assert expected in paths, f"/api/schema missing {expected}"
 
 
 def test_cli_starts_server_and_reports_host_port(tmp_path: Path) -> None:
