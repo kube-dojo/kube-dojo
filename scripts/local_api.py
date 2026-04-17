@@ -3988,30 +3988,10 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
 
     // ---- Phase D: Operator / Readiness / Activity ----
 
-    function renderOperatorItem(text, moduleKey, phase, endpoint) {{
-      const label = esc(text || '');
-      const link = endpoint
-        ? ` <a href="${{esc(endpoint)}}" title="${{esc(endpoint)}}" target="_blank" rel="noopener">[drill]</a>`
-        : '';
-      return `<li>${{label}}${{link}}</li>`;
-    }}
-
     function renderOperator(briefing) {{
-      const actions = briefing?.actions || {{}};
-      const top = briefing?.top_modules || [];
       const alerts = briefing?.alerts || [];
       const focus = briefing?.focus || [];
       const blockers = briefing?.blockers || [];
-
-      // Build a module_key -> endpoint lookup so "Now/Blocked/Next"
-      // text rows can drill into the right place. top_modules carries
-      // the drill endpoint per row; we fall back to None when absent.
-      const drillByLabel = new Map();
-      for (const m of top) {{
-        if (!m.module_key) continue;
-        const key = String(m.module_key);
-        if (!drillByLabel.has(key)) drillByLabel.set(key, m.endpoint || null);
-      }}
 
       // Hero: alerts + focus (blockers appended to alerts visually).
       const alertItems = [
@@ -4033,28 +4013,49 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
             : '<div class="op-hero-empty">None</div>'}}
         </div>`;
 
-      const renderCol = (rows) => rows.length
-        ? rows.map(r => {{
-            // Row is a pre-formatted string; drill-link comes from any
-            // module_key prefix that matches a top_modules entry.
-            let endpoint = null;
-            for (const [key, ep] of drillByLabel) {{
-              if (r.indexOf(key) !== -1) {{ endpoint = ep; break; }}
+      // Prefer the structured ``action_rows[]`` — each row carries its
+      // own bucket + endpoint + reason, so we don't have to reverse-
+      // parse the display string. Fall back to the ``actions.active`` /
+      // ``actions.blocked`` / ``actions.next`` string arrays for older
+      // briefings that don't have the new field.
+      const rowsSrc = Array.isArray(briefing?.action_rows) && briefing.action_rows.length
+        ? briefing.action_rows
+        : (() => {{
+            const bag = [];
+            for (const bucket of ['active', 'blocked', 'next']) {{
+              for (const label of (briefing?.actions?.[bucket] || [])) {{
+                bag.push({{bucket, label, module_key: null, phase: null, reason: null, endpoint: null}});
+              }}
             }}
-            return renderOperatorItem(r, null, null, endpoint);
-          }}).join('')
-        : '<li class="op-hero-empty">Nothing here</li>';
+            return bag;
+          }})();
 
-      $('#op-now').innerHTML = renderCol(actions.active || []);
-      $('#op-blocked').innerHTML = renderCol(actions.blocked || []);
-      $('#op-next').innerHTML = renderCol(actions.next || []);
+      const renderRow = (r) => {{
+        const label = esc(r.label || '');
+        const link = r.endpoint
+          ? ` <a href="${{esc(r.endpoint)}}" title="${{esc(r.endpoint)}}" target="_blank" rel="noopener">[drill]</a>`
+          : '';
+        return `<li>${{label}}${{link}}</li>`;
+      }};
+      const renderCol = (bucket) => {{
+        const rows = rowsSrc.filter(r => r.bucket === bucket);
+        return rows.length
+          ? rows.map(renderRow).join('')
+          : '<li class="op-hero-empty">Nothing here</li>';
+      }};
 
-      const total = (actions.active || []).length
-                  + (actions.blocked || []).length
-                  + (actions.next || []).length;
+      $('#op-now').innerHTML = renderCol('active');
+      $('#op-blocked').innerHTML = renderCol('blocked');
+      $('#op-next').innerHTML = renderCol('next');
+
+      const counts = {{active: 0, blocked: 0, next: 0}};
+      for (const r of rowsSrc) {{
+        if (counts[r.bucket] !== undefined) counts[r.bucket]++;
+      }}
+      const total = counts.active + counts.blocked + counts.next;
       const badge = $('#op-badge');
       badge.textContent = total ? `${{total}} items` : 'Idle';
-      if ((actions.blocked || []).length) {{
+      if (counts.blocked) {{
         badge.style.background = 'var(--red-muted)';
         badge.style.color = 'var(--red)';
       }} else if (total) {{
@@ -4436,12 +4437,41 @@ def build_session_briefing(repo_root: Path) -> dict[str, Any]:
     #               a human or a re-enqueue.
     # ``next``    — things ready to pick up right now.
     #
-    # Every row that names a module is mirrored in ``top_modules[]``
-    # with a reason + drill-down endpoint.
-    actions_active: list[str] = []
-    actions_blocked: list[str] = []
-    actions_next: list[str] = []
+    # Structured row shape per ``action_rows[]``:
+    #   ``{bucket, label, module_key, phase, reason, endpoint}``
+    # The dashboard reads this directly. Agents that want the old flat
+    # list view still get ``actions.{active,blocked,next}`` (derived
+    # from ``action_rows`` below) plus ``top_modules[]``, both preserved
+    # for backward compat.
+    action_rows: list[dict[str, Any]] = []
     top_modules: list[dict[str, Any]] = []
+
+    def _add_row(
+        bucket: str,
+        label: str,
+        *,
+        module_key: str | None = None,
+        phase: str | None = None,
+        reason: str | None = None,
+        endpoint: str | None = None,
+    ) -> None:
+        action_rows.append({
+            "bucket": bucket,
+            "label": label,
+            "module_key": module_key,
+            "phase": phase,
+            "reason": reason,
+            "endpoint": endpoint,
+        })
+        # ``top_modules[]`` keeps its historical shape (module_key may
+        # be None for repo-level rows like ``ready_queue``).
+        if reason and endpoint:
+            top_modules.append({
+                "module_key": module_key,
+                "phase": phase,
+                "reason": reason,
+                "endpoint": endpoint,
+            })
 
     try:
         leases = build_pipeline_leases(repo_root)
@@ -4450,79 +4480,76 @@ def build_session_briefing(repo_root: Path) -> dict[str, Any]:
     if isinstance(leases, dict) and leases.get("exists"):
         for lease in (leases.get("active") or [])[:5]:
             secs = lease.get("seconds_to_expiry")
-            actions_active.append(
-                f"{lease.get('leased_by','?')} → {lease.get('module_key','?')} "
-                f"({lease.get('phase','?')}, {secs}s left)"
+            mk = lease.get("module_key")
+            _add_row(
+                "active",
+                f"{lease.get('leased_by','?')} → {mk or '?'} "
+                f"({lease.get('phase','?')}, {secs}s left)",
+                module_key=mk,
+                phase=lease.get("phase"),
+                reason="active_lease",
+                endpoint=f"/api/module/{mk}/state" if mk else None,
             )
-            top_modules.append({
-                "module_key": lease.get("module_key"),
-                "phase": lease.get("phase"),
-                "reason": "active_lease",
-                "endpoint": f"/api/module/{lease.get('module_key')}/state",
-            })
 
     if isinstance(stuck, dict) and stuck.get("exists"):
         for job in (stuck.get("stuck_leased") or [])[:5]:
-            actions_blocked.append(
-                f"{job.get('module_key','?')} stale lease "
-                f"(held by {job.get('leased_by','?')})"
+            mk = job.get("module_key")
+            _add_row(
+                "blocked",
+                f"{mk or '?'} stale lease (held by {job.get('leased_by','?')})",
+                module_key=mk,
+                phase=job.get("phase"),
+                reason="stale_lease",
+                endpoint=f"/api/pipeline/v2/events?module={mk}" if mk else None,
             )
-            top_modules.append({
-                "module_key": job.get("module_key"),
-                "phase": job.get("phase"),
-                "reason": "stale_lease",
-                "endpoint": f"/api/pipeline/v2/events?module={job.get('module_key')}",
-            })
         for job in (stuck.get("stuck_in_state") or [])[:5]:
-            actions_blocked.append(
-                f"{job.get('module_key','?')} stuck in {job.get('queue_state','?')}"
+            mk = job.get("module_key")
+            _add_row(
+                "blocked",
+                f"{mk or '?'} stuck in {job.get('queue_state','?')}",
+                module_key=mk,
+                phase=job.get("phase"),
+                reason="stuck_in_state",
+                endpoint=f"/api/pipeline/v2/events?module={mk}" if mk else None,
             )
-            top_modules.append({
-                "module_key": job.get("module_key"),
-                "phase": job.get("phase"),
-                "reason": "stuck_in_state",
-                "endpoint": f"/api/pipeline/v2/events?module={job.get('module_key')}",
-            })
 
     if isinstance(quality, dict) and quality.get("exists"):
         for m in (quality.get("critical") or [])[:5]:
-            actions_next.append(
-                f"rubric-critical rewrite: {m.get('module','?')} "
-                f"({m.get('track','?')}) score {m.get('score','?')}"
-            )
             # Rubric rows don't carry a real ``module_key`` (the
             # audit uses human-readable labels), so we store the
             # label itself as the key and point at /api/quality/
             # scores for drill-down. Agents can cross-reference.
-            top_modules.append({
-                "module_key": m.get("module"),
-                "phase": None,
-                "reason": "critical_quality",
-                "endpoint": "/api/quality/scores",
-            })
+            _add_row(
+                "next",
+                f"rubric-critical rewrite: {m.get('module','?')} "
+                f"({m.get('track','?')}) score {m.get('score','?')}",
+                module_key=m.get("module"),
+                reason="critical_quality",
+                endpoint="/api/quality/scores",
+            )
 
     if isinstance(pipeline, dict) and pipeline.get("queue_head"):
         queue_head = pipeline["queue_head"] or {}
         ready = int(queue_head.get("ready") or 0)
         if ready:
-            actions_next.append(f"{ready} job(s) ready to pick up in pipeline v2")
-            top_modules.append({
-                "module_key": None,
-                "phase": None,
-                "reason": "ready_queue",
-                "endpoint": "/api/pipeline/v2/status",
-            })
+            _add_row(
+                "next",
+                f"{ready} job(s) ready to pick up in pipeline v2",
+                reason="ready_queue",
+                endpoint="/api/pipeline/v2/status",
+            )
         dead_letter = int(queue_head.get("dead_letter") or 0)
         if dead_letter:
-            actions_blocked.append(
-                f"{dead_letter} job(s) in dead-letter — needs human or re-enqueue"
+            _add_row(
+                "blocked",
+                f"{dead_letter} job(s) in dead-letter — needs human or re-enqueue",
+                reason="pipeline_dead_letter",
+                endpoint="/api/pipeline/v2/stuck",
             )
-            top_modules.append({
-                "module_key": None,
-                "phase": None,
-                "reason": "pipeline_dead_letter",
-                "endpoint": "/api/pipeline/v2/stuck",
-            })
+
+    actions_active = [r["label"] for r in action_rows if r["bucket"] == "active"]
+    actions_blocked = [r["label"] for r in action_rows if r["bucket"] == "blocked"]
+    actions_next = [r["label"] for r in action_rows if r["bucket"] == "next"]
 
     return {
         "snapshot": {
@@ -4566,6 +4593,13 @@ def build_session_briefing(repo_root: Path) -> dict[str, Any]:
             "blocked": actions_blocked,
             "next": actions_next,
         },
+        # Structured twin of ``actions.*``. Each row has {bucket,
+        # label, module_key, phase, reason, endpoint}. Dashboards and
+        # UI consumers read this directly — scanning ``label`` strings
+        # to infer drill-down endpoints is fragile and misroutes when
+        # the same module appears in multiple buckets (Codex Phase D
+        # review round 3).
+        "action_rows": action_rows,
         "top_modules": top_modules,
         "next_reads": [
             {"rel": "schema", "endpoint": "/api/schema", "desc": "Full endpoint index"},

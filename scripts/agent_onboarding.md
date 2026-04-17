@@ -103,7 +103,7 @@ The briefing endpoint exists so none of the above is normally necessary.
 ## 8. Conventions
 
 - **All endpoints are `GET`.** There is no write surface by design.
-- **Timestamps are Unix-epoch seconds** for anything sourced from `.pipeline/v2.db`. Bridge messages (`/api/bridge/messages`, feed rows sourced from `.bridge/messages.db`) use ISO-8601 strings.
+- **Timestamps are Unix-epoch seconds** for anything sourced from `.pipeline/v2.db` and for the merged activity feed's `items[].at` (bridge-sourced rows are normalized from ISO to epoch inside `/api/activity`). Only the dedicated `/api/bridge/messages` endpoint preserves the bridge's original ISO-8601 strings in its `timestamp` field.
 - **Errors are JSON envelopes**: `{"error": "<code>", ...optional context}` with an HTTP status that matches the code.
 - **Cache**: cacheable endpoints return a weak ETag; `If-None-Match` yields `304`.
 - **Compact**: `/api/briefing/session?compact=1` drops navigation aids (`next_reads`, `links`, worktree list) while keeping the actionable surface.

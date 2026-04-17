@@ -1987,6 +1987,87 @@ def test_briefing_has_actions_and_top_modules(tmp_path: Path) -> None:
     assert "active_lease" in reasons
 
 
+def test_briefing_action_rows_carry_structured_bucket_and_endpoint(tmp_path: Path) -> None:
+    """Codex Phase D review round 3: the dashboard was reverse-parsing
+    label strings to find drill endpoints, which misroutes when the
+    same module appears in multiple buckets and drops links for
+    non-module rows. ``action_rows[]`` carries {bucket, label,
+    module_key, phase, reason, endpoint} per row so consumers render
+    directly."""
+    _setup_repo(tmp_path)
+    _write(tmp_path / "STATUS.md", "# s\n\n## TODO\n\n- [ ] x\n")
+    now_s = int(time.time())
+    conn = sqlite3.connect(tmp_path / ".pipeline/v2.db")
+    # Active lease -> action_rows entry in 'active' bucket with a
+    # /api/module/{key}/state endpoint.
+    conn.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state, leased_by, lease_id, "
+        "leased_at, lease_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("live/mod", "write", "leased", "codex", "l-1", now_s - 10, now_s + 600),
+    )
+    # Stale lease on a different module -> action_rows entry in
+    # 'blocked' bucket with a /api/pipeline/v2/events?module= endpoint.
+    conn.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state, leased_by, lease_id, "
+        "leased_at, lease_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("stale/mod", "review", "leased", "claude", "l-2",
+         now_s - 10_000, now_s + 600),
+    )
+    conn.commit()
+    conn.close()
+
+    briefing = local_api.build_session_briefing(tmp_path)
+    rows = briefing.get("action_rows")
+    assert isinstance(rows, list) and rows, "action_rows must be present"
+
+    active = [r for r in rows if r["bucket"] == "active"]
+    blocked = [r for r in rows if r["bucket"] == "blocked"]
+    assert any(r.get("module_key") == "live/mod" for r in active)
+    assert any(r.get("module_key") == "stale/mod" for r in blocked)
+
+    live_row = next(r for r in active if r.get("module_key") == "live/mod")
+    assert live_row.get("reason") == "active_lease"
+    assert live_row.get("endpoint") == "/api/module/live/mod/state"
+
+    stale_row = next(r for r in blocked if r.get("module_key") == "stale/mod")
+    assert stale_row.get("reason") in {"stale_lease", "stuck_in_state"}
+    # Must point at the events timeline, NOT the state endpoint.
+    assert "pipeline/v2/events" in (stale_row.get("endpoint") or "")
+
+    # Labels must equal the strings in actions.{bucket} so the old
+    # flat view is still derivable from action_rows.
+    active_labels = [r["label"] for r in active]
+    assert list(briefing["actions"]["active"]) == active_labels
+
+
+def test_briefing_action_rows_link_non_module_rows(tmp_path: Path) -> None:
+    """Codex Phase D review round 3 bug 2: rows with no ``module_key``
+    (e.g. ``N job(s) ready to pick up``) previously dropped their drill
+    endpoint in the dashboard because the JS only kept endpoints for
+    rows with a module key. ``action_rows[]`` must carry the endpoint
+    even when module_key is None."""
+    _setup_repo(tmp_path)
+    _write(tmp_path / "STATUS.md", "# s\n\n## TODO\n\n- [ ] x\n")
+    # Seed a pending job so queue_head.ready > 0 and the ``ready_queue``
+    # next row fires.
+    conn = sqlite3.connect(tmp_path / ".pipeline/v2.db")
+    conn.execute(
+        "INSERT INTO jobs (module_key, phase, queue_state) VALUES (?, ?, ?)",
+        ("ready/one", "write", "pending"),
+    )
+    conn.commit()
+    conn.close()
+
+    briefing = local_api.build_session_briefing(tmp_path)
+    rows = briefing.get("action_rows") or []
+    ready_rows = [r for r in rows if r.get("reason") == "ready_queue"]
+    assert ready_rows, "ready_queue row must appear in action_rows"
+    r = ready_rows[0]
+    assert r["bucket"] == "next"
+    assert r.get("module_key") is None
+    assert r.get("endpoint") == "/api/pipeline/v2/status"
+
+
 def test_briefing_top_modules_surfaces_pipeline_dead_letter(
     tmp_path: Path,
 ) -> None:
