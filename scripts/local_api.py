@@ -3171,6 +3171,161 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
       .main {{ padding: 16px; }}
       .header-inner {{ padding: 0 16px; flex-wrap: wrap; }}
     }}
+
+    /* ---- Phase D: Operator panel ---- */
+    .op-hero {{
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      padding: 14px 18px 18px;
+      border-bottom: 1px solid var(--border-subtle);
+    }}
+    .op-hero-block {{ min-width: 0; }}
+    .op-hero-title {{
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--text-dim); margin-bottom: 6px;
+    }}
+    .op-hero-list {{
+      font-size: 13px; color: var(--text-secondary);
+      list-style: none; margin: 0; padding: 0;
+    }}
+    .op-hero-list li {{
+      padding: 4px 0;
+      border-bottom: 1px dashed var(--border-subtle);
+    }}
+    .op-hero-list li:last-child {{ border-bottom: 0; }}
+    .op-hero-list .alert {{ color: var(--amber); }}
+    .op-hero-list .blocker {{ color: var(--red); }}
+    .op-hero-empty {{ color: var(--text-dim); font-style: italic; font-size: 12px; }}
+
+    .op-cols {{
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 0;
+    }}
+    .op-col {{
+      border-right: 1px solid var(--border-subtle);
+      padding: 14px 18px;
+      min-height: 140px;
+    }}
+    .op-col:last-child {{ border-right: 0; }}
+    .op-col-title {{
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.06em; margin: 0 0 10px 0;
+    }}
+    .op-col-title.now {{ color: var(--accent); }}
+    .op-col-title.blocked {{ color: var(--red); }}
+    .op-col-title.next {{ color: var(--green); }}
+    .op-col-list {{ list-style: none; margin: 0; padding: 0; font-size: 13px; }}
+    .op-col-list li {{
+      padding: 6px 0;
+      border-bottom: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      word-break: break-word;
+    }}
+    .op-col-list li:last-child {{ border-bottom: 0; }}
+    .op-col-list a {{
+      color: var(--accent); text-decoration: none;
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+      font-size: 11px;
+    }}
+    .op-col-list a:hover {{ text-decoration: underline; }}
+
+    /* Section readiness grid */
+    .readiness-wrap {{ padding: 4px 0 0 0; }}
+    .readiness-track {{
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 12px 18px;
+    }}
+    .readiness-track:last-child {{ border-bottom: 0; }}
+    .readiness-track-header {{
+      display: flex; justify-content: space-between; align-items: baseline;
+      margin-bottom: 8px;
+    }}
+    .readiness-track-name {{
+      font-weight: 600; font-size: 14px;
+    }}
+    .readiness-track-sub {{
+      font-size: 12px; color: var(--text-dim);
+      font-variant-numeric: tabular-nums;
+    }}
+    .readiness-sections {{
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 8px;
+    }}
+    .readiness-section {{
+      background: var(--surface-1);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px 10px;
+      font-size: 12px;
+    }}
+    .readiness-section-head {{
+      display: flex; justify-content: space-between;
+      font-family: 'SF Mono', 'Fira Code', ui-monospace, monospace;
+      font-size: 11px;
+      margin-bottom: 6px;
+    }}
+    .readiness-section-slug {{ color: var(--text); font-weight: 600; }}
+    .readiness-section-pct {{
+      color: var(--green); font-variant-numeric: tabular-nums;
+    }}
+    .readiness-section-pct.mid {{ color: var(--amber); }}
+    .readiness-section-pct.low {{ color: var(--text-dim); }}
+    .readiness-section-bar {{
+      height: 4px; border-radius: 2px; background: var(--border);
+      overflow: hidden; margin-bottom: 6px;
+    }}
+    .readiness-section-fill {{
+      height: 100%; background: var(--green); transition: width 0.3s;
+    }}
+    .readiness-section-fill.mid {{ background: var(--amber); }}
+    .readiness-section-fill.low {{ background: var(--text-dim); }}
+    .readiness-section-counts {{
+      display: flex; gap: 8px;
+      color: var(--text-dim);
+      font-variant-numeric: tabular-nums;
+      font-family: 'SF Mono', 'Fira Code', ui-monospace, monospace;
+      font-size: 11px;
+    }}
+    .readiness-section-counts .dead {{ color: var(--red); }}
+    .readiness-section-counts .inflight {{ color: var(--amber); }}
+    .readiness-section-counts .cleared {{ color: var(--green); }}
+
+    /* Activity feed */
+    .activity-feed {{
+      list-style: none; margin: 0; padding: 0;
+      max-height: 420px; overflow-y: auto;
+    }}
+    .activity-feed li {{
+      display: grid;
+      grid-template-columns: 18px 80px 1fr;
+      gap: 10px; padding: 8px 18px;
+      font-size: 12px;
+      border-bottom: 1px solid var(--border-subtle);
+      align-items: center;
+    }}
+    .activity-feed li:last-child {{ border-bottom: 0; }}
+    .activity-src {{
+      width: 18px; height: 18px; border-radius: 4px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 10px;
+    }}
+    .activity-src.commit {{ background: var(--accent-muted); color: var(--accent); }}
+    .activity-src.pipeline_event {{ background: var(--teal-muted); color: var(--teal); }}
+    .activity-src.bridge_message {{ background: var(--amber-muted); color: var(--amber); }}
+    .activity-time {{
+      font-family: 'SF Mono', 'Fira Code', ui-monospace, monospace;
+      color: var(--text-dim); font-size: 11px;
+    }}
+    .activity-text {{ color: var(--text-secondary); word-break: break-word; min-width: 0; }}
+    .activity-text .mod {{ color: var(--accent); }}
+    @media (max-width: 900px) {{
+      .op-hero {{ grid-template-columns: 1fr; }}
+      .op-cols {{ grid-template-columns: 1fr; }}
+      .op-col {{ border-right: 0; border-bottom: 1px solid var(--border-subtle); }}
+      .op-col:last-child {{ border-bottom: 0; }}
+    }}
   </style>
 </head>
 <body>
@@ -3205,6 +3360,72 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
     </div>
 
     <div class="sections">
+      <div class="section-full">
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">
+              <span class="panel-icon" style="background:var(--accent-muted);color:var(--accent);">O</span>
+              Operator
+            </div>
+            <span class="panel-badge" id="op-badge" style="background:var(--accent-muted);color:var(--accent);">&nbsp;</span>
+          </div>
+          <div class="op-hero" id="op-hero">
+            <div class="op-hero-block">
+              <div class="op-hero-title">Alerts</div>
+              <div class="op-hero-empty">Loading&hellip;</div>
+            </div>
+            <div class="op-hero-block">
+              <div class="op-hero-title">Focus</div>
+              <div class="op-hero-empty">Loading&hellip;</div>
+            </div>
+          </div>
+          <div class="op-cols">
+            <div class="op-col">
+              <h4 class="op-col-title now">Now</h4>
+              <ul class="op-col-list" id="op-now"><li class="op-hero-empty">Loading&hellip;</li></ul>
+            </div>
+            <div class="op-col">
+              <h4 class="op-col-title blocked">Blocked</h4>
+              <ul class="op-col-list" id="op-blocked"><li class="op-hero-empty">Loading&hellip;</li></ul>
+            </div>
+            <div class="op-col">
+              <h4 class="op-col-title next">Next</h4>
+              <ul class="op-col-list" id="op-next"><li class="op-hero-empty">Loading&hellip;</li></ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-full">
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">
+              <span class="panel-icon" style="background:var(--teal-muted);color:var(--teal);">R</span>
+              Section Readiness
+            </div>
+            <span class="panel-badge" id="readiness-badge" style="background:var(--teal-muted);color:var(--teal);">&nbsp;</span>
+          </div>
+          <div class="panel-body-flush readiness-wrap" id="readiness-body">
+            <div class="empty-state">Loading&hellip;</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-full">
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">
+              <span class="panel-icon" style="background:var(--amber-muted);color:var(--amber);">A</span>
+              Activity (last 24 h)
+            </div>
+            <span class="panel-badge" id="activity-badge" style="background:var(--amber-muted);color:var(--amber);">&nbsp;</span>
+          </div>
+          <div class="panel-body-flush" id="activity-body">
+            <div class="empty-state">Loading&hellip;</div>
+          </div>
+        </div>
+      </div>
+
       <div class="section-full">
         <div class="panel">
           <div class="panel-header">
@@ -3765,6 +3986,191 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
       el.innerHTML = html;
     }}
 
+    // ---- Phase D: Operator / Readiness / Activity ----
+
+    function renderOperatorItem(text, moduleKey, phase, endpoint) {{
+      const label = esc(text || '');
+      const link = endpoint
+        ? ` <a href="${{esc(endpoint)}}" title="${{esc(endpoint)}}" target="_blank" rel="noopener">[drill]</a>`
+        : '';
+      return `<li>${{label}}${{link}}</li>`;
+    }}
+
+    function renderOperator(briefing) {{
+      const actions = briefing?.actions || {{}};
+      const top = briefing?.top_modules || [];
+      const alerts = briefing?.alerts || [];
+      const focus = briefing?.focus || [];
+      const blockers = briefing?.blockers || [];
+
+      // Build a module_key -> endpoint lookup so "Now/Blocked/Next"
+      // text rows can drill into the right place. top_modules carries
+      // the drill endpoint per row; we fall back to None when absent.
+      const drillByLabel = new Map();
+      for (const m of top) {{
+        if (!m.module_key) continue;
+        const key = String(m.module_key);
+        if (!drillByLabel.has(key)) drillByLabel.set(key, m.endpoint || null);
+      }}
+
+      // Hero: alerts + focus (blockers appended to alerts visually).
+      const alertItems = [
+        ...blockers.map(s => `<li class="blocker">${{esc(s)}}</li>`),
+        ...alerts.map(s => `<li class="alert">${{esc(s)}}</li>`),
+      ];
+      const focusItems = focus.map(s => `<li>${{esc(s)}}</li>`);
+      $('#op-hero').innerHTML = `
+        <div class="op-hero-block">
+          <div class="op-hero-title">Alerts &amp; Blockers</div>
+          ${{alertItems.length
+            ? `<ul class="op-hero-list">${{alertItems.join('')}}</ul>`
+            : '<div class="op-hero-empty">None</div>'}}
+        </div>
+        <div class="op-hero-block">
+          <div class="op-hero-title">Focus</div>
+          ${{focusItems.length
+            ? `<ul class="op-hero-list">${{focusItems.join('')}}</ul>`
+            : '<div class="op-hero-empty">None</div>'}}
+        </div>`;
+
+      const renderCol = (rows) => rows.length
+        ? rows.map(r => {{
+            // Row is a pre-formatted string; drill-link comes from any
+            // module_key prefix that matches a top_modules entry.
+            let endpoint = null;
+            for (const [key, ep] of drillByLabel) {{
+              if (r.indexOf(key) !== -1) {{ endpoint = ep; break; }}
+            }}
+            return renderOperatorItem(r, null, null, endpoint);
+          }}).join('')
+        : '<li class="op-hero-empty">Nothing here</li>';
+
+      $('#op-now').innerHTML = renderCol(actions.active || []);
+      $('#op-blocked').innerHTML = renderCol(actions.blocked || []);
+      $('#op-next').innerHTML = renderCol(actions.next || []);
+
+      const total = (actions.active || []).length
+                  + (actions.blocked || []).length
+                  + (actions.next || []).length;
+      const badge = $('#op-badge');
+      badge.textContent = total ? `${{total}} items` : 'Idle';
+      if ((actions.blocked || []).length) {{
+        badge.style.background = 'var(--red-muted)';
+        badge.style.color = 'var(--red)';
+      }} else if (total) {{
+        badge.style.background = 'var(--accent-muted)';
+        badge.style.color = 'var(--accent)';
+      }} else {{
+        badge.style.background = 'var(--green-muted)';
+        badge.style.color = 'var(--green)';
+      }}
+    }}
+
+    function readinessClass(pct) {{
+      if (pct >= 80) return '';
+      if (pct >= 40) return 'mid';
+      return 'low';
+    }}
+
+    function renderReadiness(data) {{
+      const el = $('#readiness-body');
+      const badge = $('#readiness-badge');
+      if (!data || data.error) {{
+        el.innerHTML = `<div class="empty-state">${{esc(data?.error || 'No data')}}</div>`;
+        badge.textContent = 'Unknown';
+        return;
+      }}
+      const tracks = data.tracks || [];
+      const totals = data.totals || {{}};
+      const pct = totals.readiness_pct ?? 0;
+      badge.textContent = `${{totals.cleared ?? 0}} / ${{totals.total ?? 0}} cleared · ${{pct}}%`;
+      if (tracks.length === 0) {{
+        el.innerHTML = '<div class="empty-state">No modules on disk</div>';
+        return;
+      }}
+      el.innerHTML = tracks.map(t => {{
+        const sections = (t.sections || []).map(s => {{
+          const scls = readinessClass(s.readiness_pct ?? 0);
+          const parts = [
+            `<span class="cleared">${{s.cleared ?? 0}}✓</span>`,
+            (s.in_flight ? `<span class="inflight">${{s.in_flight}}↻</span>` : ''),
+            (s.dead_letter ? `<span class="dead">${{s.dead_letter}}✗</span>` : ''),
+            (s.not_yet_enqueued ? `<span>${{s.not_yet_enqueued}}·</span>` : ''),
+          ].filter(Boolean).join(' ');
+          return `<div class="readiness-section">
+            <div class="readiness-section-head">
+              <span class="readiness-section-slug">${{esc(s.slug)}}</span>
+              <span class="readiness-section-pct ${{scls}}">${{s.readiness_pct}}%</span>
+            </div>
+            <div class="readiness-section-bar">
+              <div class="readiness-section-fill ${{scls}}" style="width:${{s.readiness_pct}}%"></div>
+            </div>
+            <div class="readiness-section-counts">${{parts}} <span>/ ${{s.total}}</span></div>
+          </div>`;
+        }}).join('');
+        return `<div class="readiness-track">
+          <div class="readiness-track-header">
+            <span class="readiness-track-name">${{esc(t.label)}}</span>
+            <span class="readiness-track-sub">${{t.cleared ?? 0}} / ${{t.total ?? 0}} · ${{t.readiness_pct ?? 0}}%</span>
+          </div>
+          <div class="readiness-sections">${{sections}}</div>
+        </div>`;
+      }}).join('');
+    }}
+
+    function formatRelTime(epoch, nowEpoch) {{
+      const dt = Math.max(0, nowEpoch - epoch);
+      if (dt < 60) return `${{dt}}s`;
+      if (dt < 3600) return `${{Math.floor(dt/60)}}m`;
+      if (dt < 86400) return `${{Math.floor(dt/3600)}}h`;
+      return `${{Math.floor(dt/86400)}}d`;
+    }}
+
+    function renderActivity(data) {{
+      const el = $('#activity-body');
+      const badge = $('#activity-badge');
+      if (!data || data.error) {{
+        el.innerHTML = `<div class="empty-state">${{esc(data?.error || 'No data')}}</div>`;
+        badge.textContent = 'Unknown';
+        return;
+      }}
+      const items = (data.items || []).slice(0, 60);
+      const counts = data.source_counts || {{}};
+      const parts = [];
+      if (counts.commit) parts.push(`${{counts.commit}} commits`);
+      if (counts.pipeline_event) parts.push(`${{counts.pipeline_event}} events`);
+      if (counts.bridge_message) parts.push(`${{counts.bridge_message}} msgs`);
+      badge.textContent = parts.length ? parts.join(' · ') : 'Quiet';
+      if (items.length === 0) {{
+        el.innerHTML = '<div class="empty-state">No recent activity</div>';
+        return;
+      }}
+      const now = data.generated_at || Math.floor(Date.now() / 1000);
+      const srcAbbrev = {{commit: 'C', pipeline_event: 'P', bridge_message: 'B'}};
+      const rows = items.map(it => {{
+        const srcCls = String(it.source || '');
+        const abbr = srcAbbrev[srcCls] || '?';
+        const t = formatRelTime(it.at, now);
+        let desc;
+        if (it.source === 'commit') {{
+          desc = `<span class="mono">${{esc(it.ref?.sha || '')}}</span> ${{esc(it.summary || '')}}`;
+        }} else if (it.source === 'pipeline_event') {{
+          const modPart = it.module_key
+            ? `<span class="mod mono">${{esc(shortenKey(it.module_key))}}</span> `
+            : '';
+          desc = `${{modPart}}${{esc(it.kind || '')}}`;
+        }} else {{
+          desc = `${{esc(it.summary || '')}} <span class="mono" style="color:var(--text-dim)">${{esc(it.kind || '')}}</span>`;
+        }}
+        return `<li>
+          <span class="activity-src ${{srcCls}}">${{abbr}}</span>
+          <span class="activity-time">${{t}} ago</span>
+          <span class="activity-text">${{desc}}</span>
+        </li>`;
+      }}).join('');
+      el.innerHTML = `<ul class="activity-feed">${{rows}}</ul>`;
+    }}
+
     let refreshing = false;
     async function refresh() {{
       if (refreshing) return;
@@ -3773,7 +4179,8 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
       btn.classList.add('loading');
 
       try {{
-        const [summary, missing, services, worktree, feedback, v2Status, transStatus] = await Promise.all([
+        const [summary, missing, services, worktree, feedback, v2Status, transStatus,
+               briefing, readiness, activity] = await Promise.all([
           fetchJson('/api/status/summary'),
           fetchJson('/api/missing-modules/status'),
           fetchJson('/api/runtime/services'),
@@ -3781,12 +4188,18 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
           fetchJson(`/api/issue-watch/${{ISSUE}}`),
           fetchJson('/api/pipeline/v2/status'),
           fetchJson('/api/translation/v2/status'),
+          fetchJson('/api/briefing/session?compact=1'),
+          fetchJson('/api/tracks/readiness'),
+          fetchJson('/api/activity?limit=60'),
         ]);
 
         summary.missing_modules = missing;
         summary.runtime_services = services;
 
         const t2Queue = transStatus.queue || transStatus;
+        renderOperator(briefing);
+        renderReadiness(readiness);
+        renderActivity(activity);
         renderMetrics(summary, worktree, feedback, t2Queue);
         renderServices(services);
         renderSiteTracks(summary, v2Status, t2Queue);
