@@ -4,11 +4,11 @@
 
 ## Current State
 
-**636 modules** across 7 tracks. **115 Ukrainian translations** (~18% — certs + prereqs; AI/ML not yet translated).
+**711 modules** across 8 published tracks. **115 Ukrainian translations** (~16% — certs + prereqs; AI/ML and AI not yet translated).
 
 **Website:** https://kube-dojo.github.io/ (Starlight/Astro, ~1,350 pages, ~30-40s build)
 
-**Site tabs:** Home | Fundamentals | Linux | Cloud | Certifications | Platform | On-Premises | AI/ML Engineering
+**Site tabs:** Home | Fundamentals | Linux | Cloud | Certifications | Platform | On-Premises | AI | AI/ML Engineering
 
 ## Curriculum Summary
 
@@ -21,7 +21,7 @@
 | Platform Engineering | 209 | Complete |
 | On-Premises Kubernetes | 30 | Complete (needs Gemini review) |
 | AI/ML Engineering | 68 | Complete (Phase 4b — 8 new modules via v1 pipeline, #199) |
-| **Total** | **636** | **Complete** |
+| **Total** | **711** | **Complete** |
 
 ### Certifications Breakdown
 | Cert | Modules |

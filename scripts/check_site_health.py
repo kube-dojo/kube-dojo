@@ -30,6 +30,24 @@ warnings = []
 stats = {}
 
 
+def _is_ignored_content_file(path: Path) -> bool:
+    return path.name.endswith(".staging.md")
+
+
+def _iter_markdown_files():
+    for md in DOCS_DIR.rglob("*.md"):
+        if _is_ignored_content_file(md):
+            continue
+        yield md
+
+
+def _iter_module_files():
+    for md in DOCS_DIR.rglob("module-*.md"):
+        if _is_ignored_content_file(md):
+            continue
+        yield md
+
+
 def error(msg: str):
     errors.append(msg)
 
@@ -41,7 +59,7 @@ def warn(msg: str):
 def get_all_slugs() -> set:
     """Build a set of all known slugs/paths from content files."""
     slugs = set()
-    for md in DOCS_DIR.rglob("*.md"):
+    for md in _iter_markdown_files():
         rel = md.relative_to(DOCS_DIR)
         if str(rel).startswith("uk/"):
             continue
@@ -77,7 +95,7 @@ def check_frontmatter():
     missing_title = 0
     missing_order = 0
 
-    for md in sorted(DOCS_DIR.rglob("*.md")):
+    for md in sorted(_iter_markdown_files()):
         rel = str(md.relative_to(DOCS_DIR))
         content = md.read_text(errors="replace")
 
@@ -103,7 +121,7 @@ def check_frontmatter():
             warn(f"Missing sidebar.order: {rel}")
             missing_order += 1
 
-    total = len(list(DOCS_DIR.rglob("*.md")))
+    total = len(list(_iter_markdown_files()))
     ok = total - missing_fm
     stats["total_files"] = total
     print(f"    {ok}/{total} files have valid frontmatter")
@@ -120,7 +138,7 @@ def check_slugs():
     print("\n 2. Slug fields for dotted filenames...")
     missing = 0
 
-    for md in sorted(DOCS_DIR.rglob("*.md")):
+    for md in sorted(_iter_markdown_files()):
         rel = str(md.relative_to(DOCS_DIR))
         name = md.stem  # filename without .md
 
@@ -147,7 +165,7 @@ def check_link_targets():
     broken = 0
     checked = 0
 
-    for md in sorted(DOCS_DIR.rglob("*.md")):
+    for md in sorted(_iter_markdown_files()):
         rel = str(md.relative_to(DOCS_DIR))
         if rel.startswith("uk/"):
             continue
@@ -243,7 +261,7 @@ def check_no_md_links():
     print("\n 4. No .md extension in internal links...")
     found = 0
 
-    for md in sorted(DOCS_DIR.rglob("*.md")):
+    for md in sorted(_iter_markdown_files()):
         rel = str(md.relative_to(DOCS_DIR))
         if rel.startswith("uk/"):
             continue
@@ -302,7 +320,7 @@ def check_module_count():
     m = re.search(r'\*\*(\d+)\*\*', status)
     if m:
         claimed = int(m.group(1))
-        actual = len([f for f in DOCS_DIR.rglob("module-*.md")
+        actual = len([f for f in _iter_module_files()
                       if not str(f.relative_to(DOCS_DIR)).startswith("uk/")])
         stats["module_count"] = actual
         if claimed != actual:
@@ -327,7 +345,7 @@ def check_index_completeness():
 
         parent = index.parent
         # Only check direct child modules (not in subdirectories)
-        modules = sorted(f for f in parent.glob("module-*.md"))
+        modules = sorted(f for f in parent.glob("module-*.md") if not _is_ignored_content_file(f))
         if not modules:
             continue
 
@@ -357,7 +375,7 @@ def check_naming_consistency():
     # Pattern: module-X.Y-name (with dot) — this is the correct format
     new_pattern = re.compile(r'^module-(\d+\.\d+)-[a-z]')
 
-    for md in sorted(DOCS_DIR.rglob("module-*.md")):
+    for md in sorted(_iter_module_files()):
         rel = str(md.relative_to(DOCS_DIR))
         if rel.startswith("uk/"):
             continue
@@ -432,7 +450,7 @@ def check_dirs_have_index():
         if rel.startswith("uk/"):
             continue
 
-        modules = list(d.glob("module-*.md"))
+        modules = [f for f in d.glob("module-*.md") if not _is_ignored_content_file(f)]
         if modules and not (d / "index.md").exists():
             error(f"Directory has modules but no index.md: {rel}")
             missing += 1
@@ -450,7 +468,7 @@ def check_title_numbering():
     print("\n13. Title-filename number consistency...")
     mismatches = 0
 
-    for md in sorted(DOCS_DIR.rglob("module-*.md")):
+    for md in sorted(_iter_module_files()):
         rel = str(md.relative_to(DOCS_DIR))
         if rel.startswith("uk/"):
             continue
