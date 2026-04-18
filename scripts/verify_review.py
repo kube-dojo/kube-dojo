@@ -55,11 +55,20 @@ def _read_target(path: str, branch: str | None) -> str:
     return Path(path).read_text("utf-8")
 
 
+_SUMMARY_PREFIX = "Review verifier for PR"
+
+
 def _read_review(args: argparse.Namespace) -> str:
     if not args.from_pr:
         return sys.stdin.read()
+    # Skip the verifier's own summary comments so repeat --from-pr --post-comment
+    # runs don't parse their own output as if it were the reviewer's.
+    jq = (
+        f'[.comments[] | select(.body | startswith("{_SUMMARY_PREFIX}") | not)]'
+        ' | last | .body // ""'
+    )
     return subprocess.run(
-        ["gh", "pr", "view", str(args.pr), "--json", "comments", "--jq", ".comments[-1].body"],
+        ["gh", "pr", "view", str(args.pr), "--json", "comments", "--jq", jq],
         check=True, text=True, capture_output=True,
     ).stdout
 

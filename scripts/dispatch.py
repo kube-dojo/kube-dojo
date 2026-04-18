@@ -24,7 +24,7 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
-from ai_agent_bridge._prompts import build_review_message, load_review_context
+from ai_agent_bridge._prompts import build_review_message
 
 REPO_ROOT = Path(__file__).parent.parent
 LOG_DIR = REPO_ROOT / ".dispatch-logs"
@@ -181,15 +181,10 @@ CLAUDE_TRANSLATION_TOOLS = (
 )
 
 # ---------------------------------------------------------------------------
-# Gemini review context
-# ---------------------------------------------------------------------------
-
-REVIEW_CONTEXT = load_review_context()
-
-
-# ---------------------------------------------------------------------------
 # Core dispatch functions
 # ---------------------------------------------------------------------------
+# Review context now lives in docs/review-protocol.md and is loaded via
+# ai_agent_bridge._prompts.build_review_message() on the dispatch path.
 
 def dispatch_gemini(prompt: str, model: str | None = None,
                     review: bool = False, timeout: int = 900,
