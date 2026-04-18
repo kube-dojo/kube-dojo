@@ -1445,6 +1445,8 @@ def build_bridge_messages(
 
 _QUALITY_AUDIT_CACHE: dict[str, dict[str, Any]] = {}
 _QUALITY_AUDIT_CACHE_LOCK = threading.Lock()
+_CITATION_STATUS_CACHE: dict[str, dict[str, Any]] = {}
+_CITATION_STATUS_CACHE_LOCK = threading.Lock()
 
 
 # Matches rows like:
@@ -1625,6 +1627,74 @@ def build_quality_upgrade_plan(repo_root: Path, *, target: float = 4.0) -> dict[
             "unscored modules require future audit before precise upgrade planning."
         ),
     }
+
+
+def build_citation_status(repo_root: Path) -> dict[str, Any]:
+    """Return deterministic citation coverage for English module files."""
+    from check_citations import check_file
+
+    docs_root = repo_root / "src" / "content" / "docs"
+    if not docs_root.exists():
+        return {
+            "exists": False,
+            "error": f"docs_root_missing: {docs_root}",
+        }
+
+    module_paths = sorted(
+        path
+        for path in docs_root.glob("**/module-*.md")
+        if ".staging." not in path.name and not path.relative_to(docs_root).as_posix().startswith("uk/")
+    )
+    latest_mtime = max((path.stat().st_mtime for path in module_paths), default=0.0)
+    cache_key = str(docs_root.resolve())
+    with _CITATION_STATUS_CACHE_LOCK:
+        entry = _CITATION_STATUS_CACHE.get(cache_key)
+        if entry and entry.get("mtime") == latest_mtime:
+            return entry["data"]
+
+    results = [check_file(path) for path in module_paths]
+    failing = [item for item in results if not item.get("passes")]
+    by_track: dict[str, list[dict[str, Any]]] = {}
+    for item in failing:
+        rel = Path(item["path"]).relative_to(docs_root).as_posix()
+        track = rel.split("/", 1)[0]
+        module_key = rel.removesuffix(".md")
+        track_item = {
+            "module": module_key,
+            "issues": item.get("issues") or [],
+            "sources_count": item.get("sources_count") or 0,
+        }
+        by_track.setdefault(track, []).append(track_item)
+
+    track_groups = []
+    for track, items in sorted(by_track.items(), key=lambda kv: (-len(kv[1]), kv[0])):
+        issue_counts: dict[str, int] = {}
+        for item in items:
+            for issue in item.get("issues") or []:
+                issue_counts[issue] = issue_counts.get(issue, 0) + 1
+        track_groups.append({
+            "track": track,
+            "count": len(items),
+            "issue_counts": issue_counts,
+            "modules": items,
+        })
+
+    data = {
+        "exists": True,
+        "total_repo_modules": len(module_paths),
+        "passes_count": len(results) - len(failing),
+        "failing_count": len(failing),
+        "coverage_pct": round(100.0 * (len(results) - len(failing)) / len(results), 1) if results else 0.0,
+        "tracks": track_groups,
+        "top_missing": failing[:20],
+        "scope_note": (
+            "Deterministic citation gate: modules need a Sources section, war-story sources, "
+            "and traceable citation markers before they count as review-passed."
+        ),
+    }
+    with _CITATION_STATUS_CACHE_LOCK:
+        _CITATION_STATUS_CACHE[cache_key] = {"mtime": latest_mtime, "data": data}
+    return data
 
 
 # ---- module diagnostics ----
@@ -4840,6 +4910,7 @@ def build_api_schema() -> dict[str, Any]:
                 "desc": "Upgrade queue derived from rubric scores for #180 (4/5) or #181 (5/5)",
                 "query": ["target=4.0|5.0"],
             },
+            {"path": "/api/citations/status", "desc": "Citation gate coverage and missing-source queue by track/module"},
             {"path": "/api/cache/stats", "desc": "Response-cache introspection"},
         ],
     }
@@ -4996,6 +5067,8 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
         if target <= 0:
             return 400, {"error": "invalid_target"}, "application/json; charset=utf-8"
         return 200, build_quality_upgrade_plan(repo_root, target=target), "application/json; charset=utf-8"
+    if path == "/api/citations/status":
+        return 200, build_citation_status(repo_root), "application/json; charset=utf-8"
     if path.startswith("/api/module/") and path.endswith("/lease"):
         raw_key = unquote(path[len("/api/module/") : -len("/lease")]).strip("/")
         if not raw_key:
@@ -5071,6 +5144,7 @@ CACHE_POLICY: dict[str, tuple[float, Callable[[Path], tuple] | None]] = {
     "/api/translation/v2/status": (5.0, _v_translation_db),
     "/api/labs/status": (10.0, None),
     "/api/quality/upgrade-plan": (30.0, None),
+    "/api/citations/status": (30.0, None),
     "/api/ztt/status": (30.0, None),
     "/api/git/worktree": (2.0, None),
     "/api/git/worktrees": (5.0, None),
