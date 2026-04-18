@@ -134,6 +134,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from checks import structural, ukrainian, gaps
 from dispatch import (
+    GEMINI_WRITER_MODEL,
     dispatch_gemini_with_retry,
     dispatch_claude,
     dispatch_codex,
@@ -165,9 +166,9 @@ def dispatch_auto(prompt: str, model: str, timeout: int = 900) -> tuple[bool, st
 # ---------------------------------------------------------------------------
 
 MODELS = {
-    "write": "gemini-3.1-pro-preview",     # Preview model — review in monthly evals, re-pin when GA available. See issue #217.
+    "write": GEMINI_WRITER_MODEL,          # Pinned in dispatch.py; re-evaluate monthly and replace when GA is available. See issue #217/#278.
     "write_targeted": "claude-sonnet-4-6", # TARGETED FIX: surgical patches (instruction-following)
-    "review": "gemini-3.1-pro-preview",    # STRUCTURAL REVIEW: calibration-backed choice for split-reviewer flow
+    "review": GEMINI_WRITER_MODEL,         # STRUCTURAL REVIEW: calibration-backed choice for split-reviewer flow
     "review_fallback": "claude-sonnet-4-6",  # independent REVIEW fallback when Codex is unavailable
     "knowledge_card": "gpt-5.3-codex-spark",  # WRITE grounding aligned with fact-grounding calibration
     "fact_grounding": "gpt-5.3-codex-spark",  # split-reviewer architecture: factual grounding ledger
@@ -4517,14 +4518,14 @@ def main():
   resume                           retry stuck modules only
 
 models:
-  --write-model gemini-3.1-pro-preview     override the main writer
+  --write-model {GEMINI_WRITER_MODEL}     override the main writer
   --review-model claude-sonnet-4-6         override the primary reviewer
 """, formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     # Global model overrides
     parser.add_argument("--audit-model", help=argparse.SUPPRESS)
-    parser.add_argument("--write-model", help="Model for WRITE step (default: gemini-3.1-pro-preview)")
-    parser.add_argument("--review-model", help="Model for REVIEW step (default: gemini-3.1-pro-preview)")
+    parser.add_argument("--write-model", help=f"Model for WRITE step (default: {GEMINI_WRITER_MODEL})")
+    parser.add_argument("--review-model", help=f"Model for REVIEW step (default: {GEMINI_WRITER_MODEL})")
 
     subparsers = parser.add_subparsers(dest="command", help="Pipeline command")
 
