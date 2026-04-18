@@ -2808,7 +2808,7 @@ class TestKnowledgeCards(unittest.TestCase):
             result = p.step_write(self.module_path, "Improve factual accuracy")
 
         self.assertIsNotNone(result)
-        self.assertIn("## Authoritative Sources — cite these inline", seen["prompt"])
+        self.assertIn("## Sources — cite these inline", seen["prompt"])
         self.assertIn("https://nvlpubs.nist.gov/nistpubs/ai/nist.ai.100-1.pdf", seen["prompt"])
         self.assertIn("https://www.ibm.com/history/deep-blue", seen["prompt"])
         self.assertIn("https://ai.google/responsibility/principles/", seen["prompt"])
@@ -2832,7 +2832,7 @@ class TestKnowledgeCards(unittest.TestCase):
              patch.object(p, "module_key_from_path", return_value="ai/foundations/module-1.1-what-is-ai"):
             p.step_write(self.module_path, "Improve factual accuracy", rewrite=True)
 
-        self.assertIn("## Authoritative Sources — cite these inline", seen["prompt"])
+        self.assertIn("## Sources — cite these inline", seen["prompt"])
         self.assertIn("https://nvlpubs.nist.gov/nistpubs/ai/nist.ai.100-1.pdf", seen["prompt"])
 
     def test_seed_injection_no_seeds_file_is_noop(self):
@@ -2851,7 +2851,7 @@ class TestKnowledgeCards(unittest.TestCase):
             result = p.step_write(self.module_path, "Improve factual accuracy")
 
         self.assertIsNotNone(result)
-        self.assertNotIn("## Authoritative Sources — cite these inline", seen["prompt"])
+        self.assertNotIn("## Sources — cite these inline", seen["prompt"])
 
     def test_seed_injection_no_matching_module_is_noop(self):
         """Existing seed file without a matching section should be ignored."""
@@ -2876,7 +2876,7 @@ class TestKnowledgeCards(unittest.TestCase):
             result = p.step_write(self.module_path, "Improve factual accuracy")
 
         self.assertIsNotNone(result)
-        self.assertNotIn("## Authoritative Sources — cite these inline", seen["prompt"])
+        self.assertNotIn("## Sources — cite these inline", seen["prompt"])
 
     def test_seed_injection_noop_for_root_level_module_key(self):
         """Root-level module keys should skip seed lookup entirely."""
@@ -2890,7 +2890,7 @@ class TestKnowledgeCards(unittest.TestCase):
              patch.object(Path, "exists", side_effect=AssertionError("seed lookup should be skipped")):
             p.step_write(self.module_path, "Improve factual accuracy")
 
-        self.assertNotIn("## Authoritative Sources — cite these inline", seen["prompt"])
+        self.assertNotIn("## Sources — cite these inline", seen["prompt"])
 
 
 class TestCitationGate(unittest.TestCase):
@@ -2955,7 +2955,7 @@ class TestCitationGate(unittest.TestCase):
         return (
             "---\ntitle: Test\n---\n\n"
             + " and ".join(body_links)
-            + "\n\n## Authoritative Sources\n"
+            + "\n\n## Sources\n"
             "- [NIST](https://nvlpubs.nist.gov/nistpubs/ai/nist.ai.100-1.pdf)\n"
             "- [IBM](https://www.ibm.com/history/deep-blue)\n"
             "\n## Sources\n"

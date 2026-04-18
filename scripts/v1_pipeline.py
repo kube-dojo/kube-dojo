@@ -911,9 +911,9 @@ them accurately in your content. Do not contradict them.
 {claims_block}
 """
 
-AUTHORITATIVE_SOURCES_BLOCK_TEMPLATE = """## Authoritative Sources — cite these inline
+AUTHORITATIVE_SOURCES_BLOCK_TEMPLATE = """## Sources — cite these inline
 
-Maintain the module's `## Authoritative Sources` section and cite these URLs
+Maintain the module's `## Sources` section and cite these URLs
 inline where relevant in the body.
 
 {sources_block}
@@ -921,8 +921,10 @@ inline where relevant in the body.
 
 SEED_SECTION_RE = re.compile(r"^##\s+`([^`]+)`\s*$")
 URL_RE = re.compile(r"https?://[^\s)]+")
+# Accept both `## Sources` (canonical per docs/citation-upgrade-plan.md) and
+# the legacy `## Authoritative Sources` header so older drafts still verify.
 AUTHORITATIVE_SOURCES_HEADING_RE = re.compile(
-    r"^##\s+Authoritative Sources(?:\s+[—-].*)?\s*$",
+    r"^##\s+(?:Sources|Authoritative Sources)(?:\s+[—-].*)?\s*$",
     re.MULTILINE | re.IGNORECASE,
 )
 
@@ -1094,7 +1096,7 @@ def _compute_cite_check(content: str) -> dict:
         return {
             "id": "CITE",
             "passed": False,
-            "evidence": "Missing `## Authoritative Sources` section.",
+            "evidence": "Missing `## Sources` section.",
         }
 
     after_heading = content[match.end():]
@@ -1422,7 +1424,7 @@ Your job is to grade the module on STRUCTURE only:
 - DEPTH: at least one practitioner-grade element (production gotcha, decision framework, war story)?
 - WHY: rationale for every major design decision?
 - PRES: every distinct concept/lab/diagram/quiz from the original is preserved (compression OK, deletion of unique value not OK)?
-- CITE: every URL from `## Authoritative Sources` is cited inline in the body, with no dead links?
+- CITE: every URL from `## Sources` is cited inline in the body, with no dead links?
 Lab quality is evaluated by the separate `lab_pipeline.py` pipeline — do not
 grade hands-on sections here.
 
@@ -1468,7 +1470,7 @@ MANDATORY CHECKS — answer PASS or FAIL for each:
    check exists to prevent information loss during rewrites — it does
    NOT forbid tightening prose.
 
-7. CITE — Does every URL listed under `## Authoritative Sources` appear
+7. CITE — Does every URL listed under `## Sources` appear
    inline in the module body, and are all cited URLs alive? A FAIL must
    name each missing or dead URL.
 
