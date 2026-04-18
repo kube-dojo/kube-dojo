@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+# Bring up local services for KubeDojo dev: API + pipeline v2 workers.
+# Idempotent — skips services already running. Safe to run at the start of
+# every session.
+#
+# Usage: scripts/services-up [--api-only | --workers-only]
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_ROOT"
+
+VENV_PY="$REPO_ROOT/.venv/bin/python"
+[ -x "$VENV_PY" ] || { echo "ERROR: $VENV_PY not found. Create venv first: python3 -m venv .venv && .venv/bin/pip install -r requirements.txt" >&2; exit 1; }
+
+mkdir -p logs/pipeline .pids
+
+mode="${1:-all}"
+
+is_alive() {
+  local pid_file="$1"
+  [ -f "$pid_file" ] || return 1
+  local pid
+  pid=$(cat "$pid_file" 2>/dev/null || true)
+  [ -n "$pid" ] || return 1
+  kill -0 "$pid" 2>/dev/null
+}
+
+start_api() {
+  if is_alive .pids/api.pid; then
+    echo "api: already running (pid $(cat .pids/api.pid))"
+    return
+  fi
+  nohup "$VENV_PY" scripts/local_api.py --host 127.0.0.1 --port 8768 \
+    > logs/api.log 2>&1 &
+  echo $! > .pids/api.pid
+  # Age the pid file so local_api's stale-PID heuristic doesn't flag the running
+  # process as reused. See #235 follow-up TODO for a proper fix.
+  touch -t 202604150800 .pids/api.pid
+  sleep 1
+  if is_alive .pids/api.pid; then
+    echo "api: started (pid $(cat .pids/api.pid))"
+  else
+    echo "api: FAILED to start — see logs/api.log" >&2
+    return 1
+  fi
+}
+
+start_worker() {
+  local role="$1"  # patch | review | write
+  local pid_file=".pids/v2-${role}-worker.pid"
+  if is_alive "$pid_file"; then
+    echo "v2-${role}-worker: already running (pid $(cat "$pid_file"))"
+    return
+  fi
+  PYTHONPATH=scripts nohup "$VENV_PY" -m pipeline_v2.cli "${role}-worker" loop \
+    --worker-id "v2-${role}-01" --sleep-seconds 30 \
+    > "logs/pipeline/${role}-worker.log" 2>&1 &
+  echo $! > "$pid_file"
+  touch -t 202604150800 "$pid_file"
+  sleep 1
+  if is_alive "$pid_file"; then
+    echo "v2-${role}-worker: started (pid $(cat "$pid_file"))"
+  else
+    echo "v2-${role}-worker: FAILED to start — see logs/pipeline/${role}-worker.log" >&2
+    return 1
+  fi
+}
+
+case "$mode" in
+  --api-only)
+    start_api
+    ;;
+  --workers-only)
+    start_worker patch
+    start_worker review
+    start_worker write
+    ;;
+  all)
+    start_api
+    start_worker patch
+    start_worker review
+    start_worker write
+    ;;
+  *)
+    echo "Usage: $0 [--api-only | --workers-only]" >&2
+    exit 2
+    ;;
+esac
+
+echo
+echo "State (via local API):"
+curl -sf http://127.0.0.1:8768/api/runtime/services 2>/dev/null \
+  | "$VENV_PY" -c "
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    print('  (API not responding)')
+    sys.exit(0)
+print(f\"  running={d['running']} stale={d['stale']} stopped={d['stopped']}\")
+for s in d['services']:
+    uptime = s.get('uptime_seconds') or 0
+    print(f\"  {s['name']}: {s['status']} ({uptime/60:.0f} min)\")
+" || echo "  (API not yet warm, retry curl /api/runtime/services in a moment)"

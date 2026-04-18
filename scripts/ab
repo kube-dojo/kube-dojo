@@ -6,4 +6,15 @@ export AB_CONTEXT_DIR="${AB_REPO_ROOT}/docs/agent-channels"
 export AB_WAKE_DIR="${AB_REPO_ROOT}/.agent/wake"
 export AB_PIPELINE_ENV_KEY="KUBEDOJO_PIPELINE"
 export PYTHONPATH="${AB_REPO_ROOT}/scripts:${PYTHONPATH}"
+
+# Default CODEX_BRIDGE_MODE to workspace-write so Codex can actually make changes
+# when invoked via ask-codex/process-codex. The upstream default is "safe"
+# (read-only, no network) which blocks worktree creation, commits, gh CLI, etc.
+# Session 2 of 2026-04-18 burned 15 min discovering this — see
+# docs/sessions/2026-04-18-session-2-codex-delegation-sprint.md.
+# Override with: CODEX_BRIDGE_MODE=safe scripts/ab ... (if you really want read-only)
+# or CODEX_BRIDGE_MODE=danger scripts/ab ... (for full network + filesystem access).
+: "${CODEX_BRIDGE_MODE:=workspace-write}"
+export CODEX_BRIDGE_MODE
+
 exec python3 -m ai_agent_bridge "$@"
