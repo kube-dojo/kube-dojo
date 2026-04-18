@@ -11,6 +11,7 @@ import subprocess
 import sys
 import threading
 import time
+import uuid
 from dataclasses import asdict, is_dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -100,6 +101,252 @@ def _load_json(text: str) -> Any:
         return json.loads(text)
     except json.JSONDecodeError:
         return text
+
+
+# ============================================================
+# Build jobs (/api/build/run + /api/build/status)
+# ============================================================
+
+
+_BUILD_JOBS_LOCK = threading.Lock()
+_BUILD_JOBS_STATE: dict[str, dict[str, Any]] = {}
+_BUILD_JOBS_FILENAME = ".cache/build_jobs.json"
+_BUILD_JOBS_MAX = 10
+_BUILD_TAIL_LINES = 30
+_WARNING_LINE_RE = re.compile(r"\bwarning\b", re.IGNORECASE)
+
+
+def _build_jobs_path(repo_root: Path) -> Path:
+    return repo_root / _BUILD_JOBS_FILENAME
+
+
+def _read_build_jobs(repo_root: Path) -> list[dict[str, Any]]:
+    path = _build_jobs_path(repo_root)
+    if not path.exists():
+        return []
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    if isinstance(payload, dict):
+        payload = payload.get("jobs", [])
+    if not isinstance(payload, list):
+        return []
+    return [job for job in payload if isinstance(job, dict)]
+
+
+def _write_build_jobs(repo_root: Path, jobs: list[dict[str, Any]]) -> None:
+    path = _build_jobs_path(repo_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_name(f"{path.name}.tmp")
+    tmp_path.write_text(
+        json.dumps(jobs[-_BUILD_JOBS_MAX :], indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    tmp_path.replace(path)
+
+
+def _reset_build_jobs_state() -> None:
+    """Test helper: drop in-memory build-job state across repos."""
+    with _BUILD_JOBS_LOCK:
+        _BUILD_JOBS_STATE.clear()
+
+
+def _trim_tail(lines: list[str]) -> list[str]:
+    return lines[-_BUILD_TAIL_LINES :]
+
+
+def _normalize_warning_line(line: str) -> str | None:
+    normalized = " ".join(line.strip().split())
+    if not normalized or not _WARNING_LINE_RE.search(normalized):
+        return None
+    return normalized
+
+
+def _find_build_job_locked(state: dict[str, Any], job_id: str) -> dict[str, Any] | None:
+    for job in reversed(state["jobs"]):
+        if job.get("job_id") == job_id:
+            return job
+    return None
+
+
+def _persist_build_state_locked(repo_root: Path, state: dict[str, Any]) -> None:
+    state["jobs"] = state["jobs"][-_BUILD_JOBS_MAX :]
+    _write_build_jobs(repo_root, state["jobs"])
+
+
+def _load_build_state(repo_root: Path) -> dict[str, Any]:
+    repo_key = str(repo_root.resolve())
+    with _BUILD_JOBS_LOCK:
+        state = _BUILD_JOBS_STATE.get(repo_key)
+        if state is not None:
+            return state
+        jobs = _read_build_jobs(repo_root)[-_BUILD_JOBS_MAX :]
+        repaired = False
+        now = time.time()
+        for job in jobs:
+            if job.get("state") != "running":
+                continue
+            started_at = float(job.get("started_at") or now)
+            tail = list(job.get("last_30_lines") or [])
+            tail.append("local_api: build job marked failed after API restart")
+            job["state"] = "fail"
+            job["finished_at"] = now
+            job["duration_s"] = round(max(0.0, now - started_at), 3)
+            job["last_30_lines"] = _trim_tail(tail)
+            job["new_warnings"] = sorted(set(job.get("new_warnings") or []))
+            repaired = True
+        state = {"jobs": jobs, "active_job_id": None}
+        if repaired:
+            _persist_build_state_locked(repo_root, state)
+        _BUILD_JOBS_STATE[repo_key] = state
+        return state
+
+
+def _spawn_build_process(repo_root: Path) -> subprocess.Popen[str]:
+    return subprocess.Popen(
+        ["npm", "run", "build"],
+        cwd=repo_root,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+    )
+
+
+def _build_job_payload(job: dict[str, Any]) -> dict[str, Any]:
+    started_at = float(job["started_at"])
+    if job.get("state") == "running":
+        duration_s = round(max(0.0, time.time() - started_at), 3)
+    else:
+        duration_s = job.get("duration_s")
+    return {
+        "job_id": job["job_id"],
+        "started_at": started_at,
+        "state": job["state"],
+        "duration_s": duration_s,
+        "last_30_lines": list(job.get("last_30_lines") or []),
+        "new_warnings": list(job.get("new_warnings") or []),
+        "finished_at": job.get("finished_at"),
+    }
+
+
+def _monitor_build_job(repo_root: Path, job_id: str, process: subprocess.Popen[str]) -> None:
+    state = _load_build_state(repo_root)
+    if process.stdout is not None:
+        for raw_line in process.stdout:
+            line = raw_line.rstrip("\r\n")
+            warning = _normalize_warning_line(line)
+            with _BUILD_JOBS_LOCK:
+                job = _find_build_job_locked(state, job_id)
+                if job is None:
+                    continue
+                tail = list(job.get("last_30_lines") or [])
+                tail.append(line)
+                job["last_30_lines"] = _trim_tail(tail)
+                warning_set = set(job.get("warning_set") or [])
+                if warning is not None:
+                    warning_set.add(warning)
+                baseline = set(job.get("baseline_warning_set") or [])
+                job["warning_set"] = sorted(warning_set)
+                job["new_warnings"] = sorted(warning_set - baseline)
+                _persist_build_state_locked(repo_root, state)
+        process.stdout.close()
+
+    return_code = process.wait()
+    finished_at = time.time()
+    with _BUILD_JOBS_LOCK:
+        job = _find_build_job_locked(state, job_id)
+        if job is None:
+            return
+        baseline = set(job.get("baseline_warning_set") or [])
+        warning_set = set(job.get("warning_set") or [])
+        job["state"] = "pass" if return_code == 0 else "fail"
+        job["finished_at"] = finished_at
+        job["duration_s"] = round(max(0.0, finished_at - float(job["started_at"])), 3)
+        job["new_warnings"] = sorted(warning_set - baseline)
+        job.pop("baseline_warning_set", None)
+        if state.get("active_job_id") == job_id:
+            state["active_job_id"] = None
+        _persist_build_state_locked(repo_root, state)
+
+
+def start_build_job(repo_root: Path) -> tuple[int, Any, str]:
+    state = _load_build_state(repo_root)
+    with _BUILD_JOBS_LOCK:
+        active_job_id = state.get("active_job_id")
+        if active_job_id:
+            active_job = _find_build_job_locked(state, active_job_id)
+            if active_job is not None and active_job.get("state") == "running":
+                return (
+                    409,
+                    {
+                        "error": "build_in_progress",
+                        "job_id": active_job_id,
+                        "started_at": active_job.get("started_at"),
+                    },
+                    "application/json; charset=utf-8",
+                )
+            state["active_job_id"] = None
+
+        previous_green_warnings: set[str] = set()
+        for previous_job in reversed(state["jobs"]):
+            if previous_job.get("state") == "pass":
+                previous_green_warnings = set(previous_job.get("warning_set") or [])
+                break
+
+        started_at = time.time()
+        job_id = f"build-{uuid.uuid4().hex[:12]}"
+        job = {
+            "job_id": job_id,
+            "started_at": started_at,
+            "state": "running",
+            "duration_s": None,
+            "finished_at": None,
+            "last_30_lines": [],
+            "warning_set": [],
+            "baseline_warning_set": sorted(previous_green_warnings),
+            "new_warnings": [],
+        }
+        state["jobs"].append(job)
+        state["active_job_id"] = job_id
+        _persist_build_state_locked(repo_root, state)
+
+    try:
+        process = _spawn_build_process(repo_root)
+    except OSError as exc:
+        finished_at = time.time()
+        with _BUILD_JOBS_LOCK:
+            failed_job = _find_build_job_locked(state, job_id)
+            if failed_job is not None:
+                failed_job["state"] = "fail"
+                failed_job["finished_at"] = finished_at
+                failed_job["duration_s"] = round(max(0.0, finished_at - started_at), 3)
+                failed_job["last_30_lines"] = [f"local_api: failed to start build: {exc}"]
+                failed_job.pop("baseline_warning_set", None)
+                state["active_job_id"] = None
+                _persist_build_state_locked(repo_root, state)
+        return (
+            500,
+            {"error": "build_spawn_failed", "job_id": job_id, "message": str(exc)},
+            "application/json; charset=utf-8",
+        )
+
+    threading.Thread(
+        target=_monitor_build_job,
+        args=(repo_root, job_id, process),
+        daemon=True,
+    ).start()
+    return 202, {"job_id": job_id, "started_at": started_at}, "application/json; charset=utf-8"
+
+
+def get_build_job_status(repo_root: Path, job_id: str) -> tuple[int, Any, str]:
+    state = _load_build_state(repo_root)
+    with _BUILD_JOBS_LOCK:
+        job = _find_build_job_locked(state, job_id)
+        if job is None:
+            return 404, {"error": "build_job_not_found", "job_id": job_id}, "application/json; charset=utf-8"
+        return 200, _build_job_payload(job), "application/json; charset=utf-8"
 
 
 # ============================================================
@@ -4865,6 +5112,8 @@ def build_api_schema() -> dict[str, Any]:
                 "desc": "Per-track, per-section production-readiness grid (cleared/in_flight/dead_letter/not_yet_enqueued)",
             },
             {"path": "/api/runtime/services", "desc": "Runtime services (pids, uptime, ports)"},
+            {"path": "/api/build/run", "desc": "Spawn `npm run build` in the background", "method": "POST"},
+            {"path": "/api/build/status", "desc": "Build job status + tail + warning diff", "query": ["job_id=..."]},
             {"path": "/api/pipeline/v2/status", "desc": "Pipeline v2 queue + per-track"},
             {
                 "path": "/api/translation/v2/status",
@@ -4965,6 +5214,11 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
         return 200, build_tracks_readiness(repo_root), "application/json; charset=utf-8"
     if path == "/api/runtime/services":
         return 200, build_runtime_services_status(repo_root), "application/json; charset=utf-8"
+    if path == "/api/build/status":
+        job_id = query.get("job_id", [None])[0]
+        if not job_id:
+            return 400, {"error": "missing_job_id"}, "application/json; charset=utf-8"
+        return get_build_job_status(repo_root, job_id)
     if path == "/api/pipeline/v2/status":
         db_path = repo_root / ".pipeline" / "v2.db"
         if not db_path.exists():
@@ -5102,6 +5356,13 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
         if module_key is None:
             return 400, {"error": "invalid_module_key"}, "application/json; charset=utf-8"
         return 200, build_module_orchestration_latest(repo_root, module_key), "application/json; charset=utf-8"
+    return 404, {"error": "not_found", "path": path}, "application/json; charset=utf-8"
+
+
+def route_post_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
+    path = urlsplit(raw_path).path.rstrip("/") or "/"
+    if path == "/api/build/run":
+        return start_build_job(repo_root)
     return 404, {"error": "not_found", "path": path}, "application/json; charset=utf-8"
 
 
@@ -5245,6 +5506,26 @@ def make_handler(repo_root: Path) -> type[BaseHTTPRequestHandler]:
             self.send_header("Content-Length", str(len(body)))
             if 200 <= status_code < 300:
                 self.send_header("ETag", etag)
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_POST(self) -> None:  # noqa: N802
+            try:
+                status_code, payload, content_type = route_post_request(repo_root, self.path)
+            except Exception as exc:  # noqa: BLE001 - surface all write failures as JSON
+                status_code = 500
+                payload = {
+                    "error": "internal_error",
+                    "exception": type(exc).__name__,
+                    "message": str(exc),
+                    "path": self.path,
+                }
+                content_type = "application/json; charset=utf-8"
+
+            body = _serialize_payload(payload, content_type)
+            self.send_response(status_code)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
 
