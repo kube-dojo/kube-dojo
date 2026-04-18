@@ -44,6 +44,9 @@ GH_CHAR_LIMIT = 64000
 # Model defaults
 # ---------------------------------------------------------------------------
 
+# 2026-04-18: Google still exposes Gemini 3 Pro as preview-only, so pin the
+# currently tested writer alias here until a GA replacement is available.
+GEMINI_WRITER_MODEL = "gemini-3.1-pro-preview"
 GEMINI_DEFAULT_MODEL = "gemini-3-flash-preview"
 GEMINI_FALLBACK_MODEL = "auto"
 CLAUDE_DEFAULT_MODEL = "claude-sonnet-4-6"
