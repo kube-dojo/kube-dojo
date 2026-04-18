@@ -45,6 +45,7 @@ import fcntl
 import html as html_lib
 import json
 import os
+import random
 import re
 import shutil
 import subprocess
@@ -72,6 +73,8 @@ LINK_CACHE_FILE = REPO_ROOT / ".pipeline" / "link-cache.json"
 LINK_CACHE_TTL = timedelta(hours=24)
 DASHBOARD_FILE = REPO_ROOT / ".pipeline" / "dashboard.html"
 RUBRIC_PROFILE_DIR = REPO_ROOT / "docs" / "rubric-profiles"
+REVIEW_SAMPLES_FILE = REPO_ROOT / ".cache" / "review_samples.jsonl"
+REVIEWER_DRIFT_FLAGGED_FILE = REPO_ROOT / ".cache" / "reviewer_drift_flagged.json"
 LINK_HEALTH_TIMEOUT_SEC = 5
 K8S_MIN_SUPPORTED_MINOR = 35
 K8S_VERSION_RE = re.compile(r"\bv?1\.(\d{1,2})\b")
@@ -83,6 +86,13 @@ CONTENT_AWARE_FACT_LEDGER_MAX_CHARS = 40_000
 CONTENT_AWARE_FACT_LEDGER_OVERLAP_CHARS = 4_000
 MAX_RETRIES = 4
 REVIEW_REJECTED_ERROR_RE = re.compile(r"^Review rejected (\d+) times$")
+SECOND_REVIEWER_SAMPLE_RATE = 0.15
+SECOND_REVIEWER_MODEL = "claude-opus-4-7"
+REVIEW_SAMPLES_SCHEMA_COMMENT = (
+    "# schema: "
+    '{"module_key":"str","codex_review":"object","opus_review":"object",'
+    '"delta_sum":"int","delta_dims":"list[int] aligned to [COV, QUIZ, EXAM, DEPTH, WHY, PRES]"}'
+)
 _LINK_CACHE_LOCK = threading.Lock()
 _PARALLEL_RUN_SECTION_STATE_LOCK = None
 _PARALLEL_RUN_SECTION_GIT_LOCK = None
@@ -1576,6 +1586,92 @@ def compute_review_payload_severity(
     )
 
 
+def _second_reviewer_sample_rate() -> float:
+    """Read SECOND_REVIEWER_SAMPLE_RATE from env, clamped to [0.0, 1.0]."""
+    raw = os.environ.get("SECOND_REVIEWER_SAMPLE_RATE", "").strip()
+    if not raw:
+        return SECOND_REVIEWER_SAMPLE_RATE
+    try:
+        value = float(raw)
+    except ValueError:
+        return SECOND_REVIEWER_SAMPLE_RATE
+    return max(0.0, min(1.0, value))
+
+
+def _review_checks_by_id(review: dict) -> dict[str, bool]:
+    """Normalize a review's check list to {check_id: passed_bool}."""
+    mapping: dict[str, bool] = {}
+    for check in review.get("checks") or []:
+        if not isinstance(check, dict):
+            continue
+        cid = str(check.get("id", "")).strip()
+        if cid:
+            mapping[cid] = bool(check.get("passed"))
+    return mapping
+
+
+def _compute_review_delta(primary_review: dict, secondary_review: dict) -> tuple[int, list[int]]:
+    """Compare two binary review payloads using a 2-point disagreement gap.
+
+    The structural gate is binary PASS/FAIL per dimension, not the old 1-5
+    rubric. We encode a mismatch as `2` so #278's per-dimension audit
+    threshold (`delta_dims[i] >= 2`) still flags a single reviewer disagreement.
+    """
+    primary_checks = _review_checks_by_id(primary_review)
+    secondary_checks = _review_checks_by_id(secondary_review)
+    delta_dims = [
+        0 if primary_checks.get(check_id) == secondary_checks.get(check_id) else 2
+        for check_id in CHECK_IDS
+    ]
+    return sum(delta_dims), delta_dims
+
+
+def _append_review_sample(record: dict) -> None:
+    """Append one sampled dual-review record to the calibration JSONL."""
+    REVIEW_SAMPLES_FILE.parent.mkdir(parents=True, exist_ok=True)
+    lock_file = REVIEW_SAMPLES_FILE.with_suffix(REVIEW_SAMPLES_FILE.suffix + ".lock")
+    with open(lock_file, "w", encoding="utf-8") as lf:
+        fcntl.flock(lf, fcntl.LOCK_EX)
+        try:
+            write_schema = (
+                not REVIEW_SAMPLES_FILE.exists()
+                or REVIEW_SAMPLES_FILE.stat().st_size == 0
+            )
+            with open(REVIEW_SAMPLES_FILE, "a", encoding="utf-8") as fh:
+                if write_schema:
+                    fh.write(REVIEW_SAMPLES_SCHEMA_COMMENT + "\n")
+                fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+        finally:
+            fcntl.flock(lf, fcntl.LOCK_UN)
+
+
+def _flag_reviewer_drift(module_key: str) -> None:
+    """Track modules that need a human audit due to reviewer drift."""
+    REVIEWER_DRIFT_FLAGGED_FILE.parent.mkdir(parents=True, exist_ok=True)
+    lock_file = REVIEWER_DRIFT_FLAGGED_FILE.with_suffix(
+        REVIEWER_DRIFT_FLAGGED_FILE.suffix + ".lock"
+    )
+    with open(lock_file, "w", encoding="utf-8") as lf:
+        fcntl.flock(lf, fcntl.LOCK_EX)
+        try:
+            flagged: list[str] = []
+            if REVIEWER_DRIFT_FLAGGED_FILE.exists():
+                try:
+                    loaded = json.loads(REVIEWER_DRIFT_FLAGGED_FILE.read_text())
+                    if isinstance(loaded, list):
+                        flagged = [str(item) for item in loaded]
+                except json.JSONDecodeError:
+                    flagged = []
+            if module_key not in flagged:
+                flagged.append(module_key)
+                _atomic_write_text(
+                    REVIEWER_DRIFT_FLAGGED_FILE,
+                    json.dumps(flagged, indent=2, ensure_ascii=False) + "\n",
+                )
+        finally:
+            fcntl.flock(lf, fcntl.LOCK_UN)
+
+
 INDEX_PROMPT_TEMPLATE = """CRITICAL INSTRUCTION: Your response must be ONLY the raw markdown content. Start with the --- frontmatter delimiter. No preamble, no explanation — ONLY the markdown file.
 
 You are rewriting the index.md for a KubeDojo section. This page introduces the section and lists its modules.
@@ -1777,6 +1873,111 @@ def _extract_review_json(output: str,
         except json.JSONDecodeError:
             continue
     return None
+
+
+def _normalize_review_result(output: str) -> dict | None:
+    """Parse + normalize a raw reviewer response into the v3 review schema."""
+    result = _extract_review_json(output)
+    if result is None:
+        return None
+
+    if not isinstance(result, dict):
+        return None
+
+    verdict = result.get("verdict", "REJECT")
+    checks_raw = result.get("checks")
+    if (not isinstance(checks_raw, list) or not checks_raw) and "scores" in result:
+        legacy_scores = result.get("scores")
+        checks_raw = []
+        if isinstance(legacy_scores, dict):
+            score_items = list(legacy_scores.items())
+        elif isinstance(legacy_scores, list):
+            score_items = [(f"d{i+1}", score) for i, score in enumerate(legacy_scores)]
+        else:
+            score_items = []
+        for i, (dim, score) in enumerate(score_items):
+            check_id = re.sub(r"[^A-Za-z0-9]+", "_", str(dim).strip()).strip("_").upper()
+            if not check_id:
+                check_id = f"D{i+1}"
+            score_value = score if isinstance(score, (int, float)) else None
+            passed = bool(score_value is not None and score_value >= LEGACY_SCORE_PASS_THRESHOLD)
+            checks_raw.append({
+                "id": check_id,
+                "passed": passed,
+                "evidence": (
+                    f"legacy score={score!r} "
+                    f"(pass threshold {LEGACY_SCORE_PASS_THRESHOLD})"
+                ),
+            })
+    if (
+        not isinstance(checks_raw, list)
+        or not all(
+            isinstance(check, dict) and isinstance(check.get("passed"), bool)
+            for check in checks_raw
+        )
+    ):
+        return None
+    checks = []
+    for i, check in enumerate(checks_raw, 1):
+        normalized = dict(check)
+        if not str(normalized.get("id", "")).strip():
+            normalized["id"] = f"C{i}"
+        checks.append(normalized)
+    edits = result.get("edits") or []
+    if not isinstance(edits, list):
+        edits = []
+
+    result["severity"] = compute_severity(verdict, checks, edits)
+    result["checks"] = checks
+    result["edits"] = edits
+    return result
+
+
+def maybe_sample_second_reviewer(
+    module_key: str,
+    module_path: Path,
+    improved: str,
+    codex_review: dict,
+    fact_ledger: dict | None = None,
+) -> None:
+    """Best-effort Claude Opus calibration sample after the primary review."""
+    sample_rate = _second_reviewer_sample_rate()
+    if sample_rate <= 0 or random.random() >= sample_rate:
+        return
+
+    print(
+        f"  CALIBRATION: sampling {SECOND_REVIEWER_MODEL} second review "
+        f"(rate={sample_rate:.2f})"
+    )
+    prompt = REVIEW_PROMPT_TEMPLATE.format(
+        original=module_path.read_text(),
+        improved=improved,
+        fact_ledger=_format_fact_ledger_for_prompt(fact_ledger),
+    )
+    try:
+        ok, output = dispatch_claude(prompt, model=SECOND_REVIEWER_MODEL, timeout=900)
+    except ClaudeUnavailableError as exc:
+        print(f"  ⚠ Calibration review skipped: {exc}")
+        return
+    if not ok:
+        print("  ⚠ Calibration review failed")
+        return
+
+    opus_review = _normalize_review_result(output)
+    if opus_review is None:
+        print("  ⚠ Calibration review parse failed")
+        return
+
+    delta_sum, delta_dims = _compute_review_delta(codex_review, opus_review)
+    _append_review_sample({
+        "module_key": module_key,
+        "codex_review": copy.deepcopy(codex_review),
+        "opus_review": opus_review,
+        "delta_sum": delta_sum,
+        "delta_dims": delta_dims,
+    })
+    if delta_sum >= 6 or any(delta >= 2 for delta in delta_dims):
+        _flag_reviewer_drift(module_key)
 
 
 # ---------------------------------------------------------------------------
@@ -2267,59 +2468,14 @@ def step_review(module_path: Path, improved: str, model: str = MODELS["review"],
         print(f"  ❌ REVIEW failed")
         return None
 
-    result = _extract_review_json(output)
+    result = _normalize_review_result(output)
     if result is None:
-        print(f"  ❌ Failed to parse REVIEW output")
+        print("  ❌ Failed to parse REVIEW output")
         print(f"  Raw: {output[:500]}")
         return None
-
-    if not isinstance(result, dict):
-        print(f"  ❌ Expected JSON object, got {type(result).__name__}")
-        return None
-
     verdict = result.get("verdict", "REJECT")
-    checks_raw = result.get("checks")
-    if (not isinstance(checks_raw, list) or not checks_raw) and "scores" in result:
-        legacy_scores = result.get("scores")
-        checks_raw = []
-        if isinstance(legacy_scores, dict):
-            score_items = list(legacy_scores.items())
-        elif isinstance(legacy_scores, list):
-            score_items = [(f"d{i+1}", score) for i, score in enumerate(legacy_scores)]
-        else:
-            score_items = []
-        for i, (dim, score) in enumerate(score_items):
-            check_id = re.sub(r"[^A-Za-z0-9]+", "_", str(dim).strip()).strip("_").upper()
-            if not check_id:
-                check_id = f"D{i+1}"
-            score_value = score if isinstance(score, (int, float)) else None
-            passed = bool(score_value is not None and score_value >= LEGACY_SCORE_PASS_THRESHOLD)
-            checks_raw.append({
-                "id": check_id,
-                "passed": passed,
-                "evidence": (
-                    f"legacy score={score!r} "
-                    f"(pass threshold {LEGACY_SCORE_PASS_THRESHOLD})"
-                ),
-            })
-    if (
-        not isinstance(checks_raw, list)
-        or not all(
-            isinstance(check, dict) and isinstance(check.get("passed"), bool)
-            for check in checks_raw
-        )
-    ):
-        print("  ❌ REVIEW checks payload malformed")
-        return None
-    checks = []
-    for i, check in enumerate(checks_raw, 1):
-        normalized = dict(check)
-        if not str(normalized.get("id", "")).strip():
-            normalized["id"] = f"C{i}"
-        checks.append(normalized)
+    checks = result.get("checks") or []
     edits = result.get("edits") or []
-    if not isinstance(edits, list):
-        edits = []
     feedback = result.get("feedback", "")
 
     # Code as arbiter: override the reviewer's self-reported severity with
@@ -3218,6 +3374,14 @@ def run_module(module_path: Path, state: dict, max_retries: int | None = None,
             review_edits_raw = review.get("edits")
             review_checks = review_checks_raw if isinstance(review_checks_raw, list) else []
             review_severity = compute_review_payload_severity(review, rubric_profile)
+
+            maybe_sample_second_reviewer(
+                key,
+                module_path,
+                improved or module_path.read_text(),
+                review,
+                fact_ledger=review_fact_ledger,
+            )
 
             if review_verdict == "APPROVE" and review_severity == "clean":
                 # Binary gate: on APPROVE, the module's state records that
