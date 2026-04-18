@@ -3805,6 +3805,61 @@ class TestRunModuleSplitReviewer(unittest.TestCase):
         self.assertEqual(review_models[0], p.MODELS["review"])
         self.assertTrue(review_models[0].startswith("gemini"))
 
+    def test_second_reviewer_sampling_writes_jsonl_and_flags_drift(self):
+        import v1_pipeline as p
+
+        sample_file = Path(self.tmpdir) / ".cache" / "review_samples.jsonl"
+        drift_file = Path(self.tmpdir) / ".cache" / "reviewer_drift_flagged.json"
+        key = "test/module-0.1-test"
+        state = {"modules": {}}
+        primary_review = {
+            "verdict": "APPROVE",
+            "checks": [{"id": cid, "passed": True} for cid in p.CHECK_IDS],
+            "edits": [],
+            "feedback": "",
+        }
+        opus_review = {
+            "verdict": "REJECT",
+            "checks": [
+                {"id": "COV", "passed": True},
+                {"id": "QUIZ", "passed": False},
+                {"id": "EXAM", "passed": True},
+                {"id": "DEPTH", "passed": True},
+                {"id": "WHY", "passed": False},
+                {"id": "PRES", "passed": True},
+            ],
+            "edits": [],
+            "feedback": "Two structural disagreements.",
+        }
+
+        with patch.object(p, "STATE_FILE", self.state_file), \
+             patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
+             patch.object(p, "REVIEW_SAMPLES_FILE", sample_file), \
+             patch.object(p, "REVIEWER_DRIFT_FLAGGED_FILE", drift_file), \
+             patch.object(p, "save_state"), \
+             patch.object(p, "module_key_from_path", return_value=key), \
+             patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_content_aware_fact_ledger", return_value=None), \
+             patch.object(p, "ensure_knowledge_card", return_value="card"), \
+             patch.object(p, "step_write", return_value=GOOD_MODULE), \
+             patch.object(p, "step_review", return_value=primary_review), \
+             patch.object(p.random, "random", return_value=0.0), \
+             patch.object(p, "dispatch_claude", return_value=(True, json.dumps(opus_review))) as mock_claude, \
+             patch.object(p, "step_check_integrity", return_value=(True, [])), \
+             patch.object(p, "step_check", return_value=(True, [])), \
+             patch.dict(os.environ, {"SECOND_REVIEWER_SAMPLE_RATE": "1.0"}, clear=False), \
+             patch("subprocess.run"):
+            p.run_module(self.module_path, state)
+
+        self.assertEqual(mock_claude.call_count, 1)
+        lines = sample_file.read_text().splitlines()
+        self.assertIn("delta_dims", lines[0])
+        record = json.loads(lines[1])
+        self.assertEqual(record["module_key"], key)
+        self.assertEqual(record["delta_dims"], [0, 2, 0, 0, 2, 0])
+        self.assertEqual(record["delta_sum"], 4)
+        self.assertEqual(json.loads(drift_file.read_text()), [key])
+
     def test_fact_ledger_cache_hit_skips_dispatch(self):
         import v1_pipeline as p
 
