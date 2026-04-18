@@ -504,13 +504,21 @@ def _classify_path(path: str) -> str:
 
 
 def build_worktree_status(repo_root: Path) -> dict[str, Any]:
-    result = subprocess.run(
-        ["git", "status", "--porcelain=v1", "--branch"],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain=v1", "--branch"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {
+            "repo_root": str(repo_root),
+            "ok": False,
+            "error": f"git status unavailable: {type(exc).__name__}",
+        }
     if result.returncode != 0:
         return {
             "repo_root": str(repo_root),
@@ -601,13 +609,21 @@ def build_worktrees_list(repo_root: Path) -> dict[str, Any]:
     suitable for agent cold-start: agents need to know about sibling
     worktrees (e.g. ``codex-wt-*``) to avoid colliding on the same branch.
     """
-    result = subprocess.run(
-        ["git", "worktree", "list", "--porcelain"],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            ["git", "worktree", "list", "--porcelain"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {
+            "ok": False,
+            "error": f"git worktree list unavailable: {type(exc).__name__}",
+            "worktrees": [],
+        }
     if result.returncode != 0:
         return {
             "ok": False,
@@ -5240,13 +5256,18 @@ def make_handler(repo_root: Path) -> type[BaseHTTPRequestHandler]:
                     self.end_headers()
                     return
 
-            self.send_response(status_code)
-            self.send_header("Content-Type", content_type)
-            self.send_header("Content-Length", str(len(body)))
-            if 200 <= status_code < 300:
-                self.send_header("ETag", etag)
-            self.end_headers()
-            self.wfile.write(body)
+            try:
+                self.send_response(status_code)
+                self.send_header("Content-Type", content_type)
+                self.send_header("Content-Length", str(len(body)))
+                if 200 <= status_code < 300:
+                    self.send_header("ETag", etag)
+                self.end_headers()
+                self.wfile.write(body)
+            except (BrokenPipeError, ConnectionResetError):
+                # Client disconnected mid-response. Swallowing keeps the
+                # worker thread alive; the server itself is unaffected.
+                return
 
         def log_message(self, format: str, *args: Any) -> None:
             return
@@ -5255,9 +5276,16 @@ def make_handler(repo_root: Path) -> type[BaseHTTPRequestHandler]:
 
 
 def serve(repo_root: Path, host: str, port: int) -> None:
+    ThreadingHTTPServer.daemon_threads = True
+    ThreadingHTTPServer.allow_reuse_address = True
     server = ThreadingHTTPServer((host, port), make_handler(repo_root))
     print(json.dumps({"repo_root": str(repo_root), "host": host, "port": port}, sort_keys=True))
-    server.serve_forever()
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        server.shutdown()
+    finally:
+        server.server_close()
 
 
 def main(argv: list[str] | None = None) -> int:
