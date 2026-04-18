@@ -2981,14 +2981,62 @@ class TestRunModuleSplitReviewer(unittest.TestCase):
 
         self.assertEqual(events[:3], ["ledger", "write", "review"])
 
+    def test_topic_conflicts_not_in_final_draft_do_not_block(self):
+        import v1_pipeline as p
+
+        topic_conflict_ledger = {
+            "as_of_date": "2026-04-12",
+            "topic": "Conflict",
+            "claims": [
+                {
+                    "id": f"C{i}",
+                    "claim": f"Hypothetical claim {i}",
+                    "status": "CONFLICTING",
+                }
+                for i in range(1, 6)
+            ],
+        }
+        review_ok = {
+            "verdict": "APPROVE",
+            "checks": [{"id": cid, "passed": True} for cid in p.CHECK_IDS],
+            "edits": [],
+            "feedback": "",
+        }
+        content_ledger = sample_fact_ledger() | {"content_aware": True}
+        state = {"modules": {}}
+        with patch.object(p, "STATE_FILE", self.state_file), \
+             patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
+             patch.object(p, "save_state"), \
+             patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
+             patch.object(p, "ensure_fact_ledger", return_value=topic_conflict_ledger), \
+             patch.object(p, "step_content_aware_fact_ledger", return_value=content_ledger), \
+             patch.object(p, "ensure_knowledge_card", return_value="card"), \
+             patch.object(p, "step_write", return_value=GOOD_MODULE), \
+             patch.object(p, "step_review", return_value=review_ok), \
+             patch.object(p, "step_check_integrity", return_value=(True, [])), \
+             patch.object(p, "step_check", return_value=(True, [])), \
+             patch("subprocess.run"):
+            ok = p.run_module(self.module_path, state)
+
+        self.assertTrue(ok)
+        ms = state["modules"]["test/module-0.1-test"]
+        self.assertEqual(ms.get("phase"), "done")
+        self.assertFalse(any("DATA_CONFLICT" in e for e in ms.get("errors", [])))
+
     def test_data_conflict_triage_exit(self):
         import v1_pipeline as p
 
         conflict_ledger = {
             "as_of_date": "2026-04-12",
             "topic": "Conflict",
+            "content_aware": True,
             "claims": [
-                {"id": f"C{i}", "status": "CONFLICTING"} for i in range(1, 6)
+                {
+                    "id": f"C{i}",
+                    "claim": f"Conflicting drafted claim {i}",
+                    "status": "CONFLICTING",
+                }
+                for i in range(1, 6)
             ],
         }
         state = {"modules": {}}
@@ -2996,7 +3044,11 @@ class TestRunModuleSplitReviewer(unittest.TestCase):
              patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
              patch.object(p, "save_state"), \
              patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
-             patch.object(p, "ensure_fact_ledger", return_value=conflict_ledger):
+             patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_content_aware_fact_ledger", return_value=conflict_ledger), \
+             patch.object(p, "ensure_knowledge_card", return_value="card"), \
+             patch.object(p, "step_write", return_value=GOOD_MODULE), \
+             patch("subprocess.run"):
             ok = p.run_module(self.module_path, state)
 
         self.assertFalse(ok)

@@ -660,6 +660,22 @@ def _merge_fact_ledgers(topic_ledger: dict | None, content_ledger: dict | None) 
     }
 
 
+def _count_fact_ledger_issues(ledger: dict | None) -> tuple[int, int]:
+    """Return (conflicting, unverified) claim counts for a fact ledger."""
+    if not isinstance(ledger, dict):
+        return 0, 0
+
+    n_conflict = sum(
+        1 for c in ledger.get("claims", [])
+        if isinstance(c, dict) and c.get("status") == "CONFLICTING"
+    )
+    n_unverified = sum(
+        1 for c in ledger.get("claims", [])
+        if isinstance(c, dict) and c.get("status") == "UNVERIFIED"
+    )
+    return n_conflict, n_unverified
+
+
 # ---------------------------------------------------------------------------
 # WRITE step — Gemini drafts improvements
 # ---------------------------------------------------------------------------
@@ -2537,24 +2553,6 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
         review_fact_ledger = ledger_result
         save_state(state)
 
-        n_conflict = sum(
-            1 for c in ledger_result.get("claims", [])
-            if isinstance(c, dict) and c.get("status") == "CONFLICTING"
-        )
-        n_unverified = sum(
-            1 for c in ledger_result.get("claims", [])
-            if isinstance(c, dict) and c.get("status") == "UNVERIFIED"
-        )
-        if (n_conflict >= DATA_CONFLICT_CONFLICT_THRESHOLD or
-                n_unverified >= DATA_CONFLICT_UNVERIFIED_THRESHOLD):
-            ms["phase"] = "data_conflict"
-            ms["errors"].append(
-                f"DATA_CONFLICT: {n_conflict} conflicting + {n_unverified} "
-                f"unverified claims — manual triage required"
-            )
-            save_state(state)
-            return False
-
     # Initial write plan. Legacy `phase="audit"` states from older runs are
     # treated the same as fresh `pending` modules: start a normal first-pass
     # write with the generic plan and let REVIEW produce the real follow-up
@@ -2714,7 +2712,8 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
             # Content-aware fact ledger: verify claims actually made in the
             # written content. Merges with the pre-write topic-based ledger
             # so the reviewer has both broad coverage and precise grounding.
-            # Non-blocking: falls back to topic-based ledger on any failure.
+            # data_conflict gating happens here, after the draft exists, so
+            # topic-only hypothetical claims do not block the pipeline.
             if improved and not dry_run:
                 fact_model = m.get("fact_grounding", MODELS["fact_grounding"])
                 content_ledger = step_content_aware_fact_ledger(
@@ -2728,6 +2727,17 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                             module_path, improved, model=fallback_model
                         )
                 if content_ledger is not None:
+                    n_conflict, n_unverified = _count_fact_ledger_issues(content_ledger)
+                    if (n_conflict >= DATA_CONFLICT_CONFLICT_THRESHOLD or
+                            n_unverified >= DATA_CONFLICT_UNVERIFIED_THRESHOLD):
+                        _atomic_write_text(staging_path, improved)
+                        ms["phase"] = "data_conflict"
+                        ms["errors"].append(
+                            f"DATA_CONFLICT: {n_conflict} conflicting + {n_unverified} "
+                            f"unverified claims in drafted content — manual triage required"
+                        )
+                        save_state(state)
+                        return False
                     review_fact_ledger = (
                         _merge_fact_ledgers(ms.get("fact_ledger"), content_ledger)
                         or ms.get("fact_ledger")
