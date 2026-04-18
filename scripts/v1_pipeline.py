@@ -630,17 +630,20 @@ def _merge_fact_ledgers(topic_ledger: dict | None, content_ledger: dict | None) 
     that don't overlap are kept for broad coverage. Returns a merged ledger
     or the best available single ledger.
     """
-    if not isinstance(content_ledger, dict) or not content_ledger.get("claims"):
-        return topic_ledger
-    if not isinstance(topic_ledger, dict) or not topic_ledger.get("claims"):
-        return content_ledger
+    topic_copy = copy.deepcopy(topic_ledger) if isinstance(topic_ledger, dict) else None
+    content_copy = copy.deepcopy(content_ledger) if isinstance(content_ledger, dict) else None
+
+    if not content_copy or not content_copy.get("claims"):
+        return topic_copy
+    if not topic_copy or not topic_copy.get("claims"):
+        return content_copy
 
     # Use content-aware claims as the base
-    merged_claims = copy.deepcopy(content_ledger["claims"])
+    merged_claims = copy.deepcopy(content_copy["claims"])
     content_texts = {c.get("claim", "").lower().strip() for c in merged_claims if isinstance(c, dict)}
 
     # Add non-overlapping topic claims
-    for claim in topic_ledger.get("claims", []):
+    for claim in topic_copy.get("claims", []):
         if not isinstance(claim, dict):
             continue
         claim_text = claim.get("claim", "").lower().strip()
@@ -653,8 +656,8 @@ def _merge_fact_ledgers(topic_ledger: dict | None, content_ledger: dict | None) 
             claim["id"] = f"C{i}"
 
     return {
-        "as_of_date": content_ledger.get("as_of_date", topic_ledger.get("as_of_date")),
-        "topic": content_ledger.get("topic", topic_ledger.get("topic")),
+        "as_of_date": content_copy.get("as_of_date", topic_copy.get("as_of_date")),
+        "topic": content_copy.get("topic", topic_copy.get("topic")),
         "content_aware": True,
         "claims": merged_claims,
     }

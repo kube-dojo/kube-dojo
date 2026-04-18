@@ -19,6 +19,7 @@ import tempfile
 import threading
 import textwrap
 import unittest
+import copy
 from argparse import Namespace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -2495,15 +2496,53 @@ class TestContentAwareFactLedger(unittest.TestCase):
         claim_texts = {c["claim"] for c in merged["claims"]}
         self.assertIn("topic claim B", claim_texts)
 
+    def test_merge_is_pure_and_idempotent(self):
+        import v1_pipeline as p
+
+        topic = {
+            "as_of_date": "2026-04-12",
+            "topic": "Test",
+            "claims": [
+                {"id": "C7", "claim": "topic claim A", "status": "SUPPORTED"},
+                {"id": "C8", "claim": "topic claim B", "status": "SUPPORTED"},
+            ],
+        }
+        content = {
+            "as_of_date": "2026-04-12",
+            "topic": "Test",
+            "content_aware": True,
+            "claims": [
+                {"id": "C9", "claim": "topic claim A", "status": "SUPPORTED"},
+                {"id": "C10", "claim": "new content claim", "status": "UNVERIFIED"},
+            ],
+        }
+        topic_before = copy.deepcopy(topic)
+        content_before = copy.deepcopy(content)
+
+        merged_once = p._merge_fact_ledgers(topic, content)
+        merged_twice = p._merge_fact_ledgers(topic, content)
+
+        self.assertEqual(topic, topic_before)
+        self.assertEqual(content, content_before)
+        self.assertEqual(merged_once, merged_twice)
+        self.assertIsNot(merged_once, topic)
+        self.assertIsNot(merged_once, content)
+
     def test_merge_returns_topic_when_content_is_none(self):
         import v1_pipeline as p
         topic = {"claims": [{"id": "C1", "claim": "x"}]}
-        self.assertEqual(p._merge_fact_ledgers(topic, None), topic)
+        merged = p._merge_fact_ledgers(topic, None)
+        self.assertEqual(merged, topic)
+        self.assertIsNot(merged, topic)
+        self.assertIsNot(merged["claims"], topic["claims"])
 
     def test_merge_returns_content_when_topic_is_none(self):
         import v1_pipeline as p
         content = {"claims": [{"id": "C1", "claim": "x"}], "content_aware": True}
-        self.assertEqual(p._merge_fact_ledgers(None, content), content)
+        merged = p._merge_fact_ledgers(None, content)
+        self.assertEqual(merged, content)
+        self.assertIsNot(merged, content)
+        self.assertIsNot(merged["claims"], content["claims"])
 
     def test_content_aware_step_caches_with_suffix(self):
         """Content-aware ledger uses '-content' cache suffix."""
