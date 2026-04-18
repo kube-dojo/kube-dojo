@@ -1322,6 +1322,72 @@ class TestPipelineTransitions(unittest.TestCase):
     @patch("v1_pipeline.STATE_FILE")
     @patch("v1_pipeline.CONTENT_ROOT")
     @patch("subprocess.run")
+    def test_stale_targeted_fix_does_not_route_severe_resume_to_targeted_writer(
+        self, mock_subprocess, mock_root, mock_state,
+    ):
+        """Severe rewrite resumes must clear stale targeted_fix before write routing."""
+        import v1_pipeline as p
+
+        mock_state.__class__ = type(self.state_file)
+        mock_root.resolve.return_value = Path(self.tmpdir).resolve()
+
+        staging = self.module_path.with_suffix(".staging.md")
+        staging.write_text(GOOD_MODULE)
+
+        state = {
+            "modules": {
+                "test/module-0.1-test": {
+                    "phase": "write",
+                    "plan": "STALE TARGETED FIX PLAN",
+                    "targeted_fix": True,
+                    "severity": "severe",
+                    "check_failures": 1,
+                    "checks_failed": [{"id": "LAB", "evidence": "stale targeted fix after CHECK failure"}],
+                    "reviewer_schema_version": 3,
+                    "errors": [],
+                },
+            },
+        }
+        write_calls = []
+
+        def fake_step_write(module_path, plan, model=None, rewrite=False,
+                            previous_output=None, knowledge_card=None, fact_ledger=None):
+            write_calls.append({
+                "plan": plan,
+                "model": model,
+                "rewrite": rewrite,
+                "previous_output": previous_output,
+            })
+            return GOOD_MODULE
+
+        with patch.object(p, "STATE_FILE", self.state_file), \
+             patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
+             patch.object(p, "save_state"), \
+             patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
+             patch.object(p, "step_write", side_effect=fake_step_write), \
+             patch.object(p, "step_review", return_value={
+                 "verdict": "APPROVE",
+                 "severity": "clean",
+                 "checks": [{"id": cid, "passed": True} for cid in p.CHECK_IDS],
+                 "edits": [],
+                 "feedback": "",
+             }), \
+             patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_content_aware_fact_ledger", return_value=None), \
+             patch.object(p, "step_check_integrity", return_value=(True, [])), \
+             patch.object(p, "step_check", return_value=(True, [])):
+            p.run_module(self.module_path, state)
+
+        self.assertEqual(len(write_calls), 1, "Expected a single resumed severe rewrite")
+        self.assertTrue(write_calls[0]["rewrite"], "Severe resume must stay in rewrite mode")
+        self.assertEqual(write_calls[0]["model"], p.MODELS["write"],
+                         "Severe rewrite must use the full writer, not the targeted-fix writer")
+        self.assertFalse(state["modules"]["test/module-0.1-test"]["targeted_fix"],
+                         "Stale targeted_fix must be cleared before rewrite routing")
+
+    @patch("v1_pipeline.STATE_FILE")
+    @patch("v1_pipeline.CONTENT_ROOT")
+    @patch("subprocess.run")
     def test_severity_targeted_routes_to_sonnet(
         self, mock_subprocess, mock_root, mock_state,
     ):

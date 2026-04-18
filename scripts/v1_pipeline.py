@@ -2721,6 +2721,12 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
     # will be lost.
     prior_severity = ms.get("severity")
     needs_rewrite = prior_severity == "severe"
+    if needs_rewrite and targeted_fix:
+        # Full rewrites must never inherit a stale targeted-fix route from a
+        # prior iteration or resume snapshot.
+        targeted_fix = False
+        ms["targeted_fix"] = False
+        save_state(state)
     if needs_rewrite:
         failed_ids = [c.get("id", "?") for c in (ms.get("checks_failed") or [])]
         print(f"  Prior severity=severe (failed: {failed_ids}) — using REWRITE mode")
