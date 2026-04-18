@@ -77,6 +77,8 @@ CLAIM_MATCH_TOLERANCE_CHARS = 10
 DATA_CONFLICT_CONFLICT_THRESHOLD = 3
 DATA_CONFLICT_UNVERIFIED_THRESHOLD = 5
 LEGACY_SCORE_PASS_THRESHOLD = 4
+CONTENT_AWARE_FACT_LEDGER_MAX_CHARS = 40_000
+CONTENT_AWARE_FACT_LEDGER_OVERLAP_CHARS = 4_000
 _LINK_CACHE_LOCK = threading.Lock()
 _PARALLEL_RUN_SECTION_LOCK = None
 INTEGRITY_WARNING_PREFIXES = (
@@ -532,10 +534,11 @@ CONTENT_AWARE_FACT_LEDGER_PROMPT = """You are verifying the factual claims in a 
 
 As-of date: {as_of_date}
 
-Below is the full module content that was just written. Extract every externally-versioned
-factual claim (version numbers, release dates, API paths, CLI flags, feature gates,
-CNCF status, default values, compatibility ranges) and verify each against authoritative
-upstream sources.
+Below is module content that was just written. It may be the full module or one
+consecutive excerpt from it. Extract every externally-versioned factual claim
+(version numbers, release dates, API paths, CLI flags, feature gates, CNCF
+status, default values, compatibility ranges) that appears in the content you
+were given and verify each against authoritative upstream sources.
 
 Rules:
 - Extract claims FROM THE CONTENT BELOW — do not invent claims about the topic.
@@ -570,6 +573,92 @@ Required JSON shape:
 """
 
 
+def _split_content_aware_ledger_windows(
+    content: str,
+    max_chars: int = CONTENT_AWARE_FACT_LEDGER_MAX_CHARS,
+    overlap_chars: int = CONTENT_AWARE_FACT_LEDGER_OVERLAP_CHARS,
+) -> list[str]:
+    """Split long modules into overlapping windows for full-content grounding."""
+    if len(content) <= max_chars:
+        return [content]
+
+    windows: list[str] = []
+    start = 0
+    content_len = len(content)
+    min_split_point = max_chars // 2
+    boundary_markers = ("\n## ", "\n### ", "\n\n")
+
+    while start < content_len:
+        end = min(start + max_chars, content_len)
+        if end < content_len:
+            search_start = min(start + min_split_point, end)
+            candidates = [
+                content.rfind(marker, search_start, end)
+                for marker in boundary_markers
+            ]
+            split_at = max((idx for idx in candidates if idx > start), default=-1)
+            if split_at != -1:
+                end = split_at
+
+        window = content[start:end].strip()
+        if window:
+            windows.append(window)
+
+        if end >= content_len:
+            break
+
+        next_start = max(0, end - overlap_chars)
+        if next_start <= start:
+            next_start = end
+        start = next_start
+
+    return windows or [content]
+
+
+def _merge_content_aware_window_ledgers(
+    ledgers: list[dict],
+    *,
+    topic: str,
+    as_of_date: str,
+) -> dict | None:
+    """Merge per-window content-aware ledgers, de-duping overlap claims."""
+    merged_claims: list[dict] = []
+    seen_claims: set[str] = set()
+    merged_topic = topic
+    merged_as_of_date = as_of_date
+
+    for ledger in ledgers:
+        if not isinstance(ledger, dict):
+            continue
+        if ledger.get("topic"):
+            merged_topic = ledger["topic"]
+        if ledger.get("as_of_date"):
+            merged_as_of_date = ledger["as_of_date"]
+
+        for claim in ledger.get("claims", []):
+            if not isinstance(claim, dict):
+                continue
+            claim_text = claim.get("claim", "").strip()
+            normalized = " ".join(claim_text.lower().split())
+            if not normalized or normalized in seen_claims:
+                continue
+            merged_claims.append(copy.deepcopy(claim))
+            seen_claims.add(normalized)
+
+    if not merged_claims:
+        return None
+
+    for i, claim in enumerate(merged_claims, 1):
+        claim["id"] = f"C{i}"
+
+    return {
+        "as_of_date": merged_as_of_date,
+        "topic": merged_topic,
+        "content_aware": True,
+        "claims": merged_claims,
+    }
+
+
 def step_content_aware_fact_ledger(
     module_path: Path,
     content: str,
@@ -590,36 +679,46 @@ def step_content_aware_fact_ledger(
     topic = _extract_topic_from_module(module_path)
     as_of_date = datetime.now(UTC).date().isoformat()
 
-    # Truncate content to avoid exceeding context limits
-    max_content_chars = 40_000
-    truncated = content[:max_content_chars]
-    if len(content) > max_content_chars:
-        truncated += f"\n\n[... truncated from {len(content)} chars ...]"
+    windows = _split_content_aware_ledger_windows(content)
+    total_windows = len(windows)
+    window_ledgers: list[dict] = []
 
-    prompt = CONTENT_AWARE_FACT_LEDGER_PROMPT.format(
-        topic=topic, as_of_date=as_of_date, content=truncated
-    )
-    print(f"\n  FACT LEDGER (content-aware): {key} (using {model})")
-    ok, output = dispatch_auto(prompt, model=model, timeout=900)
-    if not ok:
-        if output and _is_rate_limited(output):
-            print("  ⚠ Content-aware FACT LEDGER rate-limited — using topic-based ledger")
+    for index, window in enumerate(windows, 1):
+        window_label = f" [{index}/{total_windows}]" if total_windows > 1 else ""
+        prompt = CONTENT_AWARE_FACT_LEDGER_PROMPT.format(
+            topic=topic, as_of_date=as_of_date, content=window
+        )
+        print(f"\n  FACT LEDGER (content-aware{window_label}): {key} (using {model})")
+        ok, output = dispatch_auto(prompt, model=model, timeout=900)
+        if not ok:
+            if output and _is_rate_limited(output):
+                print("  ⚠ Content-aware FACT LEDGER rate-limited — using topic-based ledger")
+                return None
+            print("  ⚠ Content-aware FACT LEDGER dispatch failed — using topic-based ledger")
             return None
-        print("  ⚠ Content-aware FACT LEDGER dispatch failed — using topic-based ledger")
-        return None
 
-    ledger = _extract_review_json(output, required_keys=("claims",))
-    if not isinstance(ledger, dict):
-        print("  ⚠ Content-aware FACT LEDGER parse failed — using topic-based ledger")
-        return None
-    claims = ledger.get("claims")
-    if not isinstance(claims, list) or not claims:
+        ledger = _extract_review_json(output, required_keys=("claims",))
+        if not isinstance(ledger, dict):
+            print("  ⚠ Content-aware FACT LEDGER parse failed — using topic-based ledger")
+            return None
+        claims = ledger.get("claims")
+        if not isinstance(claims, list):
+            print("  ⚠ Content-aware FACT LEDGER invalid claims payload — using topic-based ledger")
+            return None
+        window_ledgers.append(ledger)
+
+    ledger = _merge_content_aware_window_ledgers(
+        window_ledgers,
+        topic=topic,
+        as_of_date=as_of_date,
+    )
+    if ledger is None:
         print("  ⚠ Content-aware FACT LEDGER empty — using topic-based ledger")
         return None
 
     ledger_json = json.dumps(ledger, indent=2, ensure_ascii=False)
     _atomic_write_text(cache_path, ledger_json)
-    print(f"  ✓ Content-aware FACT LEDGER: {len(claims)} claims verified, cached")
+    print(f"  ✓ Content-aware FACT LEDGER: {len(ledger['claims'])} claims verified, cached")
     return ledger
 
 

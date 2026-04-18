@@ -2537,6 +2537,86 @@ class TestContentAwareFactLedger(unittest.TestCase):
         finally:
             shutil.rmtree(tmpdir, ignore_errors=True)
 
+    def test_content_aware_step_covers_late_sections_beyond_40k(self):
+        import v1_pipeline as p
+
+        tmpdir = tempfile.mkdtemp()
+        try:
+            ledger_dir = Path(tmpdir) / ".pipeline" / "fact-ledgers"
+            content_root = Path(tmpdir) / "src" / "content" / "docs"
+            module_path = content_root / "test" / "module-0.1-test.md"
+            module_path.parent.mkdir(parents=True, exist_ok=True)
+            module_path.write_text("---\ntitle: Test\n---\n\nBody")
+
+            early_marker = "Kubernetes current stable is v1.35."
+            late_marker = "Helm current stable is v3.19.0."
+            filler_block = ("Padding text without factual claims.\n" * 1400)
+            content = (
+                "---\ntitle: Test\n---\n\n"
+                "## Early Facts\n"
+                f"{early_marker}\n\n"
+                f"{filler_block}\n"
+                "## Middle Narrative\n"
+                f"{filler_block}\n"
+                "## Late Facts\n"
+                f"{late_marker}\n"
+            )
+            self.assertGreater(len(content), p.CONTENT_AWARE_FACT_LEDGER_MAX_CHARS)
+
+            prompts: list[str] = []
+
+            def fake_dispatch(prompt: str, model: str, timeout: int):
+                prompts.append(prompt)
+                claims = []
+                if early_marker in prompt:
+                    claims.append(
+                        {
+                            "id": "C1",
+                            "claim": early_marker,
+                            "status": "SUPPORTED",
+                            "current_truth": early_marker,
+                            "sources": [{"url": "https://kubernetes.io/releases/", "source_date": "2026-04-12"}],
+                            "conflict_summary": None,
+                            "unverified_reason": None,
+                        }
+                    )
+                if late_marker in prompt:
+                    claims.append(
+                        {
+                            "id": "C1",
+                            "claim": late_marker,
+                            "status": "SUPPORTED",
+                            "current_truth": late_marker,
+                            "sources": [{"url": "https://helm.sh/docs/faq/releases/", "source_date": "2026-04-12"}],
+                            "conflict_summary": None,
+                            "unverified_reason": None,
+                        }
+                    )
+                payload = {
+                    "as_of_date": "2026-04-12",
+                    "topic": "Test",
+                    "content_aware": True,
+                    "claims": claims,
+                }
+                return True, json.dumps(payload)
+
+            with patch.object(p, "FACT_LEDGER_DIR", ledger_dir), \
+                 patch.object(p, "CONTENT_ROOT", content_root), \
+                 patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
+                 patch.object(p, "_extract_topic_from_module", return_value="Test"), \
+                 patch.object(p, "dispatch_auto", side_effect=fake_dispatch):
+                result = p.step_content_aware_fact_ledger(module_path, content)
+
+            self.assertIsNotNone(result)
+            self.assertTrue(result["content_aware"])
+            self.assertGreaterEqual(len(prompts), 2)
+            self.assertTrue(any(late_marker in prompt for prompt in prompts))
+            claim_texts = {claim["claim"] for claim in result["claims"]}
+            self.assertIn(early_marker, claim_texts)
+            self.assertIn(late_marker, claim_texts)
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
 
 class TestCliRefreshFactLedgerFlag(unittest.TestCase):
     """CLI commands should propagate --refresh-fact-ledger into run_module."""
