@@ -3,6 +3,20 @@
 from ._config import REPO_ROOT
 
 
+_REVIEW_PROTOCOL_PATH = REPO_ROOT / "docs" / "review-protocol.md"
+
+
+def load_review_context() -> str:
+    """Load the canonical review protocol section used for prompt injection."""
+    text = _REVIEW_PROTOCOL_PATH.read_text("utf-8").strip()
+    return text.split("\n## Universal Review Loop", 1)[0].strip()
+
+
+def build_review_message(content: str) -> str:
+    """Prepend canonical review context to a task message."""
+    return f"{load_review_context()}\n---\n\nTASK:\n{content}"
+
+
 def _load_gemini_context() -> str:
     """Load .gemini/docs/ context files and return as a single block.
 
@@ -154,14 +168,6 @@ Attached data:
 """
     prompt += """
 ---
-
-REVIEW PROTOCOL (mandatory for all review requests):
-- You MUST read every referenced file COMPLETELY before writing your review. Use read_file or cat — do not skim.
-- For EVERY issue you report, cite the exact content from the file (quote the line, value, or field).
-- If you cannot cite evidence from the actual file, do NOT report the issue — you may be hallucinating.
-- Do NOT invent examples that are not in the files. Only critique what actually exists.
-- Before critiquing a vocabulary list, activity list, or similar: list ALL items you found in the file first, THEN review each one.
-- If a file has 25 vocabulary entries, your review must reference the actual 25 entries, not imagined ones.
 
 Please respond appropriately. If this is a request, fulfill it.
 If Claude asked for feedback, provide your honest assessment.

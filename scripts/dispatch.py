@@ -24,6 +24,8 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
+from ai_agent_bridge._prompts import build_review_message
+
 REPO_ROOT = Path(__file__).parent.parent
 LOG_DIR = REPO_ROOT / ".dispatch-logs"
 MCP_CONFIG = REPO_ROOT / ".mcp.json"
@@ -48,6 +50,7 @@ GH_CHAR_LIMIT = 64000
 # currently tested writer alias here until a GA replacement is available.
 GEMINI_WRITER_MODEL = "gemini-3.1-pro-preview"
 GEMINI_DEFAULT_MODEL = "gemini-3-flash-preview"
+GEMINI_REVIEW_MODEL = "gemini-3.1-pro-preview"  # Pro for reviews — hallucinations on Flash cost real iteration time
 GEMINI_FALLBACK_MODEL = "auto"
 CLAUDE_DEFAULT_MODEL = "claude-sonnet-4-6"
 CODEX_DEFAULT_MODEL = "codex"  # lets codex CLI pick the default model
@@ -178,44 +181,23 @@ CLAUDE_TRANSLATION_TOOLS = (
 )
 
 # ---------------------------------------------------------------------------
-# Gemini review context
-# ---------------------------------------------------------------------------
-
-REVIEW_CONTEXT = """PROJECT CONTEXT:
-KubeDojo is a free, open-source Kubernetes curriculum with 568+ modules:
-- Certification tracks: CKA, CKAD, CKS, KCNA, KCSA (exam-aligned, K8s 1.35+)
-- Platform Engineering: SRE, GitOps, DevSecOps, MLOps (209 modules)
-- On-Premises Kubernetes: 30 modules
-- Cloud: AWS/GCP/Azure (84 modules)
-- Quality standard: Every module has learning outcomes, inline prompts, scenario-based quizzes
-
-REVIEW PROTOCOL:
-- Read every referenced file COMPLETELY before reviewing. Do not skim.
-- For EVERY issue, cite exact content (quote the line, value, or field).
-- If you cannot cite evidence from the actual file, do NOT report it.
-
-REVIEW CRITERIA:
-- Technical accuracy: K8s commands correct and runnable? Version numbers accurate?
-- Exam alignment: Matches current CNCF exam curriculum?
-- Completeness: Acceptance criteria thorough? Edge cases covered?
-- Junior-friendly: Beginner-accessible? "Why" explained, not just "what"?
-
-Respond with:
-1. Clear verdict: APPROVE / NEEDS CHANGES / REJECT
-2. Specific, actionable feedback
-3. Concise — focus on what needs changing
-"""
-
-
-# ---------------------------------------------------------------------------
 # Core dispatch functions
 # ---------------------------------------------------------------------------
+# Review context now lives in docs/review-protocol.md and is loaded via
+# ai_agent_bridge._prompts.build_review_message() on the dispatch path.
 
-def dispatch_gemini(prompt: str, model: str = GEMINI_DEFAULT_MODEL,
+def dispatch_gemini(prompt: str, model: str | None = None,
                     review: bool = False, timeout: int = 900,
                     mcp: bool = False) -> tuple[bool, str]:
-    """Call Gemini CLI directly. Returns (success, output)."""
-    full_prompt = f"{REVIEW_CONTEXT}\n---\n\nTASK:\n{prompt}" if review else prompt
+    """Call Gemini CLI directly. Returns (success, output).
+
+    When ``review=True`` and no ``model`` is specified, uses Pro
+    (``GEMINI_REVIEW_MODEL``) — Flash hallucinations on code reviews cost more
+    iteration time than the extra Pro latency.
+    """
+    if model is None:
+        model = GEMINI_REVIEW_MODEL if review else GEMINI_DEFAULT_MODEL
+    full_prompt = build_review_message(prompt) if review else prompt
     cmd = [GEMINI_CLI, "-m", model, "-y"]
     if mcp:
         cmd.extend(["--allowed-mcp-server-names", "rag"])
@@ -689,7 +671,7 @@ def main():
     # gemini
     gp = subparsers.add_parser("gemini", help="Dispatch prompt to Gemini CLI")
     gp.add_argument("prompt", help="Prompt text (use '-' to read from stdin)")
-    gp.add_argument("--model", default=GEMINI_DEFAULT_MODEL, help=f"Gemini model (default: {GEMINI_DEFAULT_MODEL})")
+    gp.add_argument("--model", default=None, help=f"Gemini model (default: {GEMINI_REVIEW_MODEL} when --review else {GEMINI_DEFAULT_MODEL})")
     gp.add_argument("--review", action="store_true", help="Prepend KubeDojo review context")
     gp.add_argument("--mcp", action="store_true", help="Enable RAG MCP tools (for translations)")
     gp.add_argument("--github", type=int, metavar="ISSUE", help="Post output to GitHub issue")
@@ -717,11 +699,12 @@ def main():
 
     if args.agent == "gemini":
         prompt = sys.stdin.read() if args.prompt == "-" else args.prompt
+        chosen_model = args.model or (GEMINI_REVIEW_MODEL if args.review else GEMINI_DEFAULT_MODEL)
         ok, output = dispatch_gemini_with_retry(
-            prompt, args.model, args.review, args.retry, args.timeout, args.mcp,
+            prompt, chosen_model, args.review, args.retry, args.timeout, args.mcp,
         )
         if ok and args.github:
-            post_to_github(args.github, output, args.model)
+            post_to_github(args.github, output, chosen_model)
         sys.exit(0 if ok else 1)
 
     elif args.agent == "claude":

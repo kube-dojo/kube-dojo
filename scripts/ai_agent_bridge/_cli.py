@@ -28,6 +28,7 @@ from ._messaging import (
     send_message,
 )
 from ._model import check_model
+from ._prompts import build_review_message
 
 try:
     from dispatch import GEMINI_WRITER_MODEL
@@ -409,6 +410,8 @@ def _build_parser() -> argparse.ArgumentParser:
                                    help="Exact sender model ID")
     ask_claude_parser.add_argument("--to-model", dest="to_model",
                                    help="Target model ID")
+    ask_claude_parser.add_argument("--review", action="store_true",
+                                   help="Prepend canonical review protocol to the message")
 
     # ask-codex
     ask_codex_parser = subparsers.add_parser("ask-codex", help="Send message AND invoke Codex (one-step; use '-' to read from stdin)")
@@ -424,6 +427,8 @@ def _build_parser() -> argparse.ArgumentParser:
                                   help="Exact sender model ID")
     ask_codex_parser.add_argument("--to-model", dest="to_model",
                                   help="Target model ID")
+    ask_codex_parser.add_argument("--review", action="store_true",
+                                  help="Prepend canonical review protocol to the message")
 
     # ask-gemini
     ask_gemini_parser = subparsers.add_parser("ask-gemini", help="Send message AND invoke Gemini (one-step)")
@@ -452,6 +457,8 @@ def _build_parser() -> argparse.ArgumentParser:
                                    help="Comma-separated delimiter names for --allow-write mode.")
     ask_gemini_parser.add_argument("--no-github", dest="no_github", action="store_true",
                                    help="Skip auto-posting review to GitHub issue")
+    ask_gemini_parser.add_argument("--review", action="store_true",
+                                   help="Prepend canonical review protocol to the message")
 
     # converse — multi-turn conversation with Gemini
     converse_parser = subparsers.add_parser("converse", help="Multi-turn conversation with Gemini (includes history)")
@@ -593,7 +600,8 @@ def _handle_ask_claude(args):
     data = None
     if args.data:
         data = Path(args.data).read_text()
-    ask_claude(args.content, args.task_id, args.type, data,
+    content = build_review_message(args.content) if args.review else args.content
+    ask_claude(content, args.task_id, args.type, data,
                args.new_session, args.from_llm, args.from_model, args.to_model)
 
 
@@ -603,6 +611,7 @@ def _handle_ask_codex(args):
     if args.data:
         data = Path(args.data).read_text()
     content = sys.stdin.read() if args.content == "-" else args.content
+    content = build_review_message(content) if args.review else content
     ask_codex(content, args.task_id, args.type, data,
               args.new_session, args.from_llm, args.from_model, args.to_model)
 
@@ -613,6 +622,7 @@ def _handle_ask_gemini(args):
     if args.data:
         data = Path(args.data).read_text()
     content = sys.stdin.read() if args.content == "-" else args.content
+    content = build_review_message(content) if args.review else content
     ask_gemini(content, args.task_id, args.type, data, args.model,
                getattr(args, 'from_model', None),
                getattr(args, 'async_mode', False),
