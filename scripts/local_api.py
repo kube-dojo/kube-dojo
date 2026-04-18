@@ -30,6 +30,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8768
 DOCS_ROOT = REPO_ROOT / "src" / "content" / "docs"
+GH_REPO = "kube-dojo/kube-dojo.github.io"
+GH_CACHE_TTL_SECONDS = 60.0
 GENERATED_PREFIXES = (
     ".astro/",
     ".dispatch-logs/",
@@ -544,6 +546,7 @@ def cached_response(
     ttl_seconds: float,
     version_fn: Callable[[], tuple],
     builder: Callable[[], tuple[int, Any, str]],
+    etag_builder: Callable[[Any, bytes], str] | None = None,
 ) -> tuple[int, bytes, str, str]:
     """Serve a response through the cache. Returns (status, body_bytes, content_type, etag).
 
@@ -562,7 +565,7 @@ def cached_response(
 
     status_code, payload, content_type = builder()
     body_bytes = _serialize_payload(payload, content_type)
-    etag = _weak_etag(body_bytes)
+    etag = etag_builder(payload, body_bytes) if etag_builder is not None else _weak_etag(body_bytes)
 
     if 200 <= status_code < 300:
         with _CACHE_LOCK:
@@ -583,6 +586,153 @@ def _cache_stats() -> dict[str, Any]:
             "entries": len(_CACHE),
             "keys": sorted(_CACHE.keys()),
         }
+
+
+def _gh_json_fields(*fields: str) -> str:
+    return ",".join(fields)
+
+
+def _gh_repo_cmd(*args: str) -> list[str]:
+    return ["gh", *args, "--repo", GH_REPO]
+
+
+def _run_gh_json(*args: str, timeout: int = 10) -> tuple[int, Any]:
+    try:
+        result = subprocess.run(
+            _gh_repo_cmd(*args),
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=timeout,
+        )
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+        return 503, {"error": "gh CLI not available"}
+    if result.returncode != 0:
+        stderr = result.stderr.strip()
+        if "Could not resolve to an issue or pull request" in stderr:
+            return 404, {"error": "not_found"}
+        return 502, {"error": "gh command failed", "message": stderr or "gh command failed"}
+    try:
+        return 200, json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        return 502, {"error": "invalid_gh_json", "message": str(exc)}
+
+
+def _normalize_gh_item(item: dict[str, Any]) -> dict[str, Any]:
+    labels = item.get("labels") or []
+    assignees = item.get("assignees") or []
+    comments = item.get("comments") or []
+    return {
+        "number": item.get("number"),
+        "title": item.get("title", ""),
+        "state": item.get("state", ""),
+        "labels": [
+            label.get("name")
+            for label in labels
+            if isinstance(label, dict) and label.get("name")
+        ],
+        "assignees": [
+            assignee.get("login")
+            for assignee in assignees
+            if isinstance(assignee, dict) and assignee.get("login")
+        ],
+        "comments_count": len(comments) if isinstance(comments, list) else 0,
+        "updated_at": item.get("updatedAt", ""),
+        "url": item.get("url", ""),
+    }
+
+
+def _normalize_gh_comments(comments: Any) -> list[dict[str, Any]]:
+    if not isinstance(comments, list):
+        return []
+    normalized: list[dict[str, Any]] = []
+    for comment in comments[-5:]:
+        if not isinstance(comment, dict):
+            continue
+        author = comment.get("author") or {}
+        normalized.append(
+            {
+                "author": author.get("login", "") if isinstance(author, dict) else "",
+                "body": comment.get("body", ""),
+                "created_at": comment.get("createdAt", ""),
+                "url": comment.get("url", ""),
+            }
+        )
+    return normalized
+
+
+def _build_gh_list(kind: str, state: str, limit: int) -> tuple[int, Any, str]:
+    status_code, payload = _run_gh_json(
+        kind,
+        "list",
+        "--state",
+        state,
+        "--limit",
+        str(limit),
+        "--json",
+        _gh_json_fields("number", "title", "state", "labels", "assignees", "comments", "updatedAt", "url"),
+    )
+    if status_code != 200:
+        return status_code, payload, "application/json; charset=utf-8"
+    items = [
+        _normalize_gh_item(item)
+        for item in payload
+        if isinstance(item, dict)
+    ]
+    return 200, {
+        "repo": GH_REPO,
+        "state": state,
+        "limit": limit,
+        "count": len(items),
+        "items": items,
+    }, "application/json; charset=utf-8"
+
+
+def _build_gh_detail(kind: str, number: int) -> tuple[int, Any, str]:
+    fields = ["number", "title", "state", "labels", "assignees", "comments", "updatedAt", "url"]
+    if kind == "pr":
+        fields.append("mergeable")
+    status_code, payload = _run_gh_json(
+        kind,
+        "view",
+        str(number),
+        "--json",
+        _gh_json_fields(*fields),
+    )
+    if status_code != 200:
+        return status_code, payload, "application/json; charset=utf-8"
+    if not isinstance(payload, dict):
+        return 502, {"error": "invalid_gh_json", "message": "expected object"}, "application/json; charset=utf-8"
+    item = _normalize_gh_item(payload)
+    item["comments"] = _normalize_gh_comments(payload.get("comments"))
+    if kind == "pr":
+        item["mergeable"] = payload.get("mergeable")
+    return 200, item, "application/json; charset=utf-8"
+
+
+def _is_gh_path(path: str) -> bool:
+    return (
+        path in {"/api/gh/issues", "/api/gh/prs"}
+        or path.startswith("/api/gh/issues/")
+        or path.startswith("/api/gh/prs/")
+    )
+
+
+def _gh_payload_etag(path: str, payload: Any) -> str:
+    latest = "empty"
+    if isinstance(payload, dict):
+        items = payload.get("items")
+        if isinstance(items, list):
+            updated_values = [
+                item.get("updated_at", "")
+                for item in items
+                if isinstance(item, dict) and item.get("updated_at")
+            ]
+            if updated_values:
+                latest = max(updated_values)
+        elif payload.get("updated_at"):
+            latest = str(payload["updated_at"])
+    return _weak_etag(f"{path}:{latest}".encode("utf-8"))
 
 
 # --- Background snapshot ---
@@ -5140,6 +5290,24 @@ def build_api_schema() -> dict[str, Any]:
             {"path": "/api/ztt/status", "desc": "Zero-to-Terminal pilot status"},
             {"path": "/api/git/worktree", "desc": "Dirty entries in the PRIMARY repo only"},
             {"path": "/api/git/worktrees", "desc": "All attached worktrees (plural)"},
+            {
+                "path": "/api/gh/issues",
+                "desc": "Cached GitHub issue list for agent orientation",
+                "query": ["state=open|closed|all (default open)", "limit=... (default 50, max 200)"],
+            },
+            {
+                "path": "/api/gh/issues/{n}",
+                "desc": "Single GitHub issue with the last 5 comments",
+            },
+            {
+                "path": "/api/gh/prs",
+                "desc": "Cached GitHub pull request list for agent orientation",
+                "query": ["state=open|closed|merged|all (default open)", "limit=... (default 50, max 200)"],
+            },
+            {
+                "path": "/api/gh/prs/{n}",
+                "desc": "Single GitHub pull request with the last 5 comments and mergeable state",
+            },
             {"path": "/api/issue-watch/{n}", "desc": "Single watched GH issue state"},
             {"path": "/api/module/{key}/state", "desc": "Per-module EN+UK+lab+frontmatter+diagnostics"},
             {"path": "/api/module/{key}/orchestration/latest", "desc": "Per-module latest pipeline job+event"},
@@ -5272,6 +5440,36 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
         return 200, build_worktree_status(repo_root), "application/json; charset=utf-8"
     if path == "/api/git/worktrees":
         return 200, build_worktrees_list(repo_root), "application/json; charset=utf-8"
+    if path == "/api/gh/issues":
+        state = query.get("state", ["open"])[0] or "open"
+        if state not in {"open", "closed", "all"}:
+            state = "open"
+        try:
+            limit = int(query.get("limit", ["50"])[0])
+        except (TypeError, ValueError):
+            limit = 50
+        return _build_gh_list("issue", state, max(1, min(limit, 200)))
+    if path.startswith("/api/gh/issues/"):
+        try:
+            number = int(path.split("/")[-1])
+        except ValueError:
+            return 400, {"error": "invalid_issue_number"}, "application/json; charset=utf-8"
+        return _build_gh_detail("issue", number)
+    if path == "/api/gh/prs":
+        state = query.get("state", ["open"])[0] or "open"
+        if state not in {"open", "closed", "merged", "all"}:
+            state = "open"
+        try:
+            limit = int(query.get("limit", ["50"])[0])
+        except (TypeError, ValueError):
+            limit = 50
+        return _build_gh_list("pr", state, max(1, min(limit, 200)))
+    if path.startswith("/api/gh/prs/"):
+        try:
+            number = int(path.split("/")[-1])
+        except ValueError:
+            return 400, {"error": "invalid_pr_number"}, "application/json; charset=utf-8"
+        return _build_gh_detail("pr", number)
     if path == "/api/schema":
         return 200, build_api_schema(), "application/json; charset=utf-8"
     if path == "/api/briefing/session":
@@ -5460,6 +5658,20 @@ def serve_request(
     parsed = urlsplit(raw_path)
     path = parsed.path.rstrip("/") or "/"
     query = parse_qs(parsed.query)
+
+    if _is_gh_path(path):
+        cache_key = _normalized_cache_key(path, query, repo_root=repo_root)
+
+        def _build() -> tuple[int, Any, str]:
+            return route_request(repo_root, raw_path)
+
+        return cached_response(
+            cache_key,
+            GH_CACHE_TTL_SECONDS,
+            lambda: ("gh",),
+            _build,
+            lambda payload, _body: _gh_payload_etag(path, payload),
+        )
 
     policy = CACHE_POLICY.get(path)
     if policy is not None:
