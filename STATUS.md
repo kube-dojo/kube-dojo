@@ -2,11 +2,18 @@
 
 > **Read this first every session. Update before ending.**
 
-## Active Work (2026-04-19, fresh session starting)
+## Active Work (2026-04-19, session 5 — citation truth + backfill design)
 
-Previous session (session 4) wrapped cleanly. Main is at `8de44240` (merge of #321 — universal review protocol + verifier). Full handoff with next-step queue: [`docs/sessions/2026-04-19-session-4-pipeline-queue-plus-review-verifier.md`](./docs/sessions/2026-04-19-session-4-pipeline-queue-plus-review-verifier.md).
+Session 5 landed two things: the heuristic quality scorer now auto-fails modules with no `## Sources` section (reveal: 726/726 critical, old 4.71 avg was fabricated; commit `c1220cd0`), and the `## Sources` vs `## Authoritative Sources` contract drift between `check_citations.py` and `v1_pipeline.py` is unified (commit `1918d262`). Full handoff with the citation-backfill plan + next-session blockers: [`docs/sessions/2026-04-19-session-5-citation-backfill-design.md`](./docs/sessions/2026-04-19-session-5-citation-backfill-design.md).
 
-**Queue for session 5** (ordered; pick one to start):
+**Next session starts here:**
+1. Write `scripts/fetch_citation.py` (proven URL fetcher + text extraction, ~150 LOC).
+2. Commit `docs/citation-trusted-domains.yaml` (tiered allowlist per Codex).
+3. Dry-run fetcher against 20 URLs across 4 allowlist tiers — prove CI can scrape k8s.io, NIST, OWASP, vendor docs without 403s.
+4. Then design v2 citation phase + v1 step functions; calibration on 4 modules (ZTT 0.1, Linux DNS, one CKS CVE-heavy, one cloud vendor-claim-heavy).
+5. Scale order confirmed by user: ZTT → AI → prereqs → cloud → AI/ML → linux → on-prem → platform → certs.
+
+**Prior queue (session 4, still valid but now lower priority than citation backfill):**
 1. #277 — `/api/build/run` + `/api/build/status` endpoints (~150 LOC, clear spec)
 2. #258 — Local API audit + cold-start cost (broad; dispatch for split plan first)
 3. #248 — Review Batch triage (probably closable)
