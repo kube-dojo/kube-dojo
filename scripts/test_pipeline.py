@@ -1306,6 +1306,58 @@ class TestPipelineTransitions(unittest.TestCase):
         # Should not pass (needs improvement)
         self.assertFalse(result)
 
+    @patch("v1_pipeline.STATE_FILE")
+    @patch("v1_pipeline.CONTENT_ROOT")
+    @patch("subprocess.run")
+    def test_write_only_preserves_draft_for_review_resume(
+        self, mock_subprocess, mock_root, mock_state,
+    ):
+        """Write-only must leave a saved draft in phase=review for the next run."""
+        import v1_pipeline as p
+
+        mock_state.__class__ = type(self.state_file)
+        mock_root.resolve.return_value = Path(self.tmpdir).resolve()
+
+        module_key = "test/module-0.1-test"
+        draft_content = GOOD_MODULE.replace(
+            "Test Module — Good",
+            "Test Module — Write-only Draft",
+        )
+        review_ok = {
+            "verdict": "APPROVE",
+            "checks": [{"id": cid, "passed": True} for cid in p.CHECK_IDS],
+            "edits": [],
+            "feedback": "",
+        }
+        git_ok = subprocess.CompletedProcess(["git"], 0, "", "")
+        state = {"modules": {}}
+
+        with patch.object(p, "STATE_FILE", self.state_file), \
+             patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
+             patch.object(p, "module_key_from_path", return_value=module_key), \
+             patch.object(p, "step_write", return_value=draft_content) as mock_write, \
+             patch.object(p, "step_review", return_value=review_ok) as mock_review, \
+             patch.object(p, "append_review_audit"), \
+             patch.object(p, "_git_stage_and_commit", return_value=(git_ok, git_ok)), \
+             patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_content_aware_fact_ledger", return_value=None), \
+             patch.object(p, "step_check_integrity", return_value=(True, [])), \
+             patch.object(p, "step_check", return_value=(True, [])):
+            first_ok = p.run_module(self.module_path, state, write_only=True)
+            self.assertTrue(first_ok)
+            self.assertEqual(state["modules"][module_key]["phase"], "review")
+            self.assertEqual(mock_write.call_count, 1)
+            self.assertEqual(mock_review.call_count, 0)
+            self.assertIn("Write-only Draft", self.module_path.read_text())
+
+            second_ok = p.run_module(self.module_path, state)
+
+        self.assertTrue(second_ok)
+        self.assertEqual(mock_write.call_count, 1, "Review resume must not trigger a second write")
+        self.assertEqual(mock_review.call_count, 1, "Next run should resume at review")
+        self.assertIn("Write-only Draft", mock_review.call_args.args[1])
+        self.assertEqual(state["modules"][module_key]["phase"], "done")
+
 
 # ---------------------------------------------------------------------------
 # Test: Binary quality gate — compute_severity unit tests (issue #223)
