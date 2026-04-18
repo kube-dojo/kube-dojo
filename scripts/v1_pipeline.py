@@ -3003,11 +3003,11 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
             # 3. If both unavailable, use writer model as last resort.
             if isinstance(review, dict) and review.get("rate_limited"):
                 fallback_model = m.get("review_fallback", MODELS["review_fallback"])
-                primary_family = _model_family(reviewer_model)
+                writer_family = _model_family(m["write"])
                 fallback_family = _model_family(fallback_model)
                 fallback_allowed = True
-                if fallback_family == primary_family:
-                    print(f"  ⚠ Primary reviewer rate-limited and fallback is same family — skipping to last resort")
+                if fallback_family == writer_family:
+                    print("  ⚠ Primary reviewer rate-limited and fallback matches writer family — skipping to last resort")
                     fallback_allowed = False
                 elif fallback_family not in INDEPENDENT_REVIEWER_FAMILIES:
                     print(f"  ⚠ Review fallback {fallback_model} is not in approved independent families — skipping to last resort")

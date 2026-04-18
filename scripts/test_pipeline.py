@@ -1264,6 +1264,102 @@ class TestPipelineTransitions(unittest.TestCase):
         self.assertEqual(mock_review.call_count, 3)
 
     @patch("v1_pipeline.STATE_FILE")
+    @patch("v1_pipeline.CONTENT_ROOT")
+    @patch("subprocess.run")
+    def test_review_skips_same_writer_family_fallback_to_last_resort(
+        self, mock_subprocess, mock_root, mock_state,
+    ):
+        """Same-writer-family fallback should skip straight to last resort and preserve re-review flag."""
+        import v1_pipeline as p
+
+        mock_state.__class__ = type(self.state_file)
+        mock_root.resolve.return_value = Path(self.tmpdir).resolve()
+
+        state = {"modules": {}}
+        models = {
+            **p.MODELS,
+            "write": "claude-sonnet-4-6",
+            "review": "gemini-3.1-pro-preview",
+            "review_fallback": "claude-sonnet-4-6",
+        }
+        all_pass_checks = [{"id": cid, "passed": True} for cid in p.CHECK_IDS]
+        review_sequence = [
+            {"rate_limited": True},
+            {"verdict": "APPROVE", "severity": "clean",
+             "checks": all_pass_checks, "edits": [], "feedback": ""},
+        ]
+
+        with patch.object(p, "STATE_FILE", self.state_file), \
+             patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
+             patch.object(p, "save_state"), \
+             patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
+             patch.object(p, "step_write", return_value=GOOD_MODULE), \
+             patch.object(p, "step_review", side_effect=review_sequence) as mock_review, \
+             patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_content_aware_fact_ledger", return_value=None), \
+             patch.object(p, "step_check_integrity", return_value=(True, [])), \
+             patch.object(p, "step_check", return_value=(True, [])):
+            p.run_module(self.module_path, state, models=models)
+
+        ms = state["modules"]["test/module-0.1-test"]
+        self.assertEqual(ms.get("phase"), "done")
+        self.assertEqual(ms.get("reviewer"), "claude")
+        self.assertTrue(ms.get("needs_independent_review"))
+        self.assertEqual(mock_review.call_count, 2)
+        self.assertEqual(
+            [call.kwargs["model"] for call in mock_review.call_args_list],
+            [models["review"], models["write"]],
+        )
+
+    @patch("v1_pipeline.STATE_FILE")
+    @patch("v1_pipeline.CONTENT_ROOT")
+    @patch("subprocess.run")
+    def test_review_uses_approved_cross_family_fallback_before_last_resort(
+        self, mock_subprocess, mock_root, mock_state,
+    ):
+        """Approved cross-family fallback should be used instead of the last-resort writer reviewer."""
+        import v1_pipeline as p
+
+        mock_state.__class__ = type(self.state_file)
+        mock_root.resolve.return_value = Path(self.tmpdir).resolve()
+
+        state = {"modules": {}}
+        models = {
+            **p.MODELS,
+            "write": "claude-sonnet-4-6",
+            "review": "gemini-3.1-pro-preview",
+            "review_fallback": "gpt-5.3-codex-spark",
+        }
+        all_pass_checks = [{"id": cid, "passed": True} for cid in p.CHECK_IDS]
+        review_sequence = [
+            {"rate_limited": True},
+            {"verdict": "APPROVE", "severity": "clean",
+             "checks": all_pass_checks, "edits": [], "feedback": ""},
+        ]
+
+        with patch.object(p, "STATE_FILE", self.state_file), \
+             patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
+             patch.object(p, "save_state"), \
+             patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
+             patch.object(p, "step_write", return_value=GOOD_MODULE), \
+             patch.object(p, "step_review", side_effect=review_sequence) as mock_review, \
+             patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_content_aware_fact_ledger", return_value=None), \
+             patch.object(p, "step_check_integrity", return_value=(True, [])), \
+             patch.object(p, "step_check", return_value=(True, [])):
+            p.run_module(self.module_path, state, models=models)
+
+        ms = state["modules"]["test/module-0.1-test"]
+        self.assertEqual(ms.get("phase"), "done")
+        self.assertEqual(ms.get("reviewer"), "codex")
+        self.assertFalse(ms.get("needs_independent_review", True))
+        self.assertEqual(mock_review.call_count, 2)
+        self.assertEqual(
+            [call.kwargs["model"] for call in mock_review.call_args_list],
+            [models["review"], models["review_fallback"]],
+        )
+
+    @patch("v1_pipeline.STATE_FILE")
     @patch("v1_pipeline.dispatch_auto")
     @patch("v1_pipeline.CONTENT_ROOT")
     @patch("subprocess.run")
