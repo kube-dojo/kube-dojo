@@ -290,6 +290,15 @@ def initial_write_plan(key: str) -> str:
     )
 
 
+def _clear_resume_metadata(ms: dict, staging_path: Path | None = None) -> None:
+    """Drop run-scoped resume state before starting a fresh pipeline attempt."""
+    ms.pop("plan", None)
+    ms.pop("targeted_fix", None)
+    ms.pop("paused_reason", None)
+    if staging_path is not None:
+        staging_path.unlink(missing_ok=True)
+
+
 def sanitize_module_key(module_key: str) -> str:
     """Convert a module key into a stable knowledge-card filename."""
     return module_key.replace("/", "__")
@@ -2485,9 +2494,7 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
         else:
             print(f"  ⚠ needs_targeted_fix phase but staging/plan missing — restarting from initial write")
             ms["phase"] = "pending"
-            ms.pop("plan", None)
-            ms.pop("targeted_fix", None)
-            ms.pop("paused_reason", None)
+            _clear_resume_metadata(ms, staging_path)
             save_state(state)
 
     # Phase 0: split-reviewer fact ledger (issue #225).
@@ -2564,10 +2571,7 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
         if dry_run:
             print(f"\n  [DRY RUN] Initial write plan: {plan}")
             return False
-        ms.pop("plan", None)
-        ms.pop("targeted_fix", None)
-        ms.pop("paused_reason", None)
-        staging_path.unlink(missing_ok=True)
+        _clear_resume_metadata(ms, staging_path)
         ms["severity"] = None
         ms["checks_failed"] = []
         ms["reviewer_schema_version"] = 3
@@ -3971,6 +3975,8 @@ def cmd_reset_stuck(args):
     for key, ms in sorted(modules.items()):
         was_stuck = False
         cleared_errors: list[str] = []
+        module_path = find_module_path(key)
+        staging_path = module_path.with_suffix(".staging.md") if module_path is not None else None
 
         # Deterministic check failures — route back to write
         errors = ms.get("errors", [])
@@ -3983,6 +3989,7 @@ def cmd_reset_stuck(args):
                 ms["phase"] = "write"
             elif ms.get("phase") == "audit":
                 ms["phase"] = "pending"
+            _clear_resume_metadata(ms, staging_path)
             was_stuck = True
 
         # Integrity gate max retries — restart from pending
@@ -3992,6 +3999,7 @@ def cmd_reset_stuck(args):
             ms["errors"] = [e for e in errors if "Integrity" not in str(e)]
             cleared_errors.extend(integrity_errors)
             ms["phase"] = "pending"
+            _clear_resume_metadata(ms, staging_path)
             was_stuck = True
 
         # Review rejected max times — match any count
@@ -4003,6 +4011,7 @@ def cmd_reset_stuck(args):
             ms["errors"] = [e for e in errors if not re.match(r"Review rejected \d+ times", str(e))]
             cleared_errors.extend(rejected_errors)
             ms["phase"] = "pending"
+            _clear_resume_metadata(ms, staging_path)
             was_stuck = True
 
         # Stale phase=write with valid draft on disk — route to review.
@@ -4013,7 +4022,6 @@ def cmd_reset_stuck(args):
             has_legit_rewrite = bool(
                 ms.get("severity") in ("severe", "targeted") and ms.get("checks_failed")
             )
-            module_path = find_module_path(key)
             if not has_legit_rewrite and module_path is not None:
                 if _safe_read_len(module_path) >= 2000:
                     ms["phase"] = "review"

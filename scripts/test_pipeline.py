@@ -824,6 +824,40 @@ class TestReviewAuditLog(unittest.TestCase):
             add_paths = mock_git.call_args[0][0]
             self.assertEqual(add_paths, [str(audit_path)])
 
+    def test_reset_stuck_clears_stale_resume_metadata_on_fresh_restart(self):
+        import v1_pipeline as p
+
+        staging_path = self.module_path.with_suffix(".staging.md")
+        staging_path.write_text("stale staged draft")
+        state = {
+            "modules": {
+                self.module_key: {
+                    "phase": "check",
+                    "severity": "targeted",
+                    "checks_failed": [{"id": "LAB", "evidence": "old failure"}],
+                    "plan": "TARGETED FIX. Old plan from previous run.",
+                    "targeted_fix": True,
+                    "paused_reason": "rate limit",
+                    "errors": ["Deterministic checks failed after review"],
+                }
+            }
+        }
+        self.state_file.parent.mkdir(parents=True, exist_ok=True)
+        self.state_file.write_text(yaml.dump(state, sort_keys=False))
+        git_ok = subprocess.CompletedProcess(["git"], 0, "", "")
+
+        with self._patch_paths(p), \
+             patch.object(p, "_git_stage_and_commit", return_value=(git_ok, git_ok)):
+            p.cmd_reset_stuck(Namespace())
+
+        reloaded = yaml.safe_load(self.state_file.read_text())
+        ms = reloaded["modules"][self.module_key]
+        self.assertEqual(ms["phase"], "write")
+        self.assertNotIn("plan", ms)
+        self.assertNotIn("targeted_fix", ms)
+        self.assertNotIn("paused_reason", ms)
+        self.assertFalse(staging_path.exists(), "Fresh restart should drop stale staged draft")
+
 
 # ---------------------------------------------------------------------------
 # Test: Pipeline step_check (deterministic gate)
