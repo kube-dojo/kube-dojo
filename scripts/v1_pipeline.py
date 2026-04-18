@@ -3210,18 +3210,21 @@ def run_module(module_path: Path, state: dict, max_retries: int | None = None,
                     pass  # non-critical
                 return True
 
+        if ms["phase"] == "review":
             # Content-aware fact ledger: verify claims actually made in the
-            # written content. Merges with the pre-write topic-based ledger
-            # so the reviewer has both broad coverage and precise grounding.
-            # data_conflict gating happens here, after the draft exists, so
-            # topic-only hypothetical claims do not block the pipeline.
+            # written content. Regenerated each iteration so rejected-draft
+            # claims stay transient — only the APPROVE branch merges them
+            # back into ms["fact_ledger"] (persistent). Generated here (not
+            # under phase=write) so re-review after a clean deterministic
+            # apply picks up the revised content's claims. See #235.
+            content_ledger = None
+            review_fact_ledger = ms.get("fact_ledger")
             if improved and not dry_run:
                 fact_model = m.get("fact_grounding", MODELS["fact_grounding"])
                 content_ledger = step_content_aware_fact_ledger(
                     module_path, improved, model=fact_model
                 )
                 if content_ledger is None:
-                    # Try fallback model
                     fallback_model = m.get("fact_fallback", MODELS["fact_fallback"])
                     if fallback_model != fact_model:
                         content_ledger = step_content_aware_fact_ledger(
@@ -3244,7 +3247,6 @@ def run_module(module_path: Path, state: dict, max_retries: int | None = None,
                         or ms.get("fact_ledger")
                     )
 
-        if ms["phase"] == "review":
             content_for_integrity = improved or module_path.read_text()
             integrity_passed, integrity_messages = step_check_integrity(
                 content_for_integrity, review_fact_ledger or ms.get("fact_ledger") or {}
@@ -3389,6 +3391,11 @@ def run_module(module_path: Path, state: dict, max_retries: int | None = None,
                 # ignore any `edits` returned alongside an APPROVE — an
                 # approval is an immutable snapshot. If the reviewer wants
                 # changes, it must REJECT with severity=targeted.
+                if content_ledger is not None:
+                    ms["fact_ledger"] = (
+                        _merge_fact_ledgers(ms.get("fact_ledger"), content_ledger)
+                        or ms.get("fact_ledger")
+                    )
                 ms["severity"] = "clean"
                 ms["checks_failed"] = []
                 ms["reviewer_schema_version"] = 3

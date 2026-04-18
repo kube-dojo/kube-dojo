@@ -3893,6 +3893,99 @@ class TestRunModuleSplitReviewer(unittest.TestCase):
 
         self.assertTrue(ok)
 
+    def test_rejected_draft_content_ledger_stays_transient_until_approve(self):
+        import v1_pipeline as p
+
+        def content_ledger(claim_text: str) -> dict:
+            return {
+                "as_of_date": "2026-04-18",
+                "topic": "Test Module",
+                "claims": [
+                    {
+                        "id": "C1",
+                        "claim": claim_text,
+                        "status": "SUPPORTED",
+                        "current_truth": claim_text,
+                        "sources": [{"url": "https://example.com/facts", "source_date": "2026-04-18"}],
+                        "conflict_summary": None,
+                        "unverified_reason": None,
+                    }
+                ],
+            }
+
+        review_ledgers: list[dict | None] = []
+        review_sequence = [
+            {
+                "verdict": "REJECT",
+                "checks": [
+                    {"id": "LAB", "passed": False, "evidence": "minor accuracy issue", "edit_refs": [0]},
+                    {"id": "COV", "passed": True},
+                    {"id": "QUIZ", "passed": True},
+                    {"id": "EXAM", "passed": True},
+                    {"id": "DEPTH", "passed": True},
+                    {"id": "WHY", "passed": True},
+                    {"id": "PRES", "passed": True},
+                ],
+                "edits": [
+                    {
+                        "type": "replace",
+                        "find": "## Learning Outcomes",
+                        "new": "## Learning Outcomes (Revised)",
+                        "reason": "revision tag",
+                    }
+                ],
+                "feedback": "Minor accuracy fix.",
+            },
+            {
+                "verdict": "APPROVE",
+                "checks": [{"id": cid, "passed": True} for cid in p.CHECK_IDS],
+                "edits": [],
+                "feedback": "",
+            },
+        ]
+
+        def fake_review(_module_path, _improved, model=None, fact_ledger=None):
+            review_ledgers.append(fact_ledger)
+            return review_sequence[len(review_ledgers) - 1]
+
+        state = {"modules": {}}
+        with patch.object(p, "STATE_FILE", self.state_file), \
+             patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
+             patch.object(p, "save_state"), \
+             patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
+             patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(
+                 p,
+                 "step_content_aware_fact_ledger",
+                 side_effect=[
+                     content_ledger("Rejected draft-only claim"),
+                     content_ledger("Approved draft claim"),
+                 ],
+             ) as mock_content_ledger, \
+             patch.object(p, "ensure_knowledge_card", return_value="card"), \
+             patch.object(p, "step_write", return_value=GOOD_MODULE), \
+             patch.object(p, "step_review", side_effect=fake_review), \
+             patch.object(p, "step_check_integrity", return_value=(True, [])), \
+             patch.object(p, "step_check", return_value=(True, [])), \
+             patch("subprocess.run"):
+            ok = p.run_module(self.module_path, state)
+
+        self.assertTrue(ok)
+        self.assertEqual(mock_content_ledger.call_count, 2)
+
+        first_claims = {claim.get("claim") for claim in review_ledgers[0].get("claims", [])}
+        second_claims = {claim.get("claim") for claim in review_ledgers[1].get("claims", [])}
+        self.assertIn("Rejected draft-only claim", first_claims)
+        self.assertNotIn("Rejected draft-only claim", second_claims)
+        self.assertIn("Approved draft claim", second_claims)
+
+        persisted_claims = {
+            claim.get("claim")
+            for claim in state["modules"]["test/module-0.1-test"]["fact_ledger"].get("claims", [])
+        }
+        self.assertNotIn("Rejected draft-only claim", persisted_claims)
+        self.assertIn("Approved draft claim", persisted_claims)
+
     def test_existing_binary_gate_tests_still_pass(self):
         suite = unittest.defaultTestLoader.loadTestsFromTestCase(TestBinaryGateIntegration)
         result = unittest.TestResult()
