@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from dispatch import dispatch_codex_review
+from pipeline_common.review_audit import append_review_audit
 
 from .control_plane import ControlPlane, Lease
 from .preflight import PreflightFinding, run_preflight
@@ -104,7 +105,7 @@ class ReviewWorker:
                     details=payload,
                 )
 
-            review_result, actual_calls, actual_usd = self._run_llm_review(
+            review_result, actual_calls, actual_usd, review_model = self._run_llm_review(
                 module_path,
                 lease=lease,
             )
@@ -163,6 +164,24 @@ class ReviewWorker:
                     priority=lease.job_id,
                 )
                 status = "approved"
+            audit_feedback = review_result["feedback"]
+            if unverified_fact_claims:
+                audit_feedback = "\n".join(
+                    [audit_feedback, *[str(check.get("evidence", "")).strip() for check in unverified_fact_claims if str(check.get("evidence", "")).strip()]]
+                ).strip()
+            append_review_audit(
+                module_path,
+                "REVIEW",
+                module_key=lease.module_key,
+                reviewer=review_model,
+                attempt=1,
+                severity="high" if failed_checks else "none",
+                checks=review_result["checks"],
+                feedback=audit_feedback,
+                verdict=verdict,
+                job_id=lease.job_id,
+                lease_id=lease.lease_id,
+            )
 
             self.control_plane.complete_lease(
                 lease.lease_id,
@@ -212,7 +231,7 @@ class ReviewWorker:
         module_path: Path,
         *,
         lease: Lease,
-    ) -> tuple[dict[str, Any], int, float]:
+    ) -> tuple[dict[str, Any], int, float, str]:
         module_text = module_path.read_text(encoding="utf-8")
         aggregated_checks: list[dict[str, Any]] = []
         feedback_parts: list[str] = []
@@ -258,7 +277,7 @@ class ReviewWorker:
             "verdict": verdict,
             "checks": ordered_checks,
             "feedback": feedback,
-        }, actual_calls, round(actual_usd, 4)
+        }, actual_calls, round(actual_usd, 4), active_review_model
 
     def _dispatch_with_retry(
         self,
