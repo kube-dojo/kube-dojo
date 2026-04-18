@@ -70,10 +70,43 @@ Uncommitted in tree:
 #273 design:
 - #280 citation-aware module page design proposal
 
-**Codex queue state (max 2 concurrent):**
-- `infra-276` (GH API endpoints — /api/gh/issues + /api/gh/prs) — running in background task `bfg1f3zn8`.
-- `infra-278-pr2` (per-track rubric profiles with default.yaml reproducing current behavior) — running in background task `bmvx43o2c`.
-- Queued for next invocation: `infra-278-pr3` (second-reviewer 10-20% sampling), `infra-279` (citation pipeline wiring), plus #235 MEDIUM-severity items.
+**Full session PR tally — 21 PRs opened, 21 reviewed:**
+
+#235 HIGH-severity (14/14 closed):
+#281 parallel-race, #284 data_conflict, #285 malformed-JSON, #287 merge-ledgers-pure,
+#288 needs_indep_review, #289 ledger-40k-windowing, #290 consecutive-check_failures,
+#291 last-attempt-re-review, #292 write-only-regression, #293 fresh-restart-cleanup,
+#294 fallback-chain-last-resort, #295 severe-rewrite-full-model,
+#296 CHECK-retries-in-function, #297 rewrite-from-baseline, #298 unified-retry-policy
+
+#235 MEDIUM (1 closed, more remaining):
+#302 rejected-drafts-do-not-poison-ledger
+
+#277 (local API build endpoints):
+#282 /api/build/run + /api/build/status
+
+#278 (pipeline v3 remaining, all 4 sub-PRs complete):
+#283 pin Gemini 1a (narrow), #286 pin Gemini 1b (full), #300 per-track rubric profiles,
+#301 second-reviewer sampling
+
+#276 (local API GH endpoints):
+#299 /api/gh/issues + /api/gh/prs
+
+#273 design:
+#280 citation-aware module page (3-tab proposal)
+
+**Codex queue state:**
+- `infra-279` (citation pipeline wiring — Gemini 3.1 Pro writes with seeds → Codex fact-checks) — running in background task `b13mx8q9p`.
+- All other originally-queued tasks now have PRs.
+
+**Merge ordering guidance for user return:**
+1. First: #281 (parallel race — highest-impact), #285 (fail-closed), #290 (consecutive counter — composes with #296)
+2. Then: all other #235 HIGH bugs (can merge in any order, some compose — see individual review comments)
+3. Then: #278 PR 1a (#283) → PR 1b (#286) (stacked — 1b needs 1a first) → PR 2 (#300) → PR 3 (#301)
+4. Then: #276 (#299), #277 (#282 — but re-run build from main first)
+5. Then: #302 (composes with #287, #289)
+6. #280 (design proposal) merge decision separate — reviews posted
+7. #279 (citation pipeline) — pending Codex completion
 
 **Service state at handoff:**
 - API: 127.0.0.1:8768, PID 82871, uptime 20 min
