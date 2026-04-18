@@ -2579,6 +2579,11 @@ class TestKnowledgeCards(unittest.TestCase):
         - Say VPA recommendations come from Prometheus instead of the VPA recommender path.
         """)
 
+    def _write_seed_file(self, content: str) -> None:
+        docs_dir = self.repo_root / "docs"
+        docs_dir.mkdir(parents=True, exist_ok=True)
+        (docs_dir / "citation-seeds-ai-foundations.md").write_text(content)
+
     def test_knowledge_card_written_with_correct_schema(self):
         """Generator writes a schema-valid knowledge card to the cache."""
         import generate_knowledge_card as g
@@ -2772,6 +2777,119 @@ class TestKnowledgeCards(unittest.TestCase):
         verified_block = seen["prompt"].split("## Verified Facts (from fact-grounding pass)", 1)[1]
         verified_block = verified_block.split("IMPROVEMENT PLAN:", 1)[0]
         self.assertNotIn("This unverified claim should not be surfaced", verified_block)
+
+    def test_seed_injection_extracts_matching_entry(self):
+        """step_write should inject only the current module's citation seeds."""
+        import v1_pipeline as p
+
+        self._write_seed_file(textwrap.dedent("""\
+        # AI Foundations — Citation Seeds
+
+        ## `ai/foundations/module-1.1-what-is-ai`
+
+        - [NIST AI RMF](https://nvlpubs.nist.gov/nistpubs/ai/nist.ai.100-1.pdf) — definitional framing
+        1. [IBM Deep Blue](https://www.ibm.com/history/deep-blue) — rule-based milestone
+        https://ai.google/responsibility/principles/ — current AI principles
+
+        ## `ai/foundations/module-1.2-what-are-llms`
+
+        - [Attention Is All You Need](https://arxiv.org/abs/1706.03762) — transformer source
+        """))
+        seen = {}
+
+        def fake_dispatch(prompt, model=None, timeout=None):
+            seen["prompt"] = prompt
+            return True, GOOD_MODULE
+
+        with patch.object(p, "REPO_ROOT", self.repo_root), \
+             patch.object(p, "dispatch_auto", side_effect=fake_dispatch), \
+             patch.object(p, "module_key_from_path", return_value="ai/foundations/module-1.1-what-is-ai"):
+            result = p.step_write(self.module_path, "Improve factual accuracy")
+
+        self.assertIsNotNone(result)
+        self.assertIn("## Authoritative Sources — cite these inline", seen["prompt"])
+        self.assertIn("https://nvlpubs.nist.gov/nistpubs/ai/nist.ai.100-1.pdf", seen["prompt"])
+        self.assertIn("https://www.ibm.com/history/deep-blue", seen["prompt"])
+        self.assertIn("https://ai.google/responsibility/principles/", seen["prompt"])
+        self.assertNotIn("https://arxiv.org/abs/1706.03762", seen["prompt"])
+
+    def test_seed_injection_reaches_rewrite_prompt(self):
+        """Rewrite prompts should include the authoritative sources block."""
+        import v1_pipeline as p
+
+        self._write_seed_file(textwrap.dedent("""\
+        # AI Foundations — Citation Seeds
+
+        ## `ai/foundations/module-1.1-what-is-ai`
+
+        - [NIST AI RMF](https://nvlpubs.nist.gov/nistpubs/ai/nist.ai.100-1.pdf) — definitional framing
+        """))
+        seen = {}
+
+        with patch.object(p, "REPO_ROOT", self.repo_root), \
+             patch.object(p, "dispatch_auto", side_effect=lambda prompt, model=None, timeout=None: (seen.__setitem__("prompt", prompt), (True, GOOD_MODULE))[1]), \
+             patch.object(p, "module_key_from_path", return_value="ai/foundations/module-1.1-what-is-ai"):
+            p.step_write(self.module_path, "Improve factual accuracy", rewrite=True)
+
+        self.assertIn("## Authoritative Sources — cite these inline", seen["prompt"])
+        self.assertIn("https://nvlpubs.nist.gov/nistpubs/ai/nist.ai.100-1.pdf", seen["prompt"])
+
+    def test_seed_injection_no_seeds_file_is_noop(self):
+        """Missing seed file should leave the WRITE prompt unchanged."""
+        import v1_pipeline as p
+
+        seen = {}
+
+        def fake_dispatch(prompt, model=None, timeout=None):
+            seen["prompt"] = prompt
+            return True, GOOD_MODULE
+
+        with patch.object(p, "REPO_ROOT", self.repo_root), \
+             patch.object(p, "dispatch_auto", side_effect=fake_dispatch), \
+             patch.object(p, "module_key_from_path", return_value="ai/foundations/module-1.1-what-is-ai"):
+            result = p.step_write(self.module_path, "Improve factual accuracy")
+
+        self.assertIsNotNone(result)
+        self.assertNotIn("## Authoritative Sources — cite these inline", seen["prompt"])
+
+    def test_seed_injection_no_matching_module_is_noop(self):
+        """Existing seed file without a matching section should be ignored."""
+        import v1_pipeline as p
+
+        self._write_seed_file(textwrap.dedent("""\
+        # AI Foundations — Citation Seeds
+
+        ## `ai/foundations/module-1.2-what-are-llms`
+
+        - [Attention Is All You Need](https://arxiv.org/abs/1706.03762) — transformer source
+        """))
+        seen = {}
+
+        def fake_dispatch(prompt, model=None, timeout=None):
+            seen["prompt"] = prompt
+            return True, GOOD_MODULE
+
+        with patch.object(p, "REPO_ROOT", self.repo_root), \
+             patch.object(p, "dispatch_auto", side_effect=fake_dispatch), \
+             patch.object(p, "module_key_from_path", return_value="ai/foundations/module-1.1-what-is-ai"):
+            result = p.step_write(self.module_path, "Improve factual accuracy")
+
+        self.assertIsNotNone(result)
+        self.assertNotIn("## Authoritative Sources — cite these inline", seen["prompt"])
+
+    def test_seed_injection_noop_for_root_level_module_key(self):
+        """Root-level module keys should skip seed lookup entirely."""
+        import v1_pipeline as p
+
+        seen = {}
+
+        with patch.object(p, "REPO_ROOT", self.repo_root), \
+             patch.object(p, "dispatch_auto", side_effect=lambda prompt, model=None, timeout=None: (seen.__setitem__("prompt", prompt), (True, GOOD_MODULE))[1]), \
+             patch.object(p, "module_key_from_path", return_value="module-0.1-test"), \
+             patch.object(Path, "exists", side_effect=AssertionError("seed lookup should be skipped")):
+            p.step_write(self.module_path, "Improve factual accuracy")
+
+        self.assertNotIn("## Authoritative Sources — cite these inline", seen["prompt"])
 
 
 # ---------------------------------------------------------------------------

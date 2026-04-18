@@ -911,6 +911,16 @@ them accurately in your content. Do not contradict them.
 {claims_block}
 """
 
+AUTHORITATIVE_SOURCES_BLOCK_TEMPLATE = """## Authoritative Sources — cite these inline
+
+Use these sources directly in the draft. Cite them inline where relevant and
+include them in the module's `## Sources` section.
+
+{sources_block}
+"""
+
+SEED_SECTION_RE = re.compile(r"^##\s+`([^`]+)`\s*$")
+
 
 def _format_fact_ledger_for_prompt(fact_ledger: dict | None) -> str:
     """Serialize fact ledger for prompt injection."""
@@ -963,6 +973,48 @@ def _format_verified_claims_for_prompt(fact_ledger: dict | None) -> str:
     return VERIFIED_FACTS_BLOCK_TEMPLATE.format(claims_block="\n".join(lines))
 
 
+def _citation_seed_path(module_key: str) -> Path | None:
+    """Return the per-track citation seed file path for a module key."""
+    track = "-".join(module_key.split("/")[:-1]).strip("-")
+    if not track:
+        return None
+    return REPO_ROOT / "docs" / f"citation-seeds-{track}.md"
+
+
+def _format_authoritative_sources_for_prompt(module_key: str) -> str:
+    """Build a prompt block from the matching module section in a seed file."""
+    seed_path = _citation_seed_path(module_key)
+    if seed_path is None:
+        return ""
+    if not seed_path.exists():
+        return ""
+
+    current_key: str | None = None
+    lines: list[str] = []
+    for raw_line in seed_path.read_text(encoding="utf-8").splitlines():
+        heading = SEED_SECTION_RE.match(raw_line.strip())
+        if heading:
+            if current_key == module_key:
+                break
+            current_key = heading.group(1).strip()
+            continue
+        if current_key != module_key:
+            continue
+        line = raw_line.strip()
+        if "http" in line and (
+            line.startswith("- ")
+            or re.match(r"^\d+\.\s+", line)
+            or line.startswith("http")
+        ):
+            lines.append(line)
+
+    if not lines:
+        return ""
+    return AUTHORITATIVE_SOURCES_BLOCK_TEMPLATE.format(
+        sources_block="\n".join(lines)
+    )
+
+
 WRITE_PROMPT_TEMPLATE = """CRITICAL INSTRUCTION: Your response must be ONLY the raw markdown content of the improved module. Start your response with the --- frontmatter delimiter. No preamble, no explanation, no summary, no "I have improved..." — ONLY the markdown file content from first line to last.
 
 You are improving a KubeDojo module. You will receive the current module content and an improvement plan.
@@ -994,6 +1046,8 @@ authority context.
 
 {verified_facts_block}
 
+{authoritative_sources_block}
+
 IMPROVEMENT PLAN:
 {plan}
 
@@ -1024,6 +1078,8 @@ UNVERIFIED in the ledger, hedge explicitly in the module text and cite the
 authority context.
 
 {verified_facts_block}
+
+{authoritative_sources_block}
 
 KNOWLEDGE PACKET — MUST PRESERVE:
 The following technical assets are extracted from the original module. You MUST include ALL of them in your rewrite, placed in the appropriate sections. Do NOT omit, summarize, or simplify any of these.
@@ -1168,18 +1224,21 @@ def step_write(module_path: Path, plan: str, model: str = MODELS["write"],
     fact_ledger_text = _format_fact_ledger_for_prompt(fact_ledger)
     k8s_lifecycle = K8S_LIFECYCLE_BLOCK.format(as_of_date=datetime.now(UTC).date().isoformat())
     verified_facts_block = _format_verified_claims_for_prompt(fact_ledger)
+    authoritative_sources_block = _format_authoritative_sources_for_prompt(key)
 
     if rewrite:
         packet = extract_knowledge_packet(content)
         prompt = REWRITE_PROMPT_TEMPLATE.format(
             file_path=key, plan=plan, content=content, knowledge_packet=packet,
             knowledge_card=knowledge_card_text, fact_ledger=fact_ledger_text,
-            k8s_lifecycle=k8s_lifecycle, verified_facts_block=verified_facts_block)
+            k8s_lifecycle=k8s_lifecycle, verified_facts_block=verified_facts_block,
+            authoritative_sources_block=authoritative_sources_block)
     else:
         prompt = WRITE_PROMPT_TEMPLATE.format(
             plan=plan, content=content, knowledge_card=knowledge_card_text,
             fact_ledger=fact_ledger_text, k8s_lifecycle=k8s_lifecycle,
-            verified_facts_block=verified_facts_block)
+            verified_facts_block=verified_facts_block,
+            authoritative_sources_block=authoritative_sources_block)
 
     # Must use dispatch_auto (not dispatch_gemini_with_retry directly) so that
     # Claude Sonnet is actually called for targeted-fix mode. Previously this
