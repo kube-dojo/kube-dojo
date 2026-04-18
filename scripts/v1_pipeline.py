@@ -176,11 +176,10 @@ MODELS = {
     # "translate" removed — uk_sync.CHUNKED_MODEL owns translation model config
 }
 
-# Reviewer families considered "independent" of the writer (currently Gemini).
-# Only these count as production-ready reviewers. Gemini reviewing Gemini is a
-# fallback to keep the pipeline moving but flags the module for re-review.
+# Reviewer families considered "independent" for the deferred re-review path
+# and fact-grounding model validation. Claude remains the preferred cross-family
+# fallback when the primary structural reviewer is unavailable.
 INDEPENDENT_REVIEWER_FAMILIES = {"codex", "claude"}
-STRUCTURAL_REVIEW_INDEPENDENCE_RELAXED = True
 
 # Pipeline phases in order.
 # "needs_targeted_fix" is a pause state entered when Claude is unavailable
@@ -2888,6 +2887,7 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
             review_started = datetime.now(UTC)
             reviewer_model = m["review"]
             used_fallback_reviewer = False
+            needs_independent_review_if_approved = False
             review = step_review(
                 module_path,
                 improved or module_path.read_text(),
@@ -2907,8 +2907,7 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                 if fallback_family == primary_family:
                     print(f"  ⚠ Primary reviewer rate-limited and fallback is same family — skipping to last resort")
                     fallback_allowed = False
-                elif (not STRUCTURAL_REVIEW_INDEPENDENCE_RELAXED and
-                      fallback_family not in INDEPENDENT_REVIEWER_FAMILIES):
+                elif fallback_family not in INDEPENDENT_REVIEWER_FAMILIES:
                     print(f"  ⚠ Review fallback {fallback_model} is not in approved independent families — skipping to last resort")
                     fallback_allowed = False
 
@@ -2962,6 +2961,7 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                         return False
                     reviewer_model = last_resort_model
                     used_fallback_reviewer = True
+                    needs_independent_review_if_approved = True
 
             if review is None:
                 ms["errors"].append(f"Review failed attempt {attempt+1}")
@@ -3000,10 +3000,7 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                 ms.pop("sonnet_anchor_failures", None)
                 reviewer_family = _model_family(reviewer_model)
                 ms["reviewer"] = reviewer_family
-                ms["needs_independent_review"] = (
-                    (not STRUCTURAL_REVIEW_INDEPENDENCE_RELAXED) and
-                    reviewer_family not in INDEPENDENT_REVIEWER_FAMILIES
-                )
+                ms["needs_independent_review"] = needs_independent_review_if_approved
                 ms["phase"] = "check"
                 save_state(state)
                 emit_audit(

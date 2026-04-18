@@ -1224,6 +1224,45 @@ class TestPipelineTransitions(unittest.TestCase):
         self.assertEqual(mock_review.call_count, 2)
 
     @patch("v1_pipeline.STATE_FILE")
+    @patch("v1_pipeline.CONTENT_ROOT")
+    @patch("subprocess.run")
+    def test_last_resort_same_family_review_sets_pending_flag(
+        self, mock_subprocess, mock_root, mock_state,
+    ):
+        """Writer-family last-resort approvals must preserve the deferred re-review flag."""
+        import v1_pipeline as p
+
+        mock_state.__class__ = type(self.state_file)
+        mock_root.resolve.return_value = Path(self.tmpdir).resolve()
+
+        state = {"modules": {}}
+        all_pass_checks = [{"id": cid, "passed": True} for cid in p.CHECK_IDS]
+        review_sequence = [
+            {"rate_limited": True},
+            {"rate_limited": True},
+            {"verdict": "APPROVE", "severity": "clean",
+             "checks": all_pass_checks, "edits": [], "feedback": ""},
+        ]
+
+        with patch.object(p, "STATE_FILE", self.state_file), \
+             patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
+             patch.object(p, "save_state"), \
+             patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
+             patch.object(p, "step_write", return_value=GOOD_MODULE), \
+             patch.object(p, "step_review", side_effect=review_sequence) as mock_review, \
+             patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_content_aware_fact_ledger", return_value=None), \
+             patch.object(p, "step_check_integrity", return_value=(True, [])), \
+             patch.object(p, "step_check", return_value=(True, [])):
+            p.run_module(self.module_path, state)
+
+        ms = state["modules"]["test/module-0.1-test"]
+        self.assertEqual(ms.get("phase"), "done")
+        self.assertEqual(ms.get("reviewer"), "gemini")
+        self.assertTrue(ms.get("needs_independent_review"))
+        self.assertEqual(mock_review.call_count, 3)
+
+    @patch("v1_pipeline.STATE_FILE")
     @patch("v1_pipeline.dispatch_auto")
     @patch("v1_pipeline.CONTENT_ROOT")
     @patch("subprocess.run")
