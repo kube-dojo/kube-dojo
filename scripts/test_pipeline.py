@@ -872,6 +872,40 @@ class TestReviewAuditLog(unittest.TestCase):
             self.assertIn(str(self.module_path), add_paths)
             self.assertIn(str(audit_path), add_paths)
 
+    def test_check_retries_in_function_without_returning_false(self):
+        import v1_pipeline as p
+
+        state = {
+            "modules": {
+                self.module_key: {
+                    "phase": "check",
+                    "reviewer": "gemini",
+                    "severity": "clean",
+                    "errors": [],
+                }
+            }
+        }
+        self.module_path.with_suffix(".staging.md").write_text(GOOD_MODULE)
+        transient_failure = [CheckResult("LINE_COUNT", False, "temporary check failure")]
+        git_ok = subprocess.CompletedProcess(["git"], 0, "", "")
+
+        with self._patch_paths(p), \
+             patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(
+                 p,
+                 "step_check",
+                 side_effect=[(False, transient_failure), (True, [])],
+             ) as mock_check, \
+             patch.object(p, "_git_stage_and_commit", return_value=(git_ok, git_ok)):
+            ok = p.run_module(self.module_path, state, max_retries=1)
+
+        ms = state["modules"][self.module_key]
+        self.assertTrue(ok)
+        self.assertEqual(mock_check.call_count, 2)
+        self.assertEqual(ms["phase"], "done")
+        self.assertNotIn("check_failures", ms)
+        self.assertNotIn("Deterministic checks failed after review", ms["errors"])
+
     def test_reset_stuck_writes_reset_audit_and_commits_batch(self):
         import v1_pipeline as p
 

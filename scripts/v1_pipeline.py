@@ -3253,18 +3253,26 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
             print(f"  ❌ No improved content available for CHECK")
             return False
 
-        check_started = datetime.now(UTC)
-        passed, results = step_check(improved, module_path)
-        if not passed:
-            ms["errors"].append("Deterministic checks failed after review")
-            ms["check_failures"] = ms.get("check_failures", 0) + 1
-            ms["targeted_fix"] = False
-            save_state(state)
+        results = []
+        for check_attempt in range(max_retries + 1):
+            check_started = datetime.now(UTC)
+            passed, results = step_check(improved, module_path)
+            if passed:
+                break
+
             emit_audit(
                 "CHECK_FAIL",
                 duration=(datetime.now(UTC) - check_started).total_seconds(),
                 failed_checks=_render_check_failures(results),
             )
+            if check_attempt < max_retries:
+                print(f"  ↻ CHECK failed, retrying ({check_attempt+1}/{max_retries})")
+                continue
+
+            ms["errors"].append("Deterministic checks failed after review")
+            ms["check_failures"] = ms.get("check_failures", 0) + 1
+            ms["targeted_fix"] = False
+            save_state(state)
             # Keep staging file so we can resume after fixing thresholds
             print(f"  Staging file kept: {staging}")
             return False
