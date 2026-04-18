@@ -2,6 +2,18 @@
 
 **Purpose**: Measurable scoring system for rating module and lab quality. Used during audits and reviews.
 
+## Citation Gate (Mandatory Before Scoring)
+
+Before a module can be counted as `4/5` or `5/5`, it must pass a citation and evidence hygiene check.
+
+Minimum requirements:
+- every war story must include an explicit citation or `Source:` line
+- concrete factual claims that matter to trust, safety, chronology, pricing, policy, law, standards, or product capability must be traceable to cited sources
+- each upgraded module must include a `## Sources` section
+- uncited modules may be improved, but they are still **not review-passed**
+
+This gate applies before the 7-dimension score is considered valid.
+
 ---
 
 ## Module Rubric (7 Dimensions, 1-5 Scale)
@@ -252,6 +264,7 @@ Scoring uses **sum of all 7 dimensions** (max 35) with a **per-dimension floor**
 python scripts/score_module.py 4 5 4 4 5 4 4          # interactive
 python scripts/score_module.py 4 5 4 4 5 4 4 --json   # machine-readable
 echo "4 5 4 4 5 4 4" | python scripts/score_module.py -  # stdin
+python scripts/check_citations.py src/content/docs/ai/foundations/module-1.1-what-is-ai.md
 ```
 
 Dimension order: D1 Outcomes, D2 Scaffolding, D3 Active Learning, D4 Real-World, D5 Assessment, D6 Cognitive Load, D7 Engagement.

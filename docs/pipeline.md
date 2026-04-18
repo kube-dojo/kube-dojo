@@ -2,6 +2,12 @@
 
 The pipeline processes each module through all 7 quality dimensions to reach a score of 29/35. It uses Gemini for writing/translating, Claude (Opus) for evaluation/review, and deterministic Python checks as quality gates.
 
+For the `4/5` and `5/5` upgrade program, **citations are a hard precondition**:
+- every war story must have a citation
+- important factual claims must be backed by sources
+- every upgraded module must include a `## Sources` section
+- a module without citations is **not review-passed**, even if the prose is strong
+
 ## Quick Start
 
 ```bash
@@ -27,7 +33,7 @@ python scripts/v1_pipeline.py resume
 ## Pipeline Steps
 
 ```
-Existing module → AUDIT+PLAN → WRITE → REVIEW → CHECK → SCORE → done
+Existing module → AUDIT+PLAN → WRITE → REVIEW → CHECK → CITE → SCORE → done
                       ↑            ↓        ↓
                       └── rejected ←┘   (max 2 retries)
 ```
@@ -39,9 +45,10 @@ Existing module → AUDIT+PLAN → WRITE → REVIEW → CHECK → SCORE → done
 | **WRITE** | Gemini Pro | Draft improvements based on the plan (full file output) | ~$0.05/module |
 | **REVIEW** | Claude Opus | Strict rubric review — approve or reject with feedback | ~$0.10/module |
 | **CHECK** | Python | Deterministic quality gates (structure, content, Ukrainian) | Free |
+| **CITE** | Python + reviewer | Verify `## Sources`, war-story citations, and evidence hygiene | Free |
 | **SCORE** | Python | `score_module.py` — 29/35 + every dimension >= 4 | Free |
 
-If REVIEW rejects, the pipeline loops back to WRITE with the feedback (max 2 retries). If it still fails, the module is flagged for manual intervention.
+If REVIEW rejects, the pipeline loops back to WRITE with the feedback (max 2 retries). If CITE or SCORE fails, the module is also rejected back into manual improvement. If it still fails, the module is flagged for manual intervention.
 
 ## Scoring System
 
@@ -105,6 +112,15 @@ The CHECK step runs these without any LLM:
 | CODE_LANG | Code blocks have language specifier | Any bare ``` found |
 | NO_EMOJI | No emoji characters | Any found |
 | K8S_API | Deprecated API versions | extensions/v1beta1, apps/v1beta, etc. |
+
+### Citation (`scripts/check_citations.py`)
+
+| Check | What | Fail condition |
+|-------|------|----------------|
+| SOURCES_SECTION | `## Sources` exists | Missing |
+| EXTERNAL_SOURCES | Sources section contains external references | None found |
+| WAR_STORY_SOURCE | Each `War Story` block has a nearby `Source:` line | Missing for any war story |
+| FOOTNOTE_OR_LINK | Module contains at least one traceable citation marker or link | None found |
 
 ### Ukrainian (`scripts/checks/ukrainian.py`)
 
