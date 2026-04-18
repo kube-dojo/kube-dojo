@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sqlite3
 import sys
 import time
@@ -34,6 +35,8 @@ VERIFY_MODEL = "deterministic-ukrainian-checks"
 DEFAULT_LEASE_SECONDS = 1200
 DEFAULT_MAX_WRITE_ATTEMPTS = 3
 DEFAULT_MAX_VERIFY_ATTEMPTS = 3
+_MODULE_REF_RE = re.compile(r"(?:module|модуль)\s+([\d.]+)", re.IGNORECASE)
+_MARKDOWN_LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 
 
 def _extract_frontmatter(path: Path) -> dict[str, Any]:
@@ -237,11 +240,14 @@ def _build_translation_queue_status(db_path: Path) -> dict[str, Any]:
             return "pending_write" if phase == "review" else "pending_review"
         return "done"
 
-    for module_key in modules:
-        counts[get_status(module_key)] += 1
+    status_by_module = {module_key: get_status(module_key) for module_key in modules}
+    for status in status_by_module.values():
+        counts[status] += 1
 
-    pending_review_list = sorted([m for m in modules if get_status(m) == "pending_review"])
-    pending_write_list = sorted([m for m in modules if get_status(m) == "pending_write"])
+    pending_review_list = sorted([m for m, status in status_by_module.items() if status == "pending_review"])
+    pending_write_list = sorted([m for m, status in status_by_module.items() if status == "pending_write"])
+    done_list = sorted([m for m, status in status_by_module.items() if status == "done"])
+    dead_letter_list = sorted([m for m, status in status_by_module.items() if status == "dead_letter"])
 
     total_modules = len(modules)
     done_count = counts["done"]
@@ -259,6 +265,8 @@ def _build_translation_queue_status(db_path: Path) -> dict[str, Any]:
         "needs_human_count": needs_human_count,
         "pending_review": pending_review_list,
         "pending_write": pending_write_list,
+        "done": done_list,
+        "dead_letter": dead_letter_list,
     }
 
 
@@ -320,6 +328,52 @@ def _count_attempts(control_plane: ControlPlane, module_key: str, event_type: st
     return attempts
 
 
+def _frontmatter_value(frontmatter: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        if key in frontmatter:
+            return frontmatter[key]
+    return None
+
+
+def _normalize_lab_metadata_value(field: str, value: Any) -> Any:
+    if value is None:
+        return None
+    if field == "complexity":
+        return str(value).strip().upper()
+    if field == "time":
+        text = " ".join(str(value).split())
+        numbers = tuple(re.findall(r"\d+", text))
+        return numbers if numbers else text.lower()
+    if field == "prerequisites":
+        if isinstance(value, list):
+            return tuple(_normalize_lab_metadata_value(field, item) for item in value)
+        text = " ".join(str(value).split())
+        links = tuple(link.strip().lower() for link in _MARKDOWN_LINK_RE.findall(text))
+        if links:
+            return links
+        modules = tuple(match.lower() for match in _MODULE_REF_RE.findall(text))
+        return modules if modules else text.lower()
+    return value
+
+
+def _lab_metadata_mismatches(repo_root: Path, module_key: str) -> list[str]:
+    en_frontmatter = _extract_frontmatter(_en_path_for_module_key(repo_root, module_key))
+    uk_frontmatter = _extract_frontmatter(_uk_path_for_module_key(repo_root, module_key))
+    mismatches: list[str] = []
+    for label, keys in (
+        ("complexity", ("complexity",)),
+        ("time", ("time", "time_to_complete")),
+        ("prerequisites", ("prerequisites",)),
+    ):
+        en_value = _frontmatter_value(en_frontmatter, *keys)
+        uk_value = _frontmatter_value(uk_frontmatter, *keys)
+        if en_value is None and uk_value is None:
+            continue
+        if _normalize_lab_metadata_value(label, en_value) != _normalize_lab_metadata_value(label, uk_value):
+            mismatches.append(label)
+    return mismatches
+
+
 def _verify_translation(repo_root: Path, module_key: str) -> tuple[bool, dict[str, Any]]:
     state = detect_module_state(repo_root, module_key)
     uk_path = _uk_path_for_module_key(repo_root, module_key)
@@ -342,6 +396,11 @@ def _verify_translation(repo_root: Path, module_key: str) -> tuple[bool, dict[st
     ]
     if quality_errors:
         details["issues"].extend(quality_errors)
+        return False, details
+    metadata_mismatches = _lab_metadata_mismatches(repo_root, module_key)
+    if metadata_mismatches:
+        details["lab_metadata_mismatches"] = metadata_mismatches
+        details["issues"].extend(f"lab_metadata_mismatch:{field}" for field in metadata_mismatches)
         return False, details
     return True, details
 

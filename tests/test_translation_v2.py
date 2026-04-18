@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import importlib
 import importlib.util
+import json
 import sqlite3
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 
 def _load_module():
@@ -18,6 +21,7 @@ def _load_module():
 
 
 translation_v2 = _load_module()
+status_script = importlib.import_module("status")
 
 
 def _git(repo_root: Path, *args: str) -> str:
@@ -60,6 +64,63 @@ def _uk_module(*, en_commit: str, en_file: str, title: str = "Українськ
             "Український текст.",
         ]
     )
+
+
+def _module_with_metadata(*, title: str, body: str, metadata: dict[str, Any] | None = None) -> str:
+    lines = ["---", f'title: "{title}"']
+    for key, value in (metadata or {}).items():
+        if isinstance(value, list):
+            rendered = "[" + ", ".join(json.dumps(item, ensure_ascii=False) for item in value) + "]"
+            lines.append(f"{key}: {rendered}")
+        else:
+            lines.append(f'{key}: {json.dumps(value, ensure_ascii=False)}')
+    lines.extend(["---", "", "## Body", "", body])
+    return "\n".join(lines)
+
+
+def _init_translation_status_db(db_path: Path, *entries: tuple[str, str]) -> None:
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.executescript(
+            """
+            CREATE TABLE jobs (id INTEGER PRIMARY KEY, module_key TEXT NOT NULL, phase TEXT NOT NULL, model TEXT, queue_state TEXT NOT NULL);
+            CREATE TABLE events (id INTEGER PRIMARY KEY, module_key TEXT NOT NULL, type TEXT NOT NULL, payload_json TEXT DEFAULT '{}');
+            """
+        )
+        for module_key, event_type in entries:
+            conn.execute(
+                "INSERT INTO jobs (module_key, phase, model, queue_state) VALUES (?, ?, ?, ?)",
+                (module_key, "review", translation_v2.VERIFY_MODEL, "completed"),
+            )
+            conn.execute(
+                "INSERT INTO events (module_key, type, payload_json) VALUES (?, ?, ?)",
+                (module_key, event_type, "{}"),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _verify_with_metadata(
+    repo_root: Path, module_key: str, *, uk_overrides: dict[str, Any] | None = None
+) -> tuple[bool, dict[str, Any]]:
+    metadata = {"complexity": "MEDIUM", "time_to_complete": "45 min", "prerequisites": ["module-0.1-alpha"]}
+    en_path = repo_root / "src/content/docs" / f"{module_key}.md"
+    _write(en_path, _module_with_metadata(title="English Title", body="English body.", metadata=metadata))
+    _git(repo_root, "add", ".")
+    _git(repo_root, "commit", "-m", "english")
+    uk_metadata = {
+        **metadata,
+        "en_commit": _git(repo_root, "log", "-1", "--format=%H", "--", str(en_path)),
+        "en_file": en_path.relative_to(repo_root).as_posix(),
+        **(uk_overrides or {}),
+    }
+    _write(
+        repo_root / "src/content/docs/uk" / f"{module_key}.md",
+        _module_with_metadata(title="Український заголовок", body="Український текст.", metadata=uk_metadata),
+    )
+    return translation_v2._verify_translation(repo_root, module_key)
 
 
 def test_detect_module_state_marks_commit_drift_stale(tmp_path: Path) -> None:
@@ -275,3 +336,94 @@ def test_build_status_treats_recovered_module_as_done(tmp_path: Path) -> None:
     report = translation_v2.build_status(repo_root, db_path=db_path, section="prerequisites/zero-to-terminal")
     assert report["queue"]["counts"]["done"] == 1
     assert report["queue"]["counts"]["dead_letter"] == 0
+
+
+def test_translation_v2_status_reports_per_track_done_and_dead_letter(tmp_path: Path) -> None:
+    db_path = tmp_path / ".pipeline/translation_v2.db"
+    _init_translation_status_db(
+        db_path,
+        ("prerequisites/zero-to-terminal/module-0.1-alpha", "translation_verified"),
+        ("linux/shell/module-1.1-alpha", "module_dead_lettered"),
+    )
+    report = status_script._enrich_translation_v2_with_per_track({"queue": translation_v2._build_translation_queue_status(db_path)})
+    by_track = {item["slug"]: item for item in report["queue"]["per_track"]}
+    assert by_track["prerequisites"]["modules"]["done"] == ["prerequisites/zero-to-terminal/module-0.1-alpha"]
+    assert by_track["linux"]["modules"]["dead_letter"] == ["linux/shell/module-1.1-alpha"]
+
+
+def test_translation_v2_freshness_rollup_is_per_track_not_global(tmp_path: Path) -> None:
+    repo_root = tmp_path
+    _init_repo(repo_root)
+    prereq_en = repo_root / "src/content/docs/prerequisites/zero-to-terminal/module-0.1-alpha.md"
+    linux_en = repo_root / "src/content/docs/linux/shell/module-1.1-alpha.md"
+    _write(prereq_en, _en_module())
+    _write(linux_en, _en_module(title="Linux Alpha"))
+    _git(repo_root, "add", ".")
+    _git(repo_root, "commit", "-m", "english")
+    prereq_commit = _git(repo_root, "log", "-1", "--format=%H", "--", str(prereq_en))
+    linux_old_commit = _git(repo_root, "log", "-1", "--format=%H", "--", str(linux_en))
+
+    _write(
+        repo_root / "src/content/docs/uk/prerequisites/zero-to-terminal/module-0.1-alpha.md",
+        _uk_module(en_commit=prereq_commit, en_file=prereq_en.relative_to(repo_root).as_posix()),
+    )
+    _write(
+        repo_root / "src/content/docs/uk/linux/shell/module-1.1-alpha.md",
+        _uk_module(en_commit=linux_old_commit, en_file=linux_en.relative_to(repo_root).as_posix()),
+    )
+    _git(repo_root, "add", ".")
+    _git(repo_root, "commit", "-m", "ukrainian")
+
+    _write(linux_en, _en_module(title="Linux Alpha v2"))
+    _git(repo_root, "add", ".")
+    _git(repo_root, "commit", "-m", "linux update")
+
+    db_path = repo_root / ".pipeline/translation_v2.db"
+    _init_translation_status_db(
+        db_path,
+        ("prerequisites/zero-to-terminal/module-0.1-alpha", "translation_verified"),
+        ("linux/shell/module-1.1-alpha", "module_dead_lettered"),
+    )
+
+    report = translation_v2.build_status(repo_root, db_path=db_path)
+    enriched = status_script._enrich_translation_v2_with_per_track(report)
+    by_track = {item["slug"]: item for item in enriched["queue"]["per_track"]}
+
+    assert by_track["prerequisites"]["freshness"] == {
+        "up_to_date_count": 1,
+        "stale_count": 0,
+        "missing_count": 0,
+        "dead_letter_count": 0,
+    }
+    assert by_track["linux"]["freshness"] == {
+        "up_to_date_count": 0,
+        "stale_count": 1,
+        "missing_count": 0,
+        "dead_letter_count": 1,
+    }
+
+
+def test_verify_translation_fails_on_lab_metadata_drift(tmp_path: Path) -> None:
+    repo_root = tmp_path
+    _init_repo(repo_root)
+    verified, details = _verify_with_metadata(
+        repo_root,
+        "prerequisites/zero-to-terminal/module-0.6-zeta",
+        uk_overrides={"complexity": "QUICK"},
+    )
+
+    assert verified is False
+    assert "lab_metadata_mismatch:complexity" in details["issues"]
+    assert details["lab_metadata_mismatches"] == ["complexity"]
+
+
+def test_verify_translation_passes_on_lab_metadata_parity(tmp_path: Path) -> None:
+    repo_root = tmp_path
+    _init_repo(repo_root)
+    verified, details = _verify_with_metadata(
+        repo_root,
+        "prerequisites/zero-to-terminal/module-0.7-eta",
+    )
+
+    assert verified is True
+    assert "lab_metadata_mismatches" not in details
