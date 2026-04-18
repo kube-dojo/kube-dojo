@@ -1917,9 +1917,9 @@ class TestComputeSeverity(unittest.TestCase):
         sev = self.p.compute_severity("APPROVE", self.all_pass, [])
         self.assertEqual(sev, "clean")
 
-    def test_routes_correctly_with_six_checks(self):
-        """Split-reviewer structural rubric has 6 checks after LAB decoupling."""
-        self.assertEqual(len(self.p.CHECK_IDS), 6)
+    def test_routes_correctly_with_seven_checks(self):
+        """Split-reviewer structural rubric has 7 checks after adding CITE."""
+        self.assertEqual(len(self.p.CHECK_IDS), 7)
         checks = [
             {"id": "COV", "passed": False, "edit_refs": [0]},
             {"id": "QUIZ", "passed": True},
@@ -1927,6 +1927,7 @@ class TestComputeSeverity(unittest.TestCase):
             {"id": "DEPTH", "passed": True},
             {"id": "WHY", "passed": True},
             {"id": "PRES", "passed": True},
+            {"id": "CITE", "passed": True},
         ]
         edits = [{"type": "replace", "find": "x", "new": "y"}]
         self.assertEqual(self.p.compute_severity("REJECT", checks, edits), "targeted")
@@ -2934,6 +2935,69 @@ class TestCitationGate(unittest.TestCase):
             entry["dead_urls"] = dead_urls
         return subprocess.CompletedProcess(["python"], 0 if passes else 1, json.dumps({"passes": passes, "results": [entry]}), "")
 
+    def _cite_ready_draft(
+        self,
+        inline_nist: bool = True,
+        inline_ibm: bool = True,
+        source_nist: bool = True,
+        source_ibm: bool = True,
+    ) -> str:
+        body_links = []
+        if inline_nist:
+            body_links.append("[NIST](https://nvlpubs.nist.gov/nistpubs/ai/nist.ai.100-1.pdf)")
+        if inline_ibm:
+            body_links.append("[IBM](https://www.ibm.com/history/deep-blue)")
+        sources_links = []
+        if source_nist:
+            sources_links.append("- [NIST](https://nvlpubs.nist.gov/nistpubs/ai/nist.ai.100-1.pdf)")
+        if source_ibm:
+            sources_links.append("- [IBM](https://www.ibm.com/history/deep-blue)")
+        return (
+            "---\ntitle: Test\n---\n\n"
+            + " and ".join(body_links)
+            + "\n\n## Authoritative Sources\n"
+            "- [NIST](https://nvlpubs.nist.gov/nistpubs/ai/nist.ai.100-1.pdf)\n"
+            "- [IBM](https://www.ibm.com/history/deep-blue)\n"
+            "\n## Sources\n"
+            + "\n".join(sources_links)
+            + "\n"
+        )
+
+    def test_cite_check_passes_when_all_seeds_cited_inline(self):
+        import v1_pipeline as p
+
+        with patch.object(p, "_resolve_url_statuses", return_value={
+            "https://nvlpubs.nist.gov/nistpubs/ai/nist.ai.100-1.pdf": 200,
+            "https://www.ibm.com/history/deep-blue": 200,
+        }):
+            result = p._compute_cite_check(self._cite_ready_draft())
+
+        self.assertTrue(result["passed"])
+
+    def test_cite_check_fails_when_seed_url_only_in_authoritative_sources_not_body(self):
+        import v1_pipeline as p
+
+        with patch.object(p, "_resolve_url_statuses", return_value={
+            "https://nvlpubs.nist.gov/nistpubs/ai/nist.ai.100-1.pdf": 200,
+            "https://www.ibm.com/history/deep-blue": 200,
+        }):
+            result = p._compute_cite_check(self._cite_ready_draft(inline_ibm=False, source_ibm=False))
+
+        self.assertFalse(result["passed"])
+        self.assertIn("https://www.ibm.com/history/deep-blue", result["evidence"])
+
+    def test_cite_check_fails_on_dead_url(self):
+        import v1_pipeline as p
+
+        with patch.object(p, "_resolve_url_statuses", return_value={
+            "https://nvlpubs.nist.gov/nistpubs/ai/nist.ai.100-1.pdf": 200,
+            "https://www.ibm.com/history/deep-blue": 404,
+        }):
+            result = p._compute_cite_check(self._cite_ready_draft())
+
+        self.assertFalse(result["passed"])
+        self.assertIn("https://www.ibm.com/history/deep-blue", result["evidence"])
+
     def test_step_check_citations_passes_when_draft_meets_threshold(self):
         import v1_pipeline as p
 
@@ -3011,6 +3075,28 @@ class TestCitationGate(unittest.TestCase):
 
         self.assertFalse(result["passes"])
         self.assertIn("https://dead.example", result["dead_urls"])
+
+    def test_review_verdict_cannot_be_APPROVE_when_cite_fails(self):
+        import v1_pipeline as p
+
+        self.module_path.write_text("---\ntitle: Test\n---\n")
+        review_payload = json.dumps({
+            "verdict": "APPROVE",
+            "checks": [{"id": cid, "passed": True} for cid in ["COV", "QUIZ", "EXAM", "DEPTH", "WHY", "PRES"]],
+            "edits": [],
+            "feedback": "",
+        })
+        with self._patch_paths(p), \
+             patch.object(p, "dispatch_auto", return_value=(True, review_payload)), \
+             patch.object(p, "_resolve_url_statuses", return_value={
+                 "https://nvlpubs.nist.gov/nistpubs/ai/nist.ai.100-1.pdf": 200,
+                 "https://www.ibm.com/history/deep-blue": 200,
+             }):
+            review = p.step_review(self.module_path, self._cite_ready_draft(inline_ibm=False, source_ibm=False))
+
+        self.assertEqual(review["verdict"], "REJECT")
+        self.assertEqual(review["severity"], "severe")
+        self.assertTrue(any(c["id"] == "CITE" and not c["passed"] for c in review["checks"]))
 
 
 # ---------------------------------------------------------------------------
