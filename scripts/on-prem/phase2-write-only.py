@@ -3,7 +3,7 @@
 
 Bypasses the v1 pipeline's review/check/score retry loop. Per module:
 
-  1. WRITE — call the chosen writer model (default: gemini-3.1-pro-preview)
+  1. WRITE — call the chosen writer model (default: scripts/dispatch.py writer pin)
   2. SAVE — write the module markdown to disk
   3. FACT-CHECK — call the calibrated fact-grounder (gpt-5.3-codex-spark) on
      the just-written module, produce a structured ledger (SUPPORTED /
@@ -51,13 +51,13 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from dispatch import dispatch_gemini_with_retry  # type: ignore  # noqa: E402
+from dispatch import GEMINI_WRITER_MODEL, dispatch_gemini_with_retry  # type: ignore  # noqa: E402
 
 CONTENT_ROOT = REPO_ROOT / "src" / "content" / "docs" / "on-premises"
 LOG_FILE = REPO_ROOT / ".pipeline" / "on-prem-logs" / "phase2-write-only.log"
 LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-DEFAULT_WRITER = os.environ.get("KUBEDOJO_WRITER_MODEL") or "gemini-3.1-pro-preview"
+DEFAULT_WRITER = os.environ.get("KUBEDOJO_WRITER_MODEL") or GEMINI_WRITER_MODEL
 FACT_CHECKER = "gpt-5.3-codex-spark"  # calibrated winner from fact-grounding test
 MIN_CONTENT_CHARS = 2000  # below this is treated as a stub
 FACT_CHECK_TIMEOUT = 900

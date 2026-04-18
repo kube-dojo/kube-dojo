@@ -50,8 +50,13 @@ from ._messaging import (
 from ._model import _detect_model_error
 from ._prompts import build_gemini_prompt
 
+try:
+    from dispatch import GEMINI_WRITER_MODEL
+except ImportError:  # pragma: no cover - package import path variant
+    from scripts.dispatch import GEMINI_WRITER_MODEL  # type: ignore
 
-def converse_gemini(content: str, task_id: str, model: str = "gemini-3.1-pro-preview",
+
+def converse_gemini(content: str, task_id: str, model: str = GEMINI_WRITER_MODEL,
                     skip_github: bool = False):
     """Multi-turn conversation with Gemini. Includes conversation history in prompt.
 

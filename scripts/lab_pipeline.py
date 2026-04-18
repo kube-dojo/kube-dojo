@@ -23,6 +23,7 @@ REPO_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from dispatch import (  # noqa: E402
+    GEMINI_WRITER_MODEL,
     _is_rate_limited,
     dispatch_claude,
     dispatch_codex,
@@ -46,7 +47,7 @@ LAB_CHECK_IDS = [
 ]
 STATIC_CHECK_IDS = LAB_CHECK_IDS[:5]
 MODELS = {
-    "review": "gemini-3.1-pro-preview",
+    "review": GEMINI_WRITER_MODEL,
 }
 
 LAB_REVIEW_PROMPT_TEMPLATE = """You are reviewing a hands-on lab for KubeDojo.

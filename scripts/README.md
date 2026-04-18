@@ -160,11 +160,11 @@ python scripts/dispatch.py claude "Expand this draft to full depth..."
 ### Programmatic Usage
 
 ```python
-from scripts.dispatch import dispatch_gemini_with_retry, post_to_github
+from scripts.dispatch import GEMINI_WRITER_MODEL, dispatch_gemini_with_retry, post_to_github
 
 ok, output = dispatch_gemini_with_retry("Review this module...", review=True)
 if ok:
-    post_to_github(66, output, "gemini-3.1-pro-preview")
+    post_to_github(66, output, GEMINI_WRITER_MODEL)
 ```
 
 ### Review Criteria

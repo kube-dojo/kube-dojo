@@ -38,10 +38,10 @@ REPORT_FILE = REPO_ROOT / ".pipeline" / "uk-sync-report.json"
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from checks import ukrainian
-from dispatch import dispatch_gemini_with_retry
+from dispatch import GEMINI_WRITER_MODEL, dispatch_gemini_with_retry
 
 CHUNKED_THRESHOLD = 40_000  # chars — modules above this use section-by-section translation
-CHUNKED_MODEL = "gemini-3.1-pro-preview"  # pro for quality on section-by-section
+CHUNKED_MODEL = GEMINI_WRITER_MODEL  # pro for quality on section-by-section
 BATCH_LIMIT = 15_000  # chars — pack adjacent sections into batches up to this size
 
 

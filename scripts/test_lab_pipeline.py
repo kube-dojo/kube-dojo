@@ -19,6 +19,7 @@ import sys
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import lab_pipeline as lp
+from dispatch import GEMINI_WRITER_MODEL
 
 
 def _write_module(path: Path, *, lab: str | dict | None = None) -> None:
@@ -155,7 +156,7 @@ class TestLabState(unittest.TestCase):
                     "phase": "done",
                     "last_run": "2026-04-14T08:30:00Z",
                     "severity": "clean",
-                    "reviewer": "gemini-3.1-pro-preview",
+                    "reviewer": GEMINI_WRITER_MODEL,
                     "module": "k8s/cka/part1-cluster-architecture/module-1.1-control-plane",
                     "checks_failed": [],
                     "errors": [],
@@ -256,7 +257,7 @@ class TestLabReviewFlow(unittest.TestCase):
                     "phase": "done",
                     "last_run": "2026-04-14T08:30:00Z",
                     "severity": "clean",
-                    "reviewer": "gemini-3.1-pro-preview",
+                    "reviewer": GEMINI_WRITER_MODEL,
                     "module": "k8s/cka/part1-cluster-architecture/module-1.1-control-plane",
                     "checks_failed": [],
                     "errors": [],
@@ -270,7 +271,7 @@ class TestLabReviewFlow(unittest.TestCase):
                 "cka-1.1-control-plane",
                 "LAB_REVIEW",
                 verdict="APPROVE",
-                reviewer="gemini-3.1-pro-preview",
+                reviewer=GEMINI_WRITER_MODEL,
                 severity="clean",
                 module="k8s/cka/part1-cluster-architecture/module-1.1-control-plane",
                 checks=[{"id": "STRUCTURE", "passed": True}],
@@ -280,7 +281,7 @@ class TestLabReviewFlow(unittest.TestCase):
             lp.append_lab_review_audit(
                 "cka-1.1-control-plane",
                 "LAB_DONE",
-                reviewer="gemini-3.1-pro-preview",
+                reviewer=GEMINI_WRITER_MODEL,
                 module="k8s/cka/part1-cluster-architecture/module-1.1-control-plane",
             )
 

@@ -29,6 +29,11 @@ from ._messaging import (
 )
 from ._model import check_model
 
+try:
+    from dispatch import GEMINI_WRITER_MODEL
+except ImportError:  # pragma: no cover - package import path variant
+    from scripts.dispatch import GEMINI_WRITER_MODEL  # type: ignore
+
 
 def interactive_mode():
     """Interactive mode for testing."""
@@ -452,7 +457,7 @@ def _build_parser() -> argparse.ArgumentParser:
     converse_parser = subparsers.add_parser("converse", help="Multi-turn conversation with Gemini (includes history)")
     converse_parser.add_argument("content", help="Message content (use '-' to read from stdin)")
     converse_parser.add_argument("--task-id", required=True, help="Conversation thread ID (e.g., 'a1-1-planning')")
-    converse_parser.add_argument("--model", default="gemini-3.1-pro-preview", help="Gemini model")
+    converse_parser.add_argument("--model", default=GEMINI_WRITER_MODEL, help="Gemini model")
     converse_parser.add_argument("--no-github", dest="no_github", action="store_true",
                                  help="Skip auto-posting to GitHub")
 

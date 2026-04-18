@@ -21,7 +21,7 @@ REPO_ROOT = Path(__file__).parent.parent
 CONTENT_ROOT = REPO_ROOT / "src" / "content" / "docs"
 
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
-from dispatch import dispatch_gemini_with_retry  # noqa: E402
+from dispatch import GEMINI_WRITER_MODEL, dispatch_gemini_with_retry  # noqa: E402
 
 
 def extract_title_and_topics(path: Path) -> tuple[str, list[str]]:
@@ -93,7 +93,7 @@ Output ONLY JSON in this format:
 ]}}
 """
 
-    ok, output = dispatch_gemini_with_retry(prompt, model="gemini-3.1-pro-preview", timeout=120)
+    ok, output = dispatch_gemini_with_retry(prompt, model=GEMINI_WRITER_MODEL, timeout=120)
     if not ok:
         return {"error": "dispatch_failed"}
 

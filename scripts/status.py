@@ -12,6 +12,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from dispatch import GEMINI_WRITER_MODEL
 from pipeline_v2.cli import _build_status_report as build_v2_status_report
 from translation_v2 import build_status as build_translation_v2_status
 from ztt_status import build_status as build_ztt_status
@@ -239,7 +240,7 @@ def _build_translation_summary(repo_root: Path) -> dict[str, Any]:
         "stale": counts["stale"],
         "unknown": counts["unknown"],
         "sync_clean": counts["missing"] == 0 and counts["stale"] == 0 and counts["unknown"] == 0,
-        "writer": "gemini-3.1-pro-preview via uk_sync.py",
+        "writer": f"{GEMINI_WRITER_MODEL} via uk_sync.py",
         "modules": modules,
     }
 
@@ -482,7 +483,7 @@ def build_repo_status(repo_root: Path, *, fast: bool = False) -> dict[str, Any]:
             "translation": (
                 "translation v2 queue + uk_sync worker"
                 if translation_v2 is not None
-                else "gemini-3.1-pro-preview via uk_sync.py"
+                else f"{GEMINI_WRITER_MODEL} via uk_sync.py"
             ),
         },
     }

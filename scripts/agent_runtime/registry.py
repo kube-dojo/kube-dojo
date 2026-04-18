@@ -23,6 +23,11 @@ from __future__ import annotations
 import os
 from typing import TypedDict
 
+try:
+    from dispatch import GEMINI_WRITER_MODEL
+except ImportError:  # pragma: no cover - package import path variant
+    from scripts.dispatch import GEMINI_WRITER_MODEL  # type: ignore
+
 
 class AgentEntry(TypedDict):
     """Registry row shape."""
@@ -64,7 +69,7 @@ AGENTS: dict[str, AgentEntry] = {
     },
     "gemini": {
         "adapter": "scripts.agent_runtime.adapters.gemini:GeminiAdapter",
-        "default_model": "gemini-3.1-pro-preview",
+        "default_model": GEMINI_WRITER_MODEL,
         "cost_tier": "low",
         "capabilities": frozenset({
             "content_writing",

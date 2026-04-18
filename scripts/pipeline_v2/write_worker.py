@@ -6,13 +6,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+from dispatch import GEMINI_WRITER_MODEL
 from v1_pipeline import _extract_frontmatter_data, find_module_path, step_write
 
 from .control_plane import ControlPlane, Lease
 from .review_worker import REVIEW_MODEL
 
 
-WRITE_MODEL = "gemini-3.1-pro-preview"
+WRITE_MODEL = GEMINI_WRITER_MODEL
 WRITE_ESTIMATED_USD = 0.0350
 STUB_BODY_CHAR_THRESHOLD = 400
 STUB_MARKERS = ("todo", "tbd", "stub", "placeholder", "coming soon")

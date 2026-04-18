@@ -33,6 +33,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
+from dispatch import GEMINI_WRITER_MODEL  # noqa: E402
 
 OUTPUT_DIR = Path("/tmp/writer-rigorous")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -42,7 +43,7 @@ RESULTS_FILE = OUTPUT_DIR / "results.json"
 # ---------- Configuration ----------
 
 CANDIDATES = [
-    {"name": "gemini-3.1-pro-preview", "family": "gemini", "tier": "frontier"},
+    {"name": GEMINI_WRITER_MODEL, "family": "gemini", "tier": "frontier"},
     {"name": "gpt-5.4", "family": "codex", "tier": "frontier"},
     {"name": "gpt-5.2", "family": "codex", "tier": "long-running"},
     {"name": "gpt-5.3-codex", "family": "codex", "tier": "codex-tuned"},

@@ -15,6 +15,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from checks import ukrainian
+from dispatch import GEMINI_WRITER_MODEL
 from pipeline_v2.control_plane import (
     DEFAULT_BUDGETS_PATH,
     ControlPlane,
@@ -27,7 +28,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DOCS_ROOT = REPO_ROOT / "src" / "content" / "docs"
 UK_ROOT = DOCS_ROOT / "uk"
 DEFAULT_DB_PATH = REPO_ROOT / ".pipeline" / "translation_v2.db"
-TRANSLATE_MODEL = "gemini-3.1-pro-preview"
+TRANSLATE_MODEL = GEMINI_WRITER_MODEL
 TRANSLATE_ESTIMATED_USD = 0.0350
 VERIFY_MODEL = "deterministic-ukrainian-checks"
 DEFAULT_LEASE_SECONDS = 1200
