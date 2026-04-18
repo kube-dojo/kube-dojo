@@ -93,7 +93,7 @@ def _validate_module_key(repo_root: Path, raw: str) -> str | None:
 def _json_default(value: Any) -> Any:
     if isinstance(value, Path):
         return str(value)
-    if is_dataclass(value):
+    if is_dataclass(value) and not isinstance(value, type):
         return asdict(value)
     raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
 
@@ -1902,6 +1902,8 @@ _CITATION_STATUS_CACHE_LOCK = threading.Lock()
 
 
 _QUALITY_TITLE_RE = re.compile(r'^title:\s*["\']?(.*?)["\']?\s*$', re.MULTILINE)
+_QUALITY_SOURCES_HEADING_RE = re.compile(r"^##\s+Sources\s*$", re.MULTILINE)
+_QUALITY_MARKDOWN_LINK_RE = re.compile(r"\[([^\]]+)\]\((https?://[^)]+)\)")
 _QUALITY_TRACK_LABELS = {
     "ai": "AI",
     "ai-ml-engineering": "AI/ML Engineering",
@@ -1927,9 +1929,12 @@ def _quality_severity(score: float) -> str:
 
 def _quality_track_label(rel: Path) -> str:
     parts = rel.parts
-    if len(parts) >= 2 and parts[0] == "k8s" and parts[1] in _CERT_TRACKS:
+    if not parts:
+        return ""
+    first = parts[0]
+    if len(parts) >= 2 and first == "k8s" and parts[1] in _CERT_TRACKS:
         return parts[1].upper()
-    top = _QUALITY_TRACK_LABELS.get(parts[0], parts[0].replace("-", " ").title())
+    top = _QUALITY_TRACK_LABELS.get(first, first.replace("-", " ").title())
     if len(parts) >= 2 and not parts[1].startswith(("module-", "part")):
         return f"{top} {parts[1].replace('-', ' ').title()}"
     return top
@@ -1989,8 +1994,13 @@ def build_quality_scores(repo_root: Path) -> dict[str, Any]:
         has_quiz = bool(re.search(r"^##+\s+(quiz|knowledge check)\b", text, re.IGNORECASE | re.MULTILINE))
         has_exercise = bool(re.search(r"^##+\s+(exercise|hands-on|practice|lab)\b", text, re.IGNORECASE | re.MULTILINE))
         has_diagram = "```mermaid" in text or "<details>" in text
+        sources_match = _QUALITY_SOURCES_HEADING_RE.search(text)
+        sources_block = text[sources_match.end():] if sources_match else ""
+        has_citations = bool(sources_match) and bool(_QUALITY_MARKDOWN_LINK_RE.search(sources_block))
         base = 0.4 if lines_count < 60 else 0.9 if lines_count < 120 else 1.4 if lines_count < 220 else 1.8 if lines_count < 300 else 2.1
         score = min(5.0, round(base + (0.6 if has_title else 0.0) + (0.8 if has_quiz else 0.0) + (0.8 if has_exercise else 0.0) + (0.7 if has_diagram else 0.0), 1))
+        if not has_citations:
+            score = min(score, 1.5)
         severity = _quality_severity(score)
         action = {
             "critical": "Critical",
@@ -2000,6 +2010,8 @@ def build_quality_scores(repo_root: Path) -> dict[str, Any]:
             "excellent": "Strong",
         }[severity]
         issues = []
+        if not has_citations:
+            issues.append("no citations")
         if lines_count < 220:
             issues.append("thin")
         if not has_quiz:
@@ -3212,7 +3224,7 @@ def build_tracks_readiness(repo_root: Path) -> dict[str, Any]:
     track_order = canonical_order + sorted(extras)
 
     out_tracks: list[dict[str, Any]] = []
-    grand: dict[str, int] = {
+    grand: dict[str, Any] = {
         "total": 0,
         "cleared": 0,
         "in_flight": 0,
@@ -5745,11 +5757,6 @@ def _v_v2_db(repo_root: Path) -> tuple:
 
 def _v_translation_db(repo_root: Path) -> tuple:
     return ("t2", _sqlite_version_key(repo_root / ".pipeline" / "translation_v2.db"))
-
-
-def _v_always_fresh(_: Path) -> tuple:
-    # Placeholder for TTL-only policies.
-    return ("ttl",)
 
 
 # Map fixed paths (query-independent beyond ``?compact=1``) to policies.

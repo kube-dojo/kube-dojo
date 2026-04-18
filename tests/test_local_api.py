@@ -72,6 +72,7 @@ def _seed_quality_module(
     quiz: bool = False,
     exercise: bool = False,
     diagram: bool = False,
+    citations: bool = True,
 ) -> None:
     path = repo / "src" / "content" / "docs" / f"{rel}.md"
     lines = ["---", f'title: "{title}"']
@@ -83,6 +84,8 @@ def _seed_quality_module(
         lines.extend(["", "## Quiz", "", "- Question"])
     if exercise:
         lines.extend(["", "## Hands-On Exercise", "", "1. Do thing"])
+    if citations:
+        lines.extend(["", "## Sources", "", "- [Upstream docs](https://example.com/docs)"])
     _write(path, "\n".join(lines) + "\n")
 
 
@@ -2187,19 +2190,26 @@ def test_briefing_top_modules_covers_critical_quality(tmp_path: Path) -> None:
     assert cq and cq[0]["endpoint"] == "/api/quality/scores"
 
 
-def test_quality_scores_live_repo_issue_303_modules_are_not_critical() -> None:
+def test_quality_scores_live_repo_no_citations_force_critical() -> None:
+    """Modules without a ``## Sources`` section with external links now
+    auto-fail (critical severity, 'no citations' as primary_issue).
+    Issue #303's original guarantee — that the structure-rich CKA/KCNA
+    modules aren't critical by length/structure heuristics — still
+    holds, but citations is now an independent floor. Until content is
+    backfilled with real Sources blocks, every untouched module is
+    critical, which is the intentional surface-the-truth state."""
     with local_api._QUALITY_AUDIT_CACHE_LOCK:
         local_api._QUALITY_AUDIT_CACHE.clear()
     quality = local_api.build_quality_scores(local_api.REPO_ROOT)
     assert quality["source"] == "heuristic"
-    critical = {m["module"] for m in quality["critical"]}
-    for module in (
-        "CKA 2.8: Scheduler & Pod Lifecycle Theory",
-        "KCNA 3.6: Security Basics (Theory)",
-        "KCNA 3.7: Cloud Native Community & Collaboration",
-        "KCNA 4.3: Release Strategies (Theory)",
-    ):
-        assert module not in critical
+    by_module = {m["module"]: m for m in quality["modules"]}
+    # Spot-check: a module we know lacks a Sources section is critical
+    # with 'no citations' leading the primary_issue.
+    sample = "CKA 2.8: Scheduler & Pod Lifecycle Theory"
+    if sample in by_module:  # guard: title may drift
+        entry = by_module[sample]
+        assert entry["severity"] == "critical"
+        assert entry["primary_issue"].startswith("no citations")
 
 
 def test_compact_briefing_keeps_actions_and_top_modules(tmp_path: Path) -> None:
