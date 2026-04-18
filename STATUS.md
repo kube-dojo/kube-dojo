@@ -96,7 +96,7 @@ Uncommitted in tree:
 #280 citation-aware module page (3-tab proposal)
 
 **Codex queue state:**
-- `infra-279` (citation pipeline wiring — Gemini 3.1 Pro writes with seeds → Codex fact-checks) — running in background task `b13mx8q9p`.
+- `infra-279` (citation pipeline wiring) — **TIMED OUT at 900s**, no PR. Partial work (+655 LOC across 3 files) uncommitted in `.worktrees/citation-pipeline`. Don't commit as-is. #279 comment posted with recommendation to split into 3 sub-tasks (#279a seed injection, #279b citation gate step, #279c rubric dimension + e2e test).
 - All other originally-queued tasks now have PRs.
 
 **Merge ordering guidance for user return:**
