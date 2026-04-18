@@ -56,6 +56,7 @@ import urllib.request
 import yaml
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timedelta, UTC
+from functools import lru_cache
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
@@ -70,6 +71,7 @@ FACT_LEDGER_TTL = timedelta(days=7)
 LINK_CACHE_FILE = REPO_ROOT / ".pipeline" / "link-cache.json"
 LINK_CACHE_TTL = timedelta(hours=24)
 DASHBOARD_FILE = REPO_ROOT / ".pipeline" / "dashboard.html"
+RUBRIC_PROFILE_DIR = REPO_ROOT / "docs" / "rubric-profiles"
 LINK_HEALTH_TIMEOUT_SEC = 5
 K8S_MIN_SUPPORTED_MINOR = 35
 K8S_VERSION_RE = re.compile(r"\bv?1\.(\d{1,2})\b")
@@ -1365,6 +1367,114 @@ IMPROVED MODULE:
 """
 
 CHECK_IDS = ["COV", "QUIZ", "EXAM", "DEPTH", "WHY", "PRES"]
+DEFAULT_SEVERE_FAILED_CHECKS = 5
+
+
+def _default_rubric_profile(name: str = "default") -> dict:
+    return {
+        "name": name,
+        "weights": {check_id: 1 for check_id in CHECK_IDS},
+        "severity_gate": {"severe_failed_checks": DEFAULT_SEVERE_FAILED_CHECKS},
+    }
+
+
+def _normalize_rubric_track(track: str | None) -> str | None:
+    if track is None:
+        return None
+    value = str(track).strip().lower().replace("_", "-")
+    if not value:
+        return None
+    aliases = {
+        "prereqs": "prerequisites",
+        "prerequisites": "prerequisites",
+        "cka": "cka",
+        "ckad": "ckad",
+        "cks": "cks",
+        "kcna": "kcna",
+        "cloud": "cloud",
+        "platform": "platform",
+        "ai": "ai",
+        "ai-ml-engineering": "ai",
+    }
+    if value in aliases:
+        return aliases[value]
+    parts = [part for part in value.split("/") if part]
+    if not parts:
+        return None
+    if parts[0] == "k8s" and len(parts) > 1 and parts[1] in {"cka", "ckad", "cks", "kcna"}:
+        return parts[1]
+    if parts[0] in {"prerequisites", "cloud", "platform"}:
+        return parts[0]
+    if parts[0] in {"ai", "ai-ml-engineering"}:
+        return "ai"
+    return aliases.get(parts[0])
+
+
+def _rubric_track_from_path(module_path: Path) -> str | None:
+    try:
+        relative = module_path.resolve().relative_to(CONTENT_ROOT.resolve())
+    except ValueError:
+        return None
+    parts = relative.parts
+    if not parts:
+        return None
+    if parts[0] == "uk" and len(parts) > 1:
+        parts = parts[1:]
+    if not parts:
+        return None
+    if parts[0] == "k8s" and len(parts) > 1:
+        return _normalize_rubric_track(f"k8s/{parts[1]}")
+    return _normalize_rubric_track(parts[0])
+
+
+def rubric_profile_name_for_module(module_path: Path) -> str:
+    frontmatter = _extract_frontmatter_data(module_path.read_text())
+    candidates = [
+        frontmatter.get("track"),
+        frontmatter.get("slug"),
+    ]
+    try:
+        candidates.append(module_key_from_path(module_path))
+    except ValueError:
+        pass
+    candidates.append(_rubric_track_from_path(module_path))
+    for candidate in candidates:
+        normalized = _normalize_rubric_track(candidate)
+        if normalized:
+            profile_path = RUBRIC_PROFILE_DIR / f"{normalized}.yaml"
+            if profile_path.exists():
+                return normalized
+    return "default"
+
+
+@lru_cache(maxsize=None)
+def load_rubric_profile(profile_name: str) -> dict:
+    normalized = _normalize_rubric_track(profile_name) or "default"
+    profile_path = RUBRIC_PROFILE_DIR / f"{normalized}.yaml"
+    profile = _default_rubric_profile(normalized)
+    if not profile_path.exists():
+        normalized = "default"
+        profile_path = RUBRIC_PROFILE_DIR / "default.yaml"
+        profile = _default_rubric_profile("default")
+    if profile_path.exists():
+        raw = yaml.safe_load(profile_path.read_text()) or {}
+        if isinstance(raw, dict):
+            weights = raw.get("weights") or {}
+            if isinstance(weights, dict):
+                for check_id in CHECK_IDS:
+                    value = weights.get(check_id)
+                    if isinstance(value, (int, float)) and not isinstance(value, bool):
+                        profile["weights"][check_id] = value
+            severity_gate = raw.get("severity_gate") or {}
+            if isinstance(severity_gate, dict):
+                threshold = severity_gate.get("severe_failed_checks")
+                if isinstance(threshold, int) and not isinstance(threshold, bool) and threshold > 0:
+                    profile["severity_gate"]["severe_failed_checks"] = threshold
+    return profile
+
+
+def load_rubric_profile_for_module(module_path: Path) -> dict:
+    return load_rubric_profile(rubric_profile_name_for_module(module_path))
 
 
 def _has_valid_review_checks(checks: object) -> bool:
@@ -1382,6 +1492,7 @@ def compute_severity(
     verdict: str,
     checks: object,
     edits: object,
+    profile: dict | None = None,
 ) -> str:
     """Compute the authoritative severity from reviewer output.
 
@@ -1412,7 +1523,14 @@ def compute_severity(
         # Contradictory: REJECT with no failed checks. Treat as severe —
         # the reviewer's structure is inconsistent, fall back to rewrite.
         return "severe"
-    if len(failed) >= 5:
+    severe_failed_checks = (
+        ((profile or {}).get("severity_gate") or {}).get("severe_failed_checks")
+        if isinstance(profile, dict)
+        else None
+    )
+    if not isinstance(severe_failed_checks, int) or isinstance(severe_failed_checks, bool) or severe_failed_checks < 1:
+        severe_failed_checks = DEFAULT_SEVERE_FAILED_CHECKS
+    if len(failed) >= severe_failed_checks:
         return "severe"
     if not edits or not isinstance(edits, list):
         return "severe"
@@ -1443,7 +1561,10 @@ def compute_severity(
     return "targeted"
 
 
-def compute_review_payload_severity(review: dict | None) -> str:
+def compute_review_payload_severity(
+    review: dict | None,
+    profile: dict | None = None,
+) -> str:
     """Compute severity from a possibly malformed review payload."""
     if not isinstance(review, dict):
         return "severe"
@@ -1451,6 +1572,7 @@ def compute_review_payload_severity(review: dict | None) -> str:
         review.get("verdict", "REJECT"),
         review.get("checks"),
         review.get("edits"),
+        profile=profile,
     )
 
 
@@ -2113,7 +2235,8 @@ def apply_review_edits(content: str, edits: list) -> tuple[str, list, list]:
 
 
 def step_review(module_path: Path, improved: str, model: str = MODELS["review"],
-                fact_ledger: dict | None = None) -> dict | None:
+                fact_ledger: dict | None = None,
+                rubric_profile: dict | None = None) -> dict | None:
     """Structural reviewer runs the binary quality gate.
 
     Returns:
@@ -2202,7 +2325,12 @@ def step_review(module_path: Path, improved: str, model: str = MODELS["review"],
     # Code as arbiter: override the reviewer's self-reported severity with
     # the computed value. Per Gemini pair-review critique A, trusting the
     # LLM to report severity produces inconsistent routing.
-    severity = compute_severity(verdict, checks, edits)
+    severity = compute_severity(
+        verdict,
+        checks,
+        edits,
+        profile=rubric_profile or load_rubric_profile_for_module(module_path),
+    )
     result["severity"] = severity
     result["checks"] = checks
     result["edits"] = edits
@@ -2662,6 +2790,7 @@ def run_module(module_path: Path, state: dict, max_retries: int | None = None,
     ms = get_module_state(state, key)
     ms["errors"] = []
     review_fact_ledger = ms.get("fact_ledger")
+    rubric_profile = load_rubric_profile_for_module(module_path)
     staging_path = module_path.with_suffix(".staging.md")
     rewrite_baseline = module_path.read_text()
 
@@ -3088,7 +3217,7 @@ def run_module(module_path: Path, state: dict, max_retries: int | None = None,
             review_checks_raw = review.get("checks")
             review_edits_raw = review.get("edits")
             review_checks = review_checks_raw if isinstance(review_checks_raw, list) else []
-            review_severity = compute_review_payload_severity(review)
+            review_severity = compute_review_payload_severity(review, rubric_profile)
 
             if review_verdict == "APPROVE" and review_severity == "clean":
                 # Binary gate: on APPROVE, the module's state records that
@@ -3922,6 +4051,9 @@ def _render_status_dashboard_html(
 
 def cmd_status(args):
     """Show pipeline status."""
+    global _quiet
+    previous_quiet = _quiet
+    _quiet = False
     state = load_state()
     modules = state.get("modules", {})
     verbose = getattr(args, "verbose", False)
@@ -4154,6 +4286,7 @@ def cmd_status(args):
                 print(f"    ... and {len(failed) - 20} more")
         else:
             print(" (use --verbose to list)")
+    _quiet = previous_quiet
 
 
 def _apply_model_overrides(args) -> dict:

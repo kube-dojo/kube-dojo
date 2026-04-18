@@ -1,0 +1,9 @@
+weights:
+  COV: 1
+  QUIZ: 1
+  EXAM: 1
+  DEPTH: 1
+  WHY: 1
+  PRES: 1
+severity_gate:
+  severe_failed_checks: 5

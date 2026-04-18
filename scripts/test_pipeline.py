@@ -681,6 +681,23 @@ class TestStateManagement(unittest.TestCase):
         self.assertEqual(loaded["modules"][key_a]["counter"], 5)
         self.assertEqual(loaded["modules"][key_b]["counter"], 5)
 
+    def test_load_rubric_profile_uses_frontmatter_track(self):
+        """Rubric profile lookup prefers an explicit frontmatter track."""
+        import v1_pipeline as p
+        with tempfile.TemporaryDirectory() as tmpdir:
+            module_path = Path(tmpdir) / "module.md"
+            module_path.write_text(textwrap.dedent("""\
+            ---
+            title: "Track Lookup Test"
+            slug: sandbox/test/module-0.1
+            track: cka
+            ---
+            Test body.
+            """))
+            profile = p.load_rubric_profile_for_module(module_path)
+            self.assertEqual(profile["name"], "cka")
+            self.assertEqual(profile["severity_gate"]["severe_failed_checks"], 5)
+
 
 # ---------------------------------------------------------------------------
 # Test: Review audit log
