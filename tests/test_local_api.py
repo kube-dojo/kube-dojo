@@ -1536,22 +1536,40 @@ def test_reviews_index_and_single(tmp_path: Path) -> None:
     reviews_dir = tmp_path / ".pipeline" / "reviews"
     reviews_dir.mkdir(parents=True)
     (reviews_dir / "cka__module-2.8-scheduler.md").write_text(
-        "# Review\n\n## 2026-01-01 — WRITE\n\n**Writer**: gemini\n",
+        "# Review\n\n## 2026-01-02 — `REVIEW` — `APPROVE`\n\n**Checks**: 4/4 passed (PRES NO_EMOJI K8S_API FACT_CHECK)\n",
         encoding="utf-8",
     )
-    (reviews_dir / "ztt__module-0.1.md").write_text("short", encoding="utf-8")
+    (reviews_dir / "ztt__module-0.1.md").write_text(
+        "# Review\n\n## 2026-01-03 — `REVIEW` — `APPROVE`\n\n**Checks**: 4/4 passed (PRES NO_EMOJI K8S_API FACT_CHECK)\n\n**Feedback**:\n> unverified: could not confirm version claim\n",
+        encoding="utf-8",
+    )
+    (reviews_dir / "bad__fact.md").write_text(
+        "# Review\n\n## 2026-01-04 — `REVIEW` — `REJECT`\n\n**Checks**: 3/4 passed (PRES NO_EMOJI K8S_API) | **Failed**: FACT_CHECK\n\n**Failed check evidence**:\n- **FACT_CHECK**: API version claim is wrong\n",
+        encoding="utf-8",
+    )
 
     index = local_api.build_reviews_index(tmp_path)
     assert index["exists"] is True
-    assert index["count"] == 2
-    keys = {r["module_key"] for r in index["reviews"]}
+    assert index["count"] == 3
+    statuses = {r["module_key"]: r["fact_check_status"] for r in index["reviews"]}
+    keys = set(statuses)
     assert "cka/module-2.8-scheduler" in keys
     assert "ztt/module-0.1" in keys
+    assert statuses["cka/module-2.8-scheduler"] == "verified"
+    assert statuses["ztt/module-0.1"] == "unverified"
+    assert statuses["bad/fact"] == "failed"
+    assert local_api.build_reviews_index(tmp_path, fact_check_status="unverified")["reviews"][0]["module_key"] == "ztt/module-0.1"
 
     single = local_api.build_module_reviews(tmp_path, "cka/module-2.8-scheduler")
     assert single is not None
-    assert "**Writer**: gemini" in single["body"]
+    assert "FACT_CHECK" in single["body"]
     assert single["truncated"] is False
+    assert single["fact_check_status"] == "verified"
+
+    unverified = local_api.build_module_reviews(tmp_path, "ztt/module-0.1")
+    assert unverified is not None
+    assert unverified["fact_check_status"] == "unverified"
+    assert unverified["unverified_evidence"][0].startswith("unverified:")
 
     # Truncation path. ``size`` is the actual on-disk size (per Codex
     # round-4 polish: truncated responses must not lie about file
@@ -1564,6 +1582,26 @@ def test_reviews_index_and_single(tmp_path: Path) -> None:
     assert trunc["size"] == 50_000
     assert trunc["max_bytes"] == 1000
     assert trunc["body_size"] == 1000
+
+
+def test_reviews_route_filter_module_state_diag_and_briefing_unverified(tmp_path: Path) -> None:
+    module_key, _ = _setup_repo(tmp_path)
+    _write(
+        tmp_path / ".pipeline/reviews/prerequisites__zero-to-terminal__module-0.1-alpha.md",
+        "# Review\n\n## 2026-01-03 — `REVIEW` — `APPROVE`\n\n**Checks**: 4/4 passed (PRES NO_EMOJI K8S_API FACT_CHECK)\n\n**Feedback**:\n> unverified: could not confirm version claim\n",
+    )
+
+    status_code, payload, _ = local_api.route_request(tmp_path, "/api/reviews?fact_check_status=unverified")
+    assert status_code == 200
+    assert payload["count"] == 1
+    assert payload["reviews"][0]["module_key"] == module_key
+
+    state = local_api.build_module_state(tmp_path, module_key)
+    assert "fact_check_unverified" in _diag_codes(state["diagnostics"])
+
+    briefing = local_api.build_session_briefing(tmp_path)
+    assert any("unverified fact claims" in alert for alert in briefing["alerts"])
+    assert any(row.get("reason") == "fact_check_unverified" for row in briefing["action_rows"])
 
 
 def test_resolve_bridge_db_path_precedence(tmp_path: Path, monkeypatch) -> None:

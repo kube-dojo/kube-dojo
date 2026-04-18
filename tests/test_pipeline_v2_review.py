@@ -123,6 +123,7 @@ def _deep_response(
     depth: bool = True,
     why: bool = True,
     fact_check: bool = True,
+    fact_evidence: str | None = None,
 ) -> str:
     checks = [
         {
@@ -149,7 +150,7 @@ def _deep_response(
         {
             "id": "FACT_CHECK",
             "passed": fact_check,
-            "evidence": "facts verified" if fact_check else "could not verify current facts",
+            "evidence": fact_evidence or ("facts verified" if fact_check else "could not verify current facts"),
             "fix_hint": "" if fact_check else "Verify claims against current live sources",
             "line_range": [11, 12],
         },
@@ -286,70 +287,35 @@ def test_review_usage_limit_falls_back_to_gpt_5_4(tmp_path):
     ]
 
 
-def test_approve_response_emits_check_passed_and_enqueues_check_pre(tmp_path):
-    control_plane = _make_control_plane(tmp_path)
-    module_path = _write_module(tmp_path)
-    control_plane.enqueue(str(module_path.relative_to(tmp_path)), phase="review", model=REVIEW_MODEL)
-    dispatch = Mock(
-        side_effect=[
-            (True, _simple_response("PRES")),
-            (True, _simple_response("NO_EMOJI")),
-            (True, _simple_response("K8S_API")),
-            (True, _deep_response()),
-        ]
-    )
-    worker = ReviewWorker(control_plane, dispatch_fn=dispatch)
-
-    with patch("pipeline_v2.preflight.subprocess.run", side_effect=_preflight_side_effect), patch(
-        "pipeline_v2.preflight._resolve_link_statuses",
-        return_value={},
-    ):
-        outcome = worker.run_once()
-
-    assert outcome.status == "approved"
-    passed_event = control_plane.iter_events("check_passed")[-1]
-    payload = json.loads(passed_event["payload_json"])
-    assert payload["verdict"] == "APPROVE"
-    queued = _fetch_rows(
-        control_plane.db_path,
-        "SELECT phase, model, queue_state FROM jobs WHERE phase = 'check_pre'",
-    )
-    assert len(queued) == 1
-    assert queued[0]["model"] == CHECK_PRE_MODEL
-    assert queued[0]["queue_state"] == "pending"
-
-
-def test_reject_response_emits_check_failed_and_enqueues_patch(tmp_path):
-    control_plane = _make_control_plane(tmp_path)
-    module_path = _write_module(tmp_path)
-    control_plane.enqueue(str(module_path.relative_to(tmp_path)), phase="review", model=REVIEW_MODEL)
-    dispatch = Mock(
-        side_effect=[
-            (True, _simple_response("PRES", passed=False)),
-            (True, _simple_response("NO_EMOJI")),
-            (True, _simple_response("K8S_API")),
-            (True, _deep_response()),
-        ]
-    )
-    worker = ReviewWorker(control_plane, dispatch_fn=dispatch)
-
-    with patch("pipeline_v2.preflight.subprocess.run", side_effect=_preflight_side_effect), patch(
-        "pipeline_v2.preflight._resolve_link_statuses",
-        return_value={},
-    ):
-        outcome = worker.run_once()
-
-    assert outcome.status == "rejected"
-    failed_event = control_plane.iter_events("check_failed")[-1]
-    payload = json.loads(failed_event["payload_json"])
-    assert payload["verdict"] == "REJECT"
-    assert payload["failed_checks"][0]["id"] == "PRES"
-    queued = _fetch_rows(
-        control_plane.db_path,
-        "SELECT phase, queue_state FROM jobs WHERE phase = 'patch'",
-    )
-    assert len(queued) == 1
-    assert queued[0]["queue_state"] == "pending"
+def test_review_worker_enforces_review_outcomes(tmp_path):
+    cases = [
+        ("approved", [_simple_response("PRES"), _simple_response("NO_EMOJI"), _simple_response("K8S_API"), _deep_response()], "check_pre", "APPROVE", None),
+        ("rejected", [_simple_response("PRES", passed=False), _simple_response("NO_EMOJI"), _simple_response("K8S_API"), _deep_response()], "patch", "REJECT", "PRES"),
+        ("rejected", [_simple_response("PRES"), _simple_response("NO_EMOJI"), _simple_response("K8S_API"), _deep_response(fact_evidence="unverified: could not confirm Kubernetes 1.99 claim")], "patch", "REJECT", "FACT_CHECK"),
+    ]
+    for i, (status, responses, phase, verdict, failed_check) in enumerate(cases):
+        case_root = tmp_path / f"case-{i}"
+        control_plane = _make_control_plane(case_root)
+        module_path = _write_module(case_root)
+        control_plane.enqueue(str(module_path.relative_to(case_root)), phase="review", model=REVIEW_MODEL)
+        worker = ReviewWorker(control_plane, dispatch_fn=Mock(side_effect=[(True, r) for r in responses]))
+        with patch("pipeline_v2.preflight.subprocess.run", side_effect=_preflight_side_effect), patch(
+            "pipeline_v2.preflight._resolve_link_statuses",
+            return_value={},
+        ):
+            outcome = worker.run_once()
+        assert outcome.status == status
+        payload = json.loads(control_plane.iter_events("check_passed" if phase == "check_pre" else "check_failed")[-1]["payload_json"])
+        assert payload["verdict"] == verdict
+        if failed_check:
+            assert payload["failed_checks"][0]["id"] == failed_check
+        if failed_check == "FACT_CHECK":
+            assert json.loads(control_plane.iter_events("fact_check_unverified")[-1]["payload_json"])["unverified_claims"][0]["id"] == "FACT_CHECK"
+        queued = _fetch_rows(control_plane.db_path, "SELECT phase, model, queue_state FROM jobs WHERE phase = ?", (phase,))
+        assert len(queued) == 1
+        assert queued[0]["queue_state"] == "pending"
+        if phase == "check_pre":
+            assert queued[0]["model"] == CHECK_PRE_MODEL
 
 
 def test_three_simple_dispatches_then_one_deep(tmp_path):
