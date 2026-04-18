@@ -108,16 +108,20 @@ class ReviewWorker:
                 module_path,
                 lease=lease,
             )
-            failed_checks = [check for check in review_result["checks"] if not check["passed"]]
             unverified_fact_claims = [
                 check for check in review_result["checks"]
                 if check["id"] == "FACT_CHECK"
                 and check.get("passed")
                 and str(check.get("evidence", "")).lstrip().lower().startswith("unverified:")
             ]
+            failed_checks = [
+                check for check in review_result["checks"]
+                if not check["passed"] or check in unverified_fact_claims
+            ]
+            verdict = "REJECT" if failed_checks else review_result["verdict"]
             event_payload = {
                 "job_id": lease.job_id,
-                "verdict": review_result["verdict"],
+                "verdict": verdict,
                 "checks": review_result["checks"],
                 "feedback": review_result["feedback"],
             }
@@ -165,7 +169,7 @@ class ReviewWorker:
                 actual_calls=actual_calls,
                 actual_usd=actual_usd,
                 outcome="attempt_succeeded",
-                event_payload={"phase": "review", "verdict": review_result["verdict"]},
+                event_payload={"phase": "review", "verdict": verdict},
             )
             return ReviewRunOutcome(
                 status=status,

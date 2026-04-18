@@ -1272,6 +1272,15 @@ def build_module_state(repo_root: Path, module_key: str) -> dict[str, Any]:
             source="pipeline_v2.jobs",
             next_action="wait for lease to release before claiming work",
         ))
+    review = build_module_reviews(repo_root, normalized, max_bytes=50_000)
+    if review and review.get("fact_check_status") == "unverified":
+        state["diagnostics"].append(_diag(
+            severity="warn",
+            code="fact_check_unverified",
+            summary="Latest review contains unverified fact claims",
+            source="reviews",
+            next_action=f"GET /api/reviews?module={normalized}",
+        ))
 
     return state
 
@@ -1670,6 +1679,10 @@ def build_pipeline_stuck(
 
 
 _REVIEW_AUDIT_DIR = Path(".pipeline") / "reviews"
+_VALID_FACT_CHECK_STATUSES = {"verified", "unverified", "failed", "none"}
+_LATEST_REVIEW_RE = re.compile(r"^## .*?— `REVIEW`.*?(?=^## |\Z)", re.MULTILINE | re.DOTALL)
+_FAILED_FACT_CHECK_RE = re.compile(r"^- \*\*FACT_CHECK\*\*:\s*(.+)$", re.MULTILINE)
+_UNVERIFIED_CLAIM_RE = re.compile(r"unverified:\s*(.+)", re.IGNORECASE)
 
 
 def _review_filename_to_module_key(filename: str) -> str:
@@ -1686,7 +1699,25 @@ def _module_key_to_review_filename(module_key: str) -> str:
     return module_key.replace("/", "__") + ".md"
 
 
-def build_reviews_index(repo_root: Path) -> dict[str, Any]:
+def _fact_check_summary(review_body: str) -> dict[str, Any]:
+    latest = next(iter(_LATEST_REVIEW_RE.findall(review_body)), "")
+    failed = [m.strip() for m in _FAILED_FACT_CHECK_RE.findall(latest)]
+    if failed:
+        return {"fact_check_status": "failed", "unverified_evidence": []}
+    unverified = [f"unverified: {m.strip()}" for m in _UNVERIFIED_CLAIM_RE.findall(latest)]
+    if unverified:
+        return {"fact_check_status": "unverified", "unverified_evidence": unverified[:3]}
+    return {
+        "fact_check_status": "verified" if "FACT_CHECK" in latest else "none",
+        "unverified_evidence": [],
+    }
+
+
+def build_reviews_index(
+    repo_root: Path,
+    *,
+    fact_check_status: str | None = None,
+) -> dict[str, Any]:
     """List every review artifact with its module key and last-modified
     timestamp. Callers fetch the body via ``/api/reviews?module=...``."""
     reviews_dir = repo_root / _REVIEW_AUDIT_DIR
@@ -1697,14 +1728,20 @@ def build_reviews_index(repo_root: Path) -> dict[str, Any]:
         try:
             mtime = path.stat().st_mtime
             size = path.stat().st_size
+            summary = _fact_check_summary(path.read_text(encoding="utf-8"))
         except OSError:
             mtime, size = 0.0, 0
+            summary = {"fact_check_status": "none", "unverified_evidence": []}
+        if fact_check_status and summary["fact_check_status"] != fact_check_status:
+            continue
         reviews.append({
             "module_key": _review_filename_to_module_key(path.name),
             "filename": path.name,
             "size": size,
             "mtime": mtime,
+            **summary,
         })
+    reviews.sort(key=lambda item: item["mtime"], reverse=True)
     return {
         "reviews_dir": str(reviews_dir),
         "exists": True,
@@ -1749,6 +1786,7 @@ def build_module_reviews(
         body = raw.decode("utf-8", errors="replace")
     except UnicodeDecodeError:
         body = raw.decode("latin-1", errors="replace")
+    summary = _fact_check_summary(body)
     return {
         "module_key": module_key,
         "path": str(path),
@@ -1757,6 +1795,7 @@ def build_module_reviews(
         "truncated": truncated,
         "max_bytes": max_bytes if truncated else None,
         "mtime": mtime,
+        **summary,
         "body": body,
     }
 
@@ -3753,6 +3792,17 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
       font-size: 12px; color: var(--text-secondary); line-height: 1.5;
       max-height: 120px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;
     }}
+    .review-list {{ list-style: none; margin: 0; padding: 0; }}
+    .review-item {{ padding: 10px 0; border-bottom: 1px solid var(--border-subtle); }}
+    .review-item:last-child {{ border-bottom: 0; }}
+    .review-head {{ display: flex; align-items: center; justify-content: space-between; gap: 12px; }}
+    .review-pill {{ padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase; }}
+    .review-pill.verified {{ background: var(--green-muted); color: var(--green); }}
+    .review-pill.unverified {{ background: var(--amber-muted); color: var(--amber); }}
+    .review-pill.failed {{ background: var(--red-muted); color: var(--red); }}
+    .review-pill.none {{ background: rgba(255,255,255,0.06); color: var(--text-dim); }}
+    .review-note {{ margin-top: 6px; font-size: 12px; color: var(--text-secondary); }}
+    .review-note mark {{ background: var(--amber-muted); color: var(--amber); padding: 0 3px; border-radius: 4px; }}
 
     .clr-green {{ color: var(--green); }}
     .clr-amber {{ color: var(--amber); }}
@@ -4124,6 +4174,17 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
           <span class="panel-badge" id="missing-badge"></span>
         </div>
         <div class="panel-body" id="missing"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="panel-icon" style="background:var(--amber-muted);color:var(--amber);">R</span>
+            Review Audit
+          </div>
+          <span class="panel-badge" id="reviews-badge"></span>
+        </div>
+        <div class="panel-body" id="reviews"></div>
       </div>
 
       <div class="panel">
@@ -4599,6 +4660,29 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
       el.innerHTML = html;
     }}
 
+    function renderReviews(data) {{
+      const el = $('#reviews');
+      const badge = $('#reviews-badge');
+      if (!data || data.error) {{
+        badge.textContent = 'Unknown';
+        el.innerHTML = `<div class="empty-state">${{esc(data?.error || 'No data')}}</div>`;
+        return;
+      }}
+      const rows = (data.reviews || []).slice(0, 8);
+      const unverified = rows.filter(r => r.fact_check_status === 'unverified').length;
+      badge.textContent = unverified ? `${{unverified}} unverified` : `${{data.count || 0}} reviews`;
+      badge.style.background = unverified ? 'var(--amber-muted)' : 'var(--green-muted)';
+      badge.style.color = unverified ? 'var(--amber)' : 'var(--green)';
+      el.innerHTML = rows.length ? `<ul class="review-list">${{rows.map(r => `
+        <li class="review-item">
+          <div class="review-head">
+            <span class="mono">${{esc(shortenKey(r.module_key))}}</span>
+            <span class="review-pill ${{esc(r.fact_check_status || 'none')}}">${{esc(r.fact_check_status || 'none')}}</span>
+          </div>
+          ${{r.unverified_evidence?.[0] ? `<div class="review-note"><mark>${{esc(r.unverified_evidence[0])}}</mark></div>` : ''}}
+        </li>`).join('')}}</ul>` : '<div class="empty-state">No review audit files</div>';
+    }}
+
     // ---- Phase D: Operator / Readiness / Activity ----
 
     function renderOperator(briefing) {{
@@ -4793,13 +4877,14 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
       btn.classList.add('loading');
 
       try {{
-        const [summary, missing, services, worktree, feedback, v2Status, transStatus,
+        const [summary, missing, services, worktree, feedback, reviews, v2Status, transStatus,
                briefing, readiness, activity] = await Promise.all([
           fetchJson('/api/status/summary'),
           fetchJson('/api/missing-modules/status'),
           fetchJson('/api/runtime/services'),
           fetchJson('/api/git/worktree'),
           fetchJson(`/api/issue-watch/${{ISSUE}}`),
+          fetchJson('/api/reviews'),
           fetchJson('/api/pipeline/v2/status'),
           fetchJson('/api/translation/v2/status'),
           fetchJson('/api/briefing/session?compact=1'),
@@ -4821,6 +4906,7 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
         renderPipelinePanel('#trans-body', '#trans-badge', t2Queue, 'Translation V2');
         renderWorktree(worktree);
         renderMissing(missing);
+        renderReviews(reviews);
         renderFeedback(feedback);
 
         const now = new Date();
@@ -5029,6 +5115,10 @@ def build_session_briefing(repo_root: Path) -> dict[str, Any]:
         quality = build_quality_scores(repo_root)
     except Exception:  # noqa: BLE001
         quality = None
+    try:
+        reviews = build_reviews_index(repo_root, fact_check_status="unverified")
+    except Exception:  # noqa: BLE001
+        reviews = None
     critical_quality: list[str] = []
     if isinstance(quality, dict) and quality.get("exists"):
         if quality.get("critical_count"):
@@ -5039,6 +5129,8 @@ def build_session_briefing(repo_root: Path) -> dict[str, Any]:
             f"{m['module']} [{m['track']}] score {m['score']}"
             for m in (quality.get("critical") or [])[:5]
         ]
+    if isinstance(reviews, dict) and reviews.get("count"):
+        alerts.append(f"{reviews['count']} module(s) with unverified fact claims")
 
     # Action-oriented triage lists. Agents ask "what should I touch"
     # not "what's the global state"; the lists below answer that in
@@ -5139,6 +5231,16 @@ def build_session_briefing(repo_root: Path) -> dict[str, Any]:
                 module_key=m.get("module"),
                 reason="critical_quality",
                 endpoint="/api/quality/scores",
+            )
+    if isinstance(reviews, dict) and reviews.get("exists"):
+        for review in (reviews.get("reviews") or [])[:5]:
+            mk = review.get("module_key")
+            _add_row(
+                "blocked",
+                f"{mk or '?'} has unverified fact claim",
+                module_key=mk,
+                reason="fact_check_unverified",
+                endpoint=f"/api/reviews?module={mk}" if mk else None,
             )
 
     if isinstance(pipeline, dict) and pipeline.get("queue_head"):
@@ -5373,7 +5475,7 @@ def build_api_schema() -> dict[str, Any]:
             {
                 "path": "/api/reviews",
                 "desc": "Review audit index (omit query) or single-module log (?module=...)",
-                "query": ["module=..."],
+                "query": ["module=...", "fact_check_status=verified|unverified|failed|none"],
             },
             {
                 "path": "/api/bridge/messages",
@@ -5551,6 +5653,9 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
             limit = 200
         return 200, build_pipeline_events(repo_root, module_key, since_seconds, limit), "application/json; charset=utf-8"
     if path == "/api/reviews":
+        fact_check_status = query.get("fact_check_status", [None])[0]
+        if fact_check_status and fact_check_status not in _VALID_FACT_CHECK_STATUSES:
+            return 400, {"error": "invalid_fact_check_status"}, "application/json; charset=utf-8"
         mk = query.get("module", [None])[0]
         if mk:
             module_key = _validate_module_key(repo_root, mk)
@@ -5560,7 +5665,7 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
             if payload is None:
                 return 404, {"error": "review_not_found", "module_key": module_key}, "application/json; charset=utf-8"
             return 200, payload, "application/json; charset=utf-8"
-        return 200, build_reviews_index(repo_root), "application/json; charset=utf-8"
+        return 200, build_reviews_index(repo_root, fact_check_status=fact_check_status), "application/json; charset=utf-8"
     if path == "/api/bridge/messages":
         since = query.get("since", [None])[0]
         try:
