@@ -3685,6 +3685,151 @@ class TestDeterministicApplyIntegration(unittest.TestCase):
         ms = state["modules"]["test/module-0.1-test"]
         self.assertEqual(ms.get("phase"), "done")
 
+    @patch("v1_pipeline.STATE_FILE")
+    @patch("v1_pipeline.CONTENT_ROOT")
+    @patch("subprocess.run")
+    def test_last_retry_full_apply_exits_in_rereview_state(
+        self, mock_subprocess, mock_root, mock_state,
+    ):
+        """A clean deterministic apply on the last retry must not reject."""
+        import v1_pipeline as p
+
+        mock_state.__class__ = type(self.state_file)
+        mock_root.resolve.return_value = Path(self.tmpdir).resolve()
+
+        review_sequence = [
+            {
+                "verdict": "REJECT",
+                "checks": [
+                    {"id": "LAB", "passed": False, "evidence": "rewrite required"},
+                    {"id": "COV", "passed": True},
+                    {"id": "QUIZ", "passed": True},
+                    {"id": "EXAM", "passed": True},
+                    {"id": "DEPTH", "passed": True},
+                    {"id": "WHY", "passed": True},
+                    {"id": "PRES", "passed": True},
+                ],
+                "edits": [],
+                "feedback": "Needs a rewrite first.",
+            },
+            {
+                "verdict": "REJECT",
+                "checks": [
+                    {"id": "LAB", "passed": False, "evidence": "minor accuracy", "edit_refs": [0]},
+                    {"id": "COV", "passed": True},
+                    {"id": "QUIZ", "passed": True},
+                    {"id": "EXAM", "passed": True},
+                    {"id": "DEPTH", "passed": True},
+                    {"id": "WHY", "passed": True},
+                    {"id": "PRES", "passed": True},
+                ],
+                "edits": [
+                    {
+                        "type": "replace",
+                        "find": "## Learning Outcomes",
+                        "new": "## Learning Outcomes (Revised)",
+                        "reason": "revision tag",
+                    },
+                ],
+                "feedback": "Minor accuracy fix.",
+            },
+        ]
+
+        state = {"modules": {}}
+
+        with patch.object(p, "STATE_FILE", self.state_file), \
+             patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
+             patch.object(p, "save_state"), \
+             patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
+             patch.object(p, "step_write", return_value=GOOD_MODULE), \
+             patch.object(p, "step_review", side_effect=review_sequence), \
+             patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_content_aware_fact_ledger", return_value=None), \
+             patch.object(p, "step_check_integrity", return_value=(True, [])), \
+             patch.object(p, "step_check", return_value=(True, [])), \
+             patch.object(p, "ensure_knowledge_card", return_value="cached card"):
+            ok = p.run_module(self.module_path, state, max_retries=1)
+
+        ms = state["modules"]["test/module-0.1-test"]
+        staging = self.module_path.with_suffix(".staging.md")
+
+        self.assertTrue(ok)
+        self.assertEqual(ms.get("phase"), "review")
+        self.assertEqual(ms.get("severity"), "targeted")
+        self.assertNotIn("Review rejected 2 times", ms.get("errors", []))
+        self.assertTrue(staging.exists(), "Patched content should be staged for resume re-review")
+        self.assertIn("## Learning Outcomes (Revised)", staging.read_text())
+
+    @patch("v1_pipeline.STATE_FILE")
+    @patch("v1_pipeline.CONTENT_ROOT")
+    @patch("subprocess.run")
+    def test_last_retry_failed_apply_still_rejects(
+        self, mock_subprocess, mock_root, mock_state,
+    ):
+        """A failed deterministic apply on the last retry must still reject."""
+        import v1_pipeline as p
+
+        mock_state.__class__ = type(self.state_file)
+        mock_root.resolve.return_value = Path(self.tmpdir).resolve()
+
+        review_sequence = [
+            {
+                "verdict": "REJECT",
+                "checks": [
+                    {"id": "LAB", "passed": False, "evidence": "rewrite required"},
+                    {"id": "COV", "passed": True},
+                    {"id": "QUIZ", "passed": True},
+                    {"id": "EXAM", "passed": True},
+                    {"id": "DEPTH", "passed": True},
+                    {"id": "WHY", "passed": True},
+                    {"id": "PRES", "passed": True},
+                ],
+                "edits": [],
+                "feedback": "Needs a rewrite first.",
+            },
+            {
+                "verdict": "REJECT",
+                "checks": [
+                    {"id": "LAB", "passed": False, "evidence": "minor accuracy", "edit_refs": [0]},
+                    {"id": "COV", "passed": True},
+                    {"id": "QUIZ", "passed": True},
+                    {"id": "EXAM", "passed": True},
+                    {"id": "DEPTH", "passed": True},
+                    {"id": "WHY", "passed": True},
+                    {"id": "PRES", "passed": True},
+                ],
+                "edits": [
+                    {
+                        "type": "replace",
+                        "find": "## Missing Anchor",
+                        "new": "## Missing Anchor (Revised)",
+                        "reason": "missing anchor",
+                    },
+                ],
+                "feedback": "Minor accuracy fix.",
+            },
+        ]
+
+        state = {"modules": {}}
+
+        with patch.object(p, "STATE_FILE", self.state_file), \
+             patch.object(p, "CONTENT_ROOT", Path(self.tmpdir)), \
+             patch.object(p, "save_state"), \
+             patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"), \
+             patch.object(p, "step_write", return_value=GOOD_MODULE), \
+             patch.object(p, "step_review", side_effect=review_sequence), \
+             patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
+             patch.object(p, "step_content_aware_fact_ledger", return_value=None), \
+             patch.object(p, "step_check_integrity", return_value=(True, [])), \
+             patch.object(p, "step_check", return_value=(True, [])), \
+             patch.object(p, "ensure_knowledge_card", return_value="cached card"):
+            ok = p.run_module(self.module_path, state, max_retries=1)
+
+        ms = state["modules"]["test/module-0.1-test"]
+        self.assertFalse(ok)
+        self.assertEqual(ms.get("phase"), "write")
+        self.assertIn("Review rejected 2 times", ms.get("errors", []))
+
 
 # ---------------------------------------------------------------------------
 # Main

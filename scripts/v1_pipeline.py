@@ -2965,7 +2965,7 @@ def run_module(module_path: Path, state: dict, max_retries: int = 4,
                         if attempt < max_retries:
                             continue
                         print("  ⚠ Max retries reached with staged deterministic edits — leaving phase=review for resume")
-                        break
+                        return True
                     elif applied_count > 0 and failed_count > 0:
                         # Partial — apply what worked, fall back to Sonnet
                         # for the remaining edits.
