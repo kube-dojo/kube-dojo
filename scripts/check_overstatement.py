@@ -124,6 +124,29 @@ def split_into_scoped_lines(body: str) -> list[tuple[int, str]]:
     return out
 
 
+_SENT_BOUNDARY_RE = re.compile(r"[.!?](?=\s|$)")
+
+
+def _sentence_span(line: str, match_start: int, match_end: int) -> tuple[int, int]:
+    """Return (start, end_exclusive) of the sentence containing the trigger
+    match. Sentence boundaries are `.`, `!`, or `?` followed by whitespace
+    or end-of-line — so periods inside `.git`, `.gitignore`, `e.g.`, file
+    extensions, and version numbers do NOT split a sentence. The end index
+    is INCLUSIVE of the terminating punctuation, so substring-replacement
+    later does not leave dangling periods."""
+    start = 0
+    for m in _SENT_BOUNDARY_RE.finditer(line, 0, match_start):
+        start = m.end()  # one past the period
+    # Skip leading whitespace.
+    while start < match_start and line[start].isspace():
+        start += 1
+    end = len(line)
+    m_end = _SENT_BOUNDARY_RE.search(line, match_end)
+    if m_end:
+        end = m_end.end()  # include the terminating punctuation
+    return start, end
+
+
 def find_candidates(body: str) -> list[dict[str, Any]]:
     """Deterministic pass. Returns a list of candidate flag records."""
     hits: list[dict[str, Any]] = []
@@ -136,11 +159,7 @@ def find_candidates(body: str) -> list[dict[str, Any]]:
                 continue
             # Whitelisted-hedge suppression: if the SAME sentence carries
             # a hedging word, don't flag.
-            # Find the sentence span around the match.
-            sent_start = line.rfind(".", 0, m.start()) + 1
-            sent_end = line.find(".", m.end())
-            if sent_end < 0:
-                sent_end = len(line)
+            sent_start, sent_end = _sentence_span(line, m.start(), m.end())
             sentence = line[sent_start:sent_end].strip()
             if HEDGE_WHITELIST_RE.search(sentence):
                 continue
@@ -254,23 +273,171 @@ def paragraph_around(body: str, line_no: int, radius: int = 3) -> str:
     return "\n".join(lines[lo:hi])
 
 
+# ---- batched LLM verdict pass --------------------------------------------
+
+BATCH_LLM_PROMPT_TEMPLATE = """You are the overstatement-audit step of the
+KubeDojo content pipeline. You receive a LIST of sentences flagged by a
+deterministic absolute-claim detector. For EACH sentence, decide whether
+it is overstated and, if so, propose a softened drop-in rewrite.
+
+## Verdict rules (per item)
+
+- `overstated` if the claim is absolute ("always", "never", "first ever",
+  "universal", "cancels anything") in a domain where edge cases exist.
+  Things that are genuinely universal (math identities, language keywords)
+  are NOT overstated.
+- `acceptable` if the absolute-seeming language is bounded by context
+  (e.g., "in this module" + "always"), hedged elsewhere in the sentence,
+  or simply not a factual overclaim.
+- `not_a_claim` if the sentence is a question, imperative, code comment,
+  or teaching analogy.
+
+## suggested_rewrite rules (when verdict=overstated)
+
+- Preserve the pedagogical point.
+- Replace the absolute language with accurate hedging ("usually", "in
+  most cases", "for the common beginner case").
+- MUST be a DROP-IN replacement for the SAME `sentence` text. Same
+  ending punctuation. Same surrounding voice. The orchestrator will
+  literally substring-swap `sentence` for `suggested_rewrite` — keep
+  punctuation aligned so the swap doesn't introduce `..` or dangling
+  fragments.
+- Otherwise, set to null.
+
+## Output (STRICT)
+
+Return ONE JSON object, no preamble, no markdown fences:
+
+{{
+  "verdicts": [
+    {{
+      "index": 0,
+      "verdict": "overstated" | "acceptable" | "not_a_claim",
+      "reason": "<one short sentence>",
+      "suggested_rewrite": "<full replacement sentence, or null>"
+    }}
+  ]
+}}
+
+The `verdicts` array MUST contain exactly {count} items, one per input
+candidate, in the SAME ORDER as the input (matched by `index`).
+
+## Module title
+
+{module_title}
+
+## Candidates
+
+{candidates_block}
+
+Return the JSON object now.
+"""
+
+
+def _format_candidates_block(items: list[dict[str, Any]]) -> str:
+    parts = []
+    for i, c in enumerate(items):
+        parts.append(
+            f"### index {i}\n"
+            f"- trigger: `{c['trigger']}`\n"
+            f"- line {c['line']}\n"
+            f"- sentence: {c['sentence']!r}\n"
+            f"- context (paragraph):\n```\n{c['context']}\n```\n"
+        )
+    return "\n".join(parts)
+
+
+def batched_llm_verdicts(candidates: list[dict[str, Any]], *,
+                         module_title: str, agent: str = "codex",
+                         task_id: str | None = None) -> list[dict[str, Any]]:
+    """Dispatch ONE LLM call covering every candidate. Returns a verdict
+    list aligned to the input order. Falls back to per-call mode for
+    individual items the LLM omitted or returned malformed."""
+    if not candidates:
+        return []
+    from citation_backfill import (  # type: ignore
+        dispatch_codex, dispatch_gemini, parse_agent_response,
+    )
+    prompt = BATCH_LLM_PROMPT_TEMPLATE.format(
+        count=len(candidates),
+        module_title=module_title,
+        candidates_block=_format_candidates_block(candidates),
+    )
+    if agent == "codex":
+        ok, raw = dispatch_codex(prompt, task_id=task_id or "overstatement-batch")
+    elif agent == "gemini":
+        ok, raw = dispatch_gemini(prompt)
+    else:
+        return [{"verdict": "error", "reason": f"unknown_agent:{agent}"}
+                for _ in candidates]
+    if not ok:
+        return [{"verdict": "error", "reason": f"dispatch_failed: {raw[-160:]}"}
+                for _ in candidates]
+    try:
+        parsed = parse_agent_response(raw)
+    except Exception as exc:  # noqa: BLE001
+        return [{"verdict": "error", "reason": f"parse_failed: {exc}"}
+                for _ in candidates]
+
+    verdicts_in = parsed.get("verdicts") or parsed.get("results") or []
+    by_index: dict[int, dict[str, Any]] = {}
+    for v in verdicts_in:
+        if isinstance(v, dict) and isinstance(v.get("index"), int):
+            by_index[int(v["index"])] = v
+    out: list[dict[str, Any]] = []
+    missing_indices: list[int] = []
+    for i, _ in enumerate(candidates):
+        v = by_index.get(i)
+        if v is None:
+            missing_indices.append(i)
+            out.append({"verdict": "error", "reason": "missing_in_batch"})
+        else:
+            out.append(v)
+    # Fallback: per-call retry for any candidates the batch missed.
+    for i in missing_indices:
+        c = candidates[i]
+        out[i] = llm_verdict(c["sentence"], c["context"], c["trigger"],
+                             agent=agent,
+                             task_id=f"overstate-fallback-{i}")
+    return out
+
+
 # ---- CLI -----------------------------------------------------------------
 
 
-def audit_file(path: Path, *, use_llm: bool, agent: str) -> dict[str, Any]:
+def audit_file(path: Path, *, use_llm: bool, agent: str,
+               batch: bool = True) -> dict[str, Any]:
     body = path.read_text(encoding="utf-8")
     candidates = find_candidates(body)
-    if use_llm:
+    if use_llm and candidates:
+        # Materialize per-candidate context once so batched + fallback
+        # paths share the same input shape.
         for c in candidates:
-            context = paragraph_around(body, c["line"])
-            verdict = llm_verdict(c["sentence"], context, c["trigger"], agent=agent,
-                                  task_id=f"overstate-{path.stem}-L{c['line']}")
-            c["verdict"] = verdict
+            c["context"] = paragraph_around(body, c["line"])
+        if batch:
+            module_title = _module_title(body, path)
+            verdicts = batched_llm_verdicts(
+                candidates, module_title=module_title, agent=agent,
+                task_id=f"overstate-{path.stem}",
+            )
+            for c, v in zip(candidates, verdicts, strict=False):
+                c["verdict"] = v
+        else:
+            for c in candidates:
+                verdict = llm_verdict(c["sentence"], c["context"], c["trigger"],
+                                      agent=agent,
+                                      task_id=f"overstate-{path.stem}-L{c['line']}")
+                c["verdict"] = verdict
     return {
         "path": str(path),
         "candidate_count": len(candidates),
         "candidates": candidates,
     }
+
+
+def _module_title(body: str, path: Path) -> str:
+    m = re.search(r"^title:\s*[\"']?([^\"'\n]+)[\"']?\s*$", body, re.MULTILINE)
+    return m.group(1).strip() if m else path.stem
 
 
 def main(argv: list[str] | None = None) -> int:

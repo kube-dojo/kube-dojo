@@ -155,25 +155,47 @@ only produce the JSON seed.
 ## HARD RULE: factual claims about real events MUST be cited
 
 This rule is NON-NEGOTIABLE and overrides every audience calibration
-below. The following claim classes MUST be `supported` OR
-`needs_allowlist_expansion`. They CANNOT be `soften_to_illustration`
-or `cannot_be_salvaged` unless the claim is provably fabricated
-(in which case `cannot_be_salvaged` with a rewrite that REMOVES the
-false claim entirely, not softens it):
+below. The following claim classes have only THREE legal dispositions:
+`supported`, `needs_allowlist_expansion`, or `cannot_be_salvaged`.
+**`soften_to_illustration` is FORBIDDEN for these classes — the
+validator will reject the seed.** The reason: softening an unsourced
+anecdote into "for instance, a team might..." preserves the false
+specifics (dollar figures, durations, timestamps) under a thin
+hedging veil — that's still lying with teaching flavor. The pipeline
+exists to stop exactly that.
 
-- `war_story` — any anecdote naming a real company, person, date, or
-  event. "GitLab's 2017 outage" MUST cite the postmortem (via
-  `supported` if the host is allowlisted, else
-  `needs_allowlist_expansion`). Never soften a named-event anecdote
-  into "a company once had an outage" — that is lying with teaching
-  flavor.
-- `incident` — same rule. Real outages, real breaches, real CVEs get
-  primary-source citations or go to allowlist expansion.
+Pick `cannot_be_salvaged` and rewrite to REMOVE the false specifics
+whenever the underlying anecdote is unattributed. Do NOT add
+"imagine" / "for instance" framing to a war story with fake-precise
+numbers — that's softening, which is forbidden here.
+
+- `war_story` — any anecdote naming a company, person, date, or
+  event with quantitative detail ($65,000, 6 hours, 120 seconds).
+  - Real and citable → `supported` (allowlisted) or
+    `needs_allowlist_expansion` (off-allowlist primary source).
+  - Unsourced / fabricated / composite → `cannot_be_salvaged`. The
+    rewrite removes the fake specifics: keep the operational lesson,
+    drop the unverified numbers and named entities.
+    Example: "Within 120 seconds, automated security bots found the
+    exposed AWS key… the company had incurred a $65,000 cloud billing
+    charge" → "Within minutes of being pushed to a public repo,
+    automated scanners can find an exposed AWS key and run up
+    significant cloud bills."
+- `incident` — same rule. Real outages cite or go to allowlist
+  expansion; unattributed incidents collapse the false specifics
+  via `cannot_be_salvaged`.
 - `standard` — named specifications, regulations, RFCs. Cite the spec.
 - `security_claim` — claims about real vulnerabilities, real attacks,
-  real defenses in the wild. Must cite.
+  real defenses. Same three-option rule. An unsourced claim with
+  fake-precise impact data → `cannot_be_salvaged` (rewrite to keep
+  the security principle, drop the unverified numbers).
 - `statistic` — specific statistics attributed to a real source
-  ("StatCounter says Windows is X%"). Cite the source.
+  ("StatCounter says Windows is X%"). Cite or rewrite to remove the
+  number.
+
+If you find yourself reaching for `soften_to_illustration` on one of
+these classes, switch to `cannot_be_salvaged` and remove the false
+specifics. The schema validator will block the seed otherwise.
 
 Claims that MAY be softened (audience calibration applies):
 - `vendor_capability` — IF presented as illustrative ("AWS
@@ -1337,8 +1359,7 @@ def run_inject(module_key: str, *, agent: str = "codex", dry_run: bool = False) 
             f"cited_dispositions_not_addressed: {sorted(missing_cited)[:5]}"
         )
 
-    staging_path = module_path.with_suffix(".staging.md")
-    staging_path.write_text(new_body, encoding="utf-8")
+    module_path.write_text(new_body, encoding="utf-8")
 
     # Write a deferred-claims record so allowlist-expansion review has
     # the full list. Rewrites are applied in-place; no revision record
@@ -1369,7 +1390,7 @@ def run_inject(module_key: str, *, agent: str = "codex", dry_run: bool = False) 
 
     return {
         "module_key": normalized_key, "ok": len(diff_issues) == 0,
-        "staging_path": str(staging_path.relative_to(REPO_ROOT)),
+        "module_path": str(module_path.relative_to(REPO_ROOT)),
         "inline_applied": sum(1 for a in applied if a.get("kind") == "inline" and a.get("status") == "applied"),
         "rewrite_applied": sum(1 for a in applied if a.get("kind") == "prose_rewrite" and a.get("status") == "applied"),
         "rejected_count": sum(1 for a in applied if a.get("status") == "rejected"),

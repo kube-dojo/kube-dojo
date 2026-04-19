@@ -4,6 +4,9 @@ import { docsSchema } from '@astrojs/starlight/schema';
 import { z } from 'astro:content';
 
 const docsExtensions = ['markdown', 'mdown', 'mkdn', 'mkd', 'mdwn', 'md', 'mdx'];
+// `.staging.md` is gitignored ephemera from older pipelines; the loader
+// pattern still excludes them defensively until the leftover files are
+// audited and removed.
 const docsPattern = [
   `**/[^_]*.{${docsExtensions.join(',')}}`,
   `!**/*.staging.{${docsExtensions.join(',')}}`,

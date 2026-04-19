@@ -155,12 +155,90 @@ def module_title_for(body: str, path: Path) -> str:
     return path.stem
 
 
+BATCH_COHERENCE_PROMPT_TEMPLATE = """You are the topical-coherence gate of
+the KubeDojo content pipeline. You receive ALL non-trivial sections of a
+single module. For EACH section, identify paragraphs that don't belong —
+topically disconnected tangents, dropped-in war stories that don't relate
+to the section's subject, or claims that jump to a different domain.
+
+Module context:
+- Module title: {module_title}
+- Module audience: {audience}
+
+## Per-paragraph rules
+
+- `on_topic` — paragraph advances the section's teaching arc. Keep.
+- `off_topic` — paragraph introduces a subject that doesn't connect to
+  the section's heading or its preceding paragraph.
+- `tangential_but_acceptable` — slightly digresses but ties back. Keep.
+
+Do NOT flag analogies, pedagogical framing, forward-references,
+hands-on callouts, or example code walkthroughs.
+
+For `off_topic`, propose `suggested_action`:
+- `move_to_section:<other section heading>` if it fits elsewhere
+- `delete` if it doesn't belong anywhere in this module
+- `rewrite_to_fit` if a small rewrite would bridge it
+
+## Output (STRICT)
+
+Return ONE JSON object, no preamble, no markdown fences:
+
+{{
+  "sections": [
+    {{
+      "section_index": 0,
+      "section": "<heading from input>",
+      "paragraphs_flagged": [
+        {{
+          "excerpt": "<first ~200 chars of offending paragraph>",
+          "verdict": "off_topic" | "tangential_but_acceptable",
+          "reason": "<one short sentence>",
+          "suggested_action": "<as above, or null>"
+        }}
+      ]
+    }}
+  ]
+}}
+
+Include EVERY input section in the `sections` array (in order, by
+`section_index`), even when `paragraphs_flagged` is empty.
+
+## Sections
+
+{sections_block}
+
+Return the JSON now.
+"""
+
+
+def _format_sections_block(sections: list[dict[str, Any]]) -> str:
+    parts = []
+    for i, s in enumerate(sections):
+        parts.append(
+            f"### section_index {i}: {s['heading']}\n"
+            f"```\n{s['content']}\n```\n"
+        )
+    return "\n".join(parts)
+
+
+def _dispatch_one(prompt: str, *, agent: str, task_id: str) -> tuple[bool, str]:
+    if agent == "codex":
+        return dispatch_codex(prompt, task_id=task_id)
+    if agent == "gemini":
+        return dispatch_gemini(prompt)
+    return False, f"unknown_agent:{agent}"
+
+
 def check_coherence(path: Path, *, agent: str = "gemini",
-                    dry_run: bool = False) -> dict[str, Any]:
+                    dry_run: bool = False, batch: bool = True) -> dict[str, Any]:
     body = path.read_text(encoding="utf-8")
     sections = split_into_sections(body)
     module_title = module_title_for(body, path)
     audience = audience_for(path)
+
+    # Skip tiny sections regardless of mode (heading + 1 intro line).
+    auditable = [s for s in sections if len(s["content"]) >= 200]
 
     if dry_run:
         return {"path": str(path),
@@ -172,38 +250,60 @@ def check_coherence(path: Path, *, agent: str = "gemini",
                               "char_count": len(s["content"])} for s in sections]}
 
     findings: list[dict[str, Any]] = []
-    for s in sections:
-        # Skip tiny sections (just a heading + one intro line).
-        if len(s["content"]) < 200:
-            continue
-        prompt = build_coherence_prompt(module_title, audience, s["content"])
+
+    if batch and auditable:
+        prompt = BATCH_COHERENCE_PROMPT_TEMPLATE.format(
+            module_title=module_title, audience=audience,
+            sections_block=_format_sections_block(auditable),
+        )
         ts = _dt.datetime.now(_dt.UTC).strftime("%H%M%SZ")
-        task_id = (f"coherence-{path.stem}-"
-                   f"{re.sub(r'[^a-z0-9]+', '-', s['heading'].lower())[:30]}-{ts}")
-        if agent == "codex":
-            ok, raw = dispatch_codex(prompt, task_id=task_id)
-        elif agent == "gemini":
-            ok, raw = dispatch_gemini(prompt)
-        else:
-            findings.append({"section": s["heading"],
-                             "error": f"unknown_agent:{agent}"})
-            continue
+        task_id = f"coherence-batch-{path.stem}-{ts}"
+        ok, raw = _dispatch_one(prompt, agent=agent, task_id=task_id)
         if not ok:
-            findings.append({"section": s["heading"],
+            findings.append({"section": "(batch)",
                              "error": f"dispatch_failed:{raw[-200:]}"})
-            continue
-        try:
-            parsed = parse_agent_response(raw)
-        except Exception as exc:  # noqa: BLE001
-            findings.append({"section": s["heading"],
-                             "error": f"parse_failed:{exc}"})
-            continue
-        flagged = parsed.get("paragraphs_flagged") or []
-        if flagged:
+        else:
+            try:
+                parsed = parse_agent_response(raw)
+            except Exception as exc:  # noqa: BLE001
+                parsed = {"sections": []}
+                findings.append({"section": "(batch)",
+                                 "error": f"parse_failed:{exc}"})
+            sections_in = parsed.get("sections") or []
+            by_idx = {int(s.get("section_index", -1)): s
+                      for s in sections_in if isinstance(s, dict)}
+            for i, s in enumerate(auditable):
+                hit = by_idx.get(i)
+                if hit is None:
+                    findings.append({"section": s["heading"],
+                                     "error": "missing_in_batch"})
+                    continue
+                for f in (hit.get("paragraphs_flagged") or []):
+                    f["section"] = s["heading"]
+                    f["section_start_line"] = s["start_line"]
+                    findings.append(f)
+    else:
+        for s in auditable:
+            prompt = build_coherence_prompt(module_title, audience, s["content"])
+            ts = _dt.datetime.now(_dt.UTC).strftime("%H%M%SZ")
+            task_id = (f"coherence-{path.stem}-"
+                       f"{re.sub(r'[^a-z0-9]+', '-', s['heading'].lower())[:30]}-{ts}")
+            ok, raw = _dispatch_one(prompt, agent=agent, task_id=task_id)
+            if not ok:
+                findings.append({"section": s["heading"],
+                                 "error": f"dispatch_failed:{raw[-200:]}"})
+                continue
+            try:
+                parsed = parse_agent_response(raw)
+            except Exception as exc:  # noqa: BLE001
+                findings.append({"section": s["heading"],
+                                 "error": f"parse_failed:{exc}"})
+                continue
+            flagged = parsed.get("paragraphs_flagged") or []
             for f in flagged:
                 f["section"] = s["heading"]
                 f["section_start_line"] = s["start_line"]
-            findings.extend(flagged)
+                findings.append(f)
 
     return {"path": str(path),
             "module_title": module_title,

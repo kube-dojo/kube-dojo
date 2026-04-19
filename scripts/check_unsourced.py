@@ -248,18 +248,131 @@ def llm_verdict(paragraph: str, *, agent: str = "codex",
         return {"verdict": "error", "reason": f"parse_failed:{exc}"}
 
 
+BATCH_LLM_PROMPT_TEMPLATE = """You are the unsourced-assertion gate of the
+KubeDojo content pipeline. You receive a LIST of paragraphs that pattern-
+matched on factual signals (dated year, named company, statistic,
+war-story prefix, etc.) but carry NO inline citation. For EACH paragraph,
+decide whether it needs a citation.
+
+## Verdict rules (per item)
+
+- `needs_citation` — the paragraph states a real-world fact a reader could
+  verify against a source. Examples: war stories with named companies and
+  dates, statistics with specific numbers, attributed standards.
+- `teaching_hypothetical` — illustrative ("a team might pay $400/month",
+  "imagine you accidentally delete..."). No citation needed IF the framing
+  is already explicit. If the text presents a specific dated event as
+  fact, use `needs_citation` instead.
+- `not_a_claim` — prose, analogy, instruction, framing.
+
+For each `needs_citation`, propose 2-3 short search queries in
+`search_hint`.
+
+## Output (STRICT)
+
+Return ONE JSON object, no preamble, no markdown fences:
+
+{{
+  "verdicts": [
+    {{
+      "index": 0,
+      "verdict": "needs_citation" | "teaching_hypothetical" | "not_a_claim",
+      "reason": "<one short sentence>",
+      "search_hint": ["query 1", "query 2"] | null
+    }}
+  ]
+}}
+
+The `verdicts` array MUST contain exactly {count} items, in the SAME
+ORDER as the input (matched by `index`).
+
+## Paragraphs
+
+{paragraphs_block}
+
+Return the JSON now.
+"""
+
+
+def _format_paragraphs_block(items: list[dict[str, Any]]) -> str:
+    parts = []
+    for i, c in enumerate(items):
+        parts.append(
+            f"### index {i}\n"
+            f"- line {c['line']}\n"
+            f"- signals: {','.join(c['signals'])}\n"
+            f"- paragraph:\n```\n{c['paragraph']}\n```\n"
+        )
+    return "\n".join(parts)
+
+
+def batched_llm_verdicts(items: list[dict[str, Any]], *,
+                         agent: str = "codex",
+                         task_id: str | None = None) -> list[dict[str, Any]]:
+    if not items:
+        return []
+    from citation_backfill import (  # type: ignore
+        dispatch_codex, dispatch_gemini, parse_agent_response,
+    )
+    prompt = BATCH_LLM_PROMPT_TEMPLATE.format(
+        count=len(items),
+        paragraphs_block=_format_paragraphs_block(items),
+    )
+    if agent == "codex":
+        ok, raw = dispatch_codex(prompt, task_id=task_id or "unsourced-batch")
+    elif agent == "gemini":
+        ok, raw = dispatch_gemini(prompt)
+    else:
+        return [{"verdict": "error", "reason": f"unknown_agent:{agent}"}
+                for _ in items]
+    if not ok:
+        return [{"verdict": "error", "reason": f"dispatch_failed:{raw[-160:]}"}
+                for _ in items]
+    try:
+        parsed = parse_agent_response(raw)
+    except Exception as exc:  # noqa: BLE001
+        return [{"verdict": "error", "reason": f"parse_failed:{exc}"}
+                for _ in items]
+
+    verdicts_in = parsed.get("verdicts") or parsed.get("results") or []
+    by_index: dict[int, dict[str, Any]] = {}
+    for v in verdicts_in:
+        if isinstance(v, dict) and isinstance(v.get("index"), int):
+            by_index[int(v["index"])] = v
+    out: list[dict[str, Any]] = []
+    missing: list[int] = []
+    for i in range(len(items)):
+        v = by_index.get(i)
+        if v is None:
+            missing.append(i)
+            out.append({"verdict": "error", "reason": "missing_in_batch"})
+        else:
+            out.append(v)
+    for i in missing:
+        out[i] = llm_verdict(items[i]["paragraph"], agent=agent,
+                             task_id=f"unsourced-fallback-{i}")
+    return out
+
+
 # ---- CLI -----------------------------------------------------------------
 
 
 def audit_file(path: Path, *, use_llm: bool, agent: str,
-               aggressive: bool = False) -> dict[str, Any]:
+               aggressive: bool = False, batch: bool = True) -> dict[str, Any]:
     body = path.read_text(encoding="utf-8")
     candidates = find_candidates(body, aggressive=aggressive)
-    if use_llm:
-        for c in candidates:
-            verdict = llm_verdict(c["paragraph"], agent=agent,
-                                  task_id=f"unsourced-{path.stem}-L{c['line']}")
-            c["verdict"] = verdict
+    if use_llm and candidates:
+        if batch:
+            verdicts = batched_llm_verdicts(
+                candidates, agent=agent, task_id=f"unsourced-{path.stem}",
+            )
+            for c, v in zip(candidates, verdicts, strict=False):
+                c["verdict"] = v
+        else:
+            for c in candidates:
+                verdict = llm_verdict(c["paragraph"], agent=agent,
+                                      task_id=f"unsourced-{path.stem}-L{c['line']}")
+                c["verdict"] = verdict
     # Strip bulky paragraph field from the public output.
     for c in candidates:
         c.pop("paragraph", None)
