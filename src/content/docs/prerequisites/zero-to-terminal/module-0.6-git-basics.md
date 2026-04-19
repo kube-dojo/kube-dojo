@@ -22,13 +22,13 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-A mid-sized financial technology company relied on a shared network drive to store their infrastructure configuration files. Engineers would map the drive, open the files in their local editors, make changes, and save them back to the network. One Friday afternoon, a junior engineer was tasked with updating a testing environment. By mistake, they opened the production `payment-processor-deployment.yaml` file instead of the testing variant. They modified the container image tag to an experimental build, saved the file, and applied the configuration to the cluster.
+Teams that manage infrastructure files on a shared drive without version control can easily change the wrong environment by mistake and have no reliable audit trail when something breaks.
 
-Within minutes, the payment processing system began dropping transactions. When the senior engineers rushed to investigate, they looked at the configuration file on the network drive, but it only showed the current, broken state. Because there was no version control system in place, there was no historical record of what the file looked like ten minutes prior, who had changed it, or why. The team had to manually reconstruct the production configuration from memory and outdated documentation. The subsequent delay in restoring service halted all customer transactions for six hours, resulting in millions of dollars in lost revenue and severe reputational damage.
+When the system failed, the team could see only the current broken file state. Without version control, they had to reconstruct the previous configuration manually, which slowed recovery and made the incident more damaging.
 
-Version control prevents this exact scenario. Git, the industry standard for version control, acts as an unbreakable time machine for your code and configuration. It records every change, identifies exactly who made it, and allows you to instantly revert to any previous state. In the modern cloud-native world, infrastructure is defined as code. If you cannot track, review, and revert your infrastructure code with absolute certainty, you are operating a disaster waiting to happen. Mastering Git is not optional for platform engineers; it is the foundational skill upon which all reliable automation and collaboration is built. 
+Version control prevents this exact scenario. [Git, the industry standard for version control](https://en.wikipedia.org/wiki/Git), acts as an unbreakable time machine for your code and configuration. It records every change, identifies exactly who made it, and usually allows you to quickly return to a previous committed state. In the modern cloud-native world, infrastructure is defined as code. If you cannot track, review, and revert your infrastructure code with absolute certainty, you are operating a disaster waiting to happen. Mastering Git is not optional for platform engineers; it is the foundational skill upon which all reliable automation and collaboration is built. 
 
-Without Git, modern continuous integration and continuous deployment (CI/CD) pipelines cannot exist. The entire premise of automated deployments relies on a single, trusted source of truth that triggers automation whenever a new, approved change is detected. If you do not understand Git, you cannot understand modern software delivery.
+Modern CI/CD pipelines rely on a version-controlled source of truth, and Git is the system most teams use for that job. The entire premise of automated deployments relies on a single, trusted source of truth that triggers automation whenever a new, approved change is detected. If you do not understand Git, you cannot understand modern software delivery.
 
 ## Section 1: The Concept of Version Control and Git's Architecture
 
@@ -90,7 +90,7 @@ git version 2.39.2
 
 ### Identity Configuration
 
-Because Git is designed for collaboration across potentially thousands of developers, it refuses to create snapshots unless it knows exactly who is taking them. Every commit requires an author name and an email address. This is critical for accountability—if an infrastructure change brings down production, the team needs to know who to ask about the rationale behind the change.
+Git records author and committer identity in each commit, and in normal day-to-day use you should configure `user.name` and `user.email` so your commits are attributed correctly. This is critical for accountability—if an infrastructure change brings down production, the team needs to know who to ask about the rationale behind the change.
 
 You configure this using the `git config` command. The `--global` flag applies these settings to all repositories on your current computer by writing them to a hidden file in your home directory (`~/.gitconfig`).
 
@@ -181,7 +181,7 @@ Untracked files:
 nothing added to commit but untracked files present (use "git add" to track)
 ```
 
-Git recognizes that a file exists in the Working Directory, but it lists it as "Untracked." This means Git has never seen this file before. It is not monitoring it for changes, and it will not automatically back it up. Git only tracks what you explicitly tell it to track.
+Git recognizes that a file exists in the Working Directory, but it lists it as "Untracked." This means Git is not currently tracking this file. It is not monitoring it for changes, and it will not automatically back it up. Git only tracks what you explicitly tell it to track.
 
 ### Step 2: Moving to the Staging Area (git add)
 
@@ -237,13 +237,13 @@ On branch main
 nothing to commit, working tree clean
 ```
 
-Your Working Directory is now described as "clean." This means every single file currently sitting on your disk matches the latest snapshot stored in the `.git` database exactly. There are no pending changes.
+Your Working Directory is now described as "clean." This means every tracked file currently sitting in your Working Directory matches the latest snapshot stored in the `.git` database. There are no pending changes.
 
 ### War Story: The Accidental Secret Commit
 
 A junior developer was testing an application locally that required an AWS access key. For convenience, they hardcoded the key directly into their `deployment.yaml` file just to see if the pods would start. It worked. Excited, they ran `git add .` (a command which indiscriminately stages every changed file in the entire directory) and then ran `git commit -m "fix deployment"`.
 
-They then pushed the code to a public GitHub repository. Within 120 seconds, automated security bots scanning public GitHub repositories found the exposed AWS key. The bots instantly spun up hundreds of massive cryptocurrency mining servers across multiple AWS regions using the compromised credentials. By the time the developer woke up the next morning, the company had incurred a $65,000 cloud billing charge.
+They then pushed the code to a public repository. Exposed cloud credentials in public repositories can be discovered quickly by automated scanners and abused to create expensive resources before a team notices.
 
 **The Lesson**: Never blindly use `git add .` unless you are absolutely certain what you have changed. Always run `git status` and `git diff` before staging to ensure you are not accidentally committing passwords, API keys, private ssh keys, or temporary debugging files.
 
@@ -451,7 +451,7 @@ kubeconfig-local
 EOF
 ```
 
-Git reads this file top-to-bottom. Any file that matches a pattern listed in the `.gitignore` will never show up in `git status` as untracked. This makes it impossible to accidentally stage it with a wildcard command like `git add .`.
+Git reads this file top-to-bottom. Any untracked file that matches a pattern listed in the `.gitignore` will normally not show up in `git status` as untracked. This makes it much less likely that you will accidentally stage it with a wildcard command like `git add .`.
 
 ### Active Learning: Pattern Matching
 > **Pause and predict**: Given the `.gitignore` file above, which of the following three newly created files would still show up as "Untracked" when you run `git status`? 1) `main.tfstate`, 2) `secret-keys.yaml`, 3) `secret-keys.txt`.
@@ -465,16 +465,16 @@ Git reads this file top-to-bottom. Any file that matches a pattern listed in the
 
 ## Did You Know?
 
-1. **Git was built in two weeks.** In 2005, the Linux kernel community abruptly lost their free license to a proprietary version control system. Linus Torvalds, the original creator of Linux, needed a replacement immediately. Unimpressed with existing options, he wrote the initial version of Git in just 14 days, and the massive Linux kernel codebase migrated to it two months later.
-2. **The name is a self-deprecating insult.** Torvalds, known for his abrasive humor, named the system "Git" (British slang for a stubborn, unpleasant, or incompetent person). He famously joked at a conference, "I'm an egotistical bastard, and I name all my projects after myself. First Linux, now Git."
-3. **Git does not track empty directories.** Due to its underlying database architecture, which maps paths directly to file contents, Git only tracks files. If you create an empty directory and run `git status`, Git will completely ignore it. Developers work around this limitation by placing a hidden, empty file (often conventionally named `.gitkeep`) inside a directory to force Git to track the folder's existence.
-4. **Colossal collision resistance.** The hashes identifying your commits (the SHA-1 strings) are 40-character hexadecimal numbers. The mathematical probability of two different snapshots generating the exact same hash (a hash collision) is astronomically low. You are statistically far more likely to be struck by lightning while simultaneously winning the lottery than to experience an accidental Git hash collision in your repository.
+1. **Git was built in two weeks.** In 2005, the Linux kernel project lost its free BitKeeper arrangement, which pushed Linus Torvalds and the community to create Git quickly as a replacement.
+2. **The name is a self-deprecating insult.** Torvalds, known for his abrasive humor, named the system ["Git" (British slang for a stubborn, unpleasant, or incompetent person)](https://en.wikipedia.org/wiki/Git). He famously joked at a conference, "I'm an egotistical bastard, and I name all my projects after myself. First Linux, now Git."
+3. **Git does not track empty directories.** Git does not track empty directories on their own. If a team wants an otherwise empty directory to exist in the repository, it usually adds a small placeholder file inside it.
+4. **Colossal collision resistance.** Historically, Git has identified objects with 40-character SHA-1 values. Accidental collisions are extremely unlikely in normal use, but SHA-1 is no longer considered strong enough for long-term cryptographic collision resistance, which is one reason newer Git work supports SHA-256.
 
 ## Common Mistakes
 
 | Mistake | Why It Happens | How to Fix It |
 | :--- | :--- | :--- |
-| **Accidentally committing a password/secret** | Using the indiscriminate `git add .` command without reviewing `git status` first, accidentally dragging a `.env` file into the staging area. | If unpushed: `git reset HEAD~1` to undo the commit locally. If pushed, **the secret is compromised**. You must instantly revoke/rotate the credential in AWS/GCP. Do not just delete it in a new commit; the history is permanent. |
+| **Accidentally committing a password/secret** | Using the indiscriminate `git add .` command without reviewing `git status` first, accidentally dragging a `.env` file into the staging area. | If unpushed: `git reset HEAD~1` to undo the commit locally. If pushed, **the secret is compromised**. You must promptly revoke or rotate the credential in AWS/GCP. Do not just delete it in a new commit; the history is permanent. |
 | **"fatal: refusing to merge unrelated histories"** | You initialized a repository locally, and initialized a separate repository on GitHub with a default README, then tried to pull. Git thinks they are two completely different, unrelated projects. | Run `git pull origin main --allow-unrelated-histories` to forcefully instruct Git to combine the two distinct timelines into one. |
 | **"Updates were rejected because the remote contains work that you do not have locally"** | A teammate pushed new commits to the GitHub server while you were working offline. Git refuses to let you push and overwrite their work. | Run `git pull` first to download and integrate their changes into your local branch. Resolve any potential merge conflicts, then run `git push`. |
 | **Empty or meaningless commit messages** | Rushing the job. Using vague messages like `git commit -m "update"` or `git commit -m "fixed stuff"`. | Use `git commit --amend -m "new better message"` if you haven't pushed yet. Develop a professional habit of writing "Why" not just "What". |
@@ -505,7 +505,7 @@ Git requires an author identity when you create a commit, so `user.name` and `us
 
 <details>
 <summary>5. You created a file named `aws-credentials.json` on your local machine to test a script. You never want this file to be committed to the company repository. What exactly should you do to ensure it is ignored forever?</summary>
-You must create a plain text file named `.gitignore` in the root of your repository if one does not already exist. Inside this file, you need to add the exact filename `aws-credentials.json` on a new line. Git reads this configuration file top-to-bottom and will automatically filter out any matching files from its tracking radar. This ensures the credentials file will never accidentally be staged or committed, preventing a severe security breach.
+You must create a plain text file named `.gitignore` in the root of your repository if one does not already exist. Inside this file, you need to add the exact filename `aws-credentials.json` on a new line. Git reads this configuration file top-to-bottom and will automatically filter out any matching files from its tracking radar. This ensures the credentials file is much less likely to be accidentally staged or committed, helping prevent a severe security breach.
 </details>
 
 <details>
@@ -673,3 +673,10 @@ Git will show `.gitignore` and `audit-trail.log` as untracked files. The other `
 ---
 
 **Next Module**: [Module 0.7: What is Networking?](../module-0.7-what-is-networking/) — Now that you can track files, it is time to understand how computers actually talk to each other across the wires.
+
+## Sources
+
+- [Git](https://en.wikipedia.org/wiki/Git) — Overview of Git, including its history and naming background.
+- [Git Guide](https://github.com/git-guides) — A concise beginner-friendly overview of Git concepts, commands, and workflow.
+- [Git Guides: git pull](https://github.com/git-guides/git-pull) — Explains remote synchronization in the same beginner-friendly register as this module.
+- [github/gitignore](https://github.com/github/gitignore) — Provides practical `.gitignore` examples learners can reuse immediately.
