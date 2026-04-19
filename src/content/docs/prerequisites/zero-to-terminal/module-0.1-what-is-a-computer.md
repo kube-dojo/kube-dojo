@@ -42,12 +42,14 @@ Let's meet the kitchen staff and equipment.
 
 ```mermaid
 graph TD
-    Manager["Restaurant Manager<br><b>Operating System (OS)</b>"] -->|Directs| Chef
+    Manager["Restaurant Manager<br/><b>Operating System (OS)</b>"] -->|Directs| Chef
     Manager -->|Manages| Counter
     Manager -->|Organizes| Pantry
 
-    Chef["Head Chef<br><b>CPU</b>"] <-->|Prepares food on| Counter["Counter Space<br><b>RAM</b>"]
-    Counter <-->|Gets ingredients from| Pantry["Pantry<br><b>Disk / SSD</b>"]
+    Chef["Head Chef<br/><b>CPU</b>"] -->|Prepares food on| Counter["Counter Space<br/><b>RAM</b>"]
+    Counter -->|Reads from| Pantry["Pantry<br/><b>Disk / SSD</b>"]
+    Pantry -->|Loads into| Counter
+    Counter -->|Hands to| Chef
 ```
 
 ---
