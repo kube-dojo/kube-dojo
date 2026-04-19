@@ -189,13 +189,19 @@ numbers — that's softening, which is forbidden here.
   real defenses. Same three-option rule. An unsourced claim with
   fake-precise impact data → `cannot_be_salvaged` (rewrite to keep
   the security principle, drop the unverified numbers).
-- `statistic` — specific statistics attributed to a real source
-  ("StatCounter says Windows is X%"). Cite or rewrite to remove the
-  number.
+- `statistic` — specific statistics, even verifiable ones (RFC-defined
+  constants, scientific facts, well-known numbers). Two paths:
+  - Real and citable → `supported` with the primary source. The IPv6
+    address-space size, RFC-defined ports, established scientific
+    constants — these have authoritative URLs. PREFER this path.
+  - Truly unciteable / illustrative-only → `cannot_be_salvaged` with
+    a rewrite that removes the precise number ("IPv6 has an
+    enormous 128-bit address space"). NEVER `soften_to_illustration`.
 
 If you find yourself reaching for `soften_to_illustration` on one of
-these classes, switch to `cannot_be_salvaged` and remove the false
-specifics. The schema validator will block the seed otherwise.
+these classes, switch to `cannot_be_salvaged` (rewrite removing the
+specifics) or `supported`/`needs_allowlist_expansion` (find the source).
+The schema validator will block any soften on these classes.
 
 Claims that MAY be softened (audience calibration applies):
 - `vendor_capability` — IF presented as illustrative ("AWS
