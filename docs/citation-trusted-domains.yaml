@@ -1,0 +1,118 @@
+---
+# Trusted-domain allowlist for autonomous citation research.
+#
+# Tiered by claim class per Codex's consult (session 5, 2026-04-19).
+# Citations whose host is not on this list auto-reject at the deterministic
+# gate. Expanding the list is a committed config change, never a per-module
+# override. Keep entries to bare registrable domains; subdomains match
+# automatically via suffix check in scripts/fetch_citation.py.
+#
+# When a claim class does not match any tier below, it falls through to
+# `general` (which is intentionally narrow). Research prompts should prefer
+# the most specific tier for a given claim.
+
+version: 1
+
+tiers:
+  # Standards, regulations, primary research. Prefer these for any claim
+  # about rules, definitions, risk, or academic consensus.
+  standards:
+    - kubernetes.io
+    - k8s.io
+    - cncf.io
+    - nist.gov
+    - owasp.org
+    - mitre.org
+    - ietf.org
+    - rfc-editor.org
+    - iso.org
+    - w3.org
+    - oasis-open.org
+    - arxiv.org
+    - acm.org
+    - ieee.org
+    - usenix.org
+    - oecd.ai
+
+  # Upstream projects + official CNCF / foundation repos. Prefer for
+  # capability claims about specific tools.
+  upstream:
+    - github.com          # only for official org repos — reviewer must
+                          # verify the repo is the upstream project, not a
+                          # third-party fork.
+    - raw.githubusercontent.com
+    - apache.org
+    - linuxfoundation.org
+    - cloudnative.io
+    - opencontainers.org
+    - helm.sh
+    - istio.io
+    - prometheus.io
+    - grafana.com
+    - opentelemetry.io
+    - envoyproxy.io
+    - argoproj.github.io
+    - fluxcd.io
+    - tekton.dev
+
+  # Vendor docs — acceptable for capability/pricing claims ABOUT THAT
+  # VENDOR. A vendor citation for a claim about a competitor's product
+  # must be rejected at research time.
+  vendor:
+    - aws.amazon.com
+    - docs.aws.amazon.com
+    - cloud.google.com
+    - learn.microsoft.com
+    - azure.microsoft.com
+    - redhat.com
+    - docs.openshift.com
+    - ibm.com
+    - oracle.com
+    - vmware.com
+    - tanzu.vmware.com
+    - rancher.com
+    - suse.com
+    - mongodb.com
+    - hashicorp.com
+    - docker.com
+    - hub.docker.com
+    - anthropic.com
+    - openai.com
+    - mistral.ai
+    - huggingface.co
+
+  # Incidents, outage post-mortems, legal actions, vulnerability
+  # disclosures. Prefer neutral primary reporting over vendor blogs.
+  incidents:
+    - cve.mitre.org
+    - nvd.nist.gov
+    - cisa.gov
+    - ncsc.gov.uk
+    - americanbar.org
+    - oecd.ai
+    - aws.amazon.com          # AWS post-mortems (dual-tier, vendor OK
+                              # for own-incident claims)
+    - status.cloud.google.com
+    - azure.status.microsoft
+
+  # Last-resort general educational references. Intentionally narrow.
+  # Anything not covered above AND not here is rejected.
+  general:
+    - developer.mozilla.org
+    - en.wikipedia.org        # only for stable definitional anchors;
+                              # reviewer must prefer primary sources when
+                              # the same claim is covered upstream.
+
+# Claim-class → tier preference ordering. Research prompt consults this
+# when picking a URL for a given claim; the first tier that returns a
+# matching allowlisted result wins.
+claim_class_priority:
+  war_story:       [incidents, standards, upstream, vendor, general]
+  incident:        [incidents, standards, vendor, general]
+  statistic:       [standards, incidents, upstream, vendor, general]
+  standard:        [standards, upstream, general]
+  vendor_capability: [vendor, upstream, standards, general]
+  pricing:         [vendor, standards, general]
+  benchmark:       [standards, upstream, vendor, general]
+  security_claim:  [incidents, standards, upstream, vendor, general]
+  further_reading: [standards, upstream, vendor, general]

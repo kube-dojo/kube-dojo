@@ -63,6 +63,7 @@ test_script.sh
 .pipeline/rewrite-output/
 .pipeline/fact-ledgers/
 .pipeline/link-cache.json
+.pipeline/citation-fetch-cache/
 .pipeline/knowledge-cards/
 .pipeline/reviews/*.lock
 .pipeline/reviews/*.md
