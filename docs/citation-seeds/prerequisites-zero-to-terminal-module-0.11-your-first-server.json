@@ -1,0 +1,271 @@
+{
+  "module_key": "prerequisites/zero-to-terminal/module-0.11-your-first-server",
+  "module_path": "src/content/docs/prerequisites/zero-to-terminal/module-0.11-your-first-server.md",
+  "research_run_id": "2026-04-19T00:33:59+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 1,
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "nginx is the most popular web server in the world and powers about a third of websites.",
+      "claim_class": "statistic",
+      "span_hint": "section: What is a Web Server?",
+      "disposition": "supported",
+      "proposed_url": "https://en.wikipedia.org/wiki/Nginx",
+      "proposed_tier": "general",
+      "rationale": "The page directly states nginx ranks first in W3Techs' web server count and gives a roughly one-third share figure."
+    },
+    {
+      "claim_id": "C002",
+      "claim_text": "Docker Desktop is free for personal use and qualifying small businesses.",
+      "claim_class": "pricing",
+      "span_hint": "section: Option A > Step 1 > tool table",
+      "disposition": "supported",
+      "proposed_url": "https://docs.docker.com/subscription/desktop-license/",
+      "proposed_tier": "vendor",
+      "rationale": "Docker's license page directly states Docker Desktop is free for personal use and small businesses under the published thresholds."
+    },
+    {
+      "claim_id": "C003",
+      "claim_text": "Docker Desktop is the most popular option with the biggest community.",
+      "claim_class": "statistic",
+      "span_hint": "section: Option A > Step 1 > tool table",
+      "disposition": "unciteable",
+      "proposed_url": null,
+      "proposed_tier": null,
+      "rationale": "The allowlisted sources do not provide a neutral, current source that directly verifies both 'most popular' and 'biggest community' for Docker Desktop."
+    },
+    {
+      "claim_id": "C004",
+      "claim_text": "OrbStack is free for personal use.",
+      "claim_class": "pricing",
+      "span_hint": "section: Option A > Step 1 > tool table",
+      "disposition": "unciteable",
+      "proposed_url": null,
+      "proposed_tier": null,
+      "rationale": "OrbStack's official site is not on the allowlist, and no allowlisted source directly verifies its current personal-use pricing."
+    },
+    {
+      "claim_id": "C005",
+      "claim_text": "OrbStack is the fastest, lightest, and best-UX option.",
+      "claim_class": "benchmark",
+      "span_hint": "section: Option A > Step 1 > tool table",
+      "disposition": "unciteable",
+      "proposed_url": null,
+      "proposed_tier": null,
+      "rationale": "These are comparative performance and UX superlatives that are not directly substantiated by an allowlisted neutral source."
+    },
+    {
+      "claim_id": "C006",
+      "claim_text": "Podman is a daemonless container engine and supports rootless operation.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Option A > Step 1 > tool table (Podman Desktop row)",
+      "disposition": "supported",
+      "proposed_url": "https://github.com/containers/podman",
+      "proposed_tier": "upstream",
+      "rationale": "The upstream Podman repository directly describes Podman as daemonless and documents rootless use."
+    },
+    {
+      "claim_id": "C007",
+      "claim_text": "Podman Desktop is free and open source.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Option A > Step 1 > tool table (Podman Desktop row)",
+      "disposition": "supported",
+      "proposed_url": "https://github.com/podman-desktop/podman-desktop",
+      "proposed_tier": "upstream",
+      "rationale": "The project's upstream repository directly presents Podman Desktop as a free and open-source tool."
+    },
+    {
+      "claim_id": "C008",
+      "claim_text": "Rancher Desktop includes Kubernetes on the desktop.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Option A > Step 1 > tool table (Rancher Desktop row)",
+      "disposition": "supported",
+      "proposed_url": "https://github.com/rancher-sandbox/rancher-desktop",
+      "proposed_tier": "upstream",
+      "rationale": "The upstream repository directly describes Rancher Desktop as bringing Kubernetes and container management to the desktop."
+    },
+    {
+      "claim_id": "C009",
+      "claim_text": "The official nginx Docker image serves static content from /usr/share/nginx/html.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Option A > Step 5; quiz answer 3",
+      "disposition": "supported",
+      "proposed_url": "https://hub.docker.com/_/nginx",
+      "proposed_tier": "vendor",
+      "rationale": "The official Docker Hub page for the nginx image directly shows static content mounted or copied into /usr/share/nginx/html."
+    },
+    {
+      "claim_id": "C010",
+      "claim_text": "Google Cloud offers $300 in free credit for 90 days to new customers.",
+      "claim_class": "pricing",
+      "span_hint": "section: Option B > Step 1 > provider list",
+      "disposition": "supported",
+      "proposed_url": "https://cloud.google.com/free",
+      "proposed_tier": "vendor",
+      "rationale": "Google Cloud's official free-program page directly advertises $300 in free credit for 90 days."
+    },
+    {
+      "claim_id": "C011",
+      "claim_text": "Oracle Cloud has always-free VM resources.",
+      "claim_class": "pricing",
+      "span_hint": "section: Option B > Step 1 > provider list",
+      "disposition": "supported",
+      "proposed_url": "https://www.oracle.com/cloud/free/faq/",
+      "proposed_tier": "vendor",
+      "rationale": "Oracle's official Free Tier FAQ directly lists Always Free compute offerings and states Always Free services are available for an unlimited period."
+    },
+    {
+      "claim_id": "C012",
+      "claim_text": "Oracle Cloud has the most generous free tier.",
+      "claim_class": "pricing",
+      "span_hint": "section: Option B > Step 1 > provider list",
+      "disposition": "unciteable",
+      "proposed_url": null,
+      "proposed_tier": null,
+      "rationale": "This is a comparative superlative across vendors, and no allowlisted neutral source directly verifies it."
+    },
+    {
+      "claim_id": "C013",
+      "claim_text": "AWS free-tier VM eligibility changed on July 15, 2025, with older accounts using the legacy EC2 free tier and newer accounts using a different free plan.",
+      "claim_class": "pricing",
+      "span_hint": "section: Option B > Step 1 > provider list",
+      "disposition": "supported",
+      "proposed_url": "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-free-tier-usage.html",
+      "proposed_tier": "vendor",
+      "rationale": "AWS's EC2 documentation directly compares benefits for accounts created before versus on or after July 15, 2025."
+    },
+    {
+      "claim_id": "C014",
+      "claim_text": "For AWS accounts created on or after July 15, 2025, the free-plan EC2 instance types include t3.micro, t3.small, t4g.micro, t4g.small, c7i-flex.large, and m7i-flex.large; older accounts typically see t2.micro or t3.micro.",
+      "claim_class": "pricing",
+      "span_hint": "section: Option B > Step 1 > step 2",
+      "disposition": "supported",
+      "proposed_url": "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-free-tier-usage.html",
+      "proposed_tier": "vendor",
+      "rationale": "The AWS EC2 free-tier usage page directly lists the instance types by account-creation cohort."
+    },
+    {
+      "claim_id": "C015",
+      "claim_text": "On Ubuntu, nginx is installed and already running immediately after sudo apt install nginx -y.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Option B > Step 3",
+      "disposition": "unciteable",
+      "proposed_url": null,
+      "proposed_tier": null,
+      "rationale": "The allowlisted Microsoft Learn guidance says the package creates a startup service but also tells the user to explicitly start nginx on first install, so it does not directly support this exact claim."
+    },
+    {
+      "claim_id": "C016",
+      "claim_text": "Ubuntu's nginx serves web files from /var/www/html by default.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Option B > Step 5; quiz answer 3",
+      "disposition": "unciteable",
+      "proposed_url": null,
+      "proposed_tier": null,
+      "rationale": "Allowlisted sources show /var/www/html in Ubuntu-based examples, but none directly and cleanly verify this exact default-path claim for stock Ubuntu nginx packaging."
+    },
+    {
+      "claim_id": "C017",
+      "claim_text": "The first website was created by Tim Berners-Lee at CERN around 1990/1991, and info.cern.ch remains the historic first site online.",
+      "claim_class": "war_story",
+      "span_hint": "section: Did You Know > bullet 1",
+      "disposition": "supported",
+      "proposed_url": "https://en.wikipedia.org/wiki/History_of_the_World_Wide_Web",
+      "proposed_tier": "general",
+      "rationale": "The page directly identifies info.cern.ch as the first website, gives the 1990/1991 launch timeline, and shows the site in 2025."
+    },
+    {
+      "claim_id": "C018",
+      "claim_text": "The first web server had a handwritten note saying 'This machine is a server. DO NOT POWER IT DOWN!!'",
+      "claim_class": "war_story",
+      "span_hint": "section: Did You Know > bullet 1",
+      "disposition": "unciteable",
+      "proposed_url": null,
+      "proposed_tier": null,
+      "rationale": "No allowlisted source located in this run directly verifies that exact quotation."
+    },
+    {
+      "claim_id": "C019",
+      "claim_text": "A learner's server setup in this module is more sophisticated than the one that launched the World Wide Web.",
+      "claim_class": "benchmark",
+      "span_hint": "section: Did You Know > bullet 1",
+      "disposition": "unciteable",
+      "proposed_url": null,
+      "proposed_tier": null,
+      "rationale": "This is a subjective comparative claim rather than a sourceable factual statement."
+    },
+    {
+      "claim_id": "C020",
+      "claim_text": "Igor Sysoev began developing nginx in 2002 to address the C10K/high-concurrency problem.",
+      "claim_class": "war_story",
+      "span_hint": "section: Did You Know > bullet 2",
+      "disposition": "supported",
+      "proposed_url": "https://en.wikipedia.org/wiki/Nginx",
+      "proposed_tier": "general",
+      "rationale": "The page directly states nginx development began in 2002 and was originally developed to solve the C10k problem."
+    },
+    {
+      "claim_id": "C021",
+      "claim_text": "nginx uses an asynchronous event-driven architecture that performs predictably under high loads.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Did You Know > bullet 2",
+      "disposition": "supported",
+      "proposed_url": "https://en.wikipedia.org/wiki/Nginx",
+      "proposed_tier": "general",
+      "rationale": "The page directly describes nginx as using an asynchronous event-driven approach and ties that architecture to high-load performance."
+    },
+    {
+      "claim_id": "C022",
+      "claim_text": "With appropriate tuning, nginx can handle hundreds of thousands of simultaneous connections.",
+      "claim_class": "benchmark",
+      "span_hint": "section: Did You Know > bullet 2",
+      "disposition": "unciteable",
+      "proposed_url": null,
+      "proposed_tier": null,
+      "rationale": "No allowlisted source located in this run directly substantiates the exact 'hundreds of thousands' concurrency claim."
+    },
+    {
+      "claim_id": "C023",
+      "claim_text": "Netflix, Airbnb, and Dropbox all use nginx as their web server.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Did You Know > bullet 3",
+      "disposition": "unciteable",
+      "proposed_url": null,
+      "proposed_tier": null,
+      "rationale": "No allowlisted source located in this run directly verifies all three company-usage claims together, or each one individually, in a current and sourceable way."
+    },
+    {
+      "claim_id": "C024",
+      "claim_text": "Some cloud providers only let you download the SSH key once during VM creation.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Common Mistakes > last row",
+      "disposition": "unciteable",
+      "proposed_url": null,
+      "proposed_tier": null,
+      "rationale": "This is provider-specific behavior and no allowlisted vendor source was found that supports it as a general cloud-provider rule."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Session",
+      "title": "A Typical HTTP Session",
+      "tier": "general",
+      "why_relevant": "It cleanly explains the TCP connection, request, and response flow that this module asks learners to trace."
+    },
+    {
+      "url": "https://hub.docker.com/_/nginx",
+      "title": "nginx Official Image on Docker Hub",
+      "tier": "vendor",
+      "why_relevant": "It is the authoritative page for the nginx container image used in the local Docker option, including the static-content path."
+    },
+    {
+      "url": "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-free-tier-usage.html",
+      "title": "Track Your Free Tier Usage for Amazon EC2",
+      "tier": "vendor",
+      "why_relevant": "It gives current, date-specific AWS free-plan details that matter for the cloud-server option."
+    }
+  ],
+  "notes": "Focused on concrete historical, pricing, benchmark, and vendor-specific claims. Excluded analogies, exercises, code blocks, and most general teaching prose. Two spots need content revision rather than citation: OrbStack claims are effectively off-allowlist for direct support, and several Ubuntu-nginx path/startup statements are not cleanly supported by the allowlisted sources. Also note a source discrepancy: Google Cloud marketing pages say 90 days, while Google documentation pages describe 91 days.",
+  "_schema_issues": [],
+  "rejected_urls": []
+}

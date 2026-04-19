@@ -1,0 +1,161 @@
+{
+  "module_key": "prerequisites/zero-to-terminal/module-0.2-what-is-a-terminal",
+  "module_path": "src/content/docs/prerequisites/zero-to-terminal/module-0.2-what-is-a-terminal.md",
+  "research_run_id": "2026-04-19T00:32:36+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 1,
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "Modern software engineering tools such as Kubernetes, Docker, cloud platforms, and automation scripts all start with the terminal.",
+      "claim_class": "statistic",
+      "span_hint": "section: Why This Module Matters",
+      "disposition": "unciteable",
+      "proposed_url": null,
+      "proposed_tier": null,
+      "rationale": "This is an absolute, sweeping claim and no allowlisted source can honestly support that every listed tool starts with the terminal."
+    },
+    {
+      "claim_id": "C002",
+      "claim_text": "The sample shell loop would rename 500 files in under a second.",
+      "claim_class": "benchmark",
+      "span_hint": "section: Why Do Engineers Use Terminals? > 1. Speed",
+      "disposition": "unciteable",
+      "proposed_url": null,
+      "proposed_tier": null,
+      "rationale": "This is a specific performance benchmark that depends on environment and is not directly backed by an allowlisted source."
+    },
+    {
+      "claim_id": "C003",
+      "claim_text": "SSH is a protocol for secure remote login and other secure network services.",
+      "claim_class": "standard",
+      "span_hint": "section: Why Do Engineers Use Terminals? > 3. Remote Access",
+      "disposition": "supported",
+      "proposed_url": "https://www.rfc-editor.org/rfc/rfc4251.html",
+      "proposed_tier": "standards",
+      "rationale": "RFC 4251 directly defines SSH as a protocol for secure remote login and other secure network services."
+    },
+    {
+      "claim_id": "C004",
+      "claim_text": "In the February 28, 2017 S3 disruption, AWS said an authorized team member entered one input incorrectly, removed more servers than intended, and AWS later added safeguards to reduce the chance of recurrence.",
+      "claim_class": "incident",
+      "span_hint": "section: Why Do Engineers Use Terminals? > A Documented Operational Mistake",
+      "disposition": "supported",
+      "proposed_url": "https://aws.amazon.com/message/41926/",
+      "proposed_tier": "vendor",
+      "rationale": "AWS's official incident summary directly describes the incorrect command input, the larger-than-intended server removal, and the added safeguards."
+    },
+    {
+      "claim_id": "C005",
+      "claim_text": "Early programmers often created and stored programs on punch cards before screen-based interaction became common.",
+      "claim_class": "statistic",
+      "span_hint": "section: Did You Know? > item 1",
+      "disposition": "supported",
+      "proposed_url": "https://en.wikipedia.org/wiki/Computer_programming_in_the_punched_card_era",
+      "proposed_tier": "general",
+      "rationale": "This page directly describes programming in the punched-card era and explains that programmers created and stored programs on punch cards."
+    },
+    {
+      "claim_id": "C006",
+      "claim_text": "GUI systems were developed in the 1970s, and the Apple Macintosh was introduced in 1984 as an early commercially successful GUI computer.",
+      "claim_class": "statistic",
+      "span_hint": "section: Did You Know? > item 1",
+      "disposition": "supported",
+      "proposed_url": "https://en.wikipedia.org/wiki/Graphical_user_interface",
+      "proposed_tier": "general",
+      "rationale": "The page's history section directly covers 1970s GUI development and identifies the 1984 Macintosh as a commercially successful GUI system."
+    },
+    {
+      "claim_id": "C007",
+      "claim_text": "Modern terminal apps are terminal emulators that simulate earlier hardware terminals connected to central computers.",
+      "claim_class": "statistic",
+      "span_hint": "section: Did You Know? > item 2",
+      "disposition": "supported",
+      "proposed_url": "https://en.wikipedia.org/wiki/Terminal_emulator",
+      "proposed_tier": "general",
+      "rationale": "The page directly explains that terminal emulators are software programs that emulate earlier hardware terminals and describes their historical use with central computers."
+    },
+    {
+      "claim_id": "C008",
+      "claim_text": "Terminal-based tools remain important for remote access and server administration, including cloud and Kubernetes work.",
+      "claim_class": "statistic",
+      "span_hint": "section: Did You Know? > item 3",
+      "disposition": "weak_anchor",
+      "proposed_url": "https://en.wikipedia.org/wiki/Terminal_emulator",
+      "proposed_tier": "general",
+      "rationale": "The page broadly supports ongoing terminal-based remote administration on servers, but it does not directly substantiate the module's broader scope and emphasis."
+    },
+    {
+      "claim_id": "C009",
+      "claim_text": "On Windows, running `wsl --install` from an elevated PowerShell session installs WSL and requires a restart.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Opening Your Terminal > Windows > Option C: WSL",
+      "disposition": "supported",
+      "proposed_url": "https://learn.microsoft.com/en-us/windows/wsl/install",
+      "proposed_tier": "vendor",
+      "rationale": "Microsoft Learn directly documents running `wsl --install` in administrator mode and then restarting the machine."
+    },
+    {
+      "claim_id": "C010",
+      "claim_text": "WSL is the best Windows option for this curriculum because Kubernetes tools work best in a Linux environment.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Opening Your Terminal > Windows > WSL note",
+      "disposition": "weak_anchor",
+      "proposed_url": "https://kubernetes.io/docs/concepts/windows/intro/",
+      "proposed_tier": "standards",
+      "rationale": "Kubernetes documentation shows Linux-first architecture and notable Windows limitations, which supports the recommendation directionally but not the exact curricular wording."
+    },
+    {
+      "claim_id": "C011",
+      "claim_text": "On macOS, the prompt ends with `%` if using zsh (the default) or `$` if using bash.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Opening Your Terminal > macOS prompt note",
+      "disposition": "unciteable",
+      "proposed_url": null,
+      "proposed_tier": null,
+      "rationale": "Prompt characters are user-configurable and shell/theme-dependent, so no allowlisted source can honestly back this exact mapping as a general rule."
+    },
+    {
+      "claim_id": "C012",
+      "claim_text": "In GitLab's January 31, 2017 database outage, accidental data removal from the primary database caused a major outage and some unrecoverable production data loss.",
+      "claim_class": "incident",
+      "span_hint": "section: Common Mistakes in Production table > wrong server row",
+      "disposition": "unciteable",
+      "proposed_url": null,
+      "proposed_tier": null,
+      "rationale": "The canonical GitLab postmortem is off-allowlist, and no allowlisted source cleanly and directly backs the module's full incident wording."
+    },
+    {
+      "claim_id": "C013",
+      "claim_text": "Copying and pasting multiple lines of commands from the internet directly into the terminal can execute hidden malicious commands or run incomplete commands immediately.",
+      "claim_class": "security_claim",
+      "span_hint": "section: Common Mistakes in Production table > copy/paste row",
+      "disposition": "unciteable",
+      "proposed_url": null,
+      "proposed_tier": null,
+      "rationale": "Allowlisted sources discuss terminals and paste behavior generally, but none directly and specifically substantiate this security warning as written."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://developer.mozilla.org/docs/Learn_web_development/Getting_started/Environment_setup/Command_line",
+      "title": "MDN Command Line Crash Course",
+      "tier": "general",
+      "why_relevant": "A beginner-friendly introduction to what the terminal is and how to use basic commands."
+    },
+    {
+      "url": "https://www.rfc-editor.org/rfc/rfc4251.html",
+      "title": "RFC 4251: The Secure Shell (SSH) Protocol Architecture",
+      "tier": "standards",
+      "why_relevant": "Explains the standard protocol behind common remote terminal access."
+    },
+    {
+      "url": "https://kubernetes.io/docs/concepts/windows/intro/",
+      "title": "Windows Containers in Kubernetes",
+      "tier": "standards",
+      "why_relevant": "Shows why Linux-first assumptions still matter when learning Kubernetes tooling on Windows."
+    }
+  ],
+  "notes": "The existing inline OpenSSH citation is off-allowlist and should be replaced with RFC 4251 in the later citation step. Several claims are better revised than cited because they are either absolute marketing-style language or depend on off-allowlist incident sources.",
+  "_schema_issues": [],
+  "rejected_urls": []
+}
