@@ -1,0 +1,187 @@
+{
+  "module_key": "prerequisites/zero-to-terminal/module-0.9-software-and-packages",
+  "module_path": "src/content/docs/prerequisites/zero-to-terminal/module-0.9-software-and-packages.md",
+  "research_run_id": "2026-04-19T22:47:33+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 2,
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "Apt and Homebrew are the most common package managers in the Kubernetes world.",
+      "claim_class": "statistic",
+      "span_hint": "section: Common Package Managers",
+      "disposition": "cannot_be_salvaged",
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "In this curriculum, we'll mostly use **apt** (for Linux) and **brew** (for macOS) since those are the most common in the Kubernetes world.",
+      "suggested_rewrite": "In this curriculum, we'll mostly use **apt** (for Linux) and **brew** (for macOS) because they are common choices on the platforms we'll use.",
+      "lesson_point_url": null,
+      "rationale": "This comparative prevalence claim has no benchmark and is not necessary to the lesson."
+    },
+    {
+      "claim_id": "C002",
+      "claim_text": "Homebrew on macOS is designed to install packages without sudo because it uses a user-writable prefix rather than system directories.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: On macOS with Homebrew",
+      "disposition": "needs_allowlist_expansion",
+      "proposed_url": "https://docs.brew.sh/Installation.html",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Homebrew's install docs directly describe the non-root default prefix, but the primary source is off the current allowlist."
+    },
+    {
+      "claim_id": "C003",
+      "claim_text": "This exact dependency conflict is why Docker and containers were invented.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Why Dependencies Matter",
+      "disposition": "cannot_be_salvaged",
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "This exact dilemma is why Docker and containers were invented, which you will learn about soon, allowing each program to have its own isolated set of dependencies.",
+      "suggested_rewrite": "This kind of dependency conflict is one reason engineers use containers, which you will learn about soon, because containers can give each program a more isolated set of dependencies.",
+      "lesson_point_url": null,
+      "rationale": "The historical-causal claim is overstated; keep the dependency-isolation lesson without the absolute origin story."
+    },
+    {
+      "claim_id": "C004",
+      "claim_text": "On Debian/Ubuntu, `apt update` refreshes the local package index and does not itself install or upgrade packages.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Updating the Package List",
+      "disposition": "needs_allowlist_expansion",
+      "proposed_url": "https://manpages.debian.org/apt-get",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "APT documentation directly explains this behavior, but Debian's primary docs are off the allowlist."
+    },
+    {
+      "claim_id": "C005",
+      "claim_text": "The Equifax breach exposed 147 million people because an Apache Struts patch had gone unapplied for two months and led to over $1.4 billion in settlements.",
+      "claim_class": "incident",
+      "span_hint": "section: Why Updates Matter: A War Story",
+      "disposition": "cannot_be_salvaged",
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "In 2017, the credit reporting agency Equifax suffered a massive data breach, exposing the personal information of 147 million people. The cause? A known vulnerability in a piece of software called Apache Struts. A patch to fix the vulnerability had been available for two months, but Equifax had not updated their systems. This single missed update cost the company over $1.4 billion in settlements and completely damaged their reputation.",
+      "suggested_rewrite": "A well-known lesson from software security is that delaying a patch for a known vulnerability can lead to a major breach, large legal costs, and long-term reputational damage.",
+      "lesson_point_url": null,
+      "rationale": "This anecdote bundles a real incident with multiple precise figures and causal details; safer to preserve the patch-management lesson without the unsupported specifics."
+    },
+    {
+      "claim_id": "C006",
+      "claim_text": "Using `sudo` with Homebrew on macOS can cause ownership and permission problems, and Homebrew explicitly warns against it.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Common Mistakes",
+      "disposition": "needs_allowlist_expansion",
+      "proposed_url": "https://docs.brew.sh/FAQ",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Homebrew's FAQ directly warns against sudo and explains the permission risks, but the primary source is off the allowlist."
+    },
+    {
+      "claim_id": "C007",
+      "claim_text": "Skipping `apt update` can leave APT with stale package metadata, which can prevent newly published versions or package records from being found.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Common Mistakes",
+      "disposition": "needs_allowlist_expansion",
+      "proposed_url": "https://manpages.debian.org/apt-get",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "APT docs explain that the package index must be refreshed before later operations can see current package data, but Debian docs are off the allowlist."
+    },
+    {
+      "claim_id": "C008",
+      "claim_text": "Misspelling a package name can expose users to typosquatting, where attackers publish malicious packages with lookalike names.",
+      "claim_class": "security_claim",
+      "span_hint": "section: Common Mistakes",
+      "disposition": "supported",
+      "proposed_url": "https://owasp.org/www-project-top-10-ci-cd-security-risks/CICD-SEC-03-Dependency-Chain-Abuse",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "OWASP directly describes typosquatting as a software supply-chain attack pattern involving lookalike package names."
+    },
+    {
+      "claim_id": "C009",
+      "claim_text": "Homebrew was created in 2009 by Max Howell because macOS lacked a proper package manager, now has over 6,000 packages, and is used by millions of developers.",
+      "claim_class": "statistic",
+      "span_hint": "section: Did You Know? item 1",
+      "disposition": "cannot_be_salvaged",
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "**Homebrew (the macOS package manager) was created in 2009 by a developer who was frustrated that macOS didn't have a proper package manager.** Max Howell built it as an open-source project. Today, it has over 6,000 packages and is used by millions of developers. The name is a beer-brewing metaphor: packages are called \"formulae,\" the install location is called the \"Cellar,\" and the whole system \"brews\" your software.",
+      "suggested_rewrite": "**Homebrew was created to give macOS users an easier package-management workflow.** It became a major open-source project, and its beer-themed terminology includes names like \"formulae\" and \"Cellar.\"",
+      "lesson_point_url": null,
+      "rationale": "The bullet mixes sourceable history with unstable package and user counts plus opinionated framing."
+    },
+    {
+      "claim_id": "C010",
+      "claim_text": "Ubuntu's `apt` has access to over 60,000 packages and is one of the largest free software catalogs in the world.",
+      "claim_class": "statistic",
+      "span_hint": "section: Did You Know? item 2",
+      "disposition": "cannot_be_salvaged",
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "**The `apt` package manager on Ubuntu has access to over 60,000 packages.** That's 60,000 programs you can install with a single command. From text editors to databases to games to scientific computing tools — it's one of the largest software catalogs in the world, and it's all free.",
+      "suggested_rewrite": "**The `apt` package manager gives Ubuntu users access to a very large catalog of packages.** From text editors to databases to scientific tools, one package-management workflow can install a wide range of software.",
+      "lesson_point_url": null,
+      "rationale": "Exact package counts drift over time and the superlative framing is not load-bearing for beginners."
+    },
+    {
+      "claim_id": "C011",
+      "claim_text": "`sudo` was created in 1980 at SUNY Buffalo, stands for \"superuser do,\" logs every command, and is used on virtually every Linux and macOS system.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Did You Know? item 3",
+      "disposition": "cannot_be_salvaged",
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "**The concept of `sudo` came from a real security need.** In 1980, programmers at SUNY Buffalo needed a way to let trusted users run specific commands as root without sharing the root password. They created `sudo` — originally standing for \"superuser do.\" The system logs every `sudo` command, so administrators can audit who did what. Today, `sudo` is used on virtually every Linux and macOS system.",
+      "suggested_rewrite": "**The concept of `sudo` came from a real security need.** It was created so trusted users could run selected commands as root without sharing the root password, and modern `sudo` can log privileged actions for later auditing.",
+      "lesson_point_url": null,
+      "rationale": "The history is real, but this sentence bundles chronology, acronym expansion, logging behavior, and ubiquity into one uncited claim."
+    },
+    {
+      "claim_id": "C012",
+      "claim_text": "The phrase \"dependency hell\" originated in the Linux community.",
+      "claim_class": "standard",
+      "span_hint": "section: Did You Know? item 4",
+      "disposition": "cannot_be_salvaged",
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "**The phrase \"dependency hell\" is a real technical term.** It originated in the Linux community to describe the extreme frustration of trying to install a program that requires a specific version of a shared library, which then breaks another program that requires a different version of that same library.",
+      "suggested_rewrite": "**The phrase \"dependency hell\" is a widely used technical term.** It describes conflicts where one program needs a different dependency version than another program on the same system.",
+      "lesson_point_url": null,
+      "rationale": "The general concept is real, but the specific origin claim is harder to verify than the concept itself."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://developer.mozilla.org/en-US/docs/Learn_web_development/Extensions/Client-side_tools/Package_management",
+      "title": "MDN: Package management basics",
+      "tier": "general",
+      "why_relevant": "Good beginner-friendly background on what packages, registries, and dependency management are."
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/Package_manager",
+      "title": "Wikipedia: Package manager",
+      "tier": "general",
+      "why_relevant": "Useful overview of what package managers do across operating systems and ecosystems."
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/Dependency_hell",
+      "title": "Wikipedia: Dependency hell",
+      "tier": "general",
+      "why_relevant": "Gives beginners extra context for the dependency-conflict problem introduced in this module."
+    }
+  ],
+  "notes": "I did not seed each row of the common package-manager command table separately; in this beginner module they function mostly as reference examples, while the higher-risk behavioral, security, and historical claims above are the ones most likely to need inline citations or rewrites.",
+  "_schema_issues": [],
+  "rejected_urls": []
+}

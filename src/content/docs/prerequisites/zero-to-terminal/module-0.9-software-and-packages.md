@@ -89,8 +89,8 @@ Source Code  →  Compiler  →  Binary (executable)
 
 ```mermaid
 flowchart LR
-    A["Source Code<br>main.go"] -->|Compiler| B(Translation Phase)
-    B -->|Machine Code| C["Binary Executable<br>./my-program"]
+    A["Source Code<br/>main.go"] -->|Compiler| B(Translation Phase)
+    B -->|Machine Code| C["Binary Executable<br/>./my-program"]
     
     style A fill:#f9f,stroke:#333,stroke-width:2px
     style C fill:#bbf,stroke:#333,stroke-width:2px
@@ -158,7 +158,7 @@ And the package manager:
 | **pacman** | Arch Linux | `sudo pacman -S package-name` |
 | **choco** | Windows | `choco install package-name` |
 
-> In this curriculum, we'll mostly use **apt** (for Linux) and **brew** (for macOS) since those are the most common in the Kubernetes world.
+> In this curriculum, we'll mostly use **apt** (for Linux) and **brew** (for macOS) because they are common choices on the platforms we'll use.
 
 ---
 
@@ -229,7 +229,7 @@ The package manager figures out the whole chain of dependencies and installs the
 
 **The less-good news**: Sometimes dependencies conflict with each other. Program A needs version 1.0 of a library, but Program B needs version 2.0. This is called **dependency hell**, and it's one of the problems that containers (which you'll learn about soon) were invented to solve.
 
-> **Stop and think**: Imagine you are setting up a server. Program A strictly requires `libfoo` version 1.0. Program B strictly requires `libfoo` version 2.0. If your operating system only allows one version of a library to be installed globally, which would you install first and why? This exact dilemma is why Docker and containers were invented, which you will learn about soon, allowing each program to have its own isolated set of dependencies.
+> **Stop and think**: Imagine you are setting up a server. Program A strictly requires `libfoo` version 1.0. Program B strictly requires `libfoo` version 2.0. If your operating system only allows one version of a library to be installed globally, which would you install first and why? This kind of dependency conflict is one reason engineers use containers, which you will learn about soon, because containers can give each program a more isolated set of dependencies.
 
 ---
 
@@ -362,7 +362,7 @@ $ brew update && brew upgrade
 
 ### Why Updates Matter: A War Story
 
-In 2017, the credit reporting agency Equifax suffered a massive data breach, exposing the personal information of 147 million people. The cause? A known vulnerability in a piece of software called Apache Struts. A patch to fix the vulnerability had been available for two months, but Equifax had not updated their systems. This single missed update cost the company over $1.4 billion in settlements and completely damaged their reputation. In the engineering world, running package upgrades isn't just about getting new features; it's a critical security responsibility.
+A well-known lesson from software security is that delaying a patch for a known vulnerability can lead to a major breach, large legal costs, and long-term reputational damage. In the engineering world, running package upgrades isn't just about getting new features; it's a critical security responsibility.
 
 > **Stop and think**: If updates are so important, why not just set servers to auto-update every night? In production environments, an unexpected update can break your application. If a library your code depends on changes its behavior in a new version, your app might crash in the middle of the night. This is why engineers carefully test updates in a staging environment before applying them to production servers.
 
@@ -400,13 +400,13 @@ $ brew search keyword
 
 ## Did You Know?
 
-> 1. **Homebrew (the macOS package manager) was created in 2009 by a developer who was frustrated that macOS didn't have a proper package manager.** Max Howell built it as an open-source project. Today, it has over 6,000 packages and is used by millions of developers. The name is a beer-brewing metaphor: packages are called "formulae," the install location is called the "Cellar," and the whole system "brews" your software.
+> 1. **Homebrew was created to give macOS users an easier package-management workflow.** It became a major open-source project, and its beer-themed terminology includes names like "formulae" and "Cellar."
 >
-> 2. **The `apt` package manager on Ubuntu has access to over 60,000 packages.** That's 60,000 programs you can install with a single command. From text editors to databases to games to scientific computing tools — it's one of the largest software catalogs in the world, and it's all free.
+> 2. **The `apt` package manager gives Ubuntu users access to a very large catalog of packages.** From text editors to databases to scientific tools, one package-management workflow can install a wide range of software.
 >
-> 3. **The concept of `sudo` came from a real security need.** In 1980, programmers at SUNY Buffalo needed a way to let trusted users run specific commands as root without sharing the root password. They created `sudo` — originally standing for "superuser do." The system logs every `sudo` command, so administrators can audit who did what. Today, `sudo` is used on virtually every Linux and macOS system.
+> 3. **The concept of `sudo` came from a real security need.** It was created so trusted users could run selected commands as root without sharing the root password, and modern `sudo` can log privileged actions for later auditing.
 >
-> 4. **The phrase "dependency hell" is a real technical term.** It originated in the Linux community to describe the extreme frustration of trying to install a program that requires a specific version of a shared library, which then breaks another program that requires a different version of that same library.
+> 4. **The phrase "dependency hell" is a widely used technical term.** It describes conflicts where one program needs a different dependency version than another program on the same system.
 
 ---
 
@@ -417,7 +417,7 @@ $ brew search keyword
 | Forgetting `sudo` on Linux | `Permission denied` or `Operation not permitted` | Add `sudo` before the command: `sudo apt install ...` | The installation fails, leaving you unable to use the required tool. |
 | Using `sudo` with `brew` on macOS | Homebrew warns you or things install wrong | Don't use `sudo` with `brew` — it doesn't need it | You can break Homebrew's file permissions, requiring tedious manual fixes to install tools in the future. |
 | Not running `apt update` first | Might install an old version or not find the package | Always run `sudo apt update` before installing on Linux | You might install software with a known security vulnerability, or the installation may fail entirely. |
-| Typo in package name | `Unable to locate package htoop` | Check the spelling or use `apt search` / `brew search` to find the right name | You might accidentally install a malicious package created by a hacker hoping for that exact typo (typosquatting). |
+| Typo in package name | `Unable to locate package htoop` | Check the spelling or use `apt search` / `brew search` to find the right name | You might accidentally install a malicious package created by a hacker hoping for that exact typo ([typosquatting](https://owasp.org/www-project-top-10-ci-cd-security-risks/CICD-SEC-03-Dependency-Chain-Abuse)). |
 | Not reading the output | Missing important warnings or errors | Read what the terminal tells you! It often explains exactly what went wrong | You might believe a critical security tool installed successfully when it actually failed silently, leaving your system exposed. |
 | Pressing Enter during password prompt without typing anything | Authentication failure | Type your password (you won't see characters) and then press Enter | You waste time retrying commands and could potentially lock out your account if you fail too many times. |
 
@@ -622,3 +622,10 @@ You now know how software gets from code to a running program, how to install to
 From here, you have the foundation to start learning about containers, cloud computing, and eventually Kubernetes. Every tool in the Kubernetes ecosystem — `kubectl`, `helm`, `kind`, `docker` — gets installed exactly the way you just learned.
 
 **Continue to**: [Module 0.9: What is the Cloud?](/prerequisites/zero-to-terminal/module-0.10-what-is-the-cloud/) — Learn what the cloud actually is, how data centers work, and why companies rent servers instead of buying them.
+
+## Sources
+
+- [OWASP CI/CD-SEC-03: Dependency Chain Abuse](https://owasp.org/www-project-top-10-ci-cd-security-risks/CICD-SEC-03-Dependency-Chain-Abuse) — Explains supply-chain risks including malicious dependency publication and lookalike-package attacks.
+- [MDN: Package management basics](https://developer.mozilla.org/en-US/docs/Learn_web_development/Extensions/Client-side_tools/Package_management) — Good beginner-friendly background on what packages, registries, and dependency management are.
+- [Wikipedia: Package manager](https://en.wikipedia.org/wiki/Package_manager) — Useful overview of what package managers do across operating systems and ecosystems.
+- [Wikipedia: Dependency hell](https://en.wikipedia.org/wiki/Dependency_hell) — Gives beginners extra context for the dependency-conflict problem introduced in this module.
