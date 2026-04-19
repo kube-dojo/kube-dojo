@@ -58,14 +58,14 @@ Files can contain anything:
 
 ### Everything is a File (Really!)
 
-Here's something wild about Linux (the operating system that Kubernetes runs on):
+Here's something wild about Linux, the operating system used on most Kubernetes nodes:
 
 **Almost everything is represented as a file.**
 
 - Your actual files? Files.
-- Your keyboard? The system sees it as a file (`/dev/input/event0`).
+- Your keyboard? The system sees it as a file ([`/dev/input/event0`](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/7/html/storage_administration_guide/ch-filesystem)).
 - Your hard drive? A file (`/dev/sda`).
-- Running programs? They have entries in `/proc/` that look like files.
+- Running programs? They have entries in [`/proc/`](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/4/html/reference_guide/ch-proc) that look like files.
 
 You don't need to worry about device files right now. Just know that the concept of "files" in Linux goes much deeper than documents and photos. This design philosophy is one reason Linux is so powerful — everything can be read, written, and manipulated using the same set of tools.
 
@@ -106,18 +106,18 @@ Your computer organizes all files and directories into a **tree** structure. It 
 |------|-----------|-----------------|
 | `/` | **Root directory** — the very top of the tree | The building itself — everything is inside it |
 | `/home/yourname/` | **Your home directory** — your personal space | Your personal workstation in the kitchen |
-| `~` | **Shorthand for your home directory** | A nickname for your workstation |
+| [`~`](https://www.redhat.com/en/blog/navigating-linux-filesystem) | **Shorthand for your home directory** | A nickname for your workstation |
 | `/etc/` | System configuration files | The restaurant's policy manual and recipe standards |
 | `/tmp/` | Temporary files that may be cleaned automatically depending on system policy | The prep table — used during cooking, sometimes cleaned up automatically |
 | `/var/log/` | Log files (records of what happened) | The order history book |
 
 > The `~` (tilde) character is a shortcut. Instead of typing `/home/yourname/`, you can just type `~`. Your terminal knows what you mean. It's like having a nickname — easier to use than the full thing.
 
-> **Why This Matters in K8s**: As a Kubernetes engineer, you will constantly interact with specific files in these exact directories. You will configure your cluster access by editing `~/.kube/config`. You will debug system components by reading manifests in `/etc/kubernetes/manifests/`. And when things break, you will hunt for clues in `/var/log/pods/` or `/var/log/containers/`.
+> **Why This Matters in K8s**: As a Kubernetes engineer, you will constantly interact with specific files in these exact directories. You will configure your cluster access by editing [`~/.kube/config`](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_config). You will debug system components by reading manifests in [`/etc/kubernetes/manifests/`](https://kubernetes.io/docs/reference/setup-tools/kubeadm/implementation-details/). And when things break, you will hunt for clues in [`/var/log/pods/` or `/var/log/containers/`](https://kubernetes.io/docs/tutorials/cluster-management/kubelet-standalone/).
 
 ### On macOS
 
-macOS is slightly different. Your home directory is at `/Users/yourname/` instead of `/home/yourname/`. But `~` still works as the shortcut, so you rarely need to think about this.
+macOS is slightly different. Your home directory is at [`/Users/yourname/` instead of `/home/yourname/`](https://en.wikipedia.org/wiki/Home_directory). But `~` still works as the shortcut, so you rarely need to think about this.
 
 ---
 
@@ -372,7 +372,7 @@ Let's decode the first column: `-rw-r--r--`
 |--------|-----------|-----------|-----------------|
 | `r` | Read | Can see the contents | Can list what's inside |
 | `w` | Write | Can change the contents | Can add or remove files |
-| `x` | Execute | Can run it as a program | Can enter the directory (`cd` into it) |
+| `x` | Execute | Can run it as a program | [Can enter the directory (`cd` into it)](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/8/html/configuring_basic_system_settings/managing-file-system-permissions_configuring-basic-system-settings) |
 | `-` | No permission | Cannot do that action | Cannot do that action |
 
 ### Reading the Example
@@ -397,7 +397,7 @@ drwxr-xr-x  Desktop
 
 > Kitchen analogy: Permissions are like **who has which key**. The head chef (owner) has the key to everything. The sous-chefs (group) can open most drawers. The waitstaff (others) can only peek through the window.
 
-> **War Story**: A developer once set a database configuration file containing production passwords to world-readable (`-rw-rw-rw-`). An attacker who gained low-level access to the server was able to simply `cat` the configuration file, read the credentials, and dump the entire customer database. Proper permissions (`-rw-------`) would have stopped the attack dead in its tracks.
+> **Example**: A world-readable configuration file containing secrets can let anyone with local access read those credentials. Restrictive permissions such as `-rw-------` are a common way to reduce that risk.
 
 Don't worry about changing permissions yet — just know how to read them. We'll cover `chmod` when you need it.
 
@@ -610,3 +610,16 @@ You've completed this exercise when you can:
 You can now navigate the filesystem, create files and directories, read files, and understand permissions. The kitchen is starting to feel familiar.
 
 **Next Module**: [Module 0.5: Editing Files](../module-0.5-editing-files/) — Learn how to actually put content inside files using a text editor that runs right in your terminal.
+
+## Sources
+
+- [RHEL Storage Administration Guide: File systems](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/7/html/storage_administration_guide/ch-filesystem) — Background on Linux filesystem concepts, including device-related entries under `/dev`.
+- [The /proc Virtual Filesystem](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/4/html/reference_guide/ch-proc) — Describes how Linux exposes process and kernel state through `/proc`.
+- [A beginner's guide to navigating the Linux filesystem](https://www.redhat.com/en/blog/navigating-linux-filesystem) — Reinforces the path concepts used in this module, including `/`, `.`, `..`, and `~`.
+- [kubectl config reference](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_config) — Documents kubectl configuration behavior and the default kubeconfig location when overrides are not set.
+- [kubeadm implementation details](https://kubernetes.io/docs/reference/setup-tools/kubeadm/implementation-details/) — Explains where kubeadm places static Pod manifests for control-plane components.
+- [Running Kubernetes node components standalone](https://kubernetes.io/docs/tutorials/cluster-management/kubelet-standalone/) — Shows node-level filesystem paths used for pod and container logs.
+- [Home directory](https://en.wikipedia.org/wiki/Home_directory) — Summarizes conventional home-directory locations across operating systems, including macOS.
+- [Managing file system permissions](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/8/html/configuring_basic_system_settings/managing-file-system-permissions_configuring-basic-system-settings) — Explains permission strings, ownership bits, and directory execute behavior.
+- [Logging Architecture](https://kubernetes.io/docs/concepts/cluster-administration/logging/) — Connects filesystem navigation skills to real Kubernetes troubleshooting on cluster nodes.
+- [Least Privilege Principle](https://owasp.org/www-community/controls/Least_Privilege_Principle) — Further reading on why sensitive files should be readable only by the minimum required users.

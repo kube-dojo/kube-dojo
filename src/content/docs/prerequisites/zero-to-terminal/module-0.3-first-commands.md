@@ -34,7 +34,7 @@ The terminal is how professionals talk to computers. Clicking buttons in a graph
 
 Here's the thing: **the terminal isn't harder than a graphical interface. It's just different.** Instead of clicking a folder to open it, you type a command. Instead of dragging a file to move it, you type a command. Same actions, different method.
 
-By the end of this module, you'll know the 9 commands that cover about 80% of everyday terminal work.
+By the end of this module, you'll know 9 commands that cover a large share of everyday terminal work.
 
 ---
 
@@ -339,7 +339,7 @@ This is the most important thing in this entire module:
 
 > **`rm` does not move files to a trash can. It removes the file entry immediately, usually without an "Are you sure?" prompt or built-in undo. For everyday users, recovery is often difficult or impossible, although specialists may sometimes recover data before it is overwritten. If you need stronger assurance that data cannot be recovered, tools such as `shred` are used for that purpose.**
 
-**Real-World War Story:** In 1998, Pixar almost lost the entire movie *Toy Story 2*. An animator accidentally ran `rm -r *` at the root level of the project. Because there is no "Trash" in the terminal, the system immediately began permanently deleting character models, environments, and animations. They unplugged the server to stop it, but 90% of the film's files were already gone. They only survived because the technical director had a personal backup on her home computer! This illustrates the sheer unforgiving power of `rm`—it does exactly what you tell it to do, immediately, without asking if you're sure.
+**Real-World War Story:** In 1998, Pixar came close to losing the in-progress animation work for *Toy Story 2*. A command run against the wrong directory of the production servers began recursively deleting character models, sets, and animations. People watched files disappear in real time and literally pulled the server's power plug to stop it, but a large fraction of the work was already gone. Pixar recovered because one of the supervising technical directors — who had been working from home with a newborn — had been copying the project to a computer at her house. Even that copy was a couple of weeks old, so they still had to reconstruct work on top of it. The lesson for you: `rm` does exactly what you tell it to, instantly, with no "Are you sure?" — treat it with the same respect you'd give a real kitchen knife.
 
 **To delete a folder and everything inside it:**
 
@@ -414,11 +414,11 @@ Use the terminal when you need precision, automation, or remote access. Use the 
 
 ## Did You Know?
 
-- **The terminal predates the mouse by decades.** Computers used text-only interfaces from the 1960s until the mid-1980s. The graphical mouse-and-windows interface you're used to was popularized by the Apple Macintosh in 1984. When you use a terminal, you're using the original way humans talked to computers.
+- **Command-line interfaces became common long before graphical mouse-and-windows interfaces became mainstream.** [Computers used text-only interfaces from the 1960s until the mid-1980s.](https://en.wikipedia.org/wiki/Command-line_interface) The graphical mouse-and-windows interface you're used to was [popularized by the Apple Macintosh in 1984](https://en.wikipedia.org/wiki/Classic_Mac_OS). When you use a terminal, you're using the original way humans talked to computers.
 
 - **`ls` is one of the oldest commands still in use.** It dates back to 1961 in MIT's Compatible Time-Sharing System (CTSS), where it was called `LISTF`. The modern `ls` appeared in the first version of Unix in 1971. You're using a command that's over 50 years old.
 
-- **The `~` (tilde) for home directory comes from a keyboard accident.** On early terminals, the Home key and the `~` key were on the same physical key. The convention stuck, and now every terminal in the world uses `~` to mean "home."
+- **The `~` (tilde) for home directory comes from a keyboard accident.** On early terminals, [the Home key and the `~` key were on the same physical key](https://en.wikipedia.org/wiki/Tilde). The convention stuck, and many Unix-like shells now use `~` to mean "home."
 
 ---
 
@@ -606,3 +606,12 @@ In [Module 0.4: Files and Directories](../module-0.4-files-and-directories/), yo
 ---
 
 > **You just used a tool that senior engineers use every day. You belong here.**
+
+## Sources
+
+- [Command-line interface](https://en.wikipedia.org/wiki/Command-line_interface) — Background on text-based computer interfaces and their long use before mainstream graphical systems.
+- [Classic Mac OS](https://en.wikipedia.org/wiki/Classic_Mac_OS) — Overview of the original Macintosh software platform associated with the popularization of GUI computing in 1984.
+- [Tilde](https://en.wikipedia.org/wiki/Tilde) — Explains the historical terminal-keyboard convention behind `~` as a home-directory shorthand.
+- [Unix shell](https://en.wikipedia.org/wiki/Unix_shell) — Further reading on shells, prompts, commands, and the environment this module introduces.
+- [ls](https://en.wikipedia.org/wiki/Ls) — Further reading on the `ls` command, including history and common options.
+- [Pipeline (Unix)](https://en.wikipedia.org/wiki/Pipeline_%28Unix%29) — Further reading on how the pipe operator connects one command's output to another.

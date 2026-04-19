@@ -42,12 +42,12 @@ Let's meet the kitchen staff and equipment.
 
 ```mermaid
 graph TD
-    Manager[Restaurant Manager<br><b>Operating System (OS)</b>] -->|Directs| Chef
+    Manager["Restaurant Manager<br><b>Operating System (OS)</b>"] -->|Directs| Chef
     Manager -->|Manages| Counter
     Manager -->|Organizes| Pantry
 
-    Chef[Head Chef<br><b>CPU</b>] <-->|Prepares food on| Counter[Counter Space<br><b>RAM</b>]
-    Counter <-->|Gets ingredients from| Pantry[Pantry<br><b>Disk / SSD</b>]
+    Chef["Head Chef<br><b>CPU</b>"] <-->|Prepares food on| Counter["Counter Space<br><b>RAM</b>"]
+    Counter <-->|Gets ingredients from| Pantry["Pantry<br><b>Disk / SSD</b>"]
 ```
 
 ---
@@ -94,9 +94,7 @@ More RAM = More counter space = More things open at once
 
 **When RAM fills up**, your computer gets slow. Just like a chef with no counter space has to keep putting things away and getting them back out, your computer starts "swapping" data back and forth to disk. This is painfully slow.
 
-In 2017, a GitLab engineer accidentally deleted a production database. GitLab's postmortem shows the recovery was complex and depended on the state of replicas and backups -- understanding how systems recover under failure is not academic, it's what prevents outages.
-
-> **Pause and predict**: You have 8 GB of RAM and you open a web browser with 30 tabs, a video editor, and a music player — all at once. What do you think happens? If you guessed "the computer gets painfully slow" — you're right. Each program needs counter space, and 30 browser tabs alone can eat 4-6 GB. The OS starts shuffling data between RAM and disk (swapping), and everything grinds to a crawl.
+> **Pause and predict**: You have 8 GB of RAM and you open a web browser with 30 tabs, a video editor, and a music player — all at once. What do you think happens? If you guessed "the computer gets painfully slow" — you're right. Each program needs counter space, and a browser with many tabs open can easily use several gigabytes of RAM. The OS starts shuffling data between RAM and disk (swapping), and everything grinds to a crawl.
 
 ---
 
@@ -145,7 +143,7 @@ The three main operating systems:
   Linux    → The open-source family used heavily in servers and cloud infrastructure
 ```
 
-Here's the part that will matter a LOT in your Kubernetes journey: Linux is the default environment you'll see in most Kubernetes tutorials and many production clusters, but it is not the only option. The Kubernetes docs say worker nodes can run either Linux or Microsoft Windows, while the control plane stays on Linux. That's why we'll be learning Linux commands in the next modules.
+Here's the part that will matter a LOT in your Kubernetes journey: Linux is the default environment you'll see in most Kubernetes tutorials and many production clusters, but it is not the only option. The Kubernetes docs say [worker nodes can run either Linux or Microsoft Windows, while the control plane stays on Linux](https://kubernetes.io/docs/concepts/windows/intro/). That's why we'll be learning Linux commands in the next modules.
 
 > **Stop and think**: Why is Linux so common in cloud and Kubernetes environments, even though Windows servers exist? Servers usually prioritize automation, remote administration, predictable behavior, and low overhead. Linux fits that model well, which is why it shows up so often in cloud-native docs and labs.
 
@@ -209,19 +207,19 @@ Kubernetes is a system that manages **thousands of these kitchens** (computers) 
 - What to do when a kitchen breaks down (move the orders to another kitchen)
 - How to add more kitchens when the restaurant gets busy
 
-You can't manage thousands of kitchens if you don't understand how *one* kitchen works. That's what this module gave you. In the cloud, pricing depends on the instance type, operating system, region, and purchase model. For example, AWS listed a Linux `t2.large` instance with 8 GiB of RAM in `us-east-1` at `$0.0928/hour` on April 15, 2026. Misunderstanding these resources literally costs money. Source: [AWS EC2 T2 Instances](https://aws.amazon.com/ec2/instance-types/t2/).
+You can't manage thousands of kitchens if you don't understand how *one* kitchen works. That's what this module gave you. In the cloud, pricing depends on the instance type, operating system, region, and purchase model. For example, a small cloud VM can cost only a few cents per hour, but the exact price depends on the instance type, operating system, region, and purchase model. Misunderstanding these resources literally costs money. Source: [AWS EC2 T2 Instances](https://aws.amazon.com/ec2/instance-types/t2/).
 
 ---
 
 ## Did You Know?
 
-- **Your phone is a computer too.** A modern smartphone has more computing power than the computers NASA used to land on the moon in 1969. The Apollo Guidance Computer had 74 KB of memory. Your phone has millions of times more.
+- **Your phone is a computer too.** A modern smartphone is dramatically more capable than the computers used in the Apollo era; for perspective, the Apollo Guidance Computer worked with only tens of kilobytes of memory.
 
-- **RAM was once magnetic.** Early computers used tiny magnetic rings (called "core memory") for RAM. Each ring stored a single bit (0 or 1). A full megabyte would have needed over 8 million tiny rings. Today, your computer's RAM chip is smaller than a postage stamp and holds billions of bits.
+- **RAM was once magnetic.** [Early computers used tiny magnetic rings (called "core memory") for RAM. Each ring stored a single bit (0 or 1).](https://en.wikipedia.org/wiki/Magnetic-core_memory) A full megabyte of core memory would have needed millions of tiny rings. Today, your computer's RAM chip is smaller than a postage stamp and holds billions of bits.
 
 - **SSDs have no moving parts.** Traditional hard drives have spinning metal disks and a moving arm (like a record player). SSDs store data in electronic circuits with zero moving parts, which is why they're faster, quieter, and more durable. Drop a laptop with an HDD and you might lose data. Drop one with an SSD and you probably won't.
 
-- **The first computer bug was an actual bug.** In 1947, engineers working on the Harvard Mark II computer found a literal moth stuck in a relay, causing the machine to fail. They taped the moth into their logbook and noted it as the "first actual case of bug being found." The term "debugging" has been used in computer science ever since.
+- **The first computer bug was an actual bug.** [In 1947, engineers working on the Harvard Mark II computer found a literal moth stuck in a relay, causing the machine to fail. They taped the moth into their logbook and noted it as the "first actual case of bug being found."](https://en.wikipedia.org/wiki/Harvard_Mark_II) The term "debugging" has been used in computer science ever since.
 
 ---
 
@@ -232,7 +230,7 @@ You can't manage thousands of kitchens if you don't understand how *one* kitchen
 | Confusing RAM and storage | "I have 256 GB of memory" -- you probably mean storage, not RAM | RAM = temporary counter space (8-32 GB typical). Storage = permanent pantry (256 GB - 2 TB typical) |
 | Thinking more storage = faster computer | A bigger pantry doesn't make the chef cook faster | Speed comes from CPU and RAM. Storage just means more room for files |
 | Ignoring RAM when computer is slow | Opening 47 browser tabs and wondering why things crawl | Check how much RAM is in use. Close what you don't need |
-| Over-provisioning cloud servers | "Let's just use the biggest server so it doesn't crash." | In the cloud, you pay for what you provision. A team might pay $400/month for a 32GB RAM server when their application only uses 2GB. Right-sizing saves thousands of dollars. |
+| Over-provisioning cloud servers | "Let's just use the biggest server so it doesn't crash." | In the cloud, you pay for what you provision. A team might pay hundreds of dollars per month for a larger server than their application actually needs. Right-sizing can save substantial money over time. |
 | Assuming CPU speed solves internet lag | "My web pages load slowly, I need a better processor." | Internet speed depends on your network bandwidth and latency. Troubleshoot your router, Wi-Fi signal, or ISP connection first before blaming your computer hardware. |
 | Never restarting the operating system | "I just close my laptop lid, why is my computer glitching?" | Restarting clears out the RAM completely and restarts background processes. Make it a habit to reboot at least once a week to clear temporary issues. |
 | Judging a CPU only by its clock speed | "A 4 GHz CPU is always better than a 3 GHz one." | Look at the number of cores as well. A 3 GHz CPU with 8 cores can handle many simultaneous tasks much better than a 4 GHz CPU with only 2 cores. |
@@ -363,3 +361,16 @@ The graphical interface is the dining room. The terminal is the kitchen. Time to
 ---
 
 > **You just used a tool that senior engineers use every day. You belong here.**
+
+## Sources
+
+- [StatCounter Desktop OS Market Share Worldwide](https://gs.statcounter.com/os-market-share/desktop/worldwide) — Market-share reference for the module's Windows desktop OS example, included here because the claim sits inside a non-wrappable code block.
+- [Windows containers in Kubernetes](https://kubernetes.io/docs/concepts/windows/intro/) — Official Kubernetes documentation covering Windows worker-node support and Linux control-plane requirements.
+- [Magnetic-core memory](https://en.wikipedia.org/wiki/Magnetic-core_memory) — Background on early magnetic-core RAM and how one bit was stored per core.
+- [Harvard Mark II](https://en.wikipedia.org/wiki/Harvard_Mark_II) — Reference for the moth-in-relay anecdote behind the early "computer bug" story.
+- [MDN Web Docs: tabs.discard()](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/tabs/discard) — Useful illustration that browsers can discard tab contents to reduce memory pressure.
+- [Apollo Guidance Computer](https://en.wikipedia.org/wiki/Apollo_Guidance_Computer) — Further reading on the Apollo-era computer used as the module's smartphone comparison example.
+- [AWS Well-Architected Framework: Select the correct resource type, size, and number](https://docs.aws.amazon.com/wellarchitected/latest/cost-optimization-pillar/select-the-correct-resource-type-size-and-number.html) — Practical guidance on right-sizing cloud resources for cost efficiency.
+- [Computer](https://en.wikipedia.org/wiki/Computer) — A broad beginner-friendly overview of what a computer is and how its major parts fit together.
+- [Operating system](https://en.wikipedia.org/wiki/Operating_system) — Useful follow-up for the module's explanation of the OS as the part that coordinates hardware and programs.
+- [Random-access memory](https://en.wikipedia.org/wiki/Random-access_memory) — Additional background on RAM, including why it is temporary and why capacity affects performance.

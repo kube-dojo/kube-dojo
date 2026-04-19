@@ -37,7 +37,7 @@ In the real world, you'll need to edit files constantly:
 - **Scripts** are files that contain a sequence of commands (like a recipe card)
 - **Kubernetes manifests** are files that tell Kubernetes what to run (you'll get there!)
 
-Consider a real-world incident at a major tech company: a junior engineer needed to update a simple setting in a load balancer. They opened the `nginx.conf` file in `nano`, accidentally typed a few stray characters while trying to save, and saved the file. Within minutes, the entire site went down, costing thousands of dollars in revenue. Why? Because they were editing directly on the production server without realizing it, and a single typo in a configuration file can break a service. 
+Consider a realistic production mistake: an engineer editing a load balancer configuration directly on a live server could save stray characters into `nginx.conf`, and a single typo in a configuration file can break a service. 
 
 You need to be able to open a file, write in it, save it, and close it -- all from the terminal. No mouse. No graphical text editor. Just you and the keyboard. Learning to edit files safely in the terminal isn't just about writing text; it's about navigating the control room of your servers with precision.
 
@@ -62,7 +62,7 @@ We're starting with **nano** because:
 | nano | vim |
 |------|-----|
 | Works the way you'd expect | Has a steep learning curve |
-| Type and it types | You need to press `i` before you can type |
+| Type and it types | [You need to press `i` before you can type](https://raw.githubusercontent.com/vim/vim/master/runtime/doc/intro.txt) |
 | Menu at the bottom shows you how to save and quit | People famously get stuck and can't figure out how to exit |
 | Perfect for beginners | Powerful but overwhelming at first |
 
@@ -298,7 +298,7 @@ echo "Great job, chef! Your first script works!"
 
 Let's understand each line:
 
-- `#!/bin/bash` -- This is called a "shebang." It tells the system "use the bash program to run this file" when you execute it directly with `./my-first-script.sh`. In practice, you should include it in shell scripts you want to run directly, but a script can still be run without it if you invoke an interpreter explicitly, such as `bash my-first-script.sh`. (Yes, "shebang" is a real term.)
+- `#!/bin/bash` -- This is called a "shebang." It tells the system "use the bash program to run this file" [when you execute it directly with `./my-first-script.sh`. In practice, you should include it in shell scripts you want to run directly, but a script can still be run without it if you invoke an interpreter explicitly, such as `bash my-first-script.sh`](https://en.wikipedia.org/wiki/Shebang_%28Unix%29). (Yes, "shebang" is a real term.)
 - `echo` -- A command that prints text to the screen. Think of it as the kitchen yelling "Order up!"
 - `$(date)` -- Runs the `date` command and inserts the result. The `$()` syntax means "run this command and give me the output."
 - `$(whoami)` -- Runs `whoami`, which tells you your username.
@@ -318,7 +318,7 @@ Right now, the file is just text. The computer won't run it because it doesn't h
 chmod +x my-first-script.sh
 ```
 
-`chmod` stands for **ch**ange **mod**e. The `+x` means "add execute permission." You're telling the restaurant manager: "This isn't just a document -- it's a recipe that should be cooked."
+`chmod` stands for **ch**ange **mod**e. [The `+x` means "add execute permission."](https://en.wikipedia.org/wiki/Chmod) You're telling the restaurant manager: "This isn't just a document -- it's a recipe that should be cooked."
 
 ### Step 4: Run it
 
@@ -353,9 +353,9 @@ When you're ready, vim will be there. For now, nano is your friend.
 
 ## Did You Know?
 
-- **nano is a clone of a clone.** It was created as a free replacement for an editor called `pstrict` which was a replacement for `pstrict` ... actually, nano is a free replacement for `pico`, which was the editor built into the Pine email client from 1989. The name `nano` derives from the SI prefix system, reflecting its role as a successor to pico (nano is 1,000 times larger than pico).
+- **nano is closely related to `pico`.** It was created as a free replacement for `pico`, and the name is a playful nod to the SI prefixes `pico` and `nano`.
 
-- **The oldest surviving text editor still in use is `ed`, created in 1969.** It was written by Ken Thompson, one of the creators of Unix. `ed` is a "line editor" -- you can't see the whole file at once. You edit one line at a time. Engineers in the 1970s wrote entire operating systems using `ed`. Your experience with nano is luxurious by comparison.
+- **One early Unix text editor still worth knowing about is `ed`.** [It was written by Ken Thompson, one of the creators of Unix. `ed` is a "line editor" -- you can't see the whole file at once.](https://en.wikipedia.org/wiki/Ed_%28text_editor%29) You edit one line at a time. Engineers in the 1970s wrote entire operating systems using `ed`. Your experience with nano is luxurious by comparison.
 
 - **Configuration files run the world.** Nearly every piece of software reads a text configuration file when it starts up. Your web server, your database, Kubernetes itself -- they all read text files to know how to behave. The ability to edit these files from the terminal is one of the most practical skills in all of computing.
 
@@ -536,3 +536,11 @@ rm hello.txt kitchen-memo.txt kitchen-report.sh my-first-script.sh
 ---
 
 > **You just used a tool that senior engineers use every day. You belong here.**
+
+## Sources
+
+- [Vim Reference Manual: Introduction](https://raw.githubusercontent.com/vim/vim/master/runtime/doc/intro.txt) — Official Vim documentation covering modes and insert commands such as `i`.
+- [Shebang (Unix)](https://en.wikipedia.org/wiki/Shebang_%28Unix%29) — Background on how shebang lines affect direct script execution versus explicitly invoking an interpreter.
+- [Chmod](https://en.wikipedia.org/wiki/Chmod) — Reference for Unix file mode changes, including adding execute permission with `+x`.
+- [Ed (text editor)](https://en.wikipedia.org/wiki/Ed_%28text_editor%29) — Summary of `ed` as an early Unix line editor written by Ken Thompson in 1969.
+- [GNU nano](https://en.wikipedia.org/wiki/GNU_nano) — Further reading on nano's history, relationship to pico, and control-key interface.

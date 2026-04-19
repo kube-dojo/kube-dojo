@@ -89,8 +89,8 @@ Source Code  →  Compiler  →  Binary (executable)
 
 ```mermaid
 flowchart LR
-    A[Source Code<br>main.go] -->|Compiler| B(Translation Phase)
-    B -->|Machine Code| C[Binary Executable<br>./my-program]
+    A["Source Code<br>main.go"] -->|Compiler| B(Translation Phase)
+    B -->|Machine Code| C["Binary Executable<br>./my-program"]
     
     style A fill:#f9f,stroke:#333,stroke-width:2px
     style C fill:#bbf,stroke:#333,stroke-width:2px

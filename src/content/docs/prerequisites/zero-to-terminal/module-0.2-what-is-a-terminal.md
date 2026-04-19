@@ -116,7 +116,7 @@ You can save terminal commands in a file (called a **script** — think of it as
 
 ### 3. Remote Access
 
-Many servers are managed remotely without anyone sitting in front of a screen. In practice, engineers often use a terminal over SSH (Secure Shell), which OpenSSH describes as the basic remote login client, although cloud consoles and web admin tools also exist. If you want to work with servers — and in Kubernetes, you will — terminal access is a standard and important skill. ([OpenSSH manual](https://www.openssh.org/manual.html))
+Many servers are managed remotely without anyone sitting in front of a screen. In practice, engineers often use a terminal over [SSH (Secure Shell)](https://www.rfc-editor.org/info/rfc4251), which OpenSSH describes as the basic remote login client, although cloud consoles and web admin tools also exist. If you want to work with servers — and in Kubernetes, you will — terminal access is a standard and important skill. ([OpenSSH manual](https://www.openssh.org/manual.html))
 
 ### 4. Scripting and Repeatability
 
@@ -125,7 +125,7 @@ When you click through a GUI, the steps can be harder to document and repeat unl
 > **Stop and think**: Imagine you need to set up 10 identical servers for a new application. With a GUI, you'd click through the same setup screens 10 times, hoping you don't miss a checkbox on server #7. With a terminal, you write the setup commands once, save them in a script, and run that script on all 10 servers. Which approach is more likely to give you 10 identical servers?
 
 **A Documented Operational Mistake**
-A real example of operational risk comes from AWS. In its official summary of the February 28, 2017 Amazon S3 disruption, AWS said an authorized team member entered one input incorrectly in an operational command, which removed more servers than intended and contributed to a major outage in `us-east-1`. AWS later added safeguards to the tool to reduce the chance of the same mistake happening again. The lesson here is not that terminals are bad or GUIs are bad. The lesson is that repeatable tooling, reviews, and safety checks matter when one action can affect many systems. ([AWS postmortem](https://aws.amazon.com/message/41926/))
+A real example of operational risk comes from AWS. In its official summary of the [February 28, 2017 Amazon S3 disruption](https://aws.amazon.com/message/41926/), AWS said an authorized team member entered one input incorrectly in an operational command, which removed more servers than intended and contributed to a major outage in `us-east-1`. AWS later added safeguards to the tool to reduce the chance of the same mistake happening again. The lesson here is not that terminals are bad or GUIs are bad. The lesson is that repeatable tooling, reviews, and safety checks matter when one action can affect many systems. ([AWS postmortem](https://aws.amazon.com/message/41926/))
 
 > **GUI vs Terminal — Honest Trade-offs**
 > We praise the terminal a lot here, but GUIs genuinely win in several areas. If you are looking at visual monitoring dashboards (like Grafana) to spot a sudden spike in traffic, editing complex architecture diagrams, or exploring a brand-new application for the very first time, a GUI is vastly superior. The rule of thumb: use GUIs for consuming visual information and initial exploration; use the terminal for text manipulation, automation, and precise execution.
@@ -134,9 +134,9 @@ A real example of operational risk comes from AWS. In its official summary of th
 
 ## Did You Know?
 
-> 1. **The first computers had no screens at all.** Early programmers used punch cards — literal pieces of cardboard with holes in them — to give instructions to computers. The terminal is the modern descendant of those text-based interactions. GUIs didn't appear until the 1970s and didn't go mainstream until the 1980s with the Apple Macintosh.
+> 1. **Many early computers had no interactive screens at all.** Early programmers used [punch cards](https://en.wikipedia.org/wiki/Punched_card) — literal pieces of cardboard with holes in them — to give instructions to computers. The terminal is the modern descendant of those text-based interactions. [GUIs didn't appear until the 1970s and didn't go mainstream until the 1980s with the Apple Macintosh](https://en.wikipedia.org/wiki/Graphical_user_interface).
 >
-> 2. **The word "terminal" comes from the physical device.** In the 1960s-70s, a "terminal" was an actual machine — a keyboard and a screen (or printer) connected to a mainframe computer. Today's terminal is a software program that simulates that old device. It's called a "terminal emulator" because it emulates (imitates) the original hardware.
+> 2. **The word "terminal" comes from the physical device.** In the 1960s-70s, [a "terminal" was an actual machine — a keyboard and a screen (or printer) connected to a mainframe computer](https://en.wikipedia.org/wiki/Computer_terminal). Today's terminal is a software program that simulates that old device. It's called a "terminal emulator" because it emulates (imitates) the original hardware.
 >
 > 3. **A huge amount of internet infrastructure is operated with terminal-based tools and automation.** Many servers and cloud workloads are administered from shells, scripts, and remote management tools rather than local desktop apps. You do not need the terminal for every task, but it is a core skill for system administration, cloud work, and Kubernetes.
 
@@ -170,13 +170,13 @@ Windows has a few options:
 2. Type **PowerShell**.
 3. Press **Enter**.
 
-**Option B: Windows Terminal** (recommended, free from Microsoft Store)
+**Option B: [Windows Terminal](https://learn.microsoft.com/en-us/windows/terminal/)** (recommended, free from Microsoft Store)
 1. Install "Windows Terminal" from the Microsoft Store.
 2. Open it from the Start menu.
 
 **Option C: WSL** (Windows Subsystem for Linux — the best option for this curriculum)
 1. Open PowerShell as Administrator.
-2. Type: `wsl --install`
+2. Type: [`wsl --install`](https://learn.microsoft.com/en-us/windows/wsl/install)
 3. Restart your computer.
 4. Open "Ubuntu" from the Start menu.
 
@@ -344,9 +344,16 @@ Everyone makes these when starting out. That's completely normal.
 | Typos in command names | `echoo: command not found` | Check your spelling. The terminal is strict — `echoo` is not `echo` |
 | Wrong capitalization | `Echo: command not found` | Most commands are lowercase. `echo` works, `Echo` doesn't |
 | Forgetting closing quote | The terminal waits for more input with `>` | Type the closing `"` and press Enter, or press **Ctrl+C** to cancel |
-| Panicking when something looks wrong | Stress! | Press **Ctrl+C** to cancel almost anything. It's your emergency stop button |
+| Panicking when a command is taking too long | Stress! | Press **Ctrl+C** to interrupt most running commands. It's your first emergency stop to try |
 
-> **Ctrl+C is your best friend.** If anything goes wrong, if the terminal seems stuck, if you accidentally started something you didn't mean to — press **Ctrl+C**. It cancels the current operation. Think of it as the fire extinguisher in the kitchen. Always within reach.
+> **Ctrl+C — your first-line interrupt.** When a command is running too long, printing forever, or you realize you started the wrong thing, press **Ctrl+C**. It sends an *interrupt signal* (SIGINT) to the running command, and most command-line tools respond by stopping.
+>
+> What it does NOT do:
+> - It doesn't help if the *terminal window itself* is frozen (try closing and reopening the window).
+> - It doesn't always work inside full-screen programs like `vim`, `less`, or `top` — those have their own quit keys (`:q`, `q`, `q`).
+> - A few programs deliberately trap it and keep running; in that case try **Ctrl+\\** (SIGQUIT) or, as a last resort, close the terminal.
+>
+> For the everyday beginner mistakes in this module, Ctrl+C will get you out.
 
 ### Common Mistakes in Production
 
@@ -354,7 +361,7 @@ When you move from learning to working on real servers, the stakes get higher. H
 
 | Production Mistake | Real Consequence | How to Prevent It |
 |--------------------|------------------|-------------------|
-| Running a command on the wrong server because you didn't read the prompt | A mistake like this can hit production instead of staging. In GitLab's January 31, 2017 database outage, the company reported that an accidental removal of data from its primary database caused a major outage and some unrecoverable production data loss. ([GitLab postmortem](https://about.gitlab.com/blog/postmortem-of-database-outage-of-january-31/)) | Always double-check the `username@hostname` in your prompt before pressing Enter on a destructive command. |
+| Running a command on the wrong server because you didn't read the prompt | A mistake like this can hit production instead of staging. In [GitLab's January 31, 2017 database outage](https://about.gitlab.com/blog/postmortem-of-database-outage-of-january-31/), the company reported that an accidental removal of data from its primary database caused a major outage and some unrecoverable production data loss. ([GitLab postmortem](https://about.gitlab.com/blog/postmortem-of-database-outage-of-january-31/)) | Always double-check the `username@hostname` in your prompt before pressing Enter on a destructive command. |
 | Copying and pasting multiple lines of commands from the internet directly into the terminal | The terminal might execute hidden malicious commands or run incomplete commands immediately. | Paste into a plain text editor first, review exactly what the commands do, and then copy them into your terminal. |
 | Running a script without testing it first | A small typo in an automated script takes down 50 servers simultaneously instead of just one. | Test scripts on a single, non-production server (a staging environment) before running them everywhere. |
 
@@ -369,7 +376,7 @@ Test your understanding! Try to answer before revealing the solution.
 <details>
 <summary>Show Answer</summary>
 
-You should immediately press **Ctrl+C**. This is the universal "stop what you're doing" signal in the terminal. When you press this shortcut, it sends an interrupt signal to the running process, telling it to terminate immediately. This is essential because it gives you a reliable escape hatch if a command hangs, takes too long, or starts doing something you didn't intend. Knowing you can always stop a process gives you the confidence to explore and learn safely.
+You should press **Ctrl+C**. It sends an interrupt signal (technically SIGINT) to the running command, and most command-line tools respond by stopping. This gives you a reliable escape hatch for the common case — a command that's printing too much, running too long, or doing something you didn't intend. It's not universal: full-screen programs like `vim` or `less` have their own quit keys, and a handful of programs trap the signal. But for the everyday mistakes in this module, Ctrl+C will get you out.
 
 </details>
 
@@ -491,3 +498,15 @@ You've completed this exercise when you can:
 You've taken the first step — you opened a terminal and ran commands. In the next modules, you'll learn to navigate the filesystem, work with files, and start building real skills.
 
 **Next Module**: [Module 0.3: First Terminal Commands](../module-0.3-first-commands/) — Learn how to open the terminal and run your first commands.
+
+## Sources
+
+- [RFC 4251: The Secure Shell (SSH) Protocol Architecture](https://www.rfc-editor.org/info/rfc4251) — Defines SSH and its role in secure remote login and related secure network services.
+- [Summary of the Amazon S3 Service Disruption in the Northern Virginia (US-EAST-1) Region](https://aws.amazon.com/message/41926/) — AWS's official postmortem for the February 28, 2017 S3 outage and the safeguards added afterward.
+- [Punched card](https://en.wikipedia.org/wiki/Punched_card) — Explains punched cards as an early medium for supplying programs and data to computers.
+- [Graphical user interface](https://en.wikipedia.org/wiki/Graphical_user_interface) — Summarizes GUI history, including 1970s origins and 1980s mainstream adoption on personal computers.
+- [Computer terminal](https://en.wikipedia.org/wiki/Computer_terminal) — Describes historical hardware terminals and why modern terminal apps are called terminal emulators.
+- [Windows Terminal](https://learn.microsoft.com/en-us/windows/terminal/) — Microsoft's official documentation for the Windows Terminal application.
+- [Install WSL](https://learn.microsoft.com/en-us/windows/wsl/install) — Official Microsoft guide for installing WSL with `wsl --install` and completing setup.
+- [Postmortem of database outage of January 31](https://about.gitlab.com/blog/postmortem-of-database-outage-of-january-31/) — GitLab's incident write-up covering the outage and production data loss described in the module.
+- [Command line crash course](https://developer.mozilla.org/en-US/docs/Learn/Tools_and_testing/Understanding_client-side_tools/Command_line) — Beginner-friendly follow-up that reinforces what the terminal is and how to use basic commands.
