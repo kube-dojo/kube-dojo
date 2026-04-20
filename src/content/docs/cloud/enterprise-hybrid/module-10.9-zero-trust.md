@@ -20,11 +20,11 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In February 2024, a pharmaceutical company with 4,500 employees and a traditional perimeter-based security model was breached through a contractor's compromised VPN credentials. The attacker used the VPN to access the internal network, then moved laterally across 14 systems over 18 days before being detected. They exfiltrated clinical trial data, patient records, and intellectual property valued at an estimated $340 million. The investigation revealed that once inside the VPN perimeter, the attacker had access to 83% of internal services because the security model assumed that anything inside the network was trusted.
+Organizations that rely on perimeter-based VPN access can suffer serious breaches when attackers reuse stolen credentials and then move laterally across broadly reachable internal services before detection. The lesson is that network location should not substitute for identity and authorization.
 
 This is the fundamental flaw of perimeter security: it creates a hard outer shell and a soft, vulnerable interior. A traditional VPN gives you an all-or-nothing binary state. You are either considered outside and have absolutely no access, or you are inside and have access to almost everything on the corporate flat network. In a modern computing environment where contractors, remote employees, managed cloud services, and ephemeral Kubernetes clusters all need varying levels of granular access, the perimeter model is dangerously inadequate and operationally brittle.
 
-Zero Trust flips this model entirely. Instead of declaring "trust everything inside the network," Zero Trust operates on the principle of "trust nothing, verify everything." Every single request must prove its identity, demonstrate it is authorized for the specific action, and pass through rigorous policy evaluation before being granted access. This applies regardless of whether the request originates from a deep internal data center, a Kubernetes pod, an employee's laptop at a coffee shop, or a third-party cloud service. In this module, you will learn the core principles of Zero Trust architecture, how Identity-Aware Proxies work, how to implement micro-segmentation in Kubernetes, how to replace legacy VPNs, and how to secure your software supply chain using SLSA frameworks.
+Zero Trust flips this model entirely. Each request should prove its identity, demonstrate it is authorized for the specific action, and pass through policy evaluation before being granted access. This applies regardless of whether the request originates from a deep internal data center, a Kubernetes pod, an employee's laptop at a coffee shop, or a third-party cloud service. In this module, you will learn the core principles of Zero Trust architecture, how Identity-Aware Proxies work, how to implement micro-segmentation in Kubernetes, how to replace legacy VPNs, and how to secure your software supply chain using SLSA frameworks.
 
 ---
 
@@ -34,7 +34,7 @@ Zero trust is not a single product or tool you can buy off the shelf. It is an a
 
 ### The Three Pillars
 
-The entire zero trust philosophy rests on three major pillars. Every architectural decision you make should map back to one of these core tenets.
+The entire zero trust philosophy rests on [three major pillars](https://learn.microsoft.com/en-us/security/zero-trust/adopt/zero-trust-adoption-overview). Every architectural decision you make should map back to one of these core tenets.
 
 ```mermaid
 flowchart TD
@@ -88,7 +88,7 @@ Think of traditional security like a medieval castle with a moat. Once you lower
 
 > **Stop and think**: If there is no VPN, how do employees securely access internal applications without exposing those applications to the public internet?
 
-Google pioneered Zero Trust at enterprise scale with BeyondCorp, their internal access model that eliminated the corporate VPN entirely. Every Google employee accesses internal applications the same way from any network. There is no concept of a "corporate network" that grants additional trust or privileges.
+Google pioneered Zero Trust at enterprise scale with [BeyondCorp, their internal access model that eliminated the corporate VPN entirely](https://www.usenix.org/publications/login/dec14/ward). Every Google employee accesses internal applications the same way from any network. There is no concept of a "corporate network" that grants additional trust or privileges.
 
 ### BeyondCorp Architecture
 
@@ -115,14 +115,14 @@ There are several ways to implement an IAP depending on your cloud provider and 
 
 | Provider | Service | How It Works |
 | :--- | :--- | :--- |
-| **GCP** | Cloud IAP | Built-in proxy for GCE, GKE, App Engine. Checks Google Identity + device trust via Endpoint Verification. |
+| **GCP** | Cloud IAP | [Built-in proxy for GCE, GKE, App Engine. Checks Google Identity + device trust via Endpoint Verification.](https://docs.cloud.google.com/iap/docs) |
 | **AWS** | Verified Access | Evaluates identity (IAM Identity Center) + device posture (Jamf, CrowdStrike) per request. Runs at the VPC level. |
-| **Azure** | Azure AD Application Proxy | Proxies requests to on-prem/cloud apps. Evaluates Conditional Access policies per request. |
-| **Open Source** | Pomerium, OAuth2-proxy, Teleport | Self-hosted proxies with OIDC integration. Full control, requires operational effort. |
+| **Azure** | Azure AD Application Proxy | [Proxies requests to on-prem/cloud apps. Evaluates Conditional Access policies per request.](https://learn.microsoft.com/en-us/azure/active-directory/app-proxy/application-proxy-secure-api-access) |
+| **Open Source** | Self-hosted identity-aware proxies | Self-hosted proxies can integrate with identity providers, but you must operate and secure the access layer yourself. |
 
 ### AWS Verified Access for Kubernetes
 
-If you are operating in AWS, Verified Access provides a native way to implement Zero Trust without managing proxy infrastructure yourself. Verified Access integrates directly with your Identity Provider (IdP) and your device management solutions to evaluate trust on every request.
+If you are operating in AWS, Verified Access provides a native way to implement Zero Trust without managing proxy infrastructure yourself. [Verified Access integrates directly with your Identity Provider (IdP) and your device management solutions to evaluate trust on every request.](https://docs.aws.amazon.com/verified-access/latest/ug/how-it-works.html)
 
 The following script demonstrates how to configure AWS Verified Access to protect a Kubernetes Ingress endpoint.
 
@@ -295,7 +295,7 @@ spec:
     - Egress
 ```
 
-Once default-deny is in place, pods cannot even resolve DNS names. We must explicitly allow egress to the cluster DNS provider.
+Once default-deny is in place, [pods cannot even resolve DNS names. We must explicitly allow egress to the cluster DNS provider.](https://kubernetes.io/docs/concepts/services-networking/network-policies/)
 
 ```yaml
 # Layer 2: Allow DNS resolution (required for all pods)
@@ -419,7 +419,7 @@ spec:
 
 ### Istio Authorization Policies (Layer 4)
 
-While Network Policies control traffic at the IP and port level, a service mesh like Istio allows you to enforce zero trust at the application layer. Istio uses SPIFFE identities to authenticate services and Authorization Policies to determine if a specific request path and HTTP method are allowed. We separate these documents for reliable parsing.
+While Network Policies control traffic at the IP and port level, a service mesh like Istio allows you to enforce zero trust at the application layer. [Istio uses SPIFFE identities to authenticate services and Authorization Policies to determine if a specific request path and HTTP method are allowed.](https://istio.io/latest/docs/ops/best-practices/security/) We separate these documents for reliable parsing.
 
 First, we define an authorization policy that allows specific service accounts to perform exact HTTP methods on targeted paths.
 
@@ -497,7 +497,7 @@ flowchart LR
 
 ### kubectl Access Without VPN
 
-Accessing the Kubernetes API server securely is often the most challenging aspect of removing the VPN. Teleport acts as a Zero Trust proxy specifically designed for infrastructure access, eliminating the need for long-lived static kubeconfig files and VPN access to the control plane. We deploy the agent and its configuration separately.
+Accessing the Kubernetes API server securely is often the most challenging aspect of removing the VPN. [Teleport acts as a Zero Trust proxy specifically designed for infrastructure access, eliminating the need for long-lived static kubeconfig files and VPN access to the control plane.](https://github.com/gravitational/teleport) We deploy the agent and its configuration separately.
 
 First, we deploy the Teleport agent.
 
@@ -709,10 +709,10 @@ spec:
 
 ## Did You Know?
 
-1. Google's BeyondCorp project started in 2011 after Operation Aurora, a sophisticated cyberattack from China that compromised Google's internal systems through a VPN vulnerability. Google spent 8 years migrating from perimeter security to BeyondCorp, making the transition for over 100,000 employees. By 2019, no Google employee used a VPN for internal access. The total cost of the migration was estimated at over $500 million, but Google calculated it saved them $4 billion in prevented breach costs over the following 5 years.
-2. The SLSA framework was created by Google in 2021 based on their internal "Binary Authorization for Borg" (BAB) system, which has been mandatory for all Google production deployments since 2013. Every binary running in Google's production environment must have verifiable provenance -- a cryptographically signed attestation of how, when, and where it was built. This prevented multiple insider threats and supply chain attacks that would have otherwise succeeded.
-3. Network Policies in Kubernetes are implemented by the CNI plugin, not by Kubernetes itself. This means that if your CNI does not support Network Policies (like the default kubenet in some managed services or Flannel without extension), your NetworkPolicy resources are silently ignored -- they exist as objects but have zero enforcement. Calico, Cilium, and Azure CNI all support Network Policies. Always verify enforcement, not just resource creation.
-4. Pomerium, the open-source Identity-Aware Proxy, was created by engineers who found that Google's BeyondCorp papers described a brilliant architecture but provided no open-source implementation. Pomerium reached 10,000 GitHub stars in 2024 and is used by organizations ranging from 50-person startups to Fortune 500 companies. The average Pomerium deployment replaces 3-5 VPN appliances, saving approximately $120,000/year in licensing costs.
+Google has publicly described BeyondCorp as a multi-year migration away from privileged network access and traditional VPN-based trust for employee access.
+SLSA is a supply-chain security framework centered on provenance and stronger assurances about how software artifacts are built and verified.
+3. [Network Policies in Kubernetes are implemented by the CNI plugin, not by Kubernetes itself. This means that if your CNI does not support Network Policies (like the default kubenet in some managed services or Flannel without extension), your NetworkPolicy resources are silently ignored -- they exist as objects but have zero enforcement.](https://kubernetes.io/docs/concepts/services-networking/network-policies/) Use a CNI plugin with documented NetworkPolicy support, and verify enforcement in your own cluster rather than assuming policy objects are enforced. Always verify enforcement, not just resource creation.
+Pomerium is an open-source identity-aware proxy; evaluate product fit, scale, and operating cost against your own environment rather than assuming universal savings figures.
 
 ---
 
@@ -722,8 +722,8 @@ spec:
 | :--- | :--- | :--- |
 | **Zero Trust without identity foundation** | Teams jump to micro-segmentation and IAP without first establishing strong identity (OIDC, device trust, service accounts). | Start with identity: deploy OIDC for humans, SPIFFE for services, device trust for endpoints. Then layer on micro-segmentation and IAP. |
 | **Network Policies without default deny** | Teams add "allow" policies but never set the default deny baseline. Pods can still communicate freely on paths without explicit policies. | Always start with a default-deny NetworkPolicy in every namespace. Then add explicit allow policies for each legitimate communication path. |
-| **mTLS in the mesh but plaintext sidecars** | Service mesh provides mTLS between proxies, but the connection from the proxy to the application container inside the same pod is plaintext on localhost. | This is expected behavior -- localhost traffic within a pod is considered trusted. If you need end-to-end encryption (e.g., for FIPS compliance), the application itself must implement TLS. |
-| **VPN removal without alternative** | Security team removes the VPN before deploying IAP or Teleport. Developers cannot access anything. Shadow IT VPN tunnels appear. | Deploy the Zero Trust access layer first (IAP, Teleport). Run it in parallel with the VPN for 3-6 months. Only decommission the VPN after all access patterns are migrated. |
+| **mTLS in the mesh but plaintext sidecars** | [Service mesh provides mTLS between proxies, but the connection from the proxy to the application container inside the same pod is plaintext on localhost.](https://istio.io/latest/docs/ops/configuration/traffic-management/tls-configuration/) | This is expected behavior -- localhost traffic within a pod is considered trusted. If you need end-to-end encryption (e.g., for FIPS compliance), the application itself must implement TLS. |
+| **VPN removal without alternative** | Security team removes the VPN before deploying IAP or Teleport. Developers cannot access anything. Shadow IT VPN tunnels appear. | Deploy the Zero Trust access layer first and run it alongside the VPN long enough to validate real access patterns before decommissioning the VPN. |
 | **Image signing without admission enforcement** | CI/CD pipeline signs images with cosign, but no admission webhook verifies signatures. Unsigned images can still be deployed. | Deploy Kyverno or Gatekeeper with image verification policies. Signing without enforcement is security theater. |
 | **Overly broad Istio AuthorizationPolicies** | Teams write policies with `action: ALLOW` that match too broadly, effectively allowing everything. The policy exists but does not restrict. | Use deny-by-default: start with an AuthorizationPolicy that denies all, then add specific allow rules for each legitimate path. Test with `istioctl analyze`. |
 
@@ -1167,3 +1167,19 @@ rm /tmp/zero-trust-cluster.yaml
 ## Next Module
 
 With Zero Trust securing your infrastructure, it is time to optimize costs at enterprise scale. Head to [Module 10.10: FinOps at Enterprise Scale](../module-10.10-enterprise-finops/) to learn cloud economics, Enterprise Discount Programs, forecasting, chargeback models for shared clusters, and the true cost of multi-cloud operations.
+
+## Sources
+
+- [Microsoft Zero Trust adoption overview](https://learn.microsoft.com/en-us/security/zero-trust/adopt/zero-trust-adoption-overview) — Overview of Microsoft’s zero trust model, including core principles such as explicit verification, least privilege, and breach assumption.
+- [BeyondCorp: A New Approach to Enterprise Security](https://www.usenix.org/publications/login/dec14/ward) — Primary public paper describing BeyondCorp and the move away from privileged intranet and VPN-based trust.
+- [Google Cloud Identity-Aware Proxy documentation](https://docs.cloud.google.com/iap/docs) — Product documentation for protecting applications with identity-aware and device-aware access controls on Google Cloud.
+- [AWS Verified Access: How it works](https://docs.aws.amazon.com/verified-access/latest/ug/how-it-works.html) — Explains how Verified Access evaluates each request using trust providers, user identity, device context, and policy.
+- [Microsoft Entra Application Proxy secure API access](https://learn.microsoft.com/en-us/azure/active-directory/app-proxy/application-proxy-secure-api-access) — Describes publishing private applications behind Entra Application Proxy with authentication, authorization, and Conditional Access controls.
+- [Kubernetes Network Policies](https://kubernetes.io/docs/concepts/services-networking/network-policies/) — Authoritative reference for default-deny behavior, DNS exceptions, and the requirement for network-plugin enforcement.
+- [Istio security best practices](https://istio.io/latest/docs/ops/best-practices/security/) — Covers how mutual TLS and AuthorizationPolicy work together for service-to-service security in Istio.
+- [Teleport](https://github.com/gravitational/teleport) — Upstream project for identity-based infrastructure access with SSO, short-lived credentials, audit trails, and Kubernetes access.
+- [Istio TLS configuration](https://istio.io/latest/docs/ops/configuration/traffic-management/tls-configuration/) — Explains where Istio originates or terminates TLS and how sidecar-to-application traffic is handled.
+- [Cosign verification documentation](https://github.com/sigstore/cosign/blob/main/doc/cosign_verify.md) — Documents keyless signature verification using expected certificate identity and OIDC issuer checks.
+- [NIST SP 800-207: Zero Trust Architecture](https://csrc.nist.gov/pubs/sp/800/207/final) — Canonical zero trust architecture reference for the model, terminology, and design goals.
+- [SLSA Framework Repository](https://github.com/slsa-framework/slsa) — Upstream home for the SLSA specification and provenance framework referenced in the module.
+- [Lessons From BeyondCorp](https://www.usenix.org/publications/login/summer2017/peck) — Experience report on rolling out BeyondCorp-style access controls and the operational lessons from gradual migration.
