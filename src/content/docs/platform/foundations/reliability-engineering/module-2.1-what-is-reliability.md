@@ -25,17 +25,17 @@ After completing this module, you will be able to:
 
 ## The Incident That Changed Everything
 
-**December 24th, 2012. Netflix headquarters.**
+**During a major holiday-period cloud outage.**
 
-The on-call engineer stares at her dashboard in disbelief. Christmas Eve, and AWS's US-East region has just entered what would become one of its most infamous outages. Netflix's entire streaming service—the thing that millions of families planned to use during their holiday gatherings—is going dark.
+A major cloud outage during a peak-traffic holiday period illustrates why reliability engineering matters most when demand and user expectations are both high.
 
 But something unexpected happens.
 
-While other companies scramble, while their engineers panic and their executives field angry customer calls, Netflix's systems are... recovering. Automatically. Within minutes, traffic is rerouting to other regions. The streaming continues. Most customers never notice.
+Teams that invest in failover, graceful degradation, and recovery automation are far better positioned to limit user impact when a cloud dependency fails.
 
 The secret? **Years of reliability engineering.**
 
-Netflix hadn't hoped for the best. They'd engineered for the worst. They'd asked: "What happens when AWS fails?" And they'd built systems that could answer: "We keep streaming."
+Teams that deliberately test cloud-dependency failure are better prepared to keep serving users when a provider has problems.
 
 ```mermaid
 flowchart TD
@@ -141,7 +141,7 @@ Everyone: "..."
 
 The problem? "Reliable" means different things to different people. We need precision.
 
-**Reliability** is the probability that a system performs its intended function for a specified period under stated conditions.
+**Reliability** is [the probability that a system performs its intended function for a specified period under stated conditions](https://csrc.nist.gov/glossary/term/reliability).
 
 Three components must be defined:
 
@@ -163,7 +163,7 @@ flowchart TD
 |-------|---------|
 | "The system is reliable" | "The system successfully processes 99.9% of valid requests within 2 seconds" |
 | "High availability" | "Available 99.95% of the time, measured monthly" |
-| "Data is safe" | "99.999999999% of objects stored survive over 10 years" |
+| "Data is safe" | "Very high annual object-durability target" |
 | "Fast enough" | "95th percentile latency under 200ms" |
 
 ```text
@@ -232,9 +232,9 @@ quadrantChart
 ```
 
 **Real-World Examples:**
-- **High Availability + Low Reliability (UNRELIABLE):** API always responds, but 5% of responses are errors.
+- **High Availability + Low Reliability (UNRELIABLE):** API usually responds, but 5% of responses are errors.
 - **Low Availability + High Reliability (FLAKY):** Mainframe with weekly maintenance windows—when up, zero errors.
-- **High Both (IDEAL):** Modern streaming services—always available, almost always works.
+- **High Both (IDEAL):** Modern streaming services—available most of the time, almost always works.
 - **Low Both (WORST):** That internal tool nobody maintains—down half the time, buggy the other half.
 
 **Durability: The Third Dimension**
@@ -274,7 +274,7 @@ How they achieve it:
 
 > **Did You Know?**
 >
-> Amazon S3's famous "11 nines" durability (99.999999999%) means if you store 10 million objects, you'd statistically expect to lose one every 10,000 years. That's not availability—S3 can be temporarily unavailable while still being durable. Your data is safe; you just can't access it right now.
+> [Amazon S3's published 11-nines durability target](https://docs.aws.amazon.com/AmazonS3/latest/userguide/DataDurability.html) implies an extremely low expected rate of object loss. That's not availability—S3 can be temporarily unavailable while still being durable. Your data is safe; you just can't access it right now.
 >
 > This distinction matters enormously. When S3 has an "outage," your files aren't being deleted—they're just temporarily inaccessible. Durability and availability are independent properties.
 
@@ -372,7 +372,7 @@ If you handle 1,000,000 requests per day:
 
 **The Exponential Cost of Each Nine:**
 
-Each additional nine is approximately **10x harder and more expensive** to achieve. Here's why:
+Each additional nine usually requires disproportionately more engineering effort and cost to achieve. Here's why:
 
 ```text
 THE EXPONENTIAL COST OF NINES
@@ -511,7 +511,7 @@ What this means:
 > | Decrease MTTR | MTBF=100h, MTTR=1h | MTTR=6min | **10x faster recovery** |
 >
 > Preventing all failures is hard—you're fighting complexity, unknown unknowns, and Murphy's Law. But recovering faster? You can invest in:
-> - Better monitoring (detect failures immediately)
+> - Better monitoring (detect failures faster)
 > - Automated rollbacks (fix some failures in seconds)
 > - Runbooks and training (human recovery is faster)
 > - Simpler architectures (easier to debug)
@@ -522,7 +522,7 @@ What this means:
 
 Here's a concept that changed how the industry thinks about reliability: the **error budget**.
 
-An error budget is the acceptable amount of unreliability—the difference between 100% and your reliability target.
+An error budget is [the acceptable amount of unreliability—the difference between 100% and your reliability target](https://cloud.google.com/service-mesh/v1.24/docs/observability/design-slo).
 
 ```text
 ERROR BUDGET: THE CONCEPT
@@ -706,22 +706,22 @@ The right trade-off depends entirely on what you're building:
 
 ### 3.3 The 100% Reliability Myth
 
-Let's talk about something engineers need to accept: **100% reliability is impossible**.
+Let's talk about something engineers need to accept: **100% reliability is not achievable in real-world systems**.
 
-Not "very expensive." Not "only for Google." **Physically impossible.**
+Not merely "very expensive." Not just "only for Google." **Practically unattainable in real-world systems.**
 
-**WHY 100% RELIABILITY CANNOT EXIST**
+**WHY 100% RELIABILITY IS NOT ACHIEVABLE IN REAL-WORLD SYSTEMS**
 
 **THE PHYSICS PROBLEM**
 - Hardware fails randomly (transistors wear out, solder cracks)
-- Cosmic rays flip bits in memory (really! ~1 error per GB per month)
+- Memory errors and other hardware faults still occur in real systems, including bit corruption events.
 - Power grids have outages (transformers explode, trees fall)
 - Datacenter cooling fails (air conditioners break)
 
 **THE DEPENDENCY PROBLEM**
-- DNS can fail (Dyn DDoS attack 2016 took down half the internet)
-- Cloud providers have outages (AWS has had 6+ major outages)
-- Certificate authorities get compromised (DigiNotar 2011)
+- DNS providers can suffer major outages or attacks, making many popular sites unreachable for large groups of users.
+- Cloud providers have had major outages, so customer architectures still need to plan for provider failure.
+- [Certificate authorities get compromised (DigiNotar 2011)](https://www.cisa.gov/news-events/alerts/2011/08/30/fraudulent-diginotar-ssl-certificate)
 - BGP gets hijacked (routing your traffic to wrong places)
 
 **THE HUMAN PROBLEM**
@@ -746,7 +746,7 @@ Cost grows EXPONENTIALLY. At some point, another nine costs more than it's worth
 >
 > Google's Chubby lock service **intentionally introduces planned outages**. Why? To ensure that dependent services don't accidentally build assumptions about 100% availability.
 >
-> If Chubby were "too reliable," services would build implicit dependencies on it always being there. Then when Chubby eventually had an unplanned outage, those services would fail catastrophically—they never tested for Chubby being down.
+> If Chubby were "too reliable," services would build implicit dependencies on it always being there. Then when Chubby eventually had an unplanned outage, those services would fail catastrophically—they had not adequately tested for Chubby being down.
 >
 > By being deliberately unreliable (within SLA), Chubby forces dependent services to handle its failures gracefully. Controlled unreliability builds resilience.
 >
@@ -754,7 +754,7 @@ Cost grows EXPONENTIALLY. At some point, another nine costs more than it's worth
 
 > **War Story: The 99.99% Promise**
 >
-> A SaaS company promised enterprise customers "99.99% availability" in contracts. Marketing loved the number. Sales closed deals with it. Nobody did the math.
+> Teams sometimes promise availability numbers that their current incident response capability cannot realistically support.
 >
 > ```text
 > THE MATH NOBODY DID
@@ -783,7 +783,7 @@ Cost grows EXPONENTIALLY. At some point, another nine costs more than it's worth
 > The SLA credits alone cost 3x what it would have taken to fix the problems!
 > ```
 >
-> The fix wasn't better reliability—it was honest expectations. They renegotiated to 99.9% (43 minutes/month), invested in faster incident response, and actually hit their targets.
+> The lesson is to set customer commitments that match demonstrated operational capability, then improve response and resilience from there.
 >
 > Customers were happier with a realistic promise kept than an ambitious promise broken.
 >
@@ -896,17 +896,17 @@ These are the patterns that look reasonable but lead to unreliable systems:
 
 ## Did You Know?
 
-- **The term "reliability engineering" emerged from the U.S. military in the 1950s.** Early missiles had a 60% failure rate—more than half of them failed! The military realized they needed systematic approaches to reliability, not just better components. The discipline they created eventually made it to software.
+- [**Reliability engineering developed as a formal discipline in the mid-20th century, driven in part by military and aerospace electronics programs.**](https://en.wikipedia.org/wiki/Reliability_engineering) Those methods later influenced software reliability practice.
 
-- **MTBF was originally measured in flight hours** for aircraft. A plane with 10,000 hour MTBF meant you'd expect one failure per 10,000 hours of flight—not calendar time. This is why "flight hours" is still a common reliability metric in aviation.
+- **In hardware-heavy domains, MTBF is often tracked in usage-based units such as operating hours.** This reflects usage exposure rather than calendar time.
 
-- **The first software reliability model** was created by John Musa at Bell Labs in 1975. He applied hardware reliability mathematics to software, founding the field of software reliability engineering. His insight: software bugs follow statistical patterns just like hardware failures.
+- **The first software reliability model** was created by [John Musa at Bell Labs in 1975](https://en.wikipedia.org/wiki/John_D._Musa). He applied hardware reliability mathematics to software, founding the field of software reliability engineering. His insight: software bugs follow statistical patterns just like hardware failures.
 
-- **Netflix pioneered the "Chaos Monkey" approach in 2010**, randomly killing production instances to ensure their systems could handle failures. Why the name? Because it's like having a monkey loose in your data center, randomly unplugging things. This evolved into chaos engineering—deliberately injecting failures to build confidence. If you haven't tested a failure, you don't know if you can survive it.
+- **Netflix popularized the "Chaos Monkey" approach**, randomly killing production instances to ensure their systems could handle failures. Why the name? Because it's like having a monkey loose in your data center, randomly unplugging things. This evolved into chaos engineering—deliberately injecting failures to build confidence. If you haven't tested a failure, you don't know if you can survive it.
 
-- **The Space Shuttle had five redundant computers** running different software written by different teams. Why? A single bug could kill astronauts. The fifth computer ran entirely different software to protect against systematic bugs. This is the ultimate "defense in depth."
+- [**The Space Shuttle had five redundant computers**](https://en.wikipedia.org/wiki/Space_Shuttle) running different software written by different teams. Why? A single bug could kill astronauts. The fifth computer ran entirely different software to protect against systematic bugs. This is the ultimate "defense in depth."
 
-- **Amazon's internal SLA is stricter than external SLAs.** They aim for internal services to be ~10x more reliable than what they promise customers. Why? Because customers experience the product of all internal reliabilities, not the average.
+- **Teams often set internal reliability objectives stricter than customer-facing SLAs.** This creates buffer for multi-service dependency chains and unexpected failures.
 
 ---
 
@@ -942,7 +942,7 @@ Users are experiencing a service that is almost always reachable, but frequently
 <details>
 <summary>Answer</summary>
 
-The monthly error budget for a 99.99% SLA is approximately 4.32 minutes (43,200 minutes per month × 0.0001). This contract puts the company in extreme danger because a single average incident takes 20 minutes to resolve (5 minutes to detect + 15 minutes to fix). Therefore, just one typical incident will immediately blow through nearly five months' worth of error budget, triggering severe financial SLA penalties. Achieving 99.99% requires fully automated detection and recovery mechanisms that resolve issues in sub-minute timeframes, which the current team clearly lacks. Promising this level of availability without the operational maturity to support it is a guaranteed recipe for losing money.
+The monthly error budget for a 99.99% SLA is approximately 4.32 minutes (43,200 minutes per month × 0.0001). This contract puts the company in extreme danger because a single average incident takes 20 minutes to resolve (5 minutes to detect + 15 minutes to fix). Therefore, just one typical incident would quickly blow through nearly five months' worth of error budget, likely triggering financial SLA penalties. Achieving 99.99% requires fully automated detection and recovery mechanisms that resolve issues in sub-minute timeframes, which the current team clearly lacks. Promising this level of availability without the operational maturity to support it is a guaranteed recipe for losing money.
 </details>
 
 **3. Scenario: You must choose between two database architectures. Architecture Alpha crashes rarely (MTBF = 500 hours) but requires manual intervention to restore, taking 30 minutes (MTTR). Architecture Beta crashes much more frequently due to aggressive preemptive node cycling (MTBF = 100 hours), but it has an automated failover that restores service in exactly 5 minutes (MTTR). Which architecture provides higher overall availability to the end user?**
@@ -1219,3 +1219,15 @@ RELIABILITY FUNDAMENTALS CHECKLIST
 ## Next Module
 
 [Module 2.2: Failure Modes and Effects](../module-2.2-failure-modes-and-effects/) - Now that you understand what reliability means, learn how systems actually fail. Understanding failure modes is the first step to designing for reliability.
+
+## Sources
+
+## Sources
+
+- [NIST Reliability Glossary Entry](https://csrc.nist.gov/glossary/term/reliability) — Provides an authoritative definition of reliability for the module's core terminology.
+- [Data Protection in Amazon S3](https://docs.aws.amazon.com/AmazonS3/latest/userguide/DataDurability.html) — Explains S3 durability characteristics and distinguishes durability expectations from availability.
+- [Designing SLOs](https://cloud.google.com/service-mesh/v1.24/docs/observability/design-slo) — Covers SLO design and error-budget math with concrete downtime examples.
+- [Fraudulent DigiNotar SSL Certificate](https://www.cisa.gov/news-events/alerts/2011/08/30/fraudulent-diginotar-ssl-certificate) — Documents the DigiNotar compromise as a real certificate-authority failure.
+- [Reliability engineering](https://en.wikipedia.org/wiki/Reliability_engineering) — Summarizes the field's historical development and early military and aerospace roots.
+- [John D. Musa](https://en.wikipedia.org/wiki/John_D._Musa) — Provides background on Musa's Bell Labs work and his role in software reliability engineering.
+- [Space Shuttle](https://en.wikipedia.org/wiki/Space_Shuttle) — Describes the Shuttle's redundant flight-computer architecture and backup software approach.
