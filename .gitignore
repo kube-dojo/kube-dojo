@@ -82,6 +82,10 @@ test_script.sh
 .pipeline/state.yaml
 .pipeline/state.lock
 .pipeline/ztt-pilot-*/
+.pipeline/v3/
+.pipeline/citation-verdicts/
+.pipeline/audit-ztt-*/
+.cache/
 
 # Agent bridge runtime
 .bridge/
