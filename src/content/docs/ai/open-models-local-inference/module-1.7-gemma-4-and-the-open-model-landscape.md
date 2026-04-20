@@ -31,7 +31,7 @@ It is here to teach a more important habit:
 Gemma 4 matters because it gives learners a current reference point for:
 - an actively maintained open-model family
 - modern local and ecosystem support
-- multiple practical deployment paths
+- [multiple practical deployment paths](https://cloud.google.com/vertex-ai/generative-ai/docs/open-models/use-gemma)
 
 It is useful as a teaching example because it can be discussed through several learner questions:
 - can I run it locally?
@@ -62,10 +62,10 @@ A useful high-level comparison looks like this:
 
 | Family | Why Learners Notice It | What To Evaluate |
 |---|---|---|
-| Gemma 4 | current Google-backed open-model family | ecosystem fit, local/runtime paths, learner accessibility |
-| Llama family | reference point in many open-model discussions | broad ecosystem, deployment familiarity |
-| Qwen family | strong practical interest and multilingual use | task fit, local support, documentation clarity |
-| Mistral family | efficient open-weight deployments | runtime support, quality-per-size tradeoffs |
+| Gemma 4 | [current Google-backed open-model family](https://huggingface.co/google/gemma-4-E2B) | ecosystem fit, local/runtime paths, learner accessibility |
+| Llama family | [reference point in many open-model discussions](https://huggingface.co/meta-llama) | broad ecosystem, deployment familiarity |
+| Qwen family | [strong practical interest and multilingual use](https://huggingface.co/Qwen/Qwen3-32B) | task fit, local support, documentation clarity |
+| Mistral family | [efficient open-weight deployments](https://mistral.ai/news/mistral-3) | runtime support, quality-per-size tradeoffs |
 
 The point is not to crown a winner.
 
@@ -161,3 +161,13 @@ From here, continue to:
 - [AI/ML Engineering: Generative AI](../../ai-ml-engineering/generative-ai/)
 - [AI/ML Engineering: AI Infrastructure](../../ai-ml-engineering/ai-infrastructure/)
 - or revisit [Choosing Between Ollama, MLX, Transformers, and vLLM](./module-1.6-choosing-between-ollama-mlx-transformers-vllm/)
+
+## Sources
+
+- [Gemma 4 E2B](https://huggingface.co/google/gemma-4-E2B) — Model card for a current Gemma 4 release used here as the concrete family reference.
+- [Use Gemma open models](https://cloud.google.com/vertex-ai/generative-ai/docs/open-models/use-gemma) — Documents Gemma deployment paths across supported runtimes and platforms.
+- [Meta Llama on Hugging Face](https://huggingface.co/meta-llama) — Official family hub for Llama as a comparison point in the open-model ecosystem.
+- [Qwen3-32B](https://huggingface.co/Qwen/Qwen3-32B) — Representative current Qwen release that supports the module's multilingual comparison point.
+- [Introducing Mistral 3](https://mistral.ai/news/mistral-3) — Overview of Mistral's current open or open-weight positioning and efficiency framing.
+- [Gemma4](https://huggingface.co/docs/transformers/model_doc/gemma4) — Transformers documentation with practical integration and usage notes for Gemma 4.
+- [Qwen on Hugging Face](https://huggingface.co/Qwen) — Family hub showing the broader Qwen release landscape for cross-family comparison.

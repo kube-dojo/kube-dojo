@@ -318,3 +318,9 @@ It is learning to ask better questions about what a system is actually doing.
 ## Next Module
 
 Continue to [What Are LLMs?](./module-1.2-what-are-llms/).
+
+## Sources
+
+- [OECD AI Principles Overview](https://oecd.ai/ai-principles/) — Provides a widely used high-level definition of an AI system and frames AI in terms of predictions, content, recommendations, and decisions.
+- [What is AI? Can you make a clear distinction between AI and non-AI systems?](https://oecd.ai/en/wonk/definition-) — Explains the OECD AI-system definition in plainer language, including how machine learning differs from explicit hand-written rules.
+- [Does ChatGPT tell the truth?](https://help.openai.com/en/articles/8313428-does-chatgpt-tell-the-truth%3F.pls) — Gives a beginner-friendly explanation of hallucinations and why fluent model outputs still need verification.

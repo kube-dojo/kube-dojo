@@ -1,0 +1,30 @@
+{
+  "module_key": "ai/foundations/module-1.1-what-is-ai",
+  "module_path": "src/content/docs/ai/foundations/module-1.1-what-is-ai.md",
+  "research_run_id": "2026-04-20T05:30:53+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 2,
+  "claims": [],
+  "further_reading": [
+    {
+      "url": "https://oecd.ai/ai-principles/",
+      "title": "OECD AI Principles Overview",
+      "tier": "standards",
+      "why_relevant": "Provides a widely used high-level definition of an AI system and frames AI in terms of predictions, content, recommendations, and decisions."
+    },
+    {
+      "url": "https://oecd.ai/en/wonk/definition-",
+      "title": "What is AI? Can you make a clear distinction between AI and non-AI systems?",
+      "tier": "standards",
+      "why_relevant": "Explains the OECD AI-system definition in plainer language, including how machine learning differs from explicit hand-written rules."
+    },
+    {
+      "url": "https://help.openai.com/en/articles/8313428-does-chatgpt-tell-the-truth%3F.pls",
+      "title": "Does ChatGPT tell the truth?",
+      "tier": "vendor",
+      "why_relevant": "Gives a beginner-friendly explanation of hallucinations and why fluent model outputs still need verification."
+    }
+  ],
+  "notes": "No inline citation seed entries were generated because this module is primarily pedagogical framing, analogies, and practice prompts, and it avoids the main citation-trigger classes called out by policy: named incidents, dated statistics, pricing, named standards or regulations, version-specific vendor claims, and security claims tied to real events.",
+  "_schema_issues": [],
+  "rejected_urls": []
+}

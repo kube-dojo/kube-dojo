@@ -1,0 +1,108 @@
+{
+  "module_key": "ai/open-models-local-inference/module-1.7-gemma-4-and-the-open-model-landscape",
+  "module_path": "src/content/docs/ai/open-models-local-inference/module-1.7-gemma-4-and-the-open-model-landscape.md",
+  "research_run_id": "2026-04-20T05:35:36+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 2,
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "Gemma 4 is a current Google-backed family of open models.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Why This Module Matters | paragraph 2; repeated in section: Gemma 4 In A Bigger Landscape | Gemma 4 row",
+      "disposition": "supported",
+      "proposed_url": "https://huggingface.co/google/gemma-4-E2B",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The official Gemma 4 model card explicitly says Gemma is a family of open models built by Google DeepMind and describes the Gemma 4 release."
+    },
+    {
+      "claim_id": "C002",
+      "claim_text": "Gemma 4 has practical local and hosted deployment paths across different hardware environments.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Why Gemma 4 Is Worth Covering",
+      "disposition": "supported",
+      "proposed_url": "https://cloud.google.com/vertex-ai/generative-ai/docs/open-models/use-gemma",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Google Cloud's Gemma documentation directly states that Gemma models run on hardware, mobile devices, and hosted services."
+    },
+    {
+      "claim_id": "C003",
+      "claim_text": "The Llama family is a major comparison point in the open-model ecosystem with broad distribution support.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Gemma 4 In A Bigger Landscape | Llama family row",
+      "disposition": "weak_anchor",
+      "proposed_url": "https://huggingface.co/meta-llama",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Meta's official Hugging Face organization establishes the Llama family and its distribution in both original Meta and Transformers formats, but it does not literally state the broader ecosystem-summary phrasing used in the module."
+    },
+    {
+      "claim_id": "C004",
+      "claim_text": "Current Qwen releases emphasize multilingual support.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Gemma 4 In A Bigger Landscape | Qwen family row",
+      "disposition": "supported",
+      "proposed_url": "https://huggingface.co/Qwen/Qwen3-32B",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The official Qwen3 model card explicitly lists multilingual support and support for 100+ languages and dialects."
+    },
+    {
+      "claim_id": "C005",
+      "claim_text": "Mistral's lineup includes open or open-weight models, including smaller variants framed as efficient deployments.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Gemma 4 In A Bigger Landscape | Mistral family row",
+      "disposition": "supported",
+      "proposed_url": "https://mistral.ai/news/mistral-3",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Mistral's official Mistral 3 announcement describes its open models and positions smaller variants around efficiency and deployability."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://huggingface.co/docs/transformers/model_doc/gemma4",
+      "title": "Gemma4",
+      "tier": "vendor",
+      "why_relevant": "Shows current Hugging Face integration details and practical usage notes for Gemma 4."
+    },
+    {
+      "url": "https://cloud.google.com/vertex-ai/generative-ai/docs/open-models/use-gemma",
+      "title": "Use Gemma open models",
+      "tier": "vendor",
+      "why_relevant": "Documents where and how Gemma models can be deployed across local and hosted environments."
+    },
+    {
+      "url": "https://huggingface.co/meta-llama",
+      "title": "Meta Llama on Hugging Face",
+      "tier": "vendor",
+      "why_relevant": "Provides an official reference point for another major open-model family used in landscape comparisons."
+    },
+    {
+      "url": "https://huggingface.co/Qwen",
+      "title": "Qwen on Hugging Face",
+      "tier": "vendor",
+      "why_relevant": "Shows the current Qwen family and release activity for cross-family comparison."
+    },
+    {
+      "url": "https://mistral.ai/news/mistral-3",
+      "title": "Introducing Mistral 3",
+      "tier": "vendor",
+      "why_relevant": "Summarizes Mistral's current open-model positioning and helps contextualize the family in the broader open-model landscape."
+    }
+  ],
+  "notes": "Most of the module is pedagogical framing, exercises, or evaluative guidance and does not require inline citation at kubernetes.io/docs-like density. The only loose family-level claim kept as weak_anchor is the Llama row.",
+  "_schema_issues": [],
+  "rejected_urls": []
+}

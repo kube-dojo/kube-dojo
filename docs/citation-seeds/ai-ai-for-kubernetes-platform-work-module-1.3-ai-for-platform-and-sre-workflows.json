@@ -1,0 +1,30 @@
+{
+  "module_key": "ai/ai-for-kubernetes-platform-work/module-1.3-ai-for-platform-and-sre-workflows",
+  "module_path": "src/content/docs/ai/ai-for-kubernetes-platform-work/module-1.3-ai-for-platform-and-sre-workflows.md",
+  "research_run_id": "2026-04-20T05:28:31+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 2,
+  "claims": [],
+  "further_reading": [
+    {
+      "url": "https://kubernetes.io/docs/concepts/cluster-administration/logging/",
+      "title": "Logging Architecture",
+      "tier": "standards",
+      "why_relevant": "Grounds alert analysis and incident-note workflows in the upstream Kubernetes logging model."
+    },
+    {
+      "url": "https://kubernetes.io/docs/tasks/debug/debug-cluster/",
+      "title": "Debug a Cluster",
+      "tier": "standards",
+      "why_relevant": "Provides authoritative Kubernetes debugging practices that pair well with AI-assisted summarization and checklist drafting."
+    },
+    {
+      "url": "https://nist.gov/itl/ai-risk-management-framework",
+      "title": "NIST AI Risk Management Framework",
+      "tier": "standards",
+      "why_relevant": "Supports the module's accountability theme by framing human oversight, governance, and risk controls for AI-assisted work."
+    }
+  ],
+  "notes": "Purely pedagogical module with advisory workflow guidance; it contains no concrete incidents, dated facts, statistics, vendor/version claims, or named standards that require inline citations.",
+  "_schema_issues": [],
+  "rejected_urls": []
+}

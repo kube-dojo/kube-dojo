@@ -169,3 +169,9 @@ It becomes dangerous when it starts to replace:
 ## Next Module
 
 Continue to [Trust Boundaries for Infrastructure AI Use](./module-1.4-trust-boundaries-for-infrastructure-ai-use/).
+
+## Sources
+
+- [Logging Architecture](https://kubernetes.io/docs/concepts/cluster-administration/logging/) — Grounds alert analysis and incident-note workflows in the upstream Kubernetes logging model.
+- [Debug a Cluster](https://kubernetes.io/docs/tasks/debug/debug-cluster/) — Provides authoritative Kubernetes debugging practices that pair well with AI-assisted summarization and checklist drafting.
+- [NIST AI Risk Management Framework](https://nist.gov/itl/ai-risk-management-framework) — Supports the module's accountability theme by framing human oversight, governance, and risk controls for AI-assisted work.
