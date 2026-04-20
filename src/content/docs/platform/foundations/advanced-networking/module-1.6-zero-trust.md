@@ -23,9 +23,9 @@ After completing this module, you will be able to:
 
 ---
 
-**December 2020. The world learns that SolarWinds — a network monitoring company used by 300,000+ organizations including most Fortune 500 companies and multiple US government agencies — had been compromised for nearly nine months. The attackers, attributed to Russian intelligence (SVR), inserted a backdoor into a routine software update that was distributed to approximately 18,000 organizations.**
+**December 2020. The world learns that SolarWinds — widely deployed network management software across private-sector and government environments — [had been compromised for nearly nine months. The attackers, attributed to Russian intelligence (SVR),](https://www.cisa.gov/news-events/cybersecurity-advisories/aa20-352a) inserted a backdoor into a routine software update that was [distributed to approximately 18,000 organizations](https://www.cisa.gov/news-events/news/joint-statement-federal-bureau-investigation-fbi-cybersecurity-and-infrastructure-security-agency-0).**
 
-Once inside a network, the attackers moved laterally with ease. They accessed email systems, cloud environments, and sensitive data across government agencies including the Department of Homeland Security, the Treasury Department, and the National Nuclear Security Administration. The reason lateral movement was so easy? **Most of these networks operated on a perimeter security model.** Once past the firewall, everything inside the network was implicitly trusted.
+Once inside a network, the attackers moved laterally with ease. They accessed email systems, cloud environments, and sensitive data across government agencies including the Department of Homeland Security, the Treasury Department, and the National Nuclear Security Administration. The breach illustrated how broad internal trust and overprivileged internal access can amplify damage after initial compromise. Once past the firewall, everything inside the network was implicitly trusted.
 
 The SolarWinds breach was not the first time the perimeter model failed catastrophically, but it became the definitive case study for why "trust the network" is a fundamentally broken security model. It accelerated a shift that had been building for years: the move to **Zero Trust**, where no user, device, or network location is inherently trusted, and every access request must be explicitly verified.
 
@@ -39,7 +39,7 @@ The traditional network security model is simple: build a strong perimeter (fire
 
 That world is gone. Your developers work from home, coffee shops, and co-working spaces. Your applications run across multiple cloud providers, SaaS platforms, and edge locations. Your "network" extends to mobile phones, personal laptops, IoT devices, and third-party APIs. There is no perimeter to defend.
 
-Zero Trust is not a product you buy. It's an architectural principle: **never trust, always verify**. Every request is authenticated and authorized regardless of network location. Every connection is encrypted. Every access decision considers user identity, device health, application context, and risk signals — not just "are you on the corporate network?"
+Zero Trust is not a product you buy. It's an architectural principle: **never trust, always verify**. [Every request is authenticated and authorized regardless of network location](https://csrc.nist.gov/pubs/sp/800/207/final). Every connection is encrypted. Every access decision considers user identity, device health, application context, and risk signals — not just "are you on the corporate network?"
 
 For platform engineers, Zero Trust changes how you architect access to Kubernetes dashboards, internal tools, databases, and cloud consoles. It replaces VPNs with identity-aware proxies. It replaces network segmentation with application-level authorization. And it provides better security with a better user experience.
 
@@ -122,11 +122,11 @@ WHY THIS FAILS
 
 BREACHES CAUSED BY PERIMETER TRUST
 ─────────────────────────────────────────────────────────────
-    2013: Target — HVAC vendor VPN → 110M credit cards
-    2017: Equifax — Internet-facing app → 147M records
-    2020: SolarWinds — Supply chain → US government secrets
-    2021: Colonial Pipeline — VPN credential → fuel supply
-    2023: MGM Resorts — Social engineering → $100M impact
+    2013: Target — third-party vendor access contributed to a major retail breach affecting tens of millions of customers
+    2017: Equifax — an internet-facing web application flaw exposed personal data for well over 100 million people
+    2020: SolarWinds — a supply-chain compromise reached multiple government and private-sector networks
+    2021: Colonial Pipeline — a remote-access compromise and ransomware incident disrupted fuel distribution
+    2023: MGM Resorts — social engineering triggered a disruptive cyber incident with major operational and financial consequences
     2023: Okta — Employee laptop → customer support systems
 ```
 
@@ -203,7 +203,7 @@ ZERO TRUST vs PERIMETER
 BEYONDCORP — ZERO TRUST AT GOOGLE SCALE
 ═══════════════════════════════════════════════════════════════
 
-In 2011, Google decided to eliminate their corporate VPN.
+In the early 2010s, Google began moving away from privileged VPN-based access for internal applications.
 Instead, ALL applications (internal and external) are
 accessed through an identity-aware proxy.
 
@@ -254,7 +254,7 @@ KEY CONCEPTS
 
 IMPACT
 ─────────────────────────────────────────────────────────────
-    Google operates with ZERO VPN for ~180,000+ employees.
+    Google has described operating this model at very large organizational scale.
     All internal applications accessible from any network.
     Same security model for office, home, and travel.
     Published in 2014 research papers, now industry standard.
@@ -407,7 +407,7 @@ TAILSCALE (WireGuard-Based)
     Deployment:     Agent on each device/server
     Protocol:       Any IP traffic (full network layer)
     Device Trust:   Tailscale manages device identity
-    Pricing:        Free (3 users), then per-seat
+    Pricing:        Free personal tier, then per-seat plans
 
     Architecture:
     ─────────────────────────────────────────────
@@ -467,7 +467,7 @@ ZSCALER PRIVATE ACCESS (ZPA) — Enterprise
     Deployment:     App Connectors + Cloud broker
     Pricing:        Enterprise (per-seat)
 
-    [+] Designed for large enterprises (10,000+ users)
+    [+] Designed for large enterprise deployments
     [+] Private app access without network access
     [+] User-to-app segmentation
     [-] Expensive
@@ -705,7 +705,7 @@ IMPLEMENTATION
     - Screen lock enabled
     - No jailbreak
 
-    Kolide (for Tailscale/Pomerium):
+    Device-trust agents can feed posture signals into access-policy decisions:
     ─────────────────────────────────────────────
     Open-source device trust agent.
     Checks: OS version, disk encryption, firewall,
@@ -866,7 +866,7 @@ LEVEL 4: CONTINUOUS VERIFICATION
     Progress: Access is not just verified once but
     continuously evaluated throughout the session.
 
-MOST ORGANIZATIONS IN 2025: Level 1-2
+Many organizations are still in the early-to-middle stages of zero-trust adoption
 TARGET FOR PLATFORM TEAMS: Level 3
 ASPIRATION: Level 4
 ```
@@ -875,11 +875,11 @@ ASPIRATION: Level 4
 
 ## Did You Know?
 
-- **Google eliminated their corporate VPN in 2013** and published the BeyondCorp papers starting in 2014. Over 180,000 employees access all internal applications — from source code to HR systems — through identity-aware proxies without any VPN. The project took roughly three years to complete and fundamentally changed how the industry thinks about network security.
+- **Google published BeyondCorp papers starting in 2014 after moving away from privileged network access at large scale, helping popularize identity-aware access patterns.
 
-- **Tailscale's coordination server never sees user traffic.** Unlike a traditional VPN where all traffic flows through a central server, Tailscale uses WireGuard to create direct peer-to-peer encrypted connections. The coordination server only helps devices find each other and exchange public keys. Even if Tailscale's infrastructure were completely compromised, an attacker could not decrypt user traffic — they would only see which devices are connected to each other.
+- **Tailscale's coordination server typically does not carry user traffic.** Unlike a traditional VPN where all traffic flows through a central server, Tailscale uses WireGuard to create direct peer-to-peer encrypted connections. The coordination server only helps devices find each other and exchange public keys. Even if Tailscale's infrastructure were completely compromised, an attacker could not decrypt user traffic — they would only see which devices are connected to each other.
 
-- **The term "Zero Trust" was coined by Forrester Research analyst John Kindervag in 2010**, three years before Google's BeyondCorp project. Kindervag argued that the perimeter security model was fundamentally flawed because it assumed that internal traffic was trustworthy. His original framework was focused on network segmentation, but the concept has since expanded to encompass identity, device trust, and continuous verification far beyond what he initially envisioned.
+- **The concept predates Google's BeyondCorp papers and is commonly associated with analyst work from the early 2010s that challenged perimeter-based trust.
 
 ---
 
@@ -1375,3 +1375,16 @@ Congratulations on completing the Advanced Networking foundation series! You now
 6. **Zero Trust Networking** — Identity-based access, VPN replacement
 
 These topics form the networking foundation for platform engineering. Each concept builds on the others — DNS routes to CDN, CDN integrates WAF, BGP underlies all routing, load balancers distribute traffic, and Zero Trust secures access across every layer.
+
+## Sources
+
+- [CISA Advisory AA20-352A: Advanced Persistent Threat Compromise of Government Agencies, Critical Infrastructure, and Private Sector Organizations](https://www.cisa.gov/news-events/cybersecurity-advisories/aa20-352a) — Documents the SolarWinds campaign, including the compromise timeline and U.S. attribution to Russia's SVR.
+- [FBI/CISA Joint Statement on SolarWinds](https://www.cisa.gov/news-events/news/joint-statement-federal-bureau-investigation-fbi-cybersecurity-and-infrastructure-security-agency-0) — Summarizes the scope of affected SolarWinds customers and the narrower set of follow-on compromise victims.
+- [NIST SP 800-207: Zero Trust Architecture](https://csrc.nist.gov/pubs/sp/800/207/final) — Defines zero-trust terminology, principles, and reference deployment models in the primary standards document.
+- [Google Cloud Identity-Aware Proxy Documentation](https://cloud.google.com/iap/docs) — Describes Google Cloud IAP as a context-aware access layer for services such as Cloud Run, App Engine, Compute Engine, and GKE.
+- [RFC 8446: TLS 1.3](https://www.rfc-editor.org/rfc/rfc8446.html) — Specifies TLS 1.3 handshake behavior, including server authentication and optional client-certificate authentication.
+- [Istio Peer Authentication and mTLS](https://istio.io/latest/docs/tasks/security/authentication/authn-policy/) — Shows how Istio enables and enforces mutual TLS between workloads with peer-authentication policy.
+- [HashiCorp Vault PKI Engine Tutorial](https://developer.hashicorp.com/vault/tutorials/secrets-management/pki-engine) — Explains how Vault PKI acts as a private CA and issues short-lived certificates.
+- [Microsoft Intune Conditional Access](https://learn.microsoft.com/en-us/intune/intune-service/protect/conditional-access) — Describes Conditional Access evaluation across identity, device compliance, application, location, and risk signals.
+- [BeyondCorp Enterprise: Define Access Policies](https://cloud.google.com/beyondcorp-enterprise/docs/define-access-policies) — Documents device-attribute and context-based access rules in BeyondCorp Enterprise.
+- [BeyondCorp: A New Approach to Enterprise Security](https://www.usenix.org/publications/login/dec14/ward) — Presents the original public description of Google's BeyondCorp architecture and its move away from privileged network access.
