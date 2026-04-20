@@ -48,8 +48,13 @@ from typing import Any
 
 try:
     import yaml
-except ImportError:  # pragma: no cover - the venv is expected to have yaml
-    yaml = None  # type: ignore[assignment]
+except ImportError as _exc:  # pragma: no cover
+    raise RuntimeError(
+        "PyYAML is required for the citation allowlist. Install with "
+        "`.venv/bin/pip install pyyaml` and run pipeline scripts via "
+        "`.venv/bin/python`. Silent fallback previously caused 100% of "
+        "URLs to be rejected as off_allowlist — see session 8 handoff."
+    ) from _exc
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -122,9 +127,11 @@ def _load_allowlist() -> dict[str, Any]:
     global _ALLOWLIST_CACHE
     if _ALLOWLIST_CACHE is not None:
         return _ALLOWLIST_CACHE
-    if yaml is None or not ALLOWLIST_PATH.exists():
-        _ALLOWLIST_CACHE = {"version": 0, "tiers": {}, "claim_class_priority": {}}
-        return _ALLOWLIST_CACHE
+    if not ALLOWLIST_PATH.exists():
+        raise FileNotFoundError(
+            f"Citation allowlist not found at {ALLOWLIST_PATH}. The pipeline "
+            "will reject every URL as off_allowlist without it."
+        )
     loaded = yaml.safe_load(ALLOWLIST_PATH.read_text(encoding="utf-8"))
     _ALLOWLIST_CACHE = loaded if isinstance(loaded, dict) else {"tiers": {}, "claim_class_priority": {}}
     return _ALLOWLIST_CACHE
