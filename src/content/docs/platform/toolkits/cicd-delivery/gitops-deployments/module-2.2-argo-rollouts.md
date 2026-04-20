@@ -1412,5 +1412,5 @@ Continue to [Module 2.3: Flux](../module-2.3-flux/) where we'll explore the alte
 ## Sources
 
 - [Argo Rollouts Analysis and Progressive Delivery](https://argo-rollouts.readthedocs.io/en/stable/features/analysis/) — Backs canary and blue-green rollout behavior, AnalysisTemplate and AnalysisRun CRDs, Prometheus-driven automated analysis, abort conditions, experiments, and progressive delivery control beyond native Deployments.
-- [https://argo-rollouts.readthedocs.io/en/stable/features/bluegreen/](https://argo-rollouts.readthedocs.io/en/stable/features/bluegreen/) — The blue-green sequence of events shows the preview ReplicaSet running before promotion and the old ReplicaSet scaling down only after the switch and delay.
+- [argo-rollouts.readthedocs.io: bluegreen](https://argo-rollouts.readthedocs.io/en/stable/features/bluegreen/) — The blue-green sequence of events shows the preview ReplicaSet running before promotion and the old ReplicaSet scaling down only after the switch and delay.
 - [Kubernetes Deployments](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/) — Use this as the baseline for native rolling-update behavior that Argo Rollouts extends.

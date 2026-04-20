@@ -1489,8 +1489,8 @@ Continue to [CI/CD Pipelines Toolkit](/platform/toolkits/cicd-delivery/ci-cd-pip
 ## Sources
 
 - [Helm Charts](https://helm.sh/docs/topics/charts/) — Backs Helm chart structure, Chart.yaml, values.yaml, templates, dependencies, chart packaging, chart types, and general claims about how Helm models reusable Kubernetes application packages.
-- [https://github.com/kubernetes-sigs/kustomize](https://github.com/kubernetes-sigs/kustomize) — The official Kustomize repository describes it as customization of raw, template-free YAML.
-- [https://helm.sh/docs/v3/faq/changes_since_helm2/](https://helm.sh/docs/v3/faq/changes_since_helm2/) — Helm's official Helm 2 to Helm 3 changes page directly explains Tiller's removal and the RBAC/security motivation.
-- [https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization) — The Kubernetes docs explicitly state that kubectl has supported Kustomize since 1.14 and show `kubectl apply -k`.
-- [https://grafana.com/blog/how-the-jsonnet-based-project-tanka-improves-kubernetes-usage/](https://grafana.com/blog/how-the-jsonnet-based-project-tanka-improves-kubernetes-usage/) — Grafana's own documentation and blog posts describe using Tanka/Jsonnet to manage its Kubernetes infrastructure.
+- [github.com: kustomize](https://github.com/kubernetes-sigs/kustomize) — The official Kustomize repository describes it as customization of raw, template-free YAML.
+- [helm.sh: changes since helm2](https://helm.sh/docs/v3/faq/changes_since_helm2/) — Helm's official Helm 2 to Helm 3 changes page directly explains Tiller's removal and the RBAC/security motivation.
+- [kubernetes.io: kustomization](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization) — The Kubernetes docs explicitly state that kubectl has supported Kustomize since 1.14 and show `kubectl apply -k`.
+- [grafana.com: how the jsonnet based project tanka improves kubernetes usage](https://grafana.com/blog/how-the-jsonnet-based-project-tanka-improves-kubernetes-usage/) — Grafana's own documentation and blog posts describe using Tanka/Jsonnet to manage its Kubernetes infrastructure.
 - [Flux HelmRelease Post Renderers](https://v2-0.docs.fluxcd.io/flux/components/helm/helmreleases/) — Useful for the module's Helm-plus-Kustomize pattern because it documents Kustomize post-rendering in Flux HelmRelease.

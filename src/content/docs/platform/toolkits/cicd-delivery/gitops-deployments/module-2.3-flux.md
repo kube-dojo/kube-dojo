@@ -1464,13 +1464,13 @@ Continue to [Module 2.4: Helm & Kustomize](../module-2.4-helm-kustomize/) where 
 
 ## Sources
 
-- [https://www.cncf.io/blog/2023/09/15/what-is-flux-cd/](https://www.cncf.io/blog/2023/09/15/what-is-flux-cd/) — The CNCF Flux backgrounder explicitly says Flux was developed by Weaveworks.
-- [https://www.cncf.io/blog/2021/09/28/gitops-101-whats-it-all-about/](https://www.cncf.io/blog/2021/09/28/gitops-101-whats-it-all-about/) — The CNCF article explicitly states that Weaveworks coined the term GitOps in 2017.
-- [https://www.cncf.io/projects/flux/](https://www.cncf.io/projects/flux/) — The CNCF project page explicitly lists Flux as having reached Graduated maturity.
-- [https://www.cncf.io/blog/2021/10/19/flux-trusted-by-amazon-d2iq-microsoft-red-hat-vmware-and-weaveworks/](https://www.cncf.io/blog/2021/10/19/flux-trusted-by-amazon-d2iq-microsoft-red-hat-vmware-and-weaveworks/) — The CNCF post explicitly names Deutsche Telekom among companies sharing Flux usage.
-- [https://www.cncf.io/announcements/2022/11/30/flux-graduates-from-cncf-incubator/](https://www.cncf.io/announcements/2022/11/30/flux-graduates-from-cncf-incubator/) — The Flux graduation announcement explicitly names Volvo and SAP as relying on Flux.
-- [https://fluxcd.io/flux/migration/faq-migration/](https://fluxcd.io/flux/migration/faq-migration/) — The migration FAQ explicitly contrasts monolithic Flux v1 with Flux v2's specialized controllers.
-- [https://fluxcd.io/flux/installation/configuration/vertical-scaling/](https://fluxcd.io/flux/installation/configuration/vertical-scaling/) — The scaling docs explicitly cover increasing worker concurrency and refer readers to sharding for horizontal scaling.
-- [https://fluxcd.io/flux/components/kustomize/kustomizations/](https://fluxcd.io/flux/components/kustomize/kustomizations/) — The Kustomization docs explicitly define `dependsOn`, `wait`, `healthChecks`, and Ready-condition behavior.
-- [https://fluxcd.io/flux/components/notification/providers/](https://fluxcd.io/flux/components/notification/providers/) — The Provider documentation explicitly documents Slack and Microsoft Teams provider types.
-- [https://www.cncf.io/projects/argo/](https://www.cncf.io/projects/argo/) — The CNCF Argo project page explicitly lists Argo at Graduated maturity.
+- [cncf.io: what is flux cd](https://www.cncf.io/blog/2023/09/15/what-is-flux-cd/) — The CNCF Flux backgrounder explicitly says Flux was developed by Weaveworks.
+- [cncf.io: gitops 101 whats it all about](https://www.cncf.io/blog/2021/09/28/gitops-101-whats-it-all-about/) — The CNCF article explicitly states that Weaveworks coined the term GitOps in 2017.
+- [cncf.io: flux](https://www.cncf.io/projects/flux/) — The CNCF project page explicitly lists Flux as having reached Graduated maturity.
+- [cncf.io: flux trusted by amazon d2iq microsoft red hat vmware and weaveworks](https://www.cncf.io/blog/2021/10/19/flux-trusted-by-amazon-d2iq-microsoft-red-hat-vmware-and-weaveworks/) — The CNCF post explicitly names Deutsche Telekom among companies sharing Flux usage.
+- [cncf.io: flux graduates from cncf incubator](https://www.cncf.io/announcements/2022/11/30/flux-graduates-from-cncf-incubator/) — The Flux graduation announcement explicitly names Volvo and SAP as relying on Flux.
+- [fluxcd.io: faq migration](https://fluxcd.io/flux/migration/faq-migration/) — The migration FAQ explicitly contrasts monolithic Flux v1 with Flux v2's specialized controllers.
+- [fluxcd.io: vertical scaling](https://fluxcd.io/flux/installation/configuration/vertical-scaling/) — The scaling docs explicitly cover increasing worker concurrency and refer readers to sharding for horizontal scaling.
+- [fluxcd.io: kustomizations](https://fluxcd.io/flux/components/kustomize/kustomizations/) — The Kustomization docs explicitly define `dependsOn`, `wait`, `healthChecks`, and Ready-condition behavior.
+- [fluxcd.io: providers](https://fluxcd.io/flux/components/notification/providers/) — The Provider documentation explicitly documents Slack and Microsoft Teams provider types.
+- [cncf.io: argo](https://www.cncf.io/projects/argo/) — The CNCF Argo project page explicitly lists Argo at Graduated maturity.

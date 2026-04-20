@@ -1319,6 +1319,6 @@ Continue to [Module 2.2: Argo Rollouts](../module-2.2-argo-rollouts/) where we'l
 ## Sources
 
 - [Argo CD Architectural Overview](https://argo-cd.readthedocs.io/en/stable/operator-manual/architecture/) — Backs Argo CD component architecture and responsibilities such as API server, repository server, application controller, Git polling/reconciliation, sync, rollback, auth delegation, and RBAC enforcement.
-- [https://argo-cd.readthedocs.io/en/release-3.1/](https://argo-cd.readthedocs.io/en/release-3.1/) — General lesson point for an illustrative rewrite.
+- [argo-cd.readthedocs.io: release 3.1](https://argo-cd.readthedocs.io/en/release-3.1/) — General lesson point for an illustrative rewrite.
 - [Introduction to ApplicationSet Controller](https://argo-cd.readthedocs.io/en/stable/operator-manual/applicationset/) — Covers ApplicationSet concepts, generators, monorepo patterns, and multi-cluster app generation.
 - [Argo CD RBAC Configuration](https://argo-cd.readthedocs.io/en/stable/operator-manual/rbac/) — Explains Argo CD RBAC, built-in roles, SSO group mapping, and project-scoped access control.

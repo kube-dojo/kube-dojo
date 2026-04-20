@@ -128,26 +128,37 @@ def _prune_schema_failed_claims(module_key: str, schema_issues: list[str]) -> di
     bad entry. Prune just the offenders and continue.
     """
     result: dict[str, Any] = {"pruned_indices": [], "remaining_claims": 0,
-                              "has_further_reading": False}
+                              "has_further_reading": False,
+                              "non_claim_issues": []}
     bad_idx: set[int] = set()
+    non_claim_issues: list[str] = []
     for issue in schema_issues:
         m = _SCHEMA_CLAIM_INDEX_RE.match(issue)
         if m:
             bad_idx.add(int(m.group(1)))
-    if not bad_idx:
-        # Non-claim schema issues (missing top-level fields, etc.) are
-        # not recoverable by pruning — caller decides whether to abort.
-        return result
+        else:
+            non_claim_issues.append(issue)
+    result["non_claim_issues"] = non_claim_issues
+    # Always load the seed so the caller's "remaining citable content"
+    # check reflects reality even when only non-claim issues were
+    # emitted (e.g. missing_section_pool: a warning, but the claims
+    # array is still valid). Previously this path returned
+    # remaining_claims=0 unconditionally, which made the caller abort
+    # modules with 10+ good claims + further_reading on any non-claim
+    # schema warning — reversing the prune-and-continue intent.
     seed_path = seed_path_for(module_key)
     if not seed_path.exists():
         return result
     seed = json.loads(seed_path.read_text(encoding="utf-8"))
     claims = seed.get("claims") or []
-    kept = [c for i, c in enumerate(claims) if i not in bad_idx]
-    seed["claims"] = kept
-    seed_path.write_text(json.dumps(seed, indent=2, ensure_ascii=False) + "\n",
-                         encoding="utf-8")
-    result["pruned_indices"] = sorted(bad_idx)
+    if bad_idx:
+        kept = [c for i, c in enumerate(claims) if i not in bad_idx]
+        seed["claims"] = kept
+        seed_path.write_text(json.dumps(seed, indent=2, ensure_ascii=False) + "\n",
+                             encoding="utf-8")
+        result["pruned_indices"] = sorted(bad_idx)
+    else:
+        kept = claims
     result["remaining_claims"] = len(kept)
     result["has_further_reading"] = bool(seed.get("further_reading") or [])
     return result

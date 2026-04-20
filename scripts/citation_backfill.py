@@ -1497,6 +1497,27 @@ def _strip_sources_section(body: str) -> str:
     return pre.rstrip()
 
 
+def _derive_title_from_url(url: str) -> str:
+    """Derive a readable title from a URL when no human-written one is available.
+
+    Turning `https://argo-cd.readthedocs.io/en/release-3.1/` into
+    `argo-cd.readthedocs.io: release 3.1` beats the default (URL repeated
+    as both link text and href) for rendered module Sources sections.
+    """
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+    except (ValueError, TypeError):
+        return url
+    host = (parsed.hostname or "").removeprefix("www.")
+    path_segments = [seg for seg in parsed.path.split("/") if seg]
+    tail = path_segments[-1] if path_segments else ""
+    readable_tail = tail.replace("-", " ").replace("_", " ").strip()
+    if host and readable_tail:
+        return f"{host}: {readable_tail}"
+    return host or url
+
+
 def _build_sources_section_from_seed(seed: dict[str, Any]) -> str:
     section_pool = load_section_pool(seed.get("section_pool_ref"))
     pool_by_id = _pool_source_index(section_pool)
@@ -1509,11 +1530,13 @@ def _build_sources_section_from_seed(seed: dict[str, Any]) -> str:
         if not normalized_url or normalized_url in seen_urls:
             return
         seen_urls.add(normalized_url)
-        resolved_title = str(title or normalized_url).strip() or normalized_url
+        title_clean = str(title or "").strip()
+        resolved_title = title_clean or _derive_title_from_url(normalized_url)
         resolved_note = str(note or "").strip()
         entries.append((resolved_title, normalized_url, resolved_note))
 
     for claim in seed.get("claims") or []:
+        disposition = claim.get("disposition")
         source_ids = [str(source_id) for source_id in claim.get("source_ids") or []]
         for source_id in source_ids:
             source = pool_by_id.get(source_id) or {}
@@ -1524,7 +1547,13 @@ def _build_sources_section_from_seed(seed: dict[str, Any]) -> str:
                 or str(claim.get("rationale") or "").strip()
                 or str(claim.get("claim_text") or "").strip(),
             )
-        if not source_ids:
+        # Pool-less proposed_url is only safe for CITED dispositions.
+        # needs_allowlist_expansion URLs are deliberately off-allowlist
+        # (awaiting review) — never leak them into Sources. Rewrite
+        # dispositions (soften/cannot_be_salvaged) have proposed_url
+        # zeroed by validate_urls but the disposition check is the
+        # correct semantic guard.
+        if not source_ids and disposition in CITED_DISPOSITIONS:
             add_entry(
                 claim.get("proposed_url"),
                 None,
