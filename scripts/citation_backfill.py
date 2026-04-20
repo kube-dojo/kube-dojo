@@ -931,6 +931,15 @@ Two kinds of edits land in the module:
 3. Never modify frontmatter, Mermaid blocks, code blocks, quiz answers,
    or exercise steps. If a claim's span_hint points into one of those,
    skip it (add to `skipped_claims` with a reason).
+3a. **Never edit content INSIDE blockquote-quoted strings.** Lines
+   like `> "...quoted text..."` are verbatim examples — typically
+   what an AI reviewer / agent / user said. They are content the
+   author chose to quote literally. Any rewrite there will fail
+   the diff lint as `unauthorized_prose_change`. If a claim's
+   span_hint points into a `> "..."` block, skip it with reason
+   `inside_quoted_block`. (Plain blockquotes WITHOUT enclosing
+   double-quotes — e.g. `> **Pause and predict**: ...` — are
+   editable; the rule is specifically about quoted-string content.)
 4. `sources_section` is appended last. Include:
    - every URL used in inline_insertions
    - every validated `further_reading` URL from the seed
