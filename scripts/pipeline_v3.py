@@ -116,6 +116,43 @@ def _sources_only_fallback(module_key: str, module_path: Path,
     return result
 
 
+_SCHEMA_CLAIM_INDEX_RE = re.compile(r"^claim\[(\d+)\]:")
+
+
+def _prune_schema_failed_claims(module_key: str, schema_issues: list[str]) -> dict[str, Any]:
+    """Drop seed claims flagged by validate_seed so the pipeline can continue.
+
+    Codex occasionally emits one bad claim (e.g. anchor_text containing a
+    newline) out of many valid ones. The original abort-the-whole-module
+    behavior wasted 10+ good claims + validated further_reading on a single
+    bad entry. Prune just the offenders and continue.
+    """
+    result: dict[str, Any] = {"pruned_indices": [], "remaining_claims": 0,
+                              "has_further_reading": False}
+    bad_idx: set[int] = set()
+    for issue in schema_issues:
+        m = _SCHEMA_CLAIM_INDEX_RE.match(issue)
+        if m:
+            bad_idx.add(int(m.group(1)))
+    if not bad_idx:
+        # Non-claim schema issues (missing top-level fields, etc.) are
+        # not recoverable by pruning — caller decides whether to abort.
+        return result
+    seed_path = seed_path_for(module_key)
+    if not seed_path.exists():
+        return result
+    seed = json.loads(seed_path.read_text(encoding="utf-8"))
+    claims = seed.get("claims") or []
+    kept = [c for i, c in enumerate(claims) if i not in bad_idx]
+    seed["claims"] = kept
+    seed_path.write_text(json.dumps(seed, indent=2, ensure_ascii=False) + "\n",
+                         encoding="utf-8")
+    result["pruned_indices"] = sorted(bad_idx)
+    result["remaining_claims"] = len(kept)
+    result["has_further_reading"] = bool(seed.get("further_reading") or [])
+    return result
+
+
 def _prune_failed_cited_claims(module_key: str, verdict_path_rel: str | None) -> dict[str, Any]:
     """Drop UNSUPPORTED/CONTRADICTED claims from the seed so inject can continue.
 
@@ -471,7 +508,10 @@ def run_pipeline(module_key: str, *, skip_research: bool = False,
         if not r.get("ok"):
             return _finalize(run_record, "research_failed", flat_key)
         if r.get("schema_issues"):
-            return _finalize(run_record, "research_schema_issues", flat_key)
+            pruned = _prune_schema_failed_claims(normalized_key, r.get("schema_issues") or [])
+            run_record["stages"]["research_schema_prune"] = pruned
+            if pruned.get("remaining_claims", 0) == 0 and not pruned.get("has_further_reading"):
+                return _finalize(run_record, "research_schema_issues", flat_key)
 
     # Stage 2: verify (Gate B) ---------------------------------------------
     v = run_verify(normalized_key, agent="gemini")

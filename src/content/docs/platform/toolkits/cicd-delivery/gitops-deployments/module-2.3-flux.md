@@ -30,14 +30,14 @@ After completing this module, you will be able to:
 
 Flux is the [GitOps Toolkit](https://fluxcd.io/flux/components/)—a set of specialized controllers that each do one thing well. While ArgoCD is an application, Flux is a framework. This gives you incredible flexibility but requires understanding how the pieces fit together.
 
-[Flux was created by Weaveworks](https://www.cncf.io/blog/2023/09/15/what-is-flux-cd/), the company that coined "GitOps." It's now a CNCF graduated project, running in production at companies like [Deutsche Telekom](https://www.cncf.io/blog/2021/10/19/flux-trusted-by-amazon-d2iq-microsoft-red-hat-vmware-and-weaveworks/), [Volvo, and SAP](https://www.cncf.io/announcements/2022/11/30/flux-graduates-from-cncf-incubator/).
+[Flux was created by Weaveworks](https://www.cncf.io/blog/2023/09/15/what-is-flux-cd/), the company that coined "GitOps." [It's now a CNCF graduated project](https://www.cncf.io/projects/flux/), running in production at companies like [Deutsche Telekom](https://www.cncf.io/blog/2021/10/19/flux-trusted-by-amazon-d2iq-microsoft-red-hat-vmware-and-weaveworks/), [Volvo, and SAP](https://www.cncf.io/announcements/2022/11/30/flux-graduates-from-cncf-incubator/).
 
 ## Did You Know?
 
-- **Weaveworks invented the term "GitOps" in 2017**—Flux became one of the early GitOps tools associated with the pattern's rise in Kubernetes
-- **[Flux v2 was a complete rewrite](https://fluxcd.io/flux/migration/faq-migration/)**—the original Flux was a monolith; Flux v2 is a toolkit of specialized controllers
-- **Flux is designed to scale through specialized controllers, configurable concurrency, and sharding**
-- **Flux is a CNCF graduated GitOps project**—Argo CD is also a CNCF graduated project, so compare them on workflow and operating model rather than maturity level
+- **[Weaveworks invented the term "GitOps" in 2017](https://www.cncf.io/blog/2021/09/28/gitops-101-whats-it-all-about/)**—Flux became one of the early GitOps tools associated with the pattern's rise in Kubernetes
+- **[Flux v2 was a complete rewrite](https://fluxcd.io/flux/migration/faq-migration/)**—the original Flux was a monolith; [Flux v2 is a toolkit of specialized controllers](https://fluxcd.io/flux/migration/faq-migration/)
+- **[Flux is designed to scale through specialized controllers, configurable concurrency, and sharding](https://fluxcd.io/flux/installation/configuration/vertical-scaling/)**
+- **Flux is a CNCF graduated GitOps project**—[Argo CD is also a CNCF graduated project](https://www.cncf.io/projects/argo/), so compare them on workflow and operating model rather than maturity level
 
 ## Flux Architecture
 
@@ -719,7 +719,7 @@ RECOMMENDATION:
 
 ## War Story: A Missing-Substitution Failure Mode
 
-A team using Flux's `postBuild.substitute` for cluster-specific values can still fail if a new cluster is bootstrapped without the required substitution inputs.
+A team using Flux's `postBuild.substitute` for cluster-specific values [can still fail if a new cluster is bootstrapped without the required substitution inputs](https://fluxcd.io/flux/components/kustomize/kustomizations/).
 
 They had a core deployment template with:
 
@@ -731,7 +731,7 @@ resources:
     cpu: ${CPU_LIMIT}
 ```
 
-In production, all variables were defined in a ConfigMap: `REPLICAS=5`, `MEMORY_LIMIT=2Gi`, `CPU_LIMIT=1000m`. But when they added a new cluster in Asia-Pacific, a junior engineer copied the cluster bootstrap but forgot to copy the ConfigMap.
+A common failure mode is bootstrapping a new cluster without the ConfigMap or Secret inputs required for post-build substitution.
 
 If substitution inputs are missing or misconfigured, reconciliation can fail or render incorrect manifests, and without readiness checks the cluster can look healthier than it really is.
 
@@ -829,7 +829,7 @@ spec:
 
 **Lessons Learned:**
 
-1. **Never equate a successful apply with a healthy rollout**—use `wait: true` or explicit `healthChecks` when readiness matters
+1. **Never equate a successful apply with a healthy rollout**—[use `wait: true` or explicit `healthChecks` when readiness matters](https://fluxcd.io/flux/components/kustomize/kustomizations/)
 2. **Always use [`optional: false`](https://fluxcd.io/flux/components/kustomize/kustomizations/)** for required substitutions
 3. **Add `healthChecks` for critical workloads**—they help Flux wait on readiness instead of treating an apply as the end of the story
 4. **Validate new clusters** before production traffic with a checklist
@@ -1310,7 +1310,7 @@ kubectl describe kustomization cert-manager -n flux-system | grep -A 20 "Conditi
 kubectl get events -n cert-manager --sort-by='.lastTimestamp'
 ```
 
-**Key Insight:** Always add `healthChecks` for any Kustomization that other resources depend on. Without them, Flux considers a Kustomization "Ready" as soon as `kubectl apply` succeeds, even if the actual pods never start.
+**Key Insight:** Always add `healthChecks` for any Kustomization that other resources depend on. Without them, Flux may consider a Kustomization "Ready" as soon as `kubectl apply` succeeds, even if the actual pods never start.
 </details>
 
 ## Hands-On Exercise
@@ -1449,7 +1449,7 @@ Before moving on, ensure you can:
 - [ ] Write Kustomizations with dependencies, health checks, and substitutions
 - [ ] Configure HelmReleases with values from ConfigMaps and Secrets
 - [ ] Set up image automation (ImageRepository, ImagePolicy, ImageUpdateAutomation)
-- [ ] Configure Slack/Teams notifications for reconciliation events
+- [ ] Configure [Slack/Teams notifications](https://fluxcd.io/flux/components/notification/providers/) for reconciliation events
 - [ ] Debug failed reconciliations with `flux get`, `flux logs`, and `kubectl describe`
 - [ ] Compare Flux vs ArgoCD trade-offs for different use cases
 - [ ] Design multi-cluster GitOps with cluster-specific substitutions
@@ -1464,10 +1464,13 @@ Continue to [Module 2.4: Helm & Kustomize](../module-2.4-helm-kustomize/) where 
 
 ## Sources
 
-- [GitOps Toolkit Components](https://fluxcd.io/flux/components/) — Canonical overview of Flux's controller-based architecture and the APIs each controller manages.
-- [What Is Flux CD?](https://www.cncf.io/blog/2023/09/15/what-is-flux-cd/) — CNCF backgrounder covering Flux's origins and project evolution.
-- [Flux Graduates from CNCF Incubator](https://www.cncf.io/announcements/2022/11/30/flux-graduates-from-cncf-incubator/) — Graduation announcement highlighting production adopters such as Volvo and SAP.
-- [Flux Trusted by Amazon, D2iQ, Microsoft, Red Hat, VMware, and Weaveworks](https://www.cncf.io/blog/2021/10/19/flux-trusted-by-amazon-d2iq-microsoft-red-hat-vmware-and-weaveworks/) — CNCF post describing public Flux usage stories, including Deutsche Telekom.
-- [Flux Migration FAQ](https://fluxcd.io/flux/migration/faq-migration/) — Primary reference for the Flux v1 to Flux v2 migration and the shift to toolkit controllers.
-- [Flux Kustomization Docs](https://fluxcd.io/flux/components/kustomize/kustomizations/) — Authoritative reference for `dependsOn`, health checks, wait behavior, and post-build substitutions.
-- [Image Reflector and Automation Controllers](https://fluxcd.io/flux/components/image/) — Primary documentation for how Flux image automation detects new images and updates Git.
+- [https://www.cncf.io/blog/2023/09/15/what-is-flux-cd/](https://www.cncf.io/blog/2023/09/15/what-is-flux-cd/) — The CNCF Flux backgrounder explicitly says Flux was developed by Weaveworks.
+- [https://www.cncf.io/blog/2021/09/28/gitops-101-whats-it-all-about/](https://www.cncf.io/blog/2021/09/28/gitops-101-whats-it-all-about/) — The CNCF article explicitly states that Weaveworks coined the term GitOps in 2017.
+- [https://www.cncf.io/projects/flux/](https://www.cncf.io/projects/flux/) — The CNCF project page explicitly lists Flux as having reached Graduated maturity.
+- [https://www.cncf.io/blog/2021/10/19/flux-trusted-by-amazon-d2iq-microsoft-red-hat-vmware-and-weaveworks/](https://www.cncf.io/blog/2021/10/19/flux-trusted-by-amazon-d2iq-microsoft-red-hat-vmware-and-weaveworks/) — The CNCF post explicitly names Deutsche Telekom among companies sharing Flux usage.
+- [https://www.cncf.io/announcements/2022/11/30/flux-graduates-from-cncf-incubator/](https://www.cncf.io/announcements/2022/11/30/flux-graduates-from-cncf-incubator/) — The Flux graduation announcement explicitly names Volvo and SAP as relying on Flux.
+- [https://fluxcd.io/flux/migration/faq-migration/](https://fluxcd.io/flux/migration/faq-migration/) — The migration FAQ explicitly contrasts monolithic Flux v1 with Flux v2's specialized controllers.
+- [https://fluxcd.io/flux/installation/configuration/vertical-scaling/](https://fluxcd.io/flux/installation/configuration/vertical-scaling/) — The scaling docs explicitly cover increasing worker concurrency and refer readers to sharding for horizontal scaling.
+- [https://fluxcd.io/flux/components/kustomize/kustomizations/](https://fluxcd.io/flux/components/kustomize/kustomizations/) — The Kustomization docs explicitly define `dependsOn`, `wait`, `healthChecks`, and Ready-condition behavior.
+- [https://fluxcd.io/flux/components/notification/providers/](https://fluxcd.io/flux/components/notification/providers/) — The Provider documentation explicitly documents Slack and Microsoft Teams provider types.
+- [https://www.cncf.io/projects/argo/](https://www.cncf.io/projects/argo/) — The CNCF Argo project page explicitly lists Argo at Graduated maturity.

@@ -8,7 +8,7 @@ sidebar:
 
 ---
 
-*Progressive delivery lets teams expose only a small slice of traffic to a new version, watch service metrics, and automatically abort a rollout when the canary regresses before the whole user base is affected.*
+*Progressive delivery lets teams [expose only a small slice of traffic to a new version, watch service metrics, and automatically abort a rollout when the canary regresses](https://argo-rollouts.readthedocs.io/en/stable/features/analysis/) before the whole user base is affected.*
 
 ---
 
@@ -40,8 +40,8 @@ After completing this module, you will be able to:
 
 - **Argo Rollouts addresses gaps in standard Kubernetes rollout behavior**—it adds progressive delivery patterns and analysis-driven control for safer releases.
 - **The canary deployment pattern is named after canaries in coal mines**—miners brought canaries underground; if the canary died, the air was toxic
-- **Automated canary analysis is an established practice**—Argo Rollouts can integrate with systems such as Kayenta.
-- **Blue-green deployments require extra capacity during promotion**—both versions can run at the same time until traffic switches and the old version scales down.
+- **Automated canary analysis is an established practice**—[Argo Rollouts can integrate with systems such as Kayenta](https://argo-rollouts.readthedocs.io/en/stable/features/analysis/).
+- **Blue-green deployments require extra capacity during promotion**—[both versions can run at the same time until traffic switches and the old version scales down](https://argo-rollouts.readthedocs.io/en/stable/features/bluegreen/).
 
 ## Rollout Strategies
 
@@ -716,20 +716,20 @@ spec:
 | Mistake | Why It's Bad | Better Approach |
 |---------|--------------|-----------------|
 | No analysis templates | Blind deployment, no safety | Always add success-rate and latency analysis |
-| Too aggressive steps | Problems hit many users | Start at 5-10%, pause longer at each step |
+| Too aggressive steps | Problems hit many users | Start with a small canary percentage and pause long enough to observe meaningful metrics |
 | Ignoring canary metrics | Analysis passes but users suffer | Include business metrics, not just infrastructure |
-| No scaleDownDelay | Fast rollback is harder once old pods are gone | Keep old version for 30-60 seconds minimum |
+| No scaleDownDelay | Fast rollback is harder once old pods are gone | Keep the old version available long enough for traffic to drain and rollback to remain practical |
 | Same replica count | Canary gets equal load despite traffic | Scale canary based on traffic weight |
 | Manual promotion in prod | Human bottleneck, slow deployments | Use automated analysis for well-understood services |
 
-## War Story: The $8.3 Million Deployment That Took 90 Seconds to Stop
+## War Story: How Progressive Delivery Can Stop a Bad Deployment Early
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  THE $8.3 MILLION DEPLOYMENT THAT TOOK 90 SECONDS TO STOP      │
 │  ───────────────────────────────────────────────────────────────│
 │  Company: Global food delivery platform                         │
-│  Scale: 15M daily orders, 850 restaurants per minute            │
+│  Scale: High-volume production traffic                          │
 │  The crisis: Memory leak shipped to production Friday evening   │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -756,9 +756,9 @@ PREVIOUS INCIDENT - WITHOUT PROGRESSIVE DELIVERY
 19:47  → Database connection pool exhausted (thundering herd)
 20:15  Full recovery
 
-Total impact: 28 minutes @ $17,000/minute = $476,000
+Total impact: a prolonged outage with substantial business loss
 Plus: SLA violations, restaurant refunds, customer credits
-Total incident cost: $1.2 million
+Total incident cost: significant
 ```
 
 **With Argo Rollouts (The New World)**
@@ -802,7 +802,7 @@ spec:
             ) / avg(container_memory_working_set_bytes{pod=~"order-service-canary.*"} offset 5m)
 ```
 
-**The Timeline That Saved Millions**
+**A Timeline Showing Early Automated Abort**
 
 ```
 FRIDAY 6:47 PM - WITH ARGO ROLLOUTS
@@ -818,8 +818,8 @@ FRIDAY 6:47 PM - WITH ARGO ROLLOUTS
 18:52:35  Canary pods terminating
 18:52:40  100% traffic back to stable
 
-Total time exposed: 5 minutes 40 seconds
-Traffic affected: 5% = ~2,500 orders
+Total time exposed: only a short validation window
+Traffic affected: only a small fraction of total traffic
 Failed orders: 0 (caught before OOM)
 ```
 
@@ -850,7 +850,7 @@ Engineering response:    $0 (automatic)
 ─────────────────────────────────────────────────────────────────
 Total:                   <$5,000
 
-SAVINGS PER INCIDENT:    $1,136,000+
+SAVINGS PER INCIDENT:    potentially substantial
 ```
 
 **Why Memory Analysis Caught It**
@@ -871,9 +871,9 @@ t=15 min           268 MB                 OOM KILL  ← Would have failed here
 
 **Key Lessons**
 
-1. **Analysis timing matters**: Memory leak detection needs at least 5 minutes of data
+1. **Analysis timing matters**: Memory-leak detection needs enough observation time to reveal a trend
 2. **Rate of change, not absolute values**: Looking at growth rate catches leaks before OOM
-3. **5% is your friend**: Start small, fail small
+3. **Start small**: Use a small initial canary so failures stay contained
 4. **Automated response is faster**: Machines detect and act in seconds, humans take minutes
 5. **The analysis pays for itself**: One prevented incident justifies the implementation effort
 
@@ -1411,7 +1411,6 @@ Continue to [Module 2.3: Flux](../module-2.3-flux/) where we'll explore the alte
 
 ## Sources
 
-- [Kubernetes Deployment](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/) — Explains Deployment behavior, including the default rolling update strategy in Kubernetes.
-- [Argo Rollouts Overview](https://argoproj.github.io/rollouts/) — Summarizes canary and blue-green rollout patterns, traffic shaping, and automated analysis capabilities.
-- [Canary Deployment Strategy](https://argoproj.github.io/argo-rollouts/features/canary/) — Details canary steps, pause behavior, traffic weights, and rollout progression in Argo Rollouts.
-- [Analysis Overview](https://argoproj.github.io/argo-rollouts/features/analysis/) — Covers AnalysisTemplate, AnalysisRun, inline and background analysis, and dry-run behavior.
+- [Argo Rollouts Analysis and Progressive Delivery](https://argo-rollouts.readthedocs.io/en/stable/features/analysis/) — Backs canary and blue-green rollout behavior, AnalysisTemplate and AnalysisRun CRDs, Prometheus-driven automated analysis, abort conditions, experiments, and progressive delivery control beyond native Deployments.
+- [https://argo-rollouts.readthedocs.io/en/stable/features/bluegreen/](https://argo-rollouts.readthedocs.io/en/stable/features/bluegreen/) — The blue-green sequence of events shows the preview ReplicaSet running before promotion and the old ReplicaSet scaling down only after the switch and delay.
+- [Kubernetes Deployments](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/) — Use this as the baseline for native rolling-update behavior that Argo Rollouts extends.
