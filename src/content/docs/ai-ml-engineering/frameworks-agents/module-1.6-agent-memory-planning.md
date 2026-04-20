@@ -2289,5 +2289,3 @@ In this scenario, ReWOO drastically reduces the sheer number of expensive LLM re
 Now that you have implemented scalable memory architectures and contained the chaos of runaway planning algorithms, it's time to secure these pipelines for real-world enterprise traffic.
 
 Move on to **[Module 1.7: Multi-Agent Systems](./module-1.7-multi-agent-systems)** to master coordination patterns, observability tracing, RBAC-compliant tool execution, and fail-safe human-in-the-loop (HITL) checkpoints.
-
-## Sources

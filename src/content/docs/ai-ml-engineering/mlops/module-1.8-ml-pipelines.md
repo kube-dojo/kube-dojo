@@ -2078,8 +2078,6 @@ Modern Teams         → Prefect, Dagster
 
 ## Sources
 
-## Sources
-
 - [Apache Airflow Project History](https://airflow.apache.org/docs/apache-airflow/stable/project.html) — Official project history covering Airflow's origins and open-source timeline.
 - [Apache Airflow 1.10.1 Documentation](https://airflow.apache.org/docs/apache-airflow/1.10.1/index.html) — Primary documentation for Airflow concepts such as DAGs, dependencies, operators, scheduling, and the web UI.
 - [Apache Oozie Overview](https://oozie.apache.org/docs/5.2.0/DG_Overview.html) — Official overview of Oozie's XML-defined workflow model and Hadoop job orchestration.

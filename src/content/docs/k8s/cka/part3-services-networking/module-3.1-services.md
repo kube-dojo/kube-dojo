@@ -1221,5 +1221,3 @@ k delete svc challenge-app
 ## Next Module
 
 [Module 3.2: Endpoints & EndpointSlices](../module-3.2-endpoints/) - Plunge deeper into the architectural transition from legacy Endpoints to highly scalable EndpointSlices, exploring exactly how Kubernetes tracks vast quantities of Pods at enterprise scale.
-
-## Sources
