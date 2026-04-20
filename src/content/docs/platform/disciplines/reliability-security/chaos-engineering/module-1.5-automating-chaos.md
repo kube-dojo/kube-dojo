@@ -27,11 +27,11 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-On October 4, 2021, Facebook experienced a 6-hour global outage that affected 3.5 billion users and cost the company an estimated $65 million in revenue. The root cause was a configuration change to their backbone routers that disconnected Facebook's data centers from each other. But the real question isn't why it happened — network misconfigurations happen. The question is why it lasted 6 hours.
+On October 4, 2021, Facebook experienced a 6-hour global outage that disrupted Facebook, Instagram, and WhatsApp worldwide. [The root cause was a configuration change to their backbone routers](https://blog.cloudflare.com/october-2021-facebook-outage) that disconnected Facebook's data centers from each other. But the real question isn't why it happened — network misconfigurations happen. The question is why it lasted 6 hours.
 
-The answer: Facebook's internal tools (including the ones engineers needed to fix the problem) ran on the same infrastructure that was down. Engineers couldn't access the admin panels, couldn't SSH into servers, couldn't even get into the buildings because the badge readers depended on Facebook's internal network. The recovery tools were victims of the same failure they were supposed to fix.
+The answer: Facebook's internal tools (including the ones engineers needed to fix the problem) ran on the same infrastructure that was down. Engineers lost access to important internal recovery tooling and faced unusually difficult network and physical access during the outage. The recovery tools were victims of the same failure they were supposed to fix.
 
-A single Game Day testing the scenario "what if our internal tools are inaccessible during an outage" would have revealed this dependency. An automated chaos pipeline testing backbone connectivity would have caught the configuration issue before it went live. Neither existed.
+The outage illustrates why teams should drill recovery-path dependencies and validate risky network changes before deployment.
 
 This module teaches you to move chaos engineering from manual experiments into automated pipelines and structured Game Days. The goal is to make resilience verification as routine as running unit tests — something that happens on every deployment, not something an engineer remembers to do once a quarter.
 
@@ -39,13 +39,13 @@ This module teaches you to move chaos engineering from manual experiments into a
 
 ## Did You Know?
 
-> **Netflix runs over 2,000 automated chaos experiments per week** across their production infrastructure. These experiments run continuously, verifying that auto-scaling, failover, and circuit breakers work correctly. When an experiment reveals a regression (something that used to be resilient is no longer), it creates an automated ticket for the owning team. This continuous verification has reduced Netflix's unplanned outage rate by 78% since they started the program.
+> **Automated chaos testing can run continuously** to verify failover, scaling, and protection mechanisms and to surface resilience regressions earlier than occasional manual exercises.
 
-> **Gremlin (a commercial chaos engineering platform) reported** that organizations running chaos experiments in CI/CD pipelines experience 60% fewer severity-1 incidents than those running chaos only during manual Game Days. The key difference is frequency — automated chaos catches regressions within hours, while quarterly Game Days leave months of blind spots.
+> Frequent chaos testing in delivery pipelines can surface resilience regressions sooner than infrequent manual exercises, but the exact incident reduction depends on how teams measure and run the program.
 
-> **The concept of "Game Days" originated at Amazon in 2004** when Jesse Robbins (now known as the "Master of Disaster") started running failure simulations that tested not just technology but people and processes. The first Game Day revealed that 40% of runbooks were outdated and that three critical services had no runbooks at all. Robbins later said: "The Game Day didn't break anything — it revealed things that were already broken."
+> **Game Days became popular through early large-scale reliability drills** that tested technology, people, and process together rather than infrastructure alone.
 
-> **Google's DiRT (Disaster Recovery Testing) program** runs annual company-wide exercises where entire regions are simulated as failed. In 2019, a DiRT exercise revealed that 11 internal services had undocumented dependencies on a specific metadata service. Fixing those dependencies before a real regional failure prevented what would have been a multi-hour cascading outage.
+> **Large organizations sometimes run recurring disaster-recovery exercises** to expose hidden dependencies before real emergencies.
 
 ---
 
@@ -777,14 +777,14 @@ Engineers usually understand the value of Chaos Engineering. Leadership often ne
 - Number of sev-1 incidents per year: Y
 - Total annual cost: $X * Y * average_duration_hours
 - Cost of Chaos Engineering program: 1 engineer's time + tooling
-- Expected incident reduction (industry average): 40-60%
+- Expected incident reduction: meaningful if the program is well scoped, measured, and sustained over time
 - ROI: ($X * Y * avg_hours * 0.5) - program_cost
 
 **The Compliance Argument:**
-- SOC 2 Type II requires demonstrating operational resilience
+- Some assurance frameworks examine whether availability-related controls operate effectively over time
 - PCI DSS 4.0 requires testing security controls
 - FedRAMP requires disaster recovery testing
-- Game Days and chaos experiments provide audit evidence for all of these
+- Recovery drills and controlled resilience tests can support evidence collection when they are mapped to specific control requirements
 
 **The Talent Argument:**
 - Top engineers want to work at organizations with mature engineering practices
@@ -802,7 +802,7 @@ Engineers usually understand the value of Chaos Engineering. Leadership often ne
 | Skipping the steady-state verification step in CI | If the system is already unhealthy when chaos starts, you can't distinguish chaos impact from pre-existing issues | Always verify steady state BEFORE injecting chaos; fail the pipeline if the baseline is already violated |
 | Running the same experiments every time | After the third identical pod-kill experiment, you're not learning anything new — you're just confirming what you already know | Maintain an experiment backlog; rotate experiments; increase blast radius over time; target new services |
 | Not cleaning up experiments on pipeline failure | If the CI job fails mid-experiment (runner dies, timeout), the chaos CRDs remain active indefinitely | Use `if: always()` cleanup steps; set short durations on chaos CRDs; have a cron job that deletes old experiments |
-| Treating Game Day findings as "nice to haves" | If findings are filed as low-priority tickets that never get fixed, the program loses credibility and participants stop engaging | Treat critical Game Day findings like production incidents — they get the same priority and SLA as a real outage |
+| Treating Game Day findings as "nice to haves" | If findings are filed as low-priority tickets that often go unfixed, the program loses credibility and participants stop engaging | Treat critical Game Day findings like production incidents — they get the same priority and SLA as a real outage |
 | No executive summary after Game Days | Technical details in a Confluence page that nobody reads provides no organizational learning | Write a 1-page executive summary with findings, business risk, and cost of not fixing; present at the next all-hands |
 
 ---
@@ -872,7 +872,7 @@ To evaluate, ask:
 - Have you increased blast radius since the initial setup?
 - Are the SLO thresholds aligned with real user expectations?
 
-A healthy chaos program should have an experiment failure rate of 10-20% — frequent enough to provide new insights, infrequent enough that the system is generally resilient.
+A healthy chaos program should produce new findings often enough to stay useful, without causing frequent uncontrolled disruption.
 
 </details>
 
@@ -911,7 +911,7 @@ The recommended progression:
 2. Move to **gating** in staging (block production deploy on staging chaos failure)
 3. Eventually, run **post-deployment checks** in production with automated canary rollback
 
-Never gate production deployments on production chaos experiments — the blast radius of a failed experiment affecting a just-deployed canary is too unpredictable.
+Avoid gating production deployments on production chaos experiments — the blast radius of a failed experiment affecting a just-deployed canary is often too unpredictable.
 
 </details>
 
@@ -1165,3 +1165,7 @@ Key takeaways:
 ## Next Module
 
 Return to the [Chaos Engineering README]() to review the complete discipline, explore further reading, and find links to related platform engineering tracks.
+
+## Sources
+
+- [Understanding how Facebook disappeared from the Internet](https://blog.cloudflare.com/october-2021-facebook-outage) — Useful incident analysis for the module's opening Facebook outage example and its network-configuration root cause.
