@@ -241,14 +241,25 @@ not just bolt on missing sections.
 3. `curl -s http://127.0.0.1:8768/api/briefing/session?compact=1`.
 4. Confirm clean tree: `git status -s`.
 5. Count current state: `curl .../api/quality/scores | jq '[.modules[] | select(.score >= 4)] | length'`.
-6. Retry session 8 failures (recipe above).
-7. After the 597-module citation queue drains, pivot to v4 for the
+6. Prefer the section pipeline for adjacent uncited modules:
+   `./.venv/bin/python scripts/pipeline_v3_section.py <section-path>`.
+   This now runs `section_source_discovery` once, then keeps research
+   per-module but constrained to the shared pool.
+7. Use `scripts/pipeline_v3.py` only for one-off reruns or cleanup on a
+   single module.
+8. Retry session 8 failures (recipe above) only when you explicitly want
+   the legacy per-module path.
+9. After the 597-module citation queue drains, pivot to v4 for the
    genuinely-thin 46.
-8. `git push` only after you eyeball the commit diffs.
+10. `git push` only after you eyeball the commit diffs.
 
 # References
 
 - `scripts/pipeline_v3.py` — orchestrator with prune-and-continue
+- `scripts/pipeline_v3_section.py` — preferred section runner with
+  shared source discovery
+- `scripts/section_source_discovery.py` — writes
+  `docs/citation-pools/<section>.json`
 - `scripts/pipeline_v3_batch_commit.py` — per-module commit wrapper
 - `scripts/fetch_citation.py` — now fails fast on missing PyYAML
 - `.pipeline/v3/batches/` — tranche files + JSONL logs

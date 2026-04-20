@@ -1,0 +1,65 @@
+{
+  "section": "platform/toolkits/cicd-delivery/gitops-deployments",
+  "modules": [
+    "platform/toolkits/cicd-delivery/gitops-deployments/module-2.1-argocd",
+    "platform/toolkits/cicd-delivery/gitops-deployments/module-2.2-argo-rollouts",
+    "platform/toolkits/cicd-delivery/gitops-deployments/module-2.3-flux",
+    "platform/toolkits/cicd-delivery/gitops-deployments/module-2.4-helm-kustomize"
+  ],
+  "generated_at": "2026-04-20T19:50:26+00:00",
+  "batch_count": 1,
+  "fallback_used": false,
+  "sources": [],
+  "rejected_urls": [
+    {
+      "url": "https://helm.sh/docs/",
+      "reason": "network_failure",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://fluxcd.io/flux/components/",
+      "reason": "network_failure",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://argoproj.github.io/argo-cd/",
+      "reason": "network_failure",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://argoproj.github.io/rollouts/",
+      "reason": "network_failure",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/",
+      "reason": "network_failure",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://fluxcd.io/install.sh",
+      "reason": "network_failure",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://argoproj.github.io/argo-helm",
+      "reason": "network_failure",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://github.com/company/payments-*",
+      "reason": "network_failure",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://github.com/stefanprodan/podinfo",
+      "reason": "network_failure",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://fluxcd.io/flux/components/image/",
+      "reason": "network_failure",
+      "at_step": "section_source_discovery"
+    }
+  ]
+}

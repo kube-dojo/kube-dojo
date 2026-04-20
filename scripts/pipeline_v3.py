@@ -443,7 +443,8 @@ def _remove_paragraph(body: str, paragraph: dict[str, Any]) -> str:
 def run_pipeline(module_key: str, *, skip_research: bool = False,
                  auto_apply: bool = True,
                  gate_agent_text: str = "codex",
-                 gate_agent_coherence: str = "gemini") -> dict[str, Any]:
+                 gate_agent_coherence: str = "gemini",
+                 section_pool_ref: str | None = None) -> dict[str, Any]:
     module_path = resolve_module_path(module_key)
     normalized_key = module_path.relative_to(DOCS_ROOT).with_suffix("").as_posix()
     flat_key = normalized_key.replace("/", "-")
@@ -461,7 +462,11 @@ def run_pipeline(module_key: str, *, skip_research: bool = False,
     if skip_research:
         run_record["stages"]["research"] = {"skipped": True}
     else:
-        r = run_research(normalized_key, agent="codex")
+        r = run_research(
+            normalized_key,
+            agent="codex",
+            section_pool_ref=section_pool_ref,
+        )
         run_record["stages"]["research"] = r
         if not r.get("ok"):
             return _finalize(run_record, "research_failed", flat_key)

@@ -31,7 +31,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from citation_backfill import (  # type: ignore  # noqa: E402
     CITED_DISPOSITIONS, DOCS_ROOT, REPO_ROOT,
     dispatch_codex, dispatch_gemini, parse_agent_response,
-    resolve_module_path, seed_path_for,
+    resolve_claim_source_urls, resolve_module_path, seed_path_for,
+    load_section_pool,
 )
 from fetch_citation import cached_text_path, fetch  # type: ignore  # noqa: E402
 
@@ -112,9 +113,11 @@ def load_page_text(url: str) -> str | None:
 
 
 def verify_claim(claim: dict[str, Any], *, agent: str,
-                 module_key: str) -> dict[str, Any]:
+                 module_key: str,
+                 section_pool: dict[str, Any] | None = None) -> dict[str, Any]:
     claim_id = claim.get("claim_id") or "?"
-    url = (claim.get("proposed_url") or "").strip()
+    urls = resolve_claim_source_urls(claim, section_pool=section_pool)
+    url = urls[0].strip() if urls else ""
     claim_text = claim.get("claim_text") or ""
     claim_class = claim.get("claim_class") or ""
     if not url or not claim_text:
@@ -158,9 +161,11 @@ def run_verify(module_key: str, *, agent: str = "gemini",
         return {"module_key": normalized_key, "ok": False,
                 "error": "no_seed_file"}
     seed = json.loads(seed_path.read_text(encoding="utf-8"))
+    section_pool = load_section_pool(seed.get("section_pool_ref"))
     claims_to_verify = [
         c for c in seed.get("claims") or []
-        if c.get("disposition") in CITED_DISPOSITIONS and c.get("proposed_url")
+        if c.get("disposition") in CITED_DISPOSITIONS
+        and resolve_claim_source_urls(c, section_pool=section_pool)
     ]
     if dry_run:
         return {"module_key": normalized_key, "dry_run": True,
@@ -170,7 +175,8 @@ def run_verify(module_key: str, *, agent: str = "gemini",
     verdicts = []
     for claim in claims_to_verify:
         verdicts.append(verify_claim(claim, agent=agent,
-                                     module_key=normalized_key))
+                                     module_key=normalized_key,
+                                     section_pool=section_pool))
 
     counts = {"SUPPORTED": 0, "UNSUPPORTED": 0,
               "CONTRADICTED": 0, "UNREADABLE": 0}
