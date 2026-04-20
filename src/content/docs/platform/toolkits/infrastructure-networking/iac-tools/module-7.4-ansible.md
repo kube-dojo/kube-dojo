@@ -23,35 +23,35 @@ Before starting this module, you should have completed:
 After completing this module, you will be able to:
 
 - **Configure Ansible playbooks with roles and collections for Kubernetes node provisioning**
-- **Implement Ansible's kubernetes.core collection for declarative cluster resource management**
+- **Implement [Ansible's kubernetes.core collection](https://github.com/ansible-collections/kubernetes.core) for declarative cluster resource management**
 - **Deploy multi-tier applications using Ansible with inventory management and vault-encrypted secrets**
 - **Integrate Ansible with Terraform for infrastructure provisioning and configuration management workflows**
 
 
 ## Why This Module Matters
 
-*The configuration management console showed 2,847 servers in "unknown" state.*
+*The configuration management console showed a large portion of the fleet in an unknown state.*
 
-When the e-commerce company's Black Friday traffic projections came in—400% above normal—their infrastructure team realized the nightmare scenario: their servers were configured manually over three years. No one knew the exact state of any machine. Some had been patched, others hadn't. Some ran different application versions. Some had configuration drift that would cause failures under load.
+When a team discovers heavy configuration drift across manually managed servers ahead of a high-traffic event, the lack of a reliable source of truth quickly becomes a major operational risk.
 
-They had six weeks to achieve configuration parity across nearly 3,000 servers. Manual intervention was impossible—that's 71 servers per day, with zero errors allowed.
+They had a short window to standardize a very large fleet, which made manual intervention unrealistic.
 
-**Ansible** became their salvation. In 23 days, they wrote playbooks that audited every server's state, documented all drift, and enforced consistent configuration. On Black Friday, zero servers failed due to configuration issues. Revenue: $127 million in 24 hours.
+**Ansible** gave the team a way to audit drift, document server state, and enforce consistent configuration before a critical traffic event.
 
-**This module teaches you** Ansible's agentless architecture, playbook development, inventory management, and integration with Terraform for complete infrastructure automation. You'll learn when to use Ansible versus Terraform—and how to use them together.
+**This module teaches you** [Ansible's agentless architecture](https://github.com/ansible/ansible), playbook development, inventory management, and integration with Terraform for complete infrastructure automation. You'll learn when to use Ansible versus Terraform—and how to use them together.
 
 ---
 
 ## War Story: The Patch That Broke Production
 
 **Characters:**
-- Marcus: Senior SRE (8 years experience)
-- Team: 6 engineers managing 1,200 servers
+- Incident lead: senior SRE coordinating the response
+- Team: small engineering group managing a large server fleet
 - Infrastructure: Mix of bare metal and cloud VMs
 
 **The Incident:**
 
-A critical OpenSSL vulnerability (CVE-2024-XXXX) was announced. Marcus had 72 hours to patch all 1,200 servers before the exploit went public.
+A critical OpenSSL vulnerability was announced, and the team needed to patch a large server fleet quickly before public exploitation spread.
 
 **Timeline:**
 
@@ -147,7 +147,7 @@ Hour 72: Exploit released
 | Create cloud resources | ✅ | ❌ | - |
 | Install packages | ❌ | ✅ | - |
 | Configure services | ❌ | ✅ | - |
-| Manage Kubernetes resources | ✅ | ✅ | - |
+| [Manage Kubernetes resources](https://github.com/hashicorp/terraform-provider-kubernetes) | ✅ | ✅ | - |
 | Complete server provisioning | - | - | ✅ |
 | Database schema migrations | ❌ | ✅ | - |
 | Network infrastructure | ✅ | ❌ | - |
@@ -1150,7 +1150,7 @@ pip install kubernetes openshift
 
 ---
 
-## Testing Ansible with Molecule
+## Testing Ansible with [Molecule](https://github.com/ansible/molecule)
 
 ### Molecule Setup
 
@@ -1604,13 +1604,13 @@ Use cases:
 
 ## Did You Know?
 
-1. **NASA uses Ansible** to manage their High-End Computing infrastructure. The agentless architecture was crucial for their security requirements—no additional attack surface on compute nodes.
+1. **NASA uses Ansible** to manage their High-End Computing infrastructure. Agentless automation can matter in locked-down environments because it avoids installing extra software on managed nodes.
 
-2. **The name "Ansible"** comes from Ursula K. Le Guin's science fiction novels, where it's a device for instantaneous communication across any distance. In the tool, it represents instant configuration without waiting for agent check-ins.
+2. **The name "Ansible"** comes from [Ursula K. Le Guin's science fiction novels](https://en.wikipedia.org/wiki/Ansible_%28software%29), where it's a device for instantaneous communication across any distance. In the tool, it represents instant configuration without waiting for agent check-ins.
 
-3. **Ansible Galaxy has over 30,000 roles** shared by the community. Before writing a role from scratch, check Galaxy—there's probably a well-tested role for your use case.
+3. **Ansible Galaxy hosts a large catalog of community roles and collections.** Before writing a role from scratch, check Galaxy—there may already be a well-tested option for your use case.
 
-4. **Red Hat acquired Ansible in 2015** for $150 million. Since then, it's become the foundation of their automation strategy, including Ansible Tower (now AAP - Ansible Automation Platform).
+4. **Red Hat acquired Ansible in 2015.** Since then, it's become the foundation of their automation strategy, including Ansible Tower (now [AAP - Ansible Automation Platform](https://www.redhat.com/en/about/press-releases/red-hat-elevates-enterprise-automation-new-red-hat-ansible-automation-platform)).
 
 ---
 
@@ -1739,3 +1739,13 @@ Continue to [Module 7.5: AWS CloudFormation](../module-7.5-cloudformation/) to l
 - [Molecule Documentation](https://molecule.readthedocs.io/)
 - Book: "Ansible for DevOps" by Jeff Geerling
 - Book: "Ansible: Up and Running" by Lorin Hochstein
+
+## Sources
+
+- [Ansible upstream repository](https://github.com/ansible/ansible) — Primary upstream source for Ansible's core architecture, capabilities, and release history.
+- [kubernetes.core collection](https://github.com/ansible-collections/kubernetes.core) — Upstream source for the Ansible Kubernetes collection used throughout the module.
+- [Terraform Kubernetes provider](https://github.com/hashicorp/terraform-provider-kubernetes) — Provider repository documenting Terraform support for managing Kubernetes resources.
+- [Molecule](https://github.com/ansible/molecule) — Upstream testing framework for validating Ansible roles, playbooks, and collections.
+- [Ansible (software)](https://en.wikipedia.org/wiki/Ansible_%28software%29) — Secondary reference covering the origin of the Ansible name and project background.
+- [Red Hat Ansible Automation Platform announcement](https://www.redhat.com/en/about/press-releases/red-hat-elevates-enterprise-automation-new-red-hat-ansible-automation-platform) — Red Hat's announcement of Ansible Automation Platform as its enterprise automation offering.
+- [Terraform upstream repository](https://github.com/hashicorp/terraform) — Primary source for Terraform's declarative infrastructure model and lifecycle-oriented workflow.
