@@ -71,7 +71,7 @@ This is an IP address. It's four numbers separated by dots, each between 0 and 2
 
 ### Types of IP Addresses
 
-**Private IP addresses** — used inside your local network:
+**[Private IP addresses](https://www.rfc-editor.org/rfc/rfc1918)** — used inside your local network:
 
 ```
 192.168.x.x    (most common for home networks)
@@ -120,7 +120,7 @@ So every computer has an IP address. But a computer runs many programs at once �
 
 That's what **ports** are for.
 
-A **port** is a number (from 0 to 65535) that identifies a specific program or service on a computer.
+A **port** is a number ([from 0 to 65535](https://www.rfc-editor.org/rfc/rfc6335)) that identifies a specific program or service on a computer.
 
 ### The Apartment Building Analogy
 
@@ -183,7 +183,7 @@ DNS is why you don't need to type `142.250.80.46` every time you want to search 
 5. Your computer connects to 142.250.80.46
 ```
 
-This all happens in milliseconds. You never notice it.
+This all happens in milliseconds. You usually do not notice it.
 
 ---
 
@@ -268,7 +268,7 @@ Content-Type: text/html; charset=UTF-8
 ...
 ```
 
-`200 OK` means the server received your request and everything is fine. You'll learn more about HTTP status codes later, but the important ones are:
+`200 OK` means the server received your request and everything is fine. You'll learn more about [HTTP status codes](https://www.rfc-editor.org/rfc/rfc9110) later, but the important ones are:
 
 | Code | Meaning | Analogy |
 |------|---------|---------|
@@ -296,13 +296,13 @@ This confirms that `google.com` translates to `142.250.80.46` (your result may d
 
 ## Did You Know?
 
-> 1. **A common production issue: DNS caching.** Sometimes, even after a server migration is completed and DNS records are updated, your application keeps connecting to the old IP address because it cached the old DNS result. This has caused real, prolonged outages at major scale. For instance, a global e-commerce giant once suffered a 4-hour outage during a migration when their payment gateways aggressively cached outdated DNS records, costing an estimated $3.2 million in lost transactions because the application simply refused to look up the new address.
+> 1. **A common production issue: DNS caching.** Sometimes, even after a server migration is completed and DNS records are updated, an application can keep connecting to the old IP address because it cached an earlier DNS result. DNS cutovers therefore need careful TTL and cache planning.
 >
 > 2. **NAT (Network Address Translation) and "It works on my machine".** Your local machine might have an IP like `192.168.1.42`, but the internet only sees your router's public IP. When you run a server on your laptop, it's bound to your local IP. This is why you can access it locally, but your friend across town gets a "connection refused" error — they cannot route traffic through the public internet directly to your private local IP without NAT rules on your router.
 >
-> 3. **DNS was invented because memorizing IP addresses was too hard.** Before DNS existed (1983), there was literally a single text file called `hosts.txt` that listed every computer on the internet and its address. Someone maintained it by hand. As the internet grew, this became impossible, so Paul Mockapetris invented DNS to automate the process.
+> 3. **DNS was invented because memorizing IP addresses was too hard.** Before DNS existed (1983), there was literally a single text file called [`hosts.txt`](https://www.rfc-editor.org/rfc/rfc1034) that listed every computer on the internet and its address. Someone maintained it by hand. As the internet grew, this became impractical, so [Paul Mockapetris invented DNS](https://www.rfc-editor.org/rfc/rfc883) to automate the process.
 >
-> 4. **IP address exhaustion is real.** The original IP address system (IPv4) only has about 4.3 billion addresses. By the 2010s, we effectively ran out. To solve this, engineers created IPv6, which has so many addresses (340 undecillion) that we could assign one to every atom on the surface of the Earth and still have plenty left over. However, moving the entire internet to IPv6 is taking decades, which is why NAT (mentioned above) is so crucial today to share IPv4 addresses.
+> 4. **IP address exhaustion is real.** The original IP address system (IPv4) only has about 4.3 billion addresses. By the 2010s, we effectively ran out. To solve this, engineers created IPv6, which uses a vastly larger 128-bit address space than IPv4. However, moving the entire internet to IPv6 is taking decades, which is why NAT (mentioned above) is so crucial today to share IPv4 addresses.
 
 ---
 
@@ -461,3 +461,13 @@ You've completed this exercise when you can:
 You now understand how computers find and talk to each other. IP addresses, ports, DNS, and basic networking commands are in your toolkit.
 
 **Next Module**: [Module 0.8: Servers and SSH](../module-0.8-servers-and-ssh/) — Learn what a server is, where they live, and how to connect to them remotely.
+
+## Sources
+
+- [RFC 1918: Address Allocation for Private Internets](https://www.rfc-editor.org/rfc/rfc1918) — Defines the private IPv4 address ranges used on local networks.
+- [RFC 6335: IANA Procedures for the Management of the Service Name and Transport Protocol Port Number Registry](https://www.rfc-editor.org/rfc/rfc6335) — Specifies the valid transport-layer port number range from 0 through 65535.
+- [Kubernetes API Access Control](https://kubernetes.io/docs/reference/access-authn-authz/controlling-access/) — Documents how clients reach the Kubernetes API server, including its default secure port.
+- [RFC 1034: Domain Names - Concepts and Facilities](https://www.rfc-editor.org/rfc/rfc1034) — Explains DNS concepts and the historical limits of the HOSTS.TXT approach.
+- [RFC 883: Domain Names - Implementation and Specification](https://www.rfc-editor.org/rfc/rfc883) — Original DNS specification published in 1983 by Paul Mockapetris.
+- [RFC 9110: HTTP Semantics](https://www.rfc-editor.org/rfc/rfc9110) — Defines standard HTTP response semantics, including 200, 404, and 500 status codes.
+- [Kubernetes Ports and Protocols](https://kubernetes.io/docs/reference/ports-and-protocols/) — Connects beginner networking concepts here to the ports learners will encounter in Kubernetes.

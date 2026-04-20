@@ -1,0 +1,161 @@
+{
+  "module_key": "prerequisites/zero-to-terminal/module-0.7-what-is-networking",
+  "module_path": "src/content/docs/prerequisites/zero-to-terminal/module-0.7-what-is-networking.md",
+  "research_run_id": "2026-04-19T23:40:54+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 2,
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "Private IPv4 address space includes 10.0.0.0/8, 172.16.0.0/12, and 192.168.0.0/16.",
+      "claim_class": "standard",
+      "span_hint": "section: Types of IP Addresses",
+      "disposition": "supported",
+      "proposed_url": "https://www.rfc-editor.org/rfc/rfc1918",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "RFC 1918 is the authoritative standard reserving these private IPv4 ranges."
+    },
+    {
+      "claim_id": "C002",
+      "claim_text": "Port numbers span 0 through 65535.",
+      "claim_class": "standard",
+      "span_hint": "section: Ports: Many Doors on One Address",
+      "disposition": "supported",
+      "proposed_url": "https://www.rfc-editor.org/rfc/rfc6335",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "RFC 6335 defines the transport port-number space and its ranges."
+    },
+    {
+      "claim_id": "C003",
+      "claim_text": "Common service ports include HTTP 80, HTTPS 443, SSH 22, and DNS 53.",
+      "claim_class": "standard",
+      "span_hint": "section: Common Ports table",
+      "disposition": "needs_allowlist_expansion",
+      "proposed_url": "https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xhtml",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The primary authoritative source for these registered port assignments is the IANA service-name and port registry, which is off the current allowlist."
+    },
+    {
+      "claim_id": "C004",
+      "claim_text": "The Kubernetes API server listens on port 6443 by default.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Common Ports table",
+      "disposition": "supported",
+      "proposed_url": "https://kubernetes.io/docs/reference/access-authn-authz/controlling-access/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Kubernetes documentation explicitly states that the API server listens on port 6443 by default."
+    },
+    {
+      "claim_id": "C005",
+      "claim_text": "Before DNS, host-to-address mappings were distributed through a central HOSTS.TXT file, and that model did not scale as the network grew.",
+      "claim_class": "standard",
+      "span_hint": "section: Did You Know, item 3",
+      "disposition": "supported",
+      "proposed_url": "https://www.rfc-editor.org/rfc/rfc1034",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "RFC 1034 describes the earlier HOSTS.TXT distribution model and the scaling problem that motivated DNS."
+    },
+    {
+      "claim_id": "C006",
+      "claim_text": "Paul Mockapetris proposed DNS in 1983.",
+      "claim_class": "standard",
+      "span_hint": "section: Did You Know, item 3",
+      "disposition": "supported",
+      "proposed_url": "https://www.rfc-editor.org/rfc/rfc883",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "RFC 883 is Paul Mockapetris's 1983 DNS specification and directly supports the attribution and year."
+    },
+    {
+      "claim_id": "C007",
+      "claim_text": "A DNS-caching migration story claims a major e-commerce company suffered a 4-hour outage and lost $3.2 million because payment gateways kept using an old IP.",
+      "claim_class": "war_story",
+      "span_hint": "section: Did You Know, item 1",
+      "disposition": "cannot_be_salvaged",
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Sometimes, even after a server migration is completed and DNS records are updated, your application keeps connecting to the old IP address because it cached the old DNS result. This has caused real, prolonged outages at major scale. For instance, a global e-commerce giant once suffered a 4-hour outage during a migration when their payment gateways aggressively cached outdated DNS records, costing an estimated $3.2 million in lost transactions because the application simply refused to look up the new address.",
+      "suggested_rewrite": "Sometimes, even after a server migration is completed and DNS records are updated, an application can keep connecting to the old IP address because it cached an earlier DNS result. DNS cutovers therefore need careful TTL and cache planning.",
+      "lesson_point_url": null,
+      "rationale": "This is an unsourced incident-style anecdote with fake-precise duration and dollar-loss details, so the specifics should be removed."
+    },
+    {
+      "claim_id": "C008",
+      "claim_text": "IPv4 provides about 4.3 billion addresses, and the central free pool was depleted in 2011.",
+      "claim_class": "statistic",
+      "span_hint": "section: Did You Know, item 4",
+      "disposition": "needs_allowlist_expansion",
+      "proposed_url": "https://itp.cdn.icann.org/en/files/announcements/release-03feb11-en.pdf",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "ICANN's 2011 depletion release directly supports both the approximate IPv4 address count and the exhaustion milestone, but the host is off allowlist."
+    },
+    {
+      "claim_id": "C009",
+      "claim_text": "IPv6 has 340 undecillion addresses, enough to assign one to every atom on Earth's surface and still have plenty left over.",
+      "claim_class": "statistic",
+      "span_hint": "section: Did You Know, item 4",
+      "disposition": "cannot_be_salvaged",
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "To solve this, engineers created IPv6, which has so many addresses (340 undecillion) that we could assign one to every atom on the surface of the Earth and still have plenty left over.",
+      "suggested_rewrite": "To solve this, engineers created IPv6, which uses a vastly larger 128-bit address space than IPv4.",
+      "lesson_point_url": null,
+      "rationale": "The exact huge-number comparison is more rhetorical than teachably necessary; the standards-backed 128-bit fact is the cleaner claim to keep."
+    },
+    {
+      "claim_id": "C010",
+      "claim_text": "HTTP status codes 200, 404, and 500 mean OK, Not Found, and Internal Server Error, respectively.",
+      "claim_class": "standard",
+      "span_hint": "section: curl — Give Me That Web Page",
+      "disposition": "supported",
+      "proposed_url": "https://www.rfc-editor.org/rfc/rfc9110",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "RFC 9110 defines the semantics of these exact HTTP status codes."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://www.rfc-editor.org/rfc/rfc1918",
+      "title": "RFC 1918: Address Allocation for Private Internets",
+      "tier": "standards",
+      "why_relevant": "Explains the private IPv4 ranges that underpin the local-vs-public IP section."
+    },
+    {
+      "url": "https://www.rfc-editor.org/rfc/rfc1034",
+      "title": "RFC 1034: Domain Names - Concepts and Facilities",
+      "tier": "standards",
+      "why_relevant": "Gives the core DNS mental model and the historical motivation for replacing HOSTS.TXT."
+    },
+    {
+      "url": "https://kubernetes.io/docs/reference/ports-and-protocols/",
+      "title": "Kubernetes Ports and Protocols",
+      "tier": "standards",
+      "why_relevant": "Bridges the beginner networking concepts here to the ports learners will encounter in Kubernetes."
+    }
+  ],
+  "notes": "Seed intentionally omits analogies, quiz/exercise blocks, and code-block example IPs/hostnames. Off-allowlist primary sources are needed for the IANA registered-port table and the ICANN IPv4 depletion announcement.",
+  "_schema_issues": [],
+  "rejected_urls": []
+}
