@@ -2,9 +2,31 @@
 
 > **Read this first every session. Update before ending.**
 
-## Active Work (2026-04-19, session 5 — citation pipeline landed + batch in flight)
+## Active Work (2026-04-21, session 10 — PR #324 merged, main reconciled, section pipeline ready)
 
-Final handoff (read this first): [`docs/sessions/2026-04-19-session-5-final.md`](./docs/sessions/2026-04-19-session-5-final.md). Pipeline is research-stage-production-grade; inject step just got a markdown-normalization fix (`9bc4a722`) whose confirmation is mid-run at handoff. A 65-module batch (ZTT+AI+prereqs research) is streaming via Monitor. 13 commits on main, nothing pushed.
+Session 9 handoff: [`docs/sessions/2026-04-21-session-9-handoff.md`](./docs/sessions/2026-04-21-session-9-handoff.md).
+
+**Session 10 landed:**
+- PR #324 (section source pool, closes #323) merged as squash commit `d89ef3de`. Two-round Gemini review: NEEDS CHANGES → 3 fixes in `0e57664e` (disposition-gate hardening for pool `source_ids` + `lesson_point_url`, isinstance guard on `parse_agent_response`, context-managed log file, + fixed a pre-existing test-isolation bug that was overwriting live pool files). Second review: APPROVE.
+- Main reconciled: local was 45 ahead of origin, origin had the squash. Merged with `-X theirs` (PR squash is canonical content; session-9 handoff and local-only files preserved). Merge commit `4e672139`, pushed.
+- 51 untracked citation-seed JSONs committed as catch-up (`b9337448`). `docs/citation-seeds/` convention: tracked source-of-truth for pipeline research. `-X theirs` conflict resolution favoured PR content on the ~40 modules that both local and PR modified — review those module diffs if anything reads off.
+- Codex was rate-limited at session start (websocket "high demand" errors), so Gemini 3.1 Pro stood in as the independent-family reviewer. Codex recovered mid-session.
+
+**Ready-to-execute next session (handoff step 6):**
+- Dogfood section pipeline on a small real section to validate at scale.
+  - First candidate: `platform/toolkits/cicd-delivery/source-control/` (3 modules: 11.1 gitlab, 11.2 gitea-forgejo, 11.3 github-advanced). Command: `.venv/bin/python scripts/pipeline_v3_section.py platform/toolkits/cicd-delivery/source-control`. Wall ~30 min.
+  - Then: `k8s/cka/part3-services-networking/` (8 content modules; exceeds default batch cap 5 → will split). 2 of the 8 (3.1, 3.6) already have session-8 seeds.
+- This is a pipeline mutation (writes pool JSON + per-module seeds + module edits + commits) — user-run per `feedback_no_run_scripts.md`.
+
+**Known gotchas (unchanged from session 9):**
+- Codex auth can go flaky under load; smoke-check with `echo hi | timeout 25 codex exec --full-auto --skip-git-repo-check` before any batch.
+- PyYAML required via `.venv/bin/python`, never the homebrew `python3` shim.
+- 900s Codex dispatch hard-timeout; large runs need phasing.
+
+**Lower-priority carry-over:**
+- 5 critical-quality modules at score 1.5 (AI/ML Advanced GenAI 1.1 fine-tuning, 1.2 LoRA, 1.3 diffusion, 1.10 single-GPU, 1.11 multi-GPU). 1.1/1.2/1.3 are long (900–1360 lines) — likely pedagogy-failure not size; 1.10/1.11 are thin (~280 lines) and need real expansion. Hit `GET /api/quality/scores?module=<key>` for the rubric-dimension breakdown before rewriting.
+- 3 stale `.staging.md` files in `ai-ml-engineering/advanced-genai/` (modules 1.4, 1.5, 1.8) — gitignored local artifacts from v1_pipeline. Harmless. Delete if v1_pipeline's "fresh restart drops staged draft" logic isn't firing.
+- pipeline_v4 (issue #322) — do NOT start until v3 section-pool queue is drained.
 
 ---
 
