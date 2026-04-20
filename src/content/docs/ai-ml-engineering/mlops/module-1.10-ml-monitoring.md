@@ -5,11 +5,11 @@ sidebar:
   order: 611
 ---
 
-San Francisco, California. October 2021. The operational dashboard showed green lights across the board. Service uptime remained at a pristine 99.99%. The API latency held steady at an average of 45ms. The HTTP error rate was virtually nonexistent at 0.001%. By every standard software engineering metric, Zillow's automated home-buying algorithm was performing flawlessly. 
+In 2021, a system could still look healthy on conventional uptime, latency, and error dashboards while the model's business decisions were degrading. 
 
-But beneath those reassuring metrics, a catastrophic algorithmic failure was unfolding. The machine learning model had been meticulously trained on historical housing market data, learning intricate patterns regarding location, square footage, school districts, and pricing. It ingested features and spat out purchasing prices, driving Zillow to buy thousands of homes. When the COVID-19 pandemic radically altered the housing landscape—shifting demand from urban centers to suburbs and introducing massive volatility in interest rates—the foundational patterns the model relied on evaporated. The model, however, possessed no awareness of this paradigm shift. It simply continued executing its primary function, purchasing houses at fundamentally flawed valuations.
+But beneath those reassuring metrics, a catastrophic algorithmic failure was unfolding. The machine learning model had been meticulously trained on historical housing market data, learning intricate patterns regarding location, square footage, school districts, and pricing. It ingested features and spat out purchasing prices, driving Zillow to buy thousands of homes. When market conditions changed abruptly, the historical patterns the model relied on no longer held. The model, however, possessed no awareness of this paradigm shift. It simply continued executing its primary function, purchasing houses at fundamentally flawed valuations.
 
-By the time the human operators realized the magnitude of the discrepancy, Zillow had hemorrhaged $569 million. The company was forced to shutter its entire iBuying division, resulting in the termination of 2,000 employees and a precipitous 25% single-day drop in stock value. This disaster was not caused by a software crash or an infrastructure outage; it was caused by a profound failure in machine learning monitoring. The model never threw an exception. It simply failed silently, highlighting the critical difference between monitoring software execution and monitoring algorithmic cognition.
+The failure led Zillow to wind down Zillow Offers, take major write-downs, and cut a large share of staff. This disaster was not caused by a software crash or an infrastructure outage; it was caused by a profound failure in machine learning monitoring. The model never threw an exception. It simply failed silently, highlighting the critical difference between monitoring software execution and monitoring algorithmic cognition.
 
 ## What You'll Be Able to Do
 
@@ -180,7 +180,7 @@ flowchart LR
     B1 & B2 --> A1 & A2
 ```
 
-> **Did You Know?** The formal academic definition of "concept drift" was introduced in 1996 by researchers Gerhard Widmer and Miroslav Kubat in their seminal paper "Learning in the Presence of Concept Drift and Hidden Contexts." It took nearly two decades for the software industry to catch up to the theoretical frameworks they established.
+> **Did You Know?** The formal academic definition of "concept drift" was introduced in 1996 by researchers Gerhard Widmer and Miroslav Kubat in their seminal paper "Learning in the Presence of Concept Drift and Hidden Contexts." The concept was established in the academic literature long before it became common language in production ML practice.
 
 ### Prediction Drift
 
@@ -221,7 +221,7 @@ To mathematically prove that drift has occurred, MLOps engineers rely on several
 
 #### Population Stability Index (PSI)
 
-PSI measures how much a population has shifted over time. It is highly robust and widely used in the financial sector.
+PSI is a common heuristic for quantifying how much a population has shifted over time.
 
 ```python
 def calculate_psi(
@@ -283,7 +283,7 @@ def ks_drift_test(
 
 #### Jensen-Shannon Divergence
 
-Unlike Kullback-Leibler (KL) divergence, JS divergence is symmetric and always returns a finite value between 0 and 1, making it exceptionally reliable for automated monitoring pipelines.
+Unlike Kullback-Leibler (KL) divergence, JS divergence is [symmetric and typically yields a finite value in a bounded range](https://en.wikipedia.org/wiki/Jensen%E2%80%93Shannon_divergence), making it exceptionally reliable for automated monitoring pipelines.
 
 ```python
 def js_divergence(
@@ -408,7 +408,7 @@ class SlidingWindowMonitor:
         }
 ```
 
-> **Did You Know?** Netflix's massive recommendation infrastructure continuously monitors over 200 distinct algorithmic and business metrics. Their capability to detect minute regressions saves millions of hours of viewer engagement, proving that at scale, even a 0.5% accuracy drop is a severe incident.
+> **Did You Know?** At large scale, recommendation systems often track many business and model-health metrics, and even small regressions can matter materially.
 
 ### Explainability Frameworks
 
@@ -416,7 +416,7 @@ Detecting a failure is only the first step. Diagnosing the exact feature respons
 
 #### SHAP (SHapley Additive exPlanations)
 
-SHAP relies on cooperative game theory to distribute the "payout" (the final prediction) among the "players" (the input features) fairly.
+SHAP relies on [cooperative game theory](https://arxiv.org/abs/1705.07874) to distribute the "payout" (the final prediction) among the "players" (the input features) fairly.
 
 ```python
 import shap
@@ -469,7 +469,7 @@ def explain_prediction_shap(model, X_sample, feature_names):
 
 #### LIME (Local Interpretable Model-agnostic Explanations)
 
-LIME operates by generating a new, localized dataset around the target prediction and fitting a simpler, inherently interpretable linear model to approximate the complex model's behavior in that specific hyperspace.
+LIME operates by generating a new, localized dataset around the target prediction and [fitting a simpler, inherently interpretable linear model](https://arxiv.org/abs/1602.04938) to approximate the complex model's behavior in that specific hyperspace.
 
 ```python
 from lime.lime_tabular import LimeTabularExplainer
@@ -908,26 +908,26 @@ System:
 └────────────────┴─────────────┴─────────────┴─────────────┴─────────────┘
 
 Recommendation:
-- Start: Evidently + Prometheus + Grafana (all free)
-- Scale: WhyLabs or Arize for advanced ML monitoring
-- Enterprise: Fiddler or Datadog ML Monitoring
+- Start: begin with a simple open-source stack for metrics, dashboards, and basic model checks, and verify current licensing before choosing named tools.
+- Scale: add a dedicated managed ML observability platform when you need richer drift, alerting, and governance workflows.
+- Enterprise: compare commercial observability platforms against your governance, security, integration, and support requirements.
 ```
 
 | Approach | Annual Cost | Pros | Cons |
 |----------|-------------|------|------|
-| Open source (Evidently + Prometheus) | $20-50K (engineering time) | Full control, no vendor lock-in | Significant engineering investment |
-| Managed platform (WhyLabs/Arize) | $50-200K | Fast setup, advanced features | Vendor dependency, data leaves your infra |
-| Cloud-native (SageMaker/Vertex) | $30-100K | Integrated with ML platform | Less flexible, cloud lock-in |
-| Enterprise (Fiddler, Arthur) | $200K+ | Compliance features, support | Expensive, may be overkill |
+| Open source | Significant internal engineering time | Full control, no vendor lock-in | Meaningful operational overhead |
+| Managed platform | Higher recurring spend than self-hosted tools | Faster setup, advanced features | Vendor dependency and data-handling tradeoffs |
+| Cloud-native | Costs vary with usage and cloud provider | Integrated with the surrounding ML platform | Less flexible and potentially more locking to one cloud |
+| Enterprise | Often priced for larger organizations and heavier governance needs | Compliance features and support | May be overkill for smaller teams |
 
 ### The Economics of Observability
 
 | Scenario | Monitoring Cost | Potential Failure Cost | ROI |
 |----------|----------------|----------------------|-----|
-| E-commerce recommendations | $50K/year | $2M/year (lost revenue from bad recs) | 40x |
-| Fraud detection | $100K/year | $10M/year (undetected fraud) | 100x |
-| Healthcare risk scoring | $200K/year | $50M+ (regulatory fines, lawsuits) | 250x+ |
-| Trading algorithms | $500K/year | Unlimited (Knight Capital: $440M in 45 min) | ∞ |
+| E-commerce recommendations | Monitoring spend is often much smaller than the revenue impact of degraded recommendations |
+| Fraud detection | The cost of missed monitoring can far exceed the cost of running the monitoring itself |
+| Healthcare risk scoring | In regulated settings, monitoring can reduce large operational and compliance risks |
+| Trading algorithms | For high-speed trading systems, weak monitoring can lead to outsized losses very quickly |
 
 | Without Monitoring | With Monitoring |
 |-------------------|-----------------|
@@ -1933,7 +1933,7 @@ No. Data drift indicates the input population shifted, but if ModelAccuracyDrop 
 
 <details>
 <summary>Scenario 2: Your fraud detection model operates in an environment where confirmed fraud labels arrive 30 days after the transaction. You need to implement real-time monitoring. Which metric should you prioritize?</summary>
-You must prioritize Prediction Drift (output distribution changes). Since calculating real-time accuracy is impossible due to the 30-day lag on ground truth labels, monitoring the frequency at which the model predicts positive fraud classes acts as an immediate proxy. If the model historically flags 2% of transactions as fraud and suddenly flags 15%, you immediately know behavior has degraded without waiting 30 days for confirmation.
+You must prioritize Prediction Drift (output distribution changes). Since calculating real-time accuracy is impossible due to the 30-day lag on ground truth labels, monitoring the frequency at which the model predicts positive fraud classes acts as an immediate proxy. If the model historically flags 2% of transactions as fraud and suddenly flags 15%, you have an immediate signal that behavior may have degraded without waiting 30 days for confirmation.
 </details>
 
 <details>
@@ -1959,3 +1959,11 @@ The fixed sample window will cycle entirely within a fraction of a second, causi
 ## Next Module
 
 Now that you have constructed mathematically rigorous observability around your models, revisit [Module 1.8: ML Pipelines](./module-1.8-ml-pipelines) to wire monitoring signals back into retraining, validation, and controlled promotion workflows.
+
+## Sources
+
+- [Jensen-Shannon divergence](https://en.wikipedia.org/wiki/Jensen%E2%80%93Shannon_divergence) — Background reference for the section's claim that JS divergence is symmetric and finite under the common base-2 normalization.
+- [Prometheus Alerting Overview](https://prometheus.io/docs/alerting/latest/overview/) — Overview of the alerting flow that matches the module's Prometheus and Alertmanager architecture.
+- [A Unified Approach to Interpreting Model Predictions](https://arxiv.org/abs/1705.07874) — Primary SHAP paper describing Shapley-value-based feature attribution.
+- ["Why Should I Trust You?": Explaining the Predictions of Any Classifier](https://arxiv.org/abs/1602.04938) — Primary LIME paper on local surrogate explanations for individual predictions.
+- [Model Cards for Model Reporting](https://arxiv.org/abs/1810.03993) — Primary reference for the model-card governance pattern used in the module.
