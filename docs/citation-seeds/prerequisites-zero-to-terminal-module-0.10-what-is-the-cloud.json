@@ -1,0 +1,174 @@
+{
+  "module_key": "prerequisites/zero-to-terminal/module-0.10-what-is-the-cloud",
+  "module_path": "src/content/docs/prerequisites/zero-to-terminal/module-0.10-what-is-the-cloud.md",
+  "research_run_id": "2026-04-20T05:22:44+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 2,
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "Kubernetes runs in the cloud.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "**Kubernetes runs in the cloud.**",
+      "suggested_rewrite": "**Kubernetes often runs in the cloud, but it can also run on-premises or in hybrid environments.**",
+      "lesson_point_url": null,
+      "rationale": "Official Kubernetes docs describe it as portable across on-premises, hybrid, and public-cloud environments, so the current wording overstates the case."
+    },
+    {
+      "claim_id": "C002",
+      "claim_text": "Buying physical servers takes 8+ weeks, costs $50K+ upfront, and cloud capacity could be rented for $200/month.",
+      "claim_class": "pricing",
+      "span_hint": "section: Why the Cloud Exists, introductory stop-and-think prompt",
+      "disposition": "soften_to_illustration",
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "You're a startup with a great app idea. You need 10 servers today to launch. Buying physical servers takes 8+ weeks and costs $50K+ upfront. What if someone already had those servers sitting in a warehouse, and you could just rent them for $200/month?",
+      "suggested_rewrite": "You're a startup with a great app idea. You need server capacity today to launch. Buying physical hardware can take weeks and require a large upfront investment, while rented cloud capacity can often be started quickly and paid for as you use it.",
+      "lesson_point_url": "https://docs.aws.amazon.com/whitepapers/latest/aws-overview/introduction.html",
+      "rationale": "The precise lead time and dollar figures are illustrative teaching numbers, but the underlying point about cloud avoiding long procurement cycles is well supported."
+    },
+    {
+      "claim_id": "C003",
+      "claim_text": "A 2012 mobile game expected 50,000 players, hit 1 million in three days, stayed offline for a week, and lost an estimated $2 million because it could not scale on-premises fast enough.",
+      "claim_class": "war_story",
+      "span_hint": "section: Why the Cloud Exists > Problem 2",
+      "disposition": "cannot_be_salvaged",
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "In 2012, a popular mobile game launched using on-premises servers. They anticipated 50,000 players, but the game went viral and hit 1 million players in three days. Because buying and racking new physical servers takes weeks, their game was offline for a critical week. They lost an estimated $2 million in potential revenue and a massive amount of player goodwill because they couldn't scale fast enough.",
+      "suggested_rewrite": "A game that outgrows its on-premises capacity can spend days offline while the team waits for new hardware, losing both revenue and player trust.",
+      "lesson_point_url": null,
+      "rationale": "This is a specific incident-style anecdote with named timing and revenue figures but no attributable source, so the false precision should be removed."
+    },
+    {
+      "claim_id": "C004",
+      "claim_text": "As of Q4 2025, AWS, Microsoft Azure, and Google Cloud were still the top three public-cloud providers by revenue.",
+      "claim_class": "statistic",
+      "span_hint": "section: The Big Three Cloud Providers, intro paragraph and note after GCP",
+      "disposition": "needs_allowlist_expansion",
+      "proposed_url": "https://www.srgresearch.com/articles/genai-helps-drive-quarterly-cloud-revenues-to-119-billion-as-growth-rate-jumped-yet-again-in-q4",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "This dated market-ranking claim is real and directly supported by an analyst primary source, but that source is off the current allowlist."
+    },
+    {
+      "claim_id": "C005",
+      "claim_text": "Traditional IT means buying 10 servers for $200,000 and using them for 5 years.",
+      "claim_class": "pricing",
+      "span_hint": "section: Pay-As-You-Go: Only Pay for What You Cook",
+      "disposition": "soften_to_illustration",
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Traditional IT: \"Buy 10 servers for $200,000. Use them for 5 years.\"",
+      "suggested_rewrite": "Traditional IT often means buying enough server capacity upfront and spreading that cost over several years.",
+      "lesson_point_url": "https://docs.aws.amazon.com/whitepapers/latest/aws-overview/introduction.html",
+      "rationale": "The exact purchase price and lifespan are illustrative rather than source-backed, but the capital-expense model is a valid lesson point."
+    },
+    {
+      "claim_id": "C006",
+      "claim_text": "Cloud means renting a server for $0.05 per hour and turning it off when you do not need it.",
+      "claim_class": "pricing",
+      "span_hint": "section: Pay-As-You-Go: Only Pay for What You Cook",
+      "disposition": "soften_to_illustration",
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Cloud: \"Rent a server for $0.05 per hour. Turn it off when you don't need it.\"",
+      "suggested_rewrite": "Cloud pricing is often usage-based, so you can pay only while a server is running.",
+      "lesson_point_url": "https://docs.aws.amazon.com/whitepapers/latest/aws-overview/introduction.html",
+      "rationale": "The exact hourly price is illustrative and time-sensitive, but the pay-as-you-go principle is well supported by vendor documentation."
+    },
+    {
+      "claim_id": "C007",
+      "claim_text": "In 2020, a team left a cloud database cluster running for 72 hours and was charged $85,000.",
+      "claim_class": "war_story",
+      "span_hint": "section: Pay-As-You-Go: Only Pay for What You Cook",
+      "disposition": "cannot_be_salvaged",
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "In 2020, an engineering team left a massive cluster of high-performance cloud databases running over a long weekend after finishing a test. Because the cloud provider assumes you want the servers you asked for, the resources ran untouched for 72 hours, resulting in an unexpected $85,000 charge. The cloud gives you infinite resources, but it also gives you an infinite bill if you aren't paying attention!",
+      "suggested_rewrite": "An engineering team can accidentally leave expensive cloud resources running after a test and come back to a surprisingly large bill. The cloud gives you fast access to capacity, but it also makes cost mistakes easy if you are not paying attention.",
+      "lesson_point_url": null,
+      "rationale": "This is an unattributed incident anecdote with exact timing and cost figures, so it should be rewritten to keep the lesson while dropping the fabricated specifics."
+    },
+    {
+      "claim_id": "C008",
+      "claim_text": "Kubernetes was created at Google.",
+      "claim_class": "standard",
+      "span_hint": "section: Where Kubernetes Fits",
+      "disposition": "supported",
+      "proposed_url": "https://www.cncf.io/reports/kubernetes-project-journey-report/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "CNCF's project history directly states that Kubernetes was initially created by Google engineers."
+    },
+    {
+      "claim_id": "C009",
+      "claim_text": "The name Kubernetes comes from Greek, meaning helmsman or pilot, and K8s abbreviates the eight letters between K and s.",
+      "claim_class": "standard",
+      "span_hint": "sections: Where Kubernetes Fits and Did You Know",
+      "disposition": "supported",
+      "proposed_url": "https://kubernetes.io/docs/concepts/overview/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The official Kubernetes overview explicitly explains both the Greek origin of the name and the K8s abbreviation."
+    },
+    {
+      "claim_id": "C010",
+      "claim_text": "AWS grew out of Amazon's own infrastructure experience, launched in 2006, and became a major cloud business.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Did You Know, first bullet",
+      "disposition": "cannot_be_salvaged",
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "**AWS started as a side project.** Amazon built massive computing infrastructure to run their online store. Someone realized they could rent out that infrastructure to other companies. AWS launched in 2006 and grew into one of Amazon's most important businesses.",
+      "suggested_rewrite": "**AWS grew out of Amazon's own infrastructure challenges.** Amazon turned those internal lessons into AWS, which launched in 2006 and made cloud infrastructure broadly rentable to other companies.",
+      "lesson_point_url": null,
+      "rationale": "AWS's official origins materials support the infrastructure-to-cloud story and the 2006 launch, but not the looser 'side project' framing or the unqualified business-importance claim as written."
+    },
+    {
+      "claim_id": "C011",
+      "claim_text": "AWS has 200+ services.",
+      "claim_class": "statistic",
+      "span_hint": "section: Common Mistakes table, row about learning all cloud services",
+      "disposition": "supported",
+      "proposed_url": "https://docs.aws.amazon.com/whitepapers/latest/aws-overview/introduction.html",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The AWS overview whitepaper directly states that over 200 AWS services are available."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-145.pdf",
+      "title": "The NIST Definition of Cloud Computing",
+      "tier": "standards",
+      "why_relevant": "This is the canonical baseline definition for core cloud concepts such as on-demand self-service and resource pooling."
+    },
+    {
+      "url": "https://docs.aws.amazon.com/whitepapers/latest/aws-overview/introduction.html",
+      "title": "Overview of Amazon Web Services",
+      "tier": "vendor",
+      "why_relevant": "It gives a concise vendor-side explanation of pay-as-you-go infrastructure, rapid provisioning, and the breadth of cloud services."
+    },
+    {
+      "url": "https://kubernetes.io/docs/concepts/overview/",
+      "title": "Kubernetes Overview",
+      "tier": "standards",
+      "why_relevant": "It is the official primer for what Kubernetes is, where the name comes from, and how it relates to modern infrastructure."
+    }
+  ],
+  "notes": "Per pipeline rules, no seed entries were created for quiz content, exercise steps, most code blocks, or most table rows. The market-share ranking claim needs off-allowlist analyst coverage; the rest of the high-risk unsupported anecdotes were converted to rewrite dispositions.",
+  "_schema_issues": [],
+  "rejected_urls": []
+}

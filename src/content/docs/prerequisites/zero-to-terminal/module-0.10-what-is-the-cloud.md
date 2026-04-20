@@ -30,7 +30,7 @@ After this module, you will be able to:
 
 The reality is much more concrete, and you already have the building blocks to understand it. After learning about computers (Module 0.1) and servers (Module 0.7), the cloud is the natural next step.
 
-Here's why this matters: **Kubernetes runs in the cloud.** When you hear "deploy to the cloud," "cloud-native application," or "cloud infrastructure," you need to know what those words actually mean. After this module, you will.
+Here's why this matters: **Kubernetes often runs in the cloud, but it can also run on-premises or in hybrid environments.** When you hear "deploy to the cloud," "cloud-native application," or "cloud infrastructure," you need to know what those words actually mean. After this module, you will.
 
 ---
 
@@ -83,7 +83,7 @@ This is cloud computing. Someone else built and maintains the infrastructure. Yo
 
 ## Why the Cloud Exists
 
-> **Stop and think**: You're a startup with a great app idea. You need 10 servers today to launch. Buying physical servers takes 8+ weeks and costs $50K+ upfront. What if someone already had those servers sitting in a warehouse, and you could just rent them for $200/month? That's the cloud's core value proposition. Keep reading to see the three specific problems it solves.
+> **Stop and think**: You're a startup with a great app idea. You need server capacity today to launch. Buying physical hardware can take weeks and require a large upfront investment, while rented cloud capacity can often be started quickly and paid for as you use it. That's the cloud's core value proposition. Keep reading to see the three specific problems it solves.
 
 The cloud exists because of three problems:
 
@@ -120,7 +120,7 @@ If you buy your own servers, you have to predict how many you'll need. Get it wr
 - **Bought too few**: Your website crashes when it gets popular
 - **Bought too many**: You're paying for servers that sit idle
 
-> **War Story**: In 2012, a popular mobile game launched using on-premises servers. They anticipated 50,000 players, but the game went viral and hit 1 million players in three days. Because buying and racking new physical servers takes weeks, their game was offline for a critical week. They lost an estimated $2 million in potential revenue and a massive amount of player goodwill because they couldn't scale fast enough.
+> **War Story**: A game that outgrows its on-premises capacity can spend days offline while the team waits for new hardware, losing both revenue and player trust.
 
 With the cloud, you can scale up and down as needed. Black Friday traffic spike? Add more servers. Sunday at 3 AM? Scale down and save money.
 
@@ -256,9 +256,9 @@ Kitchen analogy: A managed filing system for all your recipes,
 
 One of the most revolutionary aspects of cloud computing is the pricing model.
 
-Traditional IT: "Buy 10 servers for $200,000. Use them for 5 years."
+Traditional IT often means buying enough server capacity upfront and spreading that cost over several years.
 
-Cloud: "Rent a server for $0.05 per hour. Turn it off when you don't need it."
+Cloud pricing is often usage-based, so you can pay only while a server is running.
 
 ```
 Example:
@@ -276,7 +276,7 @@ This is like paying for a commercial kitchen by the hour instead of buying the b
 
 > **Pause and predict**: Your new app gets 10x more traffic on weekends compared to weekdays. How would you use cloud scaling to save money while keeping your users happy?
 
-> **War Story**: Pay-as-you-go is powerful, but it's a double-edged sword. In 2020, an engineering team left a massive cluster of high-performance cloud databases running over a long weekend after finishing a test. Because the cloud provider assumes you want the servers you asked for, the resources ran untouched for 72 hours, resulting in an unexpected $85,000 charge. The cloud gives you infinite resources, but it also gives you an infinite bill if you aren't paying attention!
+> **War Story**: Pay-as-you-go is powerful, but it's a double-edged sword. An engineering team can accidentally leave expensive cloud resources running after a test and come back to a surprisingly large bill. The cloud gives you fast access to capacity, but it also makes cost mistakes easy if you are not paying attention.
 
 ---
 
@@ -294,7 +294,7 @@ Module 0.9: You learned that the cloud has THOUSANDS of kitchens for rent
 NOW: Kubernetes is the system that manages all of those kitchens.
 ```
 
-Kubernetes (often written "K8s" -- the 8 stands for the 8 letters between K and s) was created at Google to solve this problem:
+Kubernetes (often written "K8s" -- the 8 stands for the 8 letters between K and s) [was created at Google](https://www.cncf.io/reports/kubernetes-project-journey-report/) to solve this problem:
 
 > "We have thousands of servers. How do we automatically decide which server runs which program, handle failures, and scale up when things get busy?"
 
@@ -365,11 +365,11 @@ Platform Engineering
 
 ## Did You Know?
 
-- **AWS started as a side project.** Amazon built massive computing infrastructure to run their online store. Someone realized they could rent out that infrastructure to other companies. AWS launched in 2006 and grew into one of Amazon's most important businesses.
+- **AWS grew out of Amazon's own infrastructure challenges.** Amazon turned those internal lessons into AWS, which launched in 2006 and made cloud infrastructure broadly rentable to other companies.
 
 - **Cloud data centers are enormous.** Cloud providers operate very large data center campuses with heavy power, cooling, and networking requirements. The exact size and capacity figures vary by site and change over time.
 
-- **Kubernetes means "helmsman" in Greek.** The name fits the ship-wheel logo and the broader idea of steering large fleets of containers. You'll see that nautical theme throughout the Kubernetes ecosystem.
+- **[Kubernetes means "helmsman" in Greek.](https://kubernetes.io/docs/concepts/overview/)** The name fits the ship-wheel logo and the broader idea of steering large fleets of containers. You'll see that nautical theme throughout the Kubernetes ecosystem.
 
 ---
 
@@ -509,3 +509,10 @@ You started knowing nothing about computers or terminals, and now you understand
 ---
 
 > **You just used a tool that senior engineers use every day. You belong here.**
+
+## Sources
+
+- [Kubernetes Project Journey Report](https://www.cncf.io/reports/kubernetes-project-journey-report/) - CNCF report covering Kubernetes' origins at Google and its early development history.
+- [The NIST Definition of Cloud Computing](https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-145.pdf) - Canonical baseline definition for core cloud-computing concepts and service models.
+- [Overview of Amazon Web Services](https://docs.aws.amazon.com/whitepapers/latest/aws-overview/introduction.html) - Vendor overview useful for the module's illustrative discussion of rapid provisioning, pay-as-you-go usage, and service breadth.
+- [Kubernetes Overview](https://kubernetes.io/docs/concepts/overview/) - Official Kubernetes overview explaining what Kubernetes is and where the name comes from.
