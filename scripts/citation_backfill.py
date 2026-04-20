@@ -270,6 +270,22 @@ unfixable bucket — good pedagogy uses grounded hypotheticals.
   claim. K8s Windows-support → `kubernetes.io/docs/concepts/windows/`.
   Transformer paper → `arxiv.org/abs/1706.03762`. Primary source.
 
+  **HARD TEST** before choosing `supported`: can you point at a
+  specific passage in the URL that contains THIS claim's facts —
+  the specific number, date, named entity, or quoted phrase? If
+  you cannot honestly answer "yes, that exact passage is on that
+  page," DO NOT use `supported`. A topically-adjacent URL is NOT
+  support. Vendor homepages and "what is X" landing pages
+  almost never back specific stat claims like "200+ services" or
+  "10,000 customers" — those numbers float across marketing
+  contexts and the homepage rarely repeats them verbatim.
+
+  When in doubt, pick `cannot_be_salvaged` (rewrite to remove the
+  specific) or `needs_allowlist_expansion` (the right primary
+  source is off-allowlist). Removing a load-bearing number is
+  better than citing a URL that doesn't actually back it — the
+  semantic verifier WILL catch the mismatch and the seed will fail.
+
 - **`weak_anchor`** — URL is a category/topic page that touches the
   subject but doesn't confirm the specific number/event. Acceptable
   ONLY for loose claims ("browsers use memory"); never for specific
