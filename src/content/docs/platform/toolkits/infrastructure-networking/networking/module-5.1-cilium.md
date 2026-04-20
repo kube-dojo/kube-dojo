@@ -25,9 +25,9 @@ sidebar:
 
 **Sound familiar?**
 
-This is what Kubernetes networking feels like without proper tooling. You're blind. Packets vanish into the void. Policies are write-only—you create them but never know which one is actually doing what.
+This is what Kubernetes networking feels like without proper tooling. You're blind. Packets vanish into the void. Policies are write-only—you create them but often can't tell which one is actually doing what.
 
-Cilium changes everything. By the end of this module, when something drops packets, you'll know *exactly* which policy dropped it, *why*, and you'll see it happen in real-time. No more 4 AM tcpdump sessions.
+Cilium changes everything. By the end of this module, when something drops packets, you'll know *exactly* [which policy dropped it, *why*](https://github.com/cilium/cilium), and you'll see it happen in real-time. No more 4 AM tcpdump sessions.
 
 **What You'll Learn**:
 - Why traditional networking can't keep up with Kubernetes
@@ -57,7 +57,7 @@ After completing this module, you will be able to:
 
 Let me tell you about the moment I fell in love with Cilium.
 
-We had a microservices architecture—127 services, because apparently we thought Netflix was a good role model. One service was mysteriously failing health checks. The app worked fine when tested directly. Network team said the network was fine. App team said the app was fine. Classic standoff.
+We had a microservices architecture with enough moving parts that a network-policy mistake was hard to isolate. One service was failing health checks even though direct application tests passed, and each team initially believed its own layer was fine.
 
 With traditional tools, we would've spent hours with tcpdump and iptables debugging. Instead, I ran one command:
 
@@ -72,11 +72,11 @@ production/payment-service → production/health-checker DROPPED
 Policy: production/legacy-lockdown (ingress)
 ```
 
-**The legacy-lockdown policy.** Written 18 months ago by someone who left the company. Blocked traffic from a service that didn't exist when the policy was created.
+**An older policy was the culprit.** It had outlived the assumptions it was originally written for and blocked a dependency the team had overlooked.
 
-Five-minute fix. Without Cilium, we'd still be debugging.
+The root cause was visible quickly, turning a long network investigation into a straightforward policy fix.
 
-> 💡 **Did You Know?** When Google designed their next-generation internal networking, they chose eBPF—the same technology powering Cilium. The reason? At Google scale, traditional iptables rules would take *minutes* to update. With eBPF, updates happen in microseconds. Google Cloud GKE, AWS EKS, and Azure AKS all now offer Cilium as their CNI. It's not just an alternative anymore—it's becoming the default.
+> 💡 **Did You Know?** eBPF-based dataplanes are attractive in Kubernetes because they reduce dependence on large iptables rule sets and enable richer observability.
 
 ---
 
@@ -98,7 +98,7 @@ iptables-save | wc -l
 # Output: 147,291 lines
 ```
 
-**One hundred and forty-seven thousand lines of iptables rules.**
+**Very large iptables rule sets are common in bigger clusters.**
 
 Now imagine debugging why one specific packet was dropped.
 
@@ -146,7 +146,7 @@ This happens every time:
 At scale: dozens of times per minute
 ```
 
-This isn't a hypothetical. [Datadog wrote about hitting this limit](https://www.datadoghq.com/blog/engineering/introducing-glommio/). So did [Shopify](https://shopify.engineering/resiliency-planning-how-we-prepared-for-black-friday). Large-scale Kubernetes users universally agree: iptables doesn't scale.
+This isn't a hypothetical. [Datadog wrote about hitting this limit](https://www.datadoghq.com/blog/engineering/introducing-glommio/). So did [Shopify](https://shopify.engineering/resiliency-planning-how-we-prepared-for-black-friday). At larger cluster sizes, iptables-based service routing can become a real operational bottleneck.
 
 ### The NetworkPolicy Problem
 
@@ -416,7 +416,7 @@ cilium connectivity test
 
 **What `cilium connectivity test` actually does:**
 
-This isn't a simple ping test. It deploys test workloads and verifies:
+This isn't a simple ping test. It [deploys test workloads and verifies](https://github.com/cilium/cilium-cli):
 - Pod-to-pod connectivity (same node and cross-node)
 - Pod-to-Service connectivity
 - Pod-to-external connectivity
@@ -511,7 +511,7 @@ Step 4: Policy enforcement uses identity
 
 **Why this matters:**
 
-1. **Pod restarts**: Same labels = same identity. No policy updates needed.
+1. **Pod restarts**: [Same labels = same identity](https://github.com/cilium/cilium). No policy updates needed.
 2. **Scaling**: 1 pod or 1000 pods with same labels = same identity. No rule explosion.
 3. **Cross-cluster**: Identity follows the workload. Works in multi-cluster setups.
 4. **Debugging**: "Who is identity 48291?" → `cilium identity get 48291` → Instant answer.
@@ -612,7 +612,7 @@ spec:
 "Frontend pods can connect to the API server on port 8080, but ONLY for:
 - GET requests to `/api/v1/products*` (list/view products)
 - GET requests to `/api/v1/users/<id>` (view specific user)
-- POST requests to `/api/v1/orders` with JSON content type (create orders)
+- [POST requests to `/api/v1/orders` with JSON content type](https://github.com/cilium/cilium) (create orders)
 
 Any other HTTP request? **DENIED at the network layer.**"
 
@@ -961,7 +961,7 @@ groups:
       severity: critical
 ```
 
-> 💡 **Did You Know?** Hubble captures flows using eBPF, which means there's no sampling. Unlike traditional monitoring that might capture 1 in 1000 packets, Hubble sees EVERY packet. If something happened on the network, Hubble saw it. This makes Hubble invaluable for security auditing—you have a complete record of all network communication.
+> 💡 **Did You Know?** Hubble captures flows using eBPF, which means there's no sampling. Compared with coarse network monitoring, Hubble gives detailed flow-level visibility that is especially useful for troubleshooting and auditing. This makes Hubble invaluable for security auditing—you have a complete record of all network communication.
 
 ---
 
@@ -998,11 +998,11 @@ Real benchmarks from production clusters:
 
 | Metric | kube-proxy (iptables) | Cilium eBPF | Improvement |
 |--------|----------------------|-------------|-------------|
-| Service lookup latency | ~2ms (5000 services) | ~100μs | **20x faster** |
-| Memory usage | Grows with services | Constant | **Predictable** |
-| Rule update time | 5-30 seconds | Milliseconds | **1000x faster** |
-| Connection drops on update | Yes | No | **Zero downtime** |
-| CPU usage at scale | High | Low | **50-70% reduction** |
+| Service lookup latency | Can increase as iptables rule sets grow | Often lower with eBPF-based service handling | Context-dependent |
+| Memory usage | Often grows with rule-set size | Often more predictable with eBPF maps | Workload-dependent |
+| Rule update time | Can slow down noticeably on large rule sets | Usually faster with eBPF-based updates | Environment-dependent |
+| Connection drops on update | More likely during disruptive rule churn | Typically reduced with eBPF-based updates | Depends on configuration and rollout path |
+| CPU usage at scale | Can rise with service and rule volume | Can be lower with eBPF-based handling | Depends on traffic and cluster shape |
 
 ### The DSR Bonus: Direct Server Return
 
@@ -1109,19 +1109,19 @@ Pod A ════════════════════════�
 |---------|--------------|--------------|
 | **Skipping connectivity test** | You think it's working, it's not | Always run `cilium connectivity test` after install |
 | **Installing over existing CNI** | CNI conflicts break everything | Remove old CNI completely first, or use fresh cluster |
-| **No default deny** | Wide open by default = security hole | Always set cluster-wide default deny |
+| **No default deny** | Wide open by default = security hole | In most production setups, set a cluster-wide default deny |
 | **Forgetting DNS in egress** | Pods can't resolve external hosts | Always allow `toEntities: [dns]` in egress policies |
 | **Overly broad FQDN patterns** | `*.com` defeats the purpose | Use specific FQDNs: `api.stripe.com` not `*.stripe.com` |
-| **Not enabling Hubble** | Flying blind | Hubble is free, always enable it |
+| **Not enabling Hubble** | Flying blind | Hubble is free, so enable it in most cases |
 | **Ignoring Hubble metrics** | Miss issues until they're incidents | Alert on `hubble_drop_total` and `hubble_dns_*` |
 
 ---
 
 ## War Story: The Policy That Ate Christmas
 
-*December 23rd, 2022. Large e-commerce platform. Black Friday went perfectly. Everyone was relaxed.*
+*A realistic failure mode: a policy change can accidentally block an overlooked dependency during a busy production period.*
 
-At 2:47 PM, a junior engineer deployed what seemed like a simple change: a new CiliumNetworkPolicy to restrict database access. The policy worked in staging.
+A restrictive CiliumNetworkPolicy that looked correct in staging was deployed to production.
 
 ```yaml
 # The policy that ruined Christmas
@@ -1143,30 +1143,30 @@ spec:
 
 **What they missed:** The caching service (Redis) also needed database access. It had `app: cache`, not `app: backend`.
 
-At 2:48 PM:
+Soon after deployment:
 - Cache invalidation failed
 - Stale product data started serving
 - Wrong prices shown to customers
 
-At 2:52 PM:
+A few minutes later:
 - Monitoring detected increased error rates
 - On-call engineer paged
 
-At 2:54 PM:
+When the on-call engineer checked Hubble:
 - Engineer ran: `hubble observe --to-pod production/postgres --verdict DROPPED`
 - Output showed: `production/redis-xxx -> production/postgres DROPPED`
-- Root cause identified in **2 minutes**
+- Root cause identified quickly from the drop verdict and destination
 
-At 2:56 PM:
+After the policy was updated:
 - Policy updated to include cache service
 - Traffic restored
 
-**Total incident duration: 8 minutes**
+**The outage stayed short because the policy drop was visible quickly.**
 
-Without Hubble? This would've been a multi-hour outage. The team would've blamed DNS (it's always DNS), then the load balancer, then the database itself. Eventually, maybe, someone would've checked network policies.
+Without clear policy visibility, this kind of problem can take much longer to isolate because teams often start by checking other layers first.
 
 **Lessons:**
-1. Always test policies against ALL services, not just the obvious ones
+1. Test policies against all relevant services, not just the obvious ones
 2. Hubble is not optional—it's your incident response tool
 3. `--verdict DROPPED` is the most important filter you'll ever use
 
@@ -1625,3 +1625,10 @@ Continue to [Module 5.2: Service Mesh](../module-5.2-service-mesh/) to learn abo
 ---
 
 *"The network that explains itself is the network you can actually secure."*
+
+## Sources
+
+- [Cilium Repository README](https://github.com/cilium/cilium) — Upstream overview of Cilium's eBPF dataplane, identity model, policy features, and observability integrations.
+- [Cilium CLI Repository README](https://github.com/cilium/cilium-cli) — Upstream reference for installing Cilium and running `cilium connectivity test` checks.
+- [Hubble Repository README](https://github.com/cilium/hubble) — Upstream overview of Hubble's flow visibility, troubleshooting workflow, and service-map style observability.
+- [Linux Kernel eBPF Verifier Documentation](https://github.com/torvalds/linux/blob/master/Documentation/bpf/verifier.rst) — Primary kernel documentation for how the eBPF verifier checks program safety and memory access.

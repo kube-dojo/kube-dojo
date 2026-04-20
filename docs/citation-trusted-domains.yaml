@@ -54,6 +54,11 @@ tiers:
     - argoproj.github.io
     - fluxcd.io
     - tekton.dev
+    - readthedocs.io      # hosts official project docs (argo-cd,
+                          # kustomize, prometheus-operator, etc.).
+                          # Same caveat as github.com — reviewer must
+                          # verify the subdomain is the upstream project,
+                          # not a third-party fork.
 
   # Vendor docs — acceptable for capability/pricing claims ABOUT THAT
   # VENDOR. A vendor citation for a claim about a competitor's product

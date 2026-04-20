@@ -20,9 +20,9 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In June 2023, a prominent ad-tech company migrated their mission-critical PostgreSQL database from Amazon RDS to a StatefulSet on EKS to reduce operational costs. The database ran on EBS gp3 volumes and performed flawlessly during extensive load testing. Two months into production, during a routine node upgrade process, Kubernetes gracefully terminated and rescheduled the database pod to a node in a different Availability Zone. The pod successfully initialized on the new node, but the underlying EBS volume did not follow. Because EBS volumes are strictly bound to a single physical Availability Zone, the database pod was left in a `Pending` state, repeatedly failing with volume node affinity conflicts.
+A stateful workload on EKS can fail to restart after rescheduling if its EBS-backed volume is tied to a different Availability Zone, leaving the pod in `Pending` with a volume node affinity conflict.
 
-While the on-call engineer scrambled for 18 minutes to diagnose the issue and manually recover the volume from a snapshot into the new Availability Zone, the real-time bidding pipeline—which required sub-10ms response times—was returning catastrophic errors on every request. Advertisers were dropped, bids were lost, and the estimated direct revenue loss exceeded $340,000. This incident was entirely preventable with a proper understanding of Kubernetes storage primitives and AWS zonal constraints. 
+A zonal storage mismatch during recovery can keep a critical workload offline until operators restore data in a usable zone, which is why Kubernetes storage behavior and AWS zonal constraints matter for stateful services. 
 
 Storage on Kubernetes is deceptively complex. In a traditional virtual machine environment, you attach a disk to an instance and largely forget about it. In Kubernetes, pods are ephemeral by design; they move constantly between nodes, and the scheduler can place them across any Availability Zone in your cluster. If you do not deeply understand the storage abstractions, CSI driver mechanisms, and the geographical constraints of cloud storage, your "highly available" architecture possesses a silent, catastrophic single-AZ failure mode hiding in plain sight. In this module, you will learn to master the EBS, EFS, and Mountpoint for S3 CSI drivers, ensuring your stateful workloads are truly resilient.
 
@@ -30,7 +30,7 @@ Storage on Kubernetes is deceptively complex. In a traditional virtual machine e
 
 ## The Container Storage Interface (CSI)
 
-Historically, Kubernetes included storage drivers directly within its core source code, known as "in-tree" volume plugins. As the ecosystem grew, this approach became unsustainable. The Container Storage Interface (CSI) was introduced as a standard for exposing arbitrary block and file storage systems to containerized workloads. In Kubernetes v1.35+, all in-tree AWS storage plugins have been completely removed. You must explicitly install and configure the respective CSI drivers for EBS, EFS, and S3. 
+Historically, Kubernetes included storage drivers directly within its core source code, known as "in-tree" volume plugins. As the ecosystem grew, this approach became unsustainable. The Container Storage Interface (CSI) was introduced as a standard for exposing arbitrary block and file storage systems to containerized workloads. In Kubernetes v1.35, the in-tree `awsElasticBlockStore` plugin is already removed, and AWS-backed storage integrations such as EBS, EFS, and Mountpoint for S3 rely on CSI drivers. 
 
 The CSI architecture consists of two primary components:
 1. **The Controller Plugin**: Runs as a Deployment (usually in the `kube-system` namespace) and interacts with the AWS API to provision, attach, detach, and resize volumes.
@@ -44,7 +44,7 @@ Amazon Elastic Block Store (EBS) provides persistent, high-performance block-lev
 
 ### Installing the EBS CSI Driver
 
-The EBS CSI driver is managed as an EKS Add-on. To interact with the AWS API, the driver's controller pods require precise IAM permissions. We use standard IAM Roles for Service Accounts (IRSA) or EKS Pod Identity to grant these privileges.
+[The EBS CSI driver is managed as an EKS Add-on. To interact with the AWS API, the driver's controller pods require precise IAM permissions.](https://docs.aws.amazon.com/eks/latest/userguide/workloads-add-ons-available-eks.html) We use standard IAM Roles for Service Accounts (IRSA) or EKS Pod Identity to grant these privileges.
 
 ```bash
 # Create IAM role for the EBS CSI driver
@@ -77,7 +77,7 @@ k get pods -n kube-system -l app.kubernetes.io/name=aws-ebs-csi-driver
 
 ### StorageClass: gp3 Configuration
 
-To dictate how EBS volumes are provisioned dynamically, we define a `StorageClass`. The `gp3` volume type is the absolute standard for most workloads. It provides a baseline of 3,000 IOPS and 125 MiB/s throughput natively, which can be independently scaled up to 16,000 IOPS and 1,000 MiB/s.
+To dictate how EBS volumes are provisioned dynamically, we define a `StorageClass`. The `gp3` volume type is a common default for many workloads. It provides a baseline of 3,000 IOPS and 125 MiB/s throughput, and AWS lets you provision IOPS and throughput independently of volume size.
 
 ```yaml
 apiVersion: storage.k8s.io/v1
@@ -99,7 +99,7 @@ volumeBindingMode: WaitForFirstConsumer
 allowVolumeExpansion: true
 ```
 
-The `volumeBindingMode: WaitForFirstConsumer` parameter is arguably the most critical configuration in stateful Kubernetes deployments. By default, Kubernetes uses `Immediate` binding, meaning the storage backend provisions the volume the millisecond the PVC is created. If the scheduler later decides the pod should run on a node in AZ-B, but the volume was instantly provisioned in AZ-A, the pod will remain permanently unschedulable. `WaitForFirstConsumer` intelligently delays volume creation until the pod has been fully scheduled to a specific node, ensuring the EBS volume is physically manifested in the exact same Availability Zone.
+The `volumeBindingMode: WaitForFirstConsumer` parameter is arguably the most critical configuration in stateful Kubernetes deployments. [By default, Kubernetes uses `Immediate` binding, meaning the storage backend provisions the volume the millisecond the PVC is created. If the scheduler later decides the pod should run on a node in AZ-B, but the volume was provisioned in AZ-A, the pod can remain unschedulable until scheduling aligns with that zone. `WaitForFirstConsumer` intelligently delays volume creation until the pod has been fully scheduled to a specific node](https://kubernetes.io/docs/concepts/storage/storage-classes/), ensuring the EBS volume is physically manifested in the exact same Availability Zone.
 
 > **Pause and predict**: If you forget to set `volumeBindingMode: WaitForFirstConsumer` and leave it as the default `Immediate`, and your EKS cluster spans 3 Availability Zones, what is the mathematical probability that your pod will successfully mount its newly provisioned EBS volume on the first try without node affinity rules?
 
@@ -176,7 +176,7 @@ spec:
 
 ### EBS Snapshots
 
-Data safety demands robust backup mechanisms. The EBS CSI driver integrates natively with the Kubernetes Volume Snapshot API, allowing you to trigger AWS EBS snapshots directly via Kubernetes manifests.
+Data safety demands robust backup mechanisms. [The EBS CSI driver integrates natively with the Kubernetes Volume Snapshot API, allowing you to trigger AWS EBS snapshots directly via Kubernetes manifests.](https://github.com/kubernetes-sigs/aws-ebs-csi-driver)
 
 First, you declare a `VolumeSnapshotClass` to define the driver and deletion policy.
 
@@ -228,7 +228,7 @@ spec:
 
 ### Online Volume Resizing
 
-Scaling storage is a common operational necessity. Because our `StorageClass` includes `allowVolumeExpansion: true`, we can dynamically resize EBS volumes without terminating the pod or suffering downtime. 
+Scaling storage is a common operational necessity. [Because our `StorageClass` includes `allowVolumeExpansion: true`, we can dynamically resize EBS volumes without terminating the pod or suffering downtime.](https://docs.aws.amazon.com/ebs/latest/userguide/ebs-modify-volume.html) 
 
 ```bash
 # Edit the PVC to request more storage
@@ -255,7 +255,7 @@ The underlying orchestration is elegant: the EBS controller plugin commands the 
 
 EBS has a fundamental architectural limitation: a single volume can only be mounted to a single EC2 instance at any given time. This strictly enforces the `ReadWriteOnce` access mode. But modern microservices often require a shared file repository—user uploaded media, shared application configuration, or machine learning datasets. When multiple pods across multiple distinct nodes require read and write access to the same files concurrently, Amazon Elastic File System (EFS) is the required backend.
 
-EFS implements the NFSv4 protocol and spans multiple Availability Zones natively, making it a regional resource rather than a zonal one.
+[EFS implements the NFSv4 protocol and spans multiple Availability Zones natively, making it a regional resource rather than a zonal one.](https://docs.aws.amazon.com/efs/latest/ug/how-it-works.html)
 
 ### Setting Up EFS
 
@@ -316,7 +316,7 @@ echo "EFS filesystem: $EFS_ID"
 
 ### Using EFS in Pods
 
-EFS relies heavily on the concept of EFS Access Points for dynamic provisioning. An Access Point is an application-specific entry point into an EFS file system that enforces POSIX identity and root directory paths, allowing different applications to safely share the same physical EFS filesystem securely.
+EFS relies heavily on the concept of EFS Access Points for dynamic provisioning. [An Access Point is an application-specific entry point into an EFS file system that enforces POSIX identity and root directory paths](https://docs.aws.amazon.com/efs/latest/ug/efs-access-points.html), allowing different applications to safely share the same physical EFS filesystem securely.
 
 ```yaml
 apiVersion: storage.k8s.io/v1
@@ -380,7 +380,7 @@ spec:
             claimName: shared-media
 ```
 
-Notice the critical distinction: the PVC leverages `ReadWriteMany`. All five replicas seamlessly mount the exact same file tree at `/usr/share/nginx/html/media`. When any pod modifies an image or file, the changes are universally visible to every other replica almost instantaneously. 
+Notice the critical distinction: the PVC leverages `ReadWriteMany`. All five replicas seamlessly mount the exact same file tree at `/usr/share/nginx/html/media`. When any pod modifies an image or file, the changes are generally visible to the other replicas shortly afterward. 
 
 > **Stop and think**: EFS is a regional service, meaning your 5 `cms-web` replicas can be scheduled across 3 different Availability Zones and still read/write to the same filesystem. But what is the hidden cost of this convenience? Consider how data actually flows when a pod in AZ-a reads a file that was physically written by a pod in AZ-b, and what AWS charges for network traffic that crosses AZ boundaries.
 
@@ -409,7 +409,7 @@ graph LR
 
 ### Setup and Configuration
 
-Mountpoint for S3 is not meant for dynamic provisioning; it is strictly designed to map existing S3 buckets into pods. Thus, you must manually construct a `PersistentVolume` targeting the bucket.
+[Mountpoint for S3 is not meant for dynamic provisioning; it is strictly designed to map existing S3 buckets into pods.](https://docs.aws.amazon.com/eks/latest/userguide/s3-csi.html) Thus, you must manually construct a `PersistentVolume` targeting the bucket.
 
 ```bash
 # Install the Mountpoint for S3 CSI add-on
@@ -483,8 +483,8 @@ spec:
 ### Mountpoint Limitations
 Mountpoint does not perfectly emulate a block filesystem. It comes with distinct operational caveats:
 - **Write Restrictions**: You can write sequentially to entirely new files, but you cannot execute random writes, append data to an existing file, or rename files/directories. 
-- **No File Locking**: While multiple pods can read a file concurrently, simultaneous writes to the same path will result in aggressive data corruption.
-- **Latency Overheads**: First-byte retrieval latency is heavily bound by the S3 API (typically 20–100ms), making Mountpoint unsuitable for transactional databases or highly interactive web apps.
+- **No File Locking**: Multiple pods can read the same data, but Mountpoint does not provide file locking or full shared-filesystem coordination for concurrent writers.
+- **Latency Overheads**: First-byte retrieval is bounded by S3 request latency, so Mountpoint is a poor fit for transactional databases or latency-sensitive interactive apps.
 
 ---
 
@@ -514,7 +514,7 @@ graph TD
 
 ### Solution 1: Topology-Aware Scheduling
 
-You must leverage `topologySpreadConstraints` combined with `WaitForFirstConsumer` volume binding. By explicitly telling the scheduler that pods of a given StatefulSet must reside within specific zones, you force the placement of new pods into the exact same Availability Zone where their orphaned volumes currently exist.
+Use `WaitForFirstConsumer` for newly provisioned zonal volumes, and remember that already-bound EBS volumes carry node-affinity constraints that keep a pod schedulable only in the volume's zone. Topology rules can help spread replicas across zones, but they do not move an orphaned zonal volume to another AZ.
 
 ```yaml
 apiVersion: apps/v1
@@ -621,7 +621,7 @@ Selecting the proper backend boils down to access patterns and IO profiles.
 | Use Case | Storage Type | Access Mode | Key Constraint |
 | :--- | :--- | :--- | :--- |
 | Database (single writer) | EBS gp3 | ReadWriteOnce | Single AZ, plan for node failure |
-| High-IOPS database | EBS io2 | ReadWriteOnce | Expensive ($0.125/GB + $0.065/IOPS) |
+| High-IOPS database | EBS io2 | ReadWriteOnce | Higher cost than gp3; exact pricing varies by Region and current AWS rates |
 | Shared CMS media | EFS | ReadWriteMany | Higher latency, ~4x EBS cost |
 | ML training data | Mountpoint S3 | ReadWriteMany | Read-optimized, no random writes |
 | Container scratch space | emptyDir / Instance Store | N/A (ephemeral) | Lost on pod restart |
@@ -635,9 +635,9 @@ Selecting the proper backend boils down to access patterns and IO profiles.
 
 2. EBS gp3 volumes provide 3,000 IOPS and 125 MiB/s of throughput for free at every volume size. In the gp2 era, you needed a 1,000 GB volume to get 3,000 IOPS (because gp2 scales IOPS linearly with size at 3 IOPS/GB). With gp3, even a 1 GB volume gets the full 3,000 IOPS baseline. This makes gp3 cheaper than gp2 for nearly every workload.
 
-3. EFS charges $0.30/GB-month for Standard storage, but offers an Infrequent Access (IA) tier at $0.016/GB-month—a 95% reduction. With EFS Lifecycle Management, files not accessed for 7, 14, 30, 60, or 90 days are automatically moved to IA. For CMS media storage where most images are uploaded once and rarely re-accessed, IA can reduce EFS costs by 80-90%.
+3. EFS Infrequent Access can be much cheaper than EFS Standard for cold data, and EFS Lifecycle Management can automatically transition files after configurable inactivity windows such as 7, 14, 30, 60, or 90 days.
 
-4. Mountpoint for S3 was built using Rust and runs as a highly-optimized FUSE filesystem. It achieves throughput of up to 100 Gbps for sequential reads by splitting massive file reads into parallel multi-part downloads to S3 under the hood. For ML training workloads scanning large datasets sequentially, this easily matches or exceeds the sequential performance of top-tier EBS io2 volumes at a fraction of the cost ($0.023/GB-month vs $0.125/GB-month).
+4. Mountpoint for S3 is implemented in Rust and is optimized for high-throughput access to large S3 datasets. For sequential-read workloads such as ML training, it can be a cost-effective alternative when the application fits Mountpoint's file-operation limits.
 
 ---
 
@@ -645,14 +645,14 @@ Selecting the proper backend boils down to access patterns and IO profiles.
 
 | Mistake | Why It Happens | How to Fix It |
 | :--- | :--- | :--- |
-| **Missing `WaitForFirstConsumer` in StorageClass** | Using default `Immediate` binding mode. PVC creates volume in wrong AZ. | Always set `volumeBindingMode: WaitForFirstConsumer` for EBS StorageClasses. This is not optional. |
+| **Missing `WaitForFirstConsumer` in StorageClass** | Using default `Immediate` binding mode. PVC creates volume in wrong AZ. Use `volumeBindingMode: WaitForFirstConsumer` for EBS StorageClasses unless you have a specific reason not to. This is not optional. |
 | **Running StatefulSet with no nodes in volume's AZ** | Auto Scaler scales down nodes in one AZ, leaving orphaned volumes. | Set minimum node counts per AZ. Configure Cluster Autoscaler or Karpenter to respect `topologySpreadConstraints`. |
-| **Using EBS for shared storage between pods** | Not knowing EFS exists, or assuming EBS can be mounted RWX. | EBS is ReadWriteOnce only. Use EFS for ReadWriteMany. If sharing between pods on the same node, use `ReadWriteOncePod` (Kubernetes 1.27+). |
+| **Using EBS for shared storage between pods** | Not knowing EFS exists, or assuming EBS can be mounted RWX. | Use EFS when multiple pods across nodes need shared read/write storage. If you need strict single-pod attachment semantics, use `ReadWriteOncePod` on a Kubernetes version that supports it. |
 | **Not encrypting EBS volumes** | Forgetting to add `encrypted: "true"` in the StorageClass parameters. | Add `encrypted: "true"` to your StorageClass. For compliance, use a customer-managed KMS key via `kmsKeyId`. |
 | **EFS without mount target in node's AZ** | Creating EFS mount targets in only one AZ, but nodes run in multiple AZs. | Create a mount target in every AZ where your EKS nodes run. Without a local mount target, pods either fail to mount or route NFS through cross-AZ traffic. |
 | **Using Mountpoint S3 for random writes** | Treating S3 like a filesystem. Attempting appends or overwrites. | Mountpoint S3 supports sequential writes to new files only. For read-modify-write patterns, use the S3 SDK directly or use EFS. |
-| **Not setting resource requests on storage-heavy pods** | Database pods getting OOM-killed because no memory limits were set. | Always set memory requests and limits on database pods. PostgreSQL, MySQL, and Redis all benefit from explicit memory allocation. |
-| **Ignoring EBS modification cooldown** | Attempting to resize or change volume type twice within 6 hours. | AWS imposes a 6-hour cooldown between EBS volume modifications. Plan changes carefully and do not make incremental adjustments. |
+| **Not setting resource requests on storage-heavy pods** | Database pods getting OOM-killed because no memory limits were set. Set explicit memory requests on database pods, and use memory limits only when they are carefully tuned. PostgreSQL, MySQL, and Redis all benefit from explicit memory allocation. |
+| **Ignoring EBS modification timing** | Assuming you can keep changing the same volume immediately after each request. | Wait for a modification to complete before issuing another one, and plan changes carefully because performance updates can take from minutes to hours to finish. |
 
 ---
 
@@ -1149,3 +1149,14 @@ aws efs delete-file-system --file-system-id $EFS_ID
 ## Next Module
 
 Your stateful workloads are properly anchored with robust, resilient persistent storage—but storage is only a single piece of the production puzzle. How do you scale the underlying instances efficiently, continuously observe application behavior, and rigorously control your exploding compute costs? Proceed directly to [Module 5.5: EKS Production -- Scaling, Observability & Cost](../module-5.5-eks-production/) to master Karpenter node provisioning, AWS Container Insights, and relentless cost optimization using Kubecost.
+
+## Sources
+
+- [Amazon EKS add-ons](https://docs.aws.amazon.com/eks/latest/userguide/workloads-add-ons-available-eks.html) — AWS reference for storage-related add-ons that can be installed and managed in EKS clusters.
+- [Kubernetes Storage Classes](https://kubernetes.io/docs/concepts/storage/storage-classes/) — Canonical Kubernetes reference for StorageClass behavior, including `Immediate` and `WaitForFirstConsumer` binding modes.
+- [Amazon EBS CSI driver](https://github.com/kubernetes-sigs/aws-ebs-csi-driver) — Project documentation for EBS CSI driver features such as snapshots and other storage integrations.
+- [Modify an Amazon EBS volume](https://docs.aws.amazon.com/ebs/latest/userguide/ebs-modify-volume.html) — AWS guide for online EBS volume modification and expansion workflows.
+- [Amazon EFS: How it works](https://docs.aws.amazon.com/efs/latest/ug/how-it-works.html) — AWS overview of EFS architecture, including NFSv4 semantics and regional multi-AZ access.
+- [Working with Amazon EFS Access Points](https://docs.aws.amazon.com/efs/latest/ug/efs-access-points.html) — AWS documentation for access points that scope application paths and enforce POSIX identities.
+- [Access Amazon S3 Objects with Mountpoint for Amazon S3 CSI Driver](https://docs.aws.amazon.com/eks/latest/userguide/s3-csi.html) — AWS documentation for Mountpoint CSI driver provisioning model, bucket mapping, and operational constraints.
+- [Use Kubernetes Volume Storage with Amazon EBS](https://docs.aws.amazon.com/eks/latest/userguide/ebs-csi.html) — AWS’s EKS guide for EBS CSI installation, permissions, and operational considerations.

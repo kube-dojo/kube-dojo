@@ -6,7 +6,7 @@ sidebar:
 ---
 > **Toolkit Track** | Complexity: `[COMPLEX]` | Time: 40-45 min
 
-The data science team lead stared at the Airflow logs in frustration. Their ML training pipeline had failed again—the 47th failure this month—because a Python dependency on one worker didn't match the others. "We spend more time fixing the pipeline than training models," she told the VP of Engineering. After evaluating alternatives, they migrated to Argo Workflows running on Kubernetes. Each step ran in its own container with pinned dependencies. Within three months, pipeline reliability went from 62% to 99.1%. Model deployment frequency increased from weekly to daily. The team calculated the value: faster model iterations meant **$2.8 million in additional revenue** from improved recommendation accuracy, while engineering time saved on pipeline debugging was worth **$340,000 per year**.
+Teams that run ML pipelines on inconsistent worker environments often spend significant time debugging dependency drift instead of training and shipping models. Moving each step into a pinned container on Kubernetes can make those workflows more reproducible and improve reliability.
 
 ## Prerequisites
 
@@ -28,16 +28,16 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-Argo Workflows is a container-native workflow engine for orchestrating parallel jobs on Kubernetes. While Tekton focuses on CI/CD pipelines, Argo Workflows excels at complex DAGs, data processing, and ML workflows.
+[Argo Workflows is a container-native workflow engine for orchestrating parallel jobs on Kubernetes](https://argoproj.github.io/workflows/). While [Tekton focuses on CI/CD pipelines](https://tekton.dev/docs/concepts/overview/), [Argo Workflows excels at complex DAGs, data processing, and ML workflows](https://argoproj.github.io/workflows/).
 
-It powers machine learning pipelines at companies like Intuit, Google, NVIDIA, and GitHub. When you need more than simple build-test-deploy, Argo Workflows provides the flexibility.
+For example, Argo Workflows is used in industry for machine-learning and data-processing pipelines. When you need more than simple build-test-deploy, Argo Workflows provides the flexibility.
 
 ## Did You Know?
 
-- **Argo Workflows powers Kubeflow Pipelines**—the ML workflow engine uses Argo Workflows as its execution layer
-- **GitHub Actions is built on Argo Workflows concepts**—many of the same DAG patterns apply
-- **Argo Workflows can run 10,000+ pods in a single workflow**—it's designed for massive parallel data processing
-- **The Argo project includes 4 tools**—Workflows, CD (ArgoCD), Events, and Rollouts—all designed to work together
+- **Argo Workflows is commonly used for Kubernetes-based machine-learning workflows**
+- **GitHub Actions and Argo Workflows both support dependency-driven workflows, but they are separate systems**
+- **Argo Workflows is designed for very large workflows, but you should validate cluster and controller capacity before assuming that scale**
+- **The Argo project includes 4 tools**—[Workflows, CD (ArgoCD), Events, and Rollouts](https://argoproj.github.io/)—all designed to work together
 
 ## Argo Workflows Architecture
 
@@ -679,9 +679,9 @@ spec:
 | Hardcoded secrets | Insecure | Use Kubernetes Secrets |
 | No retry strategy | Transient failures kill workflow | Add retries for flaky tasks |
 
-## War Story: The $1.2 Million 10,000 Pod Meltdown
+## War Story: Uncontrolled Parallelism Can Overload a Cluster
 
-A quantitative trading firm needed to backtest 10,000 trading strategy variations across 5 years of market data. Their data science team designed an Argo Workflow that would fan out to 10,000 parallel pods—one per strategy variant—each processing the historical data and outputting performance metrics. On paper, it would complete in 2 hours using their 500-node Kubernetes cluster.
+A large fan-out workflow can overwhelm a cluster if you launch too many pods at once without parallelism caps, quotas, and capacity testing.
 
 ```
 THE 10,000 POD INCIDENT TIMELINE
@@ -913,7 +913,7 @@ Cluster stability:          Compromised     Stable
 
 **Key Lessons:**
 
-1. **Kubernetes has finite capacity** — The API server, etcd, and scheduler have throughput limits
+1. **Kubernetes has finite capacity** — [The API server, etcd, and scheduler have throughput limits](https://kubernetes.io/docs/setup/best-practices/cluster-large/)
 2. **Parallelism is a dial, not a switch** — Start low, increase with monitoring
 3. **Batch processing beats fan-out** — 100 batches of 100 > 10,000 parallel pods
 4. **Defense in depth** — ResourceQuota + LimitRange + workflow parallelism
@@ -1648,9 +1648,9 @@ Before moving on, ensure you can:
 
 You've completed the CI/CD Pipelines Toolkit! You now understand:
 
-- **Dagger**: Programmable, portable pipelines
-- **Tekton**: Kubernetes-native CI/CD
-- **Argo Workflows**: DAG-based workflow orchestration
+- **Dagger**: [Programmable, portable pipelines](https://github.com/dagger/dagger)
+- **Tekton**: [Kubernetes-native CI/CD](https://tekton.dev/docs/concepts/overview/)
+- **Argo Workflows**: [DAG-based workflow orchestration](https://argoproj.github.io/workflows/)
 
 These tools provide different approaches to the same problem—choose based on your needs.
 
@@ -1661,3 +1661,12 @@ Continue to [Security Tools Toolkit](/platform/toolkits/security-quality/securit
 ---
 
 *"A workflow is a program. Write it like code, test it like code, version it like code."*
+
+## Sources
+
+- [Argo Workflows Overview](https://argoproj.github.io/workflows/) — Official overview of Argo Workflows concepts, DAG capabilities, and common Kubernetes workload patterns.
+- [Tekton Overview](https://tekton.dev/docs/concepts/overview/) — Official Tekton overview describing its Kubernetes-native CI/CD model and core concepts.
+- [Argo Project Overview](https://argoproj.github.io/) — Official project landing page summarizing the Argo ecosystem tools, including Workflows, CD, Events, and Rollouts.
+- [Considerations for Large Clusters](https://kubernetes.io/docs/setup/best-practices/cluster-large/) — Kubernetes guidance on control-plane, scheduler, and etcd limits in large clusters.
+- [Dagger](https://github.com/dagger/dagger) — Project repository describing Dagger as a programmable delivery engine for portable pipelines.
+- [Argo Workflows: Running At Massive Scale](https://argoproj.github.io/argo-workflows/running-at-massive-scale) — Scaling guidance relevant to teaching safe parallelism and large-workflow operation.

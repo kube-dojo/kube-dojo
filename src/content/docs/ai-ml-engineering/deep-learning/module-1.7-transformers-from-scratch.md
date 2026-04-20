@@ -14,9 +14,9 @@ sidebar:
 
 ## The Idea That Almost Died Twice
 
-**San Diego, California. July 1969. 3:47 PM.**
+**Around 1970.**
 
-Seppo Linnainmaa, a young Finnish computer scientist, had just finished his master's thesis. The paper described an elegant algorithm for computing derivatives automatically—what he called "reverse mode automatic differentiation." It was mathematically beautiful, but no one cared. Computers were too slow, and the problems it could solve seemed too small to matter.
+[Seppo Linnainmaa](https://en.wikipedia.org/wiki/Seppo_Linnainmaa), a young Finnish computer scientist, had just finished his master's thesis. The paper described an elegant algorithm for computing derivatives automatically—what he called "reverse mode automatic differentiation." It was mathematically beautiful, but no one cared. Computers were too slow, and the problems it could solve seemed too small to matter.
 
 The idea lay dormant for almost two decades.
 
@@ -24,10 +24,10 @@ Then in 1986, David Rumelhart, Geoffrey Hinton, and Ronald Williams published "L
 
 But even then, the world wasn't ready. Neural networks were slow, finicky, and often outperformed by simpler methods. Backprop was nearly forgotten again in the 1990s when support vector machines dominated.
 
-It took until 2012—when Alex Krizhevsky's AlexNet crushed the ImageNet competition using GPUs—for backpropagation to claim its throne. The algorithm that almost died twice is now the heartbeat of every AI system on Earth.
+It took until 2012—when Alex Krizhevsky's [AlexNet](https://en.wikipedia.org/wiki/AlexNet) crushed the ImageNet competition using GPUs—for backpropagation to claim its throne. The algorithm that almost died twice is now the heartbeat of every AI system on Earth.
 
 > "Backpropagation is a beautiful algorithm. It's not deep learning's breakthrough—it's its foundation. Everything else is built on top of it."
-> — Geoffrey Hinton, Nobel Prize acceptance speech, 2024
+>
 
 ---
 
@@ -42,7 +42,7 @@ By the end of this module, you will:
 - Implement gradient checking to verify your implementations
 - Visualize gradient flow through networks
 
-> ** Did You Know?** The term "backpropagation" wasn't always the preferred name. Paul Werbos originally called it "dynamic feedback" in his 1974 PhD thesis. The name "backpropagation" (or "back-propagation") was popularized by Rumelhart, Hinton, and Williams in their famous 1986 Nature paper. In the control theory community, the same algorithm is known as "adjoint sensitivity analysis." Meanwhile, in the automatic differentiation community, it's called "reverse-mode automatic differentiation." All these names describe the same fundamental algorithm!
+> ** Did You Know?** Closely related gradient-computation ideas have picked up different names in different communities, including backpropagation, reverse-mode automatic differentiation, and adjoint methods.
 
 ---
 
@@ -54,7 +54,7 @@ Every time you call `loss.backward()` in PyTorch, something magical happens. The
 
 The answer is **backpropagation** — short for "backward propagation of errors." It's not magic; it's calculus applied cleverly. By the end of this module, you'll be able to implement it yourself from scratch.
 
-Here's the transformative insight: **backpropagation is just the chain rule applied systematically**. Once you see it, you can't unsee it. Every neural network, from a simple perceptron to gpt-5, learns using the same fundamental algorithm.
+Here's the transformative insight: **backpropagation is just the chain rule applied systematically**. Once you see it, you can't unsee it. Modern neural networks learn from the same core idea: gradients from the chain rule drive parameter updates.
 
 ---
 
@@ -366,7 +366,7 @@ print(f"\nNeuron output: {y.data:.4f}")
 print(f"dy/dw = {w.grad:.4f}")
 ```
 
-> **Did You Know?** This exact approach — building a computation graph during forward pass and traversing it backward — is how PyTorch's autograd works. The main difference is that PyTorch handles tensors instead of scalars and has optimized C++ implementations. Andrej Karpathy's "micrograd" (which inspired this implementation) proved you can build a functional autograd in ~100 lines of Python!
+> **Did You Know?** This exact approach — building a computation graph during forward pass and traversing it backward — is how PyTorch's autograd works. The main difference is that PyTorch handles tensors instead of scalars and has optimized C++ implementations. [Andrej Karpathy's "micrograd"](https://github.com/karpathy/micrograd) (which inspired this implementation) proved you can build a functional autograd in ~100 lines of Python!
 
 ---
 
@@ -533,9 +533,9 @@ print(f"Relative error: {error:.2e}")  # Should be ~1e-10
 1. **During development**: When implementing new layers or loss functions
 2. **Debugging NaN gradients**: To isolate which operation is broken
 3. **Custom autograd operations**: To verify correctness
-4. **Never in production**: It's O(n) forward passes per gradient, extremely slow
+4. **Typically not used in production**: It's O(n) forward passes per gradient, extremely slow
 
-> **Did You Know?** The backpropagation algorithm was independently discovered several times. Paul Werbos described it in his 1974 PhD thesis, but it wasn't widely known. In 1986, David Rumelhart, Geoffrey Hinton, and Ronald Williams published "Learning representations by back-propagating errors" in Nature, which finally brought backprop to mainstream attention. Hinton later won the Nobel Prize in Physics (2024) partly for this work!
+> **Did You Know?** The backpropagation algorithm was independently discovered several times. Paul Werbos described it in his 1974 PhD thesis, but it wasn't widely known. In 1986, David Rumelhart, Geoffrey Hinton, and Ronald Williams published "Learning representations by back-propagating errors" in Nature, which finally brought backprop to mainstream attention. The 1986 paper later became one of the field's defining milestones.
 
 ---
 
@@ -561,7 +561,7 @@ After 10 layers: gradient ≤ 0.25¹⁰ = 0.000001
 - Residual connections
 - Proper initialization (Xavier, He)
 
-> **Did You Know?** The vanishing gradient problem plagued neural networks for nearly two decades! After the initial excitement of backpropagation in the 1980s, researchers found that networks deeper than 2-3 layers were nearly impossible to train. This "AI Winter" period lasted until ~2006 when Geoffrey Hinton showed that layer-by-layer pretraining could help. The real breakthrough came with ReLU activations (2010) and residual connections (2015), finally enabling the 100+ layer networks we use today.
+> **Did You Know?** Vanishing gradients made deep networks hard to train for many years, and later advances such as better activations, pretraining, initialization, normalization, and residual connections made much deeper models practical.
 
 ### 2. Exploding Gradients
 
@@ -579,7 +579,7 @@ After 10 layers: gradient ≤ 0.25¹⁰ = 0.000001
 
 **Symptom**: Some neurons never activate, always output 0.
 
-**Cause**: If a neuron's input is always negative, ReLU outputs 0, and gradient is 0, so it never updates.
+**Cause**: If a neuron's input stays negative across the data, ReLU outputs 0, and its loss gradient is 0, so it usually stops updating.
 
 ```python
 # Dead neuron: if z < 0 always, then:
@@ -739,7 +739,7 @@ Deep networks require storing all activations for backprop. This can exhaust GPU
 **Gradient checkpointing** trades compute for memory:
 1. Don't store intermediate activations
 2. Recompute them during backward pass
-3. Reduces memory from O(n) to O(√n) with √n checkpoints
+3. [Reduces memory from O(n) to O(√n) with √n checkpoints](https://arxiv.org/abs/1604.06174)
 
 ```python
 # PyTorch gradient checkpointing
@@ -1457,3 +1457,11 @@ Move on to **Phase 7: Advanced Generative AI** where you'll learn:
 
 _Last updated: 2025-11-27_
 _Status: Complete_
+
+## Sources
+
+- [Seppo Linnainmaa](https://en.wikipedia.org/wiki/Seppo_Linnainmaa) — Background on Linnainmaa's early work and its connection to reverse-mode automatic differentiation.
+- [AlexNet](https://en.wikipedia.org/wiki/AlexNet) — Overview of AlexNet and its 2012 ImageNet win using GPU-based training.
+- [karpathy/micrograd](https://github.com/karpathy/micrograd) — A compact educational reverse-mode autodiff engine that matches the module's scalar autograd walkthrough.
+- [Training Deep Nets with Sublinear Memory Cost](https://arxiv.org/abs/1604.06174) — Canonical reference for gradient checkpointing and the memory-versus-compute tradeoff.
+- [Automatic Differentiation in Machine Learning: a Survey](https://arxiv.org/abs/1502.05767) — Authoritative overview of autodiff methods, including reverse mode and backpropagation.

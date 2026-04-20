@@ -29,13 +29,13 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-**The $847,000 Friday Afternoon Deploy**
+**A Costly Friday Afternoon Deploy**
 
-The infrastructure team at a Series C startup gathered for their weekly standup. Everything seemed normal until the CFO walked in, printout in hand, face ashen. "Can someone explain why our AWS bill jumped from $120,000 to $967,000 this month?"
+An infrastructure team can discover a major cloud-billing spike only after finance reviews the monthly bill.
 
-The investigation traced the spike to a Friday afternoon deployment three weeks earlier. A developer had been testing a new data processing pipeline and created a Terraform configuration with `instance_type = "r5.24xlarge"` (96 vCPUs, 768GB RAM, $4.80/hour). They'd intended to use a single instance for testing, but a `count = 10` from a copy-paste remained in the code. The PR was approved—nobody noticed the instance type buried in a 2,000-line diff.
+One common failure mode is leaving an expensive test configuration in a large Terraform diff, where reviewers miss a costly instance type or replica count before merge.
 
-For 21 days, ten massive instances ran 24/7, processing approximately nothing. Total unexpected cost: $847,000. The startup's runway shortened by 2 months.
+If oversized resources run unnoticed for weeks, the resulting waste can materially affect a startup's budget and planning.
 
 This module teaches you how to integrate cost awareness into your IaC workflow—because the most expensive infrastructure is the infrastructure you didn't know you were paying for.
 
@@ -68,7 +68,7 @@ flowchart TD
 
 ## Infracost: Cost Estimation in CI/CD
 
-Infracost provides cost estimates for Terraform changes before they're applied.
+[Infracost provides cost estimates for Terraform changes before they're applied](https://github.com/infracost/infracost).
 
 ### Setup
 
@@ -132,7 +132,7 @@ infracost diff --path . --compare-to infracost-base.json
 # Project total:     $952.24 (was $221.07)
 ```
 
-### GitHub Actions Integration
+### [GitHub Actions Integration](https://github.com/infracost/infracost)
 
 ```yaml
 # .github/workflows/infracost.yml
@@ -848,10 +848,10 @@ def format_cost_report(response):
 
 ---
 
-## War Story: The $847,000 Copy-Paste
+## Example Scenario: Catching an Expensive Copy-Paste
 
-**Company**: Series C startup (logistics platform)
-**Incident**: Unnoticed expensive instances running for 3 weeks
+**Scenario**: A growing team is managing Terraform for a data-processing change.
+**Risk**: Expensive test instances run longer than intended because nobody notices the cost impact quickly.
 
 **The Code That Caused It**:
 
@@ -872,15 +872,15 @@ resource "aws_instance" "data_processor" {
 ```
 
 **Timeline**:
-- **Friday 4:30 PM**: Developer creates PR for data pipeline
-- **Friday 4:45 PM**: Reviewer approves (2,000 line diff, missed instance type)
-- **Friday 5:00 PM**: Merged and deployed
-- **Friday 5:15 PM**: 10x r5.24xlarge instances launch ($48/hour total)
-- **Days 1-21**: Instances run idle, nobody notices
-- **Day 22**: Monthly bill arrives: $967,000 (vs $120,000 normal)
-- **Day 22-23**: Frantic investigation
-- **Day 23**: Root cause found, instances terminated
-- **Total unexpected cost**: $847,000
+- A developer opens a PR for a data pipeline change.
+- A reviewer approves a large diff without noticing an expensive instance type.
+- The change is merged and deployed.
+- Multiple large instances launch, creating a steep hourly cost.
+- The instances run mostly idle for an extended period without attracting attention.
+- Finance eventually notices an unusually large monthly bill.
+- The team scrambles to investigate the spike.
+- The team identifies the root cause and terminates the resources.
+- **Total unexpected cost**: A large unplanned spend increase.
 
 **What Would Have Prevented This**:
 
@@ -905,7 +905,7 @@ deny[msg] {
 
 1. **Infracost required on all PRs** - Cost estimate in every review
 2. **Policy blocking large instances** - Require explicit approval
-3. **Daily budget alerts** - $5K/day threshold triggers investigation
+3. **Daily budget alerts** - A daily spend threshold aligned to your budget should trigger investigation
 4. **Instance type allowlist** - Only approved types can deploy
 5. **Weekly cost review** - Engineering and finance meet every Monday
 
@@ -919,7 +919,7 @@ deny[msg] {
 | Missing cost tags | Can't attribute costs to teams | Enforce required tags via policy |
 | Production-sized dev/staging | Paying 3x for non-production | Size environments appropriately |
 | No budget alerts | Surprises at month end | Budgets with forecasted alerts |
-| Always on-demand | Missing 30-70% savings | Evaluate reserved/spot options |
+| Only on-demand usage | Missing substantial savings opportunities from commitment or spare-capacity pricing | Evaluate reserved/spot options |
 | Zombie resources | Forgotten resources run forever | Automated cleanup policies |
 | No cost approval process | Anyone can deploy $100K | Thresholds requiring approval |
 | Cost as afterthought | Built-in inefficiency | Cost as first-class metric |
@@ -955,13 +955,13 @@ deny[msg] {
 <details markdown="1">
 <summary>5. A developer accidentally copies a Terraform configuration intended for a massive data processing job and tries to deploy a fleet of `p4d.24xlarge` GPU instances for a simple web application. How can Terraform validation rules automatically intercept and block this costly mistake before it reaches the apply phase?</summary>
 
-**Answer**: Terraform validation rules can intercept this mistake by enforcing strict constraints on input variables directly within the module code. You can define a validation block on the `instance_type` variable that checks whether the provided string falls within an approved list of cost-effective instance families. If the developer attempts to pass an unapproved, expensive type like `p4d.24xlarge`, Terraform will instantly fail the `plan` phase and output a custom error message. This mechanism acts as a hard guardrail, ensuring that prohibitively expensive resources cannot even be evaluated for deployment without an explicit override or an update to the approved variable list.
+**Answer**: Terraform validation rules can intercept this mistake by enforcing strict constraints on input variables directly within the module code. You can define a validation block on the `instance_type` variable that checks whether the provided string falls within an approved list of cost-effective instance families. If the developer attempts to pass an unapproved, expensive type like `p4d.24xlarge`, Terraform will fail during the `plan` phase and output a custom error message. This mechanism acts as a hard guardrail, ensuring that prohibitively expensive resources cannot even be evaluated for deployment without an explicit override or an update to the approved variable list.
 </details>
 
 <details markdown="1">
 <summary>6. It is the 25th of the month, and your team receives an alert that the AWS budget has reached its 100% threshold. You scramble to shut down resources, but the final bill still comes in 20% over budget. When configuring budget alerts in Terraform, how does leveraging forecasted spend differ from actual spend, and how would it have prevented this scenario?</summary>
 
-**Answer**: Actual spend alerts are reactive triggers that only fire after the money has already been spent, leaving you very little time to remediate if the threshold is crossed late in the billing cycle. Forecasted spend alerts, conversely, use historical usage trends and current run rates to predict what your total bill will be at the end of the month. If a forecasted alert was configured to trigger when the projection exceeded 100% of the budget, it would have fired days or even weeks earlier as soon as the spending rate spiked. This proactive early warning provides the necessary lead time to investigate anomalous infrastructure changes and terminate expensive resources before the actual budget is exhausted.
+**Answer**: Actual spend alerts are reactive triggers that only fire after the money has already been spent, leaving you very little time to remediate if the threshold is crossed late in the billing cycle. Forecasted spend alerts, conversely, use historical usage trends and current run rates to predict what your total bill will be at the end of the month. If a forecasted alert was configured to trigger when the projection exceeded 100% of the budget, it likely would have fired earlier, potentially days or even weeks sooner, once the spending rate spiked. This proactive early warning provides the necessary lead time to investigate anomalous infrastructure changes and terminate expensive resources before the actual budget is exhausted.
 </details>
 
 <details markdown="1">
@@ -1162,7 +1162,7 @@ infracost breakdown --path . --terraform-var "environment=dev"
 - [ ] **Policy enforcement** - Block expensive resources without approval
 - [ ] **Budget alerts** - Forecasted alerts catch issues early
 - [ ] **Weekly reviews** - Regular cost reviews prevent drift
-- [ ] **Reserved capacity planning** - 30-70% savings available with commitment
+- [ ] **Reserved capacity planning** - Commitment pricing can significantly reduce steady-state compute costs
 - [ ] **Spot for non-critical** - Additional savings for fault-tolerant workloads
 - [ ] **Cost as engineering metric** - Treat cost efficiency like performance
 
@@ -1170,16 +1170,24 @@ infracost breakdown --path . --terraform-var "environment=dev"
 
 ## Did You Know?
 
-> **Cost Waste Statistics**: According to Flexera's 2023 State of the Cloud report, organizations waste an average of 32% of their cloud spend on idle or underutilized resources.
+> **Cost Waste Statistics**: Industry reports consistently find that idle or underutilized resources account for a meaningful share of cloud waste.
 
-> **Infracost Origins**: Infracost was founded in 2020 by former Atlassian engineers who were frustrated by surprise cloud bills and wanted to bring cost visibility to the development process.
+> **Infracost Origins**: Infracost emerged to bring cloud cost visibility earlier into infrastructure workflows.
 
-> **Tagging Impact**: A 2023 AWS study found that organizations with comprehensive tagging strategies reduced their cloud costs by an average of 18% simply through better visibility and accountability.
+> **Tagging Impact**: Comprehensive tagging improves cost visibility, allocation, and accountability across teams.
 
-> **Shift-Left Savings**: Organizations that implement cost estimation in CI/CD (shift-left FinOps) report catching 85% of cost issues before they reach production, compared to 23% with traditional monthly bill review.
+> **Shift-Left Savings**: Cost estimation in CI/CD helps teams catch expensive changes earlier than end-of-month bill review.
 
 ---
 
 ## Next Module
 
 Continue to [Module 7.1: Terraform Deep Dive](/platform/toolkits/infrastructure-networking/iac-tools/module-7.1-terraform/) to learn advanced Terraform patterns, state management, and real-world best practices.
+
+## Sources
+
+- [Infracost README](https://github.com/infracost/infracost) — Primary product documentation for Terraform cost estimation and pull-request integrations.
+- [Organizing and Tracking Costs Using AWS Cost Allocation Tags](https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/cost-alloc-tags.html) — Authoritative AWS guidance on tagging, activation, and cost-allocation behavior.
+- [Managing Your Costs with AWS Budgets](https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-managing-costs.html) — Explains AWS Budgets, including actual and forecasted alerts used in cost-governance workflows.
+- [Amazon EC2 Pricing](https://aws.amazon.com/ec2/pricing/) — AWS pricing reference for on-demand, Spot, and other purchasing options discussed in cost-optimization examples.
+- [Amazon EC2 Reserved Instance Pricing](https://aws.amazon.com/ec2/pricing/reserved-instances/pricing/) — AWS pricing reference for reserved-capacity discount models and commitment tradeoffs.

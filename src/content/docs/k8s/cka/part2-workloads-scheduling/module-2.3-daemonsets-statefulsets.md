@@ -32,9 +32,9 @@ Deployments work exceptionally well for stateless applications like web servers,
 - **DaemonSets**: When you need exactly one pod per node (logging, monitoring, network plugins).
 - **StatefulSets**: When pods need stable identities and persistent storage (databases, distributed systems).
 
-In 2019, a major fintech company experienced a catastrophic, multi-hour outage affecting millions of transactions. The root cause? They had deployed their distributed messaging queue (Kafka) using standard Deployments rather than StatefulSets. When a brief network partition caused several nodes to drop, the Deployment controller eagerly spun up replacement pods. Because Deployments provide no guarantees regarding stable network identities or ordered startup, the new brokers came online with entirely new hostnames and immediately began attempting to form a new cluster split-brain style, utterly corrupting the topic metadata.
+Using a Deployment for systems such as Kafka can be dangerous because replacement Pods do not keep the stable identities and ordered startup behavior that many clustered stateful systems expect, so a disruption can turn into membership or recovery problems.
 
-This incident cost the company over $4 million in SLA penalties and required a full weekend of manual data reconciliation. It perfectly illustrates why understanding specialized workload controllers is not just an exam requirement for the CKA, but a critical survival skill for production Kubernetes. Deployments work great for stateless applications, but when state, identity, or node-locality matter, you must reach for the right tools.
+Misapplying workload controllers to a stateful system can turn a routine disruption into an expensive, labor-intensive recovery effort. It perfectly illustrates why understanding specialized workload controllers is not just an exam requirement for the CKA, but a critical survival skill for production Kubernetes. Deployments work great for stateless applications, but when state, identity, or node-locality matter, you must reach for the right tools.
 
 > **The Specialist Teams Analogy**
 >
@@ -57,7 +57,7 @@ By the end of this module, you'll deeply understand and be able to:
 
 ### 1.1 What Is a DaemonSet?
 
-A DaemonSet ensures that **all (or some) nodes run a copy of a pod**. As nodes are added to the cluster, pods are automatically added to them. As nodes are removed from the cluster, those pods are garbage collected. Deleting a DaemonSet will clean up the pods it created.
+A DaemonSet ensures that [**all (or some) nodes run a copy of a pod**](https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/). As nodes are added to the cluster, pods are automatically added to them. As nodes are removed from the cluster, those pods are garbage collected. Deleting a DaemonSet will clean up the pods it created.
 
 This behavior is fundamentally different from a Deployment, which simply ensures a specific *number* of pods are running somewhere in the cluster, completely regardless of which nodes they land on.
 
@@ -152,7 +152,7 @@ It is critical to distinguish between these two controllers, as picking the wron
 | Aspect | DaemonSet | Deployment |
 |--------|-----------|------------|
 | Pod count | One per node (automatic) | Specified replicas |
-| Scheduling | Bypasses scheduler | Uses scheduler |
+| Scheduling | Targets eligible nodes and then uses the scheduler to bind Pods | Uses scheduler |
 | Node addition | Auto-creates pod | No automatic action |
 | Use case | Node-level services | Application workloads |
 
@@ -177,7 +177,7 @@ kubectl delete ds fluentd
 
 > **Did You Know?**
 >
-> DaemonSets ignore most scheduling constraints by default. They even run on control plane nodes if there are no taints preventing it. Use `nodeSelector` or `tolerations` to control placement.
+> DaemonSets automatically get several built-in tolerations for node conditions, but normal taints and placement rules still apply; control plane nodes usually need explicit tolerations if they are tainted. Use `nodeSelector` or `tolerations` to control placement.
 
 ---
 
@@ -272,7 +272,7 @@ spec:
 
 | Strategy | Behavior |
 |----------|----------|
-| `RollingUpdate` | Gradually update pods, one node at a time |
+| [`RollingUpdate`](https://kubernetes.io/docs/tasks/manage-daemon/update-daemon-set/) | Gradually update pods, one node at a time |
 | `OnDelete` | Only update when pod is manually deleted |
 
 ---
@@ -281,7 +281,7 @@ spec:
 
 ### 3.1 What Is a StatefulSet?
 
-StatefulSets manage stateful applications with precise, guaranteed behaviors that Deployments lack:
+[StatefulSets manage stateful applications](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/) with precise, guaranteed behaviors that Deployments lack:
 - **Stable, unique network identifiers**
 - **Stable, persistent storage**
 - **Ordered, graceful deployment and scaling**
@@ -327,7 +327,7 @@ flowchart TD
 
 ### 3.3 StatefulSet Requirements
 
-StatefulSets require a **Headless Service** to establish their network identity. 
+[StatefulSets require a **Headless Service** to establish their network identity.](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/) 
 
 First, we define the Headless Service:
 
@@ -387,7 +387,7 @@ spec:
 
 ### 3.4 Stable Network Identity
 
-The combination of the StatefulSet controller and the Headless Service yields highly predictable DNS records for every individual pod.
+The combination of the StatefulSet controller and the Headless Service yields [highly predictable DNS records for every individual pod](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/).
 
 ```bash
 # Pod DNS names follow pattern:
@@ -405,7 +405,7 @@ curl web-1.nginx
 
 ### 3.5 Stable Storage
 
-Through the `volumeClaimTemplates` field, the StatefulSet dynamically provisions unique storage for each pod ordinal.
+Through the [`volumeClaimTemplates` field](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/), the StatefulSet dynamically provisions unique storage for each pod ordinal.
 
 ```bash
 # Each pod gets its own PVC named:
@@ -420,7 +420,7 @@ data-web-2
 
 > **Did You Know?**
 >
-> When you delete a StatefulSet, the PVCs are NOT automatically deleted. This is a safety feature—you keep your data. To clean up, manually delete the PVCs after deleting the StatefulSet.
+> By default, StatefulSet PVCs are retained when the StatefulSet is deleted, but newer Kubernetes versions also support configurable PVC retention policies. Clean up retained PVCs only when you are sure the data is no longer needed.
 
 ---
 
@@ -428,7 +428,7 @@ data-web-2
 
 ### 4.1 Ordered Creation and Deletion
 
-StatefulSets enforce strict ordering to prevent race conditions during distributed cluster formation. Each pod must wait for the previous pod in the sequence to be Running and Ready.
+StatefulSets enforce strict ordering to prevent race conditions during distributed cluster formation. [Each pod must wait for the previous pod in the sequence to be Running and Ready](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/).
 
 ```mermaid
 flowchart LR
@@ -483,7 +483,7 @@ spec:
 ```
 
 **Partition** enables canary deployments:
-- With `partition: 2`, only web-2 gets updated
+- [With `partition: 2`, only web-2 gets updated](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/)
 - web-0 and web-1 keep the old version
 - Useful for testing updates on subset of pods
 
@@ -525,7 +525,7 @@ kubectl delete pvc data-web-0 data-web-1 data-web-2
 | Network identity | None (use Service) | Stable DNS per pod |
 | Storage | Shared or none | Dedicated PVC per pod |
 | Scaling order | Any order | Sequential (ordered) |
-| Rolling update | Random order | Reverse order (N-1 first) |
+| Rolling update | No stable ordinal update order guarantee | Reverse ordinal order (N-1 first) |
 | Use case | Stateless apps | Stateful apps |
 
 ### 5.2 When to Use What
@@ -548,7 +548,7 @@ flowchart TD
 
 > **War Story: The Database Disaster**
 >
-> A team deployed PostgreSQL using a Deployment with a PVC. It worked—until the pod was rescheduled. The new pod got a different IP, replication broke, and the standby couldn't find the primary. Switching to a StatefulSet with stable network identity fixed everything. Use the right tool!
+> Using a Deployment for a database that depends on per-replica identity can cause reconnection or replication problems after rescheduling; a StatefulSet is the safer default when the application needs stable network identity.
 
 ---
 
@@ -556,7 +556,7 @@ flowchart TD
 
 ### 6.1 What Is a Headless Service?
 
-A Service with `clusterIP: None` is referred to as a "Headless" Service. Instead of load balancing traffic across endpoints via a single Virtual IP, the DNS server directly returns the individual pod IPs.
+[A Service with `clusterIP: None` is referred to as a "Headless" Service. Instead of load balancing traffic across endpoints via a single Virtual IP, the DNS server directly returns the individual pod IPs.](https://kubernetes.io/docs/concepts/services-networking/service/)
 
 Here is a regular service:
 ```yaml
@@ -614,11 +614,11 @@ nslookup nginx-headless
 
 > **Did You Know?**
 >
-> CoreDNS automatically creates multiple A records for a headless service. If your StatefulSet has 5 replicas, doing a DNS lookup on the headless service name returns 5 different IP addresses in a randomized order, enabling basic client-side load balancing!
+> For a headless Service, cluster DNS returns the set of backing Pod IPs rather than a single virtual IP, so clients can connect directly to individual replicas or apply their own selection logic.
 
 > **Did You Know?**
 >
-> StatefulSet pod ordinals always start at 0 and strictly go up to N-1. If you scale a StatefulSet to 100 replicas, the highest pod name will be `app-99`. There is no native configuration to start the index at 1 or skip numbers.
+> By default, StatefulSet pod ordinals start at 0 and strictly go up to N-1. If you scale a StatefulSet to 100 replicas, the highest pod name will be `app-99`. By default, StatefulSet ordinals start at 0, and newer Kubernetes versions also let you set a custom start ordinal with `.spec.ordinals.start`; ordinals still remain sequential.
 
 ---
 
@@ -633,7 +633,7 @@ nslookup nginx-headless
 | Wrong serviceName in StatefulSet | DNS resolution fails | Ensure serviceName matches headless Service name |
 | Scaling StatefulSet too quickly during crash | Ordered rollout gets stuck waiting for failing pod | Fix the failing pod or use `Parallel` podManagementPolicy |
 | Updating StatefulSet with `OnDelete` strategy | Pods don't update automatically | Delete pods manually or change to `RollingUpdate` |
-| Forgetting to match labels in DaemonSet | DaemonSet controller creates infinite pods or fails | Ensure `spec.selector.matchLabels` matches `template.metadata.labels` |
+| Forgetting to match labels in DaemonSet | The API rejects the DaemonSet because the selector must match the pod template labels | Ensure `spec.selector.matchLabels` matches `template.metadata.labels` |
 
 ---
 
@@ -642,7 +642,7 @@ nslookup nginx-headless
 1. **Your monitoring team needs exactly one log collector pod on every node, including nodes added later. A colleague suggests using a Deployment with `replicas` set to the node count and pod anti-affinity. Why would a DaemonSet be a better choice, and what happens when a new node joins the cluster?**
    <details>
    <summary>Answer</summary>
-   A DaemonSet is better because it automatically creates a pod on every new node that joins the cluster and removes pods from nodes that leave. With a Deployment and anti-affinity, you'd need to manually increase the replica count each time a node is added, and the anti-affinity only *prefers* spreading -- it doesn't guarantee one-per-node. Additionally, DaemonSets can tolerate taints that normal Deployments cannot, ensuring coverage on special-purpose nodes like GPU nodes or control plane nodes. This ensures that no node is ever left unmonitored or unprotected, regardless of how dynamic the cluster scaling behavior might be.
+   A DaemonSet is better because it automatically creates a pod on every new node that joins the cluster and removes pods from nodes that leave. With a Deployment and anti-affinity, you'd need to manually increase the replica count each time a node is added, and the anti-affinity only *prefers* spreading -- it doesn't guarantee one-per-node. Additionally, DaemonSets often ship with or are configured with the tolerations needed for node-level agents, but Deployments can also tolerate taints when you explicitly add matching tolerations. This ensures that no node is ever left unmonitored or unprotected, regardless of how dynamic the cluster scaling behavior might be.
    </details>
 
 2. **You're deploying a 3-node PostgreSQL cluster with primary-standby replication. The standby nodes need to connect to the primary by a stable DNS name, and each node needs its own persistent volume that survives pod restarts. Which controller do you use, and what additional resource is required? What happens if `web-1` (a standby) crashes?**
@@ -1151,3 +1151,11 @@ For each scenario, identify whether to use Deployment, DaemonSet, or StatefulSet
 ## Next Module
 
 [Module 2.4: Jobs & CronJobs](../module-2.4-jobs-cronjobs/) - Dive into batch workloads and scheduled tasks to round out your knowledge of specialized workload controllers.
+
+## Sources
+
+- [DaemonSet](https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/) — Primary upstream reference for DaemonSet guarantees, node coverage, and controller behavior.
+- [Perform a Rolling Update on a DaemonSet](https://kubernetes.io/docs/tasks/manage-daemon/update-daemon-set/) — Explains DaemonSet update strategies including `RollingUpdate` and `OnDelete` behavior.
+- [StatefulSets](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/) — Primary upstream reference for StatefulSet identity, storage, ordering, and partitioned rolling updates.
+- [Service](https://kubernetes.io/docs/concepts/services-networking/service/) — Defines headless Services and how `clusterIP: None` exposes endpoint IPs without a virtual IP.
+- [DNS for Services and Pods](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/) — Explains cluster DNS records for Services and Pods, including per-Pod records used with StatefulSets.

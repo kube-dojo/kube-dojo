@@ -27,9 +27,9 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-This is the single most important module for the CBA exam. **Domain 4 is worth 32%** — nearly one in three questions will test your understanding of plugin development, Material UI, Software Templates, theming, and auth providers.
+This is the single most important module for the CBA exam. [**Domain 4 is worth 32%**](https://www.cncf.io/training/certification/cba/) — nearly one in three questions will test your understanding of plugin development, Material UI, Software Templates, theming, and auth providers.
 
-Backstage without plugins is an empty shell. The entire value proposition — the software catalog, TechDocs, CI/CD visibility, scaffolding — all of it is delivered through plugins. When Spotify built Backstage, they designed it as a plugin platform first and a portal second. Understanding how plugins work is understanding how Backstage works.
+Backstage without plugins is an empty shell. The entire value proposition — the software catalog, TechDocs, CI/CD visibility, scaffolding — all of it is delivered through plugins. [When Spotify built Backstage](https://github.com/backstage/backstage), they designed it as a plugin platform first and a portal second. Understanding how plugins work is understanding how Backstage works.
 
 This module is code-heavy by design. The exam shows you TypeScript and React snippets and asks what they do. You will not write code during the exam, but you absolutely need to *read* code fluently.
 
@@ -41,7 +41,7 @@ This module is code-heavy by design. The exam shows you TypeScript and React sni
 
 ## War Story: The Plugin That Broke Production
 
-In 2024, a major European financial institution experienced a severe, multi-day production incident tied directly to an improperly designed Backstage plugin. A platform team had built a custom frontend plugin that polled an internal Kubernetes cluster API directly from the browser to display real-time pod metrics. Because they did not route the request securely through a Backstage backend plugin, the frontend inadvertently exposed raw, long-lived cluster tokens to the client environment. A compromised third-party browser extension harvested these tokens, leading to an unauthorized lateral movement incident. The resulting breach cost the company millions in regulatory fines, mandatory security audits, and lost engineering velocity.
+A misdesigned Backstage plugin can expose long-lived cluster credentials in the browser. If browser-exposed credentials are harvested, they can enable unauthorized access and trigger expensive incident response, remediation, and compliance work.
 
 The crucial lesson from this outage is that Backstage plugin development is not standard React development. It requires a deep, uncompromising understanding of the boundary between the browser and the server. You must know exactly where your code executes, how it authenticates, and how it handles resource limits. That architectural discipline is exactly what the CBA certification tests.
 
@@ -49,10 +49,10 @@ The crucial lesson from this outage is that Backstage plugin development is not 
 
 ## Did You Know?
 
-1. **Massive Ecosystem**: The Backstage community maintains a public directory at `backstage.io/plugins` and a dedicated `backstage/community-plugins` repository governed strictly under the Apache License 2.0. The Certified Backstage Associate (CBA) certification itself is officially offered by the CNCF.
-2. **Strict Release Cadence**: As a CNCF Incubating project (not yet Graduated), Backstage follows a monthly main release line (shipping the Tuesday before the third Wednesday of each month) and a weekly `next` release line on Tuesdays for early access. The `next` release line offers early access to upcoming features with fewer stability guarantees.
-3. **Runtime Support Windows**: Backstage strictly supports exactly two adjacent even-numbered Node.js LTS releases (e.g., Node.js 22 and 24 as of v1.46.0) and the last three major TypeScript versions at any given time. React 18 is currently supported, with React 19 under evaluation.
-4. **The New Default**: The Backstage GitHub releases confirm v1.49.0 as the stable release as of 2026-01-28. Given the documented monthly release cadence, versions up to 1.51.x may have shipped by the time of writing (April 2026), but v1.49.0 remains our verified baseline. As of v1.49.0, newly created Backstage apps use the New Frontend System by default. The old `--next` CLI flag has been removed and replaced by a `--legacy` flag.
+1. **Massive Ecosystem**: The Backstage community maintains a public directory at `backstage.io/plugins` and a dedicated [`backstage/community-plugins` repository governed strictly under the Apache License 2.0](https://github.com/backstage/community-plugins). The [Certified Backstage Associate (CBA) certification itself is officially offered by the CNCF](https://www.cncf.io/training/certification/cba/).
+2. **Strict Release Cadence**: As a CNCF Incubating project (not yet Graduated), Backstage follows [a monthly main release line (shipping the Tuesday before the third Wednesday of each month) and a weekly `next` release line on Tuesdays for early access](https://github.com/backstage/backstage/blob/master/docs/overview/versioning-policy.md). The `next` release line offers early access to upcoming features with fewer stability guarantees.
+3. **Runtime Support Windows**: Backstage strictly supports [exactly two adjacent even-numbered Node.js LTS releases (e.g., Node.js 22 and 24 as of v1.46.0)](https://github.com/backstage/backstage/releases/tag/v1.46.0) and the [last three major TypeScript versions](https://github.com/backstage/backstage/blob/master/docs/overview/versioning-policy.md) at any given time. React 18 is currently supported, with React 19 under evaluation.
+4. **The New Default**: The Backstage GitHub releases confirm v1.49.0 as the stable release as of 2026-01-28. v1.49.0 is the verified baseline referenced here; check the Backstage releases page for any newer versions before relying on release-specific behavior. [As of v1.49.0, newly created Backstage apps use the New Frontend System by default. The old `--next` CLI flag has been removed and replaced by a `--legacy` flag.](https://github.com/backstage/backstage/releases/tag/v1.49.0)
 
 ---
 
@@ -348,7 +348,7 @@ yarn new --select backend-plugin
 
 ### 3.2 Backend Plugin Structure (New Backend System)
 
-Backstage has migrated to a "new backend system" (introduced in Backstage 1.x). It reached stable 1.0 and is highly recommended for all new plugin development. The exam strongly tests the new pattern. Here is the full structure of a backend plugin using `createBackendPlugin` from `@backstage/backend-plugin-api`:
+Backstage has migrated to a "new backend system" (introduced in Backstage 1.x). [It reached stable 1.0 and is highly recommended for all new plugin development.](https://github.com/backstage/backstage/releases/tag/v1.31.0) The exam strongly tests the new pattern. Here is the full structure of a backend plugin using `createBackendPlugin` from `@backstage/backend-plugin-api`:
 
 ```typescript
 // plugins/my-dashboard-backend/src/plugin.ts
@@ -511,7 +511,7 @@ Backstage manages service-to-service communication via internally generated plug
 
 ### Requesting a Plugin Token
 
-In the New Backend System, you leverage the built-in `coreServices.auth` and `coreServices.httpAuth` modules to request authorization.
+In the New Backend System, you leverage the [built-in `coreServices.auth` and `coreServices.httpAuth` modules to request authorization](https://raw.githubusercontent.com/backstage/backstage/master/docs/auth/service-to-service-auth.md).
 
 ```typescript
 // Example snippet demonstrating service-to-service auth
@@ -553,7 +553,7 @@ async init({ logger, http, auth, httpAuth }) {
 
 ### 4.1 Backstage's Relationship with MUI
 
-Backstage uses Material UI v5 (`@mui/material`) as its component library. Every visual element — buttons, cards, tables, dialogs — comes from MUI. The exam tests your ability to recognize MUI components and understand Backstage's theming system.
+Legacy Backstage frontend code commonly uses Material UI v5 (`@mui/material`), but current Backstage also ships Backstage UI components and is gradually moving some surfaces away from MUI-only primitives. The exam tests your ability to recognize MUI components and understand Backstage's theming system.
 
 Commonly tested MUI components in a Backstage context:
 
@@ -1146,7 +1146,7 @@ describe('MyDashboardPage', () => {
 
 Key testing patterns:
 
-- **`renderInTestApp`** — Wraps your component in the full Backstage app context (theme, API providers, routing). Always use this instead of plain `render` from `@testing-library/react`.
+- **`renderInTestApp`** — Wraps your component in the full Backstage app context (theme, API providers, routing). In most Backstage component tests, use this instead of plain `render` from `@testing-library/react`.
 - **MSW (Mock Service Worker)** — The standard way to mock backend API calls in Backstage frontend tests.
 - **`screen.findByText`** — Use `findBy*` (not `getBy*`) for async content that loads after a fetch.
 
@@ -1224,8 +1224,8 @@ describe('createRouter', () => {
 | Importing backend code in a frontend plugin | Looks like regular TypeScript imports | Frontend runs in the browser. It cannot access Node.js APIs, the filesystem, or the database. Use `fetchApiRef` to call your backend plugin over HTTP. |
 | Using MUI v4 syntax (`makeStyles`, `@material-ui/core`) | Following outdated tutorials | Backstage uses MUI v5. Use `sx` prop, `styled()`, or `@mui/material` imports. |
 | Hardcoding API URLs (`fetch('http://localhost:7007/...')`) | Works in local dev | Use `fetchApiRef` from `@backstage/core-plugin-api`. Backstage handles base URL resolution, auth headers, and proxy routing. |
-| Forgetting to register the backend plugin | Plugin code exists but is never loaded | Add `backend.add(myPlugin)` in `packages/backend/src/index.ts`. No registration = no routes mounted. |
-| Template actions with no error handling | Happy-path development | If a template action throws, the entire scaffolder run fails with a cryptic error. Always wrap external API calls in try/catch and provide meaningful error messages. |
+| Forgetting to register the backend plugin | Plugin code exists but is not loaded by the backend | Add `backend.add(myPlugin)` in `packages/backend/src/index.ts`. No registration = no routes mounted. |
+| Template actions with no error handling | Happy-path development | If a template action throws, the entire scaffolder run fails with a cryptic error. Wrap external API calls in try/catch and provide meaningful error messages. |
 | Using `getBy*` in tests for async content | Unfamiliar with testing-library patterns | Data that loads from an API is async. Use `findBy*` (which retries) instead of `getBy*` (which asserts immediately). |
 | Creating custom themes with `createTheme` | Mixing MUI's `createTheme` with Backstage | Use `createUnifiedTheme` from `@backstage/theme`, not `createTheme` from `@mui/material`. Backstage's version adds page themes, navigation palette, and plugin integration. |
 | Not setting `pluginId` on backend plugins | Copy-paste errors | The `pluginId` determines the API route prefix (`/api/<pluginId>`). If two plugins share an ID, routes collide. |
@@ -1305,7 +1305,7 @@ The New Backend System explicitly prohibits manual mutation of plugin instances 
 <details>
 <summary>Answer</summary>
 
-The build step will succeed because TypeScript only checks type definitions during compilation, and the backend typings are valid syntax. However, at runtime in the browser, the plugin will immediately crash because Node.js APIs like `DatabaseService` and the underlying Knex client have no implementation in a browser environment. Backstage enforces a strict architectural boundary where frontend plugins cannot establish direct database connections. The developer must build a corresponding backend plugin to retrieve the catalog data and expose it securely via a REST endpoint that the frontend can consume.
+The build step will succeed because TypeScript only checks type definitions during compilation, and the backend typings are valid syntax. However, at runtime in the browser, the plugin will fail when it tries to use Node.js APIs like `DatabaseService` and the underlying Knex client, because they have no implementation in a browser environment. Backstage enforces a strict architectural boundary where frontend plugins cannot establish direct database connections. The developer must build a corresponding backend plugin to retrieve the catalog data and expose it securely via a REST endpoint that the frontend can consume.
 </details>
 
 **Q10**: A developer's Software Template fails during the `catalog:register` step. The template successfully runs `publish:gitlab` (id: `create-repo`), but the register step uses `repoContentsUrl: ${{ parameters.repoUrl }}` and throws an error that the URL is invalid. The user did not input a URL; it was generated. What is the conceptual flaw in the template's variable referencing?
@@ -1560,3 +1560,14 @@ This module covered the core of CBA Domain 4 — the largest domain on the exam 
 - **Module 3**: [Backstage Catalog Deep Dive](../module-1.3-backstage-catalog-infrastructure/) — Entity processors, providers, annotations, and troubleshooting (Domain 3, 22%)
 - **Module 1**: [Backstage Development Workflow](../module-1.1-backstage-dev-workflow/) — Monorepo structure, Docker builds, CLI commands (Domain 1, 24%)
 - Review the [Backstage Official Plugin Development Guide](https://backstage.io/docs/plugins/) for additional depth
+
+## Sources
+
+- [CNCF Certified Backstage Associate (CBA)](https://www.cncf.io/training/certification/cba/) — Official certification page covering the CBA exam and its published domain weighting.
+- [Backstage GitHub Repository](https://github.com/backstage/backstage) — Upstream repository showing Backstage’s project origin and CNCF incubation status.
+- [Backstage Community Plugins Repository](https://github.com/backstage/community-plugins) — Official community-plugins repository documenting the project and its Apache 2.0 licensing.
+- [Backstage Release and Versioning Policy](https://github.com/backstage/backstage/blob/master/docs/overview/versioning-policy.md) — Defines the main and next release cadence plus Node.js and TypeScript support windows referenced in the module.
+- [Backstage v1.46.0 Release Notes](https://github.com/backstage/backstage/releases/tag/v1.46.0) — Release notes confirming the Node.js support window cited in the runtime support section.
+- [Backstage v1.49.0 Release Notes](https://github.com/backstage/backstage/releases/tag/v1.49.0) — Release notes for the module’s baseline version, including the New Frontend System default and `--legacy` flag behavior.
+- [Backstage v1.31.0 Release Notes](https://github.com/backstage/backstage/releases/tag/v1.31.0) — Release notes marking the new backend system as stable 1.0 and the recommended development path.
+- [Backstage Service-to-Service Auth](https://raw.githubusercontent.com/backstage/backstage/master/docs/auth/service-to-service-auth.md) — Upstream documentation for plugin-to-plugin authentication flows and plugin request tokens.

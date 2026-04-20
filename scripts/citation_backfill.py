@@ -38,7 +38,8 @@ from fetch_citation import allowlist_tier, fetch  # type: ignore[import-not-foun
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DOCS_ROOT = REPO_ROOT / "src" / "content" / "docs"
 SEED_DIR = REPO_ROOT / "docs" / "citation-seeds"
-SCHEMA_VERSION = 2  # v2: rewrite claims require verbatim anchor_text.
+CITATION_POOL_DIR = REPO_ROOT / "docs" / "citation-pools"
+SCHEMA_VERSION = 3  # v3: optional section source pools + source_id references.
 
 CLAIM_CLASSES = {
     "war_story", "incident", "statistic", "standard",
@@ -140,6 +141,28 @@ DEFERRED_DISPOSITIONS = {"needs_allowlist_expansion"}
 HARD_CITE_CLASSES = {
     "war_story", "incident", "standard", "security_claim", "statistic",
 }
+
+
+SECTION_POOL_PREFERENCE_TEMPLATE = """
+## Shared section source pool
+
+This module belongs to a section with a pre-validated shared source pool.
+PREFER these sources whenever they can honestly support a claim. Discover a
+new URL ONLY if none of the pool entries covers the claim's specific facts.
+
+Section pool reference: `{section_pool_ref}`
+
+{section_pool_sources}
+
+Per-claim pool rules:
+- For each claim, prefer a `source_id` from the pool.
+- Set `claims[].source_ids` to the pool entries you relied on.
+- Only set `proposed_url` to a NEW URL if no pool entry covers that claim's
+  specific facts.
+- If a pool URL is merely topically adjacent, do not force it. Use
+  `needs_allowlist_expansion`, `cannot_be_salvaged`, or a new `proposed_url`
+  as appropriate.
+"""
 
 
 # ---- prompt --------------------------------------------------------------
@@ -398,6 +421,8 @@ hallucinated deep link.
 
 {allowlist_block}
 
+{section_pool_block}
+
 ## Output schema
 
 Emit ONE JSON object, no preamble, no markdown fences, no trailing commas.
@@ -438,6 +463,7 @@ def _format_schema_block() -> str:
             "module_path": "<string>",
             "research_run_id": "<ISO-8601-UTC>-<agent>-<model>",
             "schema_version": SCHEMA_VERSION,
+            "section_pool_ref": "docs/citation-pools/<flat-section>.json | null",
             "claims": [
                 {
                     "claim_id": "C001",
@@ -445,7 +471,8 @@ def _format_schema_block() -> str:
                     "claim_class": "<one-of-enum>",
                     "span_hint": "<line N | section: X | paragraph after diagram 2>",
                     "disposition": "<one of 5 dispositions — see rules above>",
-                    "proposed_url": "https://... (required for supported/weak_anchor/needs_allowlist_expansion; null for soften/salvage)",
+                    "source_ids": ["S001", "S004"],
+                    "proposed_url": "https://... (ONLY for newly-discovered URLs not already covered by the shared pool; otherwise null)",
                     "proposed_tier": "<tier, or null if off-allowlist or rewrite disposition>",
                     "anchor_text": "<REQUIRED for soften_to_illustration and cannot_be_salvaged — a VERBATIM single-line substring of the module body that the orchestrator will substring-swap for suggested_rewrite. MUST appear exactly in the module body (no paraphrasing, keep backticks, asterisks, case). MUST NOT contain a newline. SHOULD appear in exactly one line. null otherwise.>",
                     "suggested_rewrite": "<rewritten sentence for soften/salvage; null otherwise>",
@@ -467,7 +494,37 @@ def _format_schema_block() -> str:
     )
 
 
-def build_research_prompt(module_key: str, module_path: Path, module_body: str) -> str:
+def _format_section_pool_block(
+    section_pool_ref: str | None,
+    section_pool: list[dict[str, Any]] | None,
+) -> str:
+    if not section_pool_ref or not section_pool:
+        return ""
+    lines = []
+    for source in section_pool:
+        source_id = str(source.get("source_id") or "?")
+        url = str(source.get("url") or "").strip()
+        title = str(source.get("title") or url or "Untitled source").strip()
+        tier = str(source.get("tier") or "unknown").strip()
+        scope_notes = str(source.get("scope_notes") or "").strip()
+        line = f"- `{source_id}` — {title} ({tier})\n  URL: {url}"
+        if scope_notes:
+            line += f"\n  Scope: {scope_notes}"
+        lines.append(line)
+    return SECTION_POOL_PREFERENCE_TEMPLATE.format(
+        section_pool_ref=section_pool_ref,
+        section_pool_sources="\n".join(lines),
+    ).strip()
+
+
+def build_research_prompt(
+    module_key: str,
+    module_path: Path,
+    module_body: str,
+    *,
+    section_pool_ref: str | None = None,
+    section_pool: list[dict[str, Any]] | None = None,
+) -> str:
     from fetch_citation import _load_allowlist  # type: ignore[import-not-found]
     allowlist = _load_allowlist()
     level = audience_level(module_key)
@@ -475,6 +532,7 @@ def build_research_prompt(module_key: str, module_path: Path, module_body: str) 
     return RESEARCH_PROMPT_TEMPLATE.format(
         audience_guidance=guidance,
         allowlist_block=_format_allowlist_block(allowlist),
+        section_pool_block=_format_section_pool_block(section_pool_ref, section_pool),
         schema_block=_format_schema_block(),
         claim_classes=", ".join(sorted(CLAIM_CLASSES)),
         tiers=", ".join(sorted(TIER_NAMES)),
@@ -508,6 +566,98 @@ def seed_path_for(module_key: str) -> Path:
     flat = module_key.replace("/", "-")
     SEED_DIR.mkdir(parents=True, exist_ok=True)
     return SEED_DIR / f"{flat}.json"
+
+
+def section_key_for_path(module_path: Path) -> str:
+    return module_path.parent.relative_to(DOCS_ROOT).as_posix()
+
+
+def flat_section_name(section_key: str) -> str:
+    return section_key.strip("/").replace("/", "-")
+
+
+def section_pool_path_for(section_key: str) -> Path:
+    CITATION_POOL_DIR.mkdir(parents=True, exist_ok=True)
+    return CITATION_POOL_DIR / f"{flat_section_name(section_key)}.json"
+
+
+def load_section_pool(
+    section_pool_ref: str | None,
+    *,
+    strict: bool = False,
+) -> dict[str, Any] | None:
+    if not section_pool_ref:
+        return None
+    pool_path = REPO_ROOT / section_pool_ref
+    if not pool_path.exists():
+        if strict:
+            raise FileNotFoundError(f"section pool not found: {section_pool_ref}")
+        return None
+    return json.loads(pool_path.read_text(encoding="utf-8"))
+
+
+def _pool_source_index(section_pool: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
+    for source in (section_pool or {}).get("sources") or []:
+        source_id = str(source.get("source_id") or "").strip()
+        if source_id:
+            out[source_id] = source
+    return out
+
+
+def _pool_source_by_url(section_pool: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
+    for source in (section_pool or {}).get("sources") or []:
+        url = str(source.get("url") or "").strip()
+        if url:
+            out[url] = source
+    return out
+
+
+def resolve_claim_source_urls(
+    claim: dict[str, Any],
+    *,
+    section_pool: dict[str, Any] | None = None,
+) -> list[str]:
+    pool_by_id = _pool_source_index(section_pool)
+    urls: list[str] = []
+    for source_id in claim.get("source_ids") or []:
+        source = pool_by_id.get(str(source_id))
+        url = str((source or {}).get("url") or "").strip()
+        if url and url not in urls:
+            urls.append(url)
+    proposed_url = str(claim.get("proposed_url") or "").strip()
+    if proposed_url and proposed_url not in urls:
+        urls.append(proposed_url)
+    return urls
+
+
+def resolve_primary_claim_url(
+    claim: dict[str, Any],
+    *,
+    section_pool: dict[str, Any] | None = None,
+) -> str | None:
+    urls = resolve_claim_source_urls(claim, section_pool=section_pool)
+    return urls[0] if urls else None
+
+
+def _normalize_claim_pool_refs(
+    claim: dict[str, Any],
+    *,
+    section_pool: dict[str, Any] | None = None,
+) -> None:
+    source_ids = claim.get("source_ids")
+    if not isinstance(source_ids, list):
+        claim["source_ids"] = []
+    pool_by_url = _pool_source_by_url(section_pool)
+    proposed_url = str(claim.get("proposed_url") or "").strip()
+    if claim["source_ids"] or not proposed_url:
+        return
+    source = pool_by_url.get(proposed_url)
+    if source:
+        claim["source_ids"] = [str(source.get("source_id"))]
+        claim["proposed_url"] = None
+        claim["proposed_tier"] = None
 
 
 # ---- dispatch ------------------------------------------------------------
@@ -615,6 +765,20 @@ def parse_agent_response(raw: str) -> dict[str, Any]:
 def validate_seed(seed: dict[str, Any]) -> list[str]:
     """Schema-only validation (no network). Returns list of issues."""
     issues: list[str] = []
+    section_pool_ref = seed.get("section_pool_ref")
+    section_pool: dict[str, Any] | None = None
+    pool_by_id: dict[str, dict[str, Any]] = {}
+    if section_pool_ref is not None and not isinstance(section_pool_ref, str):
+        issues.append("bad_section_pool_ref")
+    if section_pool_ref:
+        try:
+            section_pool = load_section_pool(str(section_pool_ref), strict=True)
+        except FileNotFoundError:
+            issues.append(f"missing_section_pool:{section_pool_ref}")
+        except json.JSONDecodeError as exc:
+            issues.append(f"invalid_section_pool_json:{exc}")
+        else:
+            pool_by_id = _pool_source_index(section_pool)
     for field in ("module_key", "module_path", "claims", "further_reading"):
         if field not in seed:
             issues.append(f"missing_field:{field}")
@@ -628,11 +792,29 @@ def validate_seed(seed: dict[str, Any]) -> list[str]:
         disp = claim.get("disposition")
         if disp and disp not in DISPOSITIONS:
             issues.append(f"claim[{i}]:bad_disposition:{disp}")
+        source_ids = claim.get("source_ids")
+        if source_ids is None:
+            source_ids = []
+        if not isinstance(source_ids, list):
+            issues.append(f"claim[{i}]:source_ids_not_list")
+            source_ids = []
+        bad_source_ids = [
+            str(source_id) for source_id in source_ids
+            if not isinstance(source_id, str)
+        ]
+        if bad_source_ids:
+            issues.append(f"claim[{i}]:source_ids_not_strings")
+        for source_id in source_ids:
+            if pool_by_id and str(source_id) not in pool_by_id:
+                issues.append(f"claim[{i}]:unknown_source_id:{source_id}")
+            elif section_pool_ref and not pool_by_id:
+                issues.append(f"claim[{i}]:section_pool_unavailable_for_source_id:{source_id}")
         # Per-disposition field requirements.
         if disp in CITED_DISPOSITIONS:
-            if not claim.get("proposed_url"):
-                issues.append(f"claim[{i}]:missing_proposed_url_for_{disp}")
-            if not claim.get("proposed_tier"):
+            has_pool_source = bool(source_ids)
+            if not has_pool_source and not claim.get("proposed_url"):
+                issues.append(f"claim[{i}]:missing_source_ref_for_{disp}")
+            if claim.get("proposed_url") and not claim.get("proposed_tier"):
                 issues.append(f"claim[{i}]:missing_proposed_tier_for_{disp}")
         elif disp == "needs_allowlist_expansion":
             # URL optional but if present MUST be off-allowlist (that's
@@ -703,10 +885,12 @@ def validate_anchors_against_body(seed: dict[str, Any], body: str) -> list[str]:
 
 def validate_urls(seed: dict[str, Any]) -> dict[str, Any]:
     """Network pass: fetch every URL, move rejects into rejected_urls."""
+    section_pool = load_section_pool(seed.get("section_pool_ref"))
     rejected: list[dict[str, Any]] = list(seed.get("rejected_urls") or [])
     kept_claims: list[dict[str, Any]] = []
     for claim in seed.get("claims") or []:
         disp = claim.get("disposition")
+        _normalize_claim_pool_refs(claim, section_pool=section_pool)
 
         # Rewrite-bucket claims: no URL fetch needed; they carry a
         # suggested_rewrite and possibly a lesson_point_url. The
@@ -743,6 +927,13 @@ def validate_urls(seed: dict[str, Any]) -> dict[str, Any]:
         # fetch — we're deliberately pointing at unknown hosts.
         if disp == "needs_allowlist_expansion":
             claim["proposed_tier"] = None  # by definition
+            kept_claims.append(claim)
+            continue
+
+        # Cited dispositions backed by pool source_ids rely on the
+        # section_source_discovery validation pass. Only newly-discovered
+        # proposed_url values need a fresh allowlist+HTTP check here.
+        if claim.get("source_ids"):
             kept_claims.append(claim)
             continue
 
@@ -812,16 +1003,30 @@ def _iso_utc_now() -> str:
     return _dt.datetime.now(_dt.UTC).isoformat(timespec="seconds")
 
 
-def run_research(module_key: str, *, agent: str = "codex", dry_run: bool = False) -> dict[str, Any]:
+def run_research(
+    module_key: str,
+    *,
+    agent: str = "codex",
+    dry_run: bool = False,
+    section_pool_ref: str | None = None,
+) -> dict[str, Any]:
     module_path = resolve_module_path(module_key)
     module_body = module_path.read_text(encoding="utf-8")
     normalized_key = module_path.relative_to(DOCS_ROOT).with_suffix("").as_posix()
-    prompt = build_research_prompt(normalized_key, module_path, module_body)
+    section_pool = load_section_pool(section_pool_ref, strict=False)
+    prompt = build_research_prompt(
+        normalized_key,
+        module_path,
+        module_body,
+        section_pool_ref=section_pool_ref,
+        section_pool=(section_pool or {}).get("sources"),
+    )
 
     if dry_run:
         return {
             "module_key": normalized_key,
             "dry_run": True,
+            "section_pool_ref": section_pool_ref,
             "prompt_bytes": len(prompt),
             "prompt_preview": prompt[:600],
             "prompt_tail": prompt[-400:],
@@ -854,11 +1059,16 @@ def run_research(module_key: str, *, agent: str = "codex", dry_run: bool = False
 
     seed.setdefault("module_key", normalized_key)
     seed.setdefault("module_path", str(module_path.relative_to(REPO_ROOT)))
+    seed.setdefault("section_pool_ref", section_pool_ref)
     seed["schema_version"] = SCHEMA_VERSION
     seed["research_run_id"] = f"{_iso_utc_now()}-{agent}-{model}"
     # Stabilize claim IDs.
     for claim in seed.get("claims") or []:
-        if isinstance(claim, dict) and claim.get("claim_text") and not claim.get("claim_id"):
+        if not isinstance(claim, dict):
+            continue
+        claim.setdefault("source_ids", [])
+        _normalize_claim_pool_refs(claim, section_pool=section_pool)
+        if claim.get("claim_text") and not claim.get("claim_id"):
             claim["claim_id"] = _stable_claim_id(str(claim["claim_text"]))
 
     schema_issues = validate_seed(seed)
@@ -887,6 +1097,7 @@ backfill pipeline. Given the module body and the already-validated citation
 seed (with dispositions), produce a STRUCTURED EDIT PLAN the orchestrator
 will apply mechanically. You do NOT rewrite the module freely — every edit
 is an inline citation wrap of an existing phrase, tied to a specific claim_id.
+The orchestrator builds the final `## Sources` section deterministically.
 
 ## Division of responsibility
 
@@ -894,28 +1105,29 @@ Two kinds of edits land in the module:
 
 1. **Inline citation wraps** (YOUR JOB) — for every `supported` and
    `weak_anchor` claim, emit one `inline_insertion` that wraps an
-   existing phrase in `[phrase](url)` using the seed's `proposed_url`.
+   existing phrase in `[phrase](url)` using the seed's `citation_url`.
 2. **Prose rewrites** (ORCHESTRATOR'S JOB, not yours) — for every
    `soften_to_illustration` or `cannot_be_salvaged` claim, the
    orchestrator will substring-swap the seed's `anchor_text` for the
    seed's `suggested_rewrite` automatically. You must NOT emit
    `prose_rewrites` entries. They are handled deterministically from
    the seed; your participation would only introduce error.
+3. **Sources section** (ORCHESTRATOR'S JOB, not yours) — the
+   orchestrator resolves pool `source_id`s, deduplicates URLs, and
+   appends the final `## Sources` block. Leave `sources_section` empty.
 
 ## MANDATORY per-disposition actions
 
 - `supported` | `weak_anchor` → REQUIRED: one `inline_insertion` (pure
-  wrap of an existing phrase in `[phrase](url)`). The URL is the one
-  in the seed. If a supported-claim's span_hint points at a mermaid/
-  code block/table row that cannot carry a markdown link, put the URL
-  in `sources_section` instead and record the skip in
-  `skipped_claims` with reason `span_not_wrappable`.
+  wrap of an existing phrase in `[phrase](url)`). The URL is the
+  claim's `citation_url` in the seed. If a supported-claim's span_hint
+  points at a mermaid/code block/table row that cannot carry a markdown
+  link, record the skip in `skipped_claims` with reason
+  `span_not_wrappable`.
 
 - `soften_to_illustration` | `cannot_be_salvaged` → DO NOT EMIT a
   `prose_rewrite`. The orchestrator handles these via the seed's
-  `anchor_text` + `suggested_rewrite`. If the seed has a
-  `lesson_point_url` (soften only), include it in `sources_section`
-  as a Further Reading-style entry.
+  `anchor_text` + `suggested_rewrite`.
 
 - `needs_allowlist_expansion` → DO NOTHING. Add the claim_id to
   `skipped_claims` with reason `awaiting_allowlist_review`. Do not
@@ -940,13 +1152,7 @@ Two kinds of edits land in the module:
    `inside_quoted_block`. (Plain blockquotes WITHOUT enclosing
    double-quotes — e.g. `> **Pause and predict**: ...` — are
    editable; the rule is specifically about quoted-string content.)
-4. `sources_section` is appended last. Include:
-   - every URL used in inline_insertions
-   - every validated `further_reading` URL from the seed
-   - every `lesson_point_url` used by soften claims (as Further Reading
-     style entries)
-   - do NOT list duplicate URLs
-   - short human-readable titles + one-sentence annotations
+4. `sources_section` MUST be the empty string. The orchestrator owns it.
 
 ## Output schema
 
@@ -983,7 +1189,7 @@ INJECT_SCHEMA_EXAMPLE = json.dumps(
                 "replace_with": "[<original_phrase>](<url>)",
             }
         ],
-        "sources_section": "## Sources\n\n- [<title>](<url>) — <one-sentence annotation>\n- ...\n",
+        "sources_section": "",
         "skipped_claims": [
             {"claim_id": "C003", "reason": "awaiting_allowlist_review | span_in_code_block | ..."}
         ],
@@ -993,6 +1199,7 @@ INJECT_SCHEMA_EXAMPLE = json.dumps(
 
 
 def build_inject_prompt(module_key: str, module_body: str, seed: dict[str, Any]) -> str:
+    section_pool = load_section_pool(seed.get("section_pool_ref"))
     # Trim seed to the fields the inject step cares about (keep bytes down).
     # Rewrite-disposition claims still included so Codex understands the
     # module has them (for sources_section lesson_point_urls), but Codex
@@ -1005,7 +1212,8 @@ def build_inject_prompt(module_key: str, module_body: str, seed: dict[str, Any])
                 "claim_text": c.get("claim_text"),
                 "span_hint": c.get("span_hint"),
                 "disposition": c.get("disposition"),
-                "proposed_url": c.get("proposed_url"),
+                "source_ids": c.get("source_ids") or [],
+                "citation_url": resolve_primary_claim_url(c, section_pool=section_pool),
                 "lesson_point_url": c.get("lesson_point_url"),
             }
             for c in (seed.get("claims") or [])
@@ -1222,9 +1430,10 @@ def apply_inject_plan(body: str, plan: dict[str, Any], seed: dict[str, Any]) -> 
                         "status": "applied",
                         **({"note": f"anchor_ambiguous_{count}_matches"} if count > 1 else {})})
 
-    sources = (plan.get("sources_section") or "").strip()
+    sources = _build_sources_section_from_seed(seed).strip()
     if sources:
         sources = _sanitize_sources_section_urls(sources)
+        new_body = _strip_sources_section(new_body).rstrip()
         if not new_body.endswith("\n"):
             new_body += "\n"
         new_body += "\n" + sources + "\n"
@@ -1288,6 +1497,100 @@ def _strip_sources_section(body: str) -> str:
     return pre.rstrip()
 
 
+def _derive_title_from_url(url: str) -> str:
+    """Derive a readable title from a URL when no human-written one is available.
+
+    Turning `https://argo-cd.readthedocs.io/en/release-3.1/` into
+    `argo-cd.readthedocs.io: release 3.1` beats the default (URL repeated
+    as both link text and href) for rendered module Sources sections.
+    """
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+    except (ValueError, TypeError):
+        return url
+    host = (parsed.hostname or "").removeprefix("www.")
+    path_segments = [seg for seg in parsed.path.split("/") if seg]
+    tail = path_segments[-1] if path_segments else ""
+    readable_tail = tail.replace("-", " ").replace("_", " ").strip()
+    if host and readable_tail:
+        return f"{host}: {readable_tail}"
+    return host or url
+
+
+def _build_sources_section_from_seed(seed: dict[str, Any]) -> str:
+    section_pool = load_section_pool(seed.get("section_pool_ref"))
+    pool_by_id = _pool_source_index(section_pool)
+    pool_by_url = _pool_source_by_url(section_pool)
+    entries: list[tuple[str, str, str]] = []
+    seen_urls: set[str] = set()
+
+    def add_entry(url: str | None, title: str | None, note: str | None) -> None:
+        normalized_url = str(url or "").strip()
+        if not normalized_url or normalized_url in seen_urls:
+            return
+        seen_urls.add(normalized_url)
+        title_clean = str(title or "").strip()
+        resolved_title = title_clean or _derive_title_from_url(normalized_url)
+        resolved_note = str(note or "").strip()
+        entries.append((resolved_title, normalized_url, resolved_note))
+
+    for claim in seed.get("claims") or []:
+        disposition = claim.get("disposition")
+        source_ids = [str(source_id) for source_id in claim.get("source_ids") or []]
+        # Pool sources are pre-validated but still disposition-scoped:
+        # source_ids on a needs_allowlist_expansion / cannot_be_salvaged
+        # claim indicate schema drift (model hallucination) and must
+        # not reach a rendered Sources block.
+        if disposition in CITED_DISPOSITIONS:
+            for source_id in source_ids:
+                source = pool_by_id.get(source_id) or {}
+                add_entry(
+                    str(source.get("url") or "").strip() or None,
+                    str(source.get("title") or "").strip() or None,
+                    str(source.get("scope_notes") or "").strip()
+                    or str(claim.get("rationale") or "").strip()
+                    or str(claim.get("claim_text") or "").strip(),
+                )
+            # Pool-less proposed_url fallback (still CITED-gated).
+            if not source_ids:
+                add_entry(
+                    claim.get("proposed_url"),
+                    None,
+                    str(claim.get("rationale") or "").strip()
+                    or str(claim.get("claim_text") or "").strip(),
+                )
+        # lesson_point_url is semantically the illustrative-rewrite source
+        # for soften_to_illustration ONLY. On any other disposition it is
+        # schema drift; refuse to surface it.
+        if disposition == "soften_to_illustration":
+            lesson_point_url = str(claim.get("lesson_point_url") or "").strip()
+            if lesson_point_url:
+                pool_source = pool_by_url.get(lesson_point_url) or {}
+                add_entry(
+                    lesson_point_url,
+                    str(pool_source.get("title") or "").strip() or None,
+                    "General lesson point for an illustrative rewrite.",
+                )
+
+    for link in seed.get("further_reading") or []:
+        add_entry(
+            link.get("url"),
+            link.get("title"),
+            link.get("why_relevant"),
+        )
+
+    if not entries:
+        return ""
+    lines = ["## Sources", ""]
+    for title, url, note in entries:
+        if note:
+            lines.append(f"- [{title}]({url}) — {note}")
+        else:
+            lines.append(f"- [{title}]({url})")
+    return "\n".join(lines)
+
+
 def _verify_diff_is_additive(original: str, modified: str,
                              authorized_rewrites: dict[str, str] | None = None) -> list[str]:
     """Sanity-check that `modified` differs from `original` only by
@@ -1302,7 +1605,8 @@ def _verify_diff_is_additive(original: str, modified: str,
     issues: list[str] = []
     authorized_values = set((authorized_rewrites or {}).values())
     modified_pre = _strip_sources_section(modified)
-    orig_unwrapped = _INLINE_LINK_RE.sub(r"\1", original).rstrip()
+    original_pre = _strip_sources_section(original)
+    orig_unwrapped = _INLINE_LINK_RE.sub(r"\1", original_pre).rstrip()
     mod_unwrapped = _INLINE_LINK_RE.sub(r"\1", modified_pre).rstrip()
     if mod_unwrapped == orig_unwrapped:
         return issues
@@ -1491,6 +1795,10 @@ def main(argv: list[str] | None = None) -> int:
     rp = subs.add_parser("research", help="Run the research step on one module")
     rp.add_argument("module_key", help="Module key under src/content/docs/")
     rp.add_argument("--agent", default="codex", choices=["codex", "gemini"])
+    rp.add_argument(
+        "--section-pool-ref",
+        help="Optional docs/citation-pools/<section>.json reference for shared sources",
+    )
     rp.add_argument("--dry-run", action="store_true",
                     help="Print prompt + exit; no dispatch, no writes")
 
@@ -1503,7 +1811,12 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "research":
-        result = run_research(args.module_key, agent=args.agent, dry_run=args.dry_run)
+        result = run_research(
+            args.module_key,
+            agent=args.agent,
+            dry_run=args.dry_run,
+            section_pool_ref=args.section_pool_ref,
+        )
         print(json.dumps(result, indent=2, ensure_ascii=False))
         return 0 if result.get("ok") or result.get("dry_run") else 1
 

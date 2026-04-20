@@ -8,7 +8,7 @@ sidebar:
 
 ---
 
-*The on-call engineer's phone buzzed at 2 AM: "Production is down." She SSH'd into the bastion, ran `kubectl get pods`—everything looked fine. But customers were seeing errors. After two hours of frantic debugging, she discovered it: someone had manually scaled the payment service to zero replicas "for testing" three days ago, then forgot to scale it back. No ticket. No pull request. No audit trail. The change existed only in cluster state, invisible to monitoring, unknown to the team. That night cost the e-commerce platform $890,000 in lost Black Friday pre-orders. The next Monday, the CTO demanded answers. "How do we prevent this from ever happening again?" The answer was GitOps—and ArgoCD became the tool that would transform their deployment culture from chaos to confidence.*
+*A common GitOps failure mode happens when someone makes an unreviewed manual change in the cluster, the change drifts away from Git, and the team only discovers it during an outage. GitOps tools such as ArgoCD are designed to surface and reconcile that drift through a version-controlled source of truth.*
 
 ---
 
@@ -32,16 +32,16 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-ArgoCD is the most popular GitOps tool in the Kubernetes ecosystem. It watches Git repositories and automatically syncs your cluster state to match what's defined in version control. No more `kubectl apply` from laptops—every change is auditable, reviewable, and reversible.
+ArgoCD is a widely used GitOps tool in the Kubernetes ecosystem. [It watches Git repositories and automatically syncs your cluster state to match what's defined in version control.](https://argo-cd.readthedocs.io/en/stable/operator-manual/architecture/) No more `kubectl apply` from laptops—every change is auditable, reviewable, and reversible.
 
 Understanding ArgoCD isn't just about knowing the tool—it's about adopting a deployment philosophy that eliminates configuration drift and makes rollbacks trivial.
 
 ## Did You Know?
 
-- **ArgoCD syncs over 1 million applications in production**—it's used by Intuit (its creator), Tesla, NVIDIA, and thousands of companies
+- **ArgoCD is used in production at substantial scale**—it has a broad open-source community and documented enterprise adopters
 - **The name "Argo" comes from Greek mythology**—the ship that carried Jason and the Argonauts, fitting for a tool that "navigates" deployments
-- **ArgoCD was originally built for Intuit's 150+ Kubernetes clusters**—they needed a way to manage deployments at scale without tribal knowledge
-- **ArgoCD supports 50+ config management tools**—Helm, Kustomize, Jsonnet, plain YAML, and custom plugins
+- **ArgoCD was built to help manage Kubernetes deployments at scale**—especially in large multi-cluster environments
+- **ArgoCD supports multiple config-management approaches**—including Helm, Kustomize, Jsonnet, plain YAML, and custom plugins
 
 ## ArgoCD Architecture
 
@@ -751,11 +751,11 @@ spec:
 
 **The Cultural Change**
 
-After the incident, the team implemented:
+Teams that want safer GitOps workflows often add guardrails such as:
 
 1. **Prune disabled by default**: Services opt-in to pruning with explicit annotation
 2. **Two-person review for deletions**: Any PR that removes files requires platform team approval
-3. **Staging sync first**: Production ArgoCD syncs only after 1-hour staging bake time
+3. **Staging sync first**: Production syncs only after a staging bake time has passed
 4. **Sync windows**: Critical services can only sync during business hours
 
 **Key Lessons**
@@ -1315,3 +1315,10 @@ Continue to [Module 2.2: Argo Rollouts](../module-2.2-argo-rollouts/) where we'l
 ---
 
 *"The best deployment is the one you don't have to think about. GitOps with ArgoCD makes that possible."*
+
+## Sources
+
+- [Argo CD Architectural Overview](https://argo-cd.readthedocs.io/en/stable/operator-manual/architecture/) — Backs Argo CD component architecture and responsibilities such as API server, repository server, application controller, Git polling/reconciliation, sync, rollback, auth delegation, and RBAC enforcement.
+- [argo-cd.readthedocs.io: release 3.1](https://argo-cd.readthedocs.io/en/release-3.1/) — General lesson point for an illustrative rewrite.
+- [Introduction to ApplicationSet Controller](https://argo-cd.readthedocs.io/en/stable/operator-manual/applicationset/) — Covers ApplicationSet concepts, generators, monorepo patterns, and multi-cluster app generation.
+- [Argo CD RBAC Configuration](https://argo-cd.readthedocs.io/en/stable/operator-manual/rbac/) — Explains Argo CD RBAC, built-in roles, SSO group mapping, and project-scoped access control.

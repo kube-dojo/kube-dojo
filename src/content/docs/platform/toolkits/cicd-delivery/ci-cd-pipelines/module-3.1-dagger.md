@@ -6,7 +6,7 @@ sidebar:
 ---
 > **Toolkit Track** | Complexity: `[COMPLEX]` | Time: 45-50 min
 
-The senior engineer stared at the CI failure notification—the third one this hour. "It works on my machine," came the familiar refrain from the developer who'd pushed the change. After 40 minutes of debugging Jenkins logs and another 20 minutes trying to reproduce the issue, she finally found the problem: a subtle difference in the environment variable handling between the CI runner and local development. "If only we could run the exact same pipeline locally," she thought. Six months later, after migrating to Dagger, that wish became reality. Their CI pipeline became truly portable—developers ran the same pipeline on their laptops, catching 73% of issues before pushing. The company estimated the saved debugging time at **$180,000 per year** across their 45-person engineering team.
+Teams often lose time to CI-only environment mismatches that are hard to reproduce locally. A portable pipeline approach aims to reduce that gap by letting developers run equivalent pipeline logic on their own machines before pushing changes.
 
 ## Prerequisites
 
@@ -20,7 +20,7 @@ Before starting this module:
 
 After completing this module, you will be able to:
 
-- **Configure Dagger pipelines in Go, Python, or TypeScript that run identically on local machines and CI systems**
+- **[Configure Dagger pipelines in Go, Python, or TypeScript that run identically on local machines and CI systems](https://github.com/dagger/dagger)**
 - **Implement containerized CI/CD steps with explicit dependency management and caching strategies**
 - **Deploy Dagger-based pipelines across multiple CI providers (GitHub Actions, GitLab CI, CircleCI) without rewriting logic**
 - **Evaluate when Dagger's portable pipeline approach outperforms traditional YAML-based CI/CD configurations**
@@ -28,16 +28,16 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-Traditional CI/CD pipelines are written in YAML—declarative, hard to test, impossible to debug locally. Dagger flips this: write your pipelines in real programming languages, run them anywhere, and debug locally before pushing.
+Traditional CI/CD pipelines are written in YAML—declarative, hard to test, and often difficult to debug locally. Dagger flips this: write your pipelines in real programming languages, run them anywhere, and debug locally before pushing.
 
-Dagger is the "Docker for CI/CD"—portable pipelines that work the same on your laptop, in GitHub Actions, and in any CI system. No more "works on CI but not locally" debugging nightmares.
+Dagger is a container-based workflow engine designed so the same pipeline logic can run locally and in CI. No more "works on CI but not locally" debugging nightmares.
 
 ## Did You Know?
 
 - **Dagger was founded by the creators of Docker**—Solomon Hykes, the creator of Docker, started Dagger to solve CI/CD the same way Docker solved environments
-- **Dagger pipelines are 100% portable**—the same pipeline runs in GitHub Actions, GitLab CI, Jenkins, CircleCI, or your laptop
+- **Dagger pipelines are designed to be portable**—the same pipeline code can run locally and across CI systems that invoke the Dagger CLI
 - **Dagger caches at the layer level like Docker**—unchanged pipeline steps are skipped, just like Docker layer caching
-- **The name "Dagger" comes from the CI acronym**—"Devkit for Application Generation and Execution in Reproducible environments"
+- **The name "Dagger" is project branding**—what matters here is that it defines workflows as portable, programmable CI/CD logic
 
 ## What Makes Dagger Different
 
@@ -628,9 +628,9 @@ func (m *MyApp) CICD(
 
 ## War Story: The $2.3 Million 45-Minute Pipeline
 
-A fintech startup with 65 engineers had a Jenkins pipeline from 2018 that nobody wanted to touch. It took **45 minutes per run**, with 8-12 runs per developer per day. Each step installed dependencies from scratch—no caching. Debugging required pushing commits and waiting. Nobody knew why certain Jenkins plugins were installed or what would break if removed.
+A common failure mode in older CI estates is a slow, brittle pipeline with weak caching, long feedback loops, and little confidence about which plugins or steps are still safe to change.
 
-The pipeline was so slow that developers started batching changes, leading to larger PRs, harder code reviews, and more merge conflicts. Friday deployments were banned because the pipeline would inevitably fail late in the day.
+When pipelines stay slow for long enough, teams often batch changes, which makes reviews and releases riskier.
 
 ```
 THE 45-MINUTE PIPELINE BREAKDOWN
@@ -770,11 +770,11 @@ PAYBACK PERIOD: 2.4 weeks
 
 **Lessons Learned:**
 
-1. **Local-first changes everything**—developers run `dagger call test` before pushing, catching 73% of issues locally
-2. **Caching is exponential**—the second run of a pipeline should be 10x faster than the first
-3. **Parallelism isn't optional**—sequential lint + test + scan is 3x slower than parallel
+1. **Local-first changes everything**—developers can run `dagger call test` before pushing and catch some issues locally
+2. **Caching compounds**—subsequent pipeline runs can be dramatically faster than the first when inputs are reused
+3. **Parallelism matters**—running independent lint, test, and scan stages concurrently reduces wall-clock pipeline time
 4. **Real code > YAML**—Go/Python/TS pipelines can be debugged, tested, and refactored
-5. **Portability matters**—same pipeline works on laptop, GitHub Actions, GitLab, anywhere
+5. **Portability matters**—the same pipeline logic can run locally and across different CI environments
 
 ## Quiz
 
@@ -861,7 +861,7 @@ How do you securely pass a registry password to Dagger?
 <details>
 <summary>Show Answer</summary>
 
-Use the `*Secret` type, which Dagger handles securely (never logged, encrypted in transit):
+Use the `*Secret` type, which Dagger handles securely (designed to avoid logging secret values, encrypted in transit):
 
 ```go
 func (m *MyApp) Publish(
@@ -885,7 +885,7 @@ dagger call publish --password=env:GITHUB_TOKEN
 dagger call publish --password=file:./token.txt
 ```
 
-Secrets are never exposed in logs or Dagger Cloud traces.
+Secrets are designed not to appear in logs or Dagger Cloud traces.
 </details>
 
 ### Question 5
@@ -1058,7 +1058,7 @@ func (m *MyApp) Build(source *Directory) *Container {
   # Dagger Cloud stores cache externally
 ```
 
-**Best practice:** Always use multi-stage builds and distroless/Alpine base images. A 2GB image is almost always unnecessary.
+**Best practice:** In most cases, use multi-stage builds and distroless or Alpine base images. A 2GB image is almost always unnecessary.
 </details>
 
 ### Question 7
@@ -1555,3 +1555,9 @@ Continue to [Module 3.2: Tekton](../module-3.2-tekton/) where we'll explore Kube
 ---
 
 *"The best CI/CD pipeline is the one you can run on your laptop. Dagger makes every pipeline local-first."*
+
+## Sources
+
+- [dagger/dagger](https://github.com/dagger/dagger) — Upstream Dagger repository covering the core model, supported SDKs, and portability-focused workflow.
+- [dagger/dagger-for-github](https://github.com/dagger/dagger-for-github) — Official GitHub Actions integration for running Dagger pipelines in GitHub CI.
+- [Dagger SDK Source Tree](https://github.com/dagger/dagger/tree/main/sdk) — Source tree for the Go, Python, and TypeScript SDK implementations used by the module examples.

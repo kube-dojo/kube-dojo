@@ -1518,7 +1518,7 @@ By creating a dedicated IP pool (e.g., 10.245.0.0/24) for the `payment` namespac
 - Network flow logs can be audited by CIDR range
 - Compliance auditors can verify segmentation without understanding Kubernetes internals
 
-Without per-namespace pools, pod IPs are scattered across the global pool, making network-level segmentation impossible without Calico-specific policies everywhere.
+Without per-namespace pools, pod IPs are scattered across the global pool, making network-level segmentation much harder without Calico-specific policies throughout the cluster.
 
 </details>
 
@@ -1956,3 +1956,9 @@ Continue to [Module 5.1: Cilium](../module-5.1-cilium/) if you have not already,
 ---
 
 *"BGP has been routing the internet since 1994. Calico brings that same battle-tested protocol to every pod in your cluster. There is no more proven foundation for production networking."*
+
+## Sources
+
+- [Project Calico GitHub Repository](https://github.com/projectcalico/calico) — Primary upstream project entry point for releases, code, and high-level feature references.
+- [Kubernetes Network Policies](https://kubernetes.io/docs/concepts/services-networking/network-policies/) — Authoritative baseline for what the core Kubernetes NetworkPolicy API does and does not provide.
+- [RFC 4456: BGP Route Reflection](https://www.rfc-editor.org/rfc/rfc4456) — Canonical reference for the route-reflector model used to avoid full-mesh BGP scaling problems.

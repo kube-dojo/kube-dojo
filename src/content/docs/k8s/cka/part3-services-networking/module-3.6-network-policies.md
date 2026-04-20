@@ -20,15 +20,15 @@ lab:
 
 ## Why This Module Matters
 
-In 2019, a major financial institution suffered a catastrophic data breach exposing over 100 million customer records. The initial point of compromise was a simple, easily exploitable misconfiguration in a peripheral web application firewall. However, the true failure that allowed the devastating data exfiltration was the completely flat internal network architecture. The compromised external-facing workload was able to communicate freely with the cloud provider's highly sensitive internal metadata service, allowing the attacker to seamlessly extract privileged backend credentials. If a robust, default-deny network segmentation strategy had been enforced, the incident would have been isolated to a single container and completely contained.
+In 2019, a major financial institution suffered a catastrophic data breach exposing over 100 million customer records. The initial point of compromise was a simple, easily exploitable misconfiguration in a peripheral web application firewall. However, the true failure that allowed the devastating data exfiltration was the completely flat internal network architecture. The compromised external-facing workload was able to communicate freely with the cloud provider's highly sensitive internal metadata service, allowing the attacker to seamlessly extract privileged backend credentials. A robust default-deny network segmentation strategy can limit lateral movement and reduce the blast radius of a compromise.
 
-In a default Kubernetes cluster, every pod can communicate with every other pod without any restrictions. This flat network paradigm means that a vulnerability in an insignificant frontend deployment instantly compromises the security perimeter of your most critical backend databases. Network Policies serve as the critical internal firewalls for your cluster, allowing you to implement microsegmentation and dramatically reduce the potential blast radius of any security incident.
+In a default Kubernetes cluster, [every pod can communicate with every other pod without any restrictions](https://kubernetes.io/docs/concepts/services-networking/network-policies/). This flat network paradigm means that a vulnerability in an insignificant frontend deployment instantly compromises the security perimeter of your most critical backend databases. Network Policies serve as the critical internal firewalls for your cluster, allowing you to implement microsegmentation and dramatically reduce the potential blast radius of any security incident.
 
 > **The Apartment Building Analogy**
 >
 > Imagine a Kubernetes cluster as an apartment building where every apartment door is unlocked. Any tenant can walk into any other apartment. Network Policies are like installing locks on doors and giving keys only to specific people. You decide who can enter (ingress) and where tenants can go (egress).
 
-Because of this monumental security impact, the Certified Kubernetes Administrator (CKA) exam aggressively tests your ability to rapidly author, evaluate, and troubleshoot Network Policies under pressure. You will be required to build surgical ingress and egress rules, trace traffic drops to missing namespace labels, and securely orchestrate communication between complex multi-tier applications.
+Because network isolation is an important Kubernetes administration skill, you should be able to rapidly author, evaluate, and troubleshoot NetworkPolicies under pressure.
 
 ---
 
@@ -45,10 +45,10 @@ After completing this module, you will be able to:
 
 ## Did You Know?
 
-- Kubernetes version 1.35 will reach End-of-Life (EOL) on February 28, 2027, making it absolutely critical to memorize and utilize stable API groups like `networking.k8s.io/v1` (stable since release 1.8), which fully replaced the deprecated `extensions/v1beta1` back in release 1.16. Simply modifying the `apiVersion` field is usually sufficient for migration as the fundamental schema structure remained largely compatible.
-- The `endPort` field, a feature allowing administrators to specify a contiguous range of ports in a single policy rule, reached stable General Availability in Kubernetes release 1.25.
-- Nearly 80% of all NetworkPolicy debugging sessions in production environments ultimately stem from a missing DNS egress rule on port 53, which silently breaks internal service discovery the moment a default-deny egress policy is deployed.
-- NetworkPolicies operate exclusively at OSI layers 3 and 4, meaning they filter strictly based on IP addresses and TCP/UDP/SCTP ports—they cannot perform layer 7 packet inspection to block specific HTTP paths or TLS Server Name Indications (SNI).
+- [Kubernetes version 1.35 will reach End-of-Life (EOL) on February 28, 2027](https://kubernetes.io/releases/), making it absolutely critical to memorize and utilize stable API groups like [`networking.k8s.io/v1` (stable since release 1.8), which fully replaced the deprecated `extensions/v1beta1` back in release 1.16](https://kubernetes.io/docs/reference/using-api/deprecation-guide/). Simply modifying the `apiVersion` field is usually sufficient for migration as the fundamental schema structure remained largely compatible.
+- [The `endPort` field, a feature allowing administrators to specify a contiguous range of ports in a single policy rule, reached stable General Availability in Kubernetes release 1.25](https://kubernetes.io/docs/concepts/services-networking/network-policies/).
+- A common NetworkPolicy debugging issue is forgetting DNS egress on port 53, which breaks service discovery when default-deny egress is deployed.
+- [NetworkPolicies operate exclusively at OSI layers 3 and 4, meaning they filter strictly based on IP addresses and TCP/UDP/SCTP ports—they cannot perform layer 7 packet inspection to block specific HTTP paths or TLS Server Name Indications (SNI)](https://kubernetes.io/docs/concepts/services-networking/network-policies/).
 
 ---
 
@@ -110,13 +110,13 @@ spec:
 
 ## Part 2: The Default Behaviors and Deny Patterns
 
-If a namespace currently has zero NetworkPolicy objects applied to it, all ingress and egress traffic is allowed to and from the pods residing within that namespace. To build a secure, zero-trust cluster, engineers universally adopt a "default-deny" architectural pattern. 
+If a namespace currently has zero NetworkPolicy objects applied to it, all ingress and egress traffic is allowed to and from the pods residing within that namespace. To build a secure, zero-trust cluster, engineers often adopt a "default-deny" architectural pattern. 
 
-An empty podSelector (`{}`) inside the root of a NetworkPolicy effectively selects all pods within the namespace where the policy is deployed. Combining a namespace-wide empty podSelector with `policyTypes: [Ingress]` or `[Egress]` establishes a comprehensive default-deny baseline for that specific traffic direction.
+[An empty podSelector (`{}`) inside the root of a NetworkPolicy effectively selects all pods within the namespace where the policy is deployed](https://kubernetes.io/docs/concepts/services-networking/network-policies/). Combining a namespace-wide empty podSelector with `policyTypes: [Ingress]` or `[Egress]` establishes a comprehensive default-deny baseline for that specific traffic direction.
 
-Conversely, if you define an empty array element `{}` directly inside the `ingress` or `egress` rules section, the API server interprets this as an explicit wildcard allowing all traffic for that direction. 
+Conversely, [if you define an empty array element `{}` directly inside the `ingress` or `egress` rules section, the API server interprets this as an explicit wildcard allowing all traffic for that direction](https://kubernetes.io/docs/concepts/services-networking/network-policies/). 
 
-If the `policyTypes` array is entirely omitted from your manifest, the API server automatically implies `Ingress`. `Egress` is only implied by the API server if an `egress` rules block is explicitly present in the YAML specification.
+[If the `policyTypes` array is entirely omitted from your manifest, the API server automatically implies `Ingress`. `Egress` is only implied by the API server if an `egress` rules block is explicitly present in the YAML specification.](https://kubernetes.io/docs/concepts/services-networking/network-policies/)
 
 ### 2.1 Default Deny Patterns
 
@@ -198,7 +198,7 @@ spec:
 
 ## Part 3: Selective Policies and Rules
 
-NetworkPolicies strictly follow an additive evaluation model. This means the order in which policies are applied or evaluated does not change the resulting allow decision for a network connection. In rule evaluation, the properties inside a `from`/`to` array and `ports` are processed using a logical AND within a single rule, and a logical OR across distinct entries. Empty `from`, `to`, or `ports` fields act as unrestricted wildcards.
+[NetworkPolicies strictly follow an additive evaluation model. This means the order in which policies are applied or evaluated does not change the resulting allow decision for a network connection.](https://kubernetes.io/docs/concepts/services-networking/network-policies/) In rule evaluation, the properties inside a `from`/`to` array and `ports` are processed using a logical AND within a single rule, and a logical OR across distinct entries. Empty `from`, `to`, or `ports` fields act as unrestricted wildcards.
 
 NetworkPolicy filters are officially designated for TCP, UDP, and optionally SCTP. The behavior for other protocols, such as ICMP ping traffic, is entirely plugin-dependent and undefined by the Kubernetes standard.
 
@@ -321,7 +321,7 @@ spec:
 
 ### 4.1 Logical AND vs Logical OR
 
-One of the most dangerous syntactical mistakes a cluster administrator can make involves the indentation of selectors within the `from` array. A single `from`/`to` entry that combines both a `namespaceSelector` and a `podSelector` acts as an intersection (AND). However, separate entries act as a disjunction (OR).
+One of the most dangerous syntactical mistakes a cluster administrator can make involves the indentation of selectors within the `from` array. [A single `from`/`to` entry that combines both a `namespaceSelector` and a `podSelector` acts as an intersection (AND). However, separate entries act as a disjunction (OR).](https://kubernetes.io/docs/concepts/services-networking/network-policies/)
 
 ```yaml
 # OR logic: from frontend pods OR from monitoring namespace
@@ -415,7 +415,7 @@ A connection is mathematically permitted by the cluster only if both the source'
 
 ### 4.3 Essential Egress Configurations
 
-When constructing egress policies, failure to account for cluster infrastructure will immediately disrupt service operation.
+When constructing egress policies, failure to account for cluster infrastructure can quickly disrupt service operation.
 
 ```yaml
 # Backend can only talk to database
@@ -438,7 +438,7 @@ spec:
     - port: 5432
 ```
 
-A default-deny egress policy fundamentally breaks DNS lookups. Therefore, explicit DNS exceptions routing UDP and TCP traffic on port 53 to the `kube-system` namespace are mandatory for service discovery to remain operational.
+[A default-deny egress policy fundamentally breaks DNS lookups. Therefore, explicit DNS exceptions routing UDP and TCP traffic on port 53 to the `kube-system` namespace are mandatory for service discovery to remain operational.](https://kubernetes.io/docs/concepts/services-networking/network-policies/)
 
 ```yaml
 # Allow DNS to kube-system
@@ -464,7 +464,7 @@ spec:
 
 > **What would happen if**: You apply a deny-all egress policy to your backend pods but forget to add a DNS exception. The pods can still reach the database pod by IP, but `curl db-service` fails. Why does direct IP access work but service name resolution does not?
 
-To authorize traffic to endpoints outside the cluster entirely, an `ipBlock` egress is utilized. Note that cluster IP rewriting (such as Source NAT transformations implemented by services) can make it unclear whether policy matching is evaluating the original packet IP versus rewritten IPs.
+To authorize traffic to endpoints outside the cluster entirely, [an `ipBlock` egress is utilized. Note that cluster IP rewriting (such as Source NAT transformations implemented by services) can make it unclear whether policy matching is evaluating the original packet IP versus rewritten IPs.](https://kubernetes.io/docs/concepts/services-networking/network-policies/)
 
 ```yaml
 # Allow egress to external IPs
@@ -492,15 +492,15 @@ spec:
 
 ## Part 5: Edge Cases and Limitations
 
-NetworkPolicy resources are purely declarative configurations. They are only actually effective if a cluster networking solution (CNI) actively implements NetworkPolicy enforcement. If your cluster operates on a rudimentary CNI like basic Flannel, policies are silently accepted by the API but have zero enforcement effect.
+NetworkPolicy resources are purely declarative configurations. [They are only actually effective if a cluster networking solution (CNI) actively implements NetworkPolicy enforcement](https://kubernetes.io/docs/concepts/services-networking/network-policies/). [If your cluster operates on a rudimentary CNI like basic Flannel, policies are silently accepted by the API but have zero enforcement effect](https://github.com/flannel-io/flannel).
 
-Furthermore, network policy handling is technically asynchronous. Policy creation or deletion may temporarily leave rapidly scaling or newly spawned pods unprotected for fractional seconds as rules propagate. The behavioral impact on long-running, established TCP connections when policies are suddenly modified mid-stream is entirely implementation-defined and varies across CNIs.
+Furthermore, [network policy handling is technically asynchronous. Policy creation or deletion may temporarily leave rapidly scaling or newly spawned pods unprotected for fractional seconds as rules propagate. The behavioral impact on long-running, established TCP connections when policies are suddenly modified mid-stream is entirely implementation-defined and varies across CNIs.](https://kubernetes.io/docs/concepts/services-networking/network-policies/)
 
 Namespaces cannot be selected by plain names inside NetworkPolicy selectors. You must meticulously utilize namespace labels. Fortunately, modern clusters automatically tag namespaces with the immutable `kubernetes.io/metadata.name` label specifically to assist with targeting.
 
-Using `endPort` in ingress or egress rules is stable since Kubernetes release 1.25 and enables matching against contiguous port ranges. However, if an older or lightweight CNI plugin does not natively support `endPort`, the policy may fall back and evaluate strictly against the single start port provided.
+Using `endPort` in ingress or egress rules is stable since Kubernetes release 1.25 and enables matching against contiguous port ranges. However, [if an older or lightweight CNI plugin does not natively support `endPort`, the policy may fall back and evaluate strictly against the single start port provided.](https://kubernetes.io/docs/concepts/services-networking/network-policies/)
 
-NetworkPolicy behavior for pods executed with `hostNetwork: true` is highly implementation-defined. Most standard CNIs treat such workloads as node-level traffic, causing them to completely bypass pod-centric isolation constraints. As of version 1.35, the native NetworkPolicy specification still cannot express explicit deny actions, Service-name targeting, precise Node identity restrictions, TLS enforcement controls, or granular loopback blocking. The Kubernetes maintainers track three active release branches (1.35, 1.34, 1.33); ensure you do not deploy unsupported beta manifests that face the February 2027 end-of-life deprecation cycles.
+[NetworkPolicy behavior for pods executed with `hostNetwork: true` is highly implementation-defined. Most standard CNIs treat such workloads as node-level traffic, causing them to completely bypass pod-centric isolation constraints.](https://kubernetes.io/docs/concepts/services-networking/network-policies/) [As of version 1.35, the native NetworkPolicy specification still cannot express explicit deny actions, Service-name targeting, precise Node identity restrictions, TLS enforcement controls, or granular loopback blocking.](https://kubernetes.io/docs/concepts/services-networking/network-policies/) The Kubernetes maintainers track three active release branches (1.35, 1.34, 1.33); ensure you do not deploy unsupported beta manifests that face the February 2027 end-of-life deprecation cycles.
 
 ---
 
@@ -513,7 +513,7 @@ NetworkPolicy behavior for pods executed with `hostNetwork: true` is highly impl
 | Unlabeled namespaces | namespaceSelector quietly fails | Ensure namespace is labeled or rely on `kubernetes.io/metadata.name` |
 | Wrong selector logic | Unintended permissive/restrictive posture | Meticulously verify indentation for AND vs OR (same array item vs separate items) |
 | Empty ingress array | Completely blocks all ingress traffic | Utilize `ingress: [{}]` to define an explicit wildcard allowance |
-| Missing policyTypes | Unpredictable isolation dimensions | Always forcefully declare `Ingress` and `Egress` arrays within the specification |
+| Missing policyTypes | Unpredictable isolation dimensions | Explicitly declare the relevant `policyTypes` and corresponding rule arrays within the specification |
 | Targeting hostNetwork | Policy evasion by container | Avert reliance on NetworkPolicy isolation for pods heavily integrating with the host namespace |
 
 ---
@@ -1205,3 +1205,12 @@ k delete namespace secure
 ## Next Module
 
 [Module 3.7: CNI & Cluster Networking](../module-3.7-cni/) - Take your knowledge of Network Policies to the next tier by tearing down the abstraction layer and discovering how different Container Network Interfaces physically manipulate IP tables and eBPF filters to implement these logical configurations under the hood.
+
+## Sources
+
+- [Kubernetes Releases](https://kubernetes.io/releases/) — Official branch and support schedule for current Kubernetes releases.
+- [Deprecated API Migration Guide](https://kubernetes.io/docs/reference/using-api/deprecation-guide/) — Official migration guidance for removed and replacement API versions, including NetworkPolicy.
+- [Network Policies](https://kubernetes.io/docs/concepts/services-networking/network-policies/) — Canonical reference for isolation defaults, selector semantics, DNS caveats, endPort behavior, and key limitations.
+- [Flannel](https://github.com/flannel-io/flannel) — Project documentation describing Flannel's networking scope and how policy enforcement is commonly paired with other components.
+- [Declare Network Policy](https://kubernetes.io/docs/tasks/administer-cluster/declare-network-policy/) — Worked examples for default-deny and selective allow manifests.
+- [DNS for Services and Pods](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/) — Explains cluster DNS behavior that breaks when egress rules omit DNS.

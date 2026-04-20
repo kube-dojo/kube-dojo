@@ -107,25 +107,25 @@ graph TD
 
 Evaluating absolute model capabilities initially required massive, standardized benchmark datasets. However, the blistering pace of algorithmic advancement has led to rapid benchmark saturation. When a benchmark saturates, it means the frontier models are achieving near-perfect scores across the board, rendering the entire benchmark useless for distinguishing between state-of-the-art systems.
 
-> **Did You Know?** The MMLU (Massive Multitask Language Understanding) dataset contains exactly 15,908 multiple-choice questions spanning 57 distinct academic subjects, which frontier models have now entirely saturated.
+> **Did You Know?** The MMLU (Massive Multitask Language Understanding) benchmark spans 57 academic subjects, and frontier models now score so highly on it that it is less useful for separating the strongest systems.
 
-MMLU was once the gold standard for evaluation. However, it has become effectively saturated, consistently yielding scores exceeding 88-93% accuracy on frontier models. To combat this, researchers introduced MMLU-Pro, which contains 12,032 questions and expands the answer choices from four to ten, drastically reducing the impact of random statistical guessing.
+MMLU was once the gold standard for evaluation. However, it has become effectively saturated, with frontier models scoring above 90% on MMLU. To make the task harder, researchers introduced MMLU-Pro, which expands the answer choices from four to ten and focuses more on reasoning-heavy questions.
 
-> **Did You Know?** Humanity's Last Exam (HLE) was published in Nature in January 2026 by the Center for AI Safety specifically because frontier models had exhausted the difficulty of all previous reasoning benchmarks.
+> **Did You Know?** Humanity's Last Exam (HLE) was introduced as a harder benchmark after older evaluation sets began to saturate.
 
-The industry rapidly recognized that static benchmarks were highly vulnerable to data contamination. If a model encounters the benchmark questions during its vast pre-training phase, it will effortlessly regurgitate the memorized answers during evaluation. This creates a false, highly dangerous impression of deep reasoning capability.
+The industry rapidly recognized that static benchmarks were highly vulnerable to data contamination. If benchmark questions or close variants appear in pre-training data, evaluation scores can overstate a model's true reasoning ability.
 
-> **Did You Know?** The Hugging Face Open LLM Leaderboard was officially retired on March 13, 2025, after evaluating over 13,000 models, to prevent benchmark overfitting and irrelevant hill climbing.
+> **Did You Know?** [The Hugging Face Open LLM Leaderboard was officially retired on March 13, 2025](https://huggingface.co/spaces/open-llm-leaderboard/open_llm_leaderboard/discussions/1135), after evaluating over 13,000 models, to prevent benchmark overfitting and irrelevant hill climbing.
 
-Before its retirement, the Open LLM Leaderboard utilized specific static datasets like IFEval, MuSR, GPQA, and BBH. Today, crowdsourced pairwise comparisons dominate the landscape via platforms like LMSYS Chatbot Arena, where humans blindly vote on output quality, forcing models to prove their alignment and reasoning dynamically.
+Before its retirement, the Open LLM Leaderboard utilized specific static datasets like IFEval, MuSR, GPQA, and BBH. Today, platforms such as LMSYS Chatbot Arena use crowdsourced pairwise comparisons in which humans blindly vote on output quality, giving teams a live complement to static benchmarks.
 
-> **Did You Know?** The evaluation framework promptfoo was acquired by OpenAI on March 9, 2026, signaling the massive industry shift toward consolidated, enterprise-grade LLM evaluation tooling.
+> **Did You Know?** The evaluation framework [promptfoo was acquired by OpenAI on March 9, 2026](https://openai.com/index/openai-to-acquire-promptfoo/), signaling the massive industry shift toward consolidated, enterprise-grade LLM evaluation tooling.
 
 ## Traditional Metrics vs. LLM-as-a-Judge
 
-Historically, natural language processing relied entirely on n-gram overlap metrics like BLEU (Bilingual Evaluation Understudy) and ROUGE (Recall-Oriented Understudy for Gisting Evaluation). These metrics mechanically measured how many exact words from the model's generated text matched a human-written reference text. They penalized paraphrasing, summarization, and abstractive reasoning severely because they were blind to semantics and only understood string matching.
+Historically, natural language processing relied entirely on n-gram overlap metrics like BLEU (Bilingual Evaluation Understudy) and ROUGE (Recall-Oriented Understudy for Gisting Evaluation). These metrics mechanically measured how many exact words from the model's generated text matched a human-written reference text. [They penalized paraphrasing, summarization, and abstractive reasoning severely because they were blind to semantics and only understood string matching.](https://arxiv.org/abs/2303.16634)
 
-Today, the standard enterprise practice is the LLM-as-judge paradigm. Frameworks like G-Eval or RAGAS use strict chain-of-thought prompting prior to scoring, achieving a phenomenally high correlation with expert human judgments. By using a highly capable language model (the "judge") to grade the responses of another model, engineering teams can assess nuance, tone, factual grounding, and complex safety alignment policies with speed and scale.
+Today, the standard enterprise practice is the LLM-as-judge paradigm. Frameworks such as G-Eval and RAGAS use model-based evaluation to score qualities like coherence, faithfulness, and answer relevance, which can align better with human judgment than pure overlap metrics in some settings. By using a highly capable language model (the "judge") to grade the responses of another model, engineering teams can assess nuance, tone, factual grounding, and complex safety alignment policies with speed and scale.
 
 > **Stop and think**: If you use a frontier model to evaluate outputs generated by the exact same frontier model, are you risking an inherent bias where the model prefers its own stylistic quirks over objectively better responses from other architectures? How would you mitigate this self-preference bias in a production pipeline?
 
@@ -190,7 +190,7 @@ By ensuring that each layer fundamentally checks the assumptions of the previous
 
 ## Input Guardrails and Red Teaming
 
-The first active infrastructure layer of defense intercepts the user's input before it ever reaches the core generative model. Prompt injection remains a primary, critical attack vector because large language models lack a strict separation between "execution instructions" (the system prompt) and "user data" (the user input).
+The first active infrastructure layer of defense intercepts the user's input before it ever reaches the core generative model. Prompt injection remains a primary, critical attack vector because [large language models lack a strict separation between "execution instructions" (the system prompt) and "user data" (the user input)](https://owasp.org/www-community/attacks/PromptInjection).
 
 ```python
 """
@@ -732,7 +732,7 @@ if __name__ == "__main__":
 
 ## Content Moderation at Scale
 
-When applications are scaled to accommodate millions of concurrent users, running heavyweight LLMs as guardrails for every single interaction becomes financially ruinous and introduces unacceptable network latency. Instead, enterprise engineering teams construct a blazing-fast, tiered moderation pipeline. This pipeline catches the vast majority of obvious violations using ultra-lightweight systems (like perceptual hashing and regex) in milliseconds, reserving the heavy and expensive compute solely for the deeply ambiguous edge cases.
+When applications are scaled to accommodate millions of concurrent users, running heavyweight LLMs as guardrails for every single interaction usually becomes financially unsustainable and often introduces unacceptable network latency. Instead, enterprise engineering teams construct a blazing-fast, tiered moderation pipeline. This pipeline catches the vast majority of obvious violations using ultra-lightweight systems (like perceptual hashing and regex) in milliseconds, reserving the heavy and expensive compute solely for the deeply ambiguous edge cases.
 
 ```mermaid
 flowchart TD
@@ -1045,9 +1045,9 @@ Use demographic parity when you care about overall allocation rates. Use equaliz
 | **Evaluating Solely on Static Benchmarks** | Engineers assume high MMLU scores guarantee reasoning, ignoring benchmark contamination and dataset leakage in pre-training. | Combine static tests with dynamic evaluation, pairwise human preference ranking, and private held-out enterprise data. |
 | **Only Checking Outputs for Toxicity** | Relying on post-generation filters misses prompt injections, wastes inference compute, and exposes the model to adversarial logic. | Implement Defense in Depth: filter inputs, apply runtime guardrails, limit topics, and validate formatting before inference. |
 | **Treating "Fairness" as a Single Metric** | Mathematical fairness definitions often conflict (e.g., demographic parity vs. equalized odds); teams fail to define context. | Define what fairness means for your specific application domain (e.g., healthcare vs. loan approval) and optimize the exact parity metric. |
-| **Ignoring the "Alignment Tax"** | Pushing models to be overly safe can severely degrade their core reasoning capabilities and mathematical logic (the alignment tax). | Monitor both safety and capability metrics simultaneously during RLHF or fine-tuning to balance utility with safety guardrails. |
+| **Ignoring the "Alignment Tax"** | Safety tuning can introduce trade-offs with other objectives, so teams should monitor both safety and capability metrics during post-training. | Monitor both safety and capability metrics simultaneously during RLHF or fine-tuning to balance utility with safety guardrails. |
 | **Assuming System Prompts Provide Security** | Engineers trust that "Ignore previous instructions" won't work if the system prompt tells the AI to "Never ignore this." | Implement dedicated input classifiers or vector databases to detect semantic injection patterns before the model processes the tokens. |
-| **Using Legacy Kubernetes for Guardrails** | Deploying low-latency guardrails on outdated infrastructure (v1.32 or older) causes unacceptable inference latency and scale limits. | Deploy guardrails as high-performance sidecars in a modern Kubernetes v1.35+ cluster using optimized gRPC communication. |
+| **Using Legacy Kubernetes for Guardrails** | Deploying guardrails on poorly tuned or undersized infrastructure can hurt latency and scalability, so teams should measure these systems under production-like load. | Deploy guardrails as high-performance sidecars in a modern Kubernetes v1.35+ cluster using optimized gRPC communication. |
 
 ## Quiz
 
@@ -1214,3 +1214,11 @@ To eliminate network latency, the guardrail system should be packaged as an opti
 ## Next Module
 
 Now that you have built rigorous evaluation pipelines and multi-layered safety guardrails, you must turn those findings into practical offensive testing. In the next module, **[Module 1.7: AI Red Teaming](./module-1.7-ai-red-teaming/)**, we will move from measurement into adversarial evaluation, jailbreak discovery, and real-world failure hunting.
+
+## Sources
+
+- [Open LLM Leaderboard retirement announcement](https://huggingface.co/spaces/open-llm-leaderboard/open_llm_leaderboard/discussions/1135) — Hugging Face discussion announcing the retirement of the Open LLM Leaderboard and the rationale behind it.
+- [OpenAI to acquire promptfoo](https://openai.com/index/openai-to-acquire-promptfoo/) — OpenAI announcement covering the promptfoo acquisition referenced in the benchmarks section.
+- [G-Eval: NLG Evaluation using GPT-4 with Better Human Alignment](https://arxiv.org/abs/2303.16634) — Primary paper grounding the shift from overlap metrics toward model-based evaluation aligned more closely with human judgment.
+- [OWASP Prompt Injection](https://owasp.org/www-community/attacks/PromptInjection) — OWASP overview of prompt-injection risks, including the shared natural-language channel between instructions and user input.
+- [Chatbot Arena: An Open Platform for Evaluating LLMs by Human Preference](https://arxiv.org/abs/2403.04132) — Further reading on pairwise human-preference evaluation as a complement to static benchmarks.

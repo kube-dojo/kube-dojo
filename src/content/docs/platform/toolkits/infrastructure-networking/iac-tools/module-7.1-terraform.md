@@ -32,9 +32,9 @@ After completing this module, you will be able to:
 
 **The Tool That Changed Infrastructure**
 
-In 2014, HashiCorp released Terraform, and infrastructure management would never be the same. Before Terraform, provisioning infrastructure meant either clicking through cloud consoles (slow, error-prone, not repeatable) or writing custom scripts for each cloud provider (complex, different APIs, no state tracking).
+[In 2014, HashiCorp released Terraform](https://www.hashicorp.com/blog/terraform-announcement), and infrastructure management changed significantly. Before Terraform, provisioning infrastructure meant either clicking through cloud consoles (slow, error-prone, not repeatable) or writing custom scripts for each cloud provider (complex, different APIs, no state tracking).
 
-Terraform introduced three revolutionary concepts: declarative configuration (describe what you want, not how to get it), a provider model (one tool for any cloud), and state management (tracking what exists). Within five years, Terraform became the de facto standard for infrastructure as code, used by over 80% of organizations with IaC practices.
+Terraform introduced three revolutionary concepts: declarative configuration (describe what you want, not how to get it), a provider model (one tool for any cloud), and state management (tracking what exists). Over the following years, Terraform became a widely adopted infrastructure-as-code tool.
 
 Today, understanding Terraform deeply—not just copying examples from Stack Overflow—is essential for any infrastructure engineer. This module takes you beyond the basics into patterns that separate production-ready Terraform from tutorial code.
 
@@ -801,7 +801,7 @@ resource "aws_db_instance" "main" {
 }
 ```
 
-### Moved Blocks (Terraform 1.1+)
+### Moved Blocks ([Terraform 1.1+](https://github.com/hashicorp/terraform/releases/tag/v1.1.0))
 
 ```hcl
 # Refactoring without recreating resources
@@ -826,7 +826,7 @@ moved {
 }
 ```
 
-### Import Blocks (Terraform 1.5+)
+### Import Blocks ([Terraform 1.5+](https://github.com/hashicorp/terraform/releases/tag/v1.5.0))
 
 ```hcl
 # Declarative import
@@ -975,9 +975,9 @@ locals {
 
 ---
 
-## War Story: The Great State Migration
+## Example Scenario: Migrating Terraform State Layouts
 
-**Company**: Enterprise software company
+**Scenario**: A team migrating from workspace-based state to directory-based layouts
 **Challenge**: Migrating from workspace-based state to directory-based
 
 **The Situation**:
@@ -997,7 +997,7 @@ infrastructure/
 ```
 
 **The Problem**:
-- 3 workspaces, 847 resources total
+- Multiple workspaces and a large resource inventory
 - Different resources per environment
 - Can't have downtime during migration
 - Need to preserve all resources
@@ -1479,16 +1479,23 @@ terraform plan
 
 ## Did You Know?
 
-> **Terraform Origin**: Terraform was created by Mitchell Hashimoto, who wrote the first version in a week in 2014 while building HashiCorp's infrastructure. The name combines "terra" (earth) and "form" (shape), meaning "to shape the earth."
+> **Terraform Origin**: Terraform began as a HashiCorp project focused on cloud-agnostic infrastructure automation.
 
-> **Provider Ecosystem**: The Terraform Registry hosts over 3,500 providers, including community-contributed ones for everything from Domino's Pizza ordering to managing Spotify playlists.
+> **Provider Ecosystem**: The Terraform Registry hosts over 3,500 providers, including many community-contributed providers for niche and unconventional services.
 
-> **State File Scale**: The largest known Terraform state files manage over 100,000 resources, though this requires careful state splitting and is not recommended.
+> **State File Scale**: Very large Terraform estates often need state splitting and careful operational boundaries.
 
-> **Graph Visualization**: Terraform's dependency graph uses the same algorithm (topological sort) used in package managers like npm and pip to resolve dependencies.
+> **Graph Visualization**: Terraform builds a dependency graph to determine resource ordering and parallelism during operations.
 
 ---
 
 ## Next Module
 
 Continue to [Module 7.2: OpenTofu](../module-7.2-opentofu/) to learn about the open-source fork of Terraform and its unique features.
+
+## Sources
+
+- [HashiCorp Terraform Announcement](https://www.hashicorp.com/blog/terraform-announcement) — Primary-source background on Terraform's original 2014 release and early goals.
+- [Terraform v1.1.0 Release Notes](https://github.com/hashicorp/terraform/releases/tag/v1.1.0) — Documents moved blocks and other refactoring-related language features.
+- [Terraform v1.5.0 Release Notes](https://github.com/hashicorp/terraform/releases/tag/v1.5.0) — Documents declarative import blocks and generated configuration support.
+- [HashiCorp Terraform Product Overview](https://www.hashicorp.com/products/terraform) — Further reading on Terraform's ecosystem and common provider-driven use cases.

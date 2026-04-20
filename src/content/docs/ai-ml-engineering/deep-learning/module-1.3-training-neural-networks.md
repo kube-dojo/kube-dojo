@@ -12,7 +12,7 @@ sidebar:
 
 ---
 
-When researcher Soumith Chintala discovered in September 2016 that debugging TensorFlow was like trying to repair a car engine while it was running, he realized something had to change. After watching brilliant AI engineers waste days fighting incomprehensible error messages, he and colleague Adam Paszke found a better way. That night, they started building PyTorch. Within five years, their creation would power everything from gpt-5 to Stable Diffusion, fundamentally changing how the world builds AI.
+PyTorch emerged from frustration with earlier deep learning tooling and quickly became one of the most influential frameworks in modern AI.
 
 ---
 
@@ -20,7 +20,7 @@ When researcher Soumith Chintala discovered in September 2016 that debugging Ten
 
 **Menlo Park. September 2016. 11:47 PM.**
 
-Soumith Chintala was done. For months, he had watched brilliant AI researchers at Facebook waste hours—sometimes days—fighting TensorFlow's static graphs. Print statements didn't work. Debuggers were useless. One typo meant recompiling everything.
+Many researchers found early static-graph workflows frustrating because debugging and experimentation were much less direct than ordinary Python programming.
 
 "This is insane," he muttered to his colleague Adam Paszke. "We're supposed to be doing AI research, not fighting our tools."
 
@@ -29,7 +29,7 @@ They decided to build something better. Not incrementally better—*fundamentall
 They called it PyTorch. Within three years, it would conquer academic AI. Within five, it would power everything from gpt-5 to Stable Diffusion.
 
 > "The best framework is the one that gets out of your way. TensorFlow made you think about graphs. PyTorch just let you think about math."
-> — Soumith Chintala, PyTorch creator (2020 interview)
+> Paraphrased from PyTorch's publicly stated design philosophy.
 
 ---
 
@@ -95,7 +95,7 @@ Debugging was a nightmare. You couldn't just print a variable - you had to evalu
 
 ### The Facebook Answer
 
-Enter **Soumith Chintala** at Facebook AI Research. He and his team created PyTorch in 2016 with a radical philosophy: **define-by-run**.
+Enter **Soumith Chintala** at Facebook AI Research. He and his team created PyTorch in 2016 with a radical philosophy: **[define-by-run](https://arxiv.org/abs/1912.01703)**.
 
 Instead of building a graph and then running it, PyTorch builds the graph *as you run Python code*. You write normal Python. You can use print statements. You can use Python debuggers. If statements, for loops - they all just work.
 
@@ -113,9 +113,9 @@ print(logits.shape)  # You can just print it!
 ### The Research Takeover
 
 By 2019, PyTorch had conquered academia:
-- **NeurIPS 2019**: 75% of papers used PyTorch
-- **ICLR 2020**: 80% PyTorch
-- **CVPR 2020**: 70% PyTorch
+- **NeurIPS 2019**: PyTorch had become widely used in deep learning research.
+- **ICLR 2020**: PyTorch was already deeply embedded in academic deep learning workflows.
+- **CVPR 2020**: PyTorch was also heavily used in computer vision research.
 
 Why? Researchers need to iterate fast. They try crazy ideas. Many don't work. Static graphs meant recompiling for every experiment. Dynamic graphs meant instant feedback.
 
@@ -125,7 +125,7 @@ Why? Researchers need to iterate fast. They try crazy ideas. Many don't work. St
 
 Why "PyTorch"? It's the Python version of **Torch**, a scientific computing framework written in Lua that was popular in academia during the early 2010s. The original Torch was named after the Olympic torch - a symbol of passing knowledge forward.
 
-The PyTorch logo is a stylized flame - representing both the torch and the "fire" of GPU-accelerated computing.
+The PyTorch logo uses a stylized flame motif.
 
 ---
 
@@ -291,7 +291,7 @@ PyTorch supports many data types, and choosing the right one affects both **corr
 
 **For Neural Networks (most common)**:
 - `torch.float32` (or `torch.float`) - The default. Good balance of precision and speed.
-- `torch.float16` (or `torch.half`) - Half precision. 2× faster on modern GPUs, but less precise.
+- `torch.float16` (or `torch.half`) - Half precision. Often faster and more memory-efficient on compatible GPUs, but less precise.
 - `torch.bfloat16` - "Brain float". Better for training than float16 because it has more exponent bits.
 
 **For Indices and Counts**:
@@ -314,7 +314,7 @@ weights_back = weights_half.float()  # back to float32
 
 **The fp16 Training Revolution**
 
-In 2017, researchers discovered you could train neural networks in half precision (float16) with almost no accuracy loss - but 2× faster and using half the memory. This "mixed precision training" is now standard for large models.
+By the late 2010s, mixed-precision training had shown that half-precision formats could substantially reduce memory use and often improve throughput when used carefully.
 
 ```python
 # Modern training uses automatic mixed precision
@@ -393,7 +393,7 @@ In Module 26, you implemented backpropagation manually. For a simple network, it
 - Hundreds of layers
 - Complex architectures (skip connections, attention, normalization)
 
-Computing gradients by hand for gpt-5? That would be tens of thousands of lines of gradient code. With PyTorch:
+Computing gradients by hand for a modern large neural network would be prohibitively complex. With PyTorch:
 
 ```python
 loss.backward()  # That's it. Gradients for every parameter.
@@ -428,9 +428,9 @@ Let's verify: The chain rule says:
 
 Automatic differentiation isn't a deep learning invention. It was developed in the 1960s and 1970s for computational physics and engineering!
 
-**Reverse-mode automatic differentiation** (what PyTorch uses) was published by Seppo Linnainmaa in 1970 for his master's thesis. Backpropagation in neural networks was rediscovered independently in the 1980s - it's the same algorithm applied to neural network computation graphs.
+**Reverse-mode automatic differentiation** (what PyTorch uses) was published by [Seppo Linnainmaa in 1970](https://en.wikipedia.org/wiki/Seppo_Linnainmaa) for his master's thesis. Backpropagation in neural networks was rediscovered independently in the 1980s - it's the same algorithm applied to neural network computation graphs.
 
-The key insight: forward-mode AD is efficient when you have few inputs and many outputs. Reverse-mode is efficient when you have many inputs and few outputs. Neural networks have millions of inputs (weights) and one output (loss) - reverse mode wins!
+The key insight: forward-mode AD is efficient when you have few inputs and many outputs. [Reverse-mode is efficient when you have many inputs and few outputs.](https://en.wikipedia.org/wiki/Automatic_differentiation) Neural networks have millions of inputs (weights) and one output (loss) - reverse mode wins!
 
 ### Critical Gotcha: Gradients Accumulate!
 
@@ -699,9 +699,9 @@ Adam (2014) combined ideas from two earlier optimizers:
 - **Momentum**: Use exponentially weighted average of past gradients
 - **RMSprop**: Adapt learning rate per-parameter based on gradient history
 
-The name "Adam" comes from "adaptive moment estimation". Within a year of publication, it became the default optimizer for most deep learning - it just works in most situations without careful tuning.
+The name "Adam" comes from "adaptive moment estimation". Adam quickly became a very common default optimizer in deep learning practice because it often works with relatively little tuning.
 
-But it's not perfect! Researchers later found that Adam's weight decay implementation was subtly wrong. **AdamW** (2017) fixed this, and it's now preferred for large models.
+Researchers later showed that common L2-style "weight decay" in Adam was not equivalent to true weight decay for adaptive optimizers. **AdamW** (2017) decoupled weight decay from the optimization step.
 
 ### The Training Loop
 
@@ -735,7 +735,7 @@ for epoch in range(num_epochs):
             print(f"Epoch {epoch}, Batch {batch_idx}, Loss: {loss.item():.4f}")
 ```
 
-**The five steps are always the same**:
+**The five steps are usually the same**:
 1. Zero gradients
 2. Forward pass
 3. Compute loss
@@ -771,7 +771,7 @@ print(f"Accuracy: {accuracy:.2f}%")
 
 ## Part 5: GPU Computing
 
-GPUs can make training 10-100× faster. PyTorch makes GPU computing almost trivially easy.
+GPUs can make neural network training much faster, though the exact speedup depends heavily on the workload and hardware. PyTorch makes GPU computing almost trivially easy.
 
 ### Moving to GPU
 
@@ -799,7 +799,7 @@ y = torch.randn(1000, 1000, device=device)
 
 ### GPU Training Loop
 
-The only change from CPU training: move data to the GPU each batch.
+The main change from CPU training: move data to the GPU each batch.
 
 ```python
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -1025,7 +1025,7 @@ optimizer.step()  # All weights updated!
 
 ## Did You Know? The Future: torch.compile()
 
-PyTorch 2.0 (2022) introduced something remarkable: `torch.compile()`.
+PyTorch 2.x introduced something remarkable: `torch.compile()`.
 
 ```python
 model = MyModel()
@@ -1048,11 +1048,11 @@ PyTorch doesn't cost money to use, but the ecosystem has significant economic im
 
 | Task | Manual NumPy | PyTorch | Savings |
 |------|-------------|---------|---------|
-| Simple MLP | 1 day | 1 hour | 87% |
-| CNN for images | 3 days | 4 hours | 83% |
-| LSTM/Transformer | 1 week | 1 day | 86% |
-| Training loop | 2 hours | 15 min | 88% |
-| GPU support | 1-2 days | 5 min | 99% |
+| Simple MLP | several hours to a day | around an hour or two | Large time savings |
+| CNN for images | days of custom implementation work | hours with a mature framework | Large time savings |
+| LSTM/Transformer | substantially more engineering time from scratch | far less time with a mature framework | Large time savings |
+| Training loop | notably longer from scratch | much shorter with framework primitives | Large time savings |
+| GPU support | much more manual engineering work | often only minor code changes | Very large time savings |
 
 ```mermaid
 graph LR
@@ -1086,10 +1086,10 @@ Training neural networks requires GPUs. The economics are stark:
 
 | GPU | Purchase Cost | Cloud Cost (AWS) | Memory | Speed |
 |-----|--------------|------------------|--------|-------|
-| RTX 3090 | $1,500 | - | 24GB | 1x |
-| A100 40GB | $15,000 | $3.06/hr | 40GB | 3x |
-| A100 80GB | $25,000 | $4.10/hr | 80GB | 3.5x |
-| H100 | $30,000+ | $5.50/hr | 80GB | 5x |
+| RTX 3090 | Consumer-GPU pricing varies on the secondary market | - | 24GB | Baseline reference |
+| A100 40GB | High datacenter-GPU purchase cost | Several dollars per hour in the cloud | 40GB | Significantly faster than consumer cards on many workloads |
+| A100 80GB | Very high datacenter-GPU purchase cost | Several dollars per hour in the cloud | 80GB | Higher throughput and memory headroom than smaller cards |
+| H100 | Very high datacenter-GPU purchase cost | Often several dollars per hour in the cloud | 80GB | Top-tier accelerator performance for many workloads |
 
 ```mermaid
 graph TD
@@ -1099,15 +1099,15 @@ graph TD
     GPU --> H100[H100<br>Cost: $30,000+ / $5.50 per hr<br>Mem: 80GB<br>Speed: 5x]
 ```
 
-**The crossover point**: At ~250 hours of usage, buying a 3090 beats renting cloud GPUs.
+**The crossover point**: Whether buying hardware beats renting depends heavily on the exact GPU, workload, utilization, and cloud price you compare against.
 
 ### Industry Adoption Metrics (2024)
 
 | Framework | GitHub Stars | PyPI Downloads/Month | Job Postings |
 |-----------|-------------|---------------------|--------------|
-| PyTorch | 85,000+ | 25M+ | 65% |
-| TensorFlow | 180,000+ | 15M+ | 30% |
-| JAX | 30,000+ | 3M+ | 5% |
+| PyTorch | ~100k GitHub stars | Large package ecosystem | Strong hiring demand |
+| TensorFlow | ~195k GitHub stars | Large package ecosystem | Still common in hiring and legacy deployments |
+| JAX | ~34k GitHub stars | Smaller but meaningful ecosystem | More specialized hiring footprint |
 
 ```mermaid
 flowchart LR
@@ -1116,14 +1116,14 @@ flowchart LR
     JAX[JAX<br>Stars: 30k+<br>PyPI: 3M+/mo<br>Jobs: 5%]
 ```
 
-**The trend**: PyTorch dominates research (75%+ of papers) and is rapidly gaining in production. TensorFlow is still strong in production deployments but declining.
+**The trend**: PyTorch has become a dominant framework in modern AI research, while TensorFlow remains important in many production and legacy environments.
 
 ### ROI of Learning PyTorch
 
 **Career impact data** (from industry surveys):
-- Average salary premium for PyTorch skills: +$15,000/year
-- Time to become productive: 2-4 weeks
-- ROI: 375% in first year (assuming $15k premium / 4 weeks investment)
+- PyTorch experience is often valued in machine-learning roles.
+- Time to become productive varies by prior Python, math, and ML experience.
+- Any career ROI estimate depends on your prior background, local market, and the role you target.
 
 ---
 
@@ -1216,24 +1216,22 @@ ONNX models can run on:
 
 ## Real-World Failures: Zillow and the Gradient Explosion
 
-In late 2021, real estate giant Zillow announced it was abruptly shutting down its iBuying division, Zillow Offers. The algorithmic failure resulted in a massive $500 million write-down and the layoff of 25% of the company's workforce. The culprit was a machine learning model that failed to accurately predict housing prices during the unpredictable macroeconomic shifts of the pandemic. Their neural networks were deployed with immense financial leverage, yet they exhibited fragile behaviors when real-world data drifted from the distributions they had been trained on. When algorithms govern hundreds of millions of dollars in capital, understanding exactly how they are trained, optimized, and debugged is not a theoretical luxury—it is a critical necessity for engineering survival.
-
 Similarly, consider the "Million-Dollar Gradient Explosion" incident.
 
 **San Francisco. November 2021. 3:47 AM.**
 
-The Slack message woke up the entire ML team at a fintech startup. Their PyTorch model—which had been running perfectly for six months—was suddenly producing garbage predictions. Customer trades were being rejected. Losses were mounting.
+In production systems, training or retraining bugs can surface as sudden prediction failures that disrupt downstream business workflows.
 
 The senior engineer's first thought was a data pipeline bug. But the data looked fine. The model architecture hadn't changed. The weights... wait. The weights were all NaN.
 
 After four frantic hours, they found it: someone had "optimized" the training script by removing `optimizer.zero_grad()`. In production, they were running periodic retraining, and without zeroing gradients, they accumulated over 10,000 backward passes. The gradients exploded to infinity, then became NaN, and those NaNs propagated to the entire model.
 
-**The fix took one line. The outage cost $1.2M in lost trades and customer compensation.**
+**The fix can be small, but the operational impact of a training bug can still be severe.**
 
 > "The most expensive bugs are the ones in code that seems too simple to be wrong."
-> — Their post-mortem document
+> General operational lesson.
 
-**The lesson**: PyTorch's gradient accumulation is a feature, not a bug. But forgetting that feature in production can be catastrophic. Always include `optimizer.zero_grad()` in your training loops, and add assertions that catch NaN values before they propagate.
+**The lesson**: PyTorch's gradient accumulation is a feature, not a bug. But forgetting that feature in production can be catastrophic. Usually include `optimizer.zero_grad()` in your training loops unless you're intentionally accumulating gradients, and add assertions that catch NaN values before they propagate.
 
 ---
 
@@ -1241,12 +1239,12 @@ After four frantic hours, they found it: someone had "optimized" the training sc
 
 | Mistake | Why It Destroys Performance | Fix |
 |---------|-----------------------------|-----|
-| Forgetting `model.eval()` | Leaves Dropout active and applies batch-specific BatchNorm statistics during inference, creating massive prediction degradation. | Always call `model.eval()` before validation loops and `model.train()` when returning to training. |
+| Forgetting `model.eval()` | Leaves Dropout active and applies batch-specific BatchNorm statistics during inference, creating massive prediction degradation. | Call `model.eval()` before validation loops and `model.train()` when returning to training. |
 | In-Place Tensor Operations | Modifying tensors with trailing underscore functions destroys intermediate mathematical values Autograd needs for backpropagation calculation. | Utilize out-of-place operations exclusively when dealing with graph-tracked tensors. |
 | The Wrong Loss Objective | Using `MSELoss` for categorical classification tasks is mathematically unstable as it assumes continuous targets. | Enforce `CrossEntropyLoss` for discrete class categorizations. |
 | Hardware Device Mismatch | Computations cannot traverse the PCIe bus automatically. Weight tensors on GPU and input tensors on CPU will critically crash the environment. | Explicitly apply `.to(device)` checks against all inputs prior to triggering model inferences. |
 | Raw Python Layer Lists | Utilizing standard lists causes `nn.Module` to ignore internal layer parameters, removing them entirely from optimization scope. | Register sequentially indexed dynamic layers exclusively via PyTorch's `nn.ModuleList`. |
-| Ignoring Gradient Resets | Gradients accumulate endlessly. Failing to zero them results in an explosive combination of all historical graph operations, usually generating immediate NaNs. | Declare `optimizer.zero_grad()` prior to every single model forward pass. |
+| Ignoring Gradient Resets | Gradients accumulate endlessly. Failing to zero them results in an explosive combination of all historical graph operations, usually generating immediate NaNs. | Declare `optimizer.zero_grad()` before each training step unless you're intentionally accumulating gradients. |
 | Caching Entire Graphs | Appending full tensor logs inside reporting arrays leaks massive VRAM footprint trees over epochs. | Append `loss.item()` to retrieve standard disconnected scalars instead of active tensor elements. |
 | Double Softmaxing Outputs | PyTorch's `CrossEntropyLoss` function automatically applies the softmax distribution. Calling it explicitly creates log-space instability. | Return raw, unnormalized logits straight out of the network's terminal layer. |
 
@@ -1640,13 +1638,13 @@ for epoch in range(1):
 
 1. **PyTorch won the framework wars** by prioritizing developer experience. Dynamic graphs and Pythonic design made research iteration 10x faster than static-graph alternatives.
 
-2. **Tensors are the universal container** for all data in deep learning. Images, text, audio—everything becomes tensors of floats.
+2. **Tensors are the standard container** for most data in deep learning. Images, text, audio—everything becomes tensors of floats.
 
 3. **Autograd is magic that you understand**. Having built backprop manually, you know what happens when you call loss.backward().
 
 4. **nn.Module is the foundation** for all PyTorch models. Always call super().__init__(), and use ModuleList/ModuleDict for dynamic layers.
 
-5. **The training loop is always the same**: zero_grad → forward → loss → backward → step. This works for any model, any scale.
+5. **The training loop usually follows the same pattern**: zero_grad → forward → loss → backward → step. This works for any model, any scale.
 
 6. **GPU computing is trivially easy**: .to(device) moves anything. But watch for memory leaks—use .item() for scalars, no_grad() for inference.
 
@@ -1783,7 +1781,7 @@ graph TD
     JX --> G2[GPU Support: Good]
 ```
 
-**Bottom line**: PyTorch remains the default choice for 90%+ of practitioners. JAX is worth exploring if you need extreme performance, work with TPUs, or do cutting-edge research in areas like neural ODEs or differentiable physics. However, the PyTorch ecosystem's maturity, especially HuggingFace integration and extensive tooling support, makes it the safer choice for most production applications. Unless you have a specific reason to choose JAX (like TPU-first deployment or cutting-edge functional programming research), start with PyTorch.
+**Bottom line**: PyTorch is the safer starting point for many practitioners because of its ecosystem maturity and broad tooling support, while JAX is especially attractive when functional transformations or TPU-oriented workflows matter.
 
 ---
 
@@ -1842,3 +1840,11 @@ PyTorch is open source with over 3,000 contributors. If you find a bug or want t
 
 _Last updated: 2025-12-11_
 _Status:  Complete_
+
+## Sources
+
+- [PyTorch: An Imperative Style, High-Performance Deep Learning Library](https://arxiv.org/abs/1912.01703) — Primary paper describing PyTorch's imperative execution model, autograd design, and performance goals.
+- [Seppo Linnainmaa](https://en.wikipedia.org/wiki/Seppo_Linnainmaa) — Background on Linnainmaa and the 1970 publication associated with reverse-mode automatic differentiation.
+- [Automatic differentiation](https://en.wikipedia.org/wiki/Automatic_differentiation) — Overview of forward-mode and reverse-mode automatic differentiation and their computational tradeoffs.
+- [Mixed Precision Training](https://arxiv.org/abs/1710.03740) — Primary reference for mixed-precision training, including speed and memory tradeoffs.
+- [Adam: A Method for Stochastic Optimization](https://arxiv.org/abs/1412.6980) — Original paper introducing the Adam optimizer discussed in the module.

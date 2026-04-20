@@ -30,9 +30,9 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-On a high-traffic New Year's Eve, the database engineering team at a major global ride-sharing company deployed a custom metric to track query latency. They were proud of their new telemetry and named it `db_query_duration_milliseconds`. It passed CI, worked perfectly in development, and was rolled out to production. 
+A team can ship a custom latency metric that looks fine in development but later causes serious problems because its name and unit do not follow Prometheus naming conventions. 
 
-Three weeks later, the core infrastructure team attempted to create a unified Service Level Objective (SLO) dashboard. Their goal was to combine frontend API latency (measured natively in seconds using `http_request_duration_seconds`) with the new database latency metric to calculate the aggregate user wait time. The PromQL query looked simple and logical:
+Later, another team tried to combine that database latency metric with an existing HTTP latency metric in a shared SLO dashboard, assuming the units were compatible:
 
 ```promql
 histogram_quantile(0.99,
@@ -44,18 +44,18 @@ histogram_quantile(0.99,
 )
 ```
 
-During the peak midnight surge window, the P99 total latency dashboard suddenly reported **3,000.2 seconds**. The automated scaling controllers panicked, assuming the system was effectively down, and over-scaled the API tier until underlying node resources were exhausted. It took 45 minutes of frantic incident response before a sharp engineer realized the root cause: one metric was measured in seconds, and the other in milliseconds. The query was blindly adding 0.2 seconds of API latency to 3,000 milliseconds of DB latency. The mathematical operation was correct, but the semantic result was disastrous. 
+A unit mismatch like this can make a latency dashboard report nonsense values, trigger bad operational decisions, and take time to diagnose. The underlying problem is simple: one metric is in seconds while the other is in milliseconds. The math still runs, but the result is operationally meaningless. 
 
-This single naming convention violation cost the business an estimated $3.2M in unfulfilled ride requests. The remediation required renaming the metric, migrating all historical dashboards, updating extensive alerting rules, and coordinating a rolling deployment across 400 production pods. The Prometheus naming convention exists to prevent exactly this scenario. Instrumentation and alerting account for a massive portion of the PCA exam, but beyond certification, these are the fundamental skills that dictate whether your observability stack works as a safety net or a catastrophic liability.
+A metric naming and unit mistake can impose real operational cleanup costs because dashboards, alerts, and deployments may all depend on the old metric. Prometheus naming conventions exist to reduce that risk. Instrumentation and alerting are also core practical skills for operating a reliable observability stack.
 
 ---
 
 ## Did You Know?
 
-- **Prometheus client libraries exist for over 15 languages**, including Go, Python, Java, Ruby, Rust, .NET, and Erlang, with the Go library acting as the reference implementation.
-- **The widely used `node_exporter` exposes over 1,000 distinct metrics** on a standard Linux system right out of the box, monitoring everything from CPU interrupts to filesystem entropy.
-- **Alertmanager's routing tree architecture was heavily inspired** by early email Mail Transfer Agent (MTA) logic, allowing a single configuration to handle infinite routing permutations.
-- **The `_total` suffix on counters was originally an optional best practice** but was strictly mandated when the OpenMetrics standard was formalized, forcing a massive industry-wide migration.
+- Prometheus has official client libraries for several major languages and a large ecosystem of third-party libraries.
+- The widely used `node_exporter` exposes a wide variety of host metrics on Linux systems, including CPU, memory, filesystem, and network measurements.
+- Alertmanager uses a hierarchical routing tree so one configuration can route alerts to different receivers based on labels.
+- For OpenMetrics 1.0 compatibility, counter sample names use the `_total` suffix.
 
 ---
 
@@ -152,7 +152,7 @@ TRADE-OFFS:
 Summaries, like histograms, calculate distributions of observed events. However, summaries calculate streaming quantiles directly on the client side rather than relying on server-side Prometheus calculations. 
 
 ```text
-SUMMARY: Client-computed quantiles
+SUMMARY: [Client-computed quantiles](https://prometheus.io/docs/practices/histograms/)
 ──────────────────────────────────────────────────────────────
 
 Generates series like:
@@ -173,7 +173,7 @@ DON'T USE WHEN (most of the time):
   [NO] You need flexible percentile calculation at query time
   [NO] You need SLO calculations
 
-PREFER HISTOGRAMS. Summaries exist for legacy reasons.
+Prefer histograms for most distributed-service latency and SLO use cases; use summaries only when you specifically need client-side quantiles.
 ```
 
 ### Decision Framework: Which Type?
@@ -401,8 +401,8 @@ Format: <namespace>_<name>_<unit>_<suffix>
 
 namespace  = application or library name (myapp, http, node)
 name       = what is being measured (requests, duration, size)
-unit       = base unit (seconds, bytes, meters — NEVER milli/kilo)
-suffix     = metric type indicator (_total for counters, _info for info)
+unit       = [base unit (seconds, bytes, meters — NEVER milli/kilo)](https://prometheus.io/docs/practices/naming/)
+suffix     = metric type indicator ([_total for counters, _info for info](https://prometheus.io/docs/specs/om/open_metrics_spec/))
 
 GOOD:
   myapp_http_requests_total              ← counter, counts requests
@@ -445,7 +445,7 @@ BAD:
 
 ### Label Best Practices
 
-Adding labels to metrics allows for deep dimensionality, but there is a hidden cost. Every unique combination of labels creates an entirely new time series stored in the Prometheus memory TSDB. While exact cardinality limits depend on your infrastructure's available memory, a general industry guideline warns against allowing unbounded cardinality vectors.
+Adding labels to metrics allows for deep dimensionality, but there is a hidden cost. [Every unique combination of labels creates an entirely new time series stored in the Prometheus memory TSDB](https://prometheus.io/docs/practices/naming/). While exact cardinality limits depend on your infrastructure's available memory, a general industry guideline warns against allowing unbounded cardinality vectors.
 
 ```text
 LABEL DO'S AND DON'TS
@@ -466,7 +466,7 @@ DON'T:
   [NO] timestamp as label (infinite cardinality)
 
 RULE OF THUMB:
-  If a label can have more than ~100 unique values,
+  If a label can take many distinct values or grow without a clear bound,
   it probably shouldn't be a label.
   Each unique label combination = one time series in memory.
 ```
@@ -512,7 +512,7 @@ rate(node_disk_written_bytes_total[5m])
 
 ### blackbox_exporter (Probing)
 
-The `blackbox_exporter` probes external endpoints over HTTP, HTTPS, DNS, TCP, and ICMP. It is invaluable for observing synthetic user workflows and tracking external dependencies.
+The [`blackbox_exporter` probes external endpoints over HTTP, HTTPS, DNS, TCP, and ICMP](https://github.com/prometheus/blackbox_exporter). It is invaluable for observing synthetic user workflows and tracking external dependencies.
 
 ```yaml
 # blackbox-exporter config
@@ -634,7 +634,7 @@ ALERT STATES
 INACTIVE: Alert expression evaluates to false. No action.
 
 PENDING:  Alert expression evaluates to true.
-          Waiting for "for" duration to elapse.
+          Waiting for ["for" duration to elapse](https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/).
           Won't fire yet — prevents noise from brief spikes.
 
 FIRING:   Alert has been true for at least "for" duration.
@@ -886,7 +886,7 @@ route (root):                          receiver: slack-default
 
 Result: Alert goes to pagerduty-critical (first matching child route)
 
-NOTE: By default, routing stops at first match.
+NOTE: By default, [routing stops at first match](https://prometheus.io/docs/alerting/latest/configuration/).
       Add "continue: true" on a route to keep matching subsequent routes.
 ```
 
@@ -921,7 +921,7 @@ WITH inhibition:
 
 ### Silences
 
-Silences temporarily mute alerts during planned maintenance, preventing active paging while operators execute known risky updates.
+[Silences temporarily mute alerts during planned maintenance](https://prometheus.io/docs/alerting/latest/alertmanager/), preventing active paging while operators execute known risky updates.
 
 ```bash
 # Create a silence via amtool CLI
@@ -941,7 +941,7 @@ amtool silence expire --alertmanager.url=http://localhost:9093 <silence-id>
 
 ### Recording Rules for Alerting
 
-Evaluating massive histogram queries on every evaluation tick can crash a Prometheus server. Recording rules pre-compute expensive expressions, saving them back as entirely new time series data. Your alerting rules then evaluate the lightweight, pre-computed metrics.
+Evaluating massive histogram queries on every evaluation tick can crash a Prometheus server. Recording rules [pre-compute expensive expressions, saving them back as entirely new time series data](https://prometheus.io/docs/prometheus/latest/configuration/recording_rules/). Your alerting rules then evaluate the lightweight, pre-computed metrics.
 
 ```yaml
 groups:
@@ -1040,7 +1040,7 @@ Feedback: You must reject the PR. Summaries compute exact quantiles natively in 
 Base units prevent catastrophic unit mismatch errors when combining telemetry from disparate systems. If one team uses `_milliseconds` and another uses `_seconds`, joining or adding these metrics produces nonsensical results that break automated scaling and SLO calculations.
 
 Specific reasons:
-- **Consistency**: All duration metrics are in seconds, so `rate(a_seconds[5m]) + rate(b_seconds[5m])` always works
+- **Consistency**: All duration metrics are in seconds, so `rate(a_seconds[5m]) + rate(b_seconds[5m])` works when the metrics are otherwise compatible
 - **PromQL functions**: `histogram_quantile()` returns values in the metric's unit — if metrics are in seconds, the result is in seconds
 - **Grafana handles display**: Grafana natively converts seconds to "2.5ms" or "1.3h" for human display automatically. You should store raw data in base units, formatting strictly at display time.
 - **OpenMetrics standard**: Requires base units for interoperability across tools
@@ -1434,3 +1434,15 @@ Now that you have learned to natively instrument code and orchestrate alert rout
 - [Metric and Label Naming](https://prometheus.io/docs/practices/naming/)
 - [Prometheus Fundamentals](/platform/toolkits/observability-intelligence/observability/module-1.1-prometheus/)
 - [Grafana](/platform/toolkits/observability-intelligence/observability/module-1.3-grafana/)
+
+## Sources
+
+- [Prometheus Metric Types](https://prometheus.io/docs/concepts/metric_types/) — Primary reference for counter, gauge, histogram, and summary semantics.
+- [Histograms and Summaries](https://prometheus.io/docs/practices/histograms/) — Explains client-side quantiles, bucketed observations, and histogram aggregation tradeoffs.
+- [Metric and Label Naming](https://prometheus.io/docs/practices/naming/) — Covers base units, naming structure, and label-cardinality guidance.
+- [OpenMetrics Specification](https://prometheus.io/docs/specs/om/open_metrics_spec/) — Defines canonical suffix conventions for counters, info metrics, histograms, and summaries.
+- [blackbox_exporter](https://github.com/prometheus/blackbox_exporter) — Upstream documentation for supported probe protocols and exporter behavior.
+- [Prometheus Alerting Rules](https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/) — Documents alert expressions and how the `for` clause delays firing.
+- [Alertmanager Configuration](https://prometheus.io/docs/alerting/latest/configuration/) — Describes routing trees, match evaluation, batching timers, and receiver setup.
+- [Alertmanager Overview](https://prometheus.io/docs/alerting/latest/alertmanager/) — Explains silences, inhibition, grouping, and notification flow.
+- [Prometheus Recording Rules](https://prometheus.io/docs/prometheus/latest/configuration/recording_rules/) — Describes precomputing expressions into new series for faster later queries.

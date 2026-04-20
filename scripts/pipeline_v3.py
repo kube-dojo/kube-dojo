@@ -33,6 +33,7 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -41,6 +42,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from citation_backfill import (  # type: ignore  # noqa: E402
     DOCS_ROOT, REPO_ROOT, resolve_module_path, run_inject, run_research,
+    seed_path_for,
 )
 from check_coherence import check_coherence  # type: ignore  # noqa: E402
 from check_overstatement import audit_file as audit_overstatement  # type: ignore  # noqa: E402
@@ -56,6 +58,155 @@ SUMMARY_PATH = V3_DIR / "summary.jsonl"
 
 def _iso_utc() -> str:
     return _dt.datetime.now(_dt.UTC).isoformat(timespec="seconds")
+
+
+def _sources_only_fallback(module_key: str, module_path: Path,
+                           inject_result: dict[str, Any]) -> dict[str, Any]:
+    """When full inject fails on diff-lint, write just a ## Sources section.
+
+    The full inject does three things: inline anchors, prose rewrites, and a
+    Sources section from further_reading. The diff-lint bails the WHOLE
+    inject on a single unauthorized prose change, losing even the Sources
+    section — so the module stays at the citation-gate cap of 1.5.
+
+    Fallback: if the seed has further_reading entries, skip inline + prose
+    and just append a Sources section from further_reading. Lifts the module
+    off the 1.5 cap without the risk of unauthorized prose rewrites.
+    """
+    result: dict[str, Any] = {"applied": False, "ok": False, "reason": None}
+    # Only fallback if the full inject tripped diff-lint. Real failures
+    # (dispatch error, parse error, nothing_to_do) should still abort.
+    if not inject_result.get("diff_issues"):
+        result["reason"] = "no_diff_issues_to_salvage"
+        return result
+    seed_path = seed_path_for(module_key)
+    if not seed_path.exists():
+        result["reason"] = "no_seed"
+        return result
+    seed = json.loads(seed_path.read_text(encoding="utf-8"))
+    fr = seed.get("further_reading") or []
+    if not fr:
+        result["reason"] = "no_further_reading"
+        return result
+    body = module_path.read_text(encoding="utf-8")
+    if re.search(r"^##+\s+sources\b", body, re.IGNORECASE | re.MULTILINE):
+        # Already has a Sources section — don't duplicate.
+        result["reason"] = "sources_section_already_present"
+        return result
+    lines = ["", "## Sources", ""]
+    for link in fr:
+        url = (link.get("url") or "").strip()
+        title = (link.get("title") or url).strip()
+        why = (link.get("why_relevant") or "").strip()
+        if not url:
+            continue
+        if why:
+            lines.append(f"- [{title}]({url}) — {why}")
+        else:
+            lines.append(f"- [{title}]({url})")
+    if len(lines) <= 3:
+        result["reason"] = "no_valid_further_reading"
+        return result
+    block = "\n".join(lines) + "\n"
+    new_body = body.rstrip() + "\n" + block
+    module_path.write_text(new_body, encoding="utf-8")
+    result["applied"] = True
+    result["ok"] = True
+    result["further_reading_count"] = len(fr)
+    return result
+
+
+_SCHEMA_CLAIM_INDEX_RE = re.compile(r"^claim\[(\d+)\]:")
+
+
+def _prune_schema_failed_claims(module_key: str, schema_issues: list[str]) -> dict[str, Any]:
+    """Drop seed claims flagged by validate_seed so the pipeline can continue.
+
+    Codex occasionally emits one bad claim (e.g. anchor_text containing a
+    newline) out of many valid ones. The original abort-the-whole-module
+    behavior wasted 10+ good claims + validated further_reading on a single
+    bad entry. Prune just the offenders and continue.
+    """
+    result: dict[str, Any] = {"pruned_indices": [], "remaining_claims": 0,
+                              "has_further_reading": False,
+                              "non_claim_issues": []}
+    bad_idx: set[int] = set()
+    non_claim_issues: list[str] = []
+    for issue in schema_issues:
+        m = _SCHEMA_CLAIM_INDEX_RE.match(issue)
+        if m:
+            bad_idx.add(int(m.group(1)))
+        else:
+            non_claim_issues.append(issue)
+    result["non_claim_issues"] = non_claim_issues
+    # Always load the seed so the caller's "remaining citable content"
+    # check reflects reality even when only non-claim issues were
+    # emitted (e.g. missing_section_pool: a warning, but the claims
+    # array is still valid). Previously this path returned
+    # remaining_claims=0 unconditionally, which made the caller abort
+    # modules with 10+ good claims + further_reading on any non-claim
+    # schema warning — reversing the prune-and-continue intent.
+    seed_path = seed_path_for(module_key)
+    if not seed_path.exists():
+        return result
+    seed = json.loads(seed_path.read_text(encoding="utf-8"))
+    claims = seed.get("claims") or []
+    if bad_idx:
+        kept = [c for i, c in enumerate(claims) if i not in bad_idx]
+        seed["claims"] = kept
+        seed_path.write_text(json.dumps(seed, indent=2, ensure_ascii=False) + "\n",
+                             encoding="utf-8")
+        result["pruned_indices"] = sorted(bad_idx)
+    else:
+        kept = claims
+    result["remaining_claims"] = len(kept)
+    result["has_further_reading"] = bool(seed.get("further_reading") or [])
+    return result
+
+
+def _prune_failed_cited_claims(module_key: str, verdict_path_rel: str | None) -> dict[str, Any]:
+    """Drop UNSUPPORTED/CONTRADICTED claims from the seed so inject can continue.
+
+    Gate B (verify) rejects the specific citation URL the researcher proposed,
+    not the underlying claim. The seed's further_reading entries stayed
+    within the allowlist and passed HTTP validation independently, so inject
+    can still write a Sources section even when every inline claim fails
+    verify. This prune+continue beats bailing the whole module — the
+    citation-gate cap stays at 1.5 otherwise.
+    """
+    result: dict[str, Any] = {"pruned_ids": [], "remaining_citable": 0,
+                              "has_further_reading": False}
+    if not verdict_path_rel:
+        return result
+    verdict_path = REPO_ROOT / verdict_path_rel
+    if not verdict_path.exists():
+        return result
+    verdicts = json.loads(verdict_path.read_text(encoding="utf-8")).get("verdicts") or []
+    fail_ids = {str(v.get("claim_id")) for v in verdicts
+                if v.get("verdict") in ("UNSUPPORTED", "CONTRADICTED")}
+    if not fail_ids:
+        return result
+    seed_path = seed_path_for(module_key)
+    if not seed_path.exists():
+        return result
+    seed = json.loads(seed_path.read_text(encoding="utf-8"))
+    kept: list[dict[str, Any]] = []
+    pruned: list[str] = []
+    for claim in seed.get("claims") or []:
+        cid = str(claim.get("claim_id"))
+        if cid in fail_ids and claim.get("disposition") in ("supported", "weak_anchor"):
+            pruned.append(cid)
+            continue
+        kept.append(claim)
+    seed["claims"] = kept
+    seed_path.write_text(json.dumps(seed, indent=2, ensure_ascii=False) + "\n",
+                         encoding="utf-8")
+    result["pruned_ids"] = pruned
+    result["remaining_citable"] = sum(
+        1 for c in kept if c.get("disposition") in ("supported", "weak_anchor")
+    )
+    result["has_further_reading"] = bool(seed.get("further_reading") or [])
+    return result
 
 
 # ---- audit pass -----------------------------------------------------------
@@ -340,7 +491,8 @@ def _remove_paragraph(body: str, paragraph: dict[str, Any]) -> str:
 def run_pipeline(module_key: str, *, skip_research: bool = False,
                  auto_apply: bool = True,
                  gate_agent_text: str = "codex",
-                 gate_agent_coherence: str = "gemini") -> dict[str, Any]:
+                 gate_agent_coherence: str = "gemini",
+                 section_pool_ref: str | None = None) -> dict[str, Any]:
     module_path = resolve_module_path(module_key)
     normalized_key = module_path.relative_to(DOCS_ROOT).with_suffix("").as_posix()
     flat_key = normalized_key.replace("/", "-")
@@ -358,12 +510,19 @@ def run_pipeline(module_key: str, *, skip_research: bool = False,
     if skip_research:
         run_record["stages"]["research"] = {"skipped": True}
     else:
-        r = run_research(normalized_key, agent="codex")
+        r = run_research(
+            normalized_key,
+            agent="codex",
+            section_pool_ref=section_pool_ref,
+        )
         run_record["stages"]["research"] = r
         if not r.get("ok"):
             return _finalize(run_record, "research_failed", flat_key)
         if r.get("schema_issues"):
-            return _finalize(run_record, "research_schema_issues", flat_key)
+            pruned = _prune_schema_failed_claims(normalized_key, r.get("schema_issues") or [])
+            run_record["stages"]["research_schema_prune"] = pruned
+            if pruned.get("remaining_claims", 0) == 0 and not pruned.get("has_further_reading"):
+                return _finalize(run_record, "research_schema_issues", flat_key)
 
     # Stage 2: verify (Gate B) ---------------------------------------------
     v = run_verify(normalized_key, agent="gemini")
@@ -371,13 +530,19 @@ def run_pipeline(module_key: str, *, skip_research: bool = False,
     if not v.get("ok"):
         return _finalize(run_record, "verify_failed", flat_key)
     if v.get("failing_count", 0) > 0:
-        return _finalize(run_record, "verify_unsupported_or_contradicted", flat_key)
+        pruned = _prune_failed_cited_claims(normalized_key, v.get("verdict_path"))
+        run_record["stages"]["verify_prune"] = pruned
+        if pruned.get("remaining_citable", 0) == 0 and not pruned.get("has_further_reading"):
+            return _finalize(run_record, "verify_unsupported_or_contradicted", flat_key)
 
     # Stage 3: inject in place --------------------------------------------
     inj = run_inject(normalized_key, agent="codex")
     run_record["stages"]["inject"] = inj
     if not inj.get("ok"):
-        return _finalize(run_record, "inject_failed", flat_key)
+        fb = _sources_only_fallback(normalized_key, module_path, inj)
+        run_record["stages"]["inject_fallback"] = fb
+        if not fb.get("ok"):
+            return _finalize(run_record, "inject_failed", flat_key)
 
     # Stage 4: audit -------------------------------------------------------
     audit = _audit_all(module_path, gate_agent_text=gate_agent_text,

@@ -6,7 +6,7 @@ sidebar:
 ---
 > **Toolkit Track** | Complexity: `[COMPLEX]` | Time: 45-50 min
 
-The platform architect presented the migration proposal to the CTO with unexpected confidence. Their hosted CI service had been steadily increasing costs—$340,000 per year for a 90-person engineering team—and vendor lock-in was strangling their ability to customize pipelines. "We can run the same workloads on our own Kubernetes clusters for a third of the cost," she explained, "and we'll own our CI infrastructure like we own our application infrastructure." Eighteen months later, with Tekton powering 2,400 pipeline runs per day across five clusters, they'd reduced CI costs to **$95,000 per year** while gaining the ability to run pipelines on-premise for their government clients—a capability that won them a **$12 million contract**.
+A platform team proposing Tekton might argue that running CI/CD on Kubernetes can reduce hosted CI spend, lower platform lock-in, and make it easier to support workloads that must run in specific environments such as on-premises clusters.
 
 ## Prerequisites
 
@@ -28,16 +28,16 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-Tekton is a Kubernetes-native CI/CD framework. Unlike hosted CI services, Tekton runs in your cluster—giving you full control, no vendor lock-in, and the ability to scale pipelines like any other Kubernetes workload.
+[Tekton is a Kubernetes-native CI/CD framework](https://tekton.dev/docs/concepts/overview/). Unlike hosted CI services, Tekton runs in your cluster, which can give teams more control and portability while letting pipelines use Kubernetes scheduling and scaling primitives.
 
-Born from Google's Knative Build project and now a CNCF project, Tekton powers enterprise CI/CD at companies like IBM, Red Hat, and Google.
+Born from Google's [Knative Build project](https://tekton.dev/blog/2022/10/26/tekton-graduation/) and now a [CNCF project](https://tekton.dev/docs/concepts/overview/), Tekton is used in commercial products and by teams building Kubernetes-native CI/CD systems.
 
 ## Did You Know?
 
 - **Tekton is named after the Greek word for "builder"**—appropriate for a build system
-- **Tekton powers Google Cloud Build and OpenShift Pipelines**—it's the foundation of major enterprise CI/CD offerings
-- **Tekton Pipelines runs as pods in your cluster**—each task step is a container, scaling naturally with Kubernetes
-- **The Tekton Catalog has 100+ reusable tasks**—from Git clone to Kubernetes deploy, pre-built and maintained
+- **Tekton underpins offerings such as OpenShift Pipelines**—it is part of the foundation for multiple enterprise CI/CD products
+- [**Tekton Pipelines runs as pods in your cluster**—each task step is a container](https://tekton.dev/docs/concepts/concept-model/), scaling naturally with Kubernetes
+- **The Tekton Catalog provides reusable tasks and pipelines**—including common building blocks maintained by the community
 
 ## Tekton Architecture
 
@@ -674,9 +674,9 @@ spec:
 | No timeouts | Stuck pipelines waste resources | Set `timeout` on Tasks and Pipelines |
 | Ignoring results | Can't pass data between tasks | Use `results` for task outputs |
 
-## War Story: The $890,000 Workspace Disaster
+## War Story: Workspace Mismanagement Under Load
 
-An e-commerce company migrated from CircleCI to Tekton to reduce costs and gain multi-cloud capability. The migration seemed successful—pipelines ran faster, costs dropped initially, and teams loved the Kubernetes-native approach. Then Black Friday hit.
+A team can migrate from a hosted CI system to Tekton for cost or portability reasons, only to discover during a peak event that poor workspace and storage hygiene can stall critical pipelines.
 
 ```
 THE WORKSPACE DISASTER TIMELINE
@@ -963,7 +963,7 @@ Then expose the EventListener service via Ingress and configure GitHub webhook t
 </details>
 
 ### Question 5
-A company runs 500 Tekton pipeline runs per day. Each run uses a 2GB workspace PVC. Without volumeClaimTemplate (manual cleanup), they clean up PVCs weekly. With volumeClaimTemplate, PVCs are deleted immediately. Storage costs $0.10/GB/month. Calculate monthly storage cost savings.
+A company runs 500 Tekton pipeline runs per day. Each run uses a 2GB workspace PVC. Without volumeClaimTemplate (manual cleanup), they clean up PVCs weekly. With volumeClaimTemplate, PVCs are usually deleted automatically after the run finishes. Storage costs $0.10/GB/month. Calculate monthly storage cost savings.
 
 <details>
 <summary>Show Answer</summary>
@@ -1118,7 +1118,7 @@ spec:
 | Controllers | Single installation, cluster-wide |
 | Common Tasks | Central namespace with versioning |
 | Team Pipelines | Per-team namespace with RBAC |
-| Secrets | Per-team, never shared |
+| Secrets | Usually per-team, not commonly shared |
 | Storage | Per-namespace ResourceQuotas |
 | Triggers | Per-team EventListeners |
 
@@ -1378,3 +1378,10 @@ Continue to [Module 3.3: Argo Workflows](../module-3.3-argo-workflows/) where we
 ---
 
 *"Kubernetes-native means your pipelines scale like pods, fail like pods, and are debugged like pods. Tekton makes CI/CD a first-class Kubernetes citizen."*
+
+## Sources
+
+- [Tekton Overview](https://tekton.dev/docs/concepts/overview/) — Canonical overview of Tekton's Kubernetes-native CI/CD model and core project concepts.
+- [Tekton Graduation](https://tekton.dev/blog/2022/10/26/tekton-graduation/) — Summarizes Tekton's history from Knative Build through CNCF graduation.
+- [Tekton Concept Model](https://tekton.dev/docs/concepts/concept-model/) — Explains how steps, tasks, TaskRuns, pipelines, and PipelineRuns map to containers and pods.
+- [Getting Started with Triggers](https://tekton.dev/docs/getting-started/triggers/) — Follow-on reference for EventListeners, TriggerBindings, and TriggerTemplates used in webhook-driven pipelines.

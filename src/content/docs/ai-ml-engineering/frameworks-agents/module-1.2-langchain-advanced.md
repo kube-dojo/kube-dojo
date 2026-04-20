@@ -31,7 +31,7 @@ By the end of this comprehensive module, you will have mastered the architectura
 
 In early 2024, Air Canada was ordered by a civil tribunal to honor a hallucinated refund policy invented by its customer service chatbot. The bot, functioning as a generic conversational agent rather than a tightly constrained tool-caller, generated a plausible-sounding but entirely fictitious bereavement fare policy. Because the system relied on the model's internal weights rather than deterministic API calls to a strict policy database, the airline suffered substantial reputational damage and financial loss. The underlying failure was structural: the engineers permitted the LLM to act as a database rather than a reasoning engine orchestrating external tools.
 
-Meanwhile, a startup in Boston deployed a financial analysis agent that operated flawlessly in staging environments. In production, a single user asked a series of follow-up questions about technology stocks. Because the agent lacked caching tools and was free to query external market data providers synchronously, the system generated over eight hundred external API calls in one user session. The company received a twenty-three thousand dollar API bill within three days. The system lacked safeguards against infinite recursive loops and failed to properly constrain tool access.
+A financial analysis agent can behave well in staging yet still generate excessive external API traffic in production if it lacks caching, recursion limits, and tight tool constraints.
 
 These incidents highlight the core thesis of this module: large language models are exceptional reasoning engines but dangerous, unpredictable data stores. To build reliable, production-grade artificial intelligence systems, you must decouple reasoning from direct action. By designing robust tool-calling frameworks, you constrain the model to use verified external functions for data retrieval and state mutations. This module transitions you from building conversational novelties to architecting deterministic, secure, and cost-effective AI agents that safely manipulate external environments.
 
@@ -690,7 +690,7 @@ The underlying transformer model might generate a structured JSON payload resemb
 }
 ```
 
-Because the asynchronous tools yield execution control immediately to the event loop, they execute concurrently. This parallel execution mechanism drastically optimizes the agent, reducing total execution time from approximately three sequential seconds to just one single second of latency.
+Because the asynchronous tools yield execution control to the event loop, they can execute concurrently when scheduled together. This parallel execution mechanism drastically optimizes the agent, reducing total execution time from approximately three sequential seconds to just one single second of latency.
 
 ---
 
@@ -985,11 +985,11 @@ Different proprietary language models utilize slightly different wire protocols 
 
 #### The $23,800 API Call
 
-**Boston. August 2023. A fintech startup building an AI financial advisor.**
+**An AI financial advisor deployment with insufficient safeguards.**
 
 The engineering team built a beautiful tool-calling agent. Users could ask "What's happening with NVIDIA stock?" and the agent would call their market data API, analyze trends, and provide insights. In testing, it worked flawlessly.
 
-Then they deployed to production. Within 72 hours, they received a bill for $23,800 from their market data provider. What happened?
+Then they deployed to production and discovered that repeated follow-up questions could generate a large unexpected bill from their market data provider.
 
 The problem was a missing caching layer. When users asked follow-up questions like "What about their earnings?" or "How does it compare to AMD?", the agent did not realize it already had relevant data. Each question triggered fresh API calls. One curious user asking questions about tech stocks generated massive volume in a single session.
 
@@ -1016,14 +1016,14 @@ def get_stock_price(symbol: str) -> str:
 
 #### The Tool Description Disaster
 
-**Seattle. October 2023. E-commerce company building a customer service agent.**
+**A customer service agent deployment with poorly differentiated tools.**
 
 The team deployed an agent with these tools:
 - `search_orders` - Search customer order history
 - `check_inventory` - Check product availability
 - `process_return` - Process a return request
 
-Within the first week, they noticed something strange. Customers asking "Where's my order?" were getting inventory information instead of order status. The agent was choosing `check_inventory` frequently for tracking questions. The root cause? Their tool descriptions were extremely vague:
+Teams often discover that vague, overlapping tool descriptions cause agents to route common customer-service questions to the wrong tool.
 
 ```python
 # BAD - Vague descriptions
@@ -1057,7 +1057,7 @@ def check_inventory(product_id: str):
 
 An AI legal research assistant was designed to search case law, summarize findings, and provide citations. A user asked: "Find precedents for software patent disputes in Texas." The search returned fifty results, so the agent decided to get more details via `get_case_details`. Those details mentioned related cases. The agent tried to fetch those too. Then those cases referenced more cases.
 
-The system generated 12,850 API calls in a short window before crashing.
+The system generated a runaway cascade of API calls before crashing.
 
 ```python
 # BAD - No recursion protection
@@ -1096,9 +1096,9 @@ class LegalResearchTools:
 
 Understanding the true token consumption overhead is essential to writing cost-effective architectures. You must actively evaluate the cost and performance trade-offs of multi-step reasoning models against more primitive single-pass prompt strategies. 
 
-To evaluate these trade-offs effectively, you must analyze token consumption and latency metrics. A single-pass prompt strategy involves injecting all potentially necessary contextual data directly into the initial user prompt. For example, if a user asks a question about a company's financial report, a single-pass approach would retrieve the entire 50-page PDF document beforehand, embed it completely into the prompt window, and ask the LLM to generate an answer in one go. This approach is highly predictable: it requires only one network round-trip to the model provider, guarantees low execution latency (typically under two seconds), and totally eliminates the risk of the model hallucinating tool schemas or failing to invoke tools correctly.
+To evaluate these trade-offs effectively, you must analyze token consumption and latency metrics. A single-pass prompt strategy involves injecting all potentially necessary contextual data directly into the initial user prompt. For example, if a user asks a question about a company's financial report, a single-pass approach would retrieve the entire 50-page PDF document beforehand, embed it completely into the prompt window, and ask the LLM to generate an answer in one go. This approach is operationally simpler: it uses a single model round-trip and avoids tool-selection failures, though actual latency depends on model, prompt size, and provider conditions.
 
-However, a multi-step reasoning model dynamically selects and executes tools to retrieve only the specific targeted data required. If the context window is enormous, the single-pass strategy might consume 50,000 input tokens per query, which quickly becomes astronomically expensive at scale. Conversely, the multi-step agent might first call a specialized search tool, retrieve a highly relevant 500-token excerpt, and then definitively answer the question. The trade-off here is pure latency and system reliability. The multi-step agent requires multiple sequential round-trips to the LLM provider, exponentially increasing response time to perhaps ten or fifteen seconds, and introduces the significant risk that the model might select the wrong search parameters during intermediate steps. You must rigorously evaluate your specific workload: employ single-pass prompt strategies for low-latency applications with static, predictably sized context windows, and deploy expensive multi-step reasoning agents only for complex, exploratory problem domains where the required context is vast or entirely unknown at the initiation of the interaction.
+However, a multi-step reasoning model dynamically selects and executes tools to retrieve only the specific targeted data required. If the context window is large, a single-pass strategy can consume a great many input tokens per query. A multi-step agent can instead fetch a smaller relevant excerpt, but it adds extra model round-trips and can increase latency and failure modes. You must rigorously evaluate your specific workload: employ single-pass prompt strategies for low-latency applications with static, predictably sized context windows, and deploy expensive multi-step reasoning agents only for complex, exploratory problem domains where the required context is vast or entirely unknown at the initiation of the interaction.
 
 ```text
 TOOL CALLING COST ANATOMY
@@ -1130,17 +1130,17 @@ TOTAL for single tool interaction:
 
 | Agent Type | Avg. Tool Calls | Input Tokens | Output Tokens | Cost/Request |
 |-----------|-----------------|--------------|---------------|--------------|
-| Single-tool (weather) | 1 | 1,500 | 200 | $0.008 |
-| Customer service | 2.3 | 3,200 | 450 | $0.021 |
-| Research assistant | 4.6 | 6,800 | 900 | $0.045 |
-| Complex workflow | 8+ | 12,000+ | 1,500+ | $0.090+ |
+| Single-tool (weather) | varies | varies | varies | pricing-dependent |
+| Customer service | varies | varies | varies | pricing-dependent |
+| Research assistant | varies | varies | varies | pricing-dependent |
+| Complex workflow | varies | varies | varies | pricing-dependent |
 
 | Task | Manual Time | Manual Cost | Agent Cost | Savings |
 |------|-------------|-------------|------------|---------|
-| Order lookup | 2 min | $1.00 | $0.02 | 98% |
-| Flight search | 5 min | $2.50 | $0.05 | 98% |
-| Data extraction | 15 min | $7.50 | $0.10 | 99% |
-| Research synthesis | 60 min | $30.00 | $0.50 | 98% |
+| Order lookup | workload-dependent | labor-rate-dependent | model-and-tool-dependent | often substantial |
+| Flight search | workload-dependent | labor-rate-dependent | model-and-tool-dependent | often substantial |
+| Data extraction | workload-dependent | labor-rate-dependent | model-and-tool-dependent | often substantial |
+| Research synthesis | workload-dependent | labor-rate-dependent | model-and-tool-dependent | often substantial |
 
 To minimize the impact of intermediate tool results on your accumulating context window, you must format your database returns cleanly.
 
@@ -1168,7 +1168,7 @@ def search_products(query: str, limit: int = 5):
 
 **Q: How do you prevent prompt injection through tool results?**
 
-A malicious user can embed dangerous payloads in an otherwise innocuous database field. If the agent retrieves that field and incorporates it directly into the prompt context, the payload could hijack the agent's logic.
+A malicious user can embed dangerous payloads in an otherwise innocuous database field. If the agent retrieves that field and incorporates it directly into the prompt context, [the payload could hijack the agent's logic](https://owasp.org/www-community/attacks/PromptInjection).
 
 ```xml
 <tool_result source="database">
@@ -1181,10 +1181,10 @@ To mitigate this risk, you isolate external data in specific XML tags and provid
 
 ## Did You Know?
 
-- In June 2023, OpenAI officially introduced function calling to their API, fundamentally shifting the paradigm from text generation to agentic workflows.
-- Research published in 2023 demonstrated that agent accuracy for tool selection drops from roughly 95 percent to 70 percent when the number of available tools exceeds twenty.
-- Implementing a tool execution loop can reduce manual processing costs by up to 98 percent, lowering the price of a typical data extraction task from seven dollars to ten cents.
-- Early implementations of recursive agents were known to execute over ten thousand API calls in under three minutes due to the absence of depth limits and recursion protections.
+- [In June 2023, OpenAI officially introduced function calling](https://openai.com/index/function-calling-and-other-api-updates/) to their API, fundamentally shifting the paradigm from text generation to agentic workflows.
+- Tool selection accuracy often degrades as the number of overlapping tools grows, so large toolsets usually need routing or hierarchical organization.
+- Tool execution loops can reduce manual effort for some workflows, but the actual savings depend heavily on labor rates, model choice, and tool costs.
+- Recursive agents can generate runaway volumes of API calls very quickly if you do not enforce depth limits and call budgets.
 
 ---
 
@@ -1574,3 +1574,10 @@ print(analyze_company.invoke("AAPL"))
 Now that you have successfully given your agent the foundational ability to interact with external tools deterministically, you are completely ready to study the underlying reasoning loops that govern complex strategic decision making. Proceed directly to:
 
 [Module 1.3: Chain-of-Thought & Reasoning](/ai-ml-engineering/frameworks-agents/module-1.3-cot-reasoning) — Learn how to make agents "think out loud" using the advanced ReAct pattern to logically navigate deeply nested problems without catastrophic divergence.
+
+## Sources
+
+- [Function calling and other API updates](https://openai.com/index/function-calling-and-other-api-updates/) — Primary vendor announcement for OpenAI's function-calling rollout and agentic workflow framing.
+- [Claude can now use tools](https://www.anthropic.com/news/tool-use-ga) — Anthropic overview of tool use and why external tools improve accuracy and task completion.
+- [Function calling reference](https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/function-calling) — Official Google Cloud reference for function-calling schemas and execution behavior.
+- [Prompt Injection](https://owasp.org/www-community/attacks/PromptInjection) — Security reference covering prompt-injection risks, including indirect attacks via retrieved content.

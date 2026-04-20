@@ -8,7 +8,7 @@ sidebar:
 
 ## Overview
 
-What happens when you deploy to 1,000 nodes simultaneously? Your registry melts. Every node requests the same layers, creating a thundering herd that saturates bandwidth and brings deployments to a crawl. Dragonfly solves this with peer-to-peer distribution: the first node pulls from the registry, then shares with neighboring nodes, who share with their neighbors. Your registry sees 1 request instead of 1,000.
+What happens when you deploy to 1,000 nodes simultaneously? Your registry melts. Every node requests the same layers, creating a thundering herd that saturates bandwidth and brings deployments to a crawl. Dragonfly solves this with peer-to-peer distribution: the first node pulls from the registry, then shares with neighboring nodes, who share with their neighbors. In large rollouts, a P2P layer can reduce origin-registry traffic from every node pulling directly to only a small number of seed or back-to-source pulls.
 
 This module teaches you to deploy Dragonfly for massive-scale container image distribution.
 
@@ -60,15 +60,15 @@ Registry bandwidth: 1000x            Registry bandwidth: ~10x
 Failure mode: Registry overload      Failure mode: Graceful degradation
 ```
 
-Dragonfly makes the impossible possible: deploying to thousands of nodes in minutes, not hours.
+At large scale, Dragonfly is designed to cut rollout time substantially by shifting most transfer traffic from the registry to peers.
 
 ## Did You Know?
 
 - **Origin**: Dragonfly was created at Alibaba to solve their Singles' Day scaling problems—imagine deploying to 10,000+ nodes for the world's largest shopping event
-- **CNCF Incubating**: Graduated from sandbox in 2020, widely adopted in production
-- **Bandwidth Savings**: Organizations report 90%+ reduction in registry egress bandwidth
-- **Not Just Images**: Dragonfly can distribute any large file—ML models, datasets, artifacts
-- **Ant Group Scale**: Handles distribution to hundreds of thousands of nodes daily
+- **CNCF Graduated**: Dragonfly is now a CNCF Graduated project with broad production adoption.
+- **Bandwidth Savings**: Dragonfly case studies report large reductions in source-registry bandwidth and image-pull cost.
+- **Not Just Images**: [Dragonfly can distribute any large file—ML models, datasets, artifacts](https://github.com/dragonflyoss/dragonfly)
+- **Large-Scale Use**: Dragonfly is used for very large production distributions.
 
 ## Dragonfly Architecture
 
@@ -704,7 +704,7 @@ Key metrics:
 
 ### Dragonfly Console
 
-Dragonfly includes a web console for visualization:
+[Dragonfly includes a web console](https://www.cncf.io/blog/2023/08/07/dragonfly-v2-1-0-is-released/) for visualization:
 
 ```bash
 # Port-forward to manager console
@@ -836,9 +836,9 @@ This is Dragonfly's origin story—solving the largest deployment challenge on E
 **The Challenge**:
 Singles' Day (11/11) is the world's biggest shopping event. Alibaba needed to:
 - Deploy updates to 10,000+ nodes
-- Complete in under 10 minutes
+- Complete quickly enough to be practical for a peak-event rollout
 - Handle traffic spikes of millions of requests/second
-- Zero downtime during peak shopping
+- Avoid disruption during the peak shopping period
 
 **The Traditional Approach (Failed)**:
 
@@ -866,10 +866,10 @@ Time: < 5 minutes for 10,000 nodes
 4. **Back-pressure**: Rate limiting prevented network saturation
 
 **The Results**:
-- Deployment time: 2.7 hours → 5 minutes
-- Registry bandwidth: 95% reduction
-- Success rate: 99.99%
-- Scaled to 100,000+ nodes in subsequent years
+- Deployment time dropped dramatically.
+- Registry bandwidth demand fell sharply.
+- Distribution reliability improved significantly.
+- The system later expanded to much larger production environments.
 
 **The Lesson**: At massive scale, P2P isn't an optimization—it's the only way.
 
@@ -917,7 +917,7 @@ Test your understanding of Dragonfly:
 <details>
 <summary>5. How does Dragonfly integrate with Harbor?</summary>
 
-**Answer**: Dragonfly sits between the container runtime and Harbor. Configure dfdaemon to proxy Harbor URLs with credentials. The scheduler authenticates to Harbor once, downloads images, then distributes via P2P. Nodes never contact Harbor directly—all traffic goes through dfdaemon → scheduler → Harbor. This preserves Harbor's security (RBAC, scanning) while adding P2P scale.
+**Answer**: Dragonfly sits between the container runtime and Harbor. Configure dfdaemon to proxy Harbor URLs with credentials. The scheduler authenticates to Harbor once, downloads images, then distributes via P2P. Nodes typically do not contact Harbor directly—all traffic usually goes through dfdaemon → scheduler → Harbor. This preserves Harbor's security (RBAC, scanning) while adding P2P scale.
 </details>
 
 <details>
@@ -1211,3 +1211,12 @@ Continue to the [K8s Distributions Toolkit](/platform/toolkits/infrastructure-ne
 ---
 
 *"At scale, peer-to-peer isn't an optimization—it's the only architecture that works."*
+
+## Sources
+
+- [Dragonfly Upstream Repository](https://github.com/dragonflyoss/dragonfly) — Authoritative upstream source for Dragonfly's capabilities, including distributing images, files, and AI/ML artifacts.
+- [Peer-to-Peer Acceleration for AI Model Distribution with Dragonfly](https://www.cncf.io/blog/2026/04/06/peer-to-peer-acceleration-for-ai-model-distribution-with-dragonfly/) — Recent CNCF article that illustrates Dragonfly's peer-to-peer acceleration model in practice.
+- [Cloud Native Computing Foundation Announces Dragonfly's Graduation](https://www.cncf.io/announcements/2026/01/14/cloud-native-computing-foundation-announces-dragonflys-graduation/) — CNCF announcement useful for framing Dragonfly's maturity and large-scale delivery use cases.
+- [CNCF Dragonfly Project Page](https://www.cncf.io/projects/dragonfly/) — Best single overview of Dragonfly's current CNCF status, scope, and public project references.
+- [containerd Registry Host Configuration](https://github.com/containerd/containerd/blob/main/docs/hosts.md) — Upstream containerd documentation for registry host and mirror behavior relevant to Dragonfly integrations.
+- [Dragonfly v2.1.0 Is Released](https://www.cncf.io/blog/2023/08/07/dragonfly-v2-1-0-is-released/) — Release note covering Dragonfly features including its console and operational improvements.

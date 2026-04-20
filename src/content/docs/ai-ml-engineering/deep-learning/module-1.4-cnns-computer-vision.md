@@ -18,9 +18,7 @@ By the end of this rigorous module, you will be prepared to:
 
 ## Why This Module Matters
 
-In 2021, the real estate giant Zillow announced it was shutting down its iBuying division, Zillow Offers, resulting in a staggering 500 million dollar write-down and the layoff of 25 percent of its workforce. While broader market volatility played a role, the fundamental root cause of the catastrophe was a failure in their algorithmic pricing models. Their neural networks, tasked with predicting home prices using computer vision on property photos alongside deep tabular data, suffered from catastrophic overfitting, silent training failures, and unchecked model drift. The models memorized historical data perfectly but failed to generalize when market dynamics shifted. 
-
-Beyond algorithmic drift, structural pipeline failures carry immediate and devastating financial consequences. In a separate incident widely known across the industry as the "$2.3 Million Training Collapse", a prominent autonomous driving startup literally burned through 2.3 million dollars of allocated AWS GPU cluster time. A deep convolutional network processing LiDAR and optical streams encountered an unclipped exploding gradient during epoch 12 of a multi-week distributed run. The gradient silently overflowed into `NaN` (Not a Number) values, corrupting the model's weights. Because the engineering team failed to implement rigorous gradient clipping and programmatic checkpoint validation, the cluster spent weeks optimizing dead weights. The models hallucinated confidence, and the failure was completely undetected until the compute budget was permanently exhausted.
+Structural pipeline failures in large distributed training jobs can waste enormous amounts of compute if exploding gradients, `NaN` propagation, and checkpoint corruption are not caught early. Gradient clipping, loss monitoring, and checkpoint validation are standard safeguards against this class of failure.
 
 When engineering teams fail to implement rigorous deep learning practices—such as proper validation splits, early stopping, robust initialization, and disciplined learning rate scheduling—their models hallucinate confidence. A vanishing gradient in a deep vision model might cause it to completely ignore visual red flags in property photos, while an unclipped exploding gradient might silently corrupt a multi-day training checkpoint. These are not academic curiosities; they are billion-dollar engineering failures. This module bridges the gap between theoretical deep learning and production-grade Computer Vision engineering. We will cover the exact techniques used to train modern systems, from stabilizing early training with Kaiming initialization to navigating the modern PyTorch ecosystem. You will learn to construct models that are mathematically sound, computationally efficient, and financially safe to deploy.
 
@@ -28,7 +26,7 @@ When engineering teams fail to implement rigorous deep learning practices—such
 
 ## Section 1: The Dark Ages of Deep Learning and Foundational Datasets
 
-Before modern normalization and initialization techniques were established, training networks deeper than a few layers was essentially impossible due to extreme numerical instability. Deep learning relies exclusively on backpropagation, which chains mathematical gradients together using the chain rule of calculus. 
+Before modern normalization and initialization techniques were established, training networks deeper than a few layers was often extremely difficult due to severe numerical instability. Deep learning relies exclusively on backpropagation, which chains mathematical gradients together using the chain rule of calculus. 
 
 > **Did You Know?** In 2006, Geoffrey Hinton published a paper called "A Fast Learning Algorithm for Deep Belief Nets" that kickstarted the deep learning revolution, though networks were only 3-4 layers deep.
 
@@ -36,12 +34,12 @@ Before modern normalization and initialization techniques were established, trai
 
 Imagine you are trying to pass a message through a chain of 100 people playing telephone. By the time the message reaches the last person, it is completely garbled. That is what happened to gradients in deep networks — they either exploded into infinity or vanished into nothing.
 
-**Vanishing Gradients**: If your weights are initialized to small values (say, 0.5), multiplying them across many layers results in exponential decay. The gradient signal never reaches the early layers, halting learning entirely. Because floating point specifications have bounds, eventually the hardware rounds the microscopic gradient down to exactly zero. Once a gradient is zero, the model ceases to learn.
+**Vanishing Gradients**: If your weights are initialized to small values (say, 0.5), multiplying them across many layers results in exponential decay. The gradient signal can become too weak to meaningfully reach the early layers, severely slowing or halting learning. Because floating point specifications have bounds, eventually the hardware rounds the microscopic gradient down to exactly zero. Once a gradient is zero, the model ceases to learn.
 ```text
 0.5 × 0.5 × 0.5 × 0.5 × 0.5 × 0.5 × 0.5 × 0.5 × 0.5 × 0.5 = 0.001
 ```
 
-**Exploding Gradients**: Conversely, if your weights are initialized to large values (say, 2.0), the gradients compound multiplicatively until they violently overflow the floating-point memory representation, resulting in catastrophic `NaN` (Not a Number) errors. The network's weights are immediately destroyed, rendering the entire tensor permanently invalid.
+**Exploding Gradients**: Conversely, if your weights are initialized to large values (say, 2.0), the gradients compound multiplicatively until they violently overflow the floating-point memory representation, resulting in catastrophic `NaN` (Not a Number) errors. The network's weights can quickly become corrupted, rendering affected tensors invalid until the model state is reset or corrected.
 ```text
 2 × 2 × 2 × 2 × 2 × 2 × 2 × 2 × 2 × 2 = 1024
 ```
@@ -58,9 +56,9 @@ None of these scaled to the architectures we use today.
 
 To combat these issues and benchmark architectural progress, the computer vision community relies on meticulously curated datasets. When validating new structural models, researchers must start with foundational datasets to prove mathematical viability before scaling to massive corpora. 
 
-For instance, MNIST serves as the bedrock sanity check, featuring 60,000 training images and 10,000 test images of handwritten digits. Scaling up to natural imagery, CIFAR-10 has 60,000 32×32 color images in 10 classes (5,000 per class for train split distribution details), with 50,000 training images and 10,000 test images. Its more complex sibling, CIFAR-100 has 100 classes, with 500 training images and 100 test images per class. 
+For instance, MNIST serves as the bedrock sanity check, featuring [60,000 training images and 10,000 test images](https://huggingface.co/datasets/p2pfl/MNIST) of handwritten digits. Scaling up to natural imagery, [CIFAR-10 has 60,000 32×32 color images in 10 classes (5,000 per class for train split distribution details), with 50,000 training images and 10,000 test images](https://huggingface.co/datasets/uoft-cs/cifar10). Its more complex sibling, [CIFAR-100 has 100 classes, with 500 training images and 100 test images per class](https://huggingface.co/datasets/uoft-cs/cifar100). 
 
-For highly complex scene understanding and object detection pipelines, COCO 2017 includes 80 object classes in active splits and has 118,287 train, 5,000 validation, and 40,670 test images. Engineering teams use these splits to verify that their architectures do not fall victim to gradient collapse before risking production data.
+For highly complex scene understanding and object detection pipelines, [COCO 2017 includes 80 object classes in active splits and has 118,287 train, 5,000 validation, and 40,670 test images](https://github.com/ultralytics/ultralytics/blob/main/ultralytics/cfg/datasets/coco.yaml). Engineering teams use these splits to verify that their architectures do not fall victim to gradient collapse before risking production data.
 
 ---
 
@@ -68,11 +66,11 @@ For highly complex scene understanding and object detection pipelines, COCO 2017
 
 The introduction of Batch Normalization fundamentally altered the trajectory of deep learning by dynamically re-centering and re-scaling layer inputs, thus preventing the cascading variations that lead to gradient collapse. 
 
-> **Did You Know?** The BatchNorm paper has been cited over 60,000 times, making it one of the most influential papers in machine learning history.
+> **Did You Know?** The BatchNorm paper is one of the most influential works in modern deep learning.
 
 ### What BatchNorm Actually Does
 
-During training, the distribution of each layer's inputs changes continuously as the parameters of the previous layers update. However, later research showed that BatchNorm smooths the overall loss landscape, making optimization significantly easier. Mechanically, BatchNorm forces the inputs of each layer to maintain a mean of zero and a standard deviation of one across the active mini-batch. By standardizing the inputs, the gradients flowed backwards uniformly without exponential decay or magnification.
+During training, the distribution of each layer's inputs changes continuously as the parameters of the previous layers update. However, [later research showed that BatchNorm smooths the overall loss landscape, making optimization significantly easier](https://arxiv.org/abs/1805.11604). Mechanically, BatchNorm forces the inputs of each layer to maintain a mean of zero and a standard deviation of one across the active mini-batch. By standardizing the inputs, the gradients flowed backwards uniformly without exponential decay or magnification.
 
 ```python
 # The idea behind BatchNorm (simplified)
@@ -147,11 +145,11 @@ class CNNWithBatchNorm(nn.Module):
 
 ### War Story: The BatchNorm Batch Size Bug
 
-In 2019, a medical imaging startup spent weeks debugging a vision model that hit 99% accuracy in training but degraded to 10% in production. The root cause was the "BatchNorm Batch Size Bug". Hardware constraints forced them to use a batch size of 2 for extremely high-resolution MRI scans. Computing variance across a batch of 2 is statistically meaningless; it wildly fluctuated, essentially injecting massive, unrecoverable noise into the network. They were poisoning their own model at the architectural level.
+A model that trains well can still degrade in deployment when BatchNorm is used with extremely small batches, because the normalization statistics become noisy and unstable.
 
 ### The Train/Eval Mode Gotcha
 
-Because BatchNorm relies heavily on active batch statistics during training but must utilize frozen running statistics during inference, you must explicitly toggle the model's internal state. Failing to do this guarantees corrupted outputs.
+Because BatchNorm relies heavily on active batch statistics during training but [must utilize frozen running statistics during inference](https://github.com/pytorch/pytorch/blob/v2.11.0/torch/nn/modules/batchnorm.py), you must explicitly toggle the model's internal state. Failing to do this guarantees corrupted outputs.
 
 ```python
 # Training
@@ -172,7 +170,7 @@ with torch.no_grad():
 
 ### Why Layer Norm solves it by not using batches at all!
 
-When extreme hardware constraints force tiny batch sizes, BatchNorm's statistical estimates become wildly inaccurate. Layer Normalization bypasses this flaw completely by calculating statistical moments across the feature dimension for each sample independently, ignoring the batch dimension entirely.
+When extreme hardware constraints force tiny batch sizes, BatchNorm's statistical estimates become wildly inaccurate. Layer Normalization bypasses this flaw completely by [calculating statistical moments across the feature dimension for each sample independently, ignoring the batch dimension entirely](https://github.com/pytorch/pytorch/blob/v2.11.0/torch/nn/modules/normalization.py).
 
 ```python
 def layer_norm_simplified(x, gamma, beta, eps=1e-5):
@@ -191,7 +189,7 @@ def layer_norm_simplified(x, gamma, beta, eps=1e-5):
     return gamma * x_norm + beta
 ```
 
-> **Did You Know?** Every single layer of modern architectures like gpt-5 uses Layer Normalization, moving away from BatchNorm for sequence modeling.
+> **Did You Know?** Layer Normalization is widely used in Transformer-style sequence models, where batch-dependent normalization is often a poor fit.
 
 ### Layer Norm in PyTorch
 
@@ -279,7 +277,7 @@ class NetworkWithDropout(nn.Module):
         return self.layers(x)
 ```
 
-There is a subtle but important mathematical detail: during training, we zero out half the neurons. But during inference, all neurons are active. Does that not change the expected output? Yes! That is why dropout scales the remaining activations during training. PyTorch scales the active neurons by `1/(1-p)`. If dropout rate is 0.5, the remaining neurons are multiplied by 2, keeping the expected sum perfectly consistent.
+There is a subtle but important mathematical detail: during training, we zero out half the neurons. But during inference, all neurons are active. Does that not change the expected output? Yes! That is why dropout scales the remaining activations during training. [PyTorch scales the active neurons by `1/(1-p)`](https://github.com/pytorch/pytorch/blob/v2.11.0/torch/nn/modules/dropout.py). If dropout rate is 0.5, the remaining neurons are multiplied by 2, keeping the expected sum perfectly consistent.
 
 ### Modern Alternatives to Dropout
 
@@ -307,7 +305,7 @@ class DropPath(nn.Module):
 
 ### The Mathematics of Initialization
 
-If networks start with poor initial weights, gradients will inevitably explode or vanish before the loss curve can descend. Xavier (Glorot) initialization was designed precisely for symmetric activation functions like Tanh:
+If networks start with poor initial weights, gradients will inevitably explode or vanish before the loss curve can descend. [Xavier (Glorot) initialization](https://raw.githubusercontent.com/pytorch/pytorch/v2.11.0/torch/nn/init.py) was designed precisely for symmetric activation functions like Tanh:
 
 ```text
 weights ~ Uniform(-sqrt(6/(n_in + n_out)), sqrt(6/(n_in + n_out)))
@@ -316,7 +314,7 @@ weights ~ Uniform(-sqrt(6/(n_in + n_out)), sqrt(6/(n_in + n_out)))
 weights ~ Normal(0, sqrt(2/(n_in + n_out)))
 ```
 
-Because the ReLU activation function forcefully zeroes out half the input space (the entire negative domain), it halves the variance of the forward pass. To compensate, Kaiming He introduced an adjustment specifically engineered for ReLU networks, boosting the variance numerator to 2:
+Because the ReLU activation function forcefully zeroes out half the input space (the entire negative domain), it halves the variance of the forward pass. To compensate, [Kaiming He introduced an adjustment specifically engineered for ReLU networks](https://raw.githubusercontent.com/pytorch/pytorch/v2.11.0/torch/nn/init.py), boosting the variance numerator to 2:
 
 ```text
 weights ~ Normal(0, sqrt(2/n_in))
@@ -396,7 +394,7 @@ Deep learning framework tooling is advancing at an incredible pace. To keep up w
 
 > **Did You Know?** PyTorch GA release v2.11.0 was published on March 23, 2026, officially switching CUDA default wheel variants to CUDA 13.0 and deprecating TorchScript.
 
-Outside the specific PyTorch pipeline, handling image streams relies on robust libraries. TorchVision 0.26.0 removes all deprecated video decoding and encoding utilities, migrating these intensive workloads entirely to the dedicated TorchCodec library for optimized execution streams. This ecosystem alignment is mandatory when deploying to strict Kubernetes environments.
+Outside the specific PyTorch pipeline, handling image streams relies on robust libraries. [TorchVision 0.26.0 removes all deprecated video decoding and encoding utilities, migrating these intensive workloads entirely to the dedicated TorchCodec library](https://github.com/pytorch/vision/releases/tag/v0.26.0) for optimized execution streams. This ecosystem alignment is mandatory when deploying to strict Kubernetes environments.
 
 ---
 
@@ -565,7 +563,7 @@ nn_utils.clip_grad_value_(model.parameters(), clip_value=0.5)
 
 | Situation | Recommendation |
 |-----------|---------------|
-| Training RNNs/LSTMs | Always use (norm clipping) |
+| Training RNNs/LSTMs | Usually use (norm clipping) |
 | Training Transformers | Usually use (norm clipping) |
 | Standard CNNs | Often unnecessary |
 | Large learning rates | Recommended |
@@ -980,7 +978,7 @@ Memory constraints—specifically VRAM boundaries—are the ubiquitous bottlenec
    output = checkpoint(self.layer, x)  # Recomputes forward during backward
 ```
 
-Mixed precision training heavily mitigates VRAM pressure by aggressively downcasting tensors to float16 configurations seamlessly, doubling the effective batch size capable of fitting inside GPU structures.
+Mixed precision training can substantially reduce memory pressure and often allows larger batch sizes, but the gain depends on the model, optimizer states, and activation footprint.
 
 ```python
    from torch.cuda.amp import autocast, GradScaler
@@ -1697,3 +1695,19 @@ Upon running the script, `BatchNorm` will display a heavily perturbed, unstable 
 Now that you have mastered the nuances of parameter initialization, numerical profiling, and optimizing complex pipelines to absolute mathematical stability, you must construct custom architectural backbones tailored to dense unstructured image data streams.
 
 - [Proceed to Module 1.5: RNNs & Sequence Models](./module-1.5-rnns-sequence-models)
+
+## Sources
+
+- [MNIST dataset card](https://huggingface.co/datasets/p2pfl/MNIST) — Confirms the canonical MNIST train/test split counts used in the module.
+- [CIFAR-10 dataset card](https://huggingface.co/datasets/uoft-cs/cifar10) — Confirms CIFAR-10 image count, class count, and train/test split sizes.
+- [CIFAR-100 dataset card](https://huggingface.co/datasets/uoft-cs/cifar100) — Confirms CIFAR-100 class count and per-class train/test image counts.
+- [Ultralytics COCO dataset config](https://github.com/ultralytics/ultralytics/blob/main/ultralytics/cfg/datasets/coco.yaml) — Provides the commonly used COCO 2017 class count and split sizes referenced here.
+- [How Does Batch Normalization Help Optimization?](https://arxiv.org/abs/1805.11604) — Supports the claim that BatchNorm improves optimization by smoothing the loss landscape.
+- [PyTorch BatchNorm implementation (v2.11.0)](https://github.com/pytorch/pytorch/blob/v2.11.0/torch/nn/modules/batchnorm.py) — Shows that BatchNorm tracks running statistics during training and uses them in evaluation mode by default.
+- [PyTorch LayerNorm implementation (v2.11.0)](https://github.com/pytorch/pytorch/blob/v2.11.0/torch/nn/modules/normalization.py) — Shows LayerNorm normalizes over the specified last dimensions and uses input statistics in both train and eval paths.
+- [PyTorch Dropout implementation (v2.11.0)](https://github.com/pytorch/pytorch/blob/v2.11.0/torch/nn/modules/dropout.py) — Documents inverted-dropout scaling during training so evaluation can remain an identity transform.
+- [PyTorch initialization utilities (v2.11.0)](https://raw.githubusercontent.com/pytorch/pytorch/v2.11.0/torch/nn/init.py) — Contains the Xavier and Kaiming initialization formulas used to justify the initialization guidance.
+- [TorchVision v0.26.0 release notes](https://github.com/pytorch/vision/releases/tag/v0.26.0) — Confirms removal of deprecated video utilities and the migration path toward TorchCodec.
+- [Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift](https://arxiv.org/abs/1502.03167) — Primary paper for BatchNorm's original motivation and empirical results.
+- [Layer Normalization](https://arxiv.org/abs/1607.06450) — Primary reference for batch-independent normalization in recurrent and sequence models.
+- [Delving Deep into Rectifiers: Surpassing Human-Level Performance on ImageNet Classification](https://arxiv.org/abs/1502.01852) — Primary reference for rectifier-aware initialization and deep CNN training practice.

@@ -128,11 +128,11 @@ spec:
 
 | Setting | Effect | Recommendation |
 |---------|--------|----------------|
-| `runAsNonRoot: true` | Prevent root user | Always |
+| `runAsNonRoot: true` | Prevent root user | Recommended in most cases |
 | `runAsUser: 1000` | Specific non-root UID | Recommended |
 | `readOnlyRootFilesystem: true` | Prevent writes to filesystem | Where possible |
-| `allowPrivilegeEscalation: false` | Prevent setuid/setgid | Always |
-| `capabilities.drop: [ALL]` | Remove all Linux capabilities | Always, then add needed |
+| `allowPrivilegeEscalation: false` | Prevent setuid/setgid | Recommended in most cases |
+| `capabilities.drop: [ALL]` | Remove all Linux capabilities | Drop all by default, then add needed |
 | `privileged: false` | Not a privileged container | Never use `true` |
 
 ### Linux Capabilities
@@ -169,13 +169,13 @@ containers:
 
 ## Did You Know?
 
-1. **Falco was created at Sysdig in 2016** and donated to CNCF in 2018. It was one of the first tools designed specifically for container runtime security and is now used by thousands of organizations.
+1. [**Falco was created at Sysdig in 2016** and donated to CNCF in 2018](https://www.cncf.io/announcements/2024/02/29/cloud-native-computing-foundation-announces-falco-graduation/). Falco is a CNCF runtime security project used to detect suspicious behavior in cloud native workloads.
 
-2. **The Linux capability system** has 41 distinct capabilities as of kernel 5.x. `CAP_SYS_ADMIN` alone grants about 30% of all privileged operations—which is why it's called "the new root."
+2. **The Linux capability system** has 41 distinct capabilities as of kernel 5.x. `CAP_SYS_ADMIN` is unusually broad, which is why it is often treated as "the new root."
 
-3. **The first major container escape (CVE-2019-5736)** in runc allowed attackers to overwrite the host's runc binary and escape any container. It affected Docker, Kubernetes, containerd, and more. Patching required updating the container runtime, not just Kubernetes.
+3. **CVE-2019-5736 in runc** allowed attackers to overwrite the host's `runc` binary and gain host-level access in affected environments, so remediation centered on patching the container runtime rather than only Kubernetes.
 
-4. **Network policies are not enforced by default** in Kubernetes. Without a CNI that supports them (like Calico, Cilium, or Weave), NetworkPolicy resources are silently ignored—a common misconfiguration.
+4. **Network policies are not enforced by default** in Kubernetes. [Without a CNI that supports them (like Calico, Cilium, or Weave), NetworkPolicy resources are silently ignored](https://kubernetes.io/docs/concepts/services-networking/network-policies/)—a common misconfiguration.
 
 ---
 
@@ -546,7 +546,7 @@ helm upgrade falco falcosecurity/falco \
 
 ## War Story: The Cryptominer at 3 AM
 
-An e-commerce company noticed their Kubernetes cluster costs had doubled overnight.
+A compromised workload can drive a sudden spike in cluster CPU usage and cost.
 
 **The Discovery:**
 
@@ -583,11 +583,11 @@ app   847  398   /tmp/xmrig --threads=4 --url=stratum+tcp://pool.minexmr.com
 
 **The Root Cause:**
 
-A vulnerable npm package allowed remote code execution. Attacker:
-1. Exploited the RCE
-2. Downloaded xmrig to /tmp
-3. Started mining cryptocurrency
-4. Company paid for compute, attacker got the crypto
+One common path to this kind of compromise is an application vulnerability or vulnerable dependency that enables code execution. Attacker:
+1. Gained code execution in the workload
+2. Dropped a miner or other unauthorized binary into a writable path
+3. Began abusing the workload's compute resources
+4. The defender absorbs the infrastructure cost while the attacker captures the benefit
 
 **The Fix:**
 
@@ -622,11 +622,11 @@ spec:
 ```
 
 **After implementing:**
-- Same attack attempt happened 2 weeks later
-- Falco detected in 15 seconds
-- Automatic alert to Slack
-- Pod killed before meaningful mining
-- Post-mortem: Found the vulnerable package, patched it
+- Similar repeat attempts are easier to catch once runtime controls are in place
+- Runtime detection can surface suspicious behavior quickly
+- Automated alerting can notify responders immediately
+- Rapid containment can limit the attacker's dwell time and resource abuse
+- Post-incident review should identify the root cause and feed remediation back into the build and deployment process
 
 ---
 
@@ -819,7 +819,7 @@ kubectl logs -n falco -l app=falco | grep "compromised-pod" > evidence/falco-ale
 |---------|---------|----------|
 | No network policies | All pods can talk to all pods | Default deny, explicit allow |
 | Running as root | Easy privilege escalation | `runAsNonRoot: true` |
-| Privileged containers | Full host access | Never use in production |
+| Privileged containers | Full host access | Avoid in production unless required |
 | No runtime detection | Attacks go unnoticed | Deploy Falco or similar |
 | Writable root filesystem | Malware can persist | `readOnlyRootFilesystem: true` |
 | All capabilities | Unnecessary privileges | `drop: [ALL]`, add only needed |
@@ -1204,3 +1204,11 @@ Continue to [Module 4.6: Security Culture and Automation](../module-4.6-security
 ---
 
 *"Prevention is ideal, detection is essential, response is mandatory."*
+
+## Sources
+
+- [CNCF Announces Falco Graduation](https://www.cncf.io/announcements/2024/02/29/cloud-native-computing-foundation-announces-falco-graduation/) — Confirms Falco's project history, including its Sysdig origins and CNCF milestones.
+- [Pod Security Standards](https://kubernetes.io/docs/concepts/security/pod-security-standards/) — Authoritative reference for the privileged, baseline, and restricted profiles discussed in the module.
+- [Network Policies](https://kubernetes.io/docs/concepts/services-networking/network-policies/) — Defines how Kubernetes NetworkPolicy works and when policy resources do or do not take effect.
+- [Seccomp and Kubernetes](https://kubernetes.io/docs/reference/node/seccomp/) — Explains seccomp profile types, inheritance rules, and runtime behavior for Kubernetes workloads.
+- [Falco](https://www.cncf.io/projects/falco/) — Provides the official CNCF project overview for Falco, which is central to the runtime detection portion of the module.

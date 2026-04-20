@@ -8,11 +8,11 @@ sidebar:
 
 **Prerequisites**: Module 49 (Data Versioning & Feature Stores)
 
-San Francisco. October 3, 2014. 3:17 AM. Maxime Beauchemin's phone buzzed with yet another critical alert. Airbnb's core pricing data pipeline had failed again. This time it was a massive cascade: the daily pricing model had not retrained because the feature engineering pipeline died unexpectedly, which happened because the upstream data validation job timed out entirely, which happened because of a silent database schema change. No one could trace the root cause without spending hours digging through disconnected bash scripts and scattered log files.
+Modern workflow orchestrators emerged partly in response to the operational pain of tracing failures across cron jobs, scripts, and upstream data dependencies.
 
-Beauchemin dragged himself to his laptop and started manually tracing the failure graph. Four hours later, he had finally traced the failure to a single upstream task that had silently failed two days prior. The ad-hoc cron job had not reported the error properly. No one knew until everything downstream collapsed, costing the business significant revenue due to stale pricing algorithms. "We are running a billion-dollar company on bash scripts and hope," he realized.
+Tracing failures across loosely coupled cron jobs can take hours, and stale ML outputs can affect the business before anyone notices.
 
-Over the next few months, Beauchemin engineered a fundamentally different approach: a robust system where tasks explicitly declared their dependencies, where failures triggered immediate alerts, and where engineers could visualize the entire pipeline execution at a glance. He called it "Airflow," and Airbnb open-sourced it in 2015. Today, it orchestrates ML pipelines at scale across the industry. That 3 AM wake-up call spawned an entire discipline of workflow orchestration, proving that manual cron jobs are a liability when real financial impact is at stake.
+Over the next few months, Beauchemin engineered a fundamentally different approach: a robust system where tasks explicitly declared their dependencies, where failures triggered immediate alerts, and where engineers could visualize the entire pipeline execution at a glance. He called it "Airflow," and [Airbnb open-sourced it in 2015](https://airflow.apache.org/docs/apache-airflow/stable/project.html). Today, Airflow is widely used for workflow orchestration, and its history illustrates why teams move away from ad-hoc cron-based pipelines as systems grow more critical.
 
 ---
 
@@ -33,9 +33,9 @@ By the end of this module, you will be able to:
 
 Before dedicated orchestration tools, teams ran ML pipelines with cron jobs and bash scripts. This worked for simple pipelines, but as companies grew, the limitations became painful. The lack of standardized dependency management meant scripts had to arbitrarily sleep and guess when upstream data would be ready.
 
-> **Did You Know?** In 2013, LinkedIn's data team maintained over 10,000 cron jobs across dozens of servers. Engineers spent 30% of their time just debugging scheduling conflicts and mysterious failures.
+> **Did You Know?** Large engineering organizations historically accumulated many cron jobs, and debugging them became a significant operational burden.
 
-The core problems of the cron era were universal across all engineering teams:
+The core problems of the cron era were common across many engineering teams:
 - **No dependency management**: Cron does not natively know that job A must finish successfully before job B starts.
 - **No visibility**: You could not see what was running, what failed, or why without logging into servers.
 - **No retries**: Failures meant manual intervention or complete data loss.
@@ -43,31 +43,31 @@ The core problems of the cron era were universal across all engineering teams:
 
 ### The Birth of Modern Orchestration (2014-2016)
 
-**Airflow emerges at Airbnb (2014)**. Maxime Beauchemin's frustration became the industry's solution. Key innovations included expressing DAGs as pure Python code, explicit dependency management, a rich UI visualization, and extensible operator classes. Airbnb open-sourced it in 2015, and it rapidly became the defacto industry standard.
+**Airflow emerges at Airbnb (2014)**. Maxime Beauchemin's frustration became the industry's solution. Key innovations included [expressing DAGs as pure Python code, explicit dependency management, a rich UI visualization, and extensible operator classes](https://airflow.apache.org/docs/apache-airflow/1.10.1/index.html). Airbnb open-sourced it in 2015, and it rapidly became the defacto industry standard.
 
-> **Did You Know?** Airflow was named after the HVAC concept because Beauchemin saw pipelines like air ducts. It almost launched as "Dataflow" before Google trademarked the term.
+> **Did You Know?** Airflow's name has its own project lore, but the important point is that it emerged as a Python-based alternative to ad-hoc scheduling.
 
-**Oozie at Yahoo (2010-2014)**. The Hadoop ecosystem's answer to orchestration was Oozie. It was an XML-based, highly verbose orchestrator. While incredibly reliable at scale, the sheer pain of writing XML configurations made teams desperate for the elegance of Python-based tools like Airflow.
+**Apache Oozie**. [Oozie was a Hadoop workflow engine that defined workflows in XML and managed dependent jobs](https://oozie.apache.org/docs/5.2.0/DG_Overview.html).
 
 ### The Kubernetes Revolution (2017-2020)
 
 As ML workflows transitioned to containerized environments, orchestration tools had to adapt natively to Kubernetes primitives:
 
-**Kubeflow (2017)**: Google open-sourced their internal ML toolkit for Kubernetes. Finally, data scientists could request GPUs without understanding node affinity or taints.
+**Kubeflow**: [Kubeflow is an open-source toolkit for building and running machine learning workflows on Kubernetes](https://github.com/kubeflow/pipelines).
 
-> **Did You Know?** The initial Kubeflow release required 40 YAML files to deploy a single model training job. By version 1.0 in 2020, a single decorator could achieve the same deployment.
+> **Did You Know?** Early Kubernetes-based ML tooling often required substantial YAML and operational setup before higher-level SDKs improved the developer experience.
 
-**Argo Workflows (2017)**: YAML-native Kubernetes workflows gained massive popularity. By removing Python from the orchestration layer, infrastructure teams could define pipelines in the exact same language they used for their standard cluster deployments.
+**Argo Workflows**: [Argo Workflows is a Kubernetes-native workflow engine that defines containerized workflows declaratively](https://argoproj.github.io/workflows/).
 
 ### The Modern Era (2020-Present)
 
 The latest evolution of orchestration tools acknowledges that machine learning code is inherently different from standard web application code.
 
-**Prefect**: Rewrote orchestration from scratch with a "Python-native" philosophy. Flows are just decorated Python functions—no strict DAG boilerplate is required.
-**Dagster**: Introduced "Software-Defined Assets." Instead of thinking about what tasks you run, you think about what data you produce.
+**Prefect**: Takes a Python-native approach to orchestration. Flows are regular Python functions decorated with `@flow` and `@task`, rather than a separate workflow DSL.
+**Dagster**: Introduced "[Software-Defined Assets](https://github.com/dagster-io/dagster)." Instead of thinking about what tasks you run, you think about what data you produce.
 **n8n**: Visual workflow automation for the AI era. Non-programmers can build RAG pipelines by dragging and connecting nodes visually.
 
-> **Did You Know?** n8n was created by Jan Oberhauser in Berlin in 2019. It raised $12 million in Series A funding in 2022 and has become the leading self-hosted visual automation tool.
+> **Did You Know?** [n8n is a visual automation platform with native AI capabilities and self-hosting options](https://github.com/n8n-io/n8n).
 
 ---
 
@@ -93,9 +93,9 @@ Ad-hoc scheduling                 Intelligent scheduling
 
 | Without Orchestration | With Airflow |
 |-----------------------|--------------|
-| 4 hours/week debugging cron | 1 hour/week pipeline maintenance |
-| $50K/month in pricing errors | $5K/month (90% reduction) |
-| 3 engineers on-call rotation | 1 engineer with auto-alerting |
+| Significant time spent debugging cron jobs | Lower maintenance overhead with centralized orchestration |
+| Revenue can be affected by stale or failed ML pipelines | Better validation and orchestration can reduce operational mistakes |
+| Heavier manual on-call burden | Less manual intervention with alerting and automation |
 | Manual retraining triggers | Automatic daily retraining |
 
 > **Pause and predict**: If your feature engineering task is not strictly idempotent and fails halfway through, what specific data corruption occurs when the orchestrator automatically retries the task after a transient network failure?
@@ -174,7 +174,7 @@ graph TD
 
 ### What is Airflow?
 
-Airflow is the industry standard for workflow orchestration. It lets you define workflows explicitly as code (DAGs - Directed Acyclic Graphs), schedule them dynamically, and monitor their execution via a comprehensive user interface.
+Airflow is a widely used workflow orchestrator that lets you [define workflows as code, schedule them, and monitor them through a web UI](https://airflow.apache.org/docs/apache-airflow/1.10.1/index.html).
 
 ```text
 AIRFLOW ARCHITECTURE
@@ -283,7 +283,7 @@ with DAG(
 
 ### ML-Specific Patterns in Airflow
 
-Machine learning pipelines frequently require dynamic branching depending on the quality of a trained model. If the accuracy drops below an established threshold, the deployment task should be skipped. Airflow's TaskFlow API, introduced heavily in version 2.0, simplifies passing context between these dynamic branches.
+Machine learning pipelines frequently require dynamic branching depending on the quality of a trained model. If the accuracy drops below an established threshold, the deployment task should be skipped. [Airflow's TaskFlow API, introduced heavily in version 2.0, simplifies passing context between these dynamic branches](https://airflow.apache.org/docs/apache-airflow/stable/tutorial/taskflow.html).
 
 ```python
 from airflow.decorators import dag, task
@@ -382,7 +382,7 @@ ml_pipeline = ml_pipeline_with_branching()
 
 ### Why This Module Matters
 
-Kubeflow Pipelines is strictly designed for orchestrating ML workloads natively on Kubernetes. Think of Kubeflow like an automated factory assembly line where each independent station (container) has highly specialized hardware equipment. The data processing station has different tools than the massive GPU-enabled model training station, but they all connect seamlessly via shared artifact storage. 
+Kubeflow Pipelines is strictly designed for [orchestrating ML workloads natively on Kubernetes](https://github.com/kubeflow/pipelines). Think of Kubeflow like an automated factory assembly line where each independent station (container) has highly specialized hardware equipment. The data processing station has different tools than the massive GPU-enabled model training station, but they all connect seamlessly via shared artifact storage. 
 
 Kubeflow is absolutely critical for:
 - Massively distributed GPU-intensive training jobs.
@@ -583,7 +583,7 @@ compiler.Compiler().compile(
 
 ### Why n8n?
 
-n8n represents the pinnacle of visual workflow automation tools that have been explicitly adapted for artificial intelligence applications. Imagine n8n like building logic with complex LEGO blocks—each block (referred to as a node) performs a highly specific function, and you string them together visually to create massive AI workflow backends. Non-programmers, such as business analysts, can easily construct scalable RAG pipelines, internal chatbot backend systems, and extensive document processors by simply dragging and connecting these nodes. Meanwhile, developers can still write complex Python or JavaScript code inside custom logic blocks when specialized manipulation is required.
+n8n is a visual workflow automation platform that includes AI-oriented integrations and self-hosting options. Imagine n8n like building logic with complex LEGO blocks—each block (referred to as a node) performs a highly specific function, and you string them together visually to create massive AI workflow backends. Non-programmers, such as business analysts, can easily construct scalable RAG pipelines, internal chatbot backend systems, and extensive document processors by simply dragging and connecting these nodes. Meanwhile, [developers can still write complex Python or JavaScript code inside custom logic blocks](https://github.com/n8n-io/n8n) when specialized manipulation is required.
 
 ```text
 n8n FOR AI WORKFLOWS
@@ -631,7 +631,7 @@ flowchart LR
 
 ### n8n Workflow Example (JSON)
 
-Behind the visual UI, n8n pipelines are natively stored as massive JSON documents. This makes them perfectly suited for standard Git version control.
+Behind the visual UI, n8n pipelines are natively stored as massive JSON documents. This also makes them straightforward to export and track in Git.
 
 ```json
 {
@@ -691,7 +691,7 @@ Behind the visual UI, n8n pipelines are natively stored as massive JSON document
 
 ### Prefect: Python-Native Workflows
 
-Prefect represents a severe paradigm shift away from traditional orchestrators. It is architected to be completely Pythonic. You do not need to rewrite your data science logic to fit within specialized operator classes; instead, you merely decorate your standard Python functions with `@task` and `@flow`.
+Prefect represents a severe paradigm shift away from traditional orchestrators. It is architected to be completely Pythonic. You do not need to rewrite your data science logic to fit within specialized operator classes; instead, you merely [decorate your standard Python functions with `@task` and `@flow`](https://github.com/PrefectHQ/prefect).
 
 ```python
 from prefect import flow, task
@@ -762,7 +762,7 @@ Modern UI                            Classic UI
 
 ### Dagster: Asset-Based Pipelines
 
-Dagster takes an entirely different architectural approach: instead of explicitly defining tasks that mutate state, you strictly define "assets" (the data structures you aim to produce). Think of the functional difference like cooking food in a kitchen. Airflow operates like a highly sequential recipe that demands "chop the carrots, then aggressively sauté them, then serve them"—it focuses solely on the execution steps. Conversely, Dagster operates like declaring the finished meal—"we require chopped carrots, we require sautéed vegetables, we require a served dish"—and the orchestration engine automatically calculates and figures out the precise computational steps to construct each declared asset.
+Dagster takes an entirely different architectural approach: instead of explicitly defining tasks that mutate state, [you strictly define "assets" (the data structures you aim to produce)](https://github.com/dagster-io/dagster). Think of the functional difference like cooking food in a kitchen. Airflow operates like a highly sequential recipe that demands "chop the carrots, then aggressively sauté them, then serve them"—it focuses solely on the execution steps. Conversely, Dagster operates like declaring the finished meal—"we require chopped carrots, we require sautéed vegetables, we require a served dish"—and the orchestration engine automatically calculates and figures out the precise computational steps to construct each declared asset.
 
 ```python
 from dagster import asset, AssetExecutionContext, Definitions
@@ -886,7 +886,7 @@ graph TD
 
 ## Temporal: Durable Execution
 
-Temporal is profoundly different from typical task-based batch orchestrators. It is architected exclusively for long-running, highly reliable workloads that fundamentally must survive catastrophic infrastructure failures. Think of Temporal exactly like a legal notary that explicitly records every minuscule step of a complex business process into an append-only event log. If the data center completely loses power midway through processing a signature, when the servers come back online, the system parses the exact event log. The notary knows precisely which documents were signed and which were left blank—absolutely zero data is lost, and the execution engine resumes from the exact millisecond where it halted. This principle of "durable execution" is exactly why Temporal is utilized for mission-critical machine learning pipelines that cannot afford the financial cost of restarting a massive distributed training loop from scratch.
+Temporal is designed for [durable, long-running workflows that preserve workflow state across failures and resume execution without restarting the entire process from scratch](https://github.com/temporalio/temporal/blob/main/docs/architecture/README.md).
 
 ```python
 from temporalio import activity, workflow
@@ -1280,7 +1280,7 @@ Every professional orchestrator provides granular task logs. Engineers must know
 
 ### Step 3: Reproduce Locally
 
-The fastest debugging cycles happen entirely locally. To diagnose effectively, extract the isolated failing task's core logic and execute it as a standalone script:
+The fastest debugging cycles usually happen locally. To diagnose effectively, extract the isolated failing task's core logic and execute it as a standalone script:
 
 ```python
 # Instead of running the whole pipeline
@@ -1305,7 +1305,7 @@ if __name__ == "__main__":
 
 ### Step 4: Check Data Assumptions
 
-Historically, the vast majority of ML pipeline failures are pure data issues. Aggressively validate assumptions:
+Data issues are a common source of ML pipeline failures, so teams should validate assumptions explicitly during debugging:
 
 ```python
 def data_health_check(df: pd.DataFrame, context: str) -> None:
@@ -1346,7 +1346,7 @@ def process_batch(batch_id: str):
     # ... your logic
 ```
 
-This exceptionally simple pattern has saved countless engineering hours. When something violently fails, you immediately know the raw resource state when it initially started. Senior engineers at major cloud companies explicitly swear by this approach—they estimate it cuts initial operational debugging time heavily because you never have to blindly guess what environment the task actually ran in or what limited resources were available during the failure.
+This exceptionally simple pattern has saved countless engineering hours. When something violently fails, you can quickly see the raw resource state when it initially started. This simple pattern can shorten debugging by recording execution context at task start, which makes later failures easier to interpret.
 
 **"The Checkpoint Pattern"**
 
@@ -1396,16 +1396,16 @@ def safe_transform(data_path: str):
 
 ## Production War Stories
 
-### The Two Million Dollar Silent Failure (2019)
+### Silent Failure Scenario
 
-A major international fintech company executed their massive daily fraud detection model retraining exclusively on Apache Airflow. One day, the critical upstream data extraction task failed completely silently—it successfully returned an empty Pandas DataFrame without raising a Python exception. 
+A production ML pipeline can fail silently if an upstream extraction step returns empty data without raising an exception.
 
 Because the orchestrator registered a successful zero-exit code, the pipeline continued merrily executing:
 - The complex feature engineering task efficiently processed exactly zero rows (reporting zero errors).
-- The model training algorithm brilliantly fit parameters on zero samples (technically a valid matrix operation).
+- The model training stage attempted to run on an empty dataset and produced an unusable result.
 - The deployment stage happily pushed the empty "model" artifact to the production inference cluster.
 
-For exactly three days, the primary fraud model accurately predicted a 0% fraud probability for absolutely everyone. A catastrophic $2 million in deeply fraudulent transactions sailed through before a human engineer finally noticed the drastic anomaly.
+If empty data reaches production, a fraud model can become dangerously ineffective until engineers spot the anomaly.
 
 **Lesson learned**: You must add strict, explicit data validation tasks with absolute row count checks and raise aggressive exceptions on empty data.
 
@@ -1420,13 +1420,13 @@ def validate_data(df: pd.DataFrame) -> pd.DataFrame:
     return df
 ```
 
-### The Circular Dependency Nightmare (2020)
+### Circular Dependency Scenario
 
-An ambitious ML team at a major logistics corporation meticulously built an elaborate Apache Airflow deployment containing over 50 different DAGs. Over time, different engineering teams added complex cross-DAG operational dependencies utilizing external sensors. Absolutely nobody comprehensively documented them.
+Large Airflow deployments can accumulate poorly documented cross-DAG dependencies that become difficult to reason about over time.
 
-One day, a seemingly completely unrelated parameter change broke everything catastrophically: DAG A waited endlessly for DAG B, which waited for DAG C, which waited for DAG A. Classic distributed deadlock. But because the strict dependencies spanned across multiple independent DAGs, the Airflow UI tragically showed everything as "running normally" while absolutely nothing was processing.
+Circular dependencies between DAGs can create deadlocks where the UI appears healthy even though no useful work is progressing.
 
-It required four days and a full pipeline source audit to untangle the mess. The company lost nearly $400,000 in critically delayed shipment logistics optimizations.
+Untangling undocumented dependency loops can take days and materially delay downstream business processes.
 
 **Lesson learned**: Explicitly document all cross-DAG dependencies architecturally.
 
@@ -1438,8 +1438,8 @@ It required four days and a full pipeline source audit to untangle the mess. The
 |---|---|---|
 | Hardcoding absolute configurations | Requires full code deployments just to change basic hyperparameters | Use parameterized config dictionaries or external parameter stores |
 | Refusing to implement idempotency | Retrying failed tasks corrupts the database by blindly duplicating writes | Implement strict upsert patterns and completely drop existing partitions before inserting new data |
-| Passing large DataFrames through Airflow XCom | Bloats the metadata database enormously and causes violent worker memory exhaustion | Save data exclusively to object storage (S3) and pass only the lightweight file path URI string |
-| Ignoring explicit timezone configurations | Causes sensitive tasks to silently run at unintended local times (e.g., during peak web traffic hours) | Standardize purely on UTC globally and explicitly define timezone aware executions |
+| Passing large DataFrames through Airflow XCom | XComs are intended for small serializable values, not large datasets such as DataFrames | Save data exclusively to object storage (S3) and pass only the lightweight file path URI string |
+| Ignoring explicit timezone configurations | Inconsistent timezone handling can cause schedules to run at unintended times, especially around DST changes | Standardize purely on UTC globally and explicitly define timezone aware executions |
 | Severe lack of rigorous data quality gates | Upstream bad data silently trains and deploys garbage models into live production | Implement rigid row count, strict null check, and comprehensive schema validation tasks upfront |
 | Infinite execution retries without backoff | Unintentionally slams recovering downstream APIs and severely exacerbates ongoing outages | Set explicit maximum task retries and enforce exponential backoff delays across all workers |
 
@@ -1587,7 +1587,7 @@ def train_model():
     pass
 ```
 
-The fundamental goal is never purely zero failures—it is extremely fast detection, reliable automatic recovery, and minimizing the necessity of manual human intervention at 3 AM."
+The fundamental goal is not purely zero failures—it is extremely fast detection, reliable automatic recovery, and minimizing the necessity of manual human intervention at 3 AM."
 
 ---
 
@@ -1597,12 +1597,12 @@ The fundamental goal is never purely zero failures—it is extremely fast detect
 
 | Approach | Monthly Cost | Hidden Costs | Best For |
 |----------|-------------|--------------|----------|
-| Managed Airflow (MWAA) | $500-2,000 | Low ops overhead | AWS shops, medium scale |
-| Self-hosted Airflow | $200-500 (compute) | High ops overhead | Large teams, customization needs |
-| Prefect Cloud | $0-1,200 | Minimal | Fast-moving teams |
-| Dagster Cloud | $0-2,000 | Minimal | Data-centric teams |
-| Kubeflow (self-hosted) | $300-1,000 | K8s expertise required | GPU-heavy ML teams |
-| Temporal Cloud | $200-5,000 | Workflow complexity | Long-running workflows |
+| Managed Airflow (MWAA) | Pricing varies with environment size and usage | Lower day-to-day ops overhead than self-hosting | Teams already standardized on AWS |
+| Self-hosted Airflow | Infrastructure cost varies by scale and architecture | Higher ops overhead | Teams that need deeper customization and control |
+| Prefect Cloud | Pricing varies by plan and workload | Lower platform management overhead | Teams that want a managed Prefect control plane |
+| Dagster Cloud | Pricing varies by plan and workload | Lower platform management overhead | Data-centric teams that want managed Dagster services |
+| Kubeflow (self-hosted) | Cost depends heavily on cluster size and GPU usage | Kubernetes expertise required | Teams running Kubernetes-native ML platforms |
+| Temporal Cloud | Pricing varies by workload shape and scale | Added workflow-modeling complexity | Long-running, durable workflow use cases |
 
 ### The Real Cost Formula
 
@@ -2031,7 +2031,7 @@ defs = Definitions(
 <details>
 <summary>4. Scenario: Your highly-regulated machine learning verification pipeline inevitably involves a multi-day neural network training step explicitly followed by a mandatory manual human-in-the-loop compliance approval step. If the underlying Kubernetes bare-metal node randomly reboots during exactly day two, the critical workflow must aggressively resume exactly where it precipitously crashed. Which tool is strictly architecturally required?</summary>
 
-**Answer:** Temporal is distinctly the only tool currently listed that consistently provides true durable computational execution uniquely capable of seamlessly handling this precise catastrophic scenario. Traditional operational orchestrators like Apache Airflow will predictably mark a running task as fatally failed if the underlying isolated worker suddenly dies, immediately requiring a devastating full execution retry of that specific massive task. Temporal deliberately saves the exact executing state of the complex workflow continuously into its highly resilient event history.
+**Answer:** Temporal is distinctly the only tool currently listed that consistently provides true durable computational execution uniquely capable of seamlessly handling this precise catastrophic scenario. Traditional operational orchestrators like Apache Airflow will usually mark a running task as failed if the underlying isolated worker suddenly dies, often requiring a full execution retry of that specific massive task. Temporal deliberately saves the exact executing state of the complex workflow continuously into its highly resilient event history.
 </details>
 
 <details>
@@ -2075,3 +2075,17 @@ Modern Teams         → Prefect, Dagster
 ## Next Steps
 
 [Module 51](/ai-ml-engineering/mlops/module-1.9-model-serving/) will meticulously cover Model Deployment & Serving Patterns, aggressively including FastAPI endpoints, optimized gRPC servers, rolling canary deployments, and extensive A/B testing infrastructure designed explicitly for Kubernetes environments.
+
+## Sources
+
+- [Apache Airflow Project History](https://airflow.apache.org/docs/apache-airflow/stable/project.html) — Official project history covering Airflow's origins and open-source timeline.
+- [Apache Airflow 1.10.1 Documentation](https://airflow.apache.org/docs/apache-airflow/1.10.1/index.html) — Primary documentation for Airflow concepts such as DAGs, dependencies, operators, scheduling, and the web UI.
+- [Apache Oozie Overview](https://oozie.apache.org/docs/5.2.0/DG_Overview.html) — Official overview of Oozie's XML-defined workflow model and Hadoop job orchestration.
+- [Kubeflow Pipelines README](https://github.com/kubeflow/pipelines) — Primary overview of Kubeflow Pipelines as a Kubernetes-oriented ML workflow platform.
+- [Argo Workflows Documentation](https://argoproj.github.io/workflows/) — Official documentation for Argo's Kubernetes-native, declarative workflow engine.
+- [Dagster README](https://github.com/dagster-io/dagster) — Primary project overview describing Dagster's software-defined asset approach.
+- [n8n README](https://github.com/n8n-io/n8n) — Primary overview of n8n's workflow automation, AI features, self-hosting, and code extensibility.
+- [Airflow TaskFlow Tutorial](https://airflow.apache.org/docs/apache-airflow/stable/tutorial/taskflow.html) — Official TaskFlow reference for Python-first task composition and data passing in Airflow 2.x.
+- [Prefect README](https://github.com/PrefectHQ/prefect) — Primary overview of Prefect's Python `@flow` and `@task` workflow model.
+- [Temporal Architecture Overview](https://github.com/temporalio/temporal/blob/main/docs/architecture/README.md) — Primary architecture reference for Temporal's durable execution and failure-recovery model.
+- [Airflow XComs Documentation](https://airflow.apache.org/docs/apache-airflow/stable/core-concepts/xcoms.html) — Official guidance that XComs are for small, serializable values exchanged between tasks.

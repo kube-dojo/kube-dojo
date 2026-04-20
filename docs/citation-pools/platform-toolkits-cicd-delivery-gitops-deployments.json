@@ -1,0 +1,93 @@
+{
+  "section": "platform/toolkits/cicd-delivery/gitops-deployments",
+  "modules": [
+    "platform/toolkits/cicd-delivery/gitops-deployments/module-2.1-argocd",
+    "platform/toolkits/cicd-delivery/gitops-deployments/module-2.2-argo-rollouts",
+    "platform/toolkits/cicd-delivery/gitops-deployments/module-2.3-flux",
+    "platform/toolkits/cicd-delivery/gitops-deployments/module-2.4-helm-kustomize"
+  ],
+  "generated_at": "2026-04-20T20:42:34+00:00",
+  "batch_count": 1,
+  "fallback_used": false,
+  "sources": [
+    {
+      "source_id": "S001",
+      "url": "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/",
+      "title": "Kubernetes Deployments",
+      "tier": "standards",
+      "scope_notes": "Primary source for native Deployment rolling updates, rollout behavior, rollback semantics, ReplicaSets, and why progressive delivery tools extend default Kubernetes rollout mechanics.",
+      "relevant_modules": [
+        "platform/toolkits/cicd-delivery/gitops-deployments/module-2.2-argo-rollouts"
+      ]
+    },
+    {
+      "source_id": "S002",
+      "url": "https://argo-cd.readthedocs.io/en/stable/operator-manual/architecture/",
+      "title": "Argo CD Architectural Overview",
+      "tier": "upstream",
+      "scope_notes": "Backs Argo CD component architecture and responsibilities such as API server, repository server, application controller, Git polling/reconciliation, sync, rollback, auth delegation, and RBAC enforcement.",
+      "relevant_modules": [
+        "platform/toolkits/cicd-delivery/gitops-deployments/module-2.1-argocd"
+      ]
+    },
+    {
+      "source_id": "S003",
+      "url": "https://argo-cd.readthedocs.io/en/stable/operator-manual/applicationset/",
+      "title": "Argo CD ApplicationSet Introduction",
+      "tier": "upstream",
+      "scope_notes": "Backs multi-cluster and multi-application GitOps claims, cluster and Git generators, monorepo usage, ApplicationSet controller behavior, and the fact that ApplicationSet is bundled with Argo CD from v2.3 onward.",
+      "relevant_modules": [
+        "platform/toolkits/cicd-delivery/gitops-deployments/module-2.1-argocd"
+      ]
+    },
+    {
+      "source_id": "S004",
+      "url": "https://argo-cd.readthedocs.io/en/stable/operator-manual/rbac/",
+      "title": "Argo CD RBAC Configuration",
+      "tier": "upstream",
+      "scope_notes": "Backs security and access-control claims around Argo CD RBAC, SSO group mapping, AppProject roles, built-in roles, and policy-based restrictions.",
+      "relevant_modules": [
+        "platform/toolkits/cicd-delivery/gitops-deployments/module-2.1-argocd"
+      ]
+    },
+    {
+      "source_id": "S005",
+      "url": "https://argo-rollouts.readthedocs.io/en/stable/features/analysis/",
+      "title": "Argo Rollouts Analysis and Progressive Delivery",
+      "tier": "upstream",
+      "scope_notes": "Backs canary and blue-green rollout behavior, AnalysisTemplate and AnalysisRun CRDs, Prometheus-driven automated analysis, abort conditions, experiments, and progressive delivery control beyond native Deployments.",
+      "relevant_modules": [
+        "platform/toolkits/cicd-delivery/gitops-deployments/module-2.2-argo-rollouts"
+      ]
+    },
+    {
+      "source_id": "S006",
+      "url": "https://helm.sh/docs/topics/charts/",
+      "title": "Helm Charts",
+      "tier": "upstream",
+      "scope_notes": "Backs Helm chart structure, Chart.yaml, values.yaml, templates, dependencies, chart packaging, chart types, and general claims about how Helm models reusable Kubernetes application packages.",
+      "relevant_modules": [
+        "platform/toolkits/cicd-delivery/gitops-deployments/module-2.1-argocd",
+        "platform/toolkits/cicd-delivery/gitops-deployments/module-2.3-flux",
+        "platform/toolkits/cicd-delivery/gitops-deployments/module-2.4-helm-kustomize"
+      ]
+    }
+  ],
+  "rejected_urls": [
+    {
+      "url": "https://fluxcd.io/flux/components/",
+      "reason": "network_failure",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://fluxcd.io/flux/components/image/",
+      "reason": "network_failure",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/",
+      "reason": "network_failure",
+      "at_step": "section_source_discovery"
+    }
+  ]
+}

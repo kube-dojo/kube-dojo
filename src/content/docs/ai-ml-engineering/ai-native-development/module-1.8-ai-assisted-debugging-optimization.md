@@ -27,7 +27,7 @@ By the end of this module, you will:
 
 ## The AI-Assisted Debugging Mental Model
 
-Artificial intelligence is not a magic wand that fixes your code while you sleep. It is an indefatigable debugging consultant. It has read millions of stack traces, understands the intricacies of obscure frameworks, and never suffers from cognitive fatigue. However, it cannot run your application, it does not understand your unique business logic, and it is prone to hallucinating plausible but incorrect fixes if given inadequate context.
+Artificial intelligence is not a magic wand that fixes your code while you sleep. It is an indefatigable debugging consultant. It has been trained on vast numbers of stack traces, can often reason about obscure frameworks, and does not suffer from human cognitive fatigue. However, it cannot run your application, it does not understand your unique business logic, and it is prone to hallucinating plausible but incorrect fixes if given inadequate context.
 
 The professional developer treats the AI as a junior peer: providing comprehensive context, challenging its assumptions, and exhaustively verifying its outputs.
 
@@ -289,7 +289,7 @@ def process_data(data):
 
 ### Step 4: Prevent Recurrence
 
-Once the fix is validated, you must write automated tests to ensure the bug never returns. A bug fix without a regression test is merely a temporary patch.
+Once the fix is validated, you must write automated tests to help ensure the bug does not return. A bug fix without a regression test is merely a temporary patch.
 [CODE-6]
 ```python
 def test_process_user_handles_none():
@@ -739,21 +739,21 @@ git bisect good abc123  # Last known good commit
 
 Modern applications are distributed, running across hundreds of cloud instances. You must incorporate Kubernetes troubleshooting tools into your AI debugging workflows.
 
-When debugging live workloads in Kubernetes, the `kubectl debug` command is your primary tool. It supports debugging workflows for workloads and nodes, including creating pod copies, injecting ephemeral containers, and instantiating node-host-namespace debug pods.
+When debugging live workloads in Kubernetes, the `kubectl debug` command is your primary tool. It supports debugging workflows for workloads and nodes, including [creating pod copies, injecting ephemeral containers, and instantiating node-host-namespace debug pods](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_debug/).
 
 > **Stop and think**: If an application container is stripped of its shell (a distroless image), how do you run diagnostic commands inside the pod?
 
-The solution is Ephemeral Containers. To attach a debugging container to a running pod, you might use a command like `kubectl debug -f pod.yaml`. Note that using this specific YAML workflow requires the `EphemeralContainers` feature to be enabled. Ephemeral containers reached a `stable` feature-state in Kubernetes v1.25, having graduated from beta in v1.23.
+The solution is Ephemeral Containers. To attach a debugging container to a running pod, you might use a command like `kubectl debug -f pod.yaml`. Note that using this specific YAML workflow [requires the `EphemeralContainers` feature to be enabled](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_debug/). Ephemeral containers reached a `stable` feature-state in Kubernetes v1.25, having graduated from beta in v1.23.
 
-If you need to debug the underlying node, remember that debugging nodes with `kubectl` requires a cluster server version of at least 1.2.
+If you need to debug the underlying node, remember that debugging nodes with `kubectl` [requires a cluster server version of at least 1.2](https://kubernetes.io/docs/tasks/debug/debug-cluster/kubectl-node-debug/).
 
-Kubernetes v1.35 introduced a powerful capability for AI-assisted debugging: structured, machine-parseable debugging z-page responses for control-plane endpoints to support automated tooling. This structured z-page output in Kubernetes 1.35 is enabled via `Accept` headers and returns versioned JSON responses (for example, targeting `statusz` with API version fields such as `Accept: application/json;v=v1alpha1;g=config.k8s.io;as=Statusz`). You can pass these JSON blobs directly into an AI model for rapid control-plane diagnostics.
+Kubernetes v1.35 introduced a powerful capability for AI-assisted debugging: structured, machine-parseable debugging z-page responses for control-plane endpoints to support automated tooling. This [structured z-page output in Kubernetes 1.35 is enabled via `Accept` headers and returns versioned JSON responses](https://kubernetes.io/docs/reference/instrumentation/zpages/) (for example, targeting `statusz` with API version fields such as `Accept: application/json;v=v1alpha1;g=config.k8s.io;as=Statusz`). You can pass these JSON blobs directly into an AI model for rapid control-plane diagnostics.
 
 ### Profiling Kubernetes Workloads
 
-To gather performance context before asking an AI for optimizations, you might use `kubectl top`. However, `kubectl top` requires the Metrics Server to be installed and running in the cluster.
+To gather performance context before asking an AI for optimizations, you might use `kubectl top`. However, [`kubectl top` requires the Metrics Server to be installed and running in the cluster](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_top).
 
-Be aware of its limitations: The Kubernetes Metrics Server is intended for autoscaling pipelines (like HPA and VPA) and is not a replacement for full monitoring systems. In its documented configuration, it collects resource metrics every 15 seconds and positions itself purely as a lightweight component for autoscaling. Furthermore, `kubectl top pod` output can be unavailable for a few minutes after Pod creation due to metrics pipeline delay.
+Be aware of its limitations: [The Kubernetes Metrics Server is intended for autoscaling pipelines (like HPA and VPA) and is not a replacement for full monitoring systems. In its documented configuration, it collects resource metrics every 15 seconds](https://github.com/kubernetes-sigs/metrics-server) and positions itself purely as a lightweight component for autoscaling. Furthermore, [`kubectl top pod` output can be unavailable for a few minutes after Pod creation due to metrics pipeline delay](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_top/kubectl_top_pod/).
 
 ## Debugging AI Tooling Integrations
 
@@ -766,13 +766,13 @@ OpenAI models its tool calling via a five-step flow:
 4. Send the output back to the model.
 5. Receive the final response.
 
-To prevent formatting errors, ensure you use OpenAI's strict-mode function calling, which relies on structured outputs and enforces schema adherence for tool arguments.
+To prevent formatting errors, ensure you use OpenAI's [strict-mode function calling, which relies on structured outputs and enforces schema adherence for tool arguments](https://platform.openai.com/docs/guides/function-calling?api-mode=respon).
 
 As you build these integrations, note that the OpenAI Assistants API is deprecated and scheduled for shutdown on 2026-08-26. You must migrate to the Responses/Conversations APIs.
 
-OpenAI announced in May 2025 that the Responses API now supports remote Model Context Protocol (MCP) servers, image generation, the code interpreter, and improved file search tooling across major model families (including GPT-4o, GPT-4.1, and the o-series). If you are building documentation tools, OpenAI documents a public MCP server at `https://developers.openai.com/mcp` for read-only documentation access.
+OpenAI announced in May 2025 that the [Responses API now supports remote Model Context Protocol (MCP) servers, image generation, the code interpreter, and improved file search tooling across major model families (including GPT-4o, GPT-4.1, and the o-series)](https://openai.com/index/new-tools-and-features-in-the-responses-api/). If you are building documentation tools, OpenAI documents a [public MCP server at `https://developers.openai.com/mcp` for read-only documentation access](https://platform.openai.com/docs/docs-mcp).
 
-If you are integrating search, note that the OpenAI web search tooling in Responses supports non-reasoning and agentic modes, but is not available for `gpt-5` with minimal reasoning and `gpt-4.1-nano` in this context.
+If you are integrating search, note that the [OpenAI web search tooling in Responses supports non-reasoning and agentic modes, but is not available for `gpt-5` with minimal reasoning and `gpt-4.1-nano` in this context](https://platform.openai.com/docs/guides/tools-web-search?api-mode=responses).
 
 ## Performance Optimization
 
@@ -1309,7 +1309,7 @@ def test_bug():
 
 ## War Stories and Lessons
 
-History provides brutal lessons about bugs that spiral out of control. The Morris Worm was the first major internet worm, causing millions in damages. It possessed a fundamental design flaw regarding its probability of reinfection.
+History provides brutal lessons about bugs that spiral out of control. The Morris Worm showed how an aggressively self-replicating network worm could overload systems across the early internet.
 [CODE-70]
 ```c
 // Pseudo-code of the bug
@@ -1387,10 +1387,10 @@ Check:
 
 ## Did You Know?
 
-- Rear Admiral Grace Hopper discovered the first literal computer bug—a moth trapped in a relay of the Harvard Mark II—on September 9 of the late nineteen-forties.
-- The Therac-25 radiation therapy machine delivered massive overdoses to patients between 1985 and 1987 due to a lethal race condition in its software.
+- One famous early computing anecdote involved a moth found in a relay of the Harvard Mark II, helping popularize the language of "bugs" and "debugging."
+- The Therac-25 accidents between 1985 and 1987 showed how software defects and weak safety engineering in medical systems can lead to lethal overdoses.
 - On August 1, 2012, the Knight Capital Group lost $460 million in exactly 45 minutes because a repurposed software flag accidentally triggered obsolete trading code.
-- The Mars Climate Orbiter, an interplanetary probe costing $125 million, was completely destroyed on September 23, 1999, solely due to a metric-to-imperial unit conversion error.
+- The Mars Climate Orbiter was lost in 1999 after a navigation failure involving incompatible English and metric units, becoming a classic lesson in interface contracts and verification.
 
 ## Knowledge Check
 
@@ -1416,7 +1416,7 @@ The migration is critical because the Assistants API is deprecated and scheduled
 
 <details>
 <summary>5. When applying AI to performance optimization, why is it considered an antipattern to supply an entire module and ask the AI to "make it faster"?</summary>
-Providing an entire module violates the principle of profiling first. It encourages premature optimization of code blocks that have minimal impact on execution time. You should always use a tool like `cProfile` to identify the bottleneck, then ask the AI to specifically optimize that precise function.
+Providing an entire module violates the principle of profiling first. It encourages premature optimization of code blocks that have minimal impact on execution time. You should usually use a tool like `cProfile` to identify the bottleneck, then ask the AI to specifically optimize that precise function.
 </details>
 
 <details>
@@ -1552,3 +1552,17 @@ python3 logic_bug.py
 **Module 1.9: Building with AI Coding Assistants**
 
 You have mastered the art of diagnosing failures and verifying algorithmic changes. In the next module, we will pivot to creation. You will learn how to orchestrate complex feature implementations utilizing AI pair-programming workflows, ensuring architectural integrity while drastically accelerating your development velocity.
+
+## Sources
+
+- [kubectl debug reference](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_debug/) — Official `kubectl debug` reference covering pod copies, ephemeral containers, and node-debug workflows.
+- [Debug Running Pods](https://kubernetes.io/docs/tasks/debug/debug-application/debug-running-pod/) — Kubernetes task guide with practical debugging patterns for running Pods and ephemeral containers.
+- [Debugging Kubernetes Nodes with Kubectl](https://kubernetes.io/docs/tasks/debug/debug-cluster/kubectl-node-debug/) — Kubernetes documentation for node-level debugging prerequisites and usage.
+- [Kubernetes zPages](https://kubernetes.io/docs/reference/instrumentation/zpages/) — Reference for structured z-page endpoints and negotiated response formats such as JSON output.
+- [kubectl top reference](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_top) — Official `kubectl top` reference describing its dependency on Metrics Server.
+- [Metrics Server](https://github.com/kubernetes-sigs/metrics-server) — Upstream project documentation explaining Metrics Server's autoscaling focus and default 15-second scrape interval.
+- [kubectl top pod reference](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_top/kubectl_top_pod/) — Kubernetes reference noting Pod metrics availability details and common timing caveats.
+- [OpenAI Function Calling Guide](https://platform.openai.com/docs/guides/function-calling?api-mode=respon) — Primary OpenAI guide for tool-calling flow, strict mode, and structured argument validation.
+- [New tools and features in the Responses API](https://openai.com/index/new-tools-and-features-in-the-responses-api/) — OpenAI announcement summarizing Responses API support for remote MCP servers, image generation, Code Interpreter, and file search.
+- [OpenAI Docs MCP](https://platform.openai.com/docs/docs-mcp) — OpenAI documentation for the public read-only MCP server used to access developer docs.
+- [OpenAI Web Search Guide](https://platform.openai.com/docs/guides/tools-web-search?api-mode=responses) — OpenAI guide for Responses web-search tool behavior, supported modes, and model availability constraints.

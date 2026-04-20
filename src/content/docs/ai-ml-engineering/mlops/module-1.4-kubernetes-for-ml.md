@@ -7,11 +7,11 @@ sidebar:
 
 ## The Cyber Monday Meltdown
 
-In November 2025, TechFlow Inc., a highly visible mid-sized e-commerce platform, prepared for their absolute biggest sales event of the entire year. Their cutting-edge, real-time recommendation engine—powered by a deeply sophisticated and resource-intensive machine learning model—was statically deployed on three massive standalone virtual machines. They anticipated high load, but they entirely failed to anticipate the aggressive virality of a highly targeted marketing campaign that hit social media just moments before the sale went live.
+A retailer can enter a peak sales event with an ML recommendation service pinned to a small, fixed set of servers and then discover that a sudden traffic spike exceeds what those machines can handle.
 
-At exactly 9:00 AM, inbound traffic surged to an astonishing forty times their standard operating baseline. The first virtual machine, violently overwhelmed by the sudden, massive influx of parallel inference requests, instantly exhausted its physical memory capacity and crashed without warning. The hardware load balancer, functioning exactly as it was statically designed, immediately redirected all incoming traffic to the remaining two machines. Within seconds, the cascade failure was entirely complete. Both remaining servers collapsed under the crushing weight of the redirected traffic, taking the entire, mission-critical recommendation pipeline completely offline.
+A sudden traffic spike can overwhelm one inference node, push traffic onto the remaining nodes, and trigger a cascading failure if the service is running on a small fixed pool of servers.
 
-The operations team frantically scrambled to manually provision new cloud servers, manually configure the complex execution environment, and download the massive gigabyte-scale model weights over saturated network links. The system remained completely down for nearly two hours during the absolute peak shopping window. The ultimate financial impact was utterly devastating: an estimated $2.5 million in irretrievable lost revenue, coupled with severe, long-lasting damage to overall customer trust. The rigorous post-incident review yielded a single, undeniable conclusion: manual scaling and static, rigid infrastructure were fundamentally and entirely incompatible with the highly dynamic, unpredictable nature of modern machine learning workloads. They desperately needed a system capable of autonomously detecting load, provisioning specialized resources, intelligently distributing traffic, and handling node failures with absolute grace.
+When recovery depends on manual provisioning and configuration, an ML service can stay down far too long during a peak event and cause serious business damage. The operational lesson is that dynamic workloads need automated scaling, traffic management, and failure recovery.
 
 ## What You'll Be Able to Do
 
@@ -48,7 +48,7 @@ flowchart TD
     end
 ```
 
-> **Did You Know?** Kubernetes was originally open-sourced by Google on June 6, 2014, heavily inspired by their internal Borg system. By 2025, over 75% of global enterprise organizations reported utilizing Kubernetes as the foundational layer for their production machine learning workloads.
+> **Did You Know?** Kubernetes was originally open-sourced by Google on June 6, 2014, [heavily inspired by their internal Borg system](https://kubernetes.io/blog/2015/04/borg-predecessor-to-kubernetes/). [Kubernetes is widely used for production workloads, including machine learning systems](https://kubernetes.io/case-studies/).
 
 > **Stop and think**: If a Pod represents a single instance of your model, what happens to ongoing user requests if the node hosting that Pod suddenly loses power? How does the system recover without manual intervention?
 
@@ -173,7 +173,7 @@ spec:
 
 ### Deployment
 
-Managing individual Pods manually is highly dangerous. If a node fails, naked Pods are permanently lost. A Deployment acts as a rigorous supervisory controller. You declare the desired number of replicas, and the Deployment continuously monitors the cluster to guarantee that exact number of Pods is running. It also facilitates sophisticated rollout strategies.
+Managing individual Pods manually is highly dangerous. If a node fails, naked Pods are permanently lost. A Deployment acts as a rigorous supervisory controller. You declare the desired number of replicas, and [the Deployment continuously monitors the cluster to guarantee that exact number of Pods is running](https://kubernetes.io/docs/concepts/workloads/). It also facilitates sophisticated rollout strategies.
 
 ```yaml
 # deployment.yaml - ML inference deployment
@@ -226,7 +226,7 @@ spec:
 
 ### Service
 
-Because Pods are inherently ephemeral, their internal IP addresses change constantly. The Service object completely resolves this issue by providing a persistent, perfectly stable network endpoint that actively distributes incoming requests evenly across healthy Pods.
+Because Pods are inherently ephemeral, their internal IP addresses change constantly. The Service object completely resolves this issue by [providing a persistent, perfectly stable network endpoint that actively distributes incoming requests evenly across healthy Pods](https://kubernetes.io/docs/concepts/services-networking/service/).
 
 ```yaml
 # service.yaml - Expose deployment internally
@@ -390,7 +390,7 @@ Effective resource management is absolutely critical for cluster stability. The 
 
 ### Resource Requests vs Limits
 
-A request represents the guaranteed minimum allocation used for scheduling. A limit is the unbreakable maximum ceiling. CPU is compressible (the process is merely throttled), but memory is incompressible. Exceeding a memory limit results in immediate termination via OOMKilled.
+A request represents the guaranteed minimum allocation used for scheduling. A limit is the unbreakable maximum ceiling. [CPU is compressible (the process is merely throttled), but memory is incompressible. Exceeding a memory limit can lead to an OOM kill when the kernel detects memory pressure.](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/)
 
 ```mermaid
 flowchart LR
@@ -401,7 +401,7 @@ flowchart LR
 
 ### QoS Classes
 
-Kubernetes assigns strict Quality of Service classes based on these resource configurations, dictating eviction priority during severe node pressure.
+Kubernetes assigns strict Quality of Service classes based on these resource configurations, [dictating eviction priority during severe node pressure](https://kubernetes.io/docs/concepts/workloads/pods/pod-qos/).
 
 ```yaml
 # Guaranteed QoS (highest priority)
@@ -457,7 +457,7 @@ Autoscaling enables systems to react dynamically to unpredictable load, ensuring
 
 ### Horizontal Pod Autoscaler (HPA)
 
-The HPA periodically evaluates targeted metrics. When thresholds are exceeded, it instructs the Deployment to systematically increase replica counts.
+[The HPA periodically evaluates targeted metrics](https://kubernetes.io/docs/concepts/workloads/autoscaling/horizontal-pod-autoscale/). When thresholds are exceeded, it instructs the Deployment to systematically increase replica counts.
 
 ```yaml
 # hpa.yaml - Scale based on CPU
@@ -540,7 +540,7 @@ spec:
 
 ### Vertical Pod Autoscaler (VPA)
 
-While HPA aggressively adds Pods, the VPA subtly adjusts core resource requests and limits of existing Pods. This is optimal for stateful workloads.
+While HPA aggressively adds Pods, [the VPA subtly adjusts core resource requests and limits of existing Pods](https://kubernetes.io/docs/concepts/workloads/autoscaling/vertical-pod-autoscale/). This is optimal for stateful workloads.
 
 ```yaml
 # vpa.yaml - Auto-tune resources
@@ -643,7 +643,7 @@ ReadWriteOncePod (RWOP):
 - Supported in K8s v1.35+
 ```
 
-> **Did You Know?** With the widespread adoption of Kubernetes v1.35+ in 2026, the `ReadWriteOncePod` access mode became the absolute standard for single-pod stateful ML workloads, permanently replacing older, highly flawed node-level volume locking mechanisms that caused severe rollout deadlocks.
+> **Did You Know?** [Use `ReadWriteOncePod` when you need to guarantee single-Pod write access to a volume across the cluster.](https://kubernetes.io/docs/tasks/administer-cluster/change-pv-access-mode-readwriteoncepod/)
 
 ## ML Deployment Patterns
 
@@ -808,7 +808,7 @@ spec:
 
 ### DNS Resolution: How Pods Find Each Other
 
-Internal services discover one another using built-in DNS.
+Internal services discover one another using [built-in DNS](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/).
 
 ```python
 # Inside your pod, use DNS names
@@ -853,7 +853,7 @@ spec:
 
 ### Latency Optimization Strategies
 
-To aggressively shave milliseconds, configurations attempt to tightly localize active traffic within the exact same availability zone.
+To aggressively shave milliseconds, configurations attempt to [tightly localize active traffic within the exact same availability zone](https://kubernetes.io/docs/concepts/services-networking/topology-aware-routing/).
 
 ```yaml
 # Spread inference pods across zones for client proximity
@@ -951,7 +951,7 @@ kubectl logs <pod-name> --all-containers
 
 ### The Pod That Wouldn't Die
 
-In early 2024, a financial platform attempted to deploy an updated fraud model. Despite pushing the new manifest, telemetry confirmed usage of the deprecated legacy model. The original application utilized an improperly configured access mode, and the failing Pod locked the physical storage. The outgoing Pod was trapped in an infinite termination loop because it failed to cleanly sever network connections.
+A rollout can fail if an old Pod does not terminate cleanly and continues holding onto state or connections, leaving traffic on the previous version longer than expected.
 
 ```yaml
 # The fix: Add proper termination handling
@@ -967,7 +967,7 @@ spec:
 
 ### The GPU Scheduling Disaster
 
-A startup encountered severe latency degradation during peak traffic. Their autoscaler rapidly ballooned the replica count from 5 to 15. However, the cluster only contained hardware for 8 GPU workloads. The remaining Pods languished in a stalled Pending state because the HPA erroneously equated high CPU load with a mandate to scale, blind to specialized hardware constraints.
+Autoscaling can create additional Pods that remain Pending if the cluster has no spare GPU capacity, so scaling signals need to reflect the real bottleneck and available hardware.
 
 ```yaml
    # Cluster Autoscaler config
@@ -996,7 +996,7 @@ A startup encountered severe latency degradation during peak traffic. Their auto
 
 ### The Memory Leak That Killed Christmas
 
-A recommendation engine experienced cascading failures prior to a major event due to OOMKilled evictions caused by massive arrays of anomalous user profiles.
+A memory leak or unexpectedly large in-memory data structure can trigger OOM kills and cascading instability in a recommendation workload.
 
 ```yaml
    resources:
@@ -1030,37 +1030,37 @@ Transitioning to heavily orchestrated infrastructure drastically alters deep ope
 | Scenario | Manual Scaling | Kubernetes + HPA |
 |----------|----------------|------------------|
 | **Peak capacity provisioning** | | |
-| Servers for peak load (100 req/s) | 20 servers | 5-20 servers (auto-scale) |
-| Monthly infrastructure cost | $40,000 | $15,000 avg |
-| Utilization rate | 25% avg | 70% avg |
+| Servers for peak load | Fixed-capacity setups must provision for expected peak demand | Autoscaled setups can add capacity as load rises |
+| Monthly infrastructure cost | Often higher when capacity is fixed for peaks | Often lower when capacity can scale with demand, depending on workload and pricing |
+| Utilization rate | Often lower when infrastructure is overprovisioned for peaks | Often higher when capacity can be packed and scaled more dynamically |
 | **Operations** | | |
-| On-call incidents (monthly) | 8 | 2 |
-| Engineer time responding | 16 hours | 4 hours |
-| Deployment time | 2 hours | 5 minutes |
+| On-call incidents (monthly) | Incident volume depends on workload design and operational maturity | Incident volume can improve with better automation, but exact outcomes vary |
+| Engineer time responding | Manual operations can consume significant engineering time | Automation can reduce response effort, but the amount varies by team and system design |
+| Deployment time | Manual releases can be slow and error-prone | Automated rollouts can be much faster, depending on the application and release process |
 | **Annual Total** | | |
-| Infrastructure | $480,000 | $180,000 |
-| Operations (at $150/hr) | $28,800 | $7,200 |
-| **Total** | **$508,800** | **$187,200** |
-| **Savings** | | **$321,600 (63%)** |
+| Infrastructure | Annual spend is typically higher when systems are provisioned for peak load all the time | Annual spend can be lower when capacity is scaled and utilized more efficiently |
+| Operations | Labor cost depends on staffing model, tooling, and incident volume | Automation can reduce operating effort, but exact labor savings vary widely |
+| **Total** | Higher overall spend is common with fixed overprovisioning | Lower overall spend is possible with better utilization and automation |
+| **Savings** | | Savings depend on workload shape, pricing, and operational maturity |
 
 | Strategy | Without K8s | With K8s | Savings |
 |----------|-------------|----------|---------|
 | **GPU Utilization** | | | |
-| Single-tenant VMs | 30% avg utilization | N/A | Baseline |
-| Kubernetes scheduling | N/A | 60% avg utilization | 50% fewer GPUs needed |
+| Single-tenant VMs | Utilization is often lower when GPUs are dedicated to one workload | N/A | Baseline comparison |
+| Kubernetes scheduling | N/A | Shared scheduling can improve utilization when workloads fit the cluster well | GPU savings depend on workload mix and bin-packing efficiency |
 | **Spot/Preemptible** | | | |
-| On-demand A100s | $4/hour each | N/A | Baseline |
-| Spot + K8s preemption handling | N/A | $1.20/hour each | 70% savings |
+| On-demand GPUs | On-demand accelerator pricing varies by cloud, region, and instance type | N/A | Baseline comparison |
+| Spot or preemptible GPUs with interruption handling | N/A | Interruptible capacity can be much cheaper than on-demand capacity, but prices and availability vary | Savings depend on provider pricing and workload tolerance for interruption |
 | **Right-sizing** | | | |
-| Fixed instance types | Oversized 40% of time | VPA recommendations | 25% cost reduction |
+| Fixed instance types | Static sizing often leaves some workloads overprovisioned | VPA can help identify better-fit requests over time | Cost impact depends on workload behavior and how recommendations are applied |
 
 | Provider | On-Demand | Spot (70% workload) | Annual Cost |
 |----------|-----------|---------------------|-------------|
-| GKE | $367 | $161 | $4,092 |
-| EKS | $410 | $179 | $4,572 |
-| AKS | $395 | $173 | $4,404 |
+| GKE | Pricing varies by region and machine choice | Spot capacity can reduce spend when interruptions are acceptable | Annual cost is workload-dependent |
+| EKS | Pricing varies by region and machine choice | Spot capacity can reduce spend when interruptions are acceptable | Annual cost is workload-dependent |
+| AKS | Pricing varies by region and machine choice | Spot capacity can reduce spend when interruptions are acceptable | Annual cost is workload-dependent |
 
-> **Did You Know?** A prominent 2025 industry survey indicated that enterprise organizations intelligently employing dynamic container orchestration frequently realize a massive 20% overall reduction in aggregate ML infrastructure expenditure due exclusively to highly enhanced cluster resource packing density.
+> **Did You Know?** Better scheduling and autoscaling can reduce wasted infrastructure spend, but the exact savings depend on workload shape, pricing, and operational maturity.
 
 ## System Design Interview: ML Inference Platform
 
@@ -1255,7 +1255,7 @@ spec:
 <details>
 <summary>1. A machine learning inference Deployment is currently running, but live clients report highly intermittent 502 errors exclusively during rolling updates. Diagnose the probable root configuration deficiency.</summary>
 
-**Answer**: The deployment is almost certainly missing a properly configured readinessProbe. Without it, the control plane immediately routes high-volume traffic to the newly created Pods before the large model weights have fully initialized in memory. By implementing a strict readiness check that exclusively returns a success code only after the entire model is fully loaded, the load balancer will correctly wait before actively distributing requests to the new instance.
+**Answer**: The deployment is almost certainly missing a properly configured readinessProbe. Without it, the control plane can route high-volume traffic to the newly created Pods before the large model weights have fully initialized in memory. By implementing a strict readiness check that exclusively returns a success code only after the entire model is fully loaded, the load balancer will correctly wait before actively distributing requests to the new instance.
 </details>
 
 <details>
@@ -1273,7 +1273,7 @@ spec:
 <details>
 <summary>4. Design a robust operational strategy to firmly prioritize mission-critical inference Pods, guaranteeing they are the absolute last workloads to be forcibly evicted during severe cluster resource pressure.</summary>
 
-**Answer**: The optimal, fail-safe strategy demands establishing a Guaranteed Quality of Service (QoS) class. This is flawlessly achieved by ensuring that every single container within the active Pod explicitly defines resource requests that are exactly mathematically identical to its rigid resource limits. The Kubernetes kernel heavily prioritizes Guaranteed workloads, immediately and subsequently evicting BestEffort and Burstable Pods to preserve the stability of the highly critical inference processes.
+**Answer**: The optimal, fail-safe strategy demands establishing a Guaranteed Quality of Service (QoS) class. This is typically achieved by ensuring that each container within the active Pod explicitly defines resource requests that match its resource limits. Kubernetes heavily prioritizes Guaranteed workloads, usually evicting BestEffort and Burstable Pods first to preserve the stability of highly critical inference processes.
 </details>
 
 <details>
@@ -1526,7 +1526,7 @@ kubectl get pods -l app=ml-inference-mock -w
 
 ## Production Reference Templates (Historical Archive)
 
-The fully executable lab above prioritizes lightweight, universally available assets. However, in live production environments actively utilizing heavily guarded cloud registries, your manifests reflect significantly greater complexity. The structural templates below serve strictly as a reference for advanced implementation architecture.
+The fully executable lab above prioritizes lightweight, widely available assets. However, in live production environments actively utilizing heavily guarded cloud registries, your manifests reflect significantly greater complexity. The structural templates below serve strictly as a reference for advanced implementation architecture.
 
 ```yaml
 # inference-deployment.yaml
@@ -2025,3 +2025,22 @@ kubectl exec -it <pod> -- /bin/sh  # Get a shell and investigate
 You have now rigorously mastered the incredibly complex art of securely managing highly dynamic machine learning environments utilizing the foundational orchestration power of Kubernetes. By orchestrating heavily robust deployments, firmly enforcing meticulous hardware resource policies, and actively monitoring overall cluster health, your deep learning infrastructure is completely fortified for extreme scale.
 
 **Up Next**: [Module 1.5 - Advanced Kubernetes](./module-1.5-advanced-kubernetes)
+
+## Sources
+
+## Sources
+
+- [Borg: The Predecessor to Kubernetes](https://kubernetes.io/blog/2015/04/borg-predecessor-to-kubernetes/) — Explains how Borg influenced the design and operational model of Kubernetes.
+- [Kubernetes Case Studies](https://kubernetes.io/case-studies/) — Shows real production uses of Kubernetes across industries, including data and ML-adjacent platforms.
+- [Workloads](https://kubernetes.io/docs/concepts/workloads/) — Describes Pods and higher-level workload controllers such as Deployments and Jobs.
+- [Service](https://kubernetes.io/docs/concepts/services-networking/service/) — Defines how Services provide stable access to changing sets of backend Pods.
+- [Resource Management for Pods and Containers](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/) — Covers requests, limits, CPU throttling behavior, and memory-related OOM outcomes.
+- [Pod Quality of Service Classes](https://kubernetes.io/docs/concepts/workloads/pods/pod-qos/) — Explains Guaranteed, Burstable, and BestEffort QoS and how they affect eviction behavior.
+- [Horizontal Pod Autoscaling](https://kubernetes.io/docs/concepts/workloads/autoscaling/horizontal-pod-autoscale/) — Explains how HPA adjusts replica counts from observed metrics and is useful follow-on reading for the autoscaling examples.
+- [Vertical Pod Autoscaling](https://kubernetes.io/docs/concepts/workloads/autoscaling/vertical-pod-autoscale/) — Describes how VPA recommends or updates Pod resource settings over time.
+- [Change the Access Mode of a PersistentVolume to ReadWriteOncePod](https://kubernetes.io/docs/tasks/administer-cluster/change-pv-access-mode-readwriteoncepod/) — Explains the single-Pod write-access semantics of ReadWriteOncePod.
+- [DNS for Services and Pods](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/) — Documents built-in DNS naming patterns such as `service.namespace.svc.cluster.local`.
+- [Topology Aware Routing](https://kubernetes.io/docs/concepts/services-networking/topology-aware-routing/) — Explains same-zone routing preferences and when they improve performance, reliability, or cost.
+- [Kubernetes Components](https://kubernetes.io/docs/concepts/overview/components/) — Best upstream overview of control plane and node components referenced throughout the module.
+- [Schedule GPUs](https://kubernetes.io/docs/tasks/manage-gpus/scheduling-gpus/) — Covers the official Kubernetes model for requesting GPUs and scheduling workloads onto accelerator nodes.
+- [Persistent Volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/) — Explains persistent storage concepts and access modes referenced in the storage section.

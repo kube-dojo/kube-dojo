@@ -6,7 +6,7 @@ sidebar:
 ---
 > **Toolkit Track** | Complexity: `[MEDIUM]` | Time: 35-40 min
 
-The DevOps lead scrolled through the pull request with growing horror. Someone had copy-pasted the production Kubernetes manifests to create a staging environment, changing "prod" to "staging" in 47 different places. When she checked the git history, she found that the same 15 YAML files had been duplicated across dev, staging, QA, and production—with drift between them causing mysterious bugs for months. "This is why we can't deploy on Fridays," she muttered. Three weeks later, after migrating to Helm charts with Kustomize overlays, their deployment cadence went from once a week to **12 deployments per day**, and configuration drift incidents dropped to zero. The VP of Engineering later calculated the wasted developer hours: **$420,000 per year** in debugging time caused by copy-paste YAML.
+A team had copied production manifests across multiple environments and ended up with configuration drift across nearly identical YAML files. After consolidating the setup with Helm charts and Kustomize overlays, they were able to deploy more frequently and reduce drift-related debugging.
 
 ## Prerequisites
 
@@ -29,14 +29,14 @@ After completing this module, you will be able to:
 
 Raw Kubernetes YAML doesn't scale. When you have 50 services, each with development, staging, and production variants, you need a way to manage configuration. Helm and Kustomize are the two dominant solutions—and they work together beautifully.
 
-Helm packages applications as charts with templates. Kustomize overlays modifications without templates. Understanding both—and when to use each—is essential for Kubernetes operations.
+[Helm packages applications as charts with templates](https://helm.sh/docs/topics/charts/). [Kustomize overlays modifications without templates](https://github.com/kubernetes-sigs/kustomize). Understanding both—and when to use each—is essential for Kubernetes operations.
 
 ## Did You Know?
 
-- **Helm v3 removed Tiller entirely**—Helm v2's server-side component was a security concern; now Helm is purely client-side
-- **Kustomize is built into kubectl**—since 1.14, you can use `kubectl apply -k` without installing anything
-- **The name "Helm" follows the Kubernetes nautical theme**—a helm steers a ship, Helm steers your deployments
-- **Kustomize was created by Google for internal use**—they needed a template-free way to customize configurations
+- **[Helm v3 removed Tiller entirely](https://helm.sh/docs/v3/faq/changes_since_helm2/)**—Helm v2's server-side component was a security concern; now Helm is purely client-side
+- **[Kustomize is built into kubectl](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization)**—since 1.14, you can use `kubectl apply -k` without installing anything
+- **Helm uses nautical branding consistent with the Kubernetes ecosystem**
+- **Kustomize emerged from the Kubernetes ecosystem as a template-free way to customize configurations**
 
 ## Helm vs Kustomize
 
@@ -72,9 +72,9 @@ Helm packages applications as charts with templates. Kustomize overlays modifica
 
 ### A Note on Jsonnet
 
-Beyond Helm and Kustomize, **Jsonnet** is a data templating language that some teams use to generate Kubernetes manifests. Grafana Labs uses Jsonnet extensively for their Kubernetes deployments, and you will find it referenced in the CGOA exam. Jsonnet treats configuration as programmable data rather than text templates -- you write functions and objects that evaluate to JSON/YAML.
+Beyond Helm and Kustomize, **Jsonnet** is a data templating language that some teams use to generate Kubernetes manifests. [Grafana Labs uses Jsonnet extensively for their Kubernetes deployments](https://grafana.com/blog/how-the-jsonnet-based-project-tanka-improves-kubernetes-usage/), and you may also encounter it in GitOps-focused materials and projects. Jsonnet treats configuration as programmable data rather than text templates -- you write functions and objects that evaluate to JSON/YAML.
 
-In practice, Jsonnet has a smaller community than Helm or Kustomize, and most organizations choose one of the two dominant tools. However, if you encounter a project using Jsonnet (or its Kubernetes-specific library **Tanka**), understand that it solves the same problem -- reducing YAML duplication -- with a different paradigm: a full programming language for configuration rather than templates (Helm) or patches (Kustomize).
+In practice, Jsonnet has a smaller community than Helm or Kustomize, and most organizations choose one of the two dominant tools. However, if you encounter a project using Jsonnet (or the Kubernetes configuration tool **Tanka**), understand that it solves the same problem -- reducing YAML duplication -- with a different paradigm: a full programming language for configuration rather than templates (Helm) or patches (Kustomize).
 
 ## Helm Fundamentals
 
@@ -659,15 +659,15 @@ prometheus:
 | Hardcoded values in templates | Can't customize | Use `{{ .Values.x }}` with defaults |
 | Deeply nested values | Hard to override | Keep values 2-3 levels deep max |
 | No schema validation | Invalid values accepted | Use `values.schema.json` |
-| Kustomize without base | Duplication across overlays | Always use base + overlays |
+| Kustomize without base | Duplication across overlays | Usually use base + overlays |
 | Mixing patch types | Confusing, hard to debug | Pick one style per patch file |
 | Over-templating | Unmaintainable | Use Kustomize for simple overrides |
 
-## War Story: The $1.8 Million Template Explosion
+## War Story: When Chart Complexity Became a Deployment Risk
 
-A healthcare SaaS company had a Helm chart that started simple—20 values, clean templates. Over three years, it grew into a monster: **847 lines of values.yaml**, 50+ template variables, and conditional logic that would make a Turing machine weep.
+A healthcare software team let a Helm chart grow from a simple package into a large, hard-to-review set of values and conditionals.
 
-The chart powered their core patient records system across 23 hospitals. Every deployment was a sweaty-palmed ordeal because nobody fully understood all the values.
+The chart supported a sensitive application, and its growing complexity made deployments hard to review confidently.
 
 ```yaml
 # values.yaml (actual excerpt from the incident)
@@ -799,11 +799,11 @@ configMapGenerator:
 
 **Lessons Learned:**
 
-1. **Don't template security settings**—encryption should be always-on, not a flag
+1. **Don't template security settings**—encryption should usually be enabled by default, not a flag
 2. **Template what varies between releases, not between environments**—use Kustomize for environment differences
-3. **If values.yaml exceeds 100 lines, you're probably over-templating**
+3. **If values.yaml becomes very large and hard to review, you're probably over-templating**
 4. **Test with production values in CI**—the staging/prod divergence was the root cause
-5. **Mandatory schema validation**—`values.schema.json` would have caught the missing value
+5. **[Mandatory schema validation](https://helm.sh/docs/topics/charts/)**—`values.schema.json` would have caught the missing value
 
 ## Quiz
 
@@ -1098,7 +1098,7 @@ helm install my-app ./chart -f values.yaml
 # - "resources.limits: 'memory' is required"
 ```
 
-**Why this matters:** Schema validation catches configuration errors at `helm template` time, not runtime. The healthcare incident in the war story would have been caught immediately.
+**Why this matters:** Schema validation catches configuration errors at `helm template` time, not runtime. The healthcare incident in the war story would likely have been caught during templating.
 </details>
 
 ### Question 7
@@ -1485,3 +1485,12 @@ Continue to [CI/CD Pipelines Toolkit](/platform/toolkits/cicd-delivery/ci-cd-pip
 ---
 
 *"The best config is the one you understand. The second best is the one that works. Helm and Kustomize help you get both."*
+
+## Sources
+
+- [Helm Charts](https://helm.sh/docs/topics/charts/) — Backs Helm chart structure, Chart.yaml, values.yaml, templates, dependencies, chart packaging, chart types, and general claims about how Helm models reusable Kubernetes application packages.
+- [github.com: kustomize](https://github.com/kubernetes-sigs/kustomize) — The official Kustomize repository describes it as customization of raw, template-free YAML.
+- [helm.sh: changes since helm2](https://helm.sh/docs/v3/faq/changes_since_helm2/) — Helm's official Helm 2 to Helm 3 changes page directly explains Tiller's removal and the RBAC/security motivation.
+- [kubernetes.io: kustomization](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization) — The Kubernetes docs explicitly state that kubectl has supported Kustomize since 1.14 and show `kubectl apply -k`.
+- [grafana.com: how the jsonnet based project tanka improves kubernetes usage](https://grafana.com/blog/how-the-jsonnet-based-project-tanka-improves-kubernetes-usage/) — Grafana's own documentation and blog posts describe using Tanka/Jsonnet to manage its Kubernetes infrastructure.
+- [Flux HelmRelease Post Renderers](https://v2-0.docs.fluxcd.io/flux/components/helm/helmreleases/) — Useful for the module's Helm-plus-Kustomize pattern because it documents Kustomize post-rendering in Flux HelmRelease.
