@@ -1054,12 +1054,39 @@ def _validate_inline_insertion(ins: dict[str, Any]) -> str | None:
     return None
 
 
-def _authorized_rewrites(seed: dict[str, Any]) -> dict[str, dict[str, str]]:
+_QUOTED_BLOCKQUOTE_RE = re.compile(r'^>\s*[“"”]')
+
+
+def _anchor_inside_quoted_blockquote(anchor: str, body: str) -> bool:
+    """Return True iff every occurrence of `anchor` in `body` lives on a
+    line that begins with a `> "..."` blockquote-quoted string. Such
+    content is verbatim author-quoted material (AI reviewer output, user
+    statements, model excerpts) and must not be rewritten by the
+    orchestrator — the diff lint won't authorize the change and the
+    edit corrupts the author's intent."""
+    if not anchor:
+        return False
+    matched_any = False
+    for line in body.splitlines():
+        if anchor in line:
+            matched_any = True
+            if not _QUOTED_BLOCKQUOTE_RE.match(line.lstrip()):
+                return False
+    return matched_any
+
+
+def _authorized_rewrites(seed: dict[str, Any], body: str | None = None
+                         ) -> dict[str, dict[str, str]]:
     """Map claim_id → {anchor_text, suggested_rewrite} for each rewrite-
     disposition claim in the seed. Schema v2: anchor_text is a verbatim
     substring of the module body. The orchestrator substring-swaps
     anchor_text for suggested_rewrite deterministically; Codex does not
     participate in rewrites.
+
+    When `body` is supplied, claims whose anchor lives inside a
+    `> "..."` blockquote-quoted line are excluded — those lines are
+    verbatim author-quoted content (AI reviewer output, etc.) and must
+    not be rewritten.
     """
     out: dict[str, dict[str, str]] = {}
     for c in seed.get("claims") or []:
@@ -1068,6 +1095,8 @@ def _authorized_rewrites(seed: dict[str, Any]) -> dict[str, dict[str, str]]:
         anchor = c.get("anchor_text")
         suggested = c.get("suggested_rewrite")
         if not anchor or not suggested:
+            continue
+        if body is not None and _anchor_inside_quoted_blockquote(str(anchor), body):
             continue
         out[str(c.get("claim_id") or "")] = {
             "anchor_text": str(anchor),
@@ -1088,7 +1117,7 @@ def _authorized_replacement_lines(seed: dict[str, Any], body: str) -> set[str]:
     already carries a citation.
     """
     out: set[str] = set()
-    for info in _authorized_rewrites(seed).values():
+    for info in _authorized_rewrites(seed, body).values():
         anchor = info["anchor_text"]
         suggested = info["suggested_rewrite"]
         for line in body.splitlines():
@@ -1165,7 +1194,7 @@ def apply_inject_plan(body: str, plan: dict[str, Any], seed: dict[str, Any]) -> 
     # participate. Anchor substring is expected to still exist in
     # new_body — inline wraps above add `[…](url)` around sub-phrases
     # without altering the anchor sentence text.
-    for claim_id, info in _authorized_rewrites(seed).items():
+    for claim_id, info in _authorized_rewrites(seed, body).items():
         anchor = info["anchor_text"]
         suggested = info["suggested_rewrite"]
         if anchor not in new_body:
