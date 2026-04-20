@@ -21,7 +21,7 @@ lab:
 
 ## Why This Module Matters
 
-In 2014, a major global retail corporation suffered a catastrophic, hours-long outage during an unprecedented Black Friday traffic surge. While their failure predated widespread Kubernetes adoption, the root cause—a static, brittle load balancing tier unable to dynamically route traffic to healthy backend instances—cost them millions of dollars in lost revenue. This is the exact architectural crisis that Kubernetes Services are designed to prevent.
+Before service abstractions became commonplace, many production systems were vulnerable to outages when static load-balancing layers could not adapt quickly to backend failures or traffic spikes. This is the exact architectural crisis that Kubernetes Services are designed to prevent.
 
 Pods are inherently ephemeral. They are constantly created, destroyed, and replaced, meaning their IP addresses are in a state of perpetual churn. If you attempt to hardcode Pod IPs into your application configurations, your architecture will shatter the moment a node fails or a deployment scales. Services provide an unbreakable, stable networking abstraction over these shifting Pod IPs. They give your applications a permanent, reliable endpoint to communicate with, regardless of the underlying volatility. 
 
@@ -48,11 +48,11 @@ After completing this extensive module, you will be able to:
 
 ## Did You Know?
 
-1. **Services predate Pods**: The concept of stable service IPs was designed before pods existed in Kubernetes. The founders knew ephemeral pods needed stable endpoints.
+1. **Stable endpoints are a foundational Service design goal**: Kubernetes Services exist to give clients a durable network identity even though backend Pods are ephemeral.
 2. **Port Allocation Ranges**: The default NodePort allocation range is safely partitioned into two distinct segments: a static band (`30000-30085`) reserved for manually requested ports, and a dynamic band (`30086-32767`) used for automatic assignments, structurally preventing port collision issues.
 3. **The Shift to Nftables**: The legacy `ipvs` kube-proxy mode was officially deprecated in Kubernetes v1.35, firmly establishing `nftables` as the modern, high-performance Linux kernel replacement for cluster traffic routing.
 4. **Mathematical IP Banding**: The Kubernetes Service ClusterIP allocator does not randomly assign IPs; it automatically divides the virtual IP range into structured bands using the exact mathematical formula `min(max(16, cidrSize/16), 256)` to ensure highly efficient address management.
-5. **The Endpoints Bottleneck**: The monolithic `Endpoints` API became a severe performance bottleneck in massive clusters, leading to its official deprecation in Kubernetes v1.33. It has been fully replaced by the highly scalable `EndpointSlices` architecture, which stabilized in v1.21.
+5. **The Endpoints Bottleneck**: The legacy `Endpoints` API is deprecated as of Kubernetes v1.33, while `EndpointSlices` became stable in v1.21 and are the scalable API Kubernetes uses for modern Service features.
 6. **Virtual IPs are magic**: ClusterIP addresses don't exist on any network interface. They're "virtual" IPs that kube-proxy intercepts and routes at the kernel level.
 
 ---
@@ -119,7 +119,7 @@ flowchart TD
 
 </details>
 
-The solution is the Service resource. A Service acts as a static, immovable anchor in your cluster's network. It is assigned a permanent `ClusterIP` that will absolutely never change for the entire lifecycle of the Service. The client simply directs its request to this static IP, and Kubernetes dynamically handles the complexity of discovering which Pods are currently alive and routing the traffic to them.
+The solution is the Service resource. A Service acts as a static, immovable anchor in your cluster's network. It is assigned a stable `ClusterIP` that will usually remain the same for the lifecycle of the Service. The client simply directs its request to this static IP, and Kubernetes dynamically handles the complexity of discovering which Pods are currently alive and routing the traffic to them.
 
 ### 1.2 Service Components
 
@@ -137,7 +137,7 @@ To effectively design network routes, you must understand the atomic components 
 
 ### 1.3 How Services Work
 
-Behind the scenes, the magic of Services is orchestrated by an agent called `kube-proxy`, which runs continuously as a DaemonSet on every single node in your cluster. 
+Behind the scenes, the magic of Services is commonly orchestrated by an agent called `kube-proxy`, a network proxy that runs on each node unless the cluster uses an alternative implementation. 
 
 ```mermaid
 sequenceDiagram
@@ -257,7 +257,7 @@ flowchart LR
 
 ### 2.2 NodePort
 
-For external access without a dedicated cloud load balancer, `NodePort` is heavily utilized. When you declare `type: NodePort`, Kubernetes allocates a specific port from the predefined `--service-node-port-range` (default `30000-32767`). The critical behavioral mechanic here is that *every single node* in the cluster rigidly listens on that exact same NodePort and proxies traffic to the Service.
+For external access without a dedicated cloud load balancer, `NodePort` is heavily utilized. When you declare `type: NodePort`, Kubernetes allocates a specific port from the predefined `--service-node-port-range` (default `30000-32767`). The critical behavioral mechanic here is that, in the common case, every node in the cluster listens on that exact same NodePort and proxies traffic to the Service.
 
 ```yaml
 # Exposes service on each node's IP at a static port
@@ -316,7 +316,7 @@ flowchart TD
 
 ### 2.3 LoadBalancer
 
-The `LoadBalancer` type natively integrates with underlying cloud providers (AWS, GCP, Azure) to instantly provision an external, robust load balancer that automatically routes internet traffic into your cluster's NodePorts.
+The `LoadBalancer` type natively integrates with underlying cloud providers (AWS, GCP, Azure) to provision an external, robust load balancer that automatically routes internet traffic into your cluster's NodePorts.
 
 ```yaml
 # Creates external load balancer (cloud provider)
@@ -1221,3 +1221,5 @@ k delete svc challenge-app
 ## Next Module
 
 [Module 3.2: Endpoints & EndpointSlices](../module-3.2-endpoints/) - Plunge deeper into the architectural transition from legacy Endpoints to highly scalable EndpointSlices, exploring exactly how Kubernetes tracks vast quantities of Pods at enterprise scale.
+
+## Sources
