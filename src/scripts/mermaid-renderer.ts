@@ -25,9 +25,19 @@ function getHost(pre: HTMLPreElement): HTMLElement {
 }
 
 function getDiagramSource(pre: HTMLPreElement): string {
-  // Expressive Code wraps each rendered line in nested div/span nodes.
-  // `textContent` collapses those lines together, which breaks Mermaid parsing.
-  // `innerText` preserves the visible line structure for fenced diagrams.
+  // Expressive Code wraps each rendered line in `.ec-line` divs. We walk
+  // those directly and join with `\n`. Earlier code used `pre.innerText`,
+  // but `innerText` collapses lines that share a layout block — which
+  // for tightly-packed diagrams (no blank-line separators between every
+  // statement) produced one giant single-line string and broke parsing.
+  const ecLines = pre.querySelectorAll('.ec-line');
+  if (ecLines.length > 0) {
+    return Array.from(ecLines)
+      .map((line) => (line.textContent || '').replace(/\u00a0/g, ' '))
+      .join('\n')
+      .trim();
+  }
+  // Fallback for non-Expressive-Code rendered blocks.
   return (pre.innerText || pre.textContent || '').replace(/\u00a0/g, ' ').trim();
 }
 
