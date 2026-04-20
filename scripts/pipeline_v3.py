@@ -41,6 +41,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from citation_backfill import (  # type: ignore  # noqa: E402
     DOCS_ROOT, REPO_ROOT, resolve_module_path, run_inject, run_research,
+    seed_path_for,
 )
 from check_coherence import check_coherence  # type: ignore  # noqa: E402
 from check_overstatement import audit_file as audit_overstatement  # type: ignore  # noqa: E402
@@ -56,6 +57,51 @@ SUMMARY_PATH = V3_DIR / "summary.jsonl"
 
 def _iso_utc() -> str:
     return _dt.datetime.now(_dt.UTC).isoformat(timespec="seconds")
+
+
+def _prune_failed_cited_claims(module_key: str, verdict_path_rel: str | None) -> dict[str, Any]:
+    """Drop UNSUPPORTED/CONTRADICTED claims from the seed so inject can continue.
+
+    Gate B (verify) rejects the specific citation URL the researcher proposed,
+    not the underlying claim. The seed's further_reading entries stayed
+    within the allowlist and passed HTTP validation independently, so inject
+    can still write a Sources section even when every inline claim fails
+    verify. This prune+continue beats bailing the whole module — the
+    citation-gate cap stays at 1.5 otherwise.
+    """
+    result: dict[str, Any] = {"pruned_ids": [], "remaining_citable": 0,
+                              "has_further_reading": False}
+    if not verdict_path_rel:
+        return result
+    verdict_path = REPO_ROOT / verdict_path_rel
+    if not verdict_path.exists():
+        return result
+    verdicts = json.loads(verdict_path.read_text(encoding="utf-8")).get("verdicts") or []
+    fail_ids = {str(v.get("claim_id")) for v in verdicts
+                if v.get("verdict") in ("UNSUPPORTED", "CONTRADICTED")}
+    if not fail_ids:
+        return result
+    seed_path = seed_path_for(module_key)
+    if not seed_path.exists():
+        return result
+    seed = json.loads(seed_path.read_text(encoding="utf-8"))
+    kept: list[dict[str, Any]] = []
+    pruned: list[str] = []
+    for claim in seed.get("claims") or []:
+        cid = str(claim.get("claim_id"))
+        if cid in fail_ids and claim.get("disposition") in ("supported", "weak_anchor"):
+            pruned.append(cid)
+            continue
+        kept.append(claim)
+    seed["claims"] = kept
+    seed_path.write_text(json.dumps(seed, indent=2, ensure_ascii=False) + "\n",
+                         encoding="utf-8")
+    result["pruned_ids"] = pruned
+    result["remaining_citable"] = sum(
+        1 for c in kept if c.get("disposition") in ("supported", "weak_anchor")
+    )
+    result["has_further_reading"] = bool(seed.get("further_reading") or [])
+    return result
 
 
 # ---- audit pass -----------------------------------------------------------
@@ -371,7 +417,10 @@ def run_pipeline(module_key: str, *, skip_research: bool = False,
     if not v.get("ok"):
         return _finalize(run_record, "verify_failed", flat_key)
     if v.get("failing_count", 0) > 0:
-        return _finalize(run_record, "verify_unsupported_or_contradicted", flat_key)
+        pruned = _prune_failed_cited_claims(normalized_key, v.get("verdict_path"))
+        run_record["stages"]["verify_prune"] = pruned
+        if pruned.get("remaining_citable", 0) == 0 and not pruned.get("has_further_reading"):
+            return _finalize(run_record, "verify_unsupported_or_contradicted", flat_key)
 
     # Stage 3: inject in place --------------------------------------------
     inj = run_inject(normalized_key, agent="codex")
