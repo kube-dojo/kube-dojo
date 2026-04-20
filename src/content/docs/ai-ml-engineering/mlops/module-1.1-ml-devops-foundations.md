@@ -14,9 +14,9 @@ sidebar:
 
 Knight Capital Group. August 1, 2012. 9:30 AM Eastern.
 
-The opening bell rang on Wall Street, and Knight Capital's new trading software went live. For exactly 45 minutes, their automated system executed trades at a massive rate of 40 orders per second—erroneously buying high and selling low. By 10:15 AM, the company had hemorrhaged $440 million. By the end of the week, Knight Capital had to be sold off in pieces to survive.
+The opening bell rang on Wall Street, and Knight Capital's new trading software went live. For roughly 45 minutes, the faulty rollout flooded the market with unintended orders and caused losses severe enough to threaten the firm's survival.
 
-The root cause was staggering in its simplicity: a deployment technician had pushed new code but forgot to update one of the eight core production servers. The old code on that single server, which had lain dormant for years, was suddenly activated by a repurposed system flag. It initiated an obsolete testing protocol on live markets. There was no automated deployment pipeline, no environment consistency checks, and absolutely no mechanism for immediate automated rollback.
+The root cause was staggering in its simplicity: a deployment technician had pushed new code but forgot to update one of the eight core production servers. The old code on that single server, which had lain dormant for years, was suddenly activated by a repurposed system flag. It initiated an obsolete testing protocol on live markets. The incident exposed serious gaps in deployment controls, environment consistency checks, and incident response.
 
 This disaster was not fundamentally a technology failure; it was a process failure. It highlighted the terrifying absence of robust DevOps methodologies. Machine Learning systems magnify this danger exponentially. In ML, you are not merely deploying static application code—you are deploying an intertwined web of algorithms, evolving datasets, trained model weights, and hyperparameter configurations. A failure in any single component can silently degrade performance or cause catastrophic errors. This module provides the blueprint to ensure you never become the next Knight Capital, teaching you how to apply rigorous, version-controlled DevOps principles to the chaotic world of Machine Learning.
 
@@ -138,7 +138,7 @@ graph TD
     Model --> M4[Artifacts]
 ```
 
-**Did You Know?** In a 2019 study, researchers at McGill University found that only 6% of machine learning papers could be fully reproduced due to missing hyperparameters and unreported random seeds.
+**Did You Know?** Reproducing published ML results becomes much harder when papers omit key details such as hyperparameters, random seeds, data-processing steps, or environment settings.
 
 ---
 
@@ -201,7 +201,7 @@ gitGraph
 
 ### Branch Naming That Actually Helps
 
-When executing massive parallel sweeps, naming branches clearly is the only way to avoid absolute chaos.
+When executing massive parallel sweeps, naming branches clearly is one of the best ways to avoid unnecessary chaos.
 
 ```python
 # ML-specific branch naming conventions
@@ -350,7 +350,7 @@ graph TD
 
 ### DVC: The Solution
 
-Data Version Control (DVC) intercepts large files before they ever reach Git. DVC hashes the binary data, stores the heavy files in remote block storage (like S3 or GCS), and generates a tiny `.dvc` pointer file. You commit the text pointer to Git, leaving the heavy lifting to the cloud.
+Data Version Control (DVC) intercepts large files before they ever reach Git. [DVC hashes the binary data, stores the heavy files in remote block storage (like S3 or GCS), and generates a tiny `.dvc` pointer file](https://github.com/iterative/dvc). You commit the text pointer to Git, leaving the heavy lifting to the cloud.
 
 ```bash
 # Install DVC
@@ -925,7 +925,7 @@ class TestModelRobustness:
         assert np.all((predictions >= 0) & (predictions <= 1)), "Invalid probabilities!"
 ```
 
-**Did You Know?** Algorithmia's 2022 State of ML survey found that 55% of companies have never deployed a single ML model to production due to a lack of robust MLOps practices. Testing pipelines build the organizational trust required to release.
+**Did You Know?** Many organizations struggle to move ML models into production, which is one reason teams invest in repeatable testing, deployment, and monitoring practices.
 
 ---
 
@@ -933,7 +933,7 @@ class TestModelRobustness:
 
 ### The Philosophy of Pre-commit
 
-Pre-commit hooks intercept local changes immediately before they are locked into the Git history. If the code violates rules, the commit aborts. This mechanism is profoundly critical in ML environments because committing a 2GB model weight to history is nearly impossible to undo without breaking the repository for every collaborator. 
+Pre-commit hooks intercept local changes immediately before they are locked into the Git history. If the code violates rules, the commit aborts. This mechanism is profoundly critical in ML environments because committing a 2GB model weight to history is very difficult to undo cleanly and can disrupt the repository for collaborators. 
 
 ```bash
 # Install pre-commit
@@ -1169,7 +1169,7 @@ if __name__ == "__main__":
     main()
 ```
 
-**Did You Know?** GitHub's secret scanning detected over 700,000 exposed secrets in public repositories in 2022 alone, underscoring the critical need for robust pre-commit security checks.
+**Did You Know?** Public repositories regularly expose large numbers of leaked credentials, which is why automated secret scanning and pre-commit checks matter.
 
 ---
 
@@ -1461,9 +1461,9 @@ graph TD
 
 While local unit tests provide rapid feedback, diagnosing pipeline failures and running distributed training requires executing workloads in an environment that mirrors production. This is where Kubernetes becomes essential for ML DevOps.
 
-A common mistake engineers make when migrating ML pipelines to Kubernetes is utilizing standard `Deployment` resources. A `Deployment` is designed inherently for long-running, stateless services (like a web API) and will continually restart the container if the process exits. Machine Learning pipelines—whether they are data validation tests, model training, or batch evaluations—are finite, batch-oriented computational tasks. They must run to completion and then terminate.
+A common mistake engineers make when migrating ML pipelines to Kubernetes is utilizing standard `Deployment` resources. A `Deployment` is designed inherently for long-running, stateless services (like a web API) and [will continually restart the container if the process exits](https://kubernetes.io/docs/concepts/architecture/self-healing/). Machine Learning pipelines—whether they are data validation tests, model training, or batch evaluations—are finite, batch-oriented computational tasks. They must run to completion and then terminate.
 
-To execute these pipelines, you must use a Kubernetes `Job` resource. A `Job` correctly handles run-to-completion semantics, tracks the final success or failure state of the execution, and avoids infinite restart loops when a training script successfully finishes. By encapsulating deterministic experiment tracking scripts within a Kubernetes `Job`, you guarantee the pipeline executes with the exact hardware and environmental parity of production, making silent failures trivial to diagnose.
+To execute these pipelines, you must use a Kubernetes `Job` resource. [A `Job` correctly handles run-to-completion semantics, tracks the final success or failure state of the execution](https://kubernetes.io/docs/concepts/workloads/controllers/job/), and avoids infinite restart loops when a training script successfully finishes. Running deterministic experiment or validation workloads as a Kubernetes `Job` can make them easier to reproduce in an environment that is closer to production, which often makes failures easier to diagnose.
 
 ---
 
@@ -1472,11 +1472,11 @@ To execute these pipelines, you must use a Kubernetes `Job` resource. A `Job` co
 | Mistake | Why It Is Dangerous | How To Fix It |
 |---|---|---|
 | **Committing model binaries to Git** | Bloats the repository size, eventually breaking cloning. Rewriting history with `git filter-branch` is highly destructive and breaks collaborators' local repositories. | Use `git rm --cached <file>` to remove it from Git without deleting the local file, track it with DVC, and use pre-commit hooks to block future binaries. |
-| **Hardcoding hyperparameters** | Makes reproducing past experiments impossible and pollutes the code history with trivial constant changes. | Store all model hyperparameters and arguments in strict, versioned YAML configuration files. |
-| **Changing multiple variables simultaneously** | Violates the scientific method by making it impossible to empirically attribute any performance gains or regressions to a specific change (e.g., updating architecture and learning rate at once). | Strictly isolate experiments to modify exactly one fundamental variable per branch. |
+| **Hardcoding hyperparameters** | Makes reproducing past experiments much harder and pollutes the code history with trivial constant changes. | Store all model hyperparameters and arguments in strict, versioned YAML configuration files. |
+| **Changing multiple variables simultaneously** | Violates the scientific method by making it much harder to empirically attribute any performance gains or regressions to a specific change (e.g., updating architecture and learning rate at once). | Strictly isolate experiments to modify exactly one fundamental variable per branch. |
 | **Ignoring random seeds** | Prevents deterministic training and evaluation, leading to unexplainable variations in model performance across identical runs. | Centralize seed initialization for Python, NumPy, and your ML framework at the very start of your orchestration scripts. |
 | **Squashing experiment branches blindly** | Destroys the invaluable historical context of what hypotheses were tested and what exact metrics they produced. | Include comprehensive metrics, hypothesis data, and firm conclusions in the commit message before merging. |
-| **Evaluating on training data** | Introduces massive data leakage, resulting in falsely high accuracy that immediately collapses upon production deployment. | Strictly isolate the validation/test sets before any feature engineering, balancing, or normalization steps occur. |
+| **Evaluating on training data** | Introduces massive data leakage, resulting in falsely high accuracy that often collapses in production. | Strictly isolate the validation/test sets before any feature engineering, balancing, or normalization steps occur. |
 | **Skipping data drift tests** | Allows models to degrade silently and destructively in production as real-world data distributions gradually shift. | Implement statistical checks (e.g., KS tests) to continuously compare production incoming data against original training baselines. |
 | **Using vague branch names** | Forces future engineers to perform tedious "experiment archaeology" to understand past work and prevents collaboration. | Adopt structured naming conventions like `experiment/model-feature-change` to communicate intent clearly. |
 
@@ -1496,7 +1496,7 @@ The project most likely lacks robust data versioning and data drift testing. Ove
 
 <details>
 <summary>3. During a code review, you notice an experiment branch includes complex changes to the model architecture and the learning rate scheduler simultaneously. Evaluate the problem with this approach.</summary>
-This violates the core scientific method of isolating variables. By changing both the physical architecture and the behavioral scheduler simultaneously, it becomes impossible to empirically attribute any performance gains or regressions to a specific change. Experiments must strictly modify one fundamental variable at a time to yield reliable insights.
+This violates the core scientific method of isolating variables. By changing both the physical architecture and the behavioral scheduler simultaneously, it becomes much harder to empirically attribute any performance gains or regressions to a specific change. Experiments must strictly modify one fundamental variable at a time to yield reliable insights.
 </details>
 
 <details>
@@ -1690,3 +1690,10 @@ kubectl logs job/ml-train-job
 With these foundational DevOps principles in place, you now possess the framework required to build resilient, reproducible ML systems that survive the journey to production.
 
 **Up Next**: Module 1.2 - Docker & Containerization for ML — where we encapsulate the entire dependency matrix into immutable artifacts, ensuring absolute parity between the researcher's workstation and the production cluster.
+
+## Sources
+
+- [DVC: Data Versioning and ML Experiments](https://github.com/iterative/dvc) — Explains how DVC keeps lightweight metadata in Git while storing large data and model artifacts externally for reproducible ML workflows.
+- [Kubernetes Self-Healing](https://kubernetes.io/docs/concepts/architecture/self-healing/) — Describes how Kubernetes controllers replace failed containers and Pods to keep workloads running as intended.
+- [Kubernetes Jobs](https://kubernetes.io/docs/concepts/workloads/controllers/job/) — Defines Jobs as run-to-completion workloads that track completion and failure state.
+- [MLOps: Continuous delivery and automation pipelines in machine learning](https://docs.cloud.google.com/architecture/mlops-continuous-delivery-and-automation-pipelines-in-machine-learning) — Provides a high-level reference for ML pipeline maturity, automation, and production operating models.
