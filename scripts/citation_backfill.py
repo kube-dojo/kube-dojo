@@ -715,12 +715,10 @@ def _extract_bridge_response(stdout: str) -> tuple[bool, str]:
 
 def dispatch_gemini(prompt: str) -> tuple[bool, str]:
     cmd = [
-        "scripts/dispatch.py" if Path("scripts/dispatch.py").exists() else "dispatch.py",
+        sys.executable,
+        str(REPO_ROOT / "scripts" / "dispatch.py"),
         "gemini", "-", "--timeout", "900",
     ]
-    # Prefer the .venv python if present.
-    if Path(".venv/bin/python").exists():
-        cmd = [".venv/bin/python", *cmd]
     try:
         proc = subprocess.run(
             cmd,
