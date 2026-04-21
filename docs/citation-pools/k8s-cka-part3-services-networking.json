@@ -1,0 +1,193 @@
+{
+  "section": "k8s/cka/part3-services-networking",
+  "modules": [
+    "k8s/cka/part3-services-networking/module-3.1-services",
+    "k8s/cka/part3-services-networking/module-3.2-endpoints",
+    "k8s/cka/part3-services-networking/module-3.3-dns",
+    "k8s/cka/part3-services-networking/module-3.4-ingress",
+    "k8s/cka/part3-services-networking/module-3.5-gateway-api",
+    "k8s/cka/part3-services-networking/module-3.6-network-policies",
+    "k8s/cka/part3-services-networking/module-3.7-cni",
+    "k8s/cka/part3-services-networking/module-3.8-cluster-networking-data-path"
+  ],
+  "generated_at": "2026-04-21T03:34:50+00:00",
+  "batch_count": 2,
+  "fallback_used": false,
+  "sources": [
+    {
+      "source_id": "S001",
+      "url": "https://kubernetes.io/docs/concepts/services-networking/service/",
+      "title": "Service | Kubernetes",
+      "tier": "standards",
+      "scope_notes": "Backs core Service semantics: stable network identity over ephemeral Pods, selectors, Service types (ClusterIP/NodePort/LoadBalancer/ExternalName), multi-port Services, selectorless Services, headless Services, NodePort banding, and Service-driven DNS discovery.",
+      "relevant_modules": [
+        "k8s/cka/part3-services-networking/module-3.1-services",
+        "k8s/cka/part3-services-networking/module-3.2-endpoints",
+        "k8s/cka/part3-services-networking/module-3.3-dns",
+        "k8s/cka/part3-services-networking/module-3.4-ingress"
+      ]
+    },
+    {
+      "source_id": "S002",
+      "url": "https://kubernetes.io/docs/reference/networking/virtual-ips/",
+      "title": "Virtual IPs and Service Proxies | Kubernetes",
+      "tier": "standards",
+      "scope_notes": "Backs how Service virtual IPs work, kube-proxy behavior, ClusterIP allocation details, traffic policies and trafficDistribution (PreferSameZone/PreferSameNode), and proxy mode discussions including nftables/ipvs/iptables.",
+      "relevant_modules": [
+        "k8s/cka/part3-services-networking/module-3.1-services",
+        "k8s/cka/part3-services-networking/module-3.2-endpoints"
+      ]
+    },
+    {
+      "source_id": "S003",
+      "url": "https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/",
+      "title": "EndpointSlices | Kubernetes",
+      "tier": "standards",
+      "scope_notes": "Backs EndpointSlice mechanics: automatic creation, default 100 endpoints per slice, conditions (ready/serving/terminating), topology fields, kube-proxy using EndpointSlices as routing source of truth, and EndpointSlice mirroring guidance for selectorless/manual backends.",
+      "relevant_modules": [
+        "k8s/cka/part3-services-networking/module-3.1-services",
+        "k8s/cka/part3-services-networking/module-3.2-endpoints"
+      ]
+    },
+    {
+      "source_id": "S004",
+      "url": "https://kubernetes.io/blog/2025/04/24/endpoints-deprecation/",
+      "title": "Kubernetes v1.33: Continuing the transition from Endpoints to EndpointSlices | Kubernetes",
+      "tier": "standards",
+      "scope_notes": "Backs the official deprecation status of the legacy Endpoints API in Kubernetes v1.33 and the warning behavior returned by the API server when clients still read or write Endpoints.",
+      "relevant_modules": [
+        "k8s/cka/part3-services-networking/module-3.1-services",
+        "k8s/cka/part3-services-networking/module-3.2-endpoints"
+      ]
+    },
+    {
+      "source_id": "S005",
+      "url": "https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/",
+      "title": "DNS for Services and Pods | Kubernetes",
+      "tier": "standards",
+      "scope_notes": "Backs Kubernetes DNS naming and resolution behavior: service.namespace.svc names, namespace search behavior, A/AAAA and SRV records, Pod DNS setup, and headless Service DNS responses.",
+      "relevant_modules": [
+        "k8s/cka/part3-services-networking/module-3.2-endpoints",
+        "k8s/cka/part3-services-networking/module-3.3-dns",
+        "k8s/cka/part3-services-networking/module-3.6-network-policies",
+        "k8s/cka/part3-services-networking/module-3.8-cluster-networking-data-path"
+      ]
+    },
+    {
+      "source_id": "S006",
+      "url": "https://kubernetes.io/docs/tasks/administer-cluster/dns-custom-nameservers/",
+      "title": "Customizing DNS Service | Kubernetes",
+      "tier": "standards",
+      "scope_notes": "Backs CoreDNS operational details: CoreDNS as cluster DNS, the CoreDNS ConfigMap/Corefile, kube-dns service compatibility name, stub domains, and upstream forwarding customization.",
+      "relevant_modules": [
+        "k8s/cka/part3-services-networking/module-3.3-dns"
+      ]
+    },
+    {
+      "source_id": "S007",
+      "url": "https://kubernetes.io/docs/concepts/services-networking/ingress/",
+      "title": "Ingress | Kubernetes",
+      "tier": "standards",
+      "scope_notes": "Backs Ingress resource behavior: HTTP/HTTPS routing, host/path rules, TLS termination with Secrets, IngressClass, requirement for an Ingress controller, and the fact that the Ingress API is stable but frozen while Kubernetes recommends Gateway for new feature work.",
+      "relevant_modules": [
+        "k8s/cka/part3-services-networking/module-3.4-ingress"
+      ]
+    },
+    {
+      "source_id": "S008",
+      "url": "https://gateway-api.sigs.k8s.io/guides/getting-started/migrating-from-ingress/",
+      "title": "Migrating from Ingress - Kubernetes Gateway API",
+      "tier": "standards",
+      "scope_notes": "Backs Gateway API as the successor path for Ingress-era deployments, explains key differences and migration rationale, and mentions ingress2gateway as an official migration tool.",
+      "relevant_modules": [
+        "k8s/cka/part3-services-networking/module-3.4-ingress"
+      ]
+    },
+    {
+      "source_id": "S009",
+      "url": "https://kubernetes.io/docs/concepts/cluster-administration/networking/",
+      "title": "Cluster Networking",
+      "tier": "standards",
+      "scope_notes": "Backs the Kubernetes networking model, pod/service/node IP range responsibilities, flat pod networking expectations, and the fact that common runtimes use CNI plugins to implement the model.",
+      "relevant_modules": [
+        "k8s/cka/part3-services-networking/module-3.7-cni",
+        "k8s/cka/part3-services-networking/module-3.8-cluster-networking-data-path"
+      ]
+    },
+    {
+      "source_id": "S010",
+      "url": "https://kubernetes.io/docs/concepts/services-networking/network-policies/",
+      "title": "Network Policies",
+      "tier": "standards",
+      "scope_notes": "Backs NetworkPolicy semantics: L3/L4 scope, ingress/egress isolation, additive allow rules, selector behavior, plugin-enforcement requirement, and stable fields such as endPort.",
+      "relevant_modules": [
+        "k8s/cka/part3-services-networking/module-3.6-network-policies",
+        "k8s/cka/part3-services-networking/module-3.7-cni",
+        "k8s/cka/part3-services-networking/module-3.8-cluster-networking-data-path"
+      ]
+    },
+    {
+      "source_id": "S011",
+      "url": "https://kubernetes.io/docs/reference/networking/virtual-ips",
+      "title": "Virtual IPs and Service Proxies",
+      "tier": "standards",
+      "scope_notes": "Backs kube-proxy responsibilities, Service ClusterIP implementation, EndpointSlice watching, and data-path claims about packet rewriting in kube-proxy-managed service networking.",
+      "relevant_modules": [
+        "k8s/cka/part3-services-networking/module-3.7-cni",
+        "k8s/cka/part3-services-networking/module-3.8-cluster-networking-data-path"
+      ]
+    },
+    {
+      "source_id": "S012",
+      "url": "https://gateway-api.sigs.k8s.io/concepts/api-overview/",
+      "title": "Gateway API Overview",
+      "tier": "standards",
+      "scope_notes": "Backs the role-oriented Gateway API model, GatewayClass/Gateway/Route relationships, HTTPRoute capabilities such as header-based routing and request modification, experimental TCPRoute/UDPRoute status, and cross-namespace attachment behavior.",
+      "relevant_modules": [
+        "k8s/cka/part3-services-networking/module-3.5-gateway-api"
+      ]
+    },
+    {
+      "source_id": "S013",
+      "url": "https://gateway-api.sigs.k8s.io/concepts/versioning/",
+      "title": "Gateway API Versioning",
+      "tier": "standards",
+      "scope_notes": "Backs Standard vs Experimental channel claims, release cadence, supported-version framing, and ValidatingAdmissionPolicy guardrails such as safe-upgrades behavior.",
+      "relevant_modules": [
+        "k8s/cka/part3-services-networking/module-3.5-gateway-api"
+      ]
+    },
+    {
+      "source_id": "S014",
+      "url": "https://gateway-api.sigs.k8s.io/faq/",
+      "title": "Gateway API FAQ",
+      "tier": "standards",
+      "scope_notes": "Backs high-level positioning claims, including that Gateway API does not replace or deprecate Ingress and that there is no default controller implementation.",
+      "relevant_modules": [
+        "k8s/cka/part3-services-networking/module-3.5-gateway-api"
+      ]
+    },
+    {
+      "source_id": "S015",
+      "url": "https://gateway-api.sigs.k8s.io/concepts/conformance/",
+      "title": "Gateway API Conformance",
+      "tier": "standards",
+      "scope_notes": "Backs conformance-test, support-level, and portability claims across Gateway API implementations and release channels.",
+      "relevant_modules": [
+        "k8s/cka/part3-services-networking/module-3.5-gateway-api"
+      ]
+    }
+  ],
+  "rejected_urls": [
+    {
+      "url": "https://kubernetes.github.io/ingress-nginx/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://www.cni.dev/docs/spec/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    }
+  ]
+}
