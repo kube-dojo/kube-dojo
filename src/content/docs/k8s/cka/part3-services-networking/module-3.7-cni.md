@@ -340,7 +340,7 @@ crictl inspect <container-id> | jq '.info.runtimeSpec.linux.namespaces'
 | **nftables** | Uses nftables | Best | Default in modern clusters (k8s v1.33+) |
 | **iptables** | Uses iptables rules | Good | Legacy default, most older clusters |
 | **IPVS** | Uses kernel IPVS | Better | High pod count (has known edge cases) |
-| **userspace** | Legacy, user-space proxy | Poor | Never use (deprecated) |
+| **userspace** | Legacy, user-space proxy | Poor | Avoid using; deprecated |
 
 ### 4.2 How kube-proxy Works
 
@@ -880,3 +880,9 @@ Congratulations on completing Part 3! You now understand:
 - CNI and cluster networking
 
 Take the [Part 3 Cumulative Quiz](../part3-cumulative-quiz/) to test your knowledge.
+
+## Sources
+
+- [Cluster Networking](https://kubernetes.io/docs/concepts/cluster-administration/networking/) — Best Kubernetes-side overview of the network model, IP ranges, and where CNI fits.
+- [CNI Specification](https://github.com/containernetworking/cni/blob/main/SPEC.md) — Defines the runtime-plugin contract, including ADD/DEL, namespaces, and attachment lifecycle.
+- [Virtual IPs and Service Proxies](https://kubernetes.io/docs/reference/networking/virtual-ips/) — Covers kube-proxy behavior, EndpointSlice watching, and the current state of iptables, IPVS, and nftables modes.

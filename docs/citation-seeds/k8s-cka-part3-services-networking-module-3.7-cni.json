@@ -1,0 +1,298 @@
+{
+  "module_key": "k8s/cka/part3-services-networking/module-3.7-cni",
+  "module_path": "src/content/docs/k8s/cka/part3-services-networking/module-3.7-cni.md",
+  "research_run_id": "2026-04-21T05:03:29+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 3,
+  "section_pool_ref": "docs/citation-pools/k8s-cka-part3-services-networking.json",
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "Kubernetes does not ship built-in pod networking; you must install a compatible CNI plugin before pods can communicate.",
+      "claim_class": "standard",
+      "span_hint": "lines 56, 572 | Did You Know; Quiz Q1 answer",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://kubernetes.io/docs/concepts/cluster-administration/network-plugins/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Kubernetes network plugins page directly states that a CNI plugin is required to implement the Kubernetes network model."
+    },
+    {
+      "claim_id": "C003",
+      "claim_text": "The Kubernetes network model gives each Pod a unique cluster-wide IP, requires direct pod-to-pod communication without NAT, and allows node agents to reach pods on that node.",
+      "claim_class": "standard",
+      "span_hint": "lines 68-107 | Part 1.1-1.2",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://kubernetes.io/docs/concepts/services-networking/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Services, Load Balancing, and Networking overview states these core networking-model properties explicitly."
+    },
+    {
+      "claim_id": "C004",
+      "claim_text": "The Kubernetes network model is implemented on each node by the container runtime, and common runtimes use CNI plugins for networking and security capabilities.",
+      "claim_class": "standard",
+      "span_hint": "lines 33, 99-107 | Why This Module Matters; What CNI Provides",
+      "disposition": "supported",
+      "source_ids": [
+        "S009"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The section pool source for Cluster Networking directly covers the implementation role of container runtimes and common use of CNI plugins."
+    },
+    {
+      "claim_id": "C005",
+      "claim_text": "Calico: Yes NetworkPolicy, High performance, Enterprise/security-focused.",
+      "claim_class": "benchmark",
+      "span_hint": "line 152 | Part 2.1 comparison table",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| **Calico** | Yes | High | Enterprise, security-focused |",
+      "suggested_rewrite": "| **Calico** | Yes | Depends on dataplane and workload | Networking and policy across clouds, VMs, and bare metal |",
+      "lesson_point_url": null,
+      "rationale": "Calico's policy support and deployment scope are sourceable, but the unqualified 'High' performance ranking is not anchored to an authoritative comparative benchmark."
+    },
+    {
+      "claim_id": "C006",
+      "claim_text": "Cilium: Yes (advanced), Very high performance, eBPF/observability use case.",
+      "claim_class": "benchmark",
+      "span_hint": "line 153 | Part 2.1 comparison table",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| **Cilium** | Yes (advanced) | Very high | eBPF, observability |",
+      "suggested_rewrite": "| **Cilium** | Yes | Depends on workload | eBPF, observability, and policy |",
+      "lesson_point_url": null,
+      "rationale": "Cilium's eBPF, observability, and policy capabilities are sourceable, but 'Very high' is an uncited comparative performance claim."
+    },
+    {
+      "claim_id": "C007",
+      "claim_text": "Flannel: No NetworkPolicy, Medium performance, Simple clusters.",
+      "claim_class": "benchmark",
+      "span_hint": "line 154 | Part 2.1 comparison table",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| **Flannel** | No | Medium | Simple clusters |",
+      "suggested_rewrite": "| **Flannel** | No built-in NetworkPolicy enforcement | Depends on backend | Simple overlay networking |",
+      "lesson_point_url": null,
+      "rationale": "The policy limitation is supportable, but the table's fixed performance label is not backed by a stable upstream benchmark source."
+    },
+    {
+      "claim_id": "C008",
+      "claim_text": "Canal combines Flannel networking with Calico policy.",
+      "claim_class": "vendor_capability",
+      "span_hint": "line 155, line 578 | Part 2.1 comparison table; Quiz Q2 answer",
+      "disposition": "needs_allowlist_expansion",
+      "source_ids": [],
+      "proposed_url": "https://docs.tigera.io/calico/latest/getting-started/kubernetes/flannel/install-for-flannel",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The primary current documentation for Canal is on Tigera's docs host, which is off the allowlist."
+    },
+    {
+      "claim_id": "C009",
+      "claim_text": "AWS VPC CNI: Via Calico, High performance, EKS native.",
+      "claim_class": "vendor_capability",
+      "span_hint": "line 156 | Part 2.1 comparison table",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| **AWS VPC CNI** | Via Calico | High | EKS native |",
+      "suggested_rewrite": "| **AWS VPC CNI** | Yes in v1.14+ | Depends on mode and workload | EKS native |",
+      "lesson_point_url": null,
+      "rationale": "The current row is outdated because upstream AWS VPC CNI now documents native Kubernetes NetworkPolicy support in recent releases."
+    },
+    {
+      "claim_id": "C010",
+      "claim_text": "nftables is the default kube-proxy mode in modern clusters starting with Kubernetes v1.33+.",
+      "claim_class": "standard",
+      "span_hint": "line 340 | Part 4.1 kube-proxy Modes table",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S011"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| **nftables** | Uses nftables | Best | Default in modern clusters (k8s v1.33+) |",
+      "suggested_rewrite": "| **nftables** | Uses nftables | Better scalability in large clusters | Modern Linux clusters that explicitly enable it (stable since k8s v1.33) |",
+      "lesson_point_url": null,
+      "rationale": "Upstream docs mark nftables stable and enabled by default as a feature state, but also describe iptables as the default mode users migrate from."
+    },
+    {
+      "claim_id": "C011",
+      "claim_text": "IPVS proxy mode is deprecated in Kubernetes v1.35, had service edge-case gaps, and nftables is recommended as its replacement.",
+      "claim_class": "standard",
+      "span_hint": "line 342 | Part 4.1 kube-proxy Modes table",
+      "disposition": "supported",
+      "source_ids": [
+        "S011"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared pool source for Virtual IPs and Service Proxies directly documents IPVS deprecation, edge-case mismatch, and the recommendation to prefer nftables."
+    },
+    {
+      "claim_id": "C012",
+      "claim_text": "userspace is a current kube-proxy mode and is deprecated.",
+      "claim_class": "standard",
+      "span_hint": "line 343 | Part 4.1 kube-proxy Modes table",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S011"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| **userspace** | Legacy, user-space proxy | Poor | Never use (deprecated) |",
+      "suggested_rewrite": "| **userspace** | Historical proxy mode | Obsolete | Avoid in new clusters |",
+      "lesson_point_url": null,
+      "rationale": "Current Kubernetes reference docs no longer list userspace among the available Linux kube-proxy modes, so the row should be reframed as historical guidance rather than a current mode entry."
+    },
+    {
+      "claim_id": "C013",
+      "claim_text": "kube-proxy watches Services and EndpointSlices and programs node rules so ClusterIP traffic is redirected to endpoints; in iptables mode it DNATs and selects a backend Pod at random by default.",
+      "claim_class": "standard",
+      "span_hint": "lines 345-369, line 590 | Part 4.2; Quiz Q4 answer",
+      "disposition": "supported",
+      "source_ids": [
+        "S011"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared pool source for Virtual IPs and Service Proxies explicitly describes kube-proxy watching Services and EndpointSlices and using packet-rewrite rules with random backend selection by default."
+    },
+    {
+      "claim_id": "C014",
+      "claim_text": "NetworkPolicy resources only take effect when the cluster uses a networking solution that supports NetworkPolicy enforcement; otherwise creating the resource has no effect.",
+      "claim_class": "standard",
+      "span_hint": "line 467, line 578 | Common Network Issues table; Quiz Q2 answer",
+      "disposition": "supported",
+      "source_ids": [
+        "S010"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared pool Network Policies source states this behavior directly, including that creating a NetworkPolicy without an implementing controller has no effect."
+    },
+    {
+      "claim_id": "C015",
+      "claim_text": "In kubeadm clusters, CoreDNS remains Pending until a pod network add-on is installed.",
+      "claim_class": "standard",
+      "span_hint": "line 572 | Quiz Q1 answer",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/troubleshooting-kubeadm/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The kubeadm troubleshooting page explicitly says CoreDNS Pending is expected until the pod network is set up."
+    },
+    {
+      "claim_id": "C016",
+      "claim_text": "Pods running with hostNetwork should explicitly set dnsPolicy to ClusterFirstWithHostNet; otherwise they fall back to Default DNS behavior.",
+      "claim_class": "standard",
+      "span_hint": "line 562, line 596 | Common Mistakes; Quiz Q5 answer",
+      "disposition": "supported",
+      "source_ids": [
+        "S005"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared pool DNS source states this exact fallback behavior for hostNetwork pods."
+    },
+    {
+      "claim_id": "C017",
+      "claim_text": "VXLAN uses UDP destination port 4789 by default.",
+      "claim_class": "standard",
+      "span_hint": "line 584 | Quiz Q3 answer",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://www.rfc-editor.org/rfc/rfc7348",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "RFC 7348 explicitly assigns UDP destination port 4789 as the default VXLAN port."
+    },
+    {
+      "claim_id": "C018",
+      "claim_text": "BGP listens on TCP port 179.",
+      "claim_class": "standard",
+      "span_hint": "line 584 | Quiz Q3 answer",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://www.rfc-editor.org/rfc/rfc4271",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "RFC 4271 states that BGP uses TCP and listens on TCP port 179."
+    },
+    {
+      "claim_id": "C019",
+      "claim_text": "Cilium can fully replace kube-proxy and implement service load balancing in eBPF.",
+      "claim_class": "vendor_capability",
+      "span_hint": "line 590 | Quiz Q4 answer",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://github.com/cilium/cilium",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The upstream Cilium repository README explicitly says Cilium can fully replace kube-proxy and implements distributed load balancing in eBPF."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://kubernetes.io/docs/concepts/cluster-administration/networking/",
+      "title": "Cluster Networking",
+      "tier": "standards",
+      "why_relevant": "Best Kubernetes-side overview of the network model, IP ranges, and where CNI fits."
+    },
+    {
+      "url": "https://github.com/containernetworking/cni/blob/main/SPEC.md",
+      "title": "CNI Specification",
+      "tier": "upstream",
+      "why_relevant": "Defines the runtime-plugin contract, including ADD/DEL, namespaces, and attachment lifecycle."
+    },
+    {
+      "url": "https://kubernetes.io/docs/reference/networking/virtual-ips/",
+      "title": "Virtual IPs and Service Proxies",
+      "tier": "standards",
+      "why_relevant": "Covers kube-proxy behavior, EndpointSlice watching, and the current state of iptables, IPVS, and nftables modes."
+    }
+  ],
+  "notes": "Skipped shell snippets, YAML examples, and ASCII diagrams unless the surrounding prose made a concrete factual claim. The largest concentration of salvage work is in the comparison tables, where stable capability claims are mixed with uncited comparative performance labels or outdated mode/version assertions.",
+  "_schema_issues": [],
+  "rejected_urls": []
+}
