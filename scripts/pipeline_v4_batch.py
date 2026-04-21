@@ -278,7 +278,7 @@ def _run_one(
     dry_run: bool,
     skip_citation: bool,
     lease_seconds: int,
-    runner: Callable[..., pipeline_v4.PipelineV4Result] = pipeline_v4._run_pipeline_v4,
+    runner: Callable[..., pipeline_v4.PipelineV4Result] = pipeline_v4.run_pipeline_v4,
 ) -> dict[str, Any]:
     base: dict[str, Any] = {
         "module_key": candidate.module_key,

@@ -545,13 +545,14 @@ def run_pipeline_v4(
     max_rubric_retries: int = 2,
     generated_loc_threshold: float = 0.5,
     dry_run: bool = False,
+    skip_citation: bool = False,
 ) -> PipelineV4Result:
     return _run_pipeline_v4(
         module_key,
         max_rubric_retries=max_rubric_retries,
         generated_loc_threshold=generated_loc_threshold,
         dry_run=dry_run,
-        skip_citation=False,
+        skip_citation=skip_citation,
     )
 
 
