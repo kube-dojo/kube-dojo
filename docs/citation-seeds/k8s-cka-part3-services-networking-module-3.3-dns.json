@@ -1,0 +1,169 @@
+{
+  "module_key": "k8s/cka/part3-services-networking/module-3.3-dns",
+  "module_path": "src/content/docs/k8s/cka/part3-services-networking/module-3.3-dns.md",
+  "research_run_id": "2026-04-21T04:17:52+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 3,
+  "section_pool_ref": "docs/citation-pools/k8s-cka-part3-services-networking.json",
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "The module claims the CKA exam specifically tests DNS debugging, CoreDNS configuration, and Kubernetes name-resolution behavior.",
+      "claim_class": "standard",
+      "span_hint": "section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The CKA exam tests DNS debugging, CoreDNS configuration, and understanding how Kubernetes names resolve.",
+      "suggested_rewrite": "The CKA curriculum explicitly includes troubleshooting services and networking and understanding and using CoreDNS.",
+      "lesson_point_url": null,
+      "rationale": "The Linux Foundation curriculum directly names services/networking troubleshooting and CoreDNS, but not the stronger phrasing about configuration and resolution hierarchy."
+    },
+    {
+      "claim_id": "C002",
+      "claim_text": "The module claims kube-dns handled Kubernetes DNS before 1.11 and that CoreDNS is faster, more flexible, and plugin-based.",
+      "claim_class": "standard",
+      "span_hint": "section: Did You Know",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Before Kubernetes 1.11, kube-dns handled DNS. CoreDNS is faster, more flexible, and uses plugins for extensibility.",
+      "suggested_rewrite": "kube-dns was the original cluster DNS add-on, and CoreDNS became the recommended/default option in Kubernetes 1.11+ era releases because of its more extensible plugin-based architecture.",
+      "lesson_point_url": null,
+      "rationale": "Official Kubernetes sources support the historical transition and extensibility, but not the exact blanket wording or the unsupported 'faster' claim."
+    },
+    {
+      "claim_id": "C003",
+      "claim_text": "The module claims DNS is the number-one troubleshooting target and that most network issues are actually DNS issues.",
+      "claim_class": "statistic",
+      "span_hint": "section: Did You Know",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Most \"network issues\" are actually DNS issues. When in doubt, check DNS first!",
+      "suggested_rewrite": "DNS problems are a common cause of connectivity symptoms, so checking name resolution early is a practical troubleshooting step.",
+      "lesson_point_url": null,
+      "rationale": "This is an uncited superlative/ranking claim with no authoritative source backing the '#1' framing."
+    },
+    {
+      "claim_id": "C004",
+      "claim_text": "The module claims the kubelet injects /etc/resolv.conf into every Pod and always points it at the cluster DNS Service.",
+      "claim_class": "standard",
+      "span_hint": "section: Did You Know",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S005",
+        "S006"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The kubelet injects `/etc/resolv.conf` into every pod, pointing to the cluster DNS service.",
+      "suggested_rewrite": "The kubelet configures each Pod's `/etc/resolv.conf`; with the usual `ClusterFirst` policy, that file points to the cluster DNS Service.",
+      "lesson_point_url": null,
+      "rationale": "Kubernetes docs describe Pod DNS configuration, but the original sentence is too absolute because Pod DNS behavior depends on dnsPolicy and related settings."
+    },
+    {
+      "claim_id": "C005",
+      "claim_text": "Short service names resolve within a Pod's own namespace via the DNS search list, while cross-namespace lookups require qualification such as service.namespace or the full FQDN.",
+      "claim_class": "standard",
+      "span_hint": "section: 2.2 Service DNS Names / 2.3 How Search Domains Work",
+      "disposition": "supported",
+      "source_ids": [
+        "S005"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "S005 directly documents namespace search expansion and the need to qualify names across namespaces."
+    },
+    {
+      "claim_id": "C006",
+      "claim_text": "The CoreDNS Service is named `kube-dns` for compatibility with workloads that relied on the legacy Service name.",
+      "claim_class": "standard",
+      "span_hint": "section: 3.1 Viewing CoreDNS Components",
+      "disposition": "supported",
+      "source_ids": [
+        "S006"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "S006 explicitly states that the CoreDNS Service keeps the `kube-dns` name for interoperability and compatibility."
+    },
+    {
+      "claim_id": "C007",
+      "claim_text": "In a CoreDNS `hosts` plugin block, omitting `fallthrough` causes unmatched queries to stop at that plugin instead of continuing to later plugins such as `kubernetes`.",
+      "claim_class": "standard",
+      "span_hint": "section: 3.4 Customizing CoreDNS, callout after Corefile example",
+      "disposition": "needs_allowlist_expansion",
+      "source_ids": [],
+      "proposed_url": "https://coredns.io/plugins/hosts/",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The precise `hosts` plugin semantics are documented by CoreDNS itself, not by an allowlisted source in the shared pool."
+    },
+    {
+      "claim_id": "C008",
+      "claim_text": "The module explains hostNetwork DNS behavior using a stronger claim about external DNS and kubelet injection than the docs directly support.",
+      "claim_class": "standard",
+      "span_hint": "section: 5.3 Using hostNetwork with DNS",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S005"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "When a pod uses `hostNetwork: true`, it inherits the node's `/etc/resolv.conf`, which points to the node's external DNS instead of CoreDNS. This means the pod loses the ability to resolve cluster service names. Setting `ClusterFirstWithHostNet` forces the kubelet to inject the CoreDNS configuration, allowing the pod to resolve Kubernetes services while still using the host's network namespace.",
+      "suggested_rewrite": "For Pods running with `hostNetwork: true`, set `dnsPolicy: ClusterFirstWithHostNet`; otherwise a Pod using `ClusterFirst` falls back to `Default` DNS behavior and uses the node's resolver configuration.",
+      "lesson_point_url": null,
+      "rationale": "S005 directly states the `ClusterFirstWithHostNet` requirement and fallback behavior, but not the stronger universal wording about 'external DNS' and lost service-name resolution."
+    },
+    {
+      "claim_id": "C009",
+      "claim_text": "Kubernetes creates SRV records for named ports on normal and headless Services, using the `_port-name._protocol.service.namespace.svc.cluster-domain` form.",
+      "claim_class": "standard",
+      "span_hint": "section: 6.1 What Are SRV Records? / 6.2 Named Ports and SRV Records",
+      "disposition": "supported",
+      "source_ids": [
+        "S005"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "S005 explicitly documents SRV record creation for named Service ports and the record format."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/",
+      "title": "DNS for Services and Pods",
+      "tier": "standards",
+      "why_relevant": "Primary Kubernetes reference for service names, search paths, Pod DNS policies, and SRV records."
+    },
+    {
+      "url": "https://kubernetes.io/docs/tasks/administer-cluster/dns-custom-nameservers/",
+      "title": "Customizing DNS Service",
+      "tier": "standards",
+      "why_relevant": "Explains CoreDNS deployment details, the `kube-dns` compatibility Service name, and Corefile customization patterns."
+    },
+    {
+      "url": "https://kubernetes.io/docs/tasks/administer-cluster/coredns/",
+      "title": "Using CoreDNS for Service Discovery",
+      "tier": "standards",
+      "why_relevant": "Useful follow-on reading for how CoreDNS fits into Kubernetes clusters and how it replaced kube-dns operationally."
+    }
+  ],
+  "notes": "Excluded code blocks, tables, drills, and quiz prompts/steps per schema guidance; claims above cover prose assertions and the CoreDNS `fallthrough` explanation that need citation or rewrite handling.",
+  "_schema_issues": [],
+  "rejected_urls": []
+}

@@ -32,7 +32,7 @@ After this module, you will be able to:
 
 DNS is how pods find services. Every time a pod makes a request to `my-service`, DNS resolves that name to an IP address. If DNS breaks, your entire cluster's service discovery breaks. Understanding CoreDNS is essential for troubleshooting connectivity issues.
 
-The CKA exam tests DNS debugging, CoreDNS configuration, and understanding how Kubernetes names resolve. You'll need to troubleshoot DNS issues and understand the resolution hierarchy.
+The CKA curriculum explicitly includes troubleshooting services and networking and understanding and using CoreDNS. You'll need to troubleshoot DNS issues and understand the resolution hierarchy.
 
 > **The Phone Book Analogy**
 >
@@ -53,11 +53,11 @@ By the end of this module, you'll be able to:
 
 ## Did You Know?
 
-- **CoreDNS replaced kube-dns**: Before Kubernetes 1.11, kube-dns handled DNS. CoreDNS is faster, more flexible, and uses plugins for extensibility.
+- **CoreDNS replaced kube-dns**: kube-dns was the original cluster DNS add-on, and CoreDNS became the recommended/default option in Kubernetes 1.11+ era releases because of its more extensible plugin-based architecture.
 
-- **DNS is the #1 troubleshooting target**: Most "network issues" are actually DNS issues. When in doubt, check DNS first!
+- **DNS is the #1 troubleshooting target**: DNS problems are a common cause of connectivity symptoms, so checking name resolution early is a practical troubleshooting step.
 
-- **Pods get DNS configured automatically**: The kubelet injects `/etc/resolv.conf` into every pod, pointing to the cluster DNS service.
+- **Pods get DNS configured automatically**: The kubelet configures each Pod's `/etc/resolv.conf`; with the usual `ClusterFirst` policy, that file points to the cluster DNS Service.
 
 ---
 
@@ -151,7 +151,7 @@ options ndots:5
 └────────────────────────────────────────────────────────────────┘
 ```
 
-### 2.2 Shorthand Names (Search Domains)
+### 2.2 [Shorthand Names (Search Domains)](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/)
 
 ```bash
 # From pod in "default" namespace, reaching "web-svc" in "default":
@@ -472,7 +472,7 @@ spec:
     image: nginx
 ```
 
-> **Why `ClusterFirstWithHostNet`?** When a pod uses `hostNetwork: true`, it inherits the node's `/etc/resolv.conf`, which points to the node's external DNS instead of CoreDNS. This means the pod loses the ability to resolve cluster service names. Setting `ClusterFirstWithHostNet` forces the kubelet to inject the CoreDNS configuration, allowing the pod to resolve Kubernetes services while still using the host's network namespace.
+> **Why `ClusterFirstWithHostNet`?** For Pods running with `hostNetwork: true`, set `dnsPolicy: ClusterFirstWithHostNet`; otherwise a Pod using `ClusterFirst` falls back to `Default` DNS behavior and uses the node's resolver configuration.
 
 ---
 
@@ -490,7 +490,7 @@ dig SRV web-svc.default.svc.cluster.local
 # _http._tcp.web-svc.default.svc.cluster.local. 30 IN SRV 0 100 80 web-svc.default.svc.cluster.local.
 ```
 
-### 6.2 Named Ports and SRV Records
+### 6.2 [Named Ports and SRV Records](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/)
 
 ```yaml
 # Service with named port
@@ -902,3 +902,9 @@ k delete namespace test
 ## Next Module
 
 [Module 3.4: Ingress](../module-3.4-ingress/) - HTTP routing and external access to services.
+
+## Sources
+
+- [DNS for Services and Pods | Kubernetes](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/) — Backs Kubernetes DNS naming and resolution behavior: service.namespace.svc names, namespace search behavior, A/AAAA and SRV records, Pod DNS setup, and headless Service DNS responses.
+- [Customizing DNS Service | Kubernetes](https://kubernetes.io/docs/tasks/administer-cluster/dns-custom-nameservers/) — Backs CoreDNS operational details: CoreDNS as cluster DNS, the CoreDNS ConfigMap/Corefile, kube-dns service compatibility name, stub domains, and upstream forwarding customization.
+- [Using CoreDNS for Service Discovery](https://kubernetes.io/docs/tasks/administer-cluster/coredns/) — Useful follow-on reading for how CoreDNS fits into Kubernetes clusters and how it replaced kube-dns operationally.
