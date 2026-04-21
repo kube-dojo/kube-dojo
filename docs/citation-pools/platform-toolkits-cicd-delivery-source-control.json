@@ -1,0 +1,85 @@
+{
+  "section": "platform/toolkits/cicd-delivery/source-control",
+  "modules": [
+    "platform/toolkits/cicd-delivery/source-control/module-11.1-gitlab",
+    "platform/toolkits/cicd-delivery/source-control/module-11.2-gitea-forgejo",
+    "platform/toolkits/cicd-delivery/source-control/module-11.3-github-advanced"
+  ],
+  "generated_at": "2026-04-20T23:34:59+00:00",
+  "batch_count": 1,
+  "fallback_used": false,
+  "sources": [
+    {
+      "source_id": "S001",
+      "url": "https://docs.github.com/en/get-started/learning-about-github/about-github-advanced-security",
+      "title": "About GitHub Advanced Security",
+      "tier": "upstream",
+      "scope_notes": "Backs GitHub Advanced Security feature-set claims, including GitHub Code Security and GitHub Secret Protection positioning.",
+      "relevant_modules": [
+        "platform/toolkits/cicd-delivery/source-control/module-11.3-github-advanced"
+      ]
+    },
+    {
+      "source_id": "S002",
+      "url": "https://docs.github.com/en/actions/concepts/security/openid-connect",
+      "title": "OpenID Connect",
+      "tier": "upstream",
+      "scope_notes": "Backs GitHub Actions OIDC claims for short-lived federated authentication from workflows to cloud providers without long-lived secrets.",
+      "relevant_modules": [
+        "platform/toolkits/cicd-delivery/source-control/module-11.3-github-advanced"
+      ]
+    },
+    {
+      "source_id": "S003",
+      "url": "https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows",
+      "title": "Reuse Workflows",
+      "tier": "upstream",
+      "scope_notes": "Backs reusable workflow, workflow_call, inputs/secrets passing, and matrix-with-reusable-workflow claims for GitHub Actions.",
+      "relevant_modules": [
+        "platform/toolkits/cicd-delivery/source-control/module-11.3-github-advanced"
+      ]
+    },
+    {
+      "source_id": "S004",
+      "url": "https://docs.github.com/en/actions/tutorials/use-actions-runner-controller",
+      "title": "Use Actions Runner Controller",
+      "tier": "upstream",
+      "scope_notes": "Backs self-hosted GitHub Actions runners on Kubernetes, runner scale sets, and ARC-based operational patterns.",
+      "relevant_modules": [
+        "platform/toolkits/cicd-delivery/source-control/module-11.3-github-advanced"
+      ]
+    }
+  ],
+  "rejected_urls": [
+    {
+      "url": "https://docs.gitlab.com/charts/installation/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://docs.gitlab.com/administration/reference_architectures/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://docs.gitlab.com/topics/autodevops/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://docs.gitea.com/usage/actions/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://docs.gitea.com/usage/repository/repo-mirror",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://forgejo.org/docs/latest/user/oauth2-provider/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    }
+  ]
+}
