@@ -263,3 +263,9 @@ This module is the bridge, not the final destination.
 - [Home AI Operations and Cost Model](../ai-infrastructure/module-1.5-home-ai-operations-cost-model/)
 - [Private AI Training Infrastructure](../../on-premises/ai-ml-infrastructure/module-9.2-private-ai-training/)
 - [Distributed Training Infrastructure](../../platform/disciplines/data-ai/ai-infrastructure/module-1.3-distributed-training/)
+
+## Sources
+
+- [Accelerate Quicktour](https://huggingface.co/docs/accelerate/v1.9.0/en/quicktour) — Grounds the practical mechanics of moving from single-device training to multi-GPU or multi-node launches.
+- [Schedule GPUs in Kubernetes](https://kubernetes.io/docs/tasks/manage-gpus/scheduling-gpus/) — Useful next reading for learners who want to understand how GPU resources are requested and scheduled once workloads move beyond a single box.
+- [Transformers bitsandbytes Quantization Guide](https://huggingface.co/docs/transformers/en/quantization/bitsandbytes) — Helps readers evaluate whether quantization and tighter memory discipline may remove a bottleneck before adding more GPUs.

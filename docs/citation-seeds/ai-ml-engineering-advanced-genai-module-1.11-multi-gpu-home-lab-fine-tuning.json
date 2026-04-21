@@ -1,0 +1,31 @@
+{
+  "module_key": "ai-ml-engineering/advanced-genai/module-1.11-multi-gpu-home-lab-fine-tuning",
+  "module_path": "src/content/docs/ai-ml-engineering/advanced-genai/module-1.11-multi-gpu-home-lab-fine-tuning.md",
+  "research_run_id": "2026-04-21T00:47:22+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 3,
+  "section_pool_ref": "docs/citation-pools/ai-ml-engineering-advanced-genai.json",
+  "claims": [],
+  "further_reading": [
+    {
+      "url": "https://huggingface.co/docs/accelerate/v1.9.0/en/quicktour",
+      "title": "Accelerate Quicktour",
+      "tier": "vendor",
+      "why_relevant": "Grounds the practical mechanics of moving from single-device training to multi-GPU or multi-node launches."
+    },
+    {
+      "url": "https://kubernetes.io/docs/tasks/manage-gpus/scheduling-gpus/",
+      "title": "Schedule GPUs in Kubernetes",
+      "tier": "standards",
+      "why_relevant": "Useful next reading for learners who want to understand how GPU resources are requested and scheduled once workloads move beyond a single box."
+    },
+    {
+      "url": "https://huggingface.co/docs/transformers/en/quantization/bitsandbytes",
+      "title": "Transformers bitsandbytes Quantization Guide",
+      "tier": "vendor",
+      "why_relevant": "Helps readers evaluate whether quantization and tighter memory discipline may remove a bottleneck before adding more GPUs."
+    }
+  ],
+  "notes": "Module is mostly pedagogical guidance and decision framing; under the stated citation-density rules it contains no hard, specific factual claims that require inline citation.",
+  "_schema_issues": [],
+  "rejected_urls": []
+}
