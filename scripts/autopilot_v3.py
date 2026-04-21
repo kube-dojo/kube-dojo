@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
-"""Citation-pipeline autopilot: loop `run_section.py --auto-pick --only-uncited`.
+"""v3 citation-pipeline autopilot.
 
-Designed for "human triggered, walks away" operation. You give it an
-end condition (max sections, wall-clock deadline, or both) and it
-keeps processing the densest uncited section until the condition is
-met or the queue is drained.
+v3 = the citation-backfill pipeline (per-claim research + verify +
+inject + audit, driven by scripts/pipeline_v3.py). v4 — when wired
+up for thin-module body expansion — will get its own
+`autopilot_v4.py`; keep the families separate, the semantics
+differ enough that one combined runner would accumulate flags.
 
-Each iteration is an independent run_section invocation — failures in
-one section don't poison the loop, and the human can Ctrl-C between
-sections without leaving bad state.
+Loops `scripts/run_section_v3.py --auto-pick --only-uncited` with
+a stop condition (--max-sections, --until-time, or both). Each
+iteration is an independent run_section_v3 invocation, so one
+failure doesn't poison the loop and the operator can Ctrl-C
+between sections without leaving bad state.
 
 Usage:
-    .venv/bin/python scripts/autopilot.py --max-sections 3
-    .venv/bin/python scripts/autopilot.py --until-time 08:00
-    .venv/bin/python scripts/autopilot.py --max-sections 5 --until-time 14:30
-    .venv/bin/python scripts/autopilot.py --dry-run           # list the queue, don't run
+    .venv/bin/python scripts/autopilot_v3.py --max-sections 3
+    .venv/bin/python scripts/autopilot_v3.py --until-time 08:00
+    .venv/bin/python scripts/autopilot_v3.py --max-sections 5 --until-time 14:30
+    .venv/bin/python scripts/autopilot_v3.py --dry-run       # preview only
 """
 
 from __future__ import annotations
@@ -29,7 +32,7 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
 PYTHON = str(REPO_ROOT / ".venv" / "bin" / "python")
-RUN_SECTION = str(SCRIPT_DIR / "run_section.py")
+RUN_SECTION_V3 = str(SCRIPT_DIR / "run_section_v3.py")
 LOG_DIR = REPO_ROOT / ".pipeline" / "v3" / "autopilot"
 
 
@@ -45,7 +48,7 @@ def _parse_hhmm(value: str) -> dt.datetime:
 
 def _queue_preview(min_uncited: int) -> list[tuple[str, int, int]]:
     sys.path.insert(0, str(SCRIPT_DIR))
-    from run_section import _candidate_sections  # type: ignore  # noqa: E402
+    from run_section_v3 import _candidate_sections  # type: ignore  # noqa: E402
     return _candidate_sections(min_uncited=min_uncited)
 
 
@@ -58,11 +61,11 @@ def _log_iteration(entry: dict) -> None:
 
 
 def _run_one_section(min_uncited: int) -> tuple[int, str]:
-    """Invoke run_section with --auto-pick --only-uncited. Return
+    """Invoke run_section_v3 with --auto-pick --only-uncited. Return
     (exit_code, section_picked_or_empty)."""
     cmd = [
         PYTHON,
-        RUN_SECTION,
+        RUN_SECTION_V3,
         "--auto-pick",
         "--only-uncited",
         f"--min-uncited={min_uncited}",
@@ -80,7 +83,7 @@ def _run_one_section(min_uncited: int) -> tuple[int, str]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Loop run_section.py --auto-pick until a stop condition is met.",
+        description="Loop run_section_v3.py --auto-pick until a stop condition is met.",
     )
     parser.add_argument(
         "--max-sections",

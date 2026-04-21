@@ -13,12 +13,13 @@ Session 9 handoff: [`docs/sessions/2026-04-21-session-9-handoff.md`](./docs/sess
 - Codex was rate-limited at session start (websocket "high demand" errors), so Gemini 3.1 Pro stood in as the independent-family reviewer. Codex recovered mid-session.
 
 **Human-triggered automation (new this session):**
-- `scripts/autopilot.py` loops section runs until a stop condition. Usage:
-  - `.venv/bin/python scripts/autopilot.py --dry-run` — preview the queue (108+ sections, ranked by uncited count).
-  - `.venv/bin/python scripts/autopilot.py --max-sections 5` — process the 5 densest uncited sections.
-  - `.venv/bin/python scripts/autopilot.py --until-time 08:00` — run until wall-clock 08:00.
+- `scripts/autopilot_v3.py` loops section runs until a stop condition. Usage:
+  - `.venv/bin/python scripts/autopilot_v3.py --dry-run` — preview the queue (108+ sections, ranked by uncited count).
+  - `.venv/bin/python scripts/autopilot_v3.py --max-sections 5` — process the 5 densest uncited sections.
+  - `.venv/bin/python scripts/autopilot_v3.py --until-time 08:00` — run until wall-clock 08:00.
   - Per-day JSONL log at `.pipeline/v3/autopilot/<yyyy-mm-dd>.jsonl`.
-- `scripts/run_section.py` is the underlying one-shot runner (preflight → pipeline → per-module commit → build → push). Flags: `--auto-pick`, `--only-uncited` (resumes partial sections cleanly), `--min-uncited N`, `--no-build`, `--no-push`, `--no-commit`.
+- `scripts/run_section_v3.py` is the underlying one-shot v3 runner (preflight → pipeline → per-module commit → build → push). Flags: `--auto-pick`, `--only-uncited` (resumes partial sections cleanly), `--min-uncited N`, `--no-build`, `--no-push`, `--no-commit`.
+- Naming: `_v3` suffix is deliberate — v3 is the citation-backfill pipeline. When v4 (thin-module body expansion per issue #322) gets wired up, it gets its own `run_section_v4.py` and `autopilot_v4.py`; different semantics would accumulate flags if merged.
 - Not yet: queue-based worker — deferred until failure-rate data justifies the persistence layer (only ~3 real failures in the 30 modules processed this session).
 
 **Validated this session via dogfood (6 sections, 32 modules cited):**

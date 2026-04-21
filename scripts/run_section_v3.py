@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""One-shot section-pipeline runner for human operators.
+"""One-shot v3 citation-pipeline section runner.
+
+v3 = citation-backfill pipeline (per-claim research + verify + inject
++ audit, driven by scripts/pipeline_v3.py). v4 (thin-module body
+expansion) gets its own `run_section_v4.py` when implemented.
 
 Runs the full end-to-end flow for a curriculum section:
 
@@ -16,9 +20,9 @@ Runs the full end-to-end flow for a curriculum section:
     6. `git push origin main`.
 
 Usage:
-    .venv/bin/python scripts/run_section.py <section-path>
-    .venv/bin/python scripts/run_section.py <section-path> --no-push
-    .venv/bin/python scripts/run_section.py <section-path> --no-build
+    .venv/bin/python scripts/run_section_v3.py <section-path>
+    .venv/bin/python scripts/run_section_v3.py --auto-pick --only-uncited
+    .venv/bin/python scripts/run_section_v3.py <section-path> --no-push
 """
 
 from __future__ import annotations
