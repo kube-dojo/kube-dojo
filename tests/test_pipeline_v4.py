@@ -388,6 +388,85 @@ def test_generated_loc_threshold_trip(monkeypatch: pytest.MonkeyPatch, tmp_path:
     assert result.stage_reached == "CITATION_V3"
 
 
+def test_citation_residuals_queued_is_needs_human(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """pipeline_v3 exits non-zero with status="residuals_queued" when
+    it's audited the module and routed un-auto-fixable items to human
+    review. That's a legitimate outcome, not a pipeline failure, so
+    pipeline_v4 should classify it as needs_human and still run the
+    final rescore — not short-circuit out as failed."""
+    _patch_roots(monkeypatch, tmp_path)
+    _write_module(tmp_path)
+    monkeypatch.setattr(
+        pipeline_v4.rubric_gaps,
+        "gaps_for_module",
+        lambda module_key: {"score": 1.5, "gaps": ["no_citations"], "target_loc": 600},
+    )
+
+    def _residuals(module_key: str) -> dict[str, object]:
+        return {
+            "exit_code": 1,
+            "stdout_tail": [
+                "{",
+                f'  "module_key": "{MODULE_KEY}",',
+                '  "status": "residuals_queued",',
+                '  "overstatement_applied": 0,',
+                '  "off_topic_deleted": 0,',
+                '  "queued_total": 3',
+                "}",
+            ],
+            "stderr_tail": [],
+        }
+
+    monkeypatch.setattr(pipeline_v4, "_invoke_citation_pipeline", _residuals)
+    _patch_rescore_sequence(monkeypatch, [{"score": 1.5, "gaps": ["no_citations"]}])
+
+    result = pipeline_v4.run_pipeline_v4(MODULE_KEY)
+
+    assert result.outcome == "needs_human"
+    assert result.reason == "citation_residuals_queued"
+    assert result.stage_reached == "DONE"
+    assert result.citation_v3_exit == 1
+
+
+def test_citation_v3_hard_failure_still_marked_failed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A non-zero citation_v3 exit with no recognizable status (crash,
+    malformed output, etc.) is still a hard failure — don't treat
+    anything except status="residuals_queued" as non-fatal."""
+    _patch_roots(monkeypatch, tmp_path)
+    _write_module(tmp_path)
+    monkeypatch.setattr(
+        pipeline_v4.rubric_gaps,
+        "gaps_for_module",
+        lambda module_key: {"score": 1.5, "gaps": ["no_citations"], "target_loc": 600},
+    )
+    monkeypatch.setattr(
+        pipeline_v4,
+        "_invoke_citation_pipeline",
+        lambda module_key: {
+            "exit_code": 2,
+            "stdout_tail": ["Traceback (most recent call last):", "RuntimeError: oops"],
+            "stderr_tail": [],
+        },
+    )
+
+    result = pipeline_v4.run_pipeline_v4(MODULE_KEY)
+    assert result.outcome == "failed"
+    assert result.reason == "citation_v3_failed"
+
+
+def test_parse_citation_status(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert pipeline_v4._parse_citation_status([]) is None
+    assert pipeline_v4._parse_citation_status(["no json here"]) is None
+    tail = ["{", '  "status": "residuals_queued",', '  "queued_total": 4', "}"]
+    assert pipeline_v4._parse_citation_status(tail) == "residuals_queued"
+    clean_tail = ['{"status": "clean"}']
+    assert pipeline_v4._parse_citation_status(clean_tail) == "clean"
+
+
 def test_stage_5_regression(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     _patch_roots(monkeypatch, tmp_path)
     _write_module(tmp_path)
