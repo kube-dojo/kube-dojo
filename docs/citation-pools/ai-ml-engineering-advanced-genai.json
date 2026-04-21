@@ -1,0 +1,387 @@
+{
+  "section": "ai-ml-engineering/advanced-genai",
+  "modules": [
+    "ai-ml-engineering/advanced-genai/module-1.1-fine-tuning-llms",
+    "ai-ml-engineering/advanced-genai/module-1.10-single-gpu-local-fine-tuning",
+    "ai-ml-engineering/advanced-genai/module-1.11-multi-gpu-home-lab-fine-tuning",
+    "ai-ml-engineering/advanced-genai/module-1.2-lora-parameter-efficient-fine-tuning",
+    "ai-ml-engineering/advanced-genai/module-1.3-diffusion-models",
+    "ai-ml-engineering/advanced-genai/module-1.4-rlhf-alignment",
+    "ai-ml-engineering/advanced-genai/module-1.4-rlhf-alignment.staging",
+    "ai-ml-engineering/advanced-genai/module-1.5-advanced-generation-techniques",
+    "ai-ml-engineering/advanced-genai/module-1.5-advanced-generation-techniques.staging",
+    "ai-ml-engineering/advanced-genai/module-1.6-llm-evaluation",
+    "ai-ml-engineering/advanced-genai/module-1.7-ai-red-teaming",
+    "ai-ml-engineering/advanced-genai/module-1.8-ai-safety-alignment",
+    "ai-ml-engineering/advanced-genai/module-1.8-ai-safety-alignment.staging",
+    "ai-ml-engineering/advanced-genai/module-1.9-modern-peft-dora-pissa"
+  ],
+  "generated_at": "2026-04-21T00:27:53+00:00",
+  "batch_count": 4,
+  "fallback_used": false,
+  "sources": [
+    {
+      "source_id": "S001",
+      "url": "https://arxiv.org/abs/2106.09685",
+      "title": "LoRA: Low-Rank Adaptation of Large Language Models",
+      "tier": "standards",
+      "scope_notes": "Original LoRA paper for claims about freezing base weights, training low-rank adapters, parameter-count reduction, memory savings, and PEFT trade-offs versus full fine-tuning.",
+      "relevant_modules": [
+        "ai-ml-engineering/advanced-genai/module-1.1-fine-tuning-llms",
+        "ai-ml-engineering/advanced-genai/module-1.10-single-gpu-local-fine-tuning",
+        "ai-ml-engineering/advanced-genai/module-1.11-multi-gpu-home-lab-fine-tuning",
+        "ai-ml-engineering/advanced-genai/module-1.2-lora-parameter-efficient-fine-tuning",
+        "ai-ml-engineering/advanced-genai/module-1.9-modern-peft-dora-pissa"
+      ]
+    },
+    {
+      "source_id": "S002",
+      "url": "https://arxiv.org/abs/2305.14314",
+      "title": "QLoRA: Efficient Finetuning of Quantized LLMs",
+      "tier": "standards",
+      "scope_notes": "Primary source for 4-bit fine-tuning, NF4, double quantization, paged optimizers, and realistic single-GPU fine-tuning claims under constrained VRAM.",
+      "relevant_modules": [
+        "ai-ml-engineering/advanced-genai/module-1.1-fine-tuning-llms",
+        "ai-ml-engineering/advanced-genai/module-1.10-single-gpu-local-fine-tuning",
+        "ai-ml-engineering/advanced-genai/module-1.11-multi-gpu-home-lab-fine-tuning",
+        "ai-ml-engineering/advanced-genai/module-1.2-lora-parameter-efficient-fine-tuning"
+      ]
+    },
+    {
+      "source_id": "S003",
+      "url": "https://huggingface.co/docs/peft/developer_guides/lora",
+      "title": "PEFT LoRA Developer Guide",
+      "tier": "vendor",
+      "scope_notes": "Official implementation guide for LoRA configuration in PEFT, including rank, alpha, initialization, adapter behavior, and practical library-level fine-tuning mechanics.",
+      "relevant_modules": [
+        "ai-ml-engineering/advanced-genai/module-1.1-fine-tuning-llms",
+        "ai-ml-engineering/advanced-genai/module-1.10-single-gpu-local-fine-tuning",
+        "ai-ml-engineering/advanced-genai/module-1.11-multi-gpu-home-lab-fine-tuning",
+        "ai-ml-engineering/advanced-genai/module-1.2-lora-parameter-efficient-fine-tuning",
+        "ai-ml-engineering/advanced-genai/module-1.9-modern-peft-dora-pissa"
+      ]
+    },
+    {
+      "source_id": "S004",
+      "url": "https://huggingface.co/docs/trl/sft_trainer",
+      "title": "TRL SFTTrainer",
+      "tier": "vendor",
+      "scope_notes": "Official source for supervised fine-tuning workflows on causal LMs, dataset formats, evaluation/training metrics, checkpoint resume behavior, and PEFT integration in practical LLM pipelines.",
+      "relevant_modules": [
+        "ai-ml-engineering/advanced-genai/module-1.1-fine-tuning-llms",
+        "ai-ml-engineering/advanced-genai/module-1.10-single-gpu-local-fine-tuning"
+      ]
+    },
+    {
+      "source_id": "S005",
+      "url": "https://huggingface.co/docs/transformers/chat_templating",
+      "title": "Transformers Chat Templates",
+      "tier": "vendor",
+      "scope_notes": "Official source for claims about chat-template preprocessing, role/content formatting, control tokens, and applying templates correctly during chat-model fine-tuning.",
+      "relevant_modules": [
+        "ai-ml-engineering/advanced-genai/module-1.1-fine-tuning-llms",
+        "ai-ml-engineering/advanced-genai/module-1.10-single-gpu-local-fine-tuning"
+      ]
+    },
+    {
+      "source_id": "S006",
+      "url": "https://huggingface.co/docs/transformers/en/quantization/bitsandbytes",
+      "title": "Transformers bitsandbytes Quantization Guide",
+      "tier": "vendor",
+      "scope_notes": "Official source for practical 8-bit and 4-bit quantization, QLoRA-related setup, device mapping, nested quantization, and hardware compatibility constraints relevant to local tuning.",
+      "relevant_modules": [
+        "ai-ml-engineering/advanced-genai/module-1.1-fine-tuning-llms",
+        "ai-ml-engineering/advanced-genai/module-1.10-single-gpu-local-fine-tuning",
+        "ai-ml-engineering/advanced-genai/module-1.2-lora-parameter-efficient-fine-tuning"
+      ]
+    },
+    {
+      "source_id": "S007",
+      "url": "https://huggingface.co/docs/diffusers/training/lora",
+      "title": "Diffusers LoRA Training Guide",
+      "tier": "vendor",
+      "scope_notes": "Official source for LoRA applied to diffusion pipelines, including adapter targets in UNet/text encoder, training-script parameters, multi-GPU launch notes, and checkpoint outputs for image-generation fine-tuning.",
+      "relevant_modules": [
+        "ai-ml-engineering/advanced-genai/module-1.2-lora-parameter-efficient-fine-tuning"
+      ]
+    },
+    {
+      "source_id": "S008",
+      "url": "https://huggingface.co/docs/accelerate/v1.9.0/en/quicktour",
+      "title": "Accelerate Quicktour",
+      "tier": "vendor",
+      "scope_notes": "Official source for launching and adapting training code across single-GPU, multi-GPU, and multi-node setups with Accelerator/accelerate launch, including practical workflow changes for scaling experiments.",
+      "relevant_modules": [
+        "ai-ml-engineering/advanced-genai/module-1.10-single-gpu-local-fine-tuning",
+        "ai-ml-engineering/advanced-genai/module-1.11-multi-gpu-home-lab-fine-tuning"
+      ]
+    },
+    {
+      "source_id": "S009",
+      "url": "https://kubernetes.io/docs/tasks/manage-gpus/scheduling-gpus/",
+      "title": "Kubernetes Schedule GPUs",
+      "tier": "standards",
+      "scope_notes": "Official Kubernetes documentation for GPU device plugins, GPU resource requests/limits, node labeling, and scheduling behavior relevant to running training workloads on Kubernetes clusters.",
+      "relevant_modules": [
+        "ai-ml-engineering/advanced-genai/module-1.1-fine-tuning-llms",
+        "ai-ml-engineering/advanced-genai/module-1.11-multi-gpu-home-lab-fine-tuning"
+      ]
+    },
+    {
+      "source_id": "S010",
+      "url": "https://arxiv.org/abs/2006.11239",
+      "title": "Denoising Diffusion Probabilistic Models",
+      "tier": "standards",
+      "scope_notes": "Primary source for DDPM foundations, forward/reverse diffusion process, UNet-style denoising setup, and the original CIFAR-10 quality metrics often cited for early diffusion models.",
+      "relevant_modules": [
+        "ai-ml-engineering/advanced-genai/module-1.3-diffusion-models"
+      ]
+    },
+    {
+      "source_id": "S011",
+      "url": "https://arxiv.org/abs/2010.02502",
+      "title": "Denoising Diffusion Implicit Models",
+      "tier": "standards",
+      "scope_notes": "Primary source for DDIM sampling, non-Markovian reverse process, same training objective as DDPM, and the common 10x-50x faster sampling claim.",
+      "relevant_modules": [
+        "ai-ml-engineering/advanced-genai/module-1.3-diffusion-models"
+      ]
+    },
+    {
+      "source_id": "S012",
+      "url": "https://arxiv.org/abs/2112.10752",
+      "title": "High-Resolution Image Synthesis with Latent Diffusion Models",
+      "tier": "standards",
+      "scope_notes": "Backs claims about moving diffusion from pixel space to latent space to reduce compute cost while preserving fidelity, plus cross-attention conditioning for text-to-image systems.",
+      "relevant_modules": [
+        "ai-ml-engineering/advanced-genai/module-1.3-diffusion-models"
+      ]
+    },
+    {
+      "source_id": "S013",
+      "url": "https://arxiv.org/abs/2207.12598",
+      "title": "Classifier-Free Diffusion Guidance",
+      "tier": "standards",
+      "scope_notes": "Primary source for classifier-free guidance (CFG), including the quality-versus-diversity tradeoff and conditional/unconditional score combination used in modern diffusion pipelines.",
+      "relevant_modules": [
+        "ai-ml-engineering/advanced-genai/module-1.3-diffusion-models"
+      ]
+    },
+    {
+      "source_id": "S014",
+      "url": "https://huggingface.co/docs/diffusers/api/pipelines/stable_diffusion/stable_diffusion_3",
+      "title": "Diffusers Stable Diffusion 3 Pipeline Docs",
+      "tier": "vendor",
+      "scope_notes": "Supports implementation-level claims around Hugging Face Diffusers pipeline structure, SD3 components, guidance_scale usage, inference step defaults, and practical memory/offloading considerations.",
+      "relevant_modules": [
+        "ai-ml-engineering/advanced-genai/module-1.3-diffusion-models"
+      ]
+    },
+    {
+      "source_id": "S015",
+      "url": "https://huggingface.co/stabilityai/stable-diffusion-3-medium-diffusers",
+      "title": "Stable Diffusion 3 Medium Model Card",
+      "tier": "vendor",
+      "scope_notes": "Backs official license, intended-use and out-of-scope-use statements, model family naming, training-data summary, and official usage guidance for Stable Diffusion 3 Medium.",
+      "relevant_modules": [
+        "ai-ml-engineering/advanced-genai/module-1.3-diffusion-models"
+      ]
+    },
+    {
+      "source_id": "S016",
+      "url": "https://arxiv.org/abs/2203.02155",
+      "title": "Training language models to follow instructions with human feedback",
+      "tier": "standards",
+      "scope_notes": "Canonical RLHF/InstructGPT source for the pretraining -> SFT -> preference modeling -> RL pipeline, reward modeling with human comparisons, and the core alignment framing used across modern assistants.",
+      "relevant_modules": [
+        "ai-ml-engineering/advanced-genai/module-1.4-rlhf-alignment",
+        "ai-ml-engineering/advanced-genai/module-1.4-rlhf-alignment.staging",
+        "ai-ml-engineering/advanced-genai/module-1.5-advanced-generation-techniques",
+        "ai-ml-engineering/advanced-genai/module-1.5-advanced-generation-techniques.staging",
+        "ai-ml-engineering/advanced-genai/module-1.6-llm-evaluation",
+        "ai-ml-engineering/advanced-genai/module-1.8-ai-safety-alignment"
+      ]
+    },
+    {
+      "source_id": "S017",
+      "url": "https://arxiv.org/abs/2305.18290",
+      "title": "Direct Preference Optimization: Your Language Model is Secretly a Reward Model",
+      "tier": "standards",
+      "scope_notes": "Primary source for DPO as an RLHF alternative, including its direct preference-loss formulation and tradeoffs versus reward-model-plus-PPO alignment pipelines.",
+      "relevant_modules": [
+        "ai-ml-engineering/advanced-genai/module-1.4-rlhf-alignment",
+        "ai-ml-engineering/advanced-genai/module-1.4-rlhf-alignment.staging"
+      ]
+    },
+    {
+      "source_id": "S018",
+      "url": "https://arxiv.org/abs/2403.07691",
+      "title": "ORPO: Monolithic Preference Optimization without Reference Model",
+      "tier": "standards",
+      "scope_notes": "Primary source for ORPO, including the reference-model-free odds-ratio objective and its positioning relative to SFT and other preference-optimization approaches.",
+      "relevant_modules": [
+        "ai-ml-engineering/advanced-genai/module-1.4-rlhf-alignment",
+        "ai-ml-engineering/advanced-genai/module-1.4-rlhf-alignment.staging"
+      ]
+    },
+    {
+      "source_id": "S019",
+      "url": "https://arxiv.org/abs/2212.08073",
+      "title": "Constitutional AI: Harmlessness from AI Feedback",
+      "tier": "standards",
+      "scope_notes": "Primary source for Constitutional AI, self-critique/revision, supervised plus RL phases, rule-based constitutions, and Reinforcement Learning from AI Feedback (RLAIF).",
+      "relevant_modules": [
+        "ai-ml-engineering/advanced-genai/module-1.4-rlhf-alignment",
+        "ai-ml-engineering/advanced-genai/module-1.4-rlhf-alignment.staging",
+        "ai-ml-engineering/advanced-genai/module-1.5-advanced-generation-techniques",
+        "ai-ml-engineering/advanced-genai/module-1.5-advanced-generation-techniques.staging",
+        "ai-ml-engineering/advanced-genai/module-1.6-llm-evaluation",
+        "ai-ml-engineering/advanced-genai/module-1.8-ai-safety-alignment"
+      ]
+    },
+    {
+      "source_id": "S020",
+      "url": "https://arxiv.org/abs/2209.07858",
+      "title": "Red Teaming Language Models to Reduce Harms: Methods, Scaling Behaviors, and Lessons Learned",
+      "tier": "standards",
+      "scope_notes": "Primary source for AI red teaming methodology, harmful-output discovery, attack datasets, and how adversarial testing relates to alignment and safety evaluation.",
+      "relevant_modules": [
+        "ai-ml-engineering/advanced-genai/module-1.6-llm-evaluation",
+        "ai-ml-engineering/advanced-genai/module-1.7-ai-red-teaming",
+        "ai-ml-engineering/advanced-genai/module-1.8-ai-safety-alignment"
+      ]
+    },
+    {
+      "source_id": "S021",
+      "url": "https://arxiv.org/abs/2211.09110",
+      "title": "Holistic Evaluation of Language Models",
+      "tier": "standards",
+      "scope_notes": "Broad evaluation framework covering multi-metric, multi-scenario assessment of language models; useful for benchmark design, capability vs. broader quality dimensions, and evaluation tradeoffs.",
+      "relevant_modules": [
+        "ai-ml-engineering/advanced-genai/module-1.6-llm-evaluation",
+        "ai-ml-engineering/advanced-genai/module-1.8-ai-safety-alignment"
+      ]
+    },
+    {
+      "source_id": "S022",
+      "url": "https://arxiv.org/abs/2303.16634",
+      "title": "G-Eval: NLG Evaluation using GPT-4 with Better Human Alignment",
+      "tier": "standards",
+      "scope_notes": "Primary source for LLM-as-judge style evaluation, and for comparisons against conventional n-gram/reference-based metrics such as BLEU or ROUGE.",
+      "relevant_modules": [
+        "ai-ml-engineering/advanced-genai/module-1.6-llm-evaluation",
+        "ai-ml-engineering/advanced-genai/module-1.8-ai-safety-alignment"
+      ]
+    },
+    {
+      "source_id": "S023",
+      "url": "https://arxiv.org/abs/2306.05685",
+      "title": "Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena",
+      "tier": "standards",
+      "scope_notes": "Primary source for MT-Bench, Chatbot Arena, LLM-as-a-judge methodology, agreement with human preferences, and known judge biases such as position or verbosity bias.",
+      "relevant_modules": [
+        "ai-ml-engineering/advanced-genai/module-1.6-llm-evaluation",
+        "ai-ml-engineering/advanced-genai/module-1.8-ai-safety-alignment"
+      ]
+    },
+    {
+      "source_id": "S024",
+      "url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
+      "title": "OWASP Top 10 for Large Language Model Applications",
+      "tier": "standards",
+      "scope_notes": "Security taxonomy for LLM applications covering prompt injection, data/model poisoning, sensitive disclosure, excessive agency, overreliance, and related GenAI app risks.",
+      "relevant_modules": [
+        "ai-ml-engineering/advanced-genai/module-1.6-llm-evaluation",
+        "ai-ml-engineering/advanced-genai/module-1.7-ai-red-teaming",
+        "ai-ml-engineering/advanced-genai/module-1.8-ai-safety-alignment"
+      ]
+    },
+    {
+      "source_id": "S025",
+      "url": "https://arxiv.org/abs/1906.01820",
+      "title": "Risks from Learned Optimization in Advanced Machine Learning Systems",
+      "tier": "standards",
+      "scope_notes": "Primary source for mesa-optimization, inner alignment, outer alignment, and foundational alignment terminology.",
+      "relevant_modules": [
+        "ai-ml-engineering/advanced-genai/module-1.8-ai-safety-alignment"
+      ]
+    },
+    {
+      "source_id": "S026",
+      "url": "https://www.nist.gov/publications/artificial-intelligence-risk-management-framework-ai-rmf-10",
+      "title": "NIST AI RMF 1.0",
+      "tier": "standards",
+      "scope_notes": "Official NIST framework for governing, mapping, measuring, and managing AI risks; supports release timing and voluntary governance claims.",
+      "relevant_modules": [
+        "ai-ml-engineering/advanced-genai/module-1.8-ai-safety-alignment"
+      ]
+    },
+    {
+      "source_id": "S027",
+      "url": "https://www.nist.gov/publications/artificial-intelligence-risk-management-framework-generative-artificial-intelligence",
+      "title": "NIST AI RMF: Generative AI Profile (AI 600-1)",
+      "tier": "standards",
+      "scope_notes": "Official generative-AI-specific companion to AI RMF 1.0; supports claims about GenAI risk categories, controls, and publication timing.",
+      "relevant_modules": [
+        "ai-ml-engineering/advanced-genai/module-1.8-ai-safety-alignment"
+      ]
+    },
+    {
+      "source_id": "S028",
+      "url": "https://arxiv.org/abs/2402.09353",
+      "title": "DoRA: Weight-Decomposed Low-Rank Adaptation",
+      "tier": "standards",
+      "scope_notes": "Primary source for DoRA’s weight magnitude/direction decomposition, training-stability rationale, and benchmark comparisons against LoRA/full fine-tuning.",
+      "relevant_modules": [
+        "ai-ml-engineering/advanced-genai/module-1.9-modern-peft-dora-pissa"
+      ]
+    },
+    {
+      "source_id": "S029",
+      "url": "https://arxiv.org/abs/2404.02948",
+      "title": "PiSSA: Principal Singular Values and Singular Vectors Adaptation of Large Language Models",
+      "tier": "standards",
+      "scope_notes": "Primary source for PiSSA’s SVD-based initialization, faster convergence claims, and performance comparisons versus standard LoRA.",
+      "relevant_modules": [
+        "ai-ml-engineering/advanced-genai/module-1.9-modern-peft-dora-pissa"
+      ]
+    }
+  ],
+  "rejected_urls": [
+    {
+      "url": "https://docs.pytorch.org/tutorials/beginner/dist_overview.html",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://doi.org/10.6028/NIST.AI.100-1",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://doi.org/10.6028/NIST.AI.600-1",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://www.canlii.org/en/bc/bccrt/doc/2024/2024bccrt149/2024bccrt149.html",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://openreview.net/forum?id=iO4LZibEqW",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://openreview.net/forum?id=uccHPGDlao",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://eur-lex.europa.eu/legal-content/EN/LSU/?uri=CELEX%3A32024R1689",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    }
+  ]
+}
