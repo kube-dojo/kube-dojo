@@ -1,0 +1,127 @@
+{
+  "section": "platform/toolkits/data-ai-platforms/cloud-native-databases",
+  "modules": [
+    "platform/toolkits/data-ai-platforms/cloud-native-databases/module-15.1-cockroachdb",
+    "platform/toolkits/data-ai-platforms/cloud-native-databases/module-15.2-cloudnativepg",
+    "platform/toolkits/data-ai-platforms/cloud-native-databases/module-15.3-serverless-databases",
+    "platform/toolkits/data-ai-platforms/cloud-native-databases/module-15.4-vitess",
+    "platform/toolkits/data-ai-platforms/cloud-native-databases/module-15.5-etcd-operator"
+  ],
+  "generated_at": "2026-04-21T05:29:13+00:00",
+  "batch_count": 2,
+  "fallback_used": false,
+  "sources": [
+    {
+      "source_id": "S001",
+      "url": "https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/",
+      "title": "Operating etcd clusters for Kubernetes",
+      "tier": "standards",
+      "scope_notes": "Backs claims that etcd is Kubernetes' backing store for all cluster data, that production setups should use odd-sized multi-node clusters with backups, and that etcd reliability directly affects control-plane behavior.",
+      "relevant_modules": [
+        "platform/toolkits/data-ai-platforms/cloud-native-databases/module-15.5-etcd-operator"
+      ]
+    },
+    {
+      "source_id": "S002",
+      "url": "https://github.com/etcd-io/etcd-operator/releases",
+      "title": "Releases: etcd-io/etcd-operator",
+      "tier": "upstream",
+      "scope_notes": "Backs claims about the current official etcd-io operator release line, including v0.2.0 features such as certificate management, TLS-secured clusters, scaling, and upgrade support.",
+      "relevant_modules": [
+        "platform/toolkits/data-ai-platforms/cloud-native-databases/module-15.5-etcd-operator"
+      ]
+    },
+    {
+      "source_id": "S003",
+      "url": "https://github.com/coreos/etcd-operator",
+      "title": "Archived coreos/etcd-operator repository",
+      "tier": "upstream",
+      "scope_notes": "Backs historical claims that the old CoreOS etcd operator is archived and documents its older feature set like failover, rolling upgrades, and backup/restore.",
+      "relevant_modules": [
+        "platform/toolkits/data-ai-platforms/cloud-native-databases/module-15.5-etcd-operator"
+      ]
+    }
+  ],
+  "rejected_urls": [
+    {
+      "url": "https://www.cockroachlabs.com/docs/stable/architecture/overview",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://www.cockroachlabs.com/docs/stable/multiregion-overview",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://cloudnative-pg.io/docs/1.29/failover/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://cloudnative-pg.io/docs/1.29/recovery/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://console.neon.tech/api/v2/projects/{project_id}/branches",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://console.neon.tech/api/v2/projects/{project_id}/branches/{branch_id}/restore",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://planetscale.com/docs/vitess/schema-changes/branching",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://vitess.io/docs/23.0/reference/features/vschema/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://vitess.io/docs/23.0/user-guides/configuration-advanced/resharding/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://vitess.io/docs/23.0/user-guides/schema-changes/managed-online-schema-changes/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://etcd.io/docs/v3.6/op-guide/security/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://etcd.io/docs/v3.6/op-guide/monitoring/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://etcd.io/docs/v3.6/op-guide/maintenance/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://etcd.io/docs/v3.6/op-guide/failures/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://etcd.io/docs/v3.6/op-guide/performance/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://etcd.io/docs/v3.6/upgrades/upgrade_3_6/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    }
+  ]
+}
