@@ -930,3 +930,9 @@ Congratulations! You've completed the ML Platforms Toolkit. You now understand:
 - Building LLM applications with LangChain and LlamaIndex
 
 Continue to other toolkits or apply these skills to build production ML systems!
+
+## Sources
+
+- [LangChain README](https://github.com/langchain-ai/langchain) — Primary upstream overview of LangChain's architecture, ecosystem, and core capabilities.
+- [LlamaIndex README](https://github.com/run-llama/llama_index) — Primary upstream overview of LlamaIndex's data connectors, retrieval workflow, and backend integrations.
+- [Retrieval-Augmented Generation for Large Language Models: A Survey](https://arxiv.org/abs/2312.10997) — Good survey source for RAG concepts, retrieval design tradeoffs, and evaluation framing.
