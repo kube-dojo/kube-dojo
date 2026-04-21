@@ -29,10 +29,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import time
 from pathlib import Path
+from urllib.error import URLError
+from urllib.request import urlopen
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -45,6 +48,21 @@ from section_source_discovery import (  # type: ignore  # noqa: E402
 
 COMMITTABLE = {"clean", "residuals_queued"}
 DOCS_ROOT = REPO_ROOT / "src" / "content" / "docs"
+QUALITY_SCORES_URL = "http://127.0.0.1:8768/api/quality/scores"
+_QUALITY_TITLE_RE = re.compile(r'^title:\s*["\']?(.*?)["\']?\s*$', re.MULTILINE)
+_MODULE_NUMBER_RE = re.compile(r"module-([0-9]+(?:\.[0-9]+)*)")
+_CERT_TRACKS = frozenset({"cka", "ckad", "cks", "kcna", "kcsa"})
+_QUALITY_TRACK_LABELS = {
+    "ai": "AI",
+    "ai-ml-engineering": "AI/ML Engineering",
+    "cloud": "Cloud",
+    "linux": "Linux",
+    "on-premises": "On-Premises",
+    "platform": "Platform",
+    "prerequisites": "Prerequisites",
+}
+_QUALITY_ISSUE_CACHE: dict[str, str] | None = None
+_QUALITY_ISSUE_CACHE_LOADED = False
 
 
 def _run(cmd: list[str], *, check: bool = True, cwd: Path | None = None) -> subprocess.CompletedProcess:
@@ -102,11 +120,129 @@ def _uncited_modules(section_key: str) -> list[str]:
     return [key for key in _section_module_keys(section_key) if not _module_has_sources(key)]
 
 
-def _candidate_sections(min_uncited: int = 3) -> list[tuple[str, int, int]]:
+def _quality_track_label(rel: Path) -> str:
+    parts = rel.parts
+    if not parts:
+        return ""
+    first = parts[0]
+    if len(parts) >= 2 and first == "k8s" and parts[1] in _CERT_TRACKS:
+        return parts[1].upper()
+    top = _QUALITY_TRACK_LABELS.get(first, first.replace("-", " ").title())
+    if len(parts) >= 2 and not parts[1].startswith(("module-", "part")):
+        return f"{top} {parts[1].replace('-', ' ').title()}"
+    return top
+
+
+def _module_quality_label(module_key: str) -> str:
+    rel = Path(f"{module_key}.md")
+    module_path = DOCS_ROOT / rel
+    title = rel.stem.replace("-", " ").title()
+    if module_path.exists():
+        text = module_path.read_text(encoding="utf-8", errors="replace")
+        if text.startswith("---\n") and "\n---\n" in text[4:]:
+            frontmatter = text[4:].split("\n---\n", 1)[0]
+            match = _QUALITY_TITLE_RE.search(frontmatter)
+            if match:
+                title = match.group(1).strip() or title
+    title = re.sub(r"^Module\s+[0-9]+(?:\.[0-9]+)*:\s*", "", title).strip()
+    track = _quality_track_label(rel)
+    number_match = _MODULE_NUMBER_RE.search(rel.stem)
+    if track.lower() in _CERT_TRACKS and number_match:
+        return f"{track} {number_match.group(1)}: {title}"
+    return f"{track}: {title}"
+
+
+def _iter_quality_score_entries(payload: object) -> list[dict]:
+    if not isinstance(payload, dict):
+        return []
+    entries: list[dict] = []
+    seen: set[str] = set()
+    modules = payload.get("modules")
+    if isinstance(modules, list):
+        for entry in modules:
+            if not isinstance(entry, dict):
+                continue
+            module = entry.get("module")
+            if isinstance(module, str) and module not in seen:
+                seen.add(module)
+                entries.append(entry)
+    for key, value in payload.items():
+        if key == "modules" or not isinstance(value, list):
+            continue
+        for entry in value:
+            if not isinstance(entry, dict):
+                continue
+            module = entry.get("module")
+            if isinstance(module, str) and module not in seen:
+                seen.add(module)
+                entries.append(entry)
+    return entries
+
+
+def _load_quality_issue_map(timeout_s: float = 5.0) -> dict[str, str] | None:
+    global _QUALITY_ISSUE_CACHE, _QUALITY_ISSUE_CACHE_LOADED
+    if _QUALITY_ISSUE_CACHE_LOADED:
+        return _QUALITY_ISSUE_CACHE
+    try:
+        with urlopen(QUALITY_SCORES_URL, timeout=timeout_s) as response:
+            payload = json.load(response)
+    except (OSError, URLError, TimeoutError, json.JSONDecodeError) as exc:
+        print(
+            f"warning: content-stable gate failed open; could not load {QUALITY_SCORES_URL}: {exc}",
+            file=sys.stderr,
+            flush=True,
+        )
+        _QUALITY_ISSUE_CACHE = None
+        _QUALITY_ISSUE_CACHE_LOADED = True
+        return None
+    issues: dict[str, str] = {}
+    for entry in _iter_quality_score_entries(payload):
+        module = entry.get("module")
+        issue = entry.get("primary_issue")
+        if isinstance(module, str):
+            issues[module] = issue if isinstance(issue, str) else ""
+    _QUALITY_ISSUE_CACHE = issues
+    _QUALITY_ISSUE_CACHE_LOADED = True
+    return issues
+
+
+def _content_stable_modules(
+    module_keys: list[str],
+    *,
+    log_skips: bool,
+) -> list[str]:
+    issues_by_label = _load_quality_issue_map()
+    if issues_by_label is None:
+        return module_keys
+
+    kept: list[str] = []
+    for module_key in module_keys:
+        label = _module_quality_label(module_key)
+        if label not in issues_by_label:
+            print(
+                f"warning: {module_key} missing from /api/quality/scores; content-stable gate failing open",
+                file=sys.stderr,
+                flush=True,
+            )
+            kept.append(module_key)
+            continue
+        issue = issues_by_label[label]
+        if issue == "no citations":
+            kept.append(module_key)
+            continue
+        if log_skips:
+            shown_issue = issue or "<empty>"
+            print(f"skip: {module_key} primary_issue={shown_issue} — parks for v4", flush=True)
+    return kept
+
+
+def _candidate_sections(min_uncited: int = 3, *, content_stable_only: bool = False) -> list[tuple[str, int, int]]:
     """Scan every section directory under DOCS_ROOT; return (section_key,
-    uncited_count, total_count) for those with >= min_uncited modules
-    still missing `## Sources`. Sorted highest-uncited first so the
-    densest backlog comes first.
+    eligible_uncited_count, total_count) for those with >= min_uncited
+    modules still missing `## Sources`. When content_stable_only is set,
+    only modules whose quality-score primary_issue is exactly
+    "no citations" count toward the threshold. Sorted highest-uncited
+    first so the densest backlog comes first.
     """
     candidates: list[tuple[str, int, int]] = []
     seen: set[str] = set()
@@ -123,14 +259,17 @@ def _candidate_sections(min_uncited: int = 3) -> list[tuple[str, int, int]]:
             continue
         seen.add(section_key)
         modules = _section_module_keys(section_key)
-        uncited = sum(1 for m in modules if not _module_has_sources(m))
+        uncited_keys = [m for m in modules if not _module_has_sources(m)]
+        if content_stable_only:
+            uncited_keys = _content_stable_modules(uncited_keys, log_skips=False)
+        uncited = len(uncited_keys)
         if uncited >= min_uncited:
             candidates.append((section_key, uncited, len(modules)))
     candidates.sort(key=lambda t: (-t[1], t[0]))
     return candidates
 
 
-def auto_pick_section(min_uncited: int = 3) -> str | None:
+def auto_pick_section(min_uncited: int = 3, *, content_stable_only: bool = False) -> str | None:
     """Pick the section most in need of citation work.
 
     Ranking is simple uncited-count desc, path asc. The scorer's
@@ -141,12 +280,16 @@ def auto_pick_section(min_uncited: int = 3) -> str | None:
     and already accounts for critical modules — a section with 12
     uncited modules will also have many critical ones by definition.
     """
-    candidates = _candidate_sections(min_uncited=min_uncited)
+    candidates = _candidate_sections(
+        min_uncited=min_uncited,
+        content_stable_only=content_stable_only,
+    )
     if not candidates:
         return None
     section_key, uncited, total = candidates[0]
+    count_label = "content-stable uncited" if content_stable_only else "uncited"
     print(
-        f"→ auto-pick: {section_key} ({uncited}/{total} modules uncited)",
+        f"→ auto-pick: {section_key} ({uncited}/{total} modules {count_label})",
         flush=True,
     )
     return section_key
@@ -305,6 +448,11 @@ def main(argv: list[str] | None = None) -> int:
         default=3,
         help="With --auto-pick, ignore sections with fewer uncited modules than this (default: 3).",
     )
+    parser.add_argument(
+        "--content-stable-only",
+        action="store_true",
+        help="Skip modules unless /api/quality/scores reports primary_issue == 'no citations'.",
+    )
     parser.add_argument("--batch-size", type=int, default=5)
     parser.add_argument("--max-batch-chars", type=int, default=28_000)
     parser.add_argument("--no-build", action="store_true", help="Skip npm run build")
@@ -319,10 +467,14 @@ def main(argv: list[str] | None = None) -> int:
             print("→ --auto-pick ignored because an explicit section_path was given", flush=True)
             section_key = normalize_section_key(args.section_path)
         else:
-            picked = auto_pick_section(min_uncited=args.min_uncited)
+            picked = auto_pick_section(
+                min_uncited=args.min_uncited,
+                content_stable_only=args.content_stable_only,
+            )
             if not picked:
+                count_label = "content-stable uncited" if args.content_stable_only else "uncited"
                 print(
-                    f"→ auto-pick found no section with >= {args.min_uncited} uncited modules; queue may be drained",
+                    f"→ auto-pick found no section with >= {args.min_uncited} {count_label} modules; queue may be drained",
                     flush=True,
                 )
                 return 0
@@ -349,6 +501,24 @@ def main(argv: list[str] | None = None) -> int:
             print("→ nothing to do; section is fully cited", flush=True)
             return 0
         modules_override = uncited
+
+    if args.content_stable_only:
+        candidate_keys = modules_override or _section_module_keys(section_key)
+        kept = _content_stable_modules(candidate_keys, log_skips=True)
+        if modules_override is not None:
+            print(
+                f"→ --content-stable-only: {len(kept)}/{len(candidate_keys)} selected modules are stable enough for v3",
+                flush=True,
+            )
+        else:
+            print(
+                f"→ --content-stable-only: {len(kept)}/{len(candidate_keys)} section modules are stable enough for v3",
+                flush=True,
+            )
+        if not kept:
+            print("→ nothing to do; selected modules park for v4", flush=True)
+            return 0
+        modules_override = kept
 
     result = run_section_pipeline(
         section_key,

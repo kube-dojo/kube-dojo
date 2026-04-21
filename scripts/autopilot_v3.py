@@ -46,10 +46,13 @@ def _parse_hhmm(value: str) -> dt.datetime:
     return target
 
 
-def _queue_preview(min_uncited: int) -> list[tuple[str, int, int]]:
+def _queue_preview(min_uncited: int, *, content_stable_only: bool) -> list[tuple[str, int, int]]:
     sys.path.insert(0, str(SCRIPT_DIR))
     from run_section_v3 import _candidate_sections  # type: ignore  # noqa: E402
-    return _candidate_sections(min_uncited=min_uncited)
+    return _candidate_sections(
+        min_uncited=min_uncited,
+        content_stable_only=content_stable_only,
+    )
 
 
 def _log_iteration(entry: dict) -> None:
@@ -60,7 +63,7 @@ def _log_iteration(entry: dict) -> None:
         fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
-def _run_one_section(min_uncited: int) -> tuple[int, str]:
+def _run_one_section(min_uncited: int, *, content_stable_only: bool) -> tuple[int, str]:
     """Invoke run_section_v3 with --auto-pick --only-uncited. Return
     (exit_code, section_picked_or_empty)."""
     cmd = [
@@ -70,6 +73,8 @@ def _run_one_section(min_uncited: int) -> tuple[int, str]:
         "--only-uncited",
         f"--min-uncited={min_uncited}",
     ]
+    if content_stable_only:
+        cmd.append("--content-stable-only")
     print(f"→ running: {' '.join(cmd)}", flush=True)
     # Stream output live so the operator can tail progress. Capture
     # the tail for the autopilot log.
@@ -114,6 +119,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Print the queue preview and exit without invoking the pipeline.",
     )
+    parser.add_argument(
+        "--no-content-gate",
+        action="store_true",
+        help="Disable the content-stable gate and count all uncited modules.",
+    )
     args = parser.parse_args(argv)
 
     if args.max_sections is None and args.until_time is None and not args.dry_run:
@@ -121,14 +131,16 @@ def main(argv: list[str] | None = None) -> int:
 
     deadline: dt.datetime | None = _parse_hhmm(args.until_time) if args.until_time else None
 
+    content_stable_only = not args.no_content_gate
     print("== autopilot ==", flush=True)
     if args.max_sections is not None:
         print(f"  stop after {args.max_sections} section(s)", flush=True)
     if deadline is not None:
         print(f"  stop at {deadline.isoformat(sep=' ', timespec='minutes')}", flush=True)
     print(f"  min-uncited threshold: {args.min_uncited}", flush=True)
+    print(f"  content-stable gate: {'on' if content_stable_only else 'off'}", flush=True)
 
-    queue = _queue_preview(args.min_uncited)
+    queue = _queue_preview(args.min_uncited, content_stable_only=content_stable_only)
     print(f"→ queue head ({len(queue)} sections above threshold):", flush=True)
     for sec, uncited, total in queue[:10]:
         print(f"    {uncited:3d}/{total:<3d}  {sec}", flush=True)
@@ -146,7 +158,7 @@ def main(argv: list[str] | None = None) -> int:
             break
 
         iteration_start = time.time()
-        rc, _ = _run_one_section(args.min_uncited)
+        rc, _ = _run_one_section(args.min_uncited, content_stable_only=content_stable_only)
         elapsed = round(time.time() - iteration_start, 1)
         _log_iteration({
             "iteration": processed + 1,
@@ -163,7 +175,7 @@ def main(argv: list[str] | None = None) -> int:
 
         # Recheck whether anything's left; pipeline auto-pick prints
         # "queue may be drained" with rc=0 when empty.
-        remaining = _queue_preview(args.min_uncited)
+        remaining = _queue_preview(args.min_uncited, content_stable_only=content_stable_only)
         if not remaining:
             print("→ queue drained; stopping", flush=True)
             break
