@@ -1,0 +1,467 @@
+{
+  "module_key": "k8s/cka/part3-services-networking/module-3.2-endpoints",
+  "module_path": "src/content/docs/k8s/cka/part3-services-networking/module-3.2-endpoints.md",
+  "research_run_id": "2026-04-21T04:04:53+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 3,
+  "section_pool_ref": "docs/citation-pools/k8s-cka-part3-services-networking.json",
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "A global e-commerce company had a specific 45-minute Cyber Monday checkout outage in 2020 caused by Kubernetes endpoint limits.",
+      "claim_class": "war_story",
+      "span_hint": "section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "In 2020, a global e-commerce giant faced a catastrophic 45-minute checkout outage during Cyber Monday.",
+      "suggested_rewrite": "At large scale, legacy Service-backend discovery can become a traffic-routing bottleneck during peak events.",
+      "lesson_point_url": null,
+      "rationale": "This is a specific real-world outage anecdote with precise timing and event framing but no attributable source."
+    },
+    {
+      "claim_id": "C002",
+      "claim_text": "The legacy Kubernetes Endpoints API truncates backend lists at 1,000 entries.",
+      "claim_class": "statistic",
+      "span_hint": "section: Why This Module Matters",
+      "disposition": "supported",
+      "source_ids": [
+        "S001"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Service docs explicitly document truncation of legacy Endpoints objects beyond 1,000 backing endpoints."
+    },
+    {
+      "claim_id": "C003",
+      "claim_text": "Because of that truncation, thousands of transactions were sent to an overloaded subset while newer replicas received no traffic.",
+      "claim_class": "incident",
+      "span_hint": "section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Thousands of transactions were forced through a stagnant subset of increasingly overloaded pods. Meanwhile, hundreds of newly scaled replicas sat completely idle, receiving zero traffic.",
+      "suggested_rewrite": "Any load-balancing path that still depends on the legacy `Endpoints` API can end up sending traffic to only a subset of the available backends once a Service exceeds the old object's capacity.",
+      "lesson_point_url": null,
+      "rationale": "The operational lesson is real, but these incident-specific outcomes are presented as a concrete event without a source."
+    },
+    {
+      "claim_id": "C004",
+      "claim_text": "The company lost an estimated $3.2 million before an engineer found the over-capacity annotation and migrated to EndpointSlice.",
+      "claim_class": "war_story",
+      "span_hint": "section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The company lost an estimated $3.2 million in revenue before a senior engineer identified the obscure `endpoints.kubernetes.io/over-capacity: truncated` annotation and migrated the service to the newer API.",
+      "suggested_rewrite": "In this kind of over-capacity situation, operators may discover the `endpoints.kubernetes.io/over-capacity: truncated` annotation and need to migrate clients and tooling to `EndpointSlice`.",
+      "lesson_point_url": null,
+      "rationale": "The revenue figure and incident resolution sequence are unsourced real-event specifics and must be removed."
+    },
+    {
+      "claim_id": "C005",
+      "claim_text": "As of Kubernetes v1.33+, reading or writing Endpoints objects emits deprecation warnings.",
+      "claim_class": "standard",
+      "span_hint": "section: Did You Know",
+      "disposition": "supported",
+      "source_ids": [
+        "S004"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The v1.33 deprecation post explicitly states that the API server returns warnings for Endpoints reads and writes."
+    },
+    {
+      "claim_id": "C006",
+      "claim_text": "Legacy Endpoints objects truncate at 1,000 items and add the `endpoints.kubernetes.io/over-capacity: truncated` annotation.",
+      "claim_class": "statistic",
+      "span_hint": "section: Did You Know",
+      "disposition": "supported",
+      "source_ids": [
+        "S001"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Service docs cover both the 1,000-endpoint truncation behavior and the over-capacity annotation."
+    },
+    {
+      "claim_id": "C007",
+      "claim_text": "Kubernetes creates EndpointSlices with no more than 100 endpoints by default and creates a new slice when another endpoint must be added.",
+      "claim_class": "statistic",
+      "span_hint": "section: Did You Know",
+      "disposition": "supported",
+      "source_ids": [
+        "S003",
+        "S001"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Both the EndpointSlice and Service docs document the default 100-endpoint slice behavior."
+    },
+    {
+      "claim_id": "C008",
+      "claim_text": "kube-proxy uses EndpointSlices as its source of truth for internal traffic routing.",
+      "claim_class": "standard",
+      "span_hint": "section: Did You Know",
+      "disposition": "supported",
+      "source_ids": [
+        "S003",
+        "S011"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The EndpointSlice docs say EndpointSlices act as kube-proxy's source of truth, and the virtual IP docs say kube-proxy watches EndpointSlice objects."
+    },
+    {
+      "claim_id": "C009",
+      "claim_text": "The legacy Endpoints API lacks dual-stack and trafficDistribution support, truncates large endpoint lists, and EndpointSlices are stable since v1.21.",
+      "claim_class": "standard",
+      "span_hint": "section: Part 2: The Shift to EndpointSlices",
+      "disposition": "supported",
+      "source_ids": [
+        "S001",
+        "S003",
+        "S004"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "These versioned capability and limitation claims are covered across the Service, EndpointSlice, and v1.33 deprecation docs."
+    },
+    {
+      "claim_id": "C010",
+      "claim_text": "EndpointSlices group endpoints by IP family, protocol, port, and Service name, and are automatically created for selector-based Services.",
+      "claim_class": "standard",
+      "span_hint": "section: 4.1 Why EndpointSlices?",
+      "disposition": "supported",
+      "source_ids": [
+        "S003"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The EndpointSlice docs explicitly describe automatic creation and grouping semantics."
+    },
+    {
+      "claim_id": "C011",
+      "claim_text": "The module claims EndpointSlices can list up to 100 ports and that `FQDN` addressType has undefined semantics while only IPv4/IPv6 are processed by kube-proxy.",
+      "claim_class": "standard",
+      "span_hint": "section: 4.1 Why EndpointSlices?",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The controller's `--max-endpoints-per-slice` limit can be configured up to 1,000 endpoints per slice, though each EndpointSlice may also list up to 100 ports. EndpointSlice `addressType` supports `IPv4`, `IPv6`, and `FQDN` (though FQDN currently has no defined semantics and only IPv4/IPv6 are processed by `kube-proxy`).",
+      "suggested_rewrite": "The controller's `--max-endpoints-per-slice` setting is configurable, and EndpointSlices are primarily used to represent Service backends in a more scalable form than legacy `Endpoints`.",
+      "lesson_point_url": null,
+      "rationale": "This sentence mixes partly supported details with unstable or inconsistently documented specifics and should be simplified."
+    },
+    {
+      "claim_id": "C012",
+      "claim_text": "Endpoints can transiently appear in more than one EndpointSlice because updates and watches arrive at different times.",
+      "claim_class": "standard",
+      "span_hint": "section: 4.2 EndpointSlice Structure",
+      "disposition": "supported",
+      "source_ids": [
+        "S003"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The EndpointSlice docs have a dedicated section documenting duplicate endpoints across slices during transitions."
+    },
+    {
+      "claim_id": "C013",
+      "claim_text": "The comparison table says legacy Endpoints have unlimited max entries while EndpointSlices have 100 per slice.",
+      "claim_class": "statistic",
+      "span_hint": "section: 4.4 Endpoints vs EndpointSlices Comparison",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| Max entries | Unlimited (but problematic) | 100 per slice |",
+      "suggested_rewrite": "| Max entries | Single object with scalability limits | Small slices created and updated independently |",
+      "lesson_point_url": null,
+      "rationale": "The legacy Endpoints row is inaccurate because the old API truncates over-capacity data instead of being meaningfully unlimited."
+    },
+    {
+      "claim_id": "C014",
+      "claim_text": "EndpointSlice routing uses `ready`, `serving`, and `terminating`; terminating endpoints are usually ignored but may still receive traffic if all available endpoints are terminating.",
+      "claim_class": "standard",
+      "span_hint": "section: 2.4 Endpoints with NotReady Pods & EndpointSlice Conditions",
+      "disposition": "supported",
+      "source_ids": [
+        "S003"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The EndpointSlice docs define these conditions and document the all-terminating fallback."
+    },
+    {
+      "claim_id": "C015",
+      "claim_text": "For pod-backed endpoints, nil `ready` or `serving` values are interpreted as true, while nil `terminating` is interpreted as false.",
+      "claim_class": "standard",
+      "span_hint": "section: 2.4 Endpoints with NotReady Pods & EndpointSlice Conditions",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://kubernetes.io/zh-cn/docs/reference/kubernetes-api/service-resources/endpoint-slice-v1/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared pool does not cover nil-default semantics, but the official Kubernetes API reference does."
+    },
+    {
+      "claim_id": "C016",
+      "claim_text": "Services without selectors do not get EndpointSlices created automatically and must use manual EndpointSlices or legacy Endpoints.",
+      "claim_class": "standard",
+      "span_hint": "section: 3.1 When to Use Manual Endpoints",
+      "disposition": "supported",
+      "source_ids": [
+        "S001",
+        "S003"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Service docs describe selectorless Services with manual EndpointSlices, and the EndpointSlice docs describe mirroring legacy Endpoints."
+    },
+    {
+      "claim_id": "C017",
+      "claim_text": "Manually managed EndpointSlices should use the `endpointslice.kubernetes.io/managed-by` label, and each EndpointSlice name must be unique within a namespace.",
+      "claim_class": "standard",
+      "span_hint": "section: 3.1 When to Use Manual Endpoints",
+      "disposition": "supported",
+      "source_ids": [
+        "S003",
+        "S001"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Both docs explicitly describe the `managed-by` label and the unique-name requirement for EndpointSlices."
+    },
+    {
+      "claim_id": "C018",
+      "claim_text": "A headless Service has no ClusterIP, and DNS returns the selected Pod IPs directly instead of a single virtual IP.",
+      "claim_class": "standard",
+      "span_hint": "section: 5.1 What Is a Headless Service?",
+      "disposition": "supported",
+      "source_ids": [
+        "S001",
+        "S005"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Service and DNS docs both document headless Service behavior and returned DNS records."
+    },
+    {
+      "claim_id": "C019",
+      "claim_text": "Selector-based headless Services create EndpointSlices automatically, while selectorless headless Services do not.",
+      "claim_class": "standard",
+      "span_hint": "section: 5.2 Headless Service Behavior",
+      "disposition": "supported",
+      "source_ids": [
+        "S001"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Service docs explicitly distinguish headless Services with selectors from those without selectors."
+    },
+    {
+      "claim_id": "C020",
+      "claim_text": "EndpointSlices support topology-aware routing so traffic can stay in the same zone to reduce latency and cross-zone cost, and `service.kubernetes.io/topology-mode: Auto` enables that behavior.",
+      "claim_class": "standard",
+      "span_hint": "section: Part 6: Service Topology and Topology Hints",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://kubernetes.io/docs/concepts/services-networking/topology-aware-routing/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared pool does not include Topology Aware Routing, but the official Kubernetes concept page directly covers same-zone routing and the `topology-mode` annotation."
+    },
+    {
+      "claim_id": "C021",
+      "claim_text": "The Common Mistakes table says a manual Endpoint or EndpointSlice name must exactly match the Service name.",
+      "claim_class": "standard",
+      "span_hint": "section: Common Mistakes",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| **Wrong endpoint name** | Endpoints drop entirely and are not associated with the target service. | The manual Endpoint or EndpointSlice name must exactly match the Service name. |",
+      "suggested_rewrite": "| **Wrong endpoint linkage** | Manually created backends are not associated with the target Service. | For legacy Endpoints, the resource name must match the Service; for EndpointSlices, link them with the `kubernetes.io/service-name` label. |",
+      "lesson_point_url": null,
+      "rationale": "The EndpointSlice part of the row is incorrect because EndpointSlices are linked by label, not by exact object name."
+    },
+    {
+      "claim_id": "C022",
+      "claim_text": "The Common Mistakes table says `targetRef` should always be included when building manual endpoints for in-cluster resources.",
+      "claim_class": "standard",
+      "span_hint": "section: Common Mistakes",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| **Missing `targetRef`** | You cannot dynamically trace an endpoint back to the pod that generated it. | Always include `targetRef` mapping when building manual endpoints pointing to inner-cluster resources. |",
+      "suggested_rewrite": "| **Missing `targetRef`** | Tracing an endpoint back to its originating object becomes harder. | Add `targetRef` when you want easier debugging for in-cluster backends. |",
+      "lesson_point_url": null,
+      "rationale": "This is stronger than the API requires; `targetRef` is useful for traceability but not mandatory in all manual endpoint definitions."
+    },
+    {
+      "claim_id": "C023",
+      "claim_text": "Legacy Endpoints do not support modern dual-stack use cases and EndpointSlices should be used for IPv6 or dual-stack networking.",
+      "claim_class": "standard",
+      "span_hint": "section: Common Mistakes",
+      "disposition": "supported",
+      "source_ids": [
+        "S001",
+        "S004"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Service docs and the v1.33 deprecation post both state that Endpoints do not support dual-stack service features."
+    },
+    {
+      "claim_id": "C024",
+      "claim_text": "Only the affected EndpointSlice is updated during pod churn, reducing API server and kube-proxy processing time by roughly 30x.",
+      "claim_class": "benchmark",
+      "span_hint": "quiz: answer 4",
+      "disposition": "soften_to_illustration",
+      "source_ids": [
+        "S003",
+        "S011"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "When a pod changes, only the affected slice (~100 entries) is updated and transmitted, reducing API server load and kube-proxy processing time by roughly 30x.",
+      "suggested_rewrite": "When a pod changes, only the affected slice needs to be updated and transmitted, which substantially reduces API server and kube-proxy churn compared with rewriting one giant Endpoints object.",
+      "lesson_point_url": "https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/",
+      "rationale": "The efficiency claim is sound, but the exact 30x figure is an illustrative back-of-the-envelope benchmark rather than a sourced measurement."
+    },
+    {
+      "claim_id": "C025",
+      "claim_text": "StatefulSets use a headless Service to give each Pod a stable DNS name like `<pod-name>.<service-name>.<namespace>.svc.cluster.local`.",
+      "claim_class": "standard",
+      "span_hint": "quiz: answer 5",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared pool does not cover StatefulSet pod identity, but the official StatefulSet docs do."
+    },
+    {
+      "claim_id": "C026",
+      "claim_text": "The quiz answer says nil `ready` or `serving` defaults to true and nil `terminating` defaults to false for pod-backed endpoints.",
+      "claim_class": "standard",
+      "span_hint": "quiz: answer 6",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://kubernetes.io/zh-cn/docs/reference/kubernetes-api/service-resources/endpoint-slice-v1/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "This exact nil-default behavior is documented in the official Kubernetes API reference rather than the shared section pool."
+    },
+    {
+      "claim_id": "C027",
+      "claim_text": "If a Service exceeds 1,000 active pods, the legacy Endpoints API truncates at 1,000 and traffic paths that rely on Endpoints can strand the rest.",
+      "claim_class": "statistic",
+      "span_hint": "quiz: answer 7",
+      "disposition": "supported",
+      "source_ids": [
+        "S001"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Service docs explicitly describe truncation and the fact that legacy Endpoints-based load balancing only reaches up to 1,000 backends."
+    },
+    {
+      "claim_id": "C028",
+      "claim_text": "kube-proxy may still route to endpoints marked `serving: true` and `terminating: true` when all available endpoints are terminating.",
+      "claim_class": "standard",
+      "span_hint": "quiz: answer 8",
+      "disposition": "supported",
+      "source_ids": [
+        "S003"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The EndpointSlice docs directly describe this intended fallback behavior during rolling updates."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/",
+      "title": "EndpointSlices",
+      "tier": "standards",
+      "why_relevant": "Primary reference for slice sizing, conditions, duplication behavior, and controller-managed EndpointSlices."
+    },
+    {
+      "url": "https://kubernetes.io/docs/concepts/services-networking/service/",
+      "title": "Service",
+      "tier": "standards",
+      "why_relevant": "Covers selectorless Services, headless Services, deprecated Endpoints behavior, and over-capacity truncation."
+    },
+    {
+      "url": "https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/",
+      "title": "DNS for Services and Pods",
+      "tier": "standards",
+      "why_relevant": "Explains how normal and headless Services resolve in cluster DNS, including multiple A/AAAA responses."
+    }
+  ],
+  "notes": "Shared pool coverage is strong for Service and EndpointSlice mechanics. The unsourced outage story and two Common Mistakes rows need rewrite rather than citation. Nil-default EndpointSlice condition semantics required an official Kubernetes API reference URL outside the shared pool.",
+  "_schema_issues": [],
+  "rejected_urls": []
+}

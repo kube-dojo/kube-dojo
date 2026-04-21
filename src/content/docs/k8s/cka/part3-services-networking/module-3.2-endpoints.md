@@ -333,7 +333,7 @@ k get endpointslice web-svc-abc12 -o yaml
 
 ### 2.1 No Endpoints = No Traffic
 
-When traffic drops, your first stop is always verifying endpoint generation:
+When traffic drops, your first stop is usually verifying endpoint generation:
 
 ```bash
 # Service exists but has no endpoints
@@ -622,11 +622,11 @@ spec:
 |---------|---------|----------|
 | **Wrong endpoint name** | Endpoints drop entirely and are not associated with the target service. | The manual Endpoint or EndpointSlice name must exactly match the Service name. |
 | **Selector typo** | The service yields `<none>` endpoints because no pods are matched. | Double-check label selectors using `kubectl get pods --show-labels`. |
-| **Missing `targetRef`** | You cannot dynamically trace an endpoint back to the pod that generated it. | Always include `targetRef` mapping when building manual endpoints pointing to inner-cluster resources. |
-| **Ignoring `NotReadyAddresses`** | Engineers falsely assume pods are healthy because they show as "Running", but they are failing readiness. | Always check `describe` output for `NotReadyAddresses` or missing `serving` conditions. |
+| **Missing `targetRef`** | You cannot dynamically trace an endpoint back to the pod that generated it. | Include `targetRef` mapping when building manual endpoints pointing to inner-cluster resources whenever possible. |
+| **Ignoring `NotReadyAddresses`** | Engineers falsely assume pods are healthy because they show as "Running", but they are failing readiness. | Usually check `describe` output for `NotReadyAddresses` or missing `serving` conditions. |
 | **Confusing Endpoints / EndpointSlices** | Getting truncated, incomplete data when querying large clusters. | Use both commands for debugging, but treat `EndpointSlices` as the modern source of truth. |
 | **Missing `managed-by` label** | The control plane might aggressively overwrite or ignore manual EndpointSlices. | Ensure manually created EndpointSlices utilize the `endpointslice.kubernetes.io/managed-by` label. |
-| **Using Endpoints for IPv6** | Legacy `Endpoints` entirely lack modern dual-stack support. | Migrate immediately to `EndpointSlices` for any IPv6 or dual-stack network topologies. |
+| **Using Endpoints for IPv6** | Legacy `Endpoints` entirely lack modern dual-stack support. | Use `EndpointSlices` for any IPv6 or dual-stack network topologies. |
 | **Forgetting headless rules** | Selectorless headless services fail to route traffic because they lack slices. | Remember that selectorless headless services do NOT auto-create EndpointSlices; create them manually. |
 
 ---
@@ -1123,3 +1123,9 @@ k delete endpoints manual-svc
 ## Next Module
 
 [Module 3.3: DNS & CoreDNS](../module-3.3-dns/) - Deep-dive into Kubernetes DNS, service discovery, and resolving complex naming constraints.
+
+## Sources
+
+- [EndpointSlices](https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/) — Primary reference for slice sizing, conditions, duplication behavior, and controller-managed EndpointSlices.
+- [Service](https://kubernetes.io/docs/concepts/services-networking/service/) — Covers selectorless Services, headless Services, deprecated Endpoints behavior, and over-capacity truncation.
+- [DNS for Services and Pods](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/) — Explains how normal and headless Services resolve in cluster DNS, including multiple A/AAAA responses.
