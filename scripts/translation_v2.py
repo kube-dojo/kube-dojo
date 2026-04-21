@@ -246,6 +246,7 @@ def _build_translation_queue_status(db_path: Path) -> dict[str, Any]:
 
     pending_review_list = sorted([m for m, status in status_by_module.items() if status == "pending_review"])
     pending_write_list = sorted([m for m, status in status_by_module.items() if status == "pending_write"])
+    in_progress_list = sorted([m for m, status in status_by_module.items() if status == "in_progress"])
     done_list = sorted([m for m, status in status_by_module.items() if status == "done"])
     dead_letter_list = sorted([m for m, status in status_by_module.items() if status == "dead_letter"])
 
@@ -265,6 +266,7 @@ def _build_translation_queue_status(db_path: Path) -> dict[str, Any]:
         "needs_human_count": needs_human_count,
         "pending_review": pending_review_list,
         "pending_write": pending_write_list,
+        "in_progress": in_progress_list,
         "done": done_list,
         "dead_letter": dead_letter_list,
     }
