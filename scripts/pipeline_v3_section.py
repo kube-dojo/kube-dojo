@@ -36,6 +36,7 @@ def run_section_pipeline(
     batch_size: int = 5,
     max_batch_chars: int = 28_000,
     auto_apply: bool = True,
+    modules_override: list[str] | None = None,
 ) -> dict:
     section_key = normalize_section_key(section_path)
     log_path = REPO_ROOT / ".pipeline" / "v3" / "batches" / f"{flat_section_name(section_key)}.log"
@@ -54,10 +55,17 @@ def run_section_pipeline(
             "log_path": str(log_path.relative_to(REPO_ROOT)),
         }
 
-    modules = [
-        module_path.relative_to((REPO_ROOT / "src" / "content" / "docs")).with_suffix("").as_posix()
-        for module_path in list_section_modules(section_key)
-    ]
+    # `modules_override` lets the caller restrict the per-module stage
+    # to a specific subset (e.g. "only modules still missing citations")
+    # while still rebuilding the pool from the whole section — pool
+    # completeness is what keeps source reuse stable.
+    if modules_override is not None:
+        modules = list(modules_override)
+    else:
+        modules = [
+            module_path.relative_to((REPO_ROOT / "src" / "content" / "docs")).with_suffix("").as_posix()
+            for module_path in list_section_modules(section_key)
+        ]
     statuses: dict[str, int] = {}
     results: list[dict] = []
     for index, module_key in enumerate(modules, start=1):
