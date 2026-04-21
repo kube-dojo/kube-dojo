@@ -107,17 +107,17 @@ graph TD
 
 Evaluating absolute model capabilities initially required massive, standardized benchmark datasets. However, the blistering pace of algorithmic advancement has led to rapid benchmark saturation. When a benchmark saturates, it means the frontier models are achieving near-perfect scores across the board, rendering the entire benchmark useless for distinguishing between state-of-the-art systems.
 
-> **Did You Know?** The MMLU (Massive Multitask Language Understanding) benchmark spans 57 academic subjects, and frontier models now score so highly on it that it is less useful for separating the strongest systems.
+> **Did You Know?** [The MMLU (Massive Multitask Language Understanding) benchmark spans 57 academic subjects](https://arxiv.org/abs/2009.03300), and frontier models now score so highly on it that it is less useful for separating the strongest systems.
 
-MMLU was once the gold standard for evaluation. However, it has become effectively saturated, with frontier models scoring above 90% on MMLU. To make the task harder, researchers introduced MMLU-Pro, which expands the answer choices from four to ten and focuses more on reasoning-heavy questions.
+MMLU was once the gold standard for evaluation. However, [it has become effectively saturated, with frontier models scoring above 90% on MMLU](https://arxiv.org/abs/2501.14249). To make the task harder, [researchers introduced MMLU-Pro, which expands the answer choices from four to ten and focuses more on reasoning-heavy questions](https://arxiv.org/abs/2406.01574).
 
-> **Did You Know?** Humanity's Last Exam (HLE) was introduced as a harder benchmark after older evaluation sets began to saturate.
+> **Did You Know?** [Humanity's Last Exam (HLE) was introduced as a harder benchmark after older evaluation sets began to saturate](https://arxiv.org/abs/2501.14249).
 
-The industry rapidly recognized that static benchmarks were highly vulnerable to data contamination. If benchmark questions or close variants appear in pre-training data, evaluation scores can overstate a model's true reasoning ability.
+The industry rapidly recognized that static benchmarks were highly vulnerable to data contamination. [If benchmark questions or close variants appear in pre-training data, evaluation scores can overstate a model's true reasoning ability.](https://arxiv.org/abs/2502.17521)
 
-> **Did You Know?** [The Hugging Face Open LLM Leaderboard was officially retired on March 13, 2025](https://huggingface.co/spaces/open-llm-leaderboard/open_llm_leaderboard/discussions/1135), after evaluating over 13,000 models, to prevent benchmark overfitting and irrelevant hill climbing.
+> **Did You Know?** [The Hugging Face Open LLM Leaderboard was officially retired on March 13, 2025](https://huggingface.co/spaces/open-llm-leaderboard/open_llm_leaderboard/discussions/1135), [after evaluating over 13,000 models, to prevent benchmark overfitting and irrelevant hill climbing](https://huggingface.co/spaces/open-llm-leaderboard/open_llm_leaderboard/discussions/1135).
 
-Before its retirement, the Open LLM Leaderboard utilized specific static datasets like IFEval, MuSR, GPQA, and BBH. Today, platforms such as LMSYS Chatbot Arena use crowdsourced pairwise comparisons in which humans blindly vote on output quality, giving teams a live complement to static benchmarks.
+Before its retirement, the Open LLM Leaderboard utilized specific static datasets like IFEval, MuSR, GPQA, and BBH. Today, platforms such as [LMSYS Chatbot Arena use crowdsourced pairwise comparisons in which humans blindly vote on output quality](https://arxiv.org/abs/2306.05685), giving teams a live complement to static benchmarks.
 
 > **Did You Know?** The evaluation framework [promptfoo was acquired by OpenAI on March 9, 2026](https://openai.com/index/openai-to-acquire-promptfoo/), signaling the massive industry shift toward consolidated, enterprise-grade LLM evaluation tooling.
 
@@ -125,7 +125,7 @@ Before its retirement, the Open LLM Leaderboard utilized specific static dataset
 
 Historically, natural language processing relied entirely on n-gram overlap metrics like BLEU (Bilingual Evaluation Understudy) and ROUGE (Recall-Oriented Understudy for Gisting Evaluation). These metrics mechanically measured how many exact words from the model's generated text matched a human-written reference text. [They penalized paraphrasing, summarization, and abstractive reasoning severely because they were blind to semantics and only understood string matching.](https://arxiv.org/abs/2303.16634)
 
-Today, the standard enterprise practice is the LLM-as-judge paradigm. Frameworks such as G-Eval and RAGAS use model-based evaluation to score qualities like coherence, faithfulness, and answer relevance, which can align better with human judgment than pure overlap metrics in some settings. By using a highly capable language model (the "judge") to grade the responses of another model, engineering teams can assess nuance, tone, factual grounding, and complex safety alignment policies with speed and scale.
+Today, many enterprise teams use LLM-as-judge approaches as part of their evaluation stack. Frameworks such as G-Eval and RAGAS use model-based evaluation to score qualities like coherence, faithfulness, and answer relevance, which can align better with human judgment than pure overlap metrics in some settings. By using a highly capable language model (the "judge") to grade the responses of another model, engineering teams can assess nuance, tone, factual grounding, and complex safety alignment policies with speed and scale.
 
 > **Stop and think**: If you use a frontier model to evaluate outputs generated by the exact same frontier model, are you risking an inherent bias where the model prefers its own stylistic quirks over objectively better responses from other architectures? How would you mitigate this self-preference bias in a production pipeline?
 
@@ -412,7 +412,7 @@ flowchart TD
     DR -- Enforce conversation flow --> SO[Safe Output]
 ```
 
-Implementing these guardrails at scale involves creating fast, extensible classes that can intercept and manipulate the text stream. Performance is critical here; if a guardrail takes 500 milliseconds to execute, it severely damages the user experience of a real-time streaming chatbot. In a Kubernetes v1.35 environment, these validation layers are often deployed as low-latency sidecar containers or dedicated gRPC services within the cluster.
+Implementing these guardrails at scale involves creating fast, extensible classes that can intercept and manipulate the text stream. Performance is critical here; if a guardrail adds noticeable per-request latency, it can visibly damage the user experience of a real-time streaming chatbot. In a Kubernetes v1.35 environment, these validation layers are often deployed as low-latency sidecar containers or dedicated gRPC services within the cluster.
 
 ```python
 """
@@ -1017,7 +1017,7 @@ Using robust mathematical fairness analyzers, we can directly observe these disp
 
 ### Equalized Odds vs Demographic Parity
 
-Demographic parity asks whether approval rates are similar across groups. Equalized odds asks a harder question: when the ground truth is held constant, do different groups receive similar true-positive and false-positive rates?
+[Demographic parity asks whether approval rates are similar across groups.](https://arxiv.org/abs/1104.3913) Equalized odds asks a harder question: when the ground truth is held constant, do different groups receive similar true-positive and false-positive rates?
 
 That distinction matters because a model can satisfy demographic parity while still making systematically worse mistakes for one population.
 
@@ -1217,8 +1217,12 @@ Now that you have built rigorous evaluation pipelines and multi-layered safety g
 
 ## Sources
 
-- [Open LLM Leaderboard retirement announcement](https://huggingface.co/spaces/open-llm-leaderboard/open_llm_leaderboard/discussions/1135) — Hugging Face discussion announcing the retirement of the Open LLM Leaderboard and the rationale behind it.
-- [OpenAI to acquire promptfoo](https://openai.com/index/openai-to-acquire-promptfoo/) — OpenAI announcement covering the promptfoo acquisition referenced in the benchmarks section.
-- [G-Eval: NLG Evaluation using GPT-4 with Better Human Alignment](https://arxiv.org/abs/2303.16634) — Primary paper grounding the shift from overlap metrics toward model-based evaluation aligned more closely with human judgment.
-- [OWASP Prompt Injection](https://owasp.org/www-community/attacks/PromptInjection) — OWASP overview of prompt-injection risks, including the shared natural-language channel between instructions and user input.
-- [Chatbot Arena: An Open Platform for Evaluating LLMs by Human Preference](https://arxiv.org/abs/2403.04132) — Further reading on pairwise human-preference evaluation as a complement to static benchmarks.
+- [arxiv.org: 2009.03300](https://arxiv.org/abs/2009.03300) — The original MMLU paper is the primary source for the benchmark's scope and subject count.
+- [arxiv.org: 2501.14249](https://arxiv.org/abs/2501.14249) — Humanity's Last Exam explicitly motivates itself by noting that popular benchmarks such as MMLU have passed the 90% range.
+- [arxiv.org: 2406.01574](https://arxiv.org/abs/2406.01574) — The MMLU-Pro paper directly describes the ten-option format and the shift toward more challenging reasoning questions.
+- [arxiv.org: 2502.17521](https://arxiv.org/abs/2502.17521) — The cited survey is specifically about benchmark contamination in LLM evaluation and supports this failure mode.
+- [huggingface.co: 1135](https://huggingface.co/spaces/open-llm-leaderboard/open_llm_leaderboard/discussions/1135) — The retirement discussion gives the date, the 13K-plus figure, and the stated reasons for shutting it down.
+- [Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena](https://arxiv.org/abs/2306.05685) — Primary source for MT-Bench, Chatbot Arena, LLM-as-a-judge methodology, agreement with human preferences, and known judge biases such as position or verbosity bias.
+- [arxiv.org: 1104.3913](https://arxiv.org/abs/1104.3913) — Fairness Through Awareness is a primary source for statistical parity, which the module is describing in plain language as demographic parity.
+- [Holistic Evaluation of Language Models](https://arxiv.org/abs/2211.09110) — Broadens evaluation beyond single benchmarks and helps frame multi-dimensional LLM assessment.
+- [OWASP Top 10 for Large Language Model Applications](https://owasp.org/www-project-top-10-for-large-language-model-applications/) — Useful companion reading for the module's guardrails, prompt-injection, and safety-stack sections.
