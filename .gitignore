@@ -83,6 +83,7 @@ test_script.sh
 .pipeline/state.lock
 .pipeline/ztt-pilot-*/
 .pipeline/v3/
+.pipeline/v4/
 .pipeline/citation-verdicts/
 .pipeline/audit-ztt-*/
 .cache/

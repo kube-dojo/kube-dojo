@@ -313,6 +313,7 @@ def test_expand_module_integration_shape_and_file_content(monkeypatch, tmp_path:
     assert result.provenance_blocks_added >= 4
     assert result.loc_after >= 220
     final_text = expand_module._module_path(THIN_MODULE_KEY).read_text(encoding="utf-8")
+    assert result.loc_after == expand_module._count_loc(final_text)
     assert "<!-- v4:generated type=no_quiz model=codex turn=1 -->" in final_text
     assert "<!-- v4:generated type=thin model=gemini turn=1 -->" in final_text
     assert "## Quiz" in final_text
