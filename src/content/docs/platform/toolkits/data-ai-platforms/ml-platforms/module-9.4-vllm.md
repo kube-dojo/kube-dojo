@@ -44,7 +44,7 @@ Through innovations like PagedAttention and continuous batching, vLLM achieves 2
 - vLLM can serve a 70B parameter model on 2 GPUs that would normally require 8 GPUs with naive serving
 - The project was created at UC Berkeley and achieved **24x throughput** improvements in benchmarks
 - vLLM supports **100+ model architectures** including Llama, Mistral, Falcon, GPT-NeoX, and more
-- Continuous batching means vLLM **never waits** for slow requests to finish before starting new ones
+- Continuous batching means vLLM usually does not wait for slow requests to finish before starting new ones
 - vLLM's memory efficiency comes from sharing attention key-value cache pages between requests
 
 ---
@@ -861,7 +861,7 @@ What is continuous batching in vLLM?
 <details>
 <summary>Show Answer</summary>
 
-**Processing new requests immediately without waiting for existing batches to complete**
+**Processing new requests as soon as capacity is available rather than waiting for existing batches to complete**
 
 Unlike static batching where you wait for all requests in a batch to finish, continuous batching adds new requests to the GPU as soon as capacity is available. This dramatically improves throughput.
 </details>
@@ -950,3 +950,10 @@ When this metric is consistently high, requests are waiting in queue, indicating
 ## Next Module
 
 Continue to [Module 9.5: Ray Serve](../module-9.5-ray-serve/) to learn about distributed inference and scaling LLM serving across multiple nodes.
+
+## Sources
+
+- [Efficient Memory Management for Large Language Model Serving with PagedAttention](https://arxiv.org/abs/2309.06180) — Primary research source for PagedAttention, KV-cache sharing, and the paper's reported throughput gains.
+- [vLLM OpenAI-Compatible Server](https://raw.githubusercontent.com/vllm-project/vllm/main/docs/serving/openai_compatible_server.md) — Upstream documentation for vLLM's OpenAI-compatible APIs, including completions, chat, and embeddings endpoints.
+- [vLLM Parallelism and Scaling](https://github.com/vllm-project/vllm/blob/main/docs/serving/parallelism_scaling.md) — Upstream guidance on tensor parallelism, multi-GPU deployment, and `/dev/shm` considerations for serving.
+- [Schedule GPUs](https://kubernetes.io/docs/tasks/manage-gpus/scheduling-gpus/) — Authoritative Kubernetes documentation for requesting GPU resources in Pods and deployments.
