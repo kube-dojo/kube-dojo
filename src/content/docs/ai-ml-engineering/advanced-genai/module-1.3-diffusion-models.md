@@ -35,7 +35,7 @@ By the end of this module, you will be able to:
 
 The modern generative era for continuous data was fundamentally catalyzed by the submission of the Denoising Diffusion Probabilistic Models (DDPM) paper on 2020-06-19. Before DDPM, Generative Adversarial Networks (GANs) dominated the landscape but suffered from severe mode collapse and highly unstable training dynamics. DDPM demonstrated a mathematically elegant alternative based on principles derived from non-equilibrium thermodynamics: a neural network could learn to systematically reverse a Markovian process that gradually corrupts an image with Gaussian noise.
 
-The forward process destroys information step-by-step until the data is indistinguishable from pure isotropic noise. Imagine dropping ink into a glass of water; over time, the ink diffuses until the water is uniformly colored. While thermodynamically impossible to reverse in the physical world, the reverse process in machine learning trains a specialized UNet architecture to predict the exact noise vector added at each discrete timestep. This effectively allows the model to learn to denoise and recover a pristine, coherent image from pure static. The paper's abstract reported groundbreaking empirical performance on the unconditional CIFAR-10 dataset, achieving an Inception score of 9.46 and a Frechet Inception Distance (FID) of 3.17. The original DDPM API in Hugging Face Diffusers uses a standard UNet model together with a DDPMScheduler and defaults to a computationally heavy 1000 inference steps.
+The forward process destroys information step-by-step until the data is indistinguishable from pure isotropic noise. Imagine dropping ink into a glass of water; over time, the ink diffuses until the water is uniformly colored. While effectively irreversible in the physical world, the reverse process in machine learning trains a specialized UNet architecture to predict the noise vector added at each discrete timestep. This effectively allows the model to learn to denoise and recover a pristine, coherent image from pure static. The paper's abstract reported groundbreaking empirical performance on the unconditional CIFAR-10 dataset, achieving an Inception score of 9.46 and a Frechet Inception Distance (FID) of 3.17. The original DDPM API in Hugging Face Diffusers uses a standard UNet model together with a DDPMScheduler and defaults to a computationally heavy 1000 inference steps.
 
 However, DDPM required hundreds or even thousands of sequential forward passes through the network to generate a single image, making it computationally prohibitive for real-time applications. The massive inference latency was a critical roadblock for enterprise adoption. This severe limitation was solved when DDIM was submitted on 2020-10-06, presented as an implicit non-Markovian sampler with the exact same training objective as DDPM. By altering the sampling trajectory to safely skip intermediate steps without retraining, DDIM can be 10x to 50x faster than DDPM in wall-clock time while allowing a computation-quality tradeoff without having to retrain the underlying base model.
 
@@ -86,8 +86,6 @@ spec:
 When defining the resources block in a Kubernetes v1.35+ manifest for massive ML workloads, setting explicit limits is a matter of cluster survival. Requesting `nvidia.com/gpu: 1` gives the scheduler an integer GPU allocation target through the device plugin, but it does not magically guarantee full memory-level isolation in every runtime configuration. If you need stricter partitioning or reproducible tenancy boundaries, pair the manifest with the actual GPU-sharing mechanism in use, such as MIG or time-slicing policies enforced by the device plugin and runtime stack. Because a diffusion model must load multi-gigabyte safetensors into VRAM before accepting requests, any sudden resource starvation or unmanaged sharing can still crash the worker. Furthermore, isolating this workload in the `ai-inference` namespace prevents CPU-heavy web applications from causing noisy neighbor degradation.
 
 ## Section 3: The Discrete Realm: Pre-Neural Origins and Code Generation
-
-The quest to automate programming stretches back to Grace Hopper, who fundamentally believed that developers should not be forced to write machine code. Her creation of the first compiler in the 1950s established the rule-based translation of human-readable abstractions into executable instructions. For decades, code generation remained strictly deterministic, relying entirely on Abstract Syntax Trees and rigid grammars. The paradigm shifted completely with the introduction of autoregressive large language models.
 
 While diffusion models map continuous, forgiving visual spaces where an extra pixel is imperceptible, autoregressive models are forced to map the strict, unforgiving, and discrete syntax of programming languages.
 
@@ -278,7 +276,7 @@ graph TD
 
 ## Section 4: Evaluating Code Generation and Metrics
 
-How do we actually know if a code model is capable? Natural language metrics like BLEU or ROUGE are completely useless in the discrete realm. A model can output code that matches a reference string by 99% but fails to compile due to a single misplaced bracket. Execution is the only ground truth.
+How do we actually know if a code model is capable? Natural language metrics like BLEU or ROUGE are completely useless in the discrete realm. A model can output code that matches a reference string by 99% but fails to compile due to a single misplaced bracket. Execution is the most reliable ground truth.
 
 ```python
 def has_close_elements(numbers: List[float], threshold: float) -> bool:
@@ -572,7 +570,7 @@ def speculative_decode(
     return detokenize(tokens)
 ```
 
-Furthermore, standard neural generation guarantees no syntactic validity. Syntax constrained decoding ensures strict parseability at the execution level by utilizing context-free grammars (like Lark) to mask out impossible token selections from the logits directly.
+Furthermore, standard neural generation guarantees no syntactic validity. Syntax constrained decoding ensures strict syntactic parseability by utilizing context-free grammars (like Lark) to mask out invalid token selections from the logits directly.
 
 ```python
 from lark import Lark
@@ -1270,3 +1268,9 @@ BLEU and ROUGE are natural language metrics that exclusively measure superficial
 You have now thoroughly analyzed the architectural extremes of modern generative AI, spanning from predicting continuous visual variables in diffusion models to auto-completing strict syntax boundaries in complex repositories using autoregressive logic and execution-based evaluation techniques.
 
 **Up Next**: [Module 1.5: Building AI Agents](/ai-ml-engineering/frameworks-agents/module-1.5-building-ai-agents/) — Discover how to wrap these generative assets in autonomous control loops, allowing models to independently execute terminal commands, inspect file systems, and orchestrate complex workflows seamlessly.
+
+## Sources
+
+- [Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239) — This is the foundational DDPM paper for the forward/reverse diffusion process and the original CIFAR-10 results.
+- [High-Resolution Image Synthesis with Latent Diffusion Models](https://arxiv.org/abs/2112.10752) — This is the primary source for why latent-space diffusion reduces compute while preserving quality and enabling flexible conditioning.
+- [Diffusers Stable Diffusion 3 Pipeline Docs](https://huggingface.co/docs/diffusers/api/pipelines/stable_diffusion/stable_diffusion_3) — This is the practical implementation reference for SD3 inference, guidance behavior, and memory/offloading considerations.
