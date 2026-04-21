@@ -891,3 +891,7 @@ Continue to [Module 9.3: Feature Stores](../module-9.3-feature-stores/) to learn
 ---
 
 *"Experiment tracking isn't overhead—it's insurance. Every hour you spend logging is paid back tenfold when you need to reproduce results or debug a production model."*
+
+## Sources
+
+- [MLflow README](https://raw.githubusercontent.com/mlflow/mlflow/master/README.md) — Good high-level overview of MLflow's core capabilities and current project positioning.
