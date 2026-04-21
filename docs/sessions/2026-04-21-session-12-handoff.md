@@ -141,9 +141,23 @@ run. Queuing the invocation here:
 ```bash
 .venv/bin/python scripts/pipeline_v4_batch.py \
     --track ai-ml-engineering/ai-infrastructure \
-    --limit 5 \
-    --workers 5
+    --limit 5
 ```
+
+`--workers` defaults to 1 and is hard-capped at 3. Values above 3
+clamp with a stderr WARNING. Gemini rate-limits on parallel calls
+(429 MODEL_CAPACITY_EXHAUSTED) and pipeline_v4's internal Gemini
+dispatches are the dominant cost; on top of the operator's usual
+concurrent translations/reviews, even 3 is aggressive. The batch
+wrapper's concurrency infra exists for cross-process lease safety
+(resumable if the batch crashes, cannot collide with a second
+terminal's batch), not for within-process parallelism.
+
+I initially posted this invocation with `--workers 5` — that was
+wrong and would have burned the Gemini quota on 429s. Landed a
+`MAX_WORKERS=3` clamp + warning + test in the follow-up commit so
+future invocations can't repeat the mistake. Added
+`feedback_batch_worker_cap.md` to memory.
 
 Candidate set verified (all 5 at score 1.5):
 

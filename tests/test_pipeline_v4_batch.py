@@ -210,6 +210,51 @@ def test_run_batch_happy_path(
     assert emitted[-1] == {"summary": summary}
 
 
+def test_workers_clamped_to_max(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """--workers 8 must clamp to MAX_WORKERS and emit a stderr warning.
+    Above the cap the expected behavior is Gemini 429s, so enforce
+    rather than letting the caller shoot themselves in the foot."""
+    _patch_db(monkeypatch, tmp_path)
+    observed: list[int] = []
+    live = 0
+    max_live = 0
+    import threading as _threading
+    lock = _threading.Lock()
+
+    def _runner(module_key: str, **kwargs):
+        nonlocal live, max_live
+        with lock:
+            live += 1
+            max_live = max(max_live, live)
+            observed.append(live)
+        try:
+            time.sleep(0.05)
+            return _canned_result(module_key)
+        finally:
+            with lock:
+                live -= 1
+
+    payload = _quality_payload(
+        [{"path": f"ai/m-{i}.md", "score": 2.0, "primary_issue": "thin"} for i in range(6)]
+    )
+    pipeline_v4_batch.run_batch(
+        workers=8,
+        quality_fetch=lambda root: payload,
+        runner=_runner,
+        emit=lambda _p: None,
+    )
+    err = capsys.readouterr().err
+    assert "clamping" in err, f"expected clamp warning on stderr, got: {err}"
+    assert max_live <= pipeline_v4_batch.MAX_WORKERS, (
+        f"workers clamp broken: max_live={max_live} but MAX_WORKERS="
+        f"{pipeline_v4_batch.MAX_WORKERS}"
+    )
+
+
 def test_run_batch_runs_in_parallel(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

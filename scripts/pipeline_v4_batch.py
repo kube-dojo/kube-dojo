@@ -1,16 +1,24 @@
 #!/usr/bin/env python3
-"""Concurrent runner for pipeline_v4 across a module set.
+"""Sequential-by-default runner for pipeline_v4 across a module set.
 
-Selects low-scored modules from the local-api quality scores, claims
-each with a per-module SQLite lease in .pipeline/v2.db so two concurrent
-batches can't collide, and runs --workers pipelines in parallel.
+Selects low-scored modules from the local-api quality scores and runs
+pipeline_v4 on each. Each module is claimed via a per-module SQLite
+lease in .pipeline/v2.db so two separate batch processes (e.g. two
+terminals, or a crashed batch restarting) never touch the same module
+at the same time.
 
-Each pipeline_v4 run is bounded by subprocess calls (Gemini, Codex) so
-ThreadPoolExecutor is the right concurrency primitive — the GIL is
-released during the subprocess waits.
+**Default --workers is 1.** Pipeline v4 internally dispatches Gemini
+(no_quiz + thin expansion) and a pipeline_v3 subprocess (citation_v3
+— also uses Gemini). Gemini rate-limits on parallel calls and returns
+429 MODEL_CAPACITY_EXHAUSTED. 2 or 3 workers can be safe when no
+other Gemini workloads (translations, reviews) are running.
+--workers is hard-capped at MAX_WORKERS=3 — values above that are
+clamped with a warning. The lease coordination matters primarily
+across processes (resumable, crash-safe), not for within-process
+parallelism.
 
 Usage:
-    .venv/bin/python scripts/pipeline_v4_batch.py --track /ai --limit 5 --workers 4
+    .venv/bin/python scripts/pipeline_v4_batch.py --track /ai --limit 5
     .venv/bin/python scripts/pipeline_v4_batch.py --limit 1 --dry-run
 """
 
@@ -40,7 +48,15 @@ import pipeline_v4  # noqa: E402
 
 DB_PATH = REPO_ROOT / ".pipeline" / "v2.db"
 DEFAULT_LEASE_SECONDS = 1800
-DEFAULT_WORKERS = 8
+# Gemini rate-limits on parallel calls (429 MODEL_CAPACITY_EXHAUSTED),
+# and pipeline_v4's internal dispatches to Gemini are the dominant
+# cost. Default is sequential; raising to 2-3 can be safe when the
+# user has no other Gemini workloads running, but anything above 3
+# hits rate limits hard. The hard cap enforces that — the script
+# clamps any --workers > MAX_WORKERS down to MAX_WORKERS with a
+# stderr warning.
+DEFAULT_WORKERS = 1
+MAX_WORKERS = 3
 DEFAULT_MAX_SCORE = 4.0
 
 LEASE_SCHEMA = """
@@ -323,6 +339,22 @@ def run_batch(
     quality_fetch: Callable[[Path], dict[str, Any]] | None = None,
     emit: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
+    if workers > MAX_WORKERS:
+        print(
+            f"[pipeline_v4_batch] WARNING: --workers {workers} exceeds "
+            f"MAX_WORKERS={MAX_WORKERS}; clamping. Gemini rate-limits on "
+            "parallel calls; more than 3 concurrent pipelines will hit "
+            "429 MODEL_CAPACITY_EXHAUSTED.",
+            file=sys.stderr,
+        )
+        workers = MAX_WORKERS
+    if workers > 1 and not dry_run and runner is None:
+        print(
+            f"[pipeline_v4_batch] NOTE: --workers {workers} fires "
+            f"{workers} concurrent Gemini dispatches. Safe only when no "
+            "other Gemini workloads (translations, reviews) are running.",
+            file=sys.stderr,
+        )
     started_at = dt.datetime.now(dt.UTC).isoformat(timespec="seconds")
     candidates = select_candidates(
         track=track,
@@ -405,7 +437,13 @@ def _build_parser() -> argparse.ArgumentParser:
         "--workers",
         type=int,
         default=DEFAULT_WORKERS,
-        help=f"Concurrent worker count (default {DEFAULT_WORKERS}).",
+        help=(
+            f"Concurrent worker count (default {DEFAULT_WORKERS}, max "
+            f"{MAX_WORKERS}). Gemini rate-limits on parallel calls: "
+            "2-3 workers is OK when no other Gemini workloads are running, "
+            "above 3 trips 429s. Values above the cap are clamped with a "
+            "warning."
+        ),
     )
     parser.add_argument(
         "--min-score",
