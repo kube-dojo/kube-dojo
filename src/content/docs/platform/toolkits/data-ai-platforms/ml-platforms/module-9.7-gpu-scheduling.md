@@ -458,7 +458,7 @@ Import NVIDIA's official Grafana dashboard (ID: **12239**) for an out-of-the-box
 | Feature | NVIDIA (CUDA) | AMD (ROCm) | Intel (oneAPI) |
 |---|---|---|---|
 | **K8s Device Plugin** | Mature, GPU Operator | Community `amd-gpu` plugin | Intel Device Plugins Operator |
-| **ML Framework Support** | Universal (PyTorch, TF, JAX) | PyTorch (good), TF (limited) | PyTorch (growing), oneAPI DPC++ |
+| **ML Framework Support** | Broad (PyTorch, TF, JAX) | PyTorch (good), TF (limited) | PyTorch (growing), oneAPI DPC++ |
 | **GPU Sharing** | Time-slicing + MIG | No equivalent to MIG | SR-IOV based partitioning |
 | **Monitoring** | DCGM Exporter (Prometheus) | ROCm SMI Exporter | Intel GPU metrics (limited) |
 | **Cloud Availability** | All major clouds | Limited (Azure, some AWS) | Intel Flex/Max on select clouds |
@@ -655,3 +655,10 @@ For MLOps pipeline integration with GPU workloads, see [Module 9.1: Kubeflow](..
 ## Next Module
 
 [Module 10.1: Anomaly Detection Tools](/platform/toolkits/observability-intelligence/aiops-tools/module-10.1-anomaly-detection-tools/) - Apply AI to your infrastructure with AIOps.
+
+## Sources
+
+- [Kubernetes: Schedule GPUs](https://kubernetes.io/docs/tasks/manage-gpus/scheduling-gpus/) — This is the canonical upstream reference for how Kubernetes exposes and schedules GPU resources.
+- [Kubernetes: Device Plugins](https://kubernetes.io/docs/concepts/extend-kubernetes/compute-storage-net/device-plugins/) — This explains the kubelet registration flow, integer extended resources, and why GPU access depends on device plugins.
+- [Kubernetes: Gang Scheduling](https://kubernetes.io/docs/concepts/scheduling-eviction/gang-scheduling/) — This is the upstream description of the v1.35 alpha gang-scheduling model and its all-or-nothing semantics.
+- [NVIDIA GPU Operator](https://github.com/NVIDIA/gpu-operator) — This upstream repository describes the operator-managed NVIDIA GPU stack and is the best allowlisted source for operator scope.
