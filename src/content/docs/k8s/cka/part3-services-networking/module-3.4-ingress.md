@@ -1196,3 +1196,8 @@ rm tls.key tls.crt
 ## Next Module
 
 [Module 3.5: Gateway API](../module-3.5-gateway-api/) - The next generation of Kubernetes ingress.
+
+## Sources
+
+- [Ingress | Kubernetes](https://kubernetes.io/docs/concepts/services-networking/ingress/) — Canonical reference for Ingress behavior, controller prerequisites, path matching, TLS, and default backends.
+- [Migrating from Ingress | Kubernetes Gateway API](https://gateway-api.sigs.k8s.io/guides/getting-started/migrating-from-ingress/) — Explains why Gateway API is the successor path and maps Ingress concepts to Gateway API resources.

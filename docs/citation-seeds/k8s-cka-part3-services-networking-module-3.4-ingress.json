@@ -1,0 +1,199 @@
+{
+  "module_key": "k8s/cka/part3-services-networking/module-3.4-ingress",
+  "module_path": "src/content/docs/k8s/cka/part3-services-networking/module-3.4-ingress.md",
+  "research_run_id": "2026-04-21T04:27:02+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 3,
+  "section_pool_ref": "docs/citation-pools/k8s-cka-part3-services-networking.json",
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "Ingress provides HTTP/HTTPS routing with path-based routing, virtual hosts, and TLS termination.",
+      "claim_class": "standard",
+      "span_hint": "section: Why This Module Matters, paragraph 1",
+      "disposition": "supported",
+      "source_ids": [
+        "S007"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Kubernetes Ingress concept page explicitly defines Ingress as HTTP/HTTPS external access and notes TLS termination and name-based virtual hosting."
+    },
+    {
+      "claim_id": "C002",
+      "claim_text": "The CKA exam tests Ingress creation, path routing, and understanding how Ingress connects to Services.",
+      "claim_class": "standard",
+      "span_hint": "section: Why This Module Matters, paragraph 2",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The CKA exam tests Ingress creation, path routing, and understanding how Ingress connects to Services.",
+      "suggested_rewrite": "This module focuses on the Ingress tasks you should practice: creating resources, routing requests, and tracing traffic to Services.",
+      "lesson_point_url": null,
+      "rationale": "The allowlisted CKA overview confirms Services and Networking coverage, but not this exact exam-task breakdown, so the sentence should be rewritten to remove the unsourced specificity."
+    },
+    {
+      "claim_id": "C003",
+      "claim_text": "The module gives an exact March 31, 2026 ingress-nginx retirement date and says no releases, bug fixes, or security patches arrive afterward.",
+      "claim_class": "incident",
+      "span_hint": "section: Why This Module Matters, retirement callout, sentences 1-2",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The popular **ingress-nginx controller** reached end-of-life on **March 31, 2026**. After this date, it receives no releases, bug fixes, or security patches.",
+      "suggested_rewrite": "Learn Ingress for compatibility, but plan new deployments around Gateway API and actively maintained controllers.",
+      "lesson_point_url": null,
+      "rationale": "The official ingress-nginx retirement page supports retirement after March 2026 but does not support the exact March 31, 2026 date stated here."
+    },
+    {
+      "claim_id": "C004",
+      "claim_text": "The Ingress API itself is not deprecated, remains supported in Kubernetes, and Gateway API is the successor path for new deployments.",
+      "claim_class": "standard",
+      "span_hint": "section: Why This Module Matters, retirement callout, sentence 3",
+      "disposition": "supported",
+      "source_ids": [
+        "S007",
+        "S008",
+        "S014"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Kubernetes docs say Ingress is stable and frozen rather than deprecated, and Gateway API docs describe Gateway API as the successor migration path."
+    },
+    {
+      "claim_id": "C005",
+      "claim_text": "Alternative controllers that support both Ingress and Gateway API include Envoy Gateway, Traefik, Kong, Cilium, and NGINX Gateway Fabric.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Why This Module Matters, retirement callout, sentence 4",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Alternative controllers that support both Ingress and Gateway API include **Envoy Gateway**, **Traefik**, **Kong**, **Cilium**, and **NGINX Gateway Fabric**.",
+      "suggested_rewrite": "Alternative projects in this space include **Envoy Gateway**, **Traefik**, **Kong**, **Cilium**, and **NGINX Gateway Fabric**.",
+      "lesson_point_url": null,
+      "rationale": "This sentence bundles controller-specific support assertions that are not verified by the shared pool and should be rewritten to remove the unsupported 'supports both' claim."
+    },
+    {
+      "claim_id": "C006",
+      "claim_text": "Ingress2Gateway 1.0 can convert Ingress resources to Gateway API resources.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Why This Module Matters, retirement callout, sentence 5",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "If you're migrating from ingress-nginx, use the **Ingress2Gateway 1.0** tool to convert Ingress resources to Gateway API resources: `kubectl krew install ingress2gateway`",
+      "suggested_rewrite": "If you're migrating from ingress-nginx, the **Ingress2Gateway** project can help convert Ingress resources to Gateway API resources; use the project's current installation instructions",
+      "lesson_point_url": null,
+      "rationale": "The March 2026 announcement confirms the tool and its purpose, but it documents `go install`, Homebrew, or downloaded binaries rather than the Krew command shown here."
+    },
+    {
+      "claim_id": "C007",
+      "claim_text": "An Ingress resource does nothing by itself; you need an Ingress controller to route traffic.",
+      "claim_class": "standard",
+      "span_hint": "section: Did You Know, bullet 1",
+      "disposition": "supported",
+      "source_ids": [
+        "S007"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Ingress docs state that only creating an Ingress resource has no effect and that an Ingress controller is required."
+    },
+    {
+      "claim_id": "C009",
+      "claim_text": "A single Ingress resource can route to dozens of backend services based on paths and hostnames.",
+      "claim_class": "statistic",
+      "span_hint": "section: Did You Know, bullet 3",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "A single Ingress resource can route to dozens of backend services based on paths and hostnames.",
+      "suggested_rewrite": "A single Ingress resource can route to multiple backend services based on paths and hostnames.",
+      "lesson_point_url": null,
+      "rationale": "The underlying capability is well-supported, but the quantified 'dozens' claim is unnecessary and not backed by an authoritative source."
+    },
+    {
+      "claim_id": "C010",
+      "claim_text": "The module repeats an exact March 31, 2026 ingress-nginx retirement date in the Did You Know section.",
+      "claim_class": "incident",
+      "span_hint": "section: Did You Know, bullet 4, sentence 1",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "**Ingress-NGINX is retired**: The once-dominant ingress-nginx controller reached end-of-life on March 31, 2026.",
+      "suggested_rewrite": "**Migration note**: Existing Ingress deployments are common, but new deployments should prefer Gateway API and actively maintained controllers.",
+      "lesson_point_url": null,
+      "rationale": "This repeats the unsupported exact retirement date and should be rewritten to keep the deployment guidance without the unverifiable timestamp."
+    },
+    {
+      "claim_id": "C012",
+      "claim_text": "When multiple paths match a request, Kubernetes uses longest-path precedence, prefers Exact over Prefix on equal matches, and YAML order does not matter.",
+      "claim_class": "standard",
+      "span_hint": "section: Part 3.3 Path Types, paragraph after table",
+      "disposition": "supported",
+      "source_ids": [
+        "S007"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Ingress specification documents longest-match precedence and Exact-over-Prefix tie breaking for multiple matches."
+    },
+    {
+      "claim_id": "C013",
+      "claim_text": "Requests that do not match any rule go to the defaultBackend.",
+      "claim_class": "standard",
+      "span_hint": "section: Part 7.1 Configuring Default Backend, paragraph after YAML",
+      "disposition": "supported",
+      "source_ids": [
+        "S007"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Ingress docs explain that a default backend is used for requests that do not match a path in the spec."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://kubernetes.io/docs/concepts/services-networking/ingress/",
+      "title": "Ingress | Kubernetes",
+      "tier": "standards",
+      "why_relevant": "Canonical reference for Ingress behavior, controller prerequisites, path matching, TLS, and default backends."
+    },
+    {
+      "url": "https://gateway-api.sigs.k8s.io/guides/getting-started/migrating-from-ingress/",
+      "title": "Migrating from Ingress | Kubernetes Gateway API",
+      "tier": "standards",
+      "why_relevant": "Explains why Gateway API is the successor path and maps Ingress concepts to Gateway API resources."
+    }
+  ],
+  "notes": "Excluded tables, diagrams, code blocks, quiz items, and hands-on/drill steps per pipeline rules. Main rewrite-required items are the unsupported exact March 31 retirement date, the unsupported 'supports both Ingress and Gateway API' controller list, the unsourced exam-specific task breakdown, and the incorrect Krew install command.",
+  "_schema_issues": [],
+  "rejected_urls": [
+    {
+      "url": "https://kubernetes.github.io/ingress-nginx/",
+      "reason": "off_allowlist",
+      "at_step": "research_validation",
+      "agent_proposed_tier": "upstream"
+    }
+  ]
+}
