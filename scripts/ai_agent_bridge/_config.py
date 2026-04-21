@@ -47,6 +47,14 @@ _PIPELINE_ENV_KEY = os.environ.get(
     "AB_PIPELINE_ENV_KEY", "KUBEDOJO_PIPELINE"
 )
 _PARENT_ENV[_PIPELINE_ENV_KEY] = "1"  # Suppress inbox hooks during pipeline runs
+# Gemini auth: CLI prefers GEMINI_API_KEY when set; otherwise falls
+# through to OAuth/subscription creds in ~/.gemini/oauth_creds.json.
+# When the API-key tier is rate-limited, set
+# KUBEDOJO_GEMINI_SUBSCRIPTION=1 to strip the key from child env so
+# dispatches use the subscription path instead.
+if os.environ.get("KUBEDOJO_GEMINI_SUBSCRIPTION") == "1":
+    _PARENT_ENV.pop("GEMINI_API_KEY", None)
+    _PARENT_ENV.pop("GOOGLE_API_KEY", None)
 
 # Model availability cache: {model: (available: bool, timestamp: float)}
 # Avoids burning API quota on repeated checks within the same session.

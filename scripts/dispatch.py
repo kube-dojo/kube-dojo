@@ -38,6 +38,14 @@ CODEX_CLI = shutil.which("codex") or "codex"
 _ENV = os.environ.copy()
 _ENV["GEMINI_SESSION"] = "1"        # Disable hostile aliases (eza, bat, zoxide)
 _ENV["KUBEDOJO_PIPELINE"] = "1"     # Suppress inbox hooks during pipeline runs
+# Gemini auth: CLI prefers GEMINI_API_KEY when set; otherwise falls
+# through to OAuth/subscription creds in ~/.gemini/oauth_creds.json.
+# When the API-key tier is rate-limited, set
+# KUBEDOJO_GEMINI_SUBSCRIPTION=1 to strip the key from child env so
+# dispatches use the subscription path instead.
+if os.environ.get("KUBEDOJO_GEMINI_SUBSCRIPTION") == "1":
+    _ENV.pop("GEMINI_API_KEY", None)
+    _ENV.pop("GOOGLE_API_KEY", None)
 
 # GitHub comment char limit (65,536 minus safety margin)
 GH_CHAR_LIMIT = 64000

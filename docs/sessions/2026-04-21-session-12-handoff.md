@@ -139,10 +139,18 @@ Per `feedback_no_run_scripts.md`, pipeline mutations are operator-
 run. Queuing the invocation here:
 
 ```bash
-.venv/bin/python scripts/pipeline_v4_batch.py \
+KUBEDOJO_GEMINI_SUBSCRIPTION=1 .venv/bin/python scripts/pipeline_v4_batch.py \
     --track ai-ml-engineering/ai-infrastructure \
     --limit 5
 ```
+
+`KUBEDOJO_GEMINI_SUBSCRIPTION=1` strips `GEMINI_API_KEY` and
+`GOOGLE_API_KEY` from the subprocess env so the gemini CLI falls
+through to OAuth/subscription creds (`~/.gemini/oauth_creds.json`).
+Use when the API-key tier is on cooldown, which is the current
+state. Both `scripts/dispatch.py` and
+`scripts/ai_agent_bridge/_config.py` honor the switch (they're the
+two places that build the subprocess env).
 
 `--workers` defaults to 1 and is hard-capped at 3. Values above 3
 clamp with a stderr WARNING. Gemini rate-limits on parallel calls
