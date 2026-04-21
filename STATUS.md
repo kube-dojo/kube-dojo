@@ -12,11 +12,26 @@ Session 9 handoff: [`docs/sessions/2026-04-21-session-9-handoff.md`](./docs/sess
 - 51 untracked citation-seed JSONs committed as catch-up (`b9337448`). `docs/citation-seeds/` convention: tracked source-of-truth for pipeline research. `-X theirs` conflict resolution favoured PR content on the ~40 modules that both local and PR modified — review those module diffs if anything reads off.
 - Codex was rate-limited at session start (websocket "high demand" errors), so Gemini 3.1 Pro stood in as the independent-family reviewer. Codex recovered mid-session.
 
-**Ready-to-execute next session (handoff step 6):**
-- Dogfood section pipeline on a small real section to validate at scale.
-  - First candidate: `platform/toolkits/cicd-delivery/source-control/` (3 modules: 11.1 gitlab, 11.2 gitea-forgejo, 11.3 github-advanced). Command: `.venv/bin/python scripts/pipeline_v3_section.py platform/toolkits/cicd-delivery/source-control`. Wall ~30 min.
-  - Then: `k8s/cka/part3-services-networking/` (8 content modules; exceeds default batch cap 5 → will split). 2 of the 8 (3.1, 3.6) already have session-8 seeds.
-- This is a pipeline mutation (writes pool JSON + per-module seeds + module edits + commits) — user-run per `feedback_no_run_scripts.md`.
+**Human-triggered automation (new this session):**
+- `scripts/autopilot.py` loops section runs until a stop condition. Usage:
+  - `.venv/bin/python scripts/autopilot.py --dry-run` — preview the queue (108+ sections, ranked by uncited count).
+  - `.venv/bin/python scripts/autopilot.py --max-sections 5` — process the 5 densest uncited sections.
+  - `.venv/bin/python scripts/autopilot.py --until-time 08:00` — run until wall-clock 08:00.
+  - Per-day JSONL log at `.pipeline/v3/autopilot/<yyyy-mm-dd>.jsonl`.
+- `scripts/run_section.py` is the underlying one-shot runner (preflight → pipeline → per-module commit → build → push). Flags: `--auto-pick`, `--only-uncited` (resumes partial sections cleanly), `--min-uncited N`, `--no-build`, `--no-push`, `--no-commit`.
+- Not yet: queue-based worker — deferred until failure-rate data justifies the persistence layer (only ~3 real failures in the 30 modules processed this session).
+
+**Validated this session via dogfood (6 sections, 32 modules cited):**
+- `platform/toolkits/cicd-delivery/source-control` — 3/3
+- `ai-ml-engineering/advanced-genai` — 11/11 real modules (3 staging runs were wasted before the filter fix; all 5 rubric-critical 1.5-score modules cleared)
+- `k8s/cka/part3-services-networking` — 6/8 (3.1 services + 3.6 network-policies inject_failed; seeds reverted)
+- `platform/toolkits/data-ai-platforms/cloud-native-databases` — 5/5
+- `platform/toolkits/data-ai-platforms/ml-platforms` — 7/7
+
+**Known inject_failed, needs manual inspection:**
+- `k8s/cka/part3-services-networking/module-3.1-services`
+- `k8s/cka/part3-services-networking/module-3.6-network-policies`
+- Likely diff-lint tripping on a prose pattern specific to these modules. Retry with `.venv/bin/python scripts/pipeline_v3.py <module-key>` to get the exact diff-lint output.
 
 **Known gotchas (unchanged from session 9):**
 - Codex auth can go flaky under load; smoke-check with `echo hi | timeout 25 codex exec --full-auto --skip-git-repo-check` before any batch.
