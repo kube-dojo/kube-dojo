@@ -167,6 +167,42 @@ def test_stage_2_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
     assert result.citation_v3_exit == 0
 
 
+def test_public_run_pipeline_v4_accepts_skip_citation(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _patch_roots(monkeypatch, tmp_path)
+    _write_module(tmp_path)
+    monkeypatch.setattr(
+        pipeline_v4.rubric_gaps,
+        "gaps_for_module",
+        lambda module_key: {
+            "score": 2.0,
+            "gaps": ["thin", "no_quiz"],
+            "target_loc": 600,
+        },
+    )
+    monkeypatch.setattr(
+        pipeline_v4.expand_module,
+        "expand_module",
+        lambda module_key, gaps, target_loc=600, dry_run=False: _expand_result(
+            gaps_filled=["thin", "no_quiz"],
+            loc_after=600,
+        ),
+    )
+    _patch_rescore_sequence(monkeypatch, [{"score": 4.4, "gaps": []}])
+
+    def _unexpected_citation(module_key: str) -> dict[str, object]:
+        raise AssertionError("skip_citation=True should not invoke citation_v3")
+
+    monkeypatch.setattr(pipeline_v4, "_invoke_citation_pipeline", _unexpected_citation)
+
+    result = pipeline_v4.run_pipeline_v4(MODULE_KEY, skip_citation=True)
+
+    assert result.outcome == "clean"
+    assert result.stage_reached == "DONE"
+    assert result.citation_v3_exit is None
+
+
 def test_stage_3_retry(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     _patch_roots(monkeypatch, tmp_path)
     _write_module(tmp_path)
