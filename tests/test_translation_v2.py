@@ -102,6 +102,36 @@ def _init_translation_status_db(db_path: Path, *entries: tuple[str, str]) -> Non
         conn.close()
 
 
+def _init_translation_status_db_with_jobs(
+    db_path: Path,
+    *,
+    jobs: list[tuple[str, str, str]],
+    events: list[tuple[str, str]],
+) -> None:
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.executescript(
+            """
+            CREATE TABLE jobs (id INTEGER PRIMARY KEY, module_key TEXT NOT NULL, phase TEXT NOT NULL, model TEXT, queue_state TEXT NOT NULL);
+            CREATE TABLE events (id INTEGER PRIMARY KEY, module_key TEXT NOT NULL, type TEXT NOT NULL, payload_json TEXT DEFAULT '{}');
+            """
+        )
+        for module_key, phase, queue_state in jobs:
+            conn.execute(
+                "INSERT INTO jobs (module_key, phase, model, queue_state) VALUES (?, ?, ?, ?)",
+                (module_key, phase, translation_v2.TRANSLATE_MODEL, queue_state),
+            )
+        for module_key, event_type in events:
+            conn.execute(
+                "INSERT INTO events (module_key, type, payload_json) VALUES (?, ?, ?)",
+                (module_key, event_type, "{}"),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def _verify_with_metadata(
     repo_root: Path, module_key: str, *, uk_overrides: dict[str, Any] | None = None
 ) -> tuple[bool, dict[str, Any]]:
@@ -349,6 +379,31 @@ def test_translation_v2_status_reports_per_track_done_and_dead_letter(tmp_path: 
     by_track = {item["slug"]: item for item in report["queue"]["per_track"]}
     assert by_track["prerequisites"]["modules"]["done"] == ["prerequisites/zero-to-terminal/module-0.1-alpha"]
     assert by_track["linux"]["modules"]["dead_letter"] == ["linux/shell/module-1.1-alpha"]
+
+
+def test_translation_v2_status_exposes_in_progress_modules_per_track(tmp_path: Path) -> None:
+    db_path = tmp_path / ".pipeline/translation_v2.db"
+    _init_translation_status_db_with_jobs(
+        db_path,
+        jobs=[
+            ("prerequisites/zero-to-terminal/module-0.1-alpha", "write", "leased"),
+            ("linux/shell/module-1.1-alpha", "review", "pending"),
+        ],
+        events=[
+            ("prerequisites/zero-to-terminal/module-0.1-alpha", "translation_write_started"),
+            ("linux/shell/module-1.1-alpha", "translation_written"),
+        ],
+    )
+
+    queue = translation_v2._build_translation_queue_status(db_path)
+    assert queue["counts"]["in_progress"] == 1
+    assert queue["in_progress"] == ["prerequisites/zero-to-terminal/module-0.1-alpha"]
+
+    report = status_script._enrich_translation_v2_with_per_track({"queue": queue})
+    by_track = {item["slug"]: item for item in report["queue"]["per_track"]}
+    assert by_track["prerequisites"]["modules"]["in_progress"] == [
+        "prerequisites/zero-to-terminal/module-0.1-alpha"
+    ]
 
 
 def test_translation_v2_freshness_rollup_is_per_track_not_global(tmp_path: Path) -> None:
