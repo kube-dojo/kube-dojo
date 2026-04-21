@@ -972,3 +972,10 @@ In Module 1.2, we'll dive deeper into:
 
 _Module 1.1 Complete!_
 _"The best incident is the one that never happens."_
+
+## Sources
+
+- [Amazon Bedrock Cross-Region Inference](https://docs.aws.amazon.com/bedrock/latest/userguide/cross-region-inference.html) — Best primary source for Bedrock geography, global routing, burst handling, and Provisioned Throughput tradeoffs.
+- [Microsoft Foundry Deployment Types](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/deployment-types) — Explains Azure global, data-zone, and regional deployment behavior, including routing, data processing location, and latency tradeoffs.
+- [Vertex AI Deployments and Endpoints](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/learn/locations) — Covers the global endpoint, data residency caveats, supported models, and feature limitations that drive architecture decisions.
+- [OCI Generative AI Overview](https://docs.oracle.com/en-us/iaas/Content/generative-ai/overview.htm) — Summarizes OCI model access, dedicated AI clusters, Responses API, tools, memory, and NL2SQL in one place.
