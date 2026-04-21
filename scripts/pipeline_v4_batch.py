@@ -253,8 +253,11 @@ def select_candidates(
         module_key = path[:-3] if path.endswith(".md") else path
         primary_issue = entry.get("primary_issue") or ""
         gaps = rubric_gaps.parse_primary_issue(str(primary_issue))
-        if skip_citation and "no_citations" in gaps:
-            continue
+        # With --skip-citation, Stage 4 won't run, so a module needs at
+        # least one expand-handlable gap to be worth selecting. Pure
+        # Stage-4-only gap lists (["no_citations"], ["no_diagram"]) get
+        # excluded; mixed lists like ["no_citations", "no_quiz"] stay,
+        # because Stage 2 can still fill the quiz.
         if skip_citation and gaps and not pipeline_v4.expand_module.can_expand(gaps):
             continue
         candidates.append(

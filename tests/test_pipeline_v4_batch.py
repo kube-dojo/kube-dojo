@@ -146,12 +146,18 @@ def test_select_candidates_applies_limit_and_min_score(
 def test_select_candidates_skip_citation_filters_stage4_only_modules(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    """With skip_citation=True we exclude gap-lists that have NO expand-
+    handlable gap (pure no_citations, pure no_diagram). Mixed lists like
+    "no citations, no exercise" must still be selected — Stage 2 can
+    fill no_exercise, and the module crosses 4/5 from the lift even
+    though citations stay unresolved."""
     _patch_db(monkeypatch, tmp_path)
     payload = _quality_payload(
         [
             {"path": "k8s/kcna/a.md", "score": 1.5, "primary_issue": "no citations"},
             {"path": "k8s/kcna/b.md", "score": 1.5, "primary_issue": "no citations, no exercise"},
             {"path": "k8s/kcna/c.md", "score": 1.5, "primary_issue": "no diagram"},
+            {"path": "k8s/kcna/d.md", "score": 1.5, "primary_issue": "no citations, no quiz"},
         ]
     )
 
@@ -161,7 +167,7 @@ def test_select_candidates_skip_citation_filters_stage4_only_modules(
         quality_fetch=lambda root: payload,
     )
 
-    assert cands == []
+    assert [c.module_key for c in cands] == ["k8s/kcna/b", "k8s/kcna/d"]
 
 
 def _canned_result(
