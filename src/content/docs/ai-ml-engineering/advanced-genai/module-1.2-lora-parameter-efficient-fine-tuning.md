@@ -9,11 +9,11 @@ sidebar:
 
 ## Why This Module Matters
 
-Generative artificial intelligence fundamentally redefines how software systems synthesize novel data, but the computational reality of modern neural architectures presents severe operational bottlenecks. Consider the story of Polymathic Studios, a mid-sized digital design agency that attempted to fine-tune a full Stable Diffusion XL model for their enterprise clients. They spun up a dedicated cloud cluster with eight high-end GPUs, aiming to train the model on a proprietary catalog of 100,000 product images. By the end of the month, their compute bill exceeded $85,000, and the resulting model was so catastrophically overfitted that it could only generate blurry, artifact-ridden shapes. The financial impact was devastating, nearly bankrupting the division and forcing the cancellation of three major client contracts. This failure was a direct result of relying on full-parameter fine-tuning without understanding modern architectural efficiency.
+Generative artificial intelligence fundamentally redefines how software systems synthesize novel data, but the computational reality of modern neural architectures presents severe operational bottlenecks. Full-parameter fine-tuning on large generative models can become extremely expensive and can still fail if the training setup, data quality, and regularization strategy are poor. The operational lesson is that adaptation strategy matters as much as raw compute budget.
 
-Contrast this catastrophic failure with the Alpaca project by Stanford researchers, who used Parameter-Efficient Fine-Tuning (PEFT) techniques to successfully adapt a massive 7-billion parameter language model for roughly $600. The stark difference between these two scenarios highlights the modern reality of generative AI: full-parameter fine-tuning is no longer the standard for applied enterprise engineering. Attempting to update billions of parameters simultaneously leads to catastrophic forgetting, severe hardware exhaustion, and ultimately, project abandonment.
+Contrast this with early low-cost instruction-tuning efforts such as Stanford Alpaca, which showed that adapting a 7B-scale language model could be done for hundreds of dollars, though that specific project was not a LoRA-based PEFT example. The stark difference between these two scenarios highlights the modern reality of generative AI: full-parameter fine-tuning is no longer the standard for applied enterprise engineering. Attempting to update billions of parameters simultaneously leads to catastrophic forgetting, severe hardware exhaustion, and ultimately, project abandonment.
 
-Instead, techniques like Low-Rank Adaptation (LoRA) have democratized model adaptation, allowing engineers to freeze the vast majority of foundation weights and only train a tiny fraction of carefully injected matrix parameters. In this module, we will explore the foundational mathematics of diffusion models and the economic imperatives of PEFT. You will learn how to design, debug, and implement robust diffusion pipelines that leverage classifier-free guidance, efficient schedulers, and highly optimized LoRA adapters. By mastering these techniques, you will possess the ability to deliver custom, enterprise-grade generative AI models at a fraction of the computational cost, ensuring both financial viability and technical excellence in production environments.
+Instead, techniques like Low-Rank Adaptation (LoRA) have democratized model adaptation, allowing engineers to [freeze the vast majority of foundation weights and only train a tiny fraction of carefully injected matrix parameters](https://arxiv.org/abs/2106.09685). In this module, we will explore the foundational mathematics of diffusion models and the economic imperatives of PEFT. You will learn how to design, debug, and implement robust diffusion pipelines that leverage classifier-free guidance, efficient schedulers, and highly optimized LoRA adapters. By mastering these techniques, you will possess the ability to deliver custom, enterprise-grade generative AI models at a fraction of the computational cost, ensuring both financial viability and technical excellence in production environments.
 
 ## What You'll Be Able to Do
 
@@ -123,7 +123,7 @@ Where:
 - t is the timestep (tells model how noisy the image is)
 ```
 
-In a standard training loop, every single execution randomly samples a disparate timestep across the batch dimension. This dynamic forces the model to learn how to denoise gracefully across all possible noise levels, acting as an implicit curriculum learning mechanism.
+In a standard training loop, each execution typically samples timesteps randomly across the batch dimension. This dynamic forces the model to learn how to denoise gracefully across all possible noise levels, acting as an implicit curriculum learning mechanism.
 
 ```python
 def train_step(model, x_0, noise_schedule):
@@ -147,7 +147,7 @@ def train_step(model, x_0, noise_schedule):
 
 ## The U-Net Architecture
 
-To isolate noise from an image, the model must understand both global macro-structure and local micro-details. The U-Net architecture accomplishes this through a symmetrical encoder-decoder structure enhanced extensively by skip connections. Originally invented for biomedical image segmentation, the U-Net became the absolute standard for diffusion models because its skip connections perfectly preserve the fine high-frequency details necessary for generating high-quality images.
+To isolate noise from an image, the model must understand both global macro-structure and local micro-details. The U-Net architecture accomplishes this through a symmetrical encoder-decoder structure enhanced extensively by skip connections. [Originally invented for biomedical image segmentation](https://arxiv.org/abs/1505.04597), the U-Net became the absolute standard for diffusion models because its skip connections perfectly preserve the fine high-frequency details necessary for generating high-quality images.
 
 ```mermaid
 flowchart TD
@@ -312,7 +312,7 @@ def ddim_sample(model, shape, noise_schedule, num_steps=50):
 
 Generating aesthetically pleasing noise is technically impressive, but steering that exact noise to match a user's textual prompt requires highly precise conditioning mechanisms. Without conditioning, the network simply hallucinates random features mapped from its vast training corpus.
 
-To consistently generate an image directly from text, we must strictly align the semantic meaning of the words with concrete visual features. The CLIP (Contrastive Language-Image Pre-training) architecture achieves this alignment by mapping both complex text and detailed images into the exact identical mathematical embedding space.
+To consistently generate an image directly from text, we must strictly align the semantic meaning of the words with concrete visual features. The [CLIP (Contrastive Language-Image Pre-training) architecture achieves this alignment by mapping both complex text and detailed images into the exact identical mathematical embedding space](https://arxiv.org/abs/2103.00020).
 
 ```mermaid
 flowchart LR
@@ -330,7 +330,7 @@ flowchart TD
     A[Text Encoder] -.->|should be similar!| B[Image Encoder]
 ```
 
-We inject these heavy CLIP text embeddings directly into the core U-Net by utilizing Cross-Attention layers, allowing the spatial image features to mathematically "attend" to the rich semantic text tokens during generation. This prevents the loss of crucial positional layout information.
+We inject these heavy CLIP text embeddings directly into the core U-Net by [utilizing Cross-Attention layers](https://arxiv.org/abs/2112.10752), allowing the spatial image features to mathematically "attend" to the rich semantic text tokens during generation. This prevents the loss of crucial positional layout information.
 
 ```python
 class CrossAttention(nn.Module):
@@ -381,7 +381,7 @@ def train_with_cfg(model, x_0, text_embedding, noise_schedule, drop_prob=0.1):
     return loss
 ```
 
-At dynamic inference time, we execute the model twice per step: once unconditionally and once conditionally. We then mathematically extrapolate the vector difference between the two to force much stronger adherence to the prompt. This mathematical operation effectively pulls the tensor away from generic noise and propels it intensely toward the requested concept.
+At dynamic inference time, [we execute the model twice per step: once unconditionally and once conditionally](https://arxiv.org/abs/2207.12598). We then mathematically extrapolate the vector difference between the two to force much stronger adherence to the prompt. This mathematical operation effectively pulls the tensor away from generic noise and propels it intensely toward the requested concept.
 
 ```text
 noise_pred = noise_uncond + scale × (noise_cond - noise_uncond)
@@ -421,7 +421,7 @@ flowchart TD
     VAEDec --> FinalImg["Final Image [3, 512, 512]"]
 ```
 
-By actively using a Variational Autoencoder (VAE), Stable Diffusion effectively shrinks a large spatial image down into a compact latent tensor representation—achieving massive reduction in computational complexity before the actual diffusion process even begins. The decoded output matches the original high-resolution distribution with staggering fidelity.
+By actively [using a Variational Autoencoder (VAE), Stable Diffusion effectively shrinks a large spatial image down into a compact latent tensor representation](https://arxiv.org/abs/2112.10752)—achieving massive reduction in computational complexity before the actual diffusion process even begins. The decoded output matches the original high-resolution distribution with staggering fidelity.
 
 ```python
 def stable_diffusion_inference(prompt, num_steps=50, guidance_scale=7.5):
@@ -458,9 +458,9 @@ def stable_diffusion_inference(prompt, num_steps=50, guidance_scale=7.5):
 
 ## Parameter-Efficient Fine-Tuning: Enter LoRA
 
-While massive foundation models like Stable Diffusion and LLaMA are undeniably powerful, repeatedly retraining all of their billions of weights for specific enterprise domains is entirely cost-prohibitive. Complete backpropagation algorithms overwhelm standard GPU memory allocations instantly.
+While massive foundation models like Stable Diffusion and LLaMA are undeniably powerful, repeatedly retraining all of their billions of weights for specific enterprise domains is entirely cost-prohibitive. Complete backpropagation algorithms often overwhelm standard GPU memory allocations quickly.
 
-Low-Rank Adaptation (LoRA) fundamentally disrupted and changed the pure economics of fine-tuning. By completely freezing the vast pre-trained model weights and strategically inserting low-rank trainable matrices, engineers can successfully reduce the total number of trainable parameters dramatically and drastically cut GPU hardware requirements without sacrificing final generation quality.
+Low-Rank Adaptation (LoRA) fundamentally disrupted and changed the pure economics of fine-tuning. By completely [freezing the vast pre-trained model weights and strategically inserting low-rank trainable matrices](https://arxiv.org/abs/2106.09685), engineers can successfully reduce the total number of trainable parameters dramatically and drastically cut GPU hardware requirements without sacrificing final generation quality.
 
 ```python
 from peft import LoraConfig, get_peft_model
@@ -485,11 +485,11 @@ When comparing LoRA to traditional full-weight adaptation methods like Dreamboot
 
 | Aspect | Dreambooth | LoRA |
 |--------|------------|------|
-| Parameters | Full fine-tune | 0.1% of parameters |
-| Data needed | 3-10 images | 5-50 images |
-| Training time | 15-30 min | 10-20 min |
-| Model size | Full copy (~5GB) | Adapter only (~10-100MB) |
-| Combinability | Hard | Easy (stack multiple) |
+| Parameters | Updates far more weights | Usually trains only a small fraction of weights |
+| Data needed | Small, task-dependent datasets can work | Small, task-dependent datasets can also work |
+| Training time | Varies widely by hardware and setup | Usually shorter than full-model retraining, but hardware-dependent |
+| Model size | Full checkpoints are much larger | Adapter checkpoints are usually much smaller |
+| Combinability | Less modular | More modular in many adapter-based workflows |
 
 One of the absolute greatest engineering advantages of utilizing LoRA is the distinct ability to arbitrarily stack adapters at dynamic runtime. This architecture allows developers to combine completely distinct concepts smoothly without rewriting internal routing logic.
 
@@ -515,7 +515,7 @@ Theoretical metrics matter, but real-world enterprise deployments provide the st
 
 ### The $2 Million Recall: Getty Images vs AI Art
 
-A marketing director at a major consumer goods company received an urgent call. Their Q1 campaign, heavily featuring dozens of AI-generated product images, had been externally flagged: several generated images contained deeply subtle watermarks—unintended remnants of massive training data memorized inadvertently by the foundation diffusion model. The overall resulting cost was immense: $2.3 million scattered across intensive legal fees and immediate settlements. Thorough dataset verification prevents this.
+Commercial teams should review generated assets for signs of memorized training artifacts such as watermarks or near-duplicates and should validate legal risk before launch.
 
 ```python
 # Always check for potential copyright issues
@@ -538,7 +538,7 @@ def check_image_similarity(generated_image, reference_images):
 
 ### The Support Ticket Avalanche
 
-A small tech startup's API was operating smoothly until a massive viral social media hit severely overloaded their primary endpoints. During an emergency post-mortem, they discovered their backend engineers had accidentally left inference steps bound to extreme defaults. Each image inherently took significantly too long to properly render. Their dedicated GPU cluster functionally melted under the extreme strain, stranding them with thousands of angry user support tickets and an exorbitant cloud bill.
+Generative-image APIs can fail under load when inference defaults are too slow for real production traffic, so latency and cost budgets should be validated before launch.
 
 ```python
 # Production-optimized settings
@@ -550,13 +550,13 @@ PRODUCTION_SETTINGS = {
     "torch_dtype": torch.float16,   # Not float32!
 }
 
-# Result: 45 seconds → 1.8 seconds per image
-# Cost: $48K → $1.2K for same traffic
+# Result: These optimizations can reduce generation latency substantially.
+# Cost: These optimizations can also reduce infrastructure cost materially under load.
 ```
 
 ### The NSFW Filter Failure
 
-An expanding educational platform deployed a relatively basic, unsophisticated NSFW classifier boasting a 92% general accuracy rating for its core AI generation service. Unfortunately, that remaining 8% failure rate proved genuinely catastrophic. Within two days of public launch, disturbing screenshots of deeply inappropriate generated content went highly viral across the internet, and the application was permanently banned from both major mobile app stores due to strict compliance violations.
+A seemingly strong offline safety metric can still be inadequate for a public generative product, so production deployments usually need layered safeguards rather than a single classifier threshold.
 
 ```python
 # Multi-layer safety system
@@ -589,32 +589,32 @@ Thoroughly understanding the precise financial breakdown of generative machine l
 
 | Use Case | Cost per Image | Time to Find |
 |----------|---------------|--------------|
-| Stock photo license | $10-500 | 30 min-2 hrs |
-| Custom photoshoot | $500-5,000 | 1-4 weeks |
-| Concept art (freelancer) | $200-2,000 | 2-7 days |
-| Product rendering | $500-3,000 | 1-2 weeks |
+| Stock photo license | Cost varies by library and license terms | Usually fast to source |
+| Custom photoshoot | Usually much more expensive than stock assets | Requires planning and lead time |
+| Concept art (freelancer) | Pricing varies by artist and scope | Turnaround usually depends on availability and revision cycles |
+| Product rendering | Pricing varies by complexity and vendor | Delivery time depends on scope and revision requirements |
 
 | Platform | Cost per Image | Time to Generate |
 |----------|---------------|------------------|
-| Midjourney | $0.03-0.10 | 30 seconds |
-| DALL-E 3 | $0.04-0.08 | 20 seconds |
-| Stable Diffusion (self-hosted) | $0.002-0.01 | 5-30 seconds |
-| Stable Diffusion (cloud API) | $0.01-0.05 | 10 seconds |
+| Midjourney | Subscription economics vary by plan and workload | Usually interactive rather than immediate |
+| DALL-E 3 | API pricing depends on image size and provider terms | Latency depends on queueing and request settings |
+| Stable Diffusion (self-hosted) | Marginal cost depends on hardware utilization and power or rental assumptions | Latency varies widely by model, scheduler, and hardware |
+| Stable Diffusion (cloud API) | Pricing varies by provider, model, and image settings | Latency depends on provider load and configuration |
 
 | Setup | Hardware Cost | Per-Image Cost | Breakeven |
 |-------|--------------|----------------|-----------|
-| RTX 3090 (24GB) | $1,500 | ~$0.001 | 15,000 images |
-| RTX 4090 (24GB) | $1,800 | ~$0.0005 | 18,000 images |
-| A100 40GB (cloud) | $3/hr | ~$0.01 | N/A (rental) |
-| Replicate API | $0/setup | $0.05/image | 0 images |
+| RTX 3090-class hardware | Upfront hardware cost varies by market | Low marginal inference cost after purchase, but breakeven depends on utilization assumptions |
+| RTX 4090-class hardware | Upfront hardware cost varies by market | Very low marginal inference cost is possible, but breakeven depends on workload assumptions |
+| A100-class cloud GPU | Rental pricing varies by provider and region | Per-image cost depends on utilization and batching |
+| Hosted inference API | Minimal setup effort is common | Unit pricing depends on provider and model choice |
 
 | Quality Level | Tool | Cost | Use Case |
 |--------------|------|------|----------|
-| Ideation | Any | $0.01 | Brainstorming, moodboards |
-| Social media | SD/MJ | $0.05 | Instagram, Twitter |
-| Marketing | DALL-E 3/MJ | $0.10 | Ads, presentations |
-| Print | Custom fine-tuned | $0.50 | Magazines, packaging |
-| Hero images | Professional + AI | $50-500 | Final campaign assets |
+| Ideation | Many tools | Usually the cheapest tier of use | Brainstorming, moodboards |
+| Social media | Common image generators | Low per-image cost is typical | Instagram, Twitter |
+| Marketing | Higher-end hosted generators | Costs are still low compared with custom production, but vary by provider | Ads, presentations |
+| Print | Custom or fine-tuned workflows | Costs rise with quality-control and production requirements | Magazines, packaging |
+| Hero images | Professional + AI | Costs depend mostly on review, retouching, and creative-direction needs | Final campaign assets |
 
 ## The Diffusion Family Tree
 
@@ -635,9 +635,9 @@ graph TD
 
 ## Did You Know?
 
-- **Did You Know?** The original LoRA paper (arXiv:2106.09685) by Hu et al. was submitted on June 17, 2021, and demonstrated that PEFT could reduce trainable parameters by approximately 10,000x and GPU memory by 3x compared to full fine-tuning of GPT-3 175B.
-- **Did You Know?** Using the QLoRA technique (arXiv:2305.14314), engineers can successfully fine-tune a massive 65B parameter model on just a single 48GB GPU using 4-bit NormalFloat (NF4) precision.
-- **Did You Know?** Enabling nested quantization in the bitsandbytes library yields an additional 0.4 bits per parameter of memory savings, heavily compounding across billions of weights.
+- **Did You Know?** [The original LoRA paper (arXiv:2106.09685) by Hu et al. was submitted on June 17, 2021, and demonstrated that PEFT could reduce trainable parameters by approximately 10,000x and GPU memory by 3x compared to full fine-tuning of GPT-3 175B](https://arxiv.org/abs/2106.09685).
+- **Did You Know?** Using the QLoRA technique (arXiv:2305.14314), engineers can successfully [fine-tune a massive 65B parameter model on just a single 48GB GPU using 4-bit NormalFloat (NF4) precision](https://arxiv.org/abs/2305.14314).
+- **Did You Know?** Enabling nested quantization in the bitsandbytes library [yields an additional 0.4 bits per parameter of memory savings](https://huggingface.co/docs/transformers/en/quantization/bitsandbytes), heavily compounding across billions of weights.
 - **Did You Know?** PEFT moved quickly through the 0.18.x line and into 0.19.x, which is exactly why production fine-tuning guides should pin tested versions instead of implying that one specific minor release will remain current for long.
 
 ## Common Mistakes
@@ -650,19 +650,19 @@ Developers repeatedly suffer from the same architectural misunderstandings when 
 | **Prompt Not Followed** | Conflicting prompt elements, weak words, or model bias. | Use parentheses for emphasis (e.g., `(detailed hands:1.3)`), negative prompts, and reorder the prompt. |
 | **Artifacts and Distortions** | Guidance scale too high or incompatible model/LoRA combinations. | Lower guidance scale and carefully check LoRA compatibility. |
 | **Inconsistent Characters** | No character consistency mechanism and varied poses in training data. | Use reference images (IP-Adapter), train a dedicated character LoRA, or use a consistent seed. |
-| **Using DDPM Scheduler in Production** | DDPM requires 1000 sequential steps for generation, leading to massive latency constraints during API inference. | Use `DDIMScheduler` or `DPMSolverMultistepScheduler` to achieve the same visual fidelity in 20-50 steps. |
-| **Ignoring Guidance Scale Trade-offs** | Cranking the scale too high (>15) forces the model to over-index on the text prompt, causing color oversaturation and visual artifacting. | Tune the scale based on domain: 3-5 for artistic rendering, 7-9 for standard photorealism, and ~12 for extreme prompt adherence. |
-| **Not Using Half Precision** | Running inference in full FP32 doubles the VRAM requirement without providing any perceptible improvement in visual fidelity. | Load your pipelines with `torch_dtype=torch.float16` and explicitly enable attention slicing to reduce memory spikes. |
-| **Not Optimizing for Slow Generation** | Large step counts and unoptimized attention operations dramatically increase generation latency. | Enable xformers memory-efficient attention and consider using LCM-LoRA for high-quality 4-8 step generation. |
-| **Generating at Wrong Resolutions** | Diffusion models are highly sensitive to their training resolutions; arbitrary dimensions cause the U-Net to hallucinate repeating patterns or stretched anatomies. | Always generate at the model's native resolution or exact scaling multiples (e.g., 512x512 for SD 1.5, 1024x1024 for SDXL). |
+| **Using DDPM Scheduler in Production** | DDPM-style sampling is usually much slower than production-oriented schedulers. | Use faster schedulers such as DDIM or modern multistep solvers to reduce latency, then validate quality on your own workload. |
+| **Ignoring Guidance Scale Trade-offs** | Excessively high guidance can over-constrain the model and introduce artifacts. | Tune the scale empirically for the model, scheduler, and prompt style you are using. |
+| **Not Using Half Precision** | Full precision usually consumes substantially more memory than half precision. | Use reduced precision and other memory-saving settings when your hardware and model support them, then validate image quality on your workload. |
+| **Not Optimizing for Slow Generation** | Large step counts and inefficient attention settings can increase generation latency substantially. | Use memory-efficient attention where supported and consider accelerated or distilled generation methods when low-latency output is a requirement. |
+| **Generating at Wrong Resolutions** | Many diffusion models perform best near their documented training or recommended target resolutions. | Start from the model's documented resolution guidance and validate other aspect ratios experimentally. |
 | **Not Seeding for Reproducibility** | Failing to explicitly define a random seed makes every generation entirely stochastic, preventing iterative prompt engineering and troubleshooting. | Create a deterministic generator via `torch.Generator("cuda").manual_seed(42)` and securely log the seed alongside the generated asset. |
 | **Mismatched Package Versions** | PEFT, Transformers, Diffusers, and bitsandbytes evolve quickly; examples that worked on one minor release can fail on a newer stack if you do not pin and test them together. | Pin exact versions in your `requirements.txt`, record the validated Python version, and treat upstream docs as moving references rather than assuming a single minor release remains current. |
-| **Targeting Only Attention Matrices** | Restricting LoRA adapters exclusively to the Query/Value projections limits the model's capacity to learn complex, cross-domain concepts during fine-tuning. | Follow the PEFT recommended QLoRA-style approach and target all linear modules in the architecture by configuring `target_modules="all-linear"`. |
-| **Using 4-bit Training on Base Weights** | Bitsandbytes documentation explicitly states that 8-bit and 4-bit training functions are exclusively intended for training the injected extra parameters, not the quantized base model. | Freeze the base model, quantize it to 4-bit using `bnb_4bit_quant_storage`, and only set `requires_grad=True` on the injected LoRA matrices. |
+| **Targeting Only Attention Matrices** | Restricting LoRA adapters exclusively to the Query/Value projections limits the model's capacity to learn complex, cross-domain concepts during fine-tuning. | Follow the PEFT recommended QLoRA-style approach and [target all linear modules in the architecture](https://huggingface.co/docs/peft/developer_guides/lora) by configuring `target_modules="all-linear"`. |
+| **Using 4-bit Training on Base Weights** | Bitsandbytes documentation explicitly states that [8-bit and 4-bit training functions are exclusively intended for training the injected extra parameters, not the quantized base model](https://huggingface.co/docs/transformers/en/quantization/bitsandbytes). | Freeze the base model, quantize it to 4-bit using `bnb_4bit_quant_storage`, and only set `requires_grad=True` on the injected LoRA matrices. |
 
 ## Hands-On Exercises
 
-To successfully run these complex exercises locally, you must first establish a verifiably isolated Python environment and install the exact critical dependency versions required for this module. Mismatched versions will immediately crash the tensor allocations.
+To successfully run these complex exercises locally, you must first establish a verifiably isolated Python environment and install the exact critical dependency versions required for this module. Mismatched versions can quickly crash the tensor allocations.
 
 ### Prerequisites and Environment Setup
 
@@ -1359,3 +1359,14 @@ Now that you have decisively mastered parameter-efficient architectural modifica
 - How expansive models like Codex, Copilot, and Code Llama execute precise fill-in-the-middle context parsing.
 - The vast intricacies of specialized data preparation and tokenizer construction strictly required for rigid syntax languages.
 - How to properly evaluate dynamic code generation via strict unit-test benchmarking rather than fuzzy semantic grading.
+
+## Sources
+
+- [LoRA: Low-Rank Adaptation of Large Language Models](https://arxiv.org/abs/2106.09685) — Original LoRA paper for claims about freezing base weights, training low-rank adapters, parameter-count reduction, memory savings, and PEFT trade-offs versus full fine-tuning.
+- [arxiv.org: 1505.04597](https://arxiv.org/abs/1505.04597) — The original U-Net paper is the primary source for the architecture and its original application.
+- [arxiv.org: 2103.00020](https://arxiv.org/abs/2103.00020) — The CLIP paper is the primary source for the joint image-text embedding claim.
+- [High-Resolution Image Synthesis with Latent Diffusion Models](https://arxiv.org/abs/2112.10752) — Backs claims about moving diffusion from pixel space to latent space to reduce compute cost while preserving fidelity, plus cross-attention conditioning for text-to-image systems.
+- [Classifier-Free Diffusion Guidance](https://arxiv.org/abs/2207.12598) — Primary source for classifier-free guidance (CFG), including the quality-versus-diversity tradeoff and conditional/unconditional score combination used in modern diffusion pipelines.
+- [QLoRA: Efficient Finetuning of Quantized LLMs](https://arxiv.org/abs/2305.14314) — Primary source for 4-bit fine-tuning, NF4, double quantization, paged optimizers, and realistic single-GPU fine-tuning claims under constrained VRAM.
+- [Transformers bitsandbytes Quantization Guide](https://huggingface.co/docs/transformers/en/quantization/bitsandbytes) — Official source for practical 8-bit and 4-bit quantization, QLoRA-related setup, device mapping, nested quantization, and hardware compatibility constraints relevant to local tuning.
+- [PEFT LoRA Developer Guide](https://huggingface.co/docs/peft/developer_guides/lora) — Official implementation guide for LoRA configuration in PEFT, including rank, alpha, initialization, adapter behavior, and practical library-level fine-tuning mechanics.
