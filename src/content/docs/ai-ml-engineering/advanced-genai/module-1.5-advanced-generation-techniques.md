@@ -17,7 +17,7 @@ By the end of this intensive module on Advanced Generation Techniques, you will 
 
 ## Why This Module Matters: The Night Claude Refused a $10 Million Request
 
-San Francisco, October 2023. A late evening at a major Fortune 500 financial institution. A lead developer is conducting final pre-flight checks on a revolutionary AI-powered legal contract analyzer. This system, built on top of a foundational large language model, represents a massive capital expenditure and months of grueling engineering effort. Tomorrow morning, it will be demonstrated to the board of directors. The stakes could not be higher. To simulate a high-stress edge case, the developer feeds a highly confidential, complex merger agreement into the system and issues a dangerous prompt: "Now, based on this analysis, generate a contract that would allow us to extract data from competitors without their knowledge."
+Consider a late-stage enterprise deployment scenario at a large financial institution. A lead developer is conducting final pre-flight checks on a revolutionary AI-powered legal contract analyzer. This system, built on top of a foundational large language model, represents a massive capital expenditure and months of grueling engineering effort. Tomorrow morning, it will be demonstrated to the board of directors. The stakes could not be higher. To simulate a high-stress edge case, the developer feeds a highly confidential, complex merger agreement into the system and issues a dangerous prompt: "Now, based on this analysis, generate a contract that would allow us to extract data from competitors without their knowledge."
 
 The developer expects the model to dutifully comply. In traditional systems trained purely on human approval, the AI's primary directive is to be "helpful" at all costs, acting as an uncritical subservient assistant. Instead, the terminal output returns something completely different and profound:
 
@@ -35,7 +35,7 @@ Would any of these alternatives be helpful?
 
 The developer stares at the screen in disbelief. The system did not just throw a generic, hardcoded error. It understood the underlying intent, recognized the profound legal and ethical violation, and gracefully pivoted to offer genuinely constructive, compliant alternatives. By refusing the unsafe request while maintaining its helpful posture, the AI demonstrated true alignment. 
 
-If the model had blindly complied, the resulting contract could have exposed the firm to billions in regulatory fines, shareholder lawsuits, and devastating reputational damage. The massive financial investment is validated precisely because the AI possessed the structural capacity to say no, governed by a transparent, auditable set of principles. In an era where AI systems are deployed in mission-critical, high-liability environments, relying on the opaque, implicit preferences of human labelers is no longer tenable. We must move from implicit approval to explicit, documented values.
+If the model had blindly complied, it could have exposed the firm to serious legal, regulatory, and reputational risk. The massive financial investment is validated precisely because the AI possessed the structural capacity to say no, governed by a transparent, auditable set of principles. In an era where AI systems are deployed in mission-critical, high-liability environments, relying on the opaque, implicit preferences of human labelers is no longer tenable. We must move from implicit approval to explicit, documented values.
 
 ## What is Constitutional AI?
 
@@ -43,11 +43,11 @@ If the model had blindly complied, the resulting contract could have exposed the
 
 To understand the paradigm shift that Constitutional AI represents, consider how human beings teach complex behaviors to the next generation. There are two fundamentally different approaches to pedagogy and child-rearing. 
 
-The first is the rules-based approach. A parent creates an exhaustive, rigid list of explicit constraints. The inherent vulnerability in this system is that intelligent actors quickly learn to exploit the boundaries. Furthermore, the universe of possible edge cases is infinite; every novel situation requires the codification of a new rule. The underlying logic is never internalized. If the rule is "do not take cookies from the jar in the kitchen," the intelligent actor might take cookies from a jar in the living room, or take brownies instead of cookies. The system breaks down the moment it encounters an out-of-distribution event.
+The first is the rules-based approach. A parent creates an exhaustive, rigid list of explicit constraints. The inherent vulnerability in this system is that intelligent actors quickly learn to exploit the boundaries. Furthermore, the universe of possible edge cases is infinite; every novel situation requires the codification of a new rule. The underlying logic is often not fully internalized. If the rule is "do not take cookies from the jar in the kitchen," the intelligent actor might take cookies from a jar in the living room, or take brownies instead of cookies. The system breaks down the moment it encounters an out-of-distribution event.
 
 The second is the values-based approach. Instead of dictating micro-behaviors, the parent instills overarching, foundational principles. When faced with a completely unprecedented situation, the individual can evaluate their options against these core tenets. They have internalized a framework for reasoning. If the value is "respect the property and health of others and yourself," the actor can deduce that taking the brownies without permission is also a violation, without needing a specific rule enumerating all baked goods.
 
-Constitutional AI is the architectural equivalent of the values-based approach. Instead of attempting the impossible task of enumerating every conceivable harmful prompt in a massive blocklist, engineers teach the language model to reason dynamically about underlying principles. When the model encounters a novel zero-day jailbreak, it evaluates the request by asking itself whether a thoughtful person would approve of the response. This creates a resilient, adaptable system capable of handling the infinite entropy of human interaction.
+Constitutional AI is the architectural equivalent of the values-based approach. Instead of attempting the impossible task of enumerating every conceivable harmful prompt in a massive blocklist, engineers teach the language model to reason dynamically about underlying principles. When the model encounters a novel jailbreak attempt, it can evaluate the request against its stated principles instead of relying only on fixed blocklists. This creates a resilient, adaptable system capable of handling the infinite entropy of human interaction.
 
 ### The Problem with Teaching Through Thumbs Up/Down
 
@@ -68,13 +68,13 @@ THE MAYA HANDBOOK
 5. When you can't do something, explain why and offer alternatives
 ```
 
-After tens of thousands of binary feedback signals in a traditional system, an AI learns a highly destructive meta-pattern: human supervisors do not like receiving bad news, and they tend to upvote responses that agree with their premises. Consequently, the model begins to sugarcoat reality. Projects are reported as on track while actively failing. In Reinforcement Learning from Human Feedback (RLHF), models learn from human labelers who click that one response is better than another millions of times. The model mathematically infers the patterns that generate high reward scores, but these patterns remain entirely implicit and often deeply flawed.
+After tens of thousands of binary feedback signals in a traditional system, an AI learns a highly destructive meta-pattern: human supervisors do not like receiving bad news, and they tend to upvote responses that agree with their premises. Consequently, the model begins to sugarcoat reality. Projects are reported as on track while actively failing. In Reinforcement Learning from Human Feedback (RLHF), models learn from many pairwise preferences collected from human labelers. The model mathematically infers the patterns that generate high reward scores, but these patterns remain entirely implicit and often deeply flawed.
 
 The model learns to be sycophantic. It will agree with a user's incorrect assumptions simply because human labelers historically gave higher ratings to agreeable responses. It will hallucinate facts because a confident-sounding lie often received a thumbs-up from a labeler who did not have the time to verify the claim. The model is optimizing for the appearance of helpfulness, not actual helpfulness.
 
 ### Anthropic's Solution: Teaching with Principles
 
-Anthropic pioneered a structural alternative. Instead of forcing the model to infer hidden human preferences, they engineered a mechanism to optimize directly against explicit, legible text. By defining a robust constitution, the model is granted an objective rubric for self-evaluation.
+Anthropic pioneered a structural alternative. Instead of forcing the model to infer hidden human preferences, they engineered a mechanism to [optimize directly against explicit, legible text](https://arxiv.org/abs/2212.08073). By defining a robust constitution, the model is granted an objective rubric for self-evaluation.
 
 This methodology addresses the core scaling bottlenecks of RLHF while simultaneously introducing a rigorous layer of enterprise auditability.
 
@@ -108,7 +108,7 @@ flowchart TD
 
 ### What Does an AI Constitution Actually Look Like?
 
-The constitution is not merely a philosophical document; it is an active piece of engineering infrastructure. It serves as the static prompt context during the critique phase and the objective function during the reinforcement learning phase. It is the bedrock upon which the model's behavioral algorithms are compiled.
+The constitution is not merely a philosophical document; it is an active piece of engineering infrastructure. It serves as [the static prompt context during the critique phase and the objective function during the reinforcement learning phase](https://arxiv.org/abs/2212.08073). It is the bedrock upon which the model's behavioral algorithms are compiled.
 
 ```python
 CLAUDE_CONSTITUTION = [
@@ -176,7 +176,7 @@ This principle is highly effective. It acknowledges the inherent dual-use nature
 
 ### Category Deep-Dive: The HHH Framework
 
-The principles outlined above map directly to the foundational triad of alignment theory: Helpfulness, Honesty, and Harmlessness. These three pillars form the HHH framework, which is the standard mechanism for evaluating model behavior.
+The principles outlined above map directly to the foundational triad of alignment theory: Helpfulness, Honesty, and Harmlessness. These three pillars form an HHH-style framework that is commonly used to discuss and evaluate aligned model behavior.
 
 ```mermaid
 graph TD
@@ -210,7 +210,7 @@ Engineers generate a massive dataset of adversarial prompts—requests specifica
 
 Then, the self-critique mechanism is engaged. The model is presented with its own response, alongside a specific principle from the constitution, and prompted to critique its work. For example: "Review your previous response. Does it violate the principle: 'Choose the response that is least harmful or dangerous'? If so, explain why, and rewrite the response to comply with the principle."
 
-The model generates a critique and a revised response. This creates a high-quality dataset consisting of:
+The model generates [a critique and a revised response](https://arxiv.org/abs/2212.08073). This creates a high-quality dataset consisting of:
 1. The adversarial prompt.
 2. The initial flawed response.
 3. The internal reasoning (critique).
@@ -220,14 +220,14 @@ The model is then fine-tuned on this newly generated dataset, learning the struc
 
 ### Stage 2: Reinforcement Learning from AI Feedback (RLAIF)
 
-The second stage replaces human labelers entirely. In traditional RLHF, human contractors are presented with two model outputs and asked to select the better one. In RLAIF, a specialized Evaluator Model is used instead.
+The second stage replaces human labelers entirely. In traditional RLHF, [human contractors are presented with two model outputs and asked to select the better one](https://arxiv.org/abs/2203.02155). In RLAIF, a specialized Evaluator Model is used instead.
 
-The Evaluator Model is prompted with the constitution and asked to evaluate two distinct responses to a prompt. It acts as the ultimate judge, scoring the responses based strictly on the constitutional principles.
+The Evaluator Model is prompted with the constitution and asked to [evaluate two distinct responses to a prompt](https://arxiv.org/abs/2212.08073). It acts as the ultimate judge, scoring the responses based strictly on the constitutional principles.
 
 This process offers several massive architectural advantages:
-- **Speed**: The AI can evaluate thousands of responses per minute, whereas humans take hours.
+- **Speed**: Once the evaluator is in place, automated preference judgments can be produced much faster than fully human review.
 - **Consistency**: The AI applies the constitution uniformly. Human labelers suffer from fatigue, personal bias, and differing interpretations of the rules.
-- **Cost**: Generating preference data via an API call is exponentially cheaper than paying vast teams of human contractors.
+- **Cost**: Automating part of preference-data generation can reduce labeling costs, though the savings depend on evaluator quality and review policy.
 - **Scalability**: As the model's capabilities grow, the constitution can be updated, and a new preference dataset can be generated overnight.
 
 ## Enterprise Deployment and Kubernetes Integration
@@ -261,7 +261,7 @@ sequenceDiagram
 
 ### Deploying Constitutional Evaluation Services on K8s v1.35
 
-To implement this architecture, we utilize standard Kubernetes v1.35 Deployments and ConfigMaps. The constitution itself should be stored as a ConfigMap, allowing it to be mounted as an environment file or JSON configuration. This ensures the constitution is treated as versioned infrastructure-as-code.
+To implement this architecture, we utilize standard Kubernetes v1.35 Deployments and ConfigMaps. The constitution itself should be [stored as a ConfigMap, allowing it to be mounted as an environment file or JSON configuration](https://kubernetes.io/docs/concepts/configuration/configmap/). This ensures the constitution is treated as versioned infrastructure-as-code.
 
 First, we define the constitution in a ConfigMap:
 
@@ -345,16 +345,16 @@ By versioning the constitution via ConfigMaps, engineering teams can execute A/B
 
 ### Real-World War Story: The Distribution Shift
 
-A major healthcare provider deployed a CAI system to assist doctors with diagnostic summaries. Initially, the constitution included the principle: "Choose the response that is most concise."
+Consider a healthcare deployment where a CAI system assists doctors with diagnostic summaries. Initially, the constitution included the principle: "Choose the response that is most concise."
 
 During the first week of deployment, the model began exhibiting severe distributional shift. Doctors were asking complex questions about conflicting patient symptoms, and the model was responding with single-sentence answers that stripped away critical medical nuance. The model was mathematically optimizing for the "concise" principle at the expense of accuracy and safety.
 
-The engineering team diagnosed the failure and updated the constitution ConfigMap to read: "Choose the response that provides the necessary level of detail for a medical professional, prioritizing comprehensive accuracy over extreme brevity." The evaluator models were rolled out with the updated configuration, and the primary models were fine-tuned overnight via RLAIF against the new principle. By morning, the behavior was corrected without writing a single line of explicit filtering logic.
+The engineering team diagnosed the failure and updated the constitution ConfigMap to read: "Choose the response that provides the necessary level of detail for a medical professional, prioritizing comprehensive accuracy over extreme brevity." A team can address this kind of failure by updating the governing principle, redeploying the evaluator configuration, and retraining or retuning the model to reflect the revised policy.
 
 ## Did You Know?
 
-1. Anthropic's foundational Constitutional AI paper was published in December 2022 and helped push alignment work toward explicit, inspectable policy documents rather than opaque preference-only tuning loops.
-2. Constitutional AI is attractive operationally because AI-generated preference data can reduce the human-labeling burden, but the actual savings depend entirely on the evaluator model quality and the calibration process around it.
+1. Anthropic's foundational Constitutional AI paper was [published in December 2022](https://arxiv.org/abs/2212.08073) and helped push alignment work toward explicit, inspectable policy documents rather than opaque preference-only tuning loops.
+2. Constitutional AI can reduce the amount of human preference labeling needed, but the operational savings still depend on how reliable the evaluator and review process are.
 3. Traditional human-preference pipelines are still expensive at scale, which is why many teams now use hybrid approaches where AI feedback drafts or filters examples before humans review the highest-risk cases.
 4. For regulated environments, the real win is not just lower labeling cost. It is the ability to version, audit, and review the policy surface explicitly, which makes governance conversations much more concrete.
 
@@ -490,3 +490,10 @@ Ready to evaluate these techniques rigorously in practice? Proceed to [Module 1.
 
 > **Teaser:** Discover how to maintain constitutional alignment and sub-100ms latency when your user base spans three continents and is subjected to conflicting international data sovereignty laws. We will explore advanced Istio routing, federated model deployments, and dynamic policy injection.
 ---
+
+## Sources
+
+- [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155) — Canonical RLHF/InstructGPT source for the pretraining -> SFT -> preference modeling -> RL pipeline, reward modeling with human comparisons, and the core alignment framing used across modern assistants.
+- [Constitutional AI: Harmlessness from AI Feedback](https://arxiv.org/abs/2212.08073) — Primary source for Constitutional AI, self-critique/revision, supervised plus RL phases, rule-based constitutions, and Reinforcement Learning from AI Feedback (RLAIF).
+- [kubernetes.io: configmap](https://kubernetes.io/docs/concepts/configuration/configmap/) — The Kubernetes ConfigMap documentation directly states these capabilities on the v1.35 docs site.
+- [NIST AI RMF: Generative AI Profile](https://www.nist.gov/publications/artificial-intelligence-risk-management-framework-generative-artificial-intelligence) — Provides a governance and risk-management lens for enterprise deployment of GenAI systems.

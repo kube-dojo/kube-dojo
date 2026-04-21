@@ -1,0 +1,288 @@
+{
+  "module_key": "ai-ml-engineering/advanced-genai/module-1.5-advanced-generation-techniques",
+  "module_path": "src/content/docs/ai-ml-engineering/advanced-genai/module-1.5-advanced-generation-techniques.md",
+  "research_run_id": "2026-04-21T01:56:30+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 3,
+  "section_pool_ref": "docs/citation-pools/ai-ml-engineering-advanced-genai.json",
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "The opening anecdote presents a specific October 2023 enterprise incident involving Claude at a Fortune 500 financial institution.",
+      "claim_class": "war_story",
+      "span_hint": "section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "San Francisco, October 2023. A late evening at a major Fortune 500 financial institution.",
+      "suggested_rewrite": "Consider a late-stage enterprise deployment scenario at a large financial institution.",
+      "lesson_point_url": null,
+      "rationale": "This is a concrete real-world anecdote with date, place, and organization class but no attributable source."
+    },
+    {
+      "claim_id": "C002",
+      "claim_text": "The anecdote claims blind compliance could have exposed the firm to billions in fines and lawsuits.",
+      "claim_class": "war_story",
+      "span_hint": "section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "If the model had blindly complied, the resulting contract could have exposed the firm to billions in regulatory fines, shareholder lawsuits, and devastating reputational damage.",
+      "suggested_rewrite": "If the model had blindly complied, it could have exposed the firm to serious legal, regulatory, and reputational risk.",
+      "lesson_point_url": null,
+      "rationale": "The sentence uses fake-precise impact language inside an unattributed war story."
+    },
+    {
+      "claim_id": "C003",
+      "claim_text": "Constitutional AI can handle a novel zero-day jailbreak by reasoning from principles rather than blocklists.",
+      "claim_class": "security_claim",
+      "span_hint": "section: The Parenting Analogy: Rules vs. Values",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "When the model encounters a novel zero-day jailbreak, it evaluates the request by asking itself whether a thoughtful person would approve of the response.",
+      "suggested_rewrite": "When the model encounters a novel jailbreak attempt, it can evaluate the request against its stated principles instead of relying only on fixed blocklists.",
+      "lesson_point_url": null,
+      "rationale": "The security framing is plausible, but the specific zero-day claim and internal mechanism are overstated relative to the available primary source."
+    },
+    {
+      "claim_id": "C004",
+      "claim_text": "RLHF involves human labelers clicking pairwise preferences millions of times.",
+      "claim_class": "statistic",
+      "span_hint": "section: The Problem with Teaching Through Thumbs Up/Down",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "In Reinforcement Learning from Human Feedback (RLHF), models learn from human labelers who click that one response is better than another millions of times.",
+      "suggested_rewrite": "In Reinforcement Learning from Human Feedback (RLHF), models learn from many pairwise preferences collected from human labelers.",
+      "lesson_point_url": null,
+      "rationale": "The process is real, but the scale claim is unsourced and more precise than the cited primary baseline warrants."
+    },
+    {
+      "claim_id": "C005",
+      "claim_text": "Traditional RLHF uses human labelers to compare model outputs and indicate which response is better.",
+      "claim_class": "standard",
+      "span_hint": "section: Stage 2: Reinforcement Learning from AI Feedback (RLAIF)",
+      "disposition": "supported",
+      "source_ids": [
+        "S016"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The InstructGPT paper is the canonical primary source for pairwise human preference collection in RLHF."
+    },
+    {
+      "claim_id": "C006",
+      "claim_text": "Constitutional AI uses a written list of principles to supervise behavior instead of relying only on implicit preference signals.",
+      "claim_class": "standard",
+      "span_hint": "section: Anthropic's Solution: Teaching with Principles",
+      "disposition": "supported",
+      "source_ids": [
+        "S019"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Constitutional AI paper explicitly describes using a list of rules or principles as the source of oversight."
+    },
+    {
+      "claim_id": "C007",
+      "claim_text": "In Constitutional AI, the constitution is used during self-critique and preference judgment phases.",
+      "claim_class": "standard",
+      "span_hint": "section: The Constitution: An AI's Written Values",
+      "disposition": "supported",
+      "source_ids": [
+        "S019"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The primary paper directly describes supervised self-critique/revision and an RL phase driven by AI preferences against constitutional principles."
+    },
+    {
+      "claim_id": "C008",
+      "claim_text": "The HHH framework is the standard mechanism for evaluating model behavior.",
+      "claim_class": "standard",
+      "span_hint": "section: Category Deep-Dive: The HHH Framework",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "These three pillars form the HHH framework, which is the standard mechanism for evaluating model behavior.",
+      "suggested_rewrite": "These three pillars form an HHH-style framework that is commonly used to discuss and evaluate aligned model behavior.",
+      "lesson_point_url": null,
+      "rationale": "HHH is a real alignment framing, but calling it the standard mechanism overstates its universality."
+    },
+    {
+      "claim_id": "C009",
+      "claim_text": "The supervised phase of Constitutional AI samples model outputs, generates self-critiques and revisions, and fine-tunes on the revised responses.",
+      "claim_class": "standard",
+      "span_hint": "section: Stage 1: Supervised Self-Critique Mechanisms",
+      "disposition": "supported",
+      "source_ids": [
+        "S019"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "This sequence is stated directly in the Constitutional AI paper abstract and method description."
+    },
+    {
+      "claim_id": "C010",
+      "claim_text": "In RLAIF, an evaluator model compares responses against the constitution and those AI preferences drive the RL stage.",
+      "claim_class": "standard",
+      "span_hint": "section: Stage 2: Reinforcement Learning from AI Feedback (RLAIF)",
+      "disposition": "supported",
+      "source_ids": [
+        "S019"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Constitutional AI paper directly describes using a model to choose between samples and then training a preference model from AI preferences."
+    },
+    {
+      "claim_id": "C011",
+      "claim_text": "AI evaluation can score thousands of responses per minute while humans take hours.",
+      "claim_class": "benchmark",
+      "span_hint": "section: Stage 2: Reinforcement Learning from AI Feedback (RLAIF)",
+      "disposition": "soften_to_illustration",
+      "source_ids": [
+        "S019"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "- **Speed**: The AI can evaluate thousands of responses per minute, whereas humans take hours.",
+      "suggested_rewrite": "- **Speed**: Once the evaluator is in place, automated preference judgments can be produced much faster than fully human review.",
+      "lesson_point_url": "https://arxiv.org/abs/2212.08073",
+      "rationale": "The comparative lesson is sound, but the specific throughput claim is not backed by the primary source."
+    },
+    {
+      "claim_id": "C012",
+      "claim_text": "Automated preference-data generation is exponentially cheaper than large-scale human labeling.",
+      "claim_class": "pricing",
+      "span_hint": "section: Stage 2: Reinforcement Learning from AI Feedback (RLAIF)",
+      "disposition": "soften_to_illustration",
+      "source_ids": [
+        "S019"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "- **Cost**: Generating preference data via an API call is exponentially cheaper than paying vast teams of human contractors.",
+      "suggested_rewrite": "- **Cost**: Automating part of preference-data generation can reduce labeling costs, though the savings depend on evaluator quality and review policy.",
+      "lesson_point_url": "https://arxiv.org/abs/2212.08073",
+      "rationale": "The direction of the claim is plausible, but the \"exponentially cheaper\" wording is not directly supported by the cited primary paper."
+    },
+    {
+      "claim_id": "C013",
+      "claim_text": "Kubernetes ConfigMaps store non-confidential configuration that Pods can consume as environment variables or files.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Deploying Constitutional Evaluation Services on K8s v1.35",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://kubernetes.io/docs/concepts/configuration/configmap/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Kubernetes ConfigMap documentation directly states these capabilities on the v1.35 docs site."
+    },
+    {
+      "claim_id": "C014",
+      "claim_text": "A major healthcare provider deployed a CAI system for diagnostic summaries and experienced a distribution-shift failure.",
+      "claim_class": "war_story",
+      "span_hint": "section: Real-World War Story: The Distribution Shift",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "A major healthcare provider deployed a CAI system to assist doctors with diagnostic summaries.",
+      "suggested_rewrite": "Consider a healthcare deployment where a CAI system assists doctors with diagnostic summaries.",
+      "lesson_point_url": null,
+      "rationale": "This is framed as a real deployment anecdote but provides no attributable source."
+    },
+    {
+      "claim_id": "C015",
+      "claim_text": "The healthcare example claims the team fixed the problem overnight by updating the constitution and rolling out the evaluator.",
+      "claim_class": "war_story",
+      "span_hint": "section: Real-World War Story: The Distribution Shift",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The evaluator models were rolled out with the updated configuration, and the primary models were fine-tuned overnight via RLAIF against the new principle. By morning, the behavior was corrected without writing a single line of explicit filtering logic.",
+      "suggested_rewrite": "A team can address this kind of failure by updating the governing principle, redeploying the evaluator configuration, and retraining or retuning the model to reflect the revised policy.",
+      "lesson_point_url": null,
+      "rationale": "The timeline and operational success are presented as a factual incident without a traceable source."
+    },
+    {
+      "claim_id": "C016",
+      "claim_text": "Anthropic's Constitutional AI paper was published in December 2022.",
+      "claim_class": "standard",
+      "span_hint": "section: Did You Know",
+      "disposition": "supported",
+      "source_ids": [
+        "S019"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The arXiv record for the Constitutional AI paper shows an initial submission date of December 15, 2022."
+    },
+    {
+      "claim_id": "C017",
+      "claim_text": "AI-generated preference data can reduce the human-labeling burden, but the savings depend on evaluator quality and calibration.",
+      "claim_class": "benchmark",
+      "span_hint": "section: Did You Know",
+      "disposition": "soften_to_illustration",
+      "source_ids": [
+        "S019"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Constitutional AI is attractive operationally because AI-generated preference data can reduce the human-labeling burden, but the actual savings depend entirely on the evaluator model quality and the calibration process around it.",
+      "suggested_rewrite": "Constitutional AI can reduce the amount of human preference labeling needed, but the operational savings still depend on how reliable the evaluator and review process are.",
+      "lesson_point_url": "https://arxiv.org/abs/2212.08073",
+      "rationale": "The primary source supports reduced reliance on human labels, but the absolute wording about savings and calibration should be softened."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://arxiv.org/abs/2212.08073",
+      "title": "Constitutional AI: Harmlessness from AI Feedback",
+      "tier": "standards",
+      "why_relevant": "Primary source for the two-stage Constitutional AI pipeline, self-critique, and RLAIF."
+    },
+    {
+      "url": "https://arxiv.org/abs/2203.02155",
+      "title": "Training Language Models to Follow Instructions with Human Feedback",
+      "tier": "standards",
+      "why_relevant": "Useful baseline for contrasting Constitutional AI with conventional RLHF."
+    },
+    {
+      "url": "https://www.nist.gov/publications/artificial-intelligence-risk-management-framework-generative-artificial-intelligence",
+      "title": "NIST AI RMF: Generative AI Profile",
+      "tier": "standards",
+      "why_relevant": "Provides a governance and risk-management lens for enterprise deployment of GenAI systems."
+    }
+  ],
+  "notes": "Skipped analogies, diagrams, tables, quiz/exercise prompts, and code blocks per schema rules. The surrounding war-story prose needs cleanup, but the faux refusal quote inside the code block is outside seed scope under the current validator instructions.",
+  "_schema_issues": [],
+  "rejected_urls": []
+}
