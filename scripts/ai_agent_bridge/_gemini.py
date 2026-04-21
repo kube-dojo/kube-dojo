@@ -51,7 +51,7 @@ from ._prompts import build_gemini_prompt
 try:
     from dispatch import GEMINI_WRITER_MODEL
 except ImportError:  # pragma: no cover - package import path variant
-    from scripts.dispatch import GEMINI_WRITER_MODEL  # type: ignore
+    GEMINI_WRITER_MODEL = _PARENT_ENV.get("KUBEDOJO_WRITER_MODEL", "gemini-3.1-pro-preview")
 
 
 def converse_gemini(content: str, task_id: str, model: str = GEMINI_WRITER_MODEL,

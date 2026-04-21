@@ -48,3 +48,17 @@ def test_stream_timeout_falls_back_to_proc_kill():
         dispatch._kill_process_tree(proc)
 
     proc.kill.assert_called_once()
+
+
+def test_gemini_quiet_mode_defaults_on_in_pipeline_mode(monkeypatch):
+    monkeypatch.delenv("KUBEDOJO_QUIET", raising=False)
+    monkeypatch.setenv("KUBEDOJO_PIPELINE", "1")
+
+    assert dispatch._gemini_quiet_mode_enabled() is True
+
+
+def test_gemini_quiet_mode_defaults_off_outside_pipeline(monkeypatch):
+    monkeypatch.delenv("KUBEDOJO_QUIET", raising=False)
+    monkeypatch.delenv("KUBEDOJO_PIPELINE", raising=False)
+
+    assert dispatch._gemini_quiet_mode_enabled() is False

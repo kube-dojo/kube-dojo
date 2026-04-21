@@ -1991,7 +1991,13 @@ def build_quality_scores(repo_root: Path) -> dict[str, Any]:
             continue
         lines_count = len(text.splitlines())
         has_title = text.startswith("---\n") and bool(_QUALITY_TITLE_RE.search(text[4:].split("\n---\n", 1)[0]))
-        has_quiz = bool(re.search(r"^##+\s+(quiz|knowledge check)\b", text, re.IGNORECASE | re.MULTILINE))
+        has_quiz = bool(
+            re.search(
+                r"^##+\s+(quiz|quick quiz|quiz yourself|test yourself|module quiz|knowledge check)\b",
+                text,
+                re.IGNORECASE | re.MULTILINE,
+            )
+        )
         has_exercise = bool(re.search(r"^##+\s+(exercise|hands-on|practice|lab)\b", text, re.IGNORECASE | re.MULTILINE))
         has_diagram = "```mermaid" in text or "<details>" in text
         sources_match = _QUALITY_SOURCES_HEADING_RE.search(text)

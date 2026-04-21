@@ -1896,6 +1896,44 @@ def test_rubric_diagnostics_matches_via_label_prefix(tmp_path: Path) -> None:
     assert sev == "poor"
 
 
+def test_build_quality_scores_counts_quiz_aliases(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "src/content/docs/ai/open-models/module-1.1-quiz-alias.md",
+        "\n".join(
+            [
+                "---",
+                'title: "Quiz Alias"',
+                "---",
+                "",
+                "## Overview",
+                "",
+                *[f"Line {i}" for i in range(180)],
+                "",
+                "## Quick Quiz",
+                "",
+                "- Question",
+                "",
+                "## Hands-On Exercise",
+                "",
+                "1. Do thing",
+                "",
+                "## Sources",
+                "",
+                "- [Docs](https://example.com/docs)",
+            ]
+        )
+        + "\n",
+    )
+    with local_api._QUALITY_AUDIT_CACHE_LOCK:
+        local_api._QUALITY_AUDIT_CACHE.clear()
+
+    quality = local_api.build_quality_scores(tmp_path)
+    module = next(item for item in quality["modules"] if item["path"] == "ai/open-models/module-1.1-quiz-alias.md")
+
+    assert module["score"] == 3.6
+    assert module["primary_issue"] == "thin, no diagram"
+
+
 def test_rubric_diagnostics_cka_does_not_match_ckad(tmp_path: Path) -> None:
     """Codex round-3 bug: raw substring ``'cka' in 'CKAD'`` is True,
     letting a CKAD audit row attach to a CKA module path. Matcher

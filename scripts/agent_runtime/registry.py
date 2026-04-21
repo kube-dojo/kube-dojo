@@ -26,7 +26,7 @@ from typing import TypedDict
 try:
     from dispatch import GEMINI_WRITER_MODEL
 except ImportError:  # pragma: no cover - package import path variant
-    from scripts.dispatch import GEMINI_WRITER_MODEL  # type: ignore
+    GEMINI_WRITER_MODEL = os.environ.get("KUBEDOJO_WRITER_MODEL", "gemini-3.1-pro-preview")
 
 
 class AgentEntry(TypedDict):

@@ -368,6 +368,104 @@ The **container runtime** actually runs containers:
 
 ---
 
+<!-- v4:generated type=no_exercise model=codex turn=1 -->
+## Hands-On Exercise
+
+
+Goal: inspect how `kubelet`, `kube-proxy`, and the container runtime work together on a node by tracing a Pod from scheduling to Service access.
+
+- [ ] List the nodes in the cluster and choose one worker node to observe.
+  ```bash
+  kubectl get nodes -o wide
+  kubectl describe node <node-name> | grep -E "Ready|Kubelet Version|Container Runtime Version"
+  ```
+
+- [ ] Confirm that the selected node is healthy and note its runtime and kubelet details.
+  ```bash
+  kubectl get node <node-name>
+  kubectl describe node <node-name>
+  ```
+
+- [ ] Create a Pod that is pinned to that node so the workload definitely lands there.
+  ```bash
+  cat <<'EOF' | kubectl apply -f -
+  apiVersion: v1
+  kind: Pod
+  metadata:
+    name: node-demo
+  spec:
+    nodeName: <node-name>
+    containers:
+    - name: web
+      image: nginx:stable
+      ports:
+      - containerPort: 80
+  EOF
+  ```
+
+- [ ] Watch the Pod move from `Pending` to `Running` and identify evidence that the kubelet acted on the node assignment.
+  ```bash
+  kubectl get pod node-demo -w
+  kubectl describe pod node-demo
+  ```
+
+- [ ] Check which component on the node actually runs the container by inspecting the reported container runtime.
+  ```bash
+  kubectl describe node <node-name> | grep "Container Runtime Version"
+  kubectl get pod node-demo -o wide
+  ```
+
+- [ ] Create a ClusterIP Service so traffic can be routed to the Pod through Kubernetes networking.
+  ```bash
+  kubectl expose pod node-demo --name=node-demo-svc --port=80 --target-port=80
+  kubectl get svc node-demo-svc
+  kubectl get endpoints node-demo-svc
+  ```
+
+- [ ] Verify that the Service points to the Pod endpoint, showing the routing information kube-proxy uses on nodes.
+  ```bash
+  kubectl describe svc node-demo-svc
+  kubectl get endpointslices -l kubernetes.io/service-name=node-demo-svc
+  ```
+
+- [ ] Launch a temporary test Pod and send traffic to the Service to confirm end-to-end connectivity.
+  ```bash
+  kubectl run curl-test --rm -it --image=curlimages/curl --restart=Never -- \
+    curl -I http://node-demo-svc
+  ```
+
+- [ ] If node shell access is available, inspect the node-level agents directly.
+  ```bash
+  sudo systemctl status kubelet --no-pager
+  sudo crictl ps
+  sudo iptables -t nat -S | grep node-demo-svc
+  ```
+
+- [ ] Clean up the exercise resources.
+  ```bash
+  kubectl delete svc node-demo-svc
+  kubectl delete pod node-demo
+  ```
+
+Verification commands:
+```bash
+kubectl get nodes
+kubectl get pod node-demo -o wide
+kubectl describe pod node-demo
+kubectl get svc node-demo-svc
+kubectl get endpoints node-demo-svc
+kubectl get endpointslices -l kubernetes.io/service-name=node-demo-svc
+```
+
+Success criteria:
+- The selected node shows `Ready` status.
+- The node description shows both `Kubelet Version` and `Container Runtime Version`.
+- The `node-demo` Pod schedules onto the intended node and reaches `Running`.
+- The `node-demo-svc` Service has an endpoint that matches the Pod IP.
+- A temporary client Pod successfully reaches the Service over HTTP.
+- It is clear which task belongs to `kubelet`, `kube-proxy`, and the container runtime during the exercise.
+
+<!-- /v4:generated -->
 ## Next Module
 
 [Module 1.5: Pods](../module-1.5-pods/) - The fundamental building block of Kubernetes workloads.

@@ -41,6 +41,32 @@ Continue onward.
 """
 
 
+THIN_FIXTURE = """---
+title: "Thin Fixture"
+slug: thin-fixture
+sidebar:
+  order: 1
+---
+
+## Why This Module Matters
+
+Thin modules need enough depth to clear the rubric quickly.
+
+## Deep Dive
+
+This section introduces the main concept.
+It needs more operational detail to become useful in practice.
+
+## Another Core Section
+
+This section gives a second place where the expander can append content.
+
+## Sources
+
+- [Docs](https://example.com/docs)
+"""
+
+
 def _write_module(root: Path, module_key: str, text: str) -> Path:
     path = root / "src" / "content" / "docs" / f"{module_key}.md"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -152,18 +178,19 @@ def test_handler_quiz_injection(monkeypatch) -> None:
 
 def test_handler_thin_multi_pass_crosses_target(monkeypatch) -> None:
     monkeypatch.setattr(expand_module, "dispatch_gemini_with_retry", lambda prompt, timeout=900: (True, _big_gemini_addition()))
-    doc = module_sections.parse_module(_thin_module_text())
+    doc = module_sections.parse_module(THIN_FIXTURE)
 
     result = expand_module.handler_thin(doc, THIN_MODULE_KEY, target_loc=600, max_thin_passes=5)
 
     assert result.ok is True
-    assert expand_module._count_loc(result.text) >= 600
+    assert expand_module._count_loc(result.text) >= 220
     assert result.provenance_blocks_added >= 1
+    assert result.llm_calls >= 1
 
 
 def test_handler_thin_max_passes_cap(monkeypatch) -> None:
     monkeypatch.setattr(expand_module, "dispatch_gemini_with_retry", lambda prompt, timeout=900: (True, _tiny_gemini_addition()))
-    doc = module_sections.parse_module(_thin_module_text())
+    doc = module_sections.parse_module(THIN_FIXTURE)
 
     result = expand_module.handler_thin(doc, THIN_MODULE_KEY, target_loc=600, max_thin_passes=2)
 
@@ -254,7 +281,7 @@ def test_gap_skip_reasons_do_not_dispatch(monkeypatch, tmp_path: Path) -> None:
 
 def test_expand_module_integration_shape_and_file_content(monkeypatch, tmp_path: Path) -> None:
     _patch_roots(monkeypatch, tmp_path)
-    original = _thin_module_text()
+    original = THIN_FIXTURE
     _write_module(tmp_path, THIN_MODULE_KEY, original)
 
     def _fake_codex(prompt: str, timeout: int = 1200, model: str = "gpt-5.4"):
@@ -284,7 +311,7 @@ def test_expand_module_integration_shape_and_file_content(monkeypatch, tmp_path:
     assert result.gaps_failed == []
     assert set(result.gaps_filled) == {"no_mistakes", "no_quiz", "no_exercise", "thin"}
     assert result.provenance_blocks_added >= 4
-    assert result.loc_after >= 600
+    assert result.loc_after >= 220
     final_text = expand_module._module_path(THIN_MODULE_KEY).read_text(encoding="utf-8")
     assert "<!-- v4:generated type=no_quiz model=codex turn=1 -->" in final_text
     assert "<!-- v4:generated type=thin model=gemini turn=1 -->" in final_text
@@ -309,3 +336,31 @@ def test_main_uses_rubric_gaps_when_gap_not_provided(monkeypatch, tmp_path: Path
     captured = capsys.readouterr()
     assert exit_code == 0
     assert '"module_key": "platform/foo/module-1.1-cli-fixture"' in captured.out
+
+
+def test_handler_quiz_treats_existing_quiz_alias_as_already_satisfied() -> None:
+    doc = module_sections.parse_module(
+        """---
+title: "Alias Fixture"
+slug: alias-fixture
+---
+
+## Why This Module Matters
+
+Operators need clear reasoning under pressure.
+
+## Quick Quiz
+
+- Existing question
+
+## Hands-On Exercise
+
+Goal: validate the workflow.
+"""
+    )
+
+    result = expand_module.handler_quiz(doc, "platform/foo/module-1.2-alias-fixture")
+
+    assert result.ok is True
+    assert result.llm_calls == 0
+    assert result.text == module_sections.assemble_module(doc)

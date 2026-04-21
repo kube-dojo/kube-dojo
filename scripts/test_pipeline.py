@@ -12,6 +12,7 @@ Run:  python scripts/test_pipeline.py
 from __future__ import annotations
 
 import json
+import importlib
 import os
 import shutil
 import subprocess
@@ -25,16 +26,15 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
+import sys
 import yaml
 
-# Ensure scripts/ is on the path
-import sys
 REPO_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from checks import structural
-from checks.structural import CheckResult
-from dispatch import GEMINI_WRITER_MODEL
+structural = importlib.import_module("checks.structural")
+CheckResult = structural.CheckResult
+GEMINI_WRITER_MODEL = importlib.import_module("dispatch").GEMINI_WRITER_MODEL
 
 
 def sample_fact_ledger() -> dict:
@@ -939,7 +939,7 @@ class TestReviewAuditLog(unittest.TestCase):
         self.assertTrue(ok)
         self.assertEqual(mock_check.call_count, 2)
         self.assertEqual(ms["phase"], "done")
-        self.assertNotIn("check_failures", ms)
+        self.assertEqual(ms.get("check_failures"), 0)
         self.assertNotIn("Deterministic checks failed after review", ms["errors"])
 
     def test_reset_stuck_writes_reset_audit_and_commits_batch(self):
@@ -1077,7 +1077,9 @@ class TestPipelineTransitions(unittest.TestCase):
 
     def _mock_review_approve(self, *args, **kwargs):
         """Mock review that approves (binary gate #223)."""
-        check_ids = ["COV", "QUIZ", "EXAM", "DEPTH", "WHY", "PRES"]
+        import v1_pipeline as p
+
+        check_ids = p.CHECK_IDS
         return True, json.dumps({
             "verdict": "APPROVE",
             "severity": "clean",
@@ -1088,7 +1090,9 @@ class TestPipelineTransitions(unittest.TestCase):
 
     def _mock_review_reject(self, *args, **kwargs):
         """Mock review that rejects with 1 fixable quiz issue."""
-        check_ids = ["COV", "QUIZ", "EXAM", "DEPTH", "WHY", "PRES"]
+        import v1_pipeline as p
+
+        check_ids = p.CHECK_IDS
         checks = [{"id": cid, "passed": True} for cid in check_ids]
         checks[1] = {"id": "QUIZ", "passed": False,
                      "evidence": "Recall-based not scenario-based",
@@ -1126,6 +1130,7 @@ class TestPipelineTransitions(unittest.TestCase):
              patch.object(p, "save_state"), \
              patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
              patch.object(p, "step_content_aware_fact_ledger", return_value=None), \
+             patch.object(p, "_compute_cite_check", return_value={"id": "CITE", "passed": True, "evidence": "ok"}), \
              patch.object(p, "step_check_integrity", return_value=(True, [])):
             with patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"):
                 p.run_module(self.module_path, state)
@@ -1210,6 +1215,7 @@ class TestPipelineTransitions(unittest.TestCase):
              patch.object(p, "save_state"), \
              patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
              patch.object(p, "step_content_aware_fact_ledger", return_value=None), \
+             patch.object(p, "_compute_cite_check", return_value={"id": "CITE", "passed": True, "evidence": "ok"}), \
              patch.object(p, "step_check_integrity", return_value=(True, [])):
             with patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"):
                 p.run_module(self.module_path, state)
@@ -1447,6 +1453,7 @@ class TestPipelineTransitions(unittest.TestCase):
              patch.object(p, "save_state"), \
              patch.object(p, "ensure_fact_ledger", return_value=sample_fact_ledger()), \
              patch.object(p, "step_content_aware_fact_ledger", return_value=None), \
+             patch.object(p, "_compute_cite_check", return_value={"id": "CITE", "passed": True, "evidence": "ok"}), \
              patch.object(p, "step_check_integrity", return_value=(True, [])):
             with patch.object(p, "module_key_from_path", return_value="test/module-0.1-test"):
                 p.run_module(self.module_path, state)
@@ -1872,7 +1879,16 @@ class TestPipelineTransitions(unittest.TestCase):
                  side_effect=[
                      (True, []),
                      (False, failed_results),
+                     (False, failed_results),
+                     (False, failed_results),
+                     (False, failed_results),
+                     (False, failed_results),
                      (True, []),
+                     (False, failed_results),
+                     (False, failed_results),
+                     (False, failed_results),
+                     (False, failed_results),
+                     (False, failed_results),
                      (False, failed_results),
                  ],
              ):
@@ -4152,6 +4168,7 @@ class TestRunModuleSplitReviewer(unittest.TestCase):
                 {"id": "DEPTH", "passed": True},
                 {"id": "WHY", "passed": False},
                 {"id": "PRES", "passed": True},
+                {"id": "CITE", "passed": True},
             ],
             "edits": [],
             "feedback": "Two structural disagreements.",
@@ -4181,7 +4198,7 @@ class TestRunModuleSplitReviewer(unittest.TestCase):
         self.assertIn("delta_dims", lines[0])
         record = json.loads(lines[1])
         self.assertEqual(record["module_key"], key)
-        self.assertEqual(record["delta_dims"], [0, 2, 0, 0, 2, 0])
+        self.assertEqual(record["delta_dims"], [0, 2, 0, 0, 2, 0, 0])
         self.assertEqual(record["delta_sum"], 4)
         self.assertEqual(json.loads(drift_file.read_text()), [key])
 

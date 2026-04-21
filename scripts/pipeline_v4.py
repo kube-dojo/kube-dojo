@@ -271,6 +271,27 @@ def _invoke_citation_pipeline(module_key: str) -> dict[str, Any]:
     }
 
 
+def _parse_citation_status(stdout_tail: list[str]) -> str | None:
+    """Extract the `status` field from pipeline_v3's stdout JSON payload.
+
+    pipeline_v3 prints a JSON object on completion. We only have the
+    tail (last 50 lines) but that's enough for a single-module run.
+    Returns the status string (e.g. "clean", "residuals_queued") or
+    None if the payload can't be parsed."""
+    if not stdout_tail:
+        return None
+    text = "\n".join(stdout_tail)
+    start = text.find("{")
+    if start < 0:
+        return None
+    try:
+        payload = json.loads(text[start:])
+    except json.JSONDecodeError:
+        return None
+    status = payload.get("status") if isinstance(payload, dict) else None
+    return str(status) if isinstance(status, str) else None
+
+
 def _new_result(module_key: str) -> PipelineV4Result:
     started_at = _iso_utc()
     return PipelineV4Result(
@@ -323,18 +344,32 @@ def _run_pipeline_v4(
         )
 
         stable_before_citation = result.score_before >= 4.0 and not result.gaps_before
-        if not stable_before_citation:
+        # Skip Stage 2 entirely when none of the starting gaps are things
+        # expand_module can handle (e.g. only no_citations / no_diagram).
+        # Retry-looping through no-op expansions wastes the whole budget
+        # and then fails at rubric_stage_3_unmet before ever reaching
+        # Stage 4, where no_citations would actually get filled.
+        stage_2_applicable = expand_module.can_expand(result.gaps_before)
+
+        if stable_before_citation:
+            result.gaps_after = []
+            result.score_after = result.score_before
+        elif not stage_2_applicable:
+            result.gaps_after = list(result.gaps_before)
+            result.score_after = result.score_before
+        else:
             attempt = 0
+            current_gaps = list(result.gaps_before)
             while True:
                 _stage_start(
                     result,
                     STAGE_EXPAND,
-                    {"attempt": attempt, "gaps": result.gaps_before, "target_loc": target_loc},
+                    {"attempt": attempt, "gaps": current_gaps, "target_loc": target_loc},
                     dry_run=dry_run,
                 )
                 expand_result = expand_module.expand_module(
                     normalized_key,
-                    result.gaps_before,
+                    current_gaps,
                     target_loc=target_loc,
                     dry_run=dry_run,
                 )
@@ -371,6 +406,11 @@ def _run_pipeline_v4(
                 )
                 if score_after_expand >= 4.0:
                     break
+                # If the only remaining gaps are Stage-4 territory
+                # (no_citations / no_diagram), further Stage 2 retries
+                # can't move the needle. Fall through to Stage 4.
+                if not expand_module.can_expand(gaps_after_expand):
+                    break
                 if result.retry_count >= max_rubric_retries:
                     return _fail_result(
                         result,
@@ -380,11 +420,10 @@ def _run_pipeline_v4(
                     )
                 result.retry_count += 1
                 attempt += 1
-        else:
-            result.gaps_after = []
-            result.score_after = result.score_before
+                current_gaps = gaps_after_expand
 
         score_before_citation = result.score_after if result.score_after is not None else result.score_before
+        citation_status: str | None = None
 
         if dry_run or skip_citation:
             skip_reason = "dry_run" if dry_run else "skip_citation"
@@ -422,18 +461,25 @@ def _run_pipeline_v4(
 
         citation_result = _invoke_citation_pipeline(normalized_key)
         result.citation_v3_exit = int(citation_result["exit_code"])
+        citation_status = _parse_citation_status(citation_result["stdout_tail"])
         _stage_finish(
             result,
             STAGE_CITATION_V3,
             {
                 "generated_loc_ratio": round(generated_ratio, 4),
                 "exit_code": result.citation_v3_exit,
+                "status": citation_status,
                 "stdout_tail": citation_result["stdout_tail"],
                 "stderr_tail": citation_result["stderr_tail"],
             },
             dry_run=dry_run,
         )
-        if result.citation_v3_exit != 0:
+        # Pipeline_v3 exits non-zero when it can't fully auto-resolve.
+        # status="residuals_queued" means it ran, audited, and routed
+        # un-fixable items to human review — that's a successful run
+        # with human follow-up, NOT a pipeline failure. Only treat
+        # other non-zero exits as failures.
+        if result.citation_v3_exit != 0 and citation_status != "residuals_queued":
             return _fail_result(
                 result,
                 outcome=OUTCOME_FAILED,
@@ -471,8 +517,16 @@ def _run_pipeline_v4(
             )
 
         result.stage_reached = STAGE_DONE
-        result.outcome = OUTCOME_SKIPPED if stable_before_citation else OUTCOME_CLEAN
-        result.reason = ""
+        # residuals_queued means pipeline_v3 ran cleanly but routed some
+        # items to human review. Not a failure, not fully clean — flag
+        # as needs_human so batch summaries distinguish it from modules
+        # that closed out without operator follow-up.
+        if citation_status == "residuals_queued":
+            result.outcome = OUTCOME_NEEDS_HUMAN
+            result.reason = "citation_residuals_queued"
+        else:
+            result.outcome = OUTCOME_SKIPPED if stable_before_citation else OUTCOME_CLEAN
+            result.reason = ""
         return _result_with_finish(result)
     except Exception as exc:
         if isinstance(exc, PipelineV4Error):

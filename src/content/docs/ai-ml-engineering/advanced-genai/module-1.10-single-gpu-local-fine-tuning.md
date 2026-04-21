@@ -274,6 +274,189 @@ Often the better move is architectural, not stubborn.
 
 ---
 
+<!-- v4:generated type=no_quiz model=codex turn=1 -->
+## Quiz
+
+
+**Q1.** Your team wants a local model to answer employee questions about a handbook that changes every month. One engineer suggests doing a single-GPU fine-tuning run on last quarter's documents so the model "knows the company policy." Based on this module, what is the better approach, and why?
+
+<details>
+<summary>Answer</summary>
+Use retrieval, not fine-tuning, as the first solution.
+
+The module explains that missing, stale, or frequently changing factual knowledge is usually a retrieval problem rather than a weight-update problem. Fine-tuning is better for repeatable behavior shifts, style, formatting, or narrow task adaptation, not for keeping up with changing reference docs.
+</details>
+
+**Q2.** You have one consumer GPU with limited VRAM, and a teammate insists on starting with the largest open model you can find because "bigger models always fine-tune better." After repeated out-of-memory errors and tiny batch settings, what should you change first?
+
+<details>
+<summary>Answer</summary>
+Choose a base model that realistically fits the GPU, then use a parameter-efficient method such as LoRA.
+
+The module says VRAM determines what base model is practical, which quantization path is realistic, and how usable the whole experiment will be. On a single GPU, PEFT is the default practical path because it lowers VRAM pressure, reduces artifact size, and speeds iteration.
+</details>
+
+**Q3.** A support team is building its first local fine-tuning dataset. They mix ticket classification examples, long-form summarization, friendly tone rewriting, and strict JSON incident reports into one small dataset. The tuned model becomes inconsistent. What dataset change would most likely improve the next run?
+
+<details>
+<summary>Answer</summary>
+Narrow the dataset to one clear adaptation target with a consistent format.
+
+The module warns that beginners often make the dataset too ambitious by combining multiple tasks at once. For a first single-GPU pass, the dataset should be narrow in purpose, consistent in structure, and clear about expected outputs so the model learns a strong signal instead of noise.
+</details>
+
+**Q4.** After a weekend fine-tuning run, your teammate says, "The tuned model feels smarter now," but they only tried a few prompts from memory and did not compare against the original model. What is missing from the workflow?
+
+<details>
+<summary>Answer</summary>
+A separate evaluation process with a reserved validation or check set and a baseline comparison.
+
+The module says evaluation discipline is one of the three constraints you cannot ignore. Without comparing baseline versus adapted behavior on a separate set, the result becomes folklore instead of evidence. "It feels better" is not enough to justify keeping the run.
+</details>
+
+**Q5.** You fine-tuned a model on one GPU and ended up with dozens of checkpoints named `test1`, `final2`, `really_final`, and `new_run_fixed`. A month later, nobody can tell which adapter came from which base model or dataset. According to the module, what should checkpoint hygiene look like instead?
+
+<details>
+<summary>Answer</summary>
+Keep only the final adapter, the training config, evaluation notes, and at most one or two meaningful checkpoints, all with traceable names.
+
+The module emphasizes that home-scale storage is limited and artifacts are only useful if you can identify which base model, dataset, and settings produced them. Keeping every checkpoint forever and using unclear names destroys reproducibility and makes the outputs hard to trust.
+</details>
+
+**Q6.** You use quantization so a training workflow fits on your single GPU. After tuning, a colleague evaluates the model in a different runtime and declares the fine-tuning a success even though that is not how the model will actually be deployed. Why is that a problem?
+
+<details>
+<summary>Answer</summary>
+Because quantization affects performance and compatibility, so you should evaluate in the same runtime context you actually care about.
+
+The module says quantization can make local work feasible, but not every quantized setup behaves identically. Baseline and tuned outputs should be compared in the real runtime environment you plan to use later, not in a disconnected setup that may hide practical differences.
+</details>
+
+**Q7.** Your single-GPU run technically completes, but the GPU is barely sustaining the job, the dataset is inconsistent, and evaluation shows almost no gain over the base model. One person argues you should just train longer. Based on the module, what is the better decision?
+
+<details>
+<summary>Answer</summary>
+Stop the tuning path and reassess the approach instead of pushing harder.
+
+The module explicitly says to reassess when hardware barely sustains the run, the dataset is too weak, retrieval would solve the problem more cleanly, or evaluation shows little improvement. A failed local tuning run is still useful if it shows the data, model choice, or architecture is wrong.
+</details>
+
+<!-- /v4:generated -->
+<!-- v4:generated type=no_exercise model=codex turn=1 -->
+## Hands-On Exercise
+
+
+Goal: complete a reproducible single-GPU LoRA fine-tuning run on a small instruct model, compare baseline vs tuned behavior on a narrow task, and keep only artifacts you can trace back to the dataset and configuration.
+
+- [ ] Create a clean project workspace for one experiment only.
+  ```bash
+  mkdir -p single-gpu-ft/{data,eval,artifacts,logs}
+  cd single-gpu-ft
+  pwd
+  ```
+
+- [ ] Record hardware limits before picking a base model so the run is sized to real VRAM, not guesswork.
+  ```bash
+  nvidia-smi --query-gpu=name,memory.total,memory.free,driver_version --format=csv,noheader
+  df -h .
+  ```
+
+- [ ] Choose one small open instruct model that realistically fits a single GPU with LoRA or QLoRA, and write the choice down in `logs/run-notes.md` with the task you want to improve.
+  ```bash
+  cat > logs/run-notes.md <<'EOF'
+  Base model:
+  Target task:
+  GPU VRAM:
+  PEFT method:
+  Why this task is fine-tuning and not retrieval:
+  EOF
+  cat logs/run-notes.md
+  ```
+
+- [ ] Build a narrow training dataset in JSONL format with one output style only, such as strict JSON answers, support-template replies, or fixed classification labels.
+  ```bash
+  cat > data/train.jsonl <<'EOF'
+  {"instruction":"Classify the ticket priority and return strict JSON.","input":"Database errors are preventing checkout for all users.","output":"{\"priority\":\"critical\",\"reason\":\"revenue-impacting outage\"}"}
+  {"instruction":"Classify the ticket priority and return strict JSON.","input":"One internal dashboard widget loads slowly for a single analyst.","output":"{\"priority\":\"low\",\"reason\":\"limited user impact\"}"}
+  {"instruction":"Classify the ticket priority and return strict JSON.","input":"Customers cannot reset passwords from the login page.","output":"{\"priority\":\"high\",\"reason\":\"authentication flow broken\"}"}
+  EOF
+  wc -l data/train.jsonl
+  ```
+
+- [ ] Reserve a separate evaluation set and keep it out of training so you can compare baseline versus tuned behavior honestly.
+  ```bash
+  cat > eval/check.jsonl <<'EOF'
+  {"instruction":"Classify the ticket priority and return strict JSON.","input":"Payment confirmation emails are delayed by several hours.","expected":"{\"priority\":\"medium\",\"reason\":\"degraded customer communication\"}"}
+  {"instruction":"Classify the ticket priority and return strict JSON.","input":"The public status page is unreachable during an active incident.","expected":"{\"priority\":\"high\",\"reason\":\"incident visibility impaired\"}"}
+  EOF
+  wc -l eval/check.jsonl
+  ```
+
+- [ ] Create a minimal reproducible config that records the base model, LoRA settings, batch size, sequence length, output directory, and checkpoint policy.
+  ```bash
+  cat > artifacts/config.yaml <<'EOF'
+  base_model: your-chosen-model
+  peft_method: lora
+  lora_r: 16
+  lora_alpha: 32
+  lora_dropout: 0.05
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 8
+  learning_rate: 2e-4
+  num_train_epochs: 1
+  max_seq_length: 1024
+  save_total_limit: 2
+  output_dir: artifacts/adapter
+  EOF
+  sed -n '1,120p' artifacts/config.yaml
+  ```
+
+- [ ] Run one short baseline check with the untuned model on the evaluation prompts and save the outputs for comparison.
+  ```bash
+  printf '%s\n' "Prompt 1: Payment confirmation emails are delayed by several hours." > eval/baseline.txt
+  printf '%s\n' "Prompt 2: The public status page is unreachable during an active incident." >> eval/baseline.txt
+  cat eval/baseline.txt
+  ```
+  Use the inference command for your chosen stack and append the raw model responses to `eval/baseline.txt`.
+
+- [ ] Start a short LoRA or QLoRA training run that is small enough to finish locally without exhausting VRAM.
+  ```bash
+  nvidia-smi
+  ```
+  Run the training command for your framework, and save the exact command line in `logs/run-notes.md`.
+
+- [ ] Verify that training produced a traceable adapter rather than a pile of unnamed checkpoints.
+  ```bash
+  find artifacts -maxdepth 3 -type f | sort
+  du -sh artifacts
+  ```
+
+- [ ] Run the same evaluation prompts against the tuned adapter and save the outputs beside the baseline.
+  ```bash
+  printf '%s\n' "Prompt 1: Payment confirmation emails are delayed by several hours." > eval/tuned.txt
+  printf '%s\n' "Prompt 2: The public status page is unreachable during an active incident." >> eval/tuned.txt
+  cat eval/tuned.txt
+  ```
+  Use the same inference path as before, but load the adapter and append the tuned responses to `eval/tuned.txt`.
+
+- [ ] Compare baseline and tuned outputs for the exact behavior you targeted, not for vague impressions.
+  ```bash
+  diff -u eval/baseline.txt eval/tuned.txt || true
+  ```
+
+- [ ] Keep only the final adapter, config, dataset, and evaluation notes, then delete throwaway checkpoints that do not help reproduce the result.
+  ```bash
+  ls -R artifacts eval logs
+  ```
+
+Success criteria:
+- The run uses a base model and PEFT method that fit a single local GPU without repeated out-of-memory failures.
+- `data/train.jsonl` and `eval/check.jsonl` are separate and narrowly focused on one task.
+- The experiment has a saved config, saved baseline outputs, and saved tuned outputs.
+- The tuned model shows a measurable improvement in the target format or behavior on the held-out prompts.
+- The final artifacts are named clearly enough that someone else can identify the base model, dataset, and settings used.
+
+<!-- /v4:generated -->
 ## Next Modules
 
 - [Modern PEFT: DoRA and PiSSA](./module-1.9-modern-peft-dora-pissa/)

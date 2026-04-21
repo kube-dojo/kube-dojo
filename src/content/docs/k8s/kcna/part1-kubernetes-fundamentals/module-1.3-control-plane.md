@@ -392,6 +392,118 @@ In production environments, control plane components are heavily replicated to p
 
 ---
 
+<!-- v4:generated type=no_exercise model=codex turn=1 -->
+## Hands-On Exercise
+
+
+Goal: observe the Kubernetes control plane in action, identify what each core component does, and trace a Pod request from API submission to node placement.
+
+- [ ] Confirm cluster access and identify the control plane node(s).
+  ```bash
+  kubectl cluster-info
+  kubectl get nodes -o wide
+  ```
+  Verification commands:
+  ```bash
+  kubectl get nodes
+  kubectl get namespaces
+  ```
+
+- [ ] Inspect the control plane components running in `kube-system`.
+  ```bash
+  kubectl get pods -n kube-system -o wide
+  kubectl get pods -n kube-system | grep -E 'apiserver|etcd|scheduler|controller-manager'
+  ```
+  Verification commands:
+  ```bash
+  kubectl get pods -n kube-system --show-labels
+  kubectl describe pod -n kube-system <control-plane-pod-name>
+  ```
+
+- [ ] Examine the API server and confirm it is the main entry point for cluster operations.
+  ```bash
+  kubectl describe pod -n kube-system <kube-apiserver-pod-name>
+  kubectl get --raw=/healthz
+  ```
+  Verification commands:
+  ```bash
+  kubectl api-resources | head
+  kubectl version --short
+  ```
+
+- [ ] Inspect `etcd` and connect it to stored cluster state.
+  ```bash
+  kubectl describe pod -n kube-system <etcd-pod-name>
+  kubectl get configmaps,secrets,serviceaccounts -A | head -20
+  ```
+  Verification commands:
+  ```bash
+  kubectl get pods -A
+  kubectl get svc -A
+  ```
+
+- [ ] Inspect the scheduler and controller manager, then identify their separate responsibilities.
+  ```bash
+  kubectl describe pod -n kube-system <kube-scheduler-pod-name>
+  kubectl describe pod -n kube-system <kube-controller-manager-pod-name>
+  ```
+  Verification commands:
+  ```bash
+  kubectl get events -A --sort-by=.lastTimestamp | tail -20
+  kubectl explain pod.spec.nodeName
+  ```
+
+- [ ] Create a Deployment and watch the control plane process it.
+  ```bash
+  kubectl create deployment control-plane-demo --image=nginx --replicas=2
+  kubectl get deployment,pods -w
+  ```
+  Verification commands:
+  ```bash
+  kubectl describe deployment control-plane-demo
+  kubectl describe pod <new-pod-name>
+  ```
+
+- [ ] Trace scheduling by checking which node each Pod was assigned to and what events were recorded.
+  ```bash
+  kubectl get pods -o wide
+  kubectl get events --sort-by=.lastTimestamp
+  ```
+  Verification commands:
+  ```bash
+  kubectl get pod <new-pod-name> -o jsonpath='{.spec.nodeName}{"\n"}'
+  kubectl describe pod <new-pod-name> | grep -A5 Events
+  ```
+
+- [ ] Compare your cluster to a high-availability design by counting control plane instances and the Kubernetes service endpoint.
+  ```bash
+  kubectl get nodes -l node-role.kubernetes.io/control-plane
+  kubectl get endpoints kubernetes -n default
+  ```
+  Verification commands:
+  ```bash
+  kubectl cluster-info
+  kubectl get componentstatuses 2>/dev/null || true
+  ```
+
+- [ ] Clean up the exercise resources.
+  ```bash
+  kubectl delete deployment control-plane-demo
+  ```
+  Verification commands:
+  ```bash
+  kubectl get deployment control-plane-demo
+  kubectl get pods | grep control-plane-demo
+  ```
+
+Success criteria:
+- API server, etcd, scheduler, and controller manager were located in `kube-system`.
+- The role of each control plane component was matched to real cluster objects or events.
+- A Deployment was created and its Pods were observed moving from requested state to scheduled state.
+- The node assignment for at least one Pod was identified with `kubectl`.
+- The difference between a single control plane and a high-availability layout was described based on observed cluster output.
+
+<!-- /v4:generated -->
 ## Next Module
 
 [Module 1.4: Kubernetes Architecture - Node Components](../module-1.4-node-components/) - Understanding the workers that run your applications.

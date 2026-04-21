@@ -31,6 +31,7 @@ Issue: #1184
 """
 from __future__ import annotations
 
+import os
 import re
 import shutil
 from pathlib import Path
@@ -38,7 +39,7 @@ from pathlib import Path
 try:
     from dispatch import GEMINI_WRITER_MODEL
 except ImportError:  # pragma: no cover - package import path variant
-    from scripts.dispatch import GEMINI_WRITER_MODEL  # type: ignore
+    GEMINI_WRITER_MODEL = os.environ.get("KUBEDOJO_WRITER_MODEL", "gemini-3.1-pro-preview")
 
 from ..result import ParseResult
 from .base import InvocationPlan

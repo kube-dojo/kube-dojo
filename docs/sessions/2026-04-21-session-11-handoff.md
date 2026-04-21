@@ -126,8 +126,9 @@ provenance_blocks_added: 1     (Quiz wrapper; thin pass additions inside
 5. RUBRIC_RECHECK attempt 1: `score=4.2` — crosses threshold
 6. CITATION_V3: skipped per `--skip-citation`
 
-Expanded module kept in worktree `.worktrees/dogfood-v4/` for review
-before cleanup.
+Expanded module committed to main as `7dc2917e`
+(`content(pipeline-v4 dogfood): expand ai-for-kubernetes-troubleshooting-and-triage
+2.0 → 4.2`) after review; dogfood worktree cleaned up.
 
 ## Content-quality spot-check
 
@@ -198,19 +199,7 @@ branch in `run_pipeline_v4`. Unit-test: attempt 0 fills no_quiz,
 rescore surfaces no_exercise; retry should run expand with
 `gaps=[no_exercise]`, not `gaps=[thin, no_quiz]`. Commit on its own.
 
-**2. Decide on dogfood worktree** (`.worktrees/dogfood-v4/`)
-
-The worktree still holds the expanded module-1.2 file. Either:
-
-- (a) commit the expansion onto main (content is high quality; saves
-  re-running v4 for this module)
-- (b) delete the worktree and let v4-on-backlog re-run module-1.2
-  later with the bug fixes applied
-- (c) use it as a golden reference for the batch run output
-
-User preference not captured yet — ask before acting.
-
-**3. Build `scripts/pipeline_v4_batch.py`**
+**2. Build `scripts/pipeline_v4_batch.py`**
 
 Spec: wrap `run_pipeline_v4` with `.pipeline/v2.db` lease
 coordination. Inputs: `--track <track>`, `--limit N`, `--workers 8`,
@@ -220,7 +209,7 @@ already in `scripts/pipeline_v2/control_plane.py`. Unit test: mock
 `run_pipeline_v4` to return canned results, assert lease
 acquire/release, assert N modules processed in parallel.
 
-**4. Dogfood batch on the /ai thin-module set**
+**3. Dogfood batch on the /ai thin-module set**
 
 Once batch wrapper lands, run it across the 5 "AI/ML Engineering Ai
 Infrastructure" critical-quality modules the briefing flags
@@ -280,7 +269,8 @@ final rubric averages.
 - Rewritten #322 body:
   https://github.com/kube-dojo/kube-dojo.github.io/issues/322
 - Session 10 handoff: `docs/sessions/2026-04-21-session-10-handoff.md`
-- Dogfood run log: main head `e663088d`, worktree
-  `.worktrees/dogfood-v4/src/content/docs/ai/ai-for-kubernetes-platform-work/module-1.2-ai-for-kubernetes-troubleshooting-and-triage.md`
+- Dogfood run log: main head `e663088d` (pipeline run); expansion
+  committed as `7dc2917e` at
+  `src/content/docs/ai/ai-for-kubernetes-platform-work/module-1.2-ai-for-kubernetes-troubleshooting-and-triage.md`
 - Issues closed: #325 (scorer paths), #272 (AI for K8s section), #198
   (Master Execution Plan)
