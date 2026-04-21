@@ -1,0 +1,368 @@
+{
+  "module_key": "platform/toolkits/data-ai-platforms/cloud-native-databases/module-15.5-etcd-operator",
+  "module_path": "src/content/docs/platform/toolkits/data-ai-platforms/cloud-native-databases/module-15.5-etcd-operator.md",
+  "research_run_id": "2026-04-21T06:43:13+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 3,
+  "section_pool_ref": "docs/citation-pools/platform-toolkits-data-ai-platforms-cloud-native-databases.json",
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "The module presents a specific fintech etcd incident with quantified business scale, exact timing, same-rack quorum loss, API impact, and 847 frozen services.",
+      "claim_class": "war_story",
+      "span_hint": "section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The SRE team at a fintech processing $2.1B in daily transactions got the alert at 3:12 AM: etcd leader election was failing. Three etcd members, all running on the same rack, had lost quorum when a switch firmware update went wrong. Without etcd, the Kubernetes API server became read-only — no new pods, no scaling, no deployments. The blast radius was total: 847 microservices frozen in place.",
+      "suggested_rewrite": "An etcd quorum failure can make the Kubernetes API effectively unavailable for writes, freezing normal cluster operations until quorum is restored.",
+      "lesson_point_url": null,
+      "rationale": "This is a precise operational anecdote with quantitative details but no attributable source."
+    },
+    {
+      "claim_id": "C002",
+      "claim_text": "The module gives a precise recovery timeline, stale snapshot window, lost state window, and quantified financial/SLA impact for the incident.",
+      "claim_class": "war_story",
+      "span_hint": "section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Recovery took 4 hours and 23 minutes. Manual etcd restoration from a snapshot that was 6 hours stale. They lost 6 hours of ConfigMap updates, Secret rotations, and custom resource state. The post-incident review calculated $890K in direct losses and 3 SLA violations.",
+      "suggested_rewrite": "Restoring etcd from an out-of-date snapshot can lose recent cluster-state changes and significantly extend an outage.",
+      "lesson_point_url": null,
+      "rationale": "The teaching point is valid, but the exact durations, losses, and SLA counts are unsourced."
+    },
+    {
+      "claim_id": "C003",
+      "claim_text": "The module claims a later similar event caused zero downtime because the operator replaced a member and restored quorum in 47 seconds.",
+      "claim_class": "war_story",
+      "span_hint": "section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Six months later, after deploying the etcd-operator with automated TLS, anti-affinity rules, and managed upgrades, a similar network event caused zero downtime — the operator detected the unhealthy member, replaced it, and restored quorum in 47 seconds.",
+      "suggested_rewrite": "Operator-managed recovery can reduce manual intervention during member failures, but any claimed outage outcome or timing needs a source.",
+      "lesson_point_url": null,
+      "rationale": "This is another specific incident claim with exact outcome and timing but no source."
+    },
+    {
+      "claim_id": "C004",
+      "claim_text": "etcd is Kubernetes' backing store for cluster state, and backups are necessary for recovery.",
+      "claim_class": "standard",
+      "span_hint": "Did You Know first bullet / Part 1.1",
+      "disposition": "supported",
+      "source_ids": [
+        "S001"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "S001 directly states that etcd is Kubernetes' backing store for all cluster data and emphasizes backups for recovery."
+    },
+    {
+      "claim_id": "C005",
+      "claim_text": "The official etcd operator release line is etcd-io/etcd-operator v0.2.0.",
+      "claim_class": "vendor_capability",
+      "span_hint": "Did You Know second bullet / Part 2.1",
+      "disposition": "supported",
+      "source_ids": [
+        "S002"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "S002 is scoped to the official etcd-io operator release line and v0.2.0 features."
+    },
+    {
+      "claim_id": "C006",
+      "claim_text": "The old coreos/etcd-operator repository is archived.",
+      "claim_class": "vendor_capability",
+      "span_hint": "Did You Know second bullet / Quiz 2 context",
+      "disposition": "supported",
+      "source_ids": [
+        "S003"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "S003 directly covers the archived status of the historical CoreOS operator repository."
+    },
+    {
+      "claim_id": "C007",
+      "claim_text": "The module says the old CoreOS operator has not been maintained since 2019.",
+      "claim_class": "vendor_capability",
+      "span_hint": "Did You Know second bullet",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The old CoreOS operator hasn't been maintained since 2019.",
+      "suggested_rewrite": "The old CoreOS operator repository is archived.",
+      "lesson_point_url": null,
+      "rationale": "The archived status is supportable, but the precise maintenance cutoff year is not established by the shared pool."
+    },
+    {
+      "claim_id": "C008",
+      "claim_text": "etcd v3.6.0 introduced downgrade support, /livez and /readyz health endpoints, and more frequent compaction behavior.",
+      "claim_class": "vendor_capability",
+      "span_hint": "Did You Know third bullet",
+      "disposition": "needs_allowlist_expansion",
+      "source_ids": [],
+      "proposed_url": "https://etcd.io/blog/2025/announcing-etcd-3.6/",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The etcd v3.6 announcement directly covers these version-specific features, but `etcd.io` is off the current allowlist."
+    },
+    {
+      "claim_id": "C009",
+      "claim_text": "A single etcd write takes 3 network round trips, so performance is dominated by disk and network latency rather than CPU.",
+      "claim_class": "statistic",
+      "span_hint": "Did You Know fourth bullet",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "**A single etcd write takes 3 network round trips** (leader propose → follower replicate → commit). This is why etcd performance is dominated by disk and network latency, not CPU. The operator's anti-affinity rules ensure members are on different nodes to survive hardware failures without sacrificing latency.",
+      "suggested_rewrite": "**etcd writes require coordination across the cluster**, so disk and network latency often matter more than CPU. Spreading members across nodes improves failure tolerance.",
+      "lesson_point_url": null,
+      "rationale": "The performance principle is real, but the exact round-trip count and the bundled anti-affinity conclusion are not cleanly backed by an allowlisted primary source here."
+    },
+    {
+      "claim_id": "C010",
+      "claim_text": "In Kubernetes, the API server is the component that normally talks to etcd directly, and etcd access should be tightly restricted.",
+      "claim_class": "standard",
+      "span_hint": "Part 1.1 diagram",
+      "disposition": "supported",
+      "source_ids": [
+        "S001"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "S001 states that access to etcd is equivalent to root in the cluster and ideally only the API server should have access."
+    },
+    {
+      "claim_id": "C011",
+      "claim_text": "etcd-operator v0.2.0 adds built-in certificate management and supports Auto and Cert-Manager TLS providers.",
+      "claim_class": "vendor_capability",
+      "span_hint": "Part 1.3 table / Part 3 intro",
+      "disposition": "supported",
+      "source_ids": [
+        "S002"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "S002 is explicitly scoped to v0.2.0 certificate-management and TLS features."
+    },
+    {
+      "claim_id": "C012",
+      "claim_text": "TLS is only configured when explicitly enabled, and Auto is the default provider if TLS is enabled without a provider being specified.",
+      "claim_class": "vendor_capability",
+      "span_hint": "Part 3 intro",
+      "disposition": "needs_allowlist_expansion",
+      "source_ids": [],
+      "proposed_url": "https://etcd.io/blog/2026/announcing-etcd-operator-v0.2.0/",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The operator announcement gives the exact defaulting behavior, but `etcd.io` is off the current allowlist."
+    },
+    {
+      "claim_id": "C013",
+      "claim_text": "The operator's TLS feature covers both inter-member and client-to-member etcd communication.",
+      "claim_class": "vendor_capability",
+      "span_hint": "Part 3.2 / bullets after manifest",
+      "disposition": "supported",
+      "source_ids": [
+        "S002"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "This is part of the v0.2.0 TLS feature set described by the shared operator release source."
+    },
+    {
+      "claim_id": "C014",
+      "claim_text": "The operator supports patch upgrades and one-minor-at-a-time upgrades, rejects skipped-minor upgrades, and validates upgrade paths for official etcd images.",
+      "claim_class": "vendor_capability",
+      "span_hint": "Part 4.1 / Part 4.2 / Warning",
+      "disposition": "supported",
+      "source_ids": [
+        "S002"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "S002 is scoped to v0.2.0 upgrade support, including one-minor-at-a-time rules and validation behavior."
+    },
+    {
+      "claim_id": "C015",
+      "claim_text": "The upgrade workflow automatically rolls back on failure.",
+      "claim_class": "vendor_capability",
+      "span_hint": "Part 4.2 numbered list",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "4. Rolls back on failure",
+      "suggested_rewrite": "4. Surfaces the failure so you can investigate before proceeding",
+      "lesson_point_url": null,
+      "rationale": "The available sources describe validation and supported paths, but not a documented automatic rollback guarantee."
+    },
+    {
+      "claim_id": "C016",
+      "claim_text": "The module's managed-Kubernetes warning names EKS, GKE, and AKS as offerings where the provider manages etcd for you.",
+      "claim_class": "vendor_capability",
+      "span_hint": "Part 1.3 warning paragraph",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "> **When NOT to use an operator**: If you're running managed Kubernetes (EKS, GKE, AKS), the cloud provider manages etcd for you. The etcd-operator is for self-managed clusters — bare metal, kubeadm, or on-premises deployments where you own the control plane.",
+      "suggested_rewrite": "> **When NOT to use an operator**: Use the etcd-operator for clusters where you run etcd yourself. It is not relevant to hosted control planes where you do not manage the backing etcd.",
+      "lesson_point_url": null,
+      "rationale": "The general distinction is sound, but the named provider bundle needs provider-specific primary citations that this seed format cannot represent cleanly as one inline source."
+    },
+    {
+      "claim_id": "C017",
+      "claim_text": "The official etcd-operator release line includes gofail-based failure testing improvements.",
+      "claim_class": "vendor_capability",
+      "span_hint": "Part 5 comparison table / v0.2.0 discussion",
+      "disposition": "needs_allowlist_expansion",
+      "source_ids": [],
+      "proposed_url": "https://etcd.io/blog/2026/announcing-etcd-operator-v0.2.0/",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The v0.2.0 announcement explicitly mentions integrated gofail in e2e testing, but `etcd.io` is off the current allowlist."
+    },
+    {
+      "claim_id": "C019",
+      "claim_text": "The comparison table asserts that aenix-io/etcd-operator's TLS management is specifically cert-manager-based.",
+      "claim_class": "vendor_capability",
+      "span_hint": "Part 5 comparison table",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| TLS management | Auto + cert-manager | cert-manager | Manual |",
+      "suggested_rewrite": "| TLS management | Auto + cert-manager | Check current project docs | Manual |",
+      "lesson_point_url": null,
+      "rationale": "The aenix-specific matrix cell is uncited here and should not present a precise capability without a direct source."
+    },
+    {
+      "claim_id": "C020",
+      "claim_text": "The comparison table asserts that aenix-io/etcd-operator supports patch and minor managed upgrades.",
+      "claim_class": "vendor_capability",
+      "span_hint": "Part 5 comparison table",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| Managed upgrades | Patch + minor | Patch + minor | Manual |",
+      "suggested_rewrite": "| Managed upgrades | Patch + minor | Check current project docs | Manual |",
+      "lesson_point_url": null,
+      "rationale": "The exact aenix upgrade-support matrix needs its own primary source."
+    },
+    {
+      "claim_id": "C021",
+      "claim_text": "The comparison table asserts that aenix-io/etcd-operator has only limited failure testing.",
+      "claim_class": "vendor_capability",
+      "span_hint": "Part 5 comparison table",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| Failure testing | gofail integration | Limited | None |",
+      "suggested_rewrite": "| Failure testing | gofail integration | Check current project docs | Manual testing required |",
+      "lesson_point_url": null,
+      "rationale": "This comparative testing claim is too specific for the available sourced evidence."
+    },
+    {
+      "claim_id": "C022",
+      "claim_text": "The comparison table assigns maturity labels 'Pre-GA' and 'Proven' across the listed alternatives.",
+      "claim_class": "vendor_capability",
+      "span_hint": "Part 5 comparison table",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| Maturity | Pre-GA (v0.2.0) | Pre-GA (v0.3.0) | Proven |",
+      "suggested_rewrite": "| Maturity | Pre-GA (v0.2.0) | Check current release status | Manual operation patterns are well established |",
+      "lesson_point_url": null,
+      "rationale": "These labels are evaluative and need direct sourcing or softer phrasing."
+    },
+    {
+      "claim_id": "C023",
+      "claim_text": "The Common Mistakes table says the archived CoreOS operator is unmaintained since 2019 and therefore a security risk.",
+      "claim_class": "security_claim",
+      "span_hint": "Common Mistakes table",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| Using the archived CoreOS etcd-operator | Unmaintained since 2019, security risks | Use etcd-io/etcd-operator (official) |",
+      "suggested_rewrite": "| Using the archived CoreOS etcd-operator | Archived and not the current project | Use etcd-io/etcd-operator (official) |",
+      "lesson_point_url": null,
+      "rationale": "The archived status is supportable, but the exact year and explicit security-risk conclusion are not sourced here."
+    },
+    {
+      "claim_id": "C024",
+      "claim_text": "The Common Mistakes table says operator v0.2.0 manages etcd v3.5.x and v3.6.x.",
+      "claim_class": "vendor_capability",
+      "span_hint": "Common Mistakes table",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| Confusing operator version with etcd version | Wrong version in spec | Operator v0.2.0 manages etcd v3.5.x/v3.6.x |",
+      "suggested_rewrite": "| Confusing operator version with etcd version | Wrong version in spec | Check the operator release notes for supported etcd versions |",
+      "lesson_point_url": null,
+      "rationale": "The exact supported-version matrix should be sourced directly from release documentation instead of stated from memory."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/",
+      "title": "Operating etcd clusters for Kubernetes",
+      "tier": "standards",
+      "why_relevant": "Best primary reference for etcd's role in Kubernetes, backups, member replacement, and production topology guidance."
+    },
+    {
+      "url": "https://github.com/etcd-io/etcd-operator/releases",
+      "title": "etcd-io/etcd-operator Releases",
+      "tier": "upstream",
+      "why_relevant": "Canonical upstream release stream for the official operator and its supported feature set."
+    },
+    {
+      "url": "https://github.com/etcd-io/etcd/blob/main/CHANGELOG/CHANGELOG-3.6.md",
+      "title": "etcd CHANGELOG-3.6",
+      "tier": "upstream",
+      "why_relevant": "Useful upstream release detail for version-specific etcd 3.6 behavior and upgrade-related changes."
+    }
+  ],
+  "notes": "Quiz questions/answers, code blocks, and exercise steps were excluded per seed rules. The aenix comparison cells need a second pass with direct project sources if you want to keep a detailed side-by-side matrix instead of generic placeholders.",
+  "_schema_issues": [],
+  "rejected_urls": []
+}

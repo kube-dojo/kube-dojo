@@ -43,11 +43,11 @@ After completing this module, you will be able to:
 
 **The Cluster That Forgot Everything**
 
-The SRE team at a fintech processing $2.1B in daily transactions got the alert at 3:12 AM: etcd leader election was failing. Three etcd members, all running on the same rack, had lost quorum when a switch firmware update went wrong. Without etcd, the Kubernetes API server became read-only — no new pods, no scaling, no deployments. The blast radius was total: 847 microservices frozen in place.
+An etcd quorum failure can make the Kubernetes API effectively unavailable for writes, freezing normal cluster operations until quorum is restored.
 
-Recovery took 4 hours and 23 minutes. Manual etcd restoration from a snapshot that was 6 hours stale. They lost 6 hours of ConfigMap updates, Secret rotations, and custom resource state. The post-incident review calculated $890K in direct losses and 3 SLA violations.
+Restoring etcd from an out-of-date snapshot can lose recent cluster-state changes and significantly extend an outage.
 
-Six months later, after deploying the etcd-operator with automated TLS, anti-affinity rules, and managed upgrades, a similar network event caused zero downtime — the operator detected the unhealthy member, replaced it, and restored quorum in 47 seconds.
+Operator-managed recovery can reduce manual intervention during member failures, but any claimed outage outcome or timing needs a source.
 
 > **The Heart Transplant Analogy**
 >
@@ -57,13 +57,13 @@ Six months later, after deploying the etcd-operator with automated TLS, anti-aff
 
 ## Did You Know?
 
-- **etcd stores ALL Kubernetes state** — every pod, service, secret, configmap, and custom resource. Lose etcd, lose your cluster. There is no recovery without a backup.
+- [**etcd stores ALL Kubernetes state** — every pod, service, secret, configmap, and custom resource. Lose etcd, lose your cluster. There is no recovery without a backup.](https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/)
 
-- **The official etcd-operator v0.2.0** (March 2026) is from the etcd-io project itself — not the archived CoreOS operator that many tutorials still reference. The old CoreOS operator hasn't been maintained since 2019.
+- [**The official etcd-operator v0.2.0** (March 2026) is from the etcd-io project itself](https://github.com/etcd-io/etcd-operator/releases) — not [the archived CoreOS operator](https://github.com/coreos/etcd-operator) that many tutorials still reference. The old CoreOS operator repository is archived.
 
 - **etcd v3.6.0 introduced major improvements** including downgrade support, livez/readyz health endpoints, and improved compaction — the operator manages upgrades to take advantage of these safely.
 
-- **A single etcd write takes 3 network round trips** (leader propose → follower replicate → commit). This is why etcd performance is dominated by disk and network latency, not CPU. The operator's anti-affinity rules ensure members are on different nodes to survive hardware failures without sacrificing latency.
+- **etcd writes require coordination across the cluster**, so disk and network latency often matter more than CPU. Spreading members across nodes improves failure tolerance.
 
 ---
 
@@ -120,13 +120,13 @@ The etcd-operator follows the standard Kubernetes operator pattern: a reconcilia
 
 | Aspect | Manual etcd | etcd-operator |
 |--------|------------|---------------|
-| TLS certificates | Generate, distribute, rotate manually | Automated (cert-manager or auto provider) |
+| TLS certificates | Generate, distribute, rotate manually | [Automated (cert-manager or auto provider)](https://github.com/etcd-io/etcd-operator/releases) |
 | Upgrades | Risky manual process, easy to break quorum | Managed with validation, one version at a time |
 | Member replacement | Complex manual procedure | Automatic detection and replacement |
 | Monitoring | Set up separately | Built-in health checks via reconciliation loop |
 | Backup | Cron jobs, hope they work | Integrated snapshot management |
 
-> **When NOT to use an operator**: If you're running managed Kubernetes (EKS, GKE, AKS), the cloud provider manages etcd for you. The etcd-operator is for self-managed clusters — bare metal, kubeadm, or on-premises deployments where you own the control plane.
+> **When NOT to use an operator**: Use the etcd-operator for clusters where you run etcd yourself. It is not relevant to hosted control planes where you do not manage the backing etcd.
 
 ---
 
@@ -210,11 +210,11 @@ spec:
         kind: ClusterIssuer
 ```
 
-This creates certificates for:
+[This creates certificates for](https://github.com/etcd-io/etcd-operator/releases):
 - **Client-to-member** connections (API server → etcd)
 - **Inter-member** connections (etcd peer communication)
 
-> **Security Best Practice**: Always use cert-manager in production. The auto provider is convenient for development but doesn't integrate with your PKI infrastructure or certificate rotation policies.
+> **Security Best Practice**: Use cert-manager in production unless you already have an equivalent PKI-integrated certificate workflow. The auto provider is convenient for development but doesn't integrate with your PKI infrastructure or certificate rotation policies.
 
 ---
 
@@ -222,7 +222,7 @@ This creates certificates for:
 
 ### 4.1 Upgrade Rules
 
-The operator enforces etcd's official upgrade rules:
+[The operator enforces etcd's official upgrade rules](https://github.com/etcd-io/etcd-operator/releases):
 
 | Upgrade Type | Example | Supported |
 |-------------|---------|-----------|
@@ -248,7 +248,7 @@ The operator:
 1. Validates the upgrade path is supported
 2. Upgrades one member at a time (rolling)
 3. Verifies cluster health after each member
-4. Rolls back on failure
+4. Surfaces the failure so you can investigate before proceeding
 
 > **Warning**: Skipping minor versions (e.g., 3.4 → 3.6) is **not supported** and the operator will reject it. Always upgrade one minor version at a time: 3.4 → 3.5 → 3.6.
 
@@ -272,10 +272,10 @@ kubectl exec -it prod-etcd-0 -- etcdctl endpoint health --cluster
 | Feature | etcd-io/etcd-operator (v0.2.0) | aenix-io/etcd-operator (v0.3.0) | Manual Management |
 |---------|-------------------------------|--------------------------------|-------------------|
 | Official project | Yes (etcd-io) | No (community) | N/A |
-| TLS management | Auto + cert-manager | cert-manager | Manual |
-| Managed upgrades | Patch + minor | Patch + minor | Manual |
-| Failure testing | gofail integration | Limited | None |
-| Maturity | Pre-GA (v0.2.0) | Pre-GA (v0.3.0) | Proven |
+| TLS management | Auto + cert-manager | Check current project docs | Manual |
+| Managed upgrades | Patch + minor | Check current project docs | Manual |
+| Failure testing | gofail integration | Check current project docs | Manual testing required |
+| Maturity | Pre-GA (v0.2.0) | Check current release status | Manual operation patterns are well established |
 
 ---
 
@@ -283,11 +283,11 @@ kubectl exec -it prod-etcd-0 -- etcdctl endpoint health --cluster
 
 | Mistake | Problem | Solution |
 |---------|---------|----------|
-| Using the archived CoreOS etcd-operator | Unmaintained since 2019, security risks | Use etcd-io/etcd-operator (official) |
+| Using the archived CoreOS etcd-operator | Archived and not the current project | Use etcd-io/etcd-operator (official) |
 | Skipping minor versions in upgrades | Operator rejects, or data corruption risk | Always upgrade one minor at a time |
 | Running all etcd members on same node | Single point of failure | Use pod anti-affinity rules |
 | No TLS in production | etcd traffic unencrypted on network | Enable TLS with cert-manager provider |
-| Confusing operator version with etcd version | Wrong version in spec | Operator v0.2.0 manages etcd v3.5.x/v3.6.x |
+| Confusing operator version with etcd version | Wrong version in spec | Check the operator release notes for supported etcd versions |
 | No etcd backups | Total data loss on cluster failure | Configure periodic snapshots |
 
 ---
@@ -393,3 +393,10 @@ kubectl delete -f https://github.com/etcd-io/etcd-operator/releases/download/v0.
 ## Next Module
 
 [Back to Cloud-Native Databases Overview]()
+
+## Sources
+
+- [Operating etcd clusters for Kubernetes](https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/) — Backs claims that etcd is Kubernetes' backing store for all cluster data, that production setups should use odd-sized multi-node clusters with backups, and that etcd reliability directly affects control-plane behavior.
+- [Releases: etcd-io/etcd-operator](https://github.com/etcd-io/etcd-operator/releases) — Backs claims about the current official etcd-io operator release line, including v0.2.0 features such as certificate management, TLS-secured clusters, scaling, and upgrade support.
+- [Archived coreos/etcd-operator repository](https://github.com/coreos/etcd-operator) — Backs historical claims that the old CoreOS etcd operator is archived and documents its older feature set like failover, rolling upgrades, and backup/restore.
+- [etcd CHANGELOG-3.6](https://github.com/etcd-io/etcd/blob/main/CHANGELOG/CHANGELOG-3.6.md) — Useful upstream release detail for version-specific etcd 3.6 behavior and upgrade-related changes.
