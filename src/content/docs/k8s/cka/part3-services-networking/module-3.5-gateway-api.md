@@ -31,7 +31,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In 2020, a massive global retail giant suffered a multi-million dollar digital outage during its peak annual holiday sales event. A misconfigured Ingress rule routed millions of checkout requests to a deprecated, under-scaled legacy backend service. The incident cost an estimated $50 million in lost revenue within just two hours. The root cause? A developer from an isolated team added a single overlapping annotation to an Ingress object shared by fifty other teams, instantly overriding the global traffic splitting rules. Because Ingress relies heavily on proprietary, non-portable annotations attached to a single resource kind, it creates a massive blast radius when multiple teams share the same load balancer.
+Shared Ingress resources can create a large blast radius in multi-team clusters when controller-specific annotations and overlapping rules interact in unexpected ways. Gateway API is designed to reduce that risk by separating infrastructure resources from route resources and by giving different teams clearer ownership boundaries.
 
 Gateway API is the modern standard designed specifically to prevent these operational disasters. By separating the infrastructure definition (Gateways) from the routing rules (HTTPRoutes), it establishes clear security boundaries. If a developer makes a syntax mistake in their HTTPRoute, it only impacts their specific application, leaving the rest of the cluster untouched. 
 
@@ -45,11 +45,11 @@ As Kubernetes clusters scale to support hundreds of microservices, mastering Gat
 
 ## Did You Know?
 
-- **Gateway API is purely an API project**: Unlike Ingress which relies heavily on a default ingress-nginx controller, Gateway API has no default controller. It relies entirely on third-party implementations like Envoy, Contour, or Istio to process traffic.
-- **Version 1.5.1 is the latest supported v1 API**: Released in early 2026 following a strict 4-month standard cadence, it introduced strict `safe-upgrades.gateway.networking.k8s.io` Validating Admission Policy (VAP) rules to prevent destructive CRD downgrades.
-- **No plans to deprecate Ingress**: Despite Gateway API's clear architectural superiority, the official FAQ explicitly states that Ingress (GA since Kubernetes 1.19) will be supported indefinitely for simple, legacy use cases.
-- **Built-in Conformance Testing**: To be deemed officially conformant, Gateway implementations must pass all core tests plus claimed extended features for at least one route profile across the two most recent releases, guaranteeing true portability across clouds.
-- **Ingress2Gateway 1.0**: Released March 2026, this official migration tool converts Ingress resources (including 30+ ingress-nginx annotations) to Gateway API equivalents. Supports output for Envoy Gateway, kgateway, and others. See the [official migration guide](https://gateway-api.sigs.k8s.io/guides/getting-started/migrating-from-ingress/).
+- **Gateway API is purely an API project**: Like Ingress, it requires a separate controller implementation to process traffic. Gateway API does not define a default controller.
+- **Version 1.5.1 is the latest supported v1 API**: Released in March 2026 following Gateway API's target 4-month standard cadence, it was a patch release; the `safe-upgrades.gateway.networking.k8s.io` ValidatingAdmissionPolicy was introduced in Gateway API 1.5.0.
+- **No plans to deprecate Ingress**: Despite Gateway API's clear architectural superiority, the [official FAQ explicitly states that Ingress (GA since Kubernetes 1.19) will be supported indefinitely](https://gateway-api.sigs.k8s.io/faq/) for simple, legacy use cases.
+- **Built-in Conformance Testing**: To be deemed officially conformant, Gateway implementations must pass all core tests plus claimed extended features for at least one route profile across the two most recent releases, providing a stronger portability baseline across implementations.
+- **ingress2gateway**: This SIG-Network migration tool can convert Ingress resources to Gateway API resources, but provider-specific feature coverage varies by release. See the [official migration guide](https://gateway-api.sigs.k8s.io/guides/getting-started/migrating-from-ingress/).
 
 ---
 
@@ -71,11 +71,11 @@ The legacy Ingress API was designed strictly for HTTP/HTTPS traffic. Gateway API
 
 ### 1.1b Route Capabilities: Standard vs Experimental
 
-The API routes traffic based on layer and protocol. **Standard** routes like `HTTPRoute` operate at Layer 7, allowing advanced capabilities like path-matching, header-based routing, and traffic splitting. In contrast, **Experimental** routes like `TCPRoute` and `UDPRoute` operate at Layer 4, forwarding raw byte streams based on SNI or port without inspecting the payload. This separation allows stable L7 routing while L4 capabilities incubate.
+The API includes both stable and experimental route types. `HTTPRoute` is a Layer 7 route type with features such as path matching, header matching, and traffic splitting. `TCPRoute` and `UDPRoute` are Experimental Layer 4 route types for forwarding TCP or UDP traffic without HTTP-level inspection, while `TLSRoute` handles SNI-based routing.
 
 ### 1.2 Resource Hierarchy
 
-The resource hierarchy of Gateway API separates concerns. As of `v1.5.1`, resources like `v1.GatewayClass`, `v1.Gateway`, `v1.ListenerSet`, `v1.HTTPRoute`, `v1.GRPCRoute`, `v1.TLSRoute`, `v1.BackendTLSPolicy`, and `v1.ReferenceGrant` are at GA support level.
+The resource hierarchy of Gateway API separates concerns. As of `v1.5.1`, key resources span different maturity levels and API versions; check the API reference for the exact channel and support level of each resource.
 
 ```mermaid
 graph TD
@@ -132,7 +132,7 @@ kubectl get crd | grep gateway
 
 ### 2.2 Gateway Controller Options
 
-Gateway API is strictly an API. You must install a controller to process traffic.
+[Gateway API is strictly an API. You must install a controller to process traffic.](https://gateway-api.sigs.k8s.io/faq/)
 
 | Controller | Type | Best For |
 |------------|------|----------|
@@ -156,7 +156,7 @@ kubectl apply -f https://projectcontour.io/quickstart/contour-gateway.yaml
 
 ## Part 3: GatewayClass and Gateway
 
-Both `Gateway` and `GatewayClass` have been GA and in the Standard channel since v0.5.0.
+[Both `Gateway` and `GatewayClass` have been GA and in the Standard channel since v0.5.0.](https://gateway-api.sigs.k8s.io/concepts/api-overview/)
 
 ### 3.1 GatewayClass
 
@@ -373,7 +373,7 @@ flowchart TD
 
 ## Part 5: HTTPRoute Filters
 
-Gateway API incorporates traffic transformations directly via filters, bypassing the need for unwieldy annotations.
+[Gateway API incorporates traffic transformations directly via filters, bypassing the need for unwieldy annotations.](https://gateway-api.sigs.k8s.io/guides/getting-started/migrating-from-ingress/)
 
 ### 5.1 Request Header Modification
 
@@ -508,7 +508,7 @@ spec:
 
 ### 7.1 ReferenceGrant
 
-Allows routes in one namespace to reference services in another namespace. In Gateway API v1.5.0, `ReferenceGrant` moved to the Standard channel (`v1`). 
+Allows routes in one namespace to reference services in another namespace. In Gateway API v1.5.0, `ReferenceGrant` moved to the `v1` API version. 
 
 ```yaml
 # In the target namespace (where the service lives)
@@ -548,7 +548,7 @@ spec:
 
 ## Part 8: TLS Configuration
 
-In Gateway API v1.5.0, several capabilities achieved Standard status including Gateway client cert validation, certificate selection for TLS origination, `ListenerSet` support, and `TLSRoute` `v1` (though `TLSRoute v1alpha2` remained strictly experimental). Notably, `TLSRoute` CEL validation requires a cluster running Kubernetes 1.31 or higher.
+In Gateway API v1.5.0, several capabilities achieved Standard status including Gateway client cert validation, certificate selection for TLS origination, `ListenerSet` support, and `TLSRoute` `v1` (though `TLSRoute v1alpha2` remained strictly experimental). Notably, [`TLSRoute` CEL validation requires a cluster running Kubernetes 1.31 or higher.](https://github.com/kubernetes-sigs/gateway-api/releases/tag/v1.5.0)
 
 ### 8.1 Gateway with TLS Termination
 
@@ -1341,3 +1341,12 @@ k delete svc frontend backend admin
 ## Next Module
 
 [Module 3.6: Network Policies](../module-3.6-network-policies/) - Controlling pod-to-pod communication.
+
+## Sources
+
+- [Gateway API FAQ](https://gateway-api.sigs.k8s.io/faq/) — Backs high-level positioning claims, including that Gateway API does not replace or deprecate Ingress and that there is no default controller implementation.
+- [Ingress | Kubernetes](https://kubernetes.io/docs/concepts/services-networking/ingress/) — Backs Ingress resource behavior: HTTP/HTTPS routing, host/path rules, TLS termination with Secrets, IngressClass, requirement for an Ingress controller, and the fact that the Ingress API is stable but frozen while Kubernetes recommends Gateway for new feature work.
+- [Gateway API Overview](https://gateway-api.sigs.k8s.io/concepts/api-overview/) — Backs the role-oriented Gateway API model, GatewayClass/Gateway/Route relationships, HTTPRoute capabilities such as header-based routing and request modification, experimental TCPRoute/UDPRoute status, and cross-namespace attachment behavior.
+- [Migrating from Ingress - Kubernetes Gateway API](https://gateway-api.sigs.k8s.io/guides/getting-started/migrating-from-ingress/) — Backs Gateway API as the successor path for Ingress-era deployments, explains key differences and migration rationale, and mentions ingress2gateway as an official migration tool.
+- [github.com: v1.5.0](https://github.com/kubernetes-sigs/gateway-api/releases/tag/v1.5.0) — The official v1.5.0 release notes explicitly state the Kubernetes version requirement for TLSRoute CEL validation.
+- [Gateway API Versioning](https://gateway-api.sigs.k8s.io/concepts/versioning/) — Explains Standard versus Experimental channels, release cadence, and supported-version policy.

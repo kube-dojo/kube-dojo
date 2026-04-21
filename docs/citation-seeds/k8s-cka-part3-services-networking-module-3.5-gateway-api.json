@@ -1,0 +1,224 @@
+{
+  "module_key": "k8s/cka/part3-services-networking/module-3.5-gateway-api",
+  "module_path": "src/content/docs/k8s/cka/part3-services-networking/module-3.5-gateway-api.md",
+  "research_run_id": "2026-04-21T04:36:33+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 3,
+  "section_pool_ref": "docs/citation-pools/k8s-cka-part3-services-networking.json",
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "The opening outage anecdote gives a specific 2020 retail incident, causal chain, team count, duration, and $50 million loss without a source.",
+      "claim_class": "war_story",
+      "span_hint": "section: Why This Module Matters, paragraph 1",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "In 2020, a massive global retail giant suffered a multi-million dollar digital outage during its peak annual holiday sales event. A misconfigured Ingress rule routed millions of checkout requests to a deprecated, under-scaled legacy backend service. The incident cost an estimated $50 million in lost revenue within just two hours. The root cause? A developer from an isolated team added a single overlapping annotation to an Ingress object shared by fifty other teams, instantly overriding the global traffic splitting rules. Because Ingress relies heavily on proprietary, non-portable annotations attached to a single resource kind, it creates a massive blast radius when multiple teams share the same load balancer.",
+      "suggested_rewrite": "Shared Ingress resources can create a large blast radius in multi-team clusters when controller-specific annotations and overlapping rules interact in unexpected ways. Gateway API is designed to reduce that risk by separating infrastructure resources from route resources and by giving different teams clearer ownership boundaries.",
+      "lesson_point_url": null,
+      "rationale": "This is a war-story claim with fake-precise operational details and no attributable incident source."
+    },
+    {
+      "claim_id": "C002",
+      "claim_text": "Gateway API has no default controller, and the comparison to Ingress having a default ingress-nginx controller is misleading.",
+      "claim_class": "standard",
+      "span_hint": "section: Did You Know, bullet 1",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "- **Gateway API is purely an API project**: Unlike Ingress which relies heavily on a default ingress-nginx controller, Gateway API has no default controller. It relies entirely on third-party implementations like Envoy, Contour, or Istio to process traffic.",
+      "suggested_rewrite": "- **Gateway API is purely an API project**: Like Ingress, it requires a separate controller implementation to process traffic. Gateway API does not define a default controller.",
+      "lesson_point_url": null,
+      "rationale": "The Gateway API FAQ directly says there is no default controller implementation, while Kubernetes Ingress also requires a separate controller and does not define ingress-nginx as a built-in default."
+    },
+    {
+      "claim_id": "C004",
+      "claim_text": "The module says v1.5.1 introduced the safe-upgrades ValidatingAdmissionPolicy, but the official release notes say that happened in v1.5.0.",
+      "claim_class": "standard",
+      "span_hint": "section: Did You Know, bullet 2",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Released in early 2026 following a strict 4-month standard cadence, it introduced strict `safe-upgrades.gateway.networking.k8s.io` Validating Admission Policy (VAP) rules to prevent destructive CRD downgrades.",
+      "suggested_rewrite": "Released in March 2026 following Gateway API's target 4-month standard cadence, it was a patch release; the `safe-upgrades.gateway.networking.k8s.io` ValidatingAdmissionPolicy was introduced in Gateway API 1.5.0.",
+      "lesson_point_url": null,
+      "rationale": "The safe-upgrades VAP is documented in the v1.5.0 release notes, not as a new feature of v1.5.1."
+    },
+    {
+      "claim_id": "C005",
+      "claim_text": "Gateway API does not replace or deprecate Ingress, and Ingress has been GA since Kubernetes 1.19.",
+      "claim_class": "standard",
+      "span_hint": "section: Did You Know, bullet 3",
+      "disposition": "supported",
+      "source_ids": [
+        "S014",
+        "S007"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The FAQ explicitly says there are no plans to deprecate Ingress, and the Kubernetes Ingress docs show it as stable since v1.19."
+    },
+    {
+      "claim_id": "C007",
+      "claim_text": "The phrase 'guaranteeing true portability across clouds' overstates what Gateway API conformance provides.",
+      "claim_class": "standard",
+      "span_hint": "section: Did You Know, bullet 4",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "guaranteeing true portability across clouds.",
+      "suggested_rewrite": "providing a stronger portability baseline across implementations.",
+      "lesson_point_url": null,
+      "rationale": "Conformance improves portability signals, but it does not honestly guarantee identical behavior across all environments and implementations."
+    },
+    {
+      "claim_id": "C008",
+      "claim_text": "The module gives unsupported specifics for ingress2gateway release timing, version number, annotation coverage, and implementation outputs.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Did You Know, bullet 5",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "- **Ingress2Gateway 1.0**: Released March 2026, this official migration tool converts Ingress resources (including 30+ ingress-nginx annotations) to Gateway API equivalents. Supports output for Envoy Gateway, kgateway, and others. See the [official migration guide](https://gateway-api.sigs.k8s.io/guides/getting-started/migrating-from-ingress/).",
+      "suggested_rewrite": "- **ingress2gateway**: This SIG-Network migration tool can convert Ingress resources to Gateway API resources, but provider-specific feature coverage varies by release. See the [official migration guide](https://gateway-api.sigs.k8s.io/guides/getting-started/migrating-from-ingress/).",
+      "lesson_point_url": null,
+      "rationale": "The official migration guide only generally mentions ingress2gateway, while the current repository/release material does not support the module's specific 1.0/March 2026/30+ annotation claims."
+    },
+    {
+      "claim_id": "C009",
+      "claim_text": "The route-capabilities paragraph mixes accurate and inaccurate protocol details; in particular, SNI applies to TLSRoute rather than TCPRoute/UDPRoute, and UDP is not a byte stream.",
+      "claim_class": "standard",
+      "span_hint": "section: Part 1.1b Route Capabilities",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The API routes traffic based on layer and protocol. **Standard** routes like `HTTPRoute` operate at Layer 7, allowing advanced capabilities like path-matching, header-based routing, and traffic splitting. In contrast, **Experimental** routes like `TCPRoute` and `UDPRoute` operate at Layer 4, forwarding raw byte streams based on SNI or port without inspecting the payload. This separation allows stable L7 routing while L4 capabilities incubate.",
+      "suggested_rewrite": "The API includes both stable and experimental route types. `HTTPRoute` is a Layer 7 route type with features such as path matching, header matching, and traffic splitting. `TCPRoute` and `UDPRoute` are Experimental Layer 4 route types for forwarding TCP or UDP traffic without HTTP-level inspection, while `TLSRoute` handles SNI-based routing.",
+      "lesson_point_url": null,
+      "rationale": "The official API overview distinguishes HTTPRoute, TLSRoute, TCPRoute, and UDPRoute more precisely than the module currently does."
+    },
+    {
+      "claim_id": "C010",
+      "claim_text": "The sentence claiming all listed resources are GA as of v1.5.1 overstates maturity levels, especially around ReferenceGrant.",
+      "claim_class": "standard",
+      "span_hint": "section: Part 1.2 Resource Hierarchy",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The resource hierarchy of Gateway API separates concerns. As of `v1.5.1`, resources like `v1.GatewayClass`, `v1.Gateway`, `v1.ListenerSet`, `v1.HTTPRoute`, `v1.GRPCRoute`, `v1.TLSRoute`, `v1.BackendTLSPolicy`, and `v1.ReferenceGrant` are at GA support level.",
+      "suggested_rewrite": "The resource hierarchy of Gateway API separates concerns. As of `v1.5.1`, key resources span different maturity levels and API versions; check the API reference for the exact channel and support level of each resource.",
+      "lesson_point_url": null,
+      "rationale": "The current API reference does not support treating every listed resource as uniformly GA."
+    },
+    {
+      "claim_id": "C012",
+      "claim_text": "Gateway API defines the API and requires a separate controller implementation to process traffic.",
+      "claim_class": "standard",
+      "span_hint": "section: Part 2.2 Gateway Controller Options",
+      "disposition": "supported",
+      "source_ids": [
+        "S014"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The FAQ explicitly states that Gateway API has no default controller implementation and defines API, conformance tests, and documentation."
+    },
+    {
+      "claim_id": "C013",
+      "claim_text": "Gateway and GatewayClass are GA and have been in the Standard channel since v0.5.0.",
+      "claim_class": "standard",
+      "span_hint": "section: Part 3 GatewayClass and Gateway",
+      "disposition": "supported",
+      "source_ids": [
+        "S012"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The API overview page directly marks both GatewayClass and Gateway as GA in the Standard channel since v0.5.0."
+    },
+    {
+      "claim_id": "C014",
+      "claim_text": "Gateway API includes native HTTPRoute features such as redirects, header manipulation, and traffic splitting that were commonly annotation-driven in Ingress.",
+      "claim_class": "standard",
+      "span_hint": "section: Part 5 HTTPRoute Filters, intro sentence",
+      "disposition": "supported",
+      "source_ids": [
+        "S008",
+        "S012"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The migration guide explicitly maps formerly annotation-driven Ingress features to native Gateway API features."
+    },
+    {
+      "claim_id": "C015",
+      "claim_text": "The ReferenceGrant prose incorrectly says it moved to the Standard channel in v1.5.0; the release notes describe it as moving to the v1 API version.",
+      "claim_class": "standard",
+      "span_hint": "section: Part 7.1 ReferenceGrant",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Allows routes in one namespace to reference services in another namespace. In Gateway API v1.5.0, `ReferenceGrant` moved to the Standard channel (`v1`).",
+      "suggested_rewrite": "Allows routes in one namespace to reference services in another namespace. In Gateway API v1.5.0, `ReferenceGrant` moved to the `v1` API version.",
+      "lesson_point_url": null,
+      "rationale": "The v1.5.0 release notes call out a move to `v1`, while the Standard-channel phrasing here is imprecise."
+    },
+    {
+      "claim_id": "C017",
+      "claim_text": "TLSRoute CEL validation requires Kubernetes 1.31 or higher.",
+      "claim_class": "standard",
+      "span_hint": "section: Part 8 TLS Configuration, paragraph 1",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://github.com/kubernetes-sigs/gateway-api/releases/tag/v1.5.0",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The official v1.5.0 release notes explicitly state the Kubernetes version requirement for TLSRoute CEL validation."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://gateway-api.sigs.k8s.io/concepts/api-overview/",
+      "title": "Gateway API Overview",
+      "tier": "standards",
+      "why_relevant": "Best single reference for the role-oriented model, resource relationships, and route-type maturity."
+    },
+    {
+      "url": "https://gateway-api.sigs.k8s.io/concepts/versioning/",
+      "title": "Gateway API Versioning",
+      "tier": "standards",
+      "why_relevant": "Explains Standard versus Experimental channels, release cadence, and supported-version policy."
+    },
+    {
+      "url": "https://gateway-api.sigs.k8s.io/guides/getting-started/migrating-from-ingress/",
+      "title": "Migrating from Ingress",
+      "tier": "standards",
+      "why_relevant": "Useful for the module's repeated comparisons between Ingress and Gateway API capabilities and operating model."
+    }
+  ],
+  "notes": "Skipped code blocks, Mermaid diagrams, tables, quiz prompts, and exercise steps per pipeline rules. Main issues are the synthetic outage anecdote, overstated portability wording, outdated/misleading ingress2gateway details, and imprecise version/status wording around safe-upgrades and ReferenceGrant.",
+  "_schema_issues": [],
+  "rejected_urls": []
+}
