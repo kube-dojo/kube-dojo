@@ -1,0 +1,141 @@
+{
+  "section": "platform/toolkits/data-ai-platforms/ml-platforms",
+  "modules": [
+    "platform/toolkits/data-ai-platforms/ml-platforms/module-9.1-kubeflow",
+    "platform/toolkits/data-ai-platforms/ml-platforms/module-9.2-mlflow",
+    "platform/toolkits/data-ai-platforms/ml-platforms/module-9.3-feature-stores",
+    "platform/toolkits/data-ai-platforms/ml-platforms/module-9.4-vllm",
+    "platform/toolkits/data-ai-platforms/ml-platforms/module-9.5-ray-serve",
+    "platform/toolkits/data-ai-platforms/ml-platforms/module-9.6-langchain-llamaindex",
+    "platform/toolkits/data-ai-platforms/ml-platforms/module-9.7-gpu-scheduling"
+  ],
+  "generated_at": "2026-04-21T06:56:52+00:00",
+  "batch_count": 2,
+  "fallback_used": false,
+  "sources": [
+    {
+      "source_id": "S001",
+      "url": "https://arxiv.org/abs/2309.06180",
+      "title": "Efficient Memory Management for Large Language Model Serving with PagedAttention",
+      "tier": "standards",
+      "scope_notes": "Primary research source for vLLM, PagedAttention, KV-cache efficiency, and reported throughput gains versus prior serving systems.",
+      "relevant_modules": [
+        "module-9.4-vllm"
+      ]
+    },
+    {
+      "source_id": "S002",
+      "url": "https://kubernetes.io/docs/tasks/manage-gpus/scheduling-gpus/",
+      "title": "Schedule GPUs",
+      "tier": "standards",
+      "scope_notes": "Backs Kubernetes GPU scheduling semantics, including vendor device plugin prerequisites, extended GPU resources, and how pods request GPU resources via limits.",
+      "relevant_modules": [
+        "platform/toolkits/data-ai-platforms/ml-platforms/module-9.5-ray-serve",
+        "platform/toolkits/data-ai-platforms/ml-platforms/module-9.7-gpu-scheduling"
+      ]
+    },
+    {
+      "source_id": "S003",
+      "url": "https://kubernetes.io/docs/concepts/extend-kubernetes/compute-storage-net/device-plugins/",
+      "title": "Device Plugins",
+      "tier": "standards",
+      "scope_notes": "Backs the Kubernetes device plugin architecture, including kubelet registration, gRPC interfaces, ListAndWatch/Allocate behavior, and vendor-specific hardware exposure.",
+      "relevant_modules": [
+        "platform/toolkits/data-ai-platforms/ml-platforms/module-9.5-ray-serve",
+        "platform/toolkits/data-ai-platforms/ml-platforms/module-9.7-gpu-scheduling"
+      ]
+    }
+  ],
+  "rejected_urls": [
+    {
+      "url": "https://www.kubeflow.org/docs/started/architecture/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://www.kubeflow.org/docs/started/installing-kubeflow/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://www.kubeflow.org/docs/components/central-dash/profiles/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://mlflow.org/docs/latest/self-hosting/architecture/tracking-server/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://mlflow.org/docs/latest/ml/model-registry/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://docs.feast.dev/getting-started/architecture/overview",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://docs.feast.dev/getting-started/concepts/point-in-time-joins",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://docs.vllm.ai/en/latest/serving/openai_compatible_server/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://docs.vllm.ai/en/stable/serving/parallelism_scaling/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://docs.vllm.ai/en/stable/features/quantization/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://docs.ray.io/en/latest/serve/index.html",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://docs.ray.io/en/latest/cluster/kubernetes/getting-started.html",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://docs.langchain.com/oss/python/langchain/overview",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://docs.langchain.com/oss/python/langchain/rag",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://docs.langchain.com/oss/python/langchain/observability",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://docs.llamaindex.ai/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/overview.html",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/24.9.2/gpu-sharing.html",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    }
+  ]
+}
