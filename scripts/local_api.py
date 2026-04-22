@@ -1148,6 +1148,88 @@ def _worktree_dirty_counts(worktree_path: Path) -> dict[str, Any] | None:
     }
 
 
+def build_git_cleanup_report(repo_root: Path) -> dict[str, Any]:
+    """Local branches + worktrees safe to prune.
+
+    A branch is prunable if it's merged into ``main`` (explicit merge commit)
+    OR its upstream is marked ``[gone]`` — the repo has ``delete_branch_on_merge``
+    enabled on GitHub, so a gone upstream means a squash/rebase-merged PR.
+
+    A worktree is prunable if its branch is prunable AND it has zero
+    TRACKED dirty entries (untracked ``.venv``/``.cache`` artifacts are ignored).
+    """
+    merged: set[str] = set()
+    try:
+        r = subprocess.run(
+            ["git", "branch", "--merged", "main", "--format=%(refname:short)"],
+            cwd=repo_root, capture_output=True, text=True, check=False, timeout=5,
+        )
+        if r.returncode == 0:
+            for name in r.stdout.splitlines():
+                name = name.strip()
+                if name and name != "main":
+                    merged.add(name)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+    gone: set[str] = set()
+    try:
+        r = subprocess.run(
+            ["git", "for-each-ref",
+             "--format=%(refname:short)\t%(upstream:track)",
+             "refs/heads/"],
+            cwd=repo_root, capture_output=True, text=True, check=False, timeout=5,
+        )
+        if r.returncode == 0:
+            for line in r.stdout.splitlines():
+                parts = line.rstrip().split("\t", 1)
+                if len(parts) == 2 and "[gone]" in parts[1]:
+                    gone.add(parts[0])
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+    prunable = sorted(merged | gone)
+    reasons: dict[str, list[str]] = {}
+    for b in prunable:
+        r_ = []
+        if b in merged:
+            r_.append("merged")
+        if b in gone:
+            r_.append("upstream-gone")
+        reasons[b] = r_
+
+    wt_list = build_worktrees_list(repo_root).get("worktrees", [])
+    prunable_worktrees: list[dict[str, Any]] = []
+    primary = str(repo_root)
+    for wt in wt_list:
+        if wt.get("path") == primary:
+            continue
+        br = wt.get("branch")
+        counts = wt.get("counts") or {}
+        tracked_dirty = (
+            counts.get("staged", 0)
+            + counts.get("unstaged", 0)
+            + counts.get("conflicted", 0)
+        )
+        if br and br in (merged | gone) and not tracked_dirty:
+            prunable_worktrees.append({
+                "path": wt["path"],
+                "branch": br,
+                "reasons": reasons.get(br, []),
+            })
+
+    return {
+        "ok": True,
+        "prunable_branches": [{"name": b, "reasons": reasons[b]} for b in prunable],
+        "prunable_worktrees": prunable_worktrees,
+        "counts": {
+            "branches": len(prunable),
+            "worktrees": len(prunable_worktrees),
+        },
+        "hint": "git cleanup-merged  # aliased; removes gone-upstream local branches",
+    }
+
+
 def _db_latest_for_module(db_path: Path, module_key: str) -> dict[str, Any] | None:
     if not db_path.exists():
         return None
@@ -5152,6 +5234,20 @@ def build_session_briefing(repo_root: Path) -> dict[str, Any]:
     if isinstance(reviews, dict) and reviews.get("count"):
         alerts.append(f"{reviews['count']} module(s) with unverified fact claims")
 
+    # Git hygiene rot: only alert when the pile crosses a threshold, so
+    # the single-leftover worktree after a merge doesn't spam the panel.
+    try:
+        cleanup = build_git_cleanup_report(repo_root)
+        cb = cleanup.get("counts", {}).get("branches", 0)
+        cw = cleanup.get("counts", {}).get("worktrees", 0)
+        if cb >= 5 or cw >= 2:
+            alerts.append(
+                f"git hygiene: {cb} prunable branch(es), {cw} prunable worktree(s) "
+                "— run `git cleanup-merged` (see /api/git/cleanup)"
+            )
+    except Exception:  # noqa: BLE001
+        pass
+
     # Action-oriented triage lists. Agents ask "what should I touch"
     # not "what's the global state"; the lists below answer that in
     # the same call as the briefing.
@@ -5455,6 +5551,7 @@ def build_api_schema() -> dict[str, Any]:
             {"path": "/api/ztt/status", "desc": "Zero-to-Terminal pilot status"},
             {"path": "/api/git/worktree", "desc": "Dirty entries in the PRIMARY repo only"},
             {"path": "/api/git/worktrees", "desc": "All attached worktrees (plural)"},
+            {"path": "/api/git/cleanup", "desc": "Prunable local branches + worktrees (merged or gone-upstream). Run 'git cleanup-merged' to act."},
             {
                 "path": "/api/gh/issues",
                 "desc": "Cached GitHub issue list for agent orientation",
@@ -5605,6 +5702,8 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
         return 200, build_worktree_status(repo_root), "application/json; charset=utf-8"
     if path == "/api/git/worktrees":
         return 200, build_worktrees_list(repo_root), "application/json; charset=utf-8"
+    if path == "/api/git/cleanup":
+        return 200, build_git_cleanup_report(repo_root), "application/json; charset=utf-8"
     if path == "/api/gh/issues":
         state = query.get("state", ["open"])[0] or "open"
         if state not in {"open", "closed", "all"}:
@@ -5786,6 +5885,7 @@ CACHE_POLICY: dict[str, tuple[float, Callable[[Path], tuple] | None]] = {
     "/api/ztt/status": (30.0, None),
     "/api/git/worktree": (2.0, None),
     "/api/git/worktrees": (5.0, None),
+    "/api/git/cleanup": (10.0, None),
     "/api/briefing/session": (5.0, None),  # background-refreshed; TTL just caps rebuild rate
 }
 
