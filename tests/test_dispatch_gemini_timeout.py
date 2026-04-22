@@ -62,3 +62,59 @@ def test_gemini_quiet_mode_defaults_off_outside_pipeline(monkeypatch):
     monkeypatch.delenv("KUBEDOJO_PIPELINE", raising=False)
 
     assert dispatch._gemini_quiet_mode_enabled() is False
+
+
+def test_gemini_env_strips_api_keys_on_subscription(monkeypatch):
+    monkeypatch.setitem(dispatch._ENV, "GEMINI_API_KEY", "sk-test")
+    monkeypatch.setitem(dispatch._ENV, "GOOGLE_API_KEY", "gg-test")
+
+    api_env = dispatch._gemini_env(use_subscription=False)
+    sub_env = dispatch._gemini_env(use_subscription=True)
+
+    assert api_env["GEMINI_API_KEY"] == "sk-test"
+    assert api_env["GOOGLE_API_KEY"] == "gg-test"
+    assert "GEMINI_API_KEY" not in sub_env
+    assert "GOOGLE_API_KEY" not in sub_env
+    assert sub_env is not api_env  # independent dict, no mutation
+
+
+def test_gemini_with_retry_flips_to_subscription_on_rate_limit():
+    """On 429 from API-key path, next retry must use the subscription path
+    immediately (no backoff — independent quotas)."""
+    calls: list[dict] = []
+
+    def fake_dispatch(*args, use_subscription=None, **kwargs):
+        calls.append({"args": args, "kwargs": kwargs,
+                      "use_subscription": use_subscription})
+        if len(calls) == 1:
+            return False, "429 Too Many Requests — quota exceeded"
+        return True, "real output"
+
+    with patch("dispatch.dispatch_gemini", side_effect=fake_dispatch), \
+         patch("dispatch.time.sleep") as sleep_mock, \
+         patch.object(dispatch, "_FORCE_GEMINI_SUBSCRIPTION", False):
+        ok, output = dispatch.dispatch_gemini_with_retry("hello", max_retries=3)
+
+    assert ok is True
+    assert output == "real output"
+    assert len(calls) == 2
+    assert calls[0]["use_subscription"] is False  # first try: API key
+    assert calls[1]["use_subscription"] is True   # retry: subscription
+    sleep_mock.assert_not_called()  # no backoff between auth-path flip
+
+
+def test_gemini_with_retry_force_subscription_skips_api_key():
+    """When KUBEDOJO_GEMINI_SUBSCRIPTION=1, first call must use subscription."""
+    calls: list[dict] = []
+
+    def fake_dispatch(*args, use_subscription=None, **kwargs):
+        calls.append({"args": args, "kwargs": kwargs,
+                      "use_subscription": use_subscription})
+        return True, "out"
+
+    with patch("dispatch.dispatch_gemini", side_effect=fake_dispatch), \
+         patch.object(dispatch, "_FORCE_GEMINI_SUBSCRIPTION", True):
+        ok, _ = dispatch.dispatch_gemini_with_retry("hello")
+
+    assert ok is True
+    assert calls[0]["use_subscription"] is True

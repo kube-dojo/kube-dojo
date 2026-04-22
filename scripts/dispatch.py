@@ -40,12 +40,27 @@ _ENV["GEMINI_SESSION"] = "1"        # Disable hostile aliases (eza, bat, zoxide)
 _ENV["KUBEDOJO_PIPELINE"] = "1"     # Suppress inbox hooks during pipeline runs
 # Gemini auth: CLI prefers GEMINI_API_KEY when set; otherwise falls
 # through to OAuth/subscription creds in ~/.gemini/oauth_creds.json.
-# When the API-key tier is rate-limited, set
-# KUBEDOJO_GEMINI_SUBSCRIPTION=1 to strip the key from child env so
-# dispatches use the subscription path instead.
-if os.environ.get("KUBEDOJO_GEMINI_SUBSCRIPTION") == "1":
-    _ENV.pop("GEMINI_API_KEY", None)
-    _ENV.pop("GOOGLE_API_KEY", None)
+#
+# Runtime behavior (see dispatch_gemini_with_retry):
+#   - Default: start on API-key path. If a 429 / quota hit is detected,
+#     automatically strip the key from the child env and retry on OAuth.
+#   - Force subscription: set KUBEDOJO_GEMINI_SUBSCRIPTION=1 to skip the
+#     API-key attempt entirely (e.g. on known-exhausted API quota).
+#
+# _ENV stays unmodified (API-key path). Subscription env is built on
+# demand via _gemini_env(use_subscription=True).
+_FORCE_GEMINI_SUBSCRIPTION = os.environ.get("KUBEDOJO_GEMINI_SUBSCRIPTION") == "1"
+
+
+def _gemini_env(use_subscription: bool) -> dict:
+    """Return the child env for a Gemini dispatch. When use_subscription=True,
+    strip the API keys so the CLI falls back to OAuth creds."""
+    if not use_subscription:
+        return _ENV
+    env = {**_ENV}
+    env.pop("GEMINI_API_KEY", None)
+    env.pop("GOOGLE_API_KEY", None)
+    return env
 
 # GitHub comment char limit (65,536 minus safety margin)
 GH_CHAR_LIMIT = 64000
@@ -196,15 +211,22 @@ CLAUDE_TRANSLATION_TOOLS = (
 
 def dispatch_gemini(prompt: str, model: str | None = None,
                     review: bool = False, timeout: int = 900,
-                    mcp: bool = False) -> tuple[bool, str]:
+                    mcp: bool = False,
+                    use_subscription: bool | None = None) -> tuple[bool, str]:
     """Call Gemini CLI directly. Returns (success, output).
 
     When ``review=True`` and no ``model`` is specified, uses Pro
     (``GEMINI_REVIEW_MODEL``) — Flash hallucinations on code reviews cost more
     iteration time than the extra Pro latency.
+
+    ``use_subscription`` selects the auth path: ``False`` → API key (default),
+    ``True`` → strip keys and use OAuth. ``None`` defers to
+    ``KUBEDOJO_GEMINI_SUBSCRIPTION`` (True if set, else False).
     """
     if model is None:
         model = GEMINI_REVIEW_MODEL if review else GEMINI_DEFAULT_MODEL
+    if use_subscription is None:
+        use_subscription = _FORCE_GEMINI_SUBSCRIPTION
     full_prompt = build_review_message(prompt) if review else prompt
     cmd = [GEMINI_CLI, "-m", model, "-y"]
     if mcp:
@@ -216,7 +238,8 @@ def dispatch_gemini(prompt: str, model: str | None = None,
     try:
         proc = subprocess.Popen(
             cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE, text=True, cwd=str(REPO_ROOT), env=_ENV,
+            stderr=subprocess.PIPE, text=True, cwd=str(REPO_ROOT),
+            env=_gemini_env(use_subscription),
             start_new_session=True,
         )
 
@@ -280,23 +303,40 @@ def dispatch_gemini(prompt: str, model: str | None = None,
 def dispatch_gemini_with_retry(prompt: str, model: str = GEMINI_DEFAULT_MODEL,
                                review: bool = False, max_retries: int = 3,
                                timeout: int = 900, mcp: bool = False) -> tuple[bool, str]:
-    """Call Gemini with retry on rate limits + fallback model."""
+    """Call Gemini with retry on rate limits + fallback model.
+
+    Auth-path fallback: starts on API key by default. If a 429 / quota error
+    is detected and we haven't already switched, flip to the OAuth/subscription
+    path and retry immediately (no backoff — the two tiers have independent
+    quotas). Only after the subscription path also rate-limits do we apply
+    exponential backoff.
+    """
     base_delay = 30
     output = ""
+    use_subscription = _FORCE_GEMINI_SUBSCRIPTION
     for attempt in range(max_retries):
-        ok, output = dispatch_gemini(prompt, model, review, timeout, mcp)
+        ok, output = dispatch_gemini(prompt, model, review, timeout, mcp,
+                                     use_subscription=use_subscription)
         if ok:
             return True, output
 
         # Check for rate limit
         if _is_rate_limited(output):
+            # If we're still on the API-key path, flip to subscription and retry
+            # immediately — the OAuth tier has a separate quota.
+            if not use_subscription:
+                print("Gemini API-key rate-limited — switching to subscription (OAuth) path",
+                      file=sys.stderr)
+                use_subscription = True
+                continue  # no sleep; retry on the other tier
+            # Already on subscription — apply exponential backoff.
             if attempt < max_retries - 1:
                 delay = base_delay * (2 ** attempt)
-                print(f"Rate limited (attempt {attempt + 1}/{max_retries}). Waiting {delay}s...",
+                print(f"Rate limited on subscription (attempt {attempt + 1}/{max_retries}). Waiting {delay}s...",
                       file=sys.stderr)
                 time.sleep(delay)
                 continue
-            # All retries exhausted on rate limit — don't try fallback (same quota)
+            # All retries exhausted on both paths.
             return False, output
 
         # Timeout — don't retry, just fail (Gemini is slow, not broken)
@@ -306,7 +346,8 @@ def dispatch_gemini_with_retry(prompt: str, model: str = GEMINI_DEFAULT_MODEL,
         # Non-rate-limit, non-timeout failure — try fallback model once
         if model != GEMINI_FALLBACK_MODEL:
             print(f"Retrying with fallback model: {GEMINI_FALLBACK_MODEL}", file=sys.stderr)
-            return dispatch_gemini(prompt, GEMINI_FALLBACK_MODEL, review, timeout, mcp)
+            return dispatch_gemini(prompt, GEMINI_FALLBACK_MODEL, review, timeout, mcp,
+                                   use_subscription=use_subscription)
 
         return False, output
 
