@@ -10,10 +10,6 @@ sidebar:
 
 ## Why This Module Matters
 
-In March 2018, the stakes of computer vision were starkly demonstrated in Tempe, Arizona. An autonomous vehicle operated by Uber struck and killed a pedestrian who was walking a bicycle across a dark road. The National Transportation Safety Board investigation revealed a catastrophic failure in the vehicle's perception system. The Convolutional Neural Network processing the camera feeds struggled to classify the object in the darkness, oscillating wildly between predicting a "vehicle," a "bicycle," and an "other." This indecision delayed the critical braking response by precious seconds. The incident immediately halted autonomous testing programs nationwide, erasing billions of dollars in projected market capitalization across the autonomous driving sector and fundamentally altering the regulatory landscape for AI deployment. 
-
-When you train a deep learning vision model, you are not merely performing matrix multiplications in a vacuum; you are building the sensory cortex of a system that will interact with the physical world. A single algorithmic blind spot or an improperly sized receptive field can lead to life-or-death consequences. Companies like Tesla, Waymo, and Mobileye invest massive amounts of capital and engineering hours into refining these architectures to ensure absolute reliability in edge cases.
-
 This module is designed to bridge the gap between theoretical mathematics and production-grade engineering. You will dissect the precise mathematical operations that allow machines to detect spatial hierarchies, recognize complex patterns, and parse messy reality. By understanding the inner workings of convolutions, pooling layers, and residual connections, you will possess the fundamental prerequisites to design, debug, and deploy vision systems that are robust, efficient, and safe for real-world application.
 
 ## Learning Outcomes
@@ -27,8 +23,6 @@ By the completion of this module, you will be able to:
 ---
 
 ## 1. The Computer Vision Revolution: Biological Roots
-
-Before we examine the tensor calculus that powers modern AI, we must look at the biological inspiration behind Convolutional Neural Networks (CNNs). The architecture of a CNN is one of the few deep learning concepts directly inspired by mammalian biology.
 
 > **Did You Know?** In 1959, neurophysiologists David Hubel and Torsten Wiesel inserted microelectrodes into the visual cortex of an anesthetized cat. They discovered that specific neurons fired only when the cat was shown lines at specific angles. This discovery of hierarchical visual processing earned them the Nobel Prize in Physiology or Medicine in 1981, and it directly laid the conceptual foundation for the Convolutional Neural Network.
 
@@ -178,8 +172,6 @@ By initializing 32 output channels, we instruct the network to discover and opti
 
 ## 3. Pooling and Receptive Fields: Seeing the Big Picture
 
-Detecting a feature is only the first step. If a network detects a pedestrian, it should not care if the pedestrian shifts three pixels to the left. The network requires spatial robustness.
-
 ### Max Pooling: The Dominant Approach
 
 Max pooling creates this spatial robustness by dividing the feature map into grids and forcing only the maximum activation value to survive.
@@ -290,8 +282,6 @@ dilated_conv = nn.Conv2d(
 ---
 
 ## 4. The Classic Architectures: A Journey Through History
-
-To design modern architectures, you must understand the ancestral lineage of the algorithms that govern computer vision.
 
 ### LeNet-5 (1998): The Original CNN
 
@@ -506,8 +496,6 @@ resolution = γ^φ
 
 ## 5. Building a CNN from Scratch
 
-Let us synthesize these historical lessons into a modern PyTorch module, aggressively employing batch normalization, residual connections, and global average pooling.
-
 ```python
 import torch
 import torch.nn as nn
@@ -652,8 +640,6 @@ BatchNorm → ReLU → Conv
 ---
 
 ## 6. Transfer Learning: Standing on Giants' Shoulders
-
-Training massive architectures from a random initialization requires monumental compute resources. In production engineering, we rely heavily on Transfer Learning. 
 
 ```python
 import torch
@@ -887,8 +873,6 @@ spec:
 
 ## 9. Hands-On Exercise: End-to-End Pipeline
 
-It is time to pull these concepts together into a fully executable production script. Your task is to write a comprehensive Python pipeline that downloads data, initializes a model, and trains it with full checkpointing support.
-
 **Success Checklist:**
 - [ ] Implement data loaders for CIFAR-10 with correct ImageNet normalizations.
 - [ ] Initialize a ResNet architecture utilizing PyTorch's `models` module.
@@ -994,8 +978,6 @@ if __name__ == '__main__':
 
 Test your technical comprehension and debugging intuition with these production scenarios.
 
-**Q1**: You are reviewing a pull request where a junior engineer replaced three stacked 3×3 convolutional layers with a single 7×7 layer to simplify the architecture. You reject the PR. Why do we use 3×3 kernels instead of larger ones like 7×7?
-
 <details>
 <summary>Answer</summary>
 Three stacked 3×3 kernels have the same receptive field as one 7×7 kernel, but with fewer parameters (3×9=27 vs 49) and more non-linearities (3 ReLUs vs 1). This makes the network more expressive and easier to train. The VGGNet paper demonstrated this principle in 2014.
@@ -1077,8 +1059,6 @@ The engineer completely forgot to call `model.eval()`. Without invoking this met
 <!-- v4:generated type=no_quiz model=codex turn=1 -->
 ## Quiz
 
-
-**Q1.** Your team adds a `Conv2d` layer with `kernel_size=3`, `padding=1`, and `stride=2` to downsample 224×224 camera frames before the next block. A teammate incorrectly wires the following layer assuming the output will still be 224×224. What spatial size should the convolution actually produce, and why?
 
 <details>
 <summary>Answer</summary>
@@ -1220,3 +1200,9 @@ Success criteria:
 ## Next Module
 
 Ready to move from recurrent architectures into the modern transformer era? Proceed directly to **[Module 1.7: Transformers from Scratch](./module-1.7-transformers-from-scratch/)** where you will discover why the phrase "Attention Is All You Need" permanently altered the trajectory of artificial intelligence, and how self-attention scales in ways that recurrent networks cannot.
+
+## Sources
+
+- [Very Deep Convolutional Networks for Large-Scale Image Recognition](https://arxiv.org/abs/1409.1556) — Primary VGG reference for the small-filter design pattern that shaped later CNNs.
+- [Deep Residual Learning for Image Recognition](https://arxiv.org/abs/1512.03385) — Primary ResNet paper for skip connections and deep-network optimization.
+- [EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks](https://arxiv.org/abs/1905.11946) — Primary source for compound scaling across depth, width, and resolution.
