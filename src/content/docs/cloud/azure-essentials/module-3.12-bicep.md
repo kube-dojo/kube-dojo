@@ -19,9 +19,9 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In March 2022, a platform engineering team at a mid-size SaaS company needed to rebuild their staging environment after a catastrophic misconfiguration. The environment consisted of 23 Azure resources: a VNet with 4 subnets, 3 App Services, a SQL database, a Redis cache, a Key Vault, an ACR, storage accounts, and various networking components. The original environment had been built by clicking through the Azure portal over several months, with configuration decisions documented in a Confluence wiki that nobody had updated in 8 months. Rebuilding took 5 engineers 3 full days, during which they discovered 14 configuration discrepancies between the wiki and the actual deployment. When the "rebuilt" environment was finally tested, 6 services failed because of subtle differences in settings---a missed NSG rule here, a wrong SKU there. Total cost of the rebuild: approximately $15,000 in engineering time.
+Teams that build environments manually through the Azure portal often discover configuration drift only when they have to recreate the environment. Rebuilds can consume substantial engineering time, and undocumented differences between the intended configuration and the actual deployment can easily break services.
 
-The team then spent one week writing Bicep templates for the entire environment. From that point forward, provisioning a complete environment took 12 minutes. When they needed a third environment for load testing two months later, they ran `az deployment group create` with different parameters and went to lunch. The infrastructure was ready before they finished eating.
+Once an environment is described in Bicep, provisioning the same infrastructure again usually becomes much faster and more repeatable because the deployment can be rerun with different parameters.
 
 This is the fundamental promise of Infrastructure as Code (IaC): **your infrastructure is defined in version-controlled files, not in wiki pages, portal clicks, or tribal knowledge.** ARM templates have been Azure's native IaC format since the beginning, and Bicep is the modern, human-friendly language that compiles down to ARM. In this module, you will learn ARM template structure, Bicep syntax, modules, deployment scopes, and the what-if feature that previews changes before they are applied. By the end, you will refactor a CLI-based deployment script into a reusable Bicep template.
 
@@ -29,7 +29,7 @@ This is the fundamental promise of Infrastructure as Code (IaC): **your infrastr
 
 ## ARM Templates: The Foundation
 
-Azure Resource Manager (ARM) is the deployment and management layer for Azure. Every Azure operation---whether from the portal, CLI, PowerShell, or SDK---goes through ARM. ARM templates are JSON files that define the resources you want to deploy.
+[Azure Resource Manager (ARM) is the deployment and management layer for Azure. Every Azure operation---whether from the portal, CLI, PowerShell, or SDK---goes through ARM. ARM templates are JSON files that define the resources you want to deploy.](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/overview)
 
 ### ARM Template Structure
 
@@ -106,7 +106,7 @@ This is why Bicep exists.
 
 ## Bicep: ARM Templates for Humans
 
-Bicep is a domain-specific language (DSL) that compiles to ARM JSON. It provides the same capabilities with dramatically better readability and tooling.
+[Bicep is a domain-specific language (DSL) that compiles to ARM JSON.](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/overview) It provides the same capabilities with dramatically better readability and tooling.
 
 ### Bicep vs ARM Template Comparison
 
@@ -147,20 +147,20 @@ The differences are stark:
 | **Comments** | Not supported | `//` and `/* */` |
 | **String interpolation** | `[format('a{0}b', param)]` | `'a${param}b'` |
 | **Readability** | Low (nested JSON) | High (clean syntax) |
-| **IntelliSense** | Limited | Full VS Code support |
-| **Modules** | Linked templates (external URLs) | Native `module` keyword |
+| **IntelliSense** | Limited | [Full VS Code support](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/overview) |
+| **Modules** | Linked templates (external URLs) | [Native `module` keyword](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/overview) |
 | **Compilation** | N/A (direct JSON) | Compiles to ARM JSON |
-| **Decompilation** | N/A | Can decompile ARM to Bicep |
+| **Decompilation** | N/A | [Can decompile ARM to Bicep](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/decompile) |
 
 ### Bicep vs Terraform
 
-While Bicep is the native choice for Azure, Terraform is the industry standard for multi-cloud IaC. How do you choose between them?
+While Bicep is the native choice for Azure, Terraform is a common option for teams that need multi-cloud IaC. How do you choose between them?
 
 | Feature | Bicep | Terraform |
 | :--- | :--- | :--- |
-| **State Management** | No state file (state is in Azure) | Requires state file management (backend) |
+| **State Management** | [No state file (state is in Azure)](https://learn.microsoft.com/en-us/azure/developer/terraform/comparing-terraform-and-bicep) | Requires state file management (backend) |
 | **Cloud Support** | Azure only | Multi-cloud (AWS, GCP, Azure, etc.) |
-| **Day 0 Support** | Immediate support for new Azure features | Slight delay for provider updates |
+| **Day 0 Support** | [Immediate support for new Azure features](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/overview) | Slight delay for provider updates |
 | **Integration** | Native to Azure CLI and Portal | Requires separate Terraform CLI |
 
 **Decision Framework**: Use Bicep if your organization is 100% Azure-native and you want to avoid managing state files. Use Terraform if you have a multi-cloud strategy or already use Terraform for other infrastructure (like GitHub, Datadog, or Kubernetes).
@@ -434,8 +434,8 @@ az deployment group create \
 
 To share Bicep modules across teams, you need a central repository. Azure provides two native ways to share IaC components:
 
-1. **Private Bicep Registries (ACR)**: You can publish Bicep modules to an Azure Container Registry (ACR). Teams reference them using the `br:` scheme (e.g., `module redis 'br:myacr.azurecr.io/bicep/modules/redis:v1'`).
-2. **Template Specs**: Template specs are native Azure resources that store an ARM template for later deployment. You can compile a Bicep file and save it as a Template Spec, complete with RBAC access control and versioning, allowing non-developers to deploy standardized infrastructure directly from the Azure Portal.
+1. **Private Bicep Registries (ACR)**: [You can publish Bicep modules to an Azure Container Registry (ACR). Teams reference them using the `br:` scheme](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/private-module-registry) (e.g., `module redis 'br:myacr.azurecr.io/bicep/modules/redis:v1'`).
+2. **Template Specs**: [Template specs are native Azure resources that store an ARM template for later deployment. You can compile a Bicep file and save it as a Template Spec, complete with RBAC access control and versioning](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/template-specs), allowing non-developers to deploy standardized infrastructure directly from the Azure Portal.
 
 ```bash
 # Publish a Bicep module to a Template Spec
@@ -451,7 +451,7 @@ az ts create \
 
 ## Deployment Scopes
 
-Bicep can deploy resources at four different scopes:
+[Bicep can deploy resources at four different scopes:](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/overview)
 
 ```mermaid
 graph TD
@@ -504,8 +504,8 @@ az deployment tenant create --location eastus2 -f tenant.bicep
 While Bicep modules organize your code, **Deployment Stacks** organize your deployed resources. A deployment stack is a native Azure resource that manages the lifecycle of a collection of resources as a single atomic unit, even if those resources span multiple resource groups or subscriptions.
 
 The key superpower of deployment stacks is **cleanup and protection**:
-- **Cleanup**: When you remove a resource from your Bicep file and update the stack, the stack can automatically delete or detach the unmanaged resource.
-- **Protection**: You can apply `DenySettings` to the stack, preventing anyone (even administrators) from manually modifying or deleting the managed resources via the portal or CLI.
+- **Cleanup**: [When you remove a resource from your Bicep file and update the stack, the stack can automatically delete or detach the unmanaged resource.](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/deployment-stacks)
+- **Protection**: [You can apply `DenySettings` to the stack, preventing anyone (even administrators) from manually modifying or deleting the managed resources via the portal or CLI.](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/deployment-stacks)
 
 ```bash
 # Create a deployment stack with DenySettings to protect against drift
@@ -520,7 +520,7 @@ az stack group create \
 
 ## What-If Deployments: Preview Before You Apply
 
-The what-if operation is your safety net. It shows what changes a deployment would make without actually making them.
+The what-if operation is your safety net. [It shows what changes a deployment would make without actually making them.](https://learn.microsoft.com/en-us/azure/azure-resource-manager/templates/deploy-what-if)
 
 > **Pause and predict**: A colleague manually added a test subnet to your VNet via the Azure Portal. Your Bicep template defines the VNet but does not include this new subnet in its `subnets` array property. When you run a `what-if` deployment in Incremental mode, will the manual subnet be marked for deletion (-), modification (~), or ignored completely? What does this reveal about how Azure handles arrays during declarative updates?
 
@@ -557,7 +557,7 @@ Scope: /subscriptions/xxx/resourceGroups/myRG
   + Microsoft.Web/serverfarms/kubedojo-staging-plan [2023-01-01]
 ```
 
-**War Story**: A team ran a Bicep deployment in **complete mode** (which deletes resources not in the template) on their production resource group. They had forgotten to include the database in their template. The what-if output clearly showed `- Delete Microsoft.Sql/servers/production-db` in red, but nobody read it because they had gotten used to "just deploying." The database was deleted, and the 4-hour recovery from geo-replicated backup cost them $50,000 in lost revenue. From that day forward, they mandated what-if review before every production deployment and exclusively used **incremental mode** (the default, which only adds/modifies, never deletes).
+Running production deployments in complete mode can delete resources that were omitted from the template. The operational lesson is to review a what-if preview carefully and reserve deletion-oriented workflows for cases where the template really represents the whole environment.
 
 ```bash
 # Deployment modes
@@ -621,13 +621,11 @@ az deployment group validate -g myRG -f main.bicep -p environment=staging
 
 ## Did You Know?
 
-1. **Bicep is a transparent abstraction over ARM templates.** Every Bicep file compiles to a standard ARM JSON template. There is no "Bicep runtime" or "Bicep API"---Azure only sees ARM JSON. This means Bicep has zero risk of vendor lock-in within Azure: if Bicep were discontinued tomorrow, you would still have valid ARM templates. You can even mix Bicep and ARM JSON in the same deployment using modules.
+1. **Bicep is a transparent abstraction over ARM templates.** Every Bicep file compiles to a standard ARM JSON template. There is no "Bicep runtime" or "Bicep API"---Azure only sees ARM JSON. This means the important deployment artifact remains an ARM template, which reduces dependence on Bicep-specific tooling during deployment. You can even mix Bicep and ARM JSON in the same deployment using modules.
 
-2. **Azure processes over 5 billion ARM API requests per day**, making it one of the highest-throughput APIs in the world. Every portal click, CLI command, Terraform apply, and Bicep deployment goes through the same ARM API. The API has a rate limit of approximately 1,200 reads and 1,200 writes per subscription per hour per region.
+3. Before deploying a template, what-if gives you a preview of the changes Azure Resource Manager expects to make, which makes it a useful safety check similar in spirit to Terraform plan.
 
-3. **The `what-if` operation was the most requested feature** in Azure's IaC history. Before what-if (launched in 2020), deploying an ARM template was a leap of faith---you had to deploy to find out what would change. Teams would create disposable resource groups to "test" templates, wasting time and money. What-if eliminated this by previewing changes before applying them, similar to Terraform's `plan` command.
-
-4. **Bicep supports user-defined types** (since Bicep v0.12), allowing you to define structured parameter types. Instead of passing 8 separate parameters for a VM configuration, you define a `vmConfig` type with all properties, getting compile-time validation and IntelliSense. This moves Bicep closer to a full programming language while remaining declarative.
+4. [**Bicep supports user-defined types** (since Bicep v0.12), allowing you to define structured parameter types.](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/user-defined-data-types) Instead of passing 8 separate parameters for a VM configuration, you define a `vmConfig` type with all properties, getting compile-time validation and IntelliSense. This moves Bicep closer to a full programming language while remaining declarative.
 
 ---
 
@@ -637,7 +635,7 @@ az deployment group validate -g myRG -f main.bicep -p environment=staging
 | :--- | :--- | :--- |
 | Using the portal to create resources instead of IaC | The portal feels faster for "quick" resources | Every resource should be in a Bicep template, even "temporary" ones. Portal-created resources are undocumented and unreproducible. |
 | Hardcoding resource names and IDs | It works for the first environment | Use parameters for anything that changes between environments. Use `uniqueString()` for globally unique names. |
-| Using Complete deployment mode in production | Someone thought it would "clean up" unused resources | Always use Incremental mode (the default). Complete mode deletes resources not in the template, which can destroy databases and storage accounts. |
+| Using Complete deployment mode in production | Someone thought it would "clean up" unused resources | [Prefer Incremental mode (the default) in most production cases. Complete mode deletes resources not in the template, which can destroy databases and storage accounts.](https://learn.microsoft.com/en-us/azure/azure-resource-manager/templates/deployment-modes) |
 | Not running what-if before deploying | "The template worked last time" | Make what-if a mandatory CI/CD step. A 30-second preview prevents hours of incident response. |
 | Writing one massive Bicep file | The template "works" at first | Break large templates into modules. Each module should represent a logical unit (networking, compute, storage). |
 | Not using parameter files for different environments | Developers hardcode environment-specific values | Create parameter files per environment (`dev.bicepparam`, `staging.bicepparam`, `prod.bicepparam`). The template stays the same; only parameters change. |
@@ -657,7 +655,7 @@ Bicep is not a separate runtime or engine; it is a domain-specific language that
 <details>
 <summary>2. A junior engineer deploys a Bicep template containing only an App Service to a resource group that currently hosts your production SQL database. They accidentally append `--mode Complete` to the deployment command. What exactly happens to the SQL database, and why does this mode exist if it is so dangerous?</summary>
 
-The production SQL database will be permanently deleted. Complete mode instructs the Azure Resource Manager to make the resource group match the template exactly, meaning it will create the App Service and actively destroy any existing resources within the group that are not defined in the template. This mode exists because it provides a mechanism to enforce strict infrastructure-as-code parity, ensuring that no "drift" or manually created resources accumulate in a resource group over time. However, because of its highly destructive nature, Complete mode should only be used in tightly controlled, automated pipelines where the template is guaranteed to represent the entire environment, and always preceded by a `what-if` preview.
+The production SQL database will be permanently deleted. Complete mode instructs the Azure Resource Manager to make the resource group match the template exactly, meaning it will create the App Service and actively destroy any existing resources within the group that are not defined in the template. This mode exists because it provides a mechanism to enforce strict infrastructure-as-code parity, ensuring that no "drift" or manually created resources accumulate in a resource group over time. However, because of its highly destructive nature, Complete mode should usually be reserved for tightly controlled, automated pipelines where the template is intended to represent the entire environment, and ideally preceded by a `what-if` preview.
 </details>
 
 <details>
@@ -681,7 +679,7 @@ You construct a single, unified `main.bicep` template that utilizes parameters t
 <details>
 <summary>6. You are tasked with deploying an Azure Policy that restricts resource creation exclusively to the `eastus` region. You want this policy to automatically apply to all current and future resource groups within your project's subscription. Which deployment scope must you target in your Bicep file, and why would targeting the default Resource Group scope fail to achieve your goal?</summary>
 
-You must explicitly define `targetScope = 'subscription'` at the top of your Bicep file to deploy the policy at the Subscription scope. Targeting the default Resource Group scope would fail because a policy applied at the resource group level only restricts the resources provisioned within that specific group; any new resource group created outside of it would be completely unaffected by the restriction. By targeting the subscription, the policy cascades downwards, enforcing the region constraint universally across every existing and future resource group under that subscription umbrella. This hierarchical inheritance and the need to manage top-level organizational guardrails are the primary reasons why Bicep supports distinct deployment scopes.
+You must explicitly define `targetScope = 'subscription'` at the top of your Bicep file to deploy the policy at the Subscription scope. Targeting the default Resource Group scope would fail because a policy applied at the resource group level only restricts the resources provisioned within that specific group; any new resource group created outside of it would be completely unaffected by the restriction. By targeting the subscription, the policy cascades downwards, enforcing the region constraint across current and future resource groups under that subscription umbrella. This hierarchical inheritance and the need to manage top-level organizational guardrails are the primary reasons why Bicep supports distinct deployment scopes.
 </details>
 
 ---
@@ -1025,3 +1023,17 @@ Congratulations on completing the Azure Essentials track! You now have a solid f
 - **[Platform Engineering Track](/platform/)** --- Learn how to build internal developer platforms on Azure
 
 The skills you have built across these 12 modules---identity, networking, compute, storage, DNS, containers, serverless, secrets, monitoring, CI/CD, and infrastructure as code---are the foundation of every production Azure environment. The difference between a junior and senior engineer is not knowing more services; it is knowing how to combine these fundamentals into reliable, secure, and cost-effective architectures.
+
+## Sources
+
+- [learn.microsoft.com: overview](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/overview) — The ARM overview explicitly describes Resource Manager as the deployment and management service, says requests from Azure APIs/tools/SDKs go through it, and defines ARM templates as JSON deployment files.
+- [learn.microsoft.com: overview](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/overview) — The Bicep overview directly says Bicep is a transparent abstraction over ARM JSON and that the CLI converts Bicep into ARM JSON.
+- [learn.microsoft.com: decompile](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/decompile) — Microsoft Learn has a dedicated decompile article for converting ARM template JSON into Bicep.
+- [learn.microsoft.com: comparing terraform and bicep](https://learn.microsoft.com/en-us/azure/developer/terraform/comparing-terraform-and-bicep) — Microsoft's Terraform-vs-Bicep comparison explicitly says Terraform stores state and Bicep does not.
+- [learn.microsoft.com: parameter files](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/parameter-files) — The parameter files documentation explicitly covers `.bicepparam` files and their association to Bicep files through `using`.
+- [learn.microsoft.com: private module registry](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/private-module-registry) — The private module registry docs state that a Bicep registry is hosted on ACR and show `br:` references.
+- [learn.microsoft.com: template specs](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/template-specs) — The template specs documentation explicitly describes them as ARM-template resources with RBAC sharing and versioning.
+- [learn.microsoft.com: deployment stacks](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/deployment-stacks) — The deployment stacks documentation explicitly says stacks manage groups of resources together and can detach or delete removed resources.
+- [learn.microsoft.com: deploy what if](https://learn.microsoft.com/en-us/azure/azure-resource-manager/templates/deploy-what-if) — The what-if documentation explicitly says it predicts changes and does not make changes to existing resources.
+- [learn.microsoft.com: deployment modes](https://learn.microsoft.com/en-us/azure/azure-resource-manager/templates/deployment-modes) — The deployment modes documentation explicitly says incremental is the default and recommended mode, complete mode deletes absent resources, and what-if should be used before complete mode.
+- [learn.microsoft.com: user defined data types](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/user-defined-data-types) — The user-defined data types documentation explicitly says Bicep CLI version 0.12.x or higher is required.

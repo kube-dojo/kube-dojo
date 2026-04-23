@@ -19,9 +19,9 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In February 2023, a major CI/CD platform disclosed that an attacker had gained access to customer repositories by compromising a shared runner environment. The attacker injected malicious code into the build process, which exfiltrated environment variables---including service principal credentials that customers had stored as pipeline secrets. Over 35,000 repositories were potentially affected. Several Azure production environments were compromised because teams had stored long-lived service principal secrets in their pipeline variables, and those secrets had full Contributor access to production subscriptions.
+Recent CI/CD security incidents have shown that when attackers compromise build infrastructure or workflow execution paths, they can steal pipeline secrets and use them to access downstream cloud environments. The operational lesson is the same: avoid long-lived credentials in pipelines and scope deployment identities as narrowly as possible.
 
-This incident crystallized a lesson the industry had been learning the hard way: **the CI/CD pipeline is the most privileged part of your infrastructure, and it deserves the strongest security posture.** Your pipeline has the power to deploy code to production, access secrets, and modify infrastructure. If an attacker compromises your pipeline, they own your production environment. Static credentials stored in pipeline variables are a ticking time bomb---they do not expire, they are visible to anyone with pipeline admin access, and they are one SSRF vulnerability away from being exfiltrated.
+This incident crystallized a lesson the industry had been learning the hard way: **the CI/CD pipeline is the most privileged part of your infrastructure, and it deserves the strongest security posture.** Your pipeline has the power to deploy code to production, access secrets, and modify infrastructure. If an attacker compromises your pipeline, they own your production environment. Static credentials stored in pipeline variables increase risk because they require manual rotation, are exposed to anyone who can administer or alter the pipeline, and can be exfiltrated if the pipeline or runner is compromised.
 
 In this module, you will learn how to build secure CI/CD pipelines targeting Azure using two platforms: Azure DevOps Pipelines and GitHub Actions. You will understand YAML pipeline syntax, how Service Connections and OIDC federation eliminate static credentials, and how to deploy to Azure Container Registry and Container Apps. By the end, you will build a complete GitHub Actions pipeline that authenticates to Azure using OIDC (zero secrets), builds a container image, pushes it to ACR, and deploys it to Container Apps.
 
@@ -29,11 +29,11 @@ In this module, you will learn how to build secure CI/CD pipelines targeting Azu
 
 ## Azure DevOps Pipelines
 
-Azure DevOps is Microsoft's integrated DevOps platform providing source control (Azure Repos), CI/CD (Azure Pipelines), project management (Boards), artifact management (Artifacts), and testing (Test Plans).
+Azure DevOps is Microsoft's integrated DevOps platform providing [source control (Azure Repos), CI/CD (Azure Pipelines), project management (Boards), artifact management (Artifacts), and testing (Test Plans)](https://learn.microsoft.com/en-us/azure/devops/).
 
 ### Pipeline Basics
 
-Azure Pipelines uses YAML files (typically `azure-pipelines.yml`) to define build and deployment workflows. A pipeline consists of **stages**, **jobs**, and **steps**.
+Azure Pipelines uses YAML files (typically `azure-pipelines.yml`) to define build and deployment workflows. A pipeline consists of [**stages**, **jobs**, and **steps**](https://learn.microsoft.com/en-us/azure/devops/pipelines/yaml-schema/?view=azure-pipelines).
 
 ```mermaid
 graph TD
@@ -132,7 +132,7 @@ stages:
 
 ### Service Connections (OIDC/Workload Identity Federation)
 
-Service Connections are how Azure DevOps authenticates with Azure. The modern approach uses **Workload Identity Federation** (OIDC), which eliminates client secrets entirely.
+Service Connections are how Azure DevOps authenticates with Azure. The modern approach uses [**Workload Identity Federation** (OIDC)](https://learn.microsoft.com/en-us/azure/devops/pipelines/release/configure-app-secret?view=azure-devops), which eliminates client secrets entirely.
 
 ```mermaid
 flowchart TD
@@ -396,7 +396,7 @@ az vm create \
 # runner-cloud-init.yaml would install the runner package and register it
 ```
 
-For production, use the official **Actions Runner Controller (ARC)** on AKS, which auto-scales runners based on pending jobs.
+For production, use the official **Actions Runner Controller (ARC)** on AKS, which [auto-scales runners based on pending jobs](https://github.com/actions/actions-runner-controller/blob/master/docs/automatically-scaling-runners.md).
 
 > **Pause and predict**: Why might deploying a self-hosted runner inside your production virtual network introduce new security risks compared to using Microsoft-hosted runners?
 
@@ -427,7 +427,7 @@ flowchart TD
 | **Scan images before deployment** | Catch vulnerabilities before they reach production | `trivy image myacr.azurecr.io/myapp:latest` in the pipeline |
 | **Use branch protection rules** | Prevent direct pushes to main | Require PRs, status checks, and code review |
 
-**War Story**: A startup used a service principal with Contributor access to their production subscription, stored as a GitHub secret. An attacker submitted a pull request that modified the workflow file to echo the secret to the pipeline logs. Because the repository did not have branch protection requiring approval for workflow changes, the PR was auto-merged by a bot. The secret appeared in the workflow run logs, which were public because the repository was public. Within minutes, the attacker had Contributor access to the production subscription. The fix: OIDC (no secret to leak), environment protection rules (require approval), and branch protection (require review for workflow changes).
+If a repository can run or merge workflow changes without adequate review and a pipeline relies on long-lived cloud credentials, an attacker may be able to alter the workflow, expose those credentials, and use them against production resources. The practical defenses are to remove long-lived secrets, require approvals for protected environments, and enforce review on workflow changes.
 
 > **Stop and think**: If you use branch protection rules to require pull request reviews, how could an attacker with Contributor access to the repository still compromise the pipeline without merging a PR?
 
@@ -435,13 +435,13 @@ flowchart TD
 
 ## Did You Know?
 
-1. **GitHub Actions OIDC tokens are valid for only 10 minutes** and are scoped to the specific workflow run, job, and repository. Even if an attacker intercepts a token, it expires before they can do anything meaningful. Compare this to a client secret with a 1-2 year expiry---the attack window is reduced from years to minutes.
+1. **GitHub Actions OIDC tokens are short-lived** and include claims that scope them to the repository and workflow context. Compared with storing long-lived client secrets in the pipeline, that materially reduces credential exposure.
 
-2. **Azure DevOps supports pipeline caching** that persists across runs. A Node.js project with 500 MB of node_modules can restore its cache in 15 seconds instead of running `npm install` for 3 minutes. Over 100 pipeline runs per week, that saves 4.2 hours of build time. Use the `Cache@2` task with a hash of your lock file as the cache key.
+2. **Azure DevOps supports pipeline caching** that persists across runs. On dependency-heavy projects, restoring a warm cache can be much faster than reinstalling dependencies from scratch. Over repeated pipeline runs, that can save meaningful build time. Use the [`Cache@2` task](https://learn.microsoft.com/en-us/azure/devops/pipelines/release/caching?view=azure-devops) with a hash of your lock file as the cache key.
 
 3. **GitHub Actions hosted runners are ephemeral and fresh for every job.** Each job gets a brand-new VM with a clean filesystem. This is excellent for security (no contamination between builds) but means every job starts from scratch. Self-hosted runners persist between jobs, enabling persistent caches and pre-installed tools, but require you to manage security (ensuring one job cannot access another job's data).
 
-4. **Azure DevOps Pipelines can deploy to any cloud**, not just Azure. The platform supports service connections for AWS, GCP, Kubernetes (any cluster), SSH targets, and generic REST APIs. A single pipeline can build in Azure DevOps, push images to ACR, and deploy to an EKS cluster on AWS.
+4. **Azure DevOps Pipelines can deploy beyond Azure** by using service connections and deployment tasks for external systems such as Kubernetes clusters, Docker registries, and other remote services.
 
 ---
 
@@ -452,11 +452,11 @@ flowchart TD
 | Storing Azure credentials as pipeline secrets instead of using OIDC | OIDC setup requires more initial configuration | Invest 15 minutes in OIDC setup. It eliminates secret rotation, reduces blast radius, and prevents credential exfiltration. |
 | Granting Contributor at subscription scope to the pipeline identity | It is the quickest way to "make it work" | Create a custom role or use Contributor scoped to the specific resource group the pipeline deploys to. |
 | Not using environments with approval gates for production | "We trust our team" or "approvals slow us down" | Environment protection rules are the last line of defense against accidental or malicious production deployments. A 30-second approval is cheap insurance. |
-| Running `docker build` on the runner instead of using ACR Tasks | Teams are familiar with local Docker builds | ACR Tasks builds images in Azure, reducing build time (no push over internet), leveraging Azure network for base image pulls, and eliminating the need for Docker on the runner. |
+| Running `docker build` on the runner instead of using ACR Tasks | Teams are familiar with local Docker builds | [ACR Tasks builds images in Azure](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-tasks-overview), reducing build time (no push over internet), leveraging Azure network for base image pulls, and eliminating the need for Docker on the runner. |
 | Using `actions/checkout@v4` instead of pinning to a specific SHA | Version tags are readable and convenient | Tags can be moved to point to different commits (supply chain attack). Pin critical actions to their full SHA: `actions/checkout@a12a3943...`. |
 | Not scanning images for vulnerabilities in the pipeline | "Scanning slows down the pipeline" | Add Trivy or Microsoft Defender scan as a pipeline step. A 30-second scan catches vulnerabilities before they reach production. Better to delay a deploy than to deploy a vulnerable image. |
 | Hardcoding resource names in the workflow file | It works for a single environment | Use workflow inputs, environment variables, or matrix strategies to parameterize resource names. This enables the same workflow to deploy to staging and production. |
-| Not testing the deployment rollback process | "We will figure it out when we need to" | Include a rollback step or document the rollback procedure. For Container Apps, this means reactivating a previous revision. Test it before you need it. |
+| Not testing the deployment rollback process | "We will figure it out when we need to" | Include a rollback step or document the rollback procedure. For Container Apps, this means [reactivating a previous revision](https://learn.microsoft.com/en-us/azure/container-apps/revisions-manage). Test it before you need it. |
 
 ---
 
@@ -489,7 +489,7 @@ You should utilize GitHub Environments to define deployment targets with specifi
 <details>
 <summary>5. Your pipeline uses a popular third-party GitHub Action referenced via the tag `@v2`. An attacker gains control of the third-party repository, injects a cryptocurrency miner into the action's code, and moves the `v2` tag to point to this malicious commit. How could you have designed your pipeline to prevent this supply chain attack from executing the malware?</summary>
 
-You could have prevented this attack by referencing the third-party action using its immutable commit SHA instead of a mutable version tag. When you reference an action by a tag, the pointer can be moved to any commit, meaning your pipeline will unknowingly pull down the newly tagged malicious code. Pinning to a specific commit SHA guarantees that the pipeline always executes the exact same code, regardless of repository compromises or tag manipulations. Even if an attacker modifies the action's repository, the SHA remains cryptographically tied to the original, safe code. Teams can use automated dependency management tools to safely update these SHAs when new, verified versions are released.
+You could have prevented this attack by referencing the third-party action using its immutable commit SHA instead of a mutable version tag. When you reference an action by a tag, the pointer can be moved to any commit, meaning your pipeline will unknowingly pull down the newly tagged malicious code. Pinning to a specific commit SHA helps ensure that the pipeline executes the exact pinned revision of the action code, even if someone later moves a tag or changes the repository. Even if an attacker modifies the action's repository, the SHA remains cryptographically tied to the original, safe code. Teams can use automated dependency management tools to safely update these SHAs when new, verified versions are released.
 </details>
 
 <details>
@@ -768,3 +768,15 @@ az ad app delete --id "$APP_OBJECT_ID"
 ## Next Module
 
 [Module 3.12: ARM & Bicep Basics](../module-3.12-bicep/) --- Learn infrastructure as code on Azure with ARM templates and Bicep, including modules, deployment scopes, and what-if previews for safe infrastructure changes.
+
+## Sources
+
+- [learn.microsoft.com: devops](https://learn.microsoft.com/en-us/azure/devops/) — The Microsoft Learn product documentation directly enumerates the Azure DevOps product areas named in the sentence.
+- [learn.microsoft.com: yaml schema](https://learn.microsoft.com/en-us/azure/devops/pipelines/yaml-schema/?view=azure-pipelines) — The Azure Pipelines YAML schema and jobs documentation define pipelines, stages, jobs, and steps in these terms.
+- [learn.microsoft.com: configure app secret](https://learn.microsoft.com/en-us/azure/devops/pipelines/release/configure-app-secret?view=azure-devops) — Microsoft Learn explicitly says secret-based ARM service connections are not recommended and that workload identity federation is the preferred credential type.
+- [learn.microsoft.com: approvals](https://learn.microsoft.com/en-us/azure/devops/pipelines/process/approvals?view=azure-devops) — Microsoft Learn explicitly documents manual approval checks on environments that pause a stage until approval is granted.
+- [github.com: automatically scaling runners.md](https://github.com/actions/actions-runner-controller/blob/master/docs/automatically-scaling-runners.md) — The official ARC repository documents autoscaling using queued and in-progress workflow runs.
+- [learn.microsoft.com: caching](https://learn.microsoft.com/en-us/azure/devops/pipelines/release/caching?view=azure-devops) — Microsoft Learn directly documents pipeline caching behavior and the Cache task model.
+- [learn.microsoft.com: container registry tasks overview](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-tasks-overview) — The ACR Tasks overview directly documents cloud-based builds and on-demand builds without a local Docker engine.
+- [learn.microsoft.com: revisions manage](https://learn.microsoft.com/en-us/azure/container-apps/revisions-manage) — Microsoft Learn directly documents activating and deactivating Container Apps revisions.
+- [Azure DevOps Workload Identity Service Connections](https://learn.microsoft.com/en-us/azure/devops/pipelines/release/configure-workload-identity?view=azure-devops) — Primary Microsoft guidance for Azure DevOps workload identity federation and service connection setup.

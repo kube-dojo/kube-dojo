@@ -19,7 +19,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In September 2022, a Series B fintech startup ran their PostgreSQL database as a StatefulSet inside EKS. They had read every blog post about "running databases on Kubernetes" and felt confident. One Friday at 4:47 PM, a node auto-scaling event drained the database pod. The PersistentVolume was in us-east-1a, but the replacement node landed in us-east-1b. The pod sat in `Pending` for 22 minutes. During those 22 minutes, their payment processing pipeline -- which served 14,000 transactions per hour -- was completely dead. The postmortem estimated $89,000 in lost revenue and two enterprise customers who never came back.
+Teams that run stateful databases on Kubernetes can hit painful outages when storage placement, scheduling, and availability-zone constraints are misaligned, which is one reason many production teams choose managed database services instead.
 
 The startup migrated to Amazon RDS the following Monday. Not because Kubernetes cannot run databases -- it absolutely can -- but because managed databases handle the hardest parts of database operations: automated failover, point-in-time recovery, patching, and cross-AZ replication. The real engineering challenge shifted from "keeping PostgreSQL alive" to "connecting Kubernetes workloads to managed databases securely, efficiently, and reliably."
 
@@ -29,7 +29,7 @@ This module teaches you the second part. You will learn how to connect Kubernete
 
 ## Private Network Connectivity
 
-The first rule of database connectivity from Kubernetes: **never expose your database to the public internet**. Every cloud provider offers private endpoint mechanisms that keep traffic on the provider's backbone network.
+The first rule of database connectivity from Kubernetes: **avoid exposing your database to the public internet whenever possible**. Every cloud provider offers private endpoint mechanisms that keep traffic on the provider's backbone network.
 
 ### Architecture: VPC-Native Connectivity
 
@@ -55,7 +55,7 @@ flowchart LR
 
 ### AWS: RDS with VPC Private Subnets
 
-On AWS, your EKS cluster and RDS instance should share the same VPC or use VPC peering. RDS instances deployed into private subnets are accessible from any resource within the VPC.
+On AWS, your EKS cluster and RDS instance should share the same VPC or use VPC peering. [RDS instances deployed into private subnets are accessible from any resource within the VPC](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_VPC.WorkingWithRDSInstanceinaVPC.html).
 
 ```bash
 # Create a DB subnet group using private subnets
@@ -94,9 +94,9 @@ aws rds create-db-instance \
   --no-publicly-accessible
 ```
 
-The `--manage-master-user-password` flag tells RDS to store the master password in AWS Secrets Manager automatically. No human ever sees or handles the password.
+The [`--manage-master-user-password` flag tells RDS to store the master password in AWS Secrets Manager automatically](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/rds-secrets-manager.html). RDS generates and stores the password in Secrets Manager so you can avoid hardcoding or manually distributing it.
 
-### GCP: Cloud SQL with Private Service Connect
+### GCP: Cloud SQL with Private IP Connectivity
 
 ```bash
 # Allocate IP range for Private Service Connect
@@ -127,7 +127,7 @@ gcloud sql instances describe app-postgres \
   --format='value(ipAddresses.filter("type=PRIVATE").ipAddress)'
 ```
 
-### Azure: Flexible Server with Private Endpoint
+### Azure: Flexible Server with Private Access (VNet Integration)
 
 ```bash
 # Create a private DNS zone for PostgreSQL
@@ -173,9 +173,9 @@ Your application connects to `app-database.production.svc.cluster.local`. If you
 
 ## Connection Pooling with PgBouncer
 
-Every database connection consumes memory on the server (roughly 5-10 MB per connection for PostgreSQL). Kubernetes makes this worse because pods scale horizontally. If you have 20 replicas, each maintaining a pool of 10 connections, that is 200 connections. During a rolling deployment, both old and new pods exist simultaneously -- suddenly 400 connections.
+Every database connection consumes server memory, so large numbers of idle connections waste capacity. Kubernetes makes this worse because pods scale horizontally. If you have 20 replicas, each maintaining a pool of 10 connections, that is 200 connections. During a rolling deployment, both old and new pods exist simultaneously -- suddenly 400 connections.
 
-Managed databases have connection limits. An RDS `db.r6g.large` instance supports roughly 1,600 connections, but performance degrades well before that ceiling. The answer is connection pooling.
+Managed databases have connection limits, and real performance usually degrades before you reach the configured maximum. The answer is connection pooling.
 
 ### PgBouncer as a Sidecar
 
@@ -316,7 +316,7 @@ spec:
 
 > **Pause and predict**: If you use `session` pooling with a modern microservice that opens and closes database connections rapidly for each HTTP request, what will happen to the backend connections on your PostgreSQL server?
 
-For 90% of Kubernetes workloads, `transaction` mode is the correct choice. It provides the best balance of connection reuse and compatibility.
+For many stateless web workloads, `transaction` mode is a strong default because it balances connection reuse with broad application compatibility.
 
 ---
 
@@ -326,7 +326,7 @@ Hardcoded database passwords in Kubernetes Secrets are a ticking time bomb. When
 
 ### External Secrets Operator (ESO) with Rotation
 
-ESO syncs secrets from cloud provider secret managers into Kubernetes Secrets automatically.
+ESO [syncs secrets from cloud provider secret managers into Kubernetes Secrets automatically](https://github.com/external-secrets/external-secrets).
 
 ```yaml
 apiVersion: external-secrets.io/v1
@@ -381,7 +381,7 @@ sequenceDiagram
     SM->>DB: Time 5: Rotate user_a password (safe)
 ```
 
-This ensures zero-downtime rotation because the old credentials remain valid throughout the entire rollout.
+This ensures zero-downtime rotation because the [old credentials remain valid throughout the entire rollout](https://docs.aws.amazon.com/secretsmanager/latest/userguide/tutorials_rotation-alternating.html).
 
 ```bash
 # AWS Secrets Manager rotation with dual-user strategy
@@ -393,7 +393,7 @@ aws secretsmanager rotate-secret \
 
 ### Triggering Pod Restarts on Secret Change
 
-Use Reloader or stakater/Reloader to automatically trigger rolling restarts:
+Use Reloader or stakater/Reloader to [automatically trigger rolling restarts](https://github.com/stakater/Reloader):
 
 ```yaml
 apiVersion: apps/v1
@@ -414,7 +414,7 @@ Running `ALTER TABLE` in production is nerve-wracking enough. Doing it automatic
 
 ### The Expand-Contract Pattern
 
-Never make breaking schema changes in a single step. Instead:
+Avoid making breaking schema changes in a single step. Instead:
 
 ```mermaid
 flowchart LR
@@ -463,17 +463,17 @@ spec:
       serviceAccountName: db-migrator
 ```
 
-The `argocd.argoproj.io/hook: PreSync` annotation tells Argo CD to run this Job before deploying new application pods. The migration runs, the schema updates, then the new application version rolls out.
+The [`argocd.argoproj.io/hook: PreSync` annotation tells Argo CD to run this Job before deploying new application pods](https://argo-cd.readthedocs.io/en/latest/user-guide/sync-waves/). The migration runs, the schema updates, then the new application version rolls out.
 
 ### Migration Safety Checklist
 
 | Rule | Reason |
 |------|--------|
-| Never drop columns in the same release that removes their usage | Old pods still running during rollout will crash |
-| Always add columns as nullable or with defaults | INSERT statements from old code won't fail |
+| Avoid dropping columns in the same release that removes their usage | Old pods still running during rollout can crash |
+| Add columns as nullable or with defaults in rolling deployments | INSERT statements from old code won't fail |
 | Use advisory locks in migration scripts | Prevents two migration Jobs from running simultaneously |
-| Set a statement timeout | A single `ALTER TABLE` locking for 10 minutes will block all queries |
-| Test rollback before applying | `migrate down` should always work |
+| Set a statement timeout | A long-running `ALTER TABLE` lock can block queries until the lock is released |
+| Test rollback before applying | `migrate down` should work for the rollback path you expect to use |
 
 ```sql
 -- Safe migration example with timeout and lock
@@ -494,9 +494,9 @@ All three clouds support Multi-AZ deployments for managed databases. The failove
 
 | Feature | AWS RDS Multi-AZ | GCP Cloud SQL Regional | Azure Flexible Server ZR |
 |---------|-------------------|------------------------|--------------------------|
-| Failover time | 60-120 seconds | ~30 seconds | ~60 seconds |
-| Read from standby | No (Multi-AZ), Yes (Multi-AZ Cluster) | No | No |
-| Cross-region | Separate feature (Read Replicas) | Cross-region replicas | Geo-replication |
+| Failover time | 60-120 seconds | ~60 seconds | 60-120 seconds |
+| Read from standby | [No (Multi-AZ), Yes (Multi-AZ Cluster)](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZ.html) | No | No |
+| Cross-region | Separate feature (Read Replicas) | [Cross-region replicas](https://cloud.google.com/sql/docs/postgres/replication/cross-region-replicas) | [Geo-replication](https://learn.microsoft.com/en-us/azure/postgresql/flexible-server/concepts-read-replicas-geo) |
 | Endpoint changes on failover | No (DNS CNAME updated) | No (IP stays same) | No (DNS updated) |
 
 ### Read Replica Routing in Kubernetes
@@ -537,9 +537,9 @@ READ_DB = "postgresql://user:pass@db-read.production.svc:5432/appdb"
 
 This catches many teams off guard. Cross-AZ data transfer costs money on every cloud:
 
-- **AWS**: $0.01/GB per direction between AZs
-- **GCP**: $0.01/GB between zones in the same region
-- **Azure**: Free within the same region (as of 2025)
+- **AWS**: [$0.01/GB per direction between AZs](https://aws.amazon.com/blogs/networking-and-content-delivery/optimizing-data-transfer-costs-when-using-aws-network-load-balancer/)
+- **GCP**: [$0.01/GB between zones in the same region](https://cloud.google.com/vpc/pricing)
+- **Azure**: [Free within the same region](https://azure.microsoft.com/en-us/pricing/details/bandwidth) (as of 2025)
 
 If your application in AZ-a talks to a database in AZ-b, every query and response crosses AZ boundaries. For a chatty application doing 10,000 queries per second, each returning 1 KB, that is roughly 864 GB/day -- about $17/day just in cross-AZ transfer.
 
@@ -553,13 +553,13 @@ If your application in AZ-a talks to a database in AZ-b, every query and respons
 
 ## Did You Know?
 
-1. **Amazon RDS manages over 1.2 million active database instances** as of 2024, making it by far the largest managed database fleet in the world. The service handles more than 350 billion transactions per day across all engines.
+1. **Amazon RDS operates at very large fleet scale**, which is one reason managed databases can absorb operational work that would otherwise fall on platform teams.
 
-2. **PostgreSQL's maximum connection limit is not a hard cap** -- it is a function of available memory. Each connection uses a dedicated backend process consuming 5-10 MB of RAM. A db.r6g.xlarge instance (32 GB RAM) could theoretically support 3,200 connections but would have no memory left for actual query processing.
+2. **PostgreSQL connection capacity is constrained by server memory and per-connection process overhead**, so practical limits are often lower than the largest `max_connections` value you can configure.
 
-3. **Google Cloud SQL's "Private Service Connect" replaced the older VPC peering approach** in 2024 because VPC peering does not support transitive routing. If you had a hub-and-spoke network topology, Cloud SQL was unreachable from spoke VPCs -- a painful limitation that caught many multi-project architectures.
+3. **Cloud SQL now offers newer private connectivity patterns for multi-network topologies**, while older private-IP approaches had routing limitations that mattered in hub-and-spoke designs.
 
-4. **Schema migration tools have been the #1 cause of production outages** at companies surveyed by the DORA team, ahead of bad deployments. The most common failure: a migration adds an index on a 500-million-row table without `CONCURRENTLY`, locking writes for 45 minutes.
+4. **Schema migrations are a common source of production risk**, especially when they take heavyweight locks or assume a deployment can change application code and database shape at the same instant.
 
 ---
 
@@ -568,13 +568,13 @@ If your application in AZ-a talks to a database in AZ-b, every query and respons
 | Mistake | Why It Happens | How to Fix It |
 |---------|---------------|---------------|
 | Exposing the database with a public IP "for debugging" | Developers need to query from laptops | Use `kubectl port-forward` to a pod with database access |
-| Not setting `volumeBindingMode: WaitForFirstConsumer` when self-hosting | Default StorageClass creates volumes immediately | Does not apply to managed DBs, but remember for dev environments |
+| Not setting `volumeBindingMode: WaitForFirstConsumer` when self-hosting | [Default StorageClass creates volumes immediately](https://kubernetes.io/docs/concepts/storage/storage-classes/) | Does not apply to managed DBs, but remember for dev environments |
 | Allowing unlimited connections from pods | No connection pooling configured | Deploy PgBouncer (sidecar or centralized) with explicit limits |
 | Storing database passwords in ConfigMaps | Confusion between ConfigMap and Secret | Use Secrets, and preferably ESO with a cloud secret manager |
 | Running migrations in application startup code | Seems convenient -- every pod migrates on boot | Use a dedicated Job (PreSync hook) so migration runs exactly once |
 | Ignoring cross-AZ data transfer costs | Not visible until the bill arrives | Monitor with VPC Flow Logs and use topology-aware routing |
 | Using `session` pool mode in PgBouncer by default | It is the default setting | Explicitly set `transaction` mode for web workloads |
-| Not testing database failover | "Multi-AZ handles it" | Schedule quarterly failover tests using `aws rds reboot-db-instance --force-failover` |
+| Not testing database failover | "Multi-AZ handles it" | Schedule quarterly failover tests using [`aws rds reboot-db-instance --force-failover`](https://docs.aws.amazon.com/cli/v1/reference/rds/reboot-db-instance.html) |
 
 ---
 
@@ -595,7 +595,7 @@ In `session` mode, PgBouncer assigns a backend server connection to a client for
 <details>
 <summary>3. Your team needs to rename the `user_status` column to `account_state` in the primary database. The lead developer plans to run `ALTER TABLE users RENAME COLUMN user_status TO account_state;` during the next Argo CD sync. You block the PR, explaining that this will cause an outage during the rolling deployment. Why will a simple rename cause an outage in Kubernetes, and how should the team apply the expand-contract pattern to execute this change safely?</summary>
 
-A simple rename causes an outage because Kubernetes rolling deployments run old and new pod versions simultaneously. The older pods still running during the rollout will attempt to query the `user_status` column, which no longer exists, causing them to crash immediately. The expand-contract pattern solves this by breaking the change into additive phases, starting with expanding the schema to include the new `account_state` column. Next, you deploy application code that writes to both columns, and finally, once all pods are updated and data is backfilled, you contract by removing the old `user_status` column. This incremental approach ensures every version of the application can safely interact with the database schema at any given moment.
+A simple rename causes an outage because Kubernetes rolling deployments run old and new pod versions simultaneously. The older pods still running during the rollout will attempt to query the `user_status` column, which no longer exists, causing them to fail as soon as they hit that code path. The expand-contract pattern solves this by breaking the change into additive phases, starting with expanding the schema to include the new `account_state` column. Next, you deploy application code that writes to both columns, and finally, once all pods are updated and data is backfilled, you contract by removing the old `user_status` column. This incremental approach ensures every version of the application can safely interact with the database schema at any given moment.
 </details>
 
 <details>
@@ -619,7 +619,7 @@ Automatically retrying a database migration Job is dangerous because migrations 
 <details>
 <summary>7. Your security team mandates that database passwords be rotated every 30 days. You write a script that updates the password in RDS, then updates the Kubernetes Secret, and finally triggers a rolling restart of the application Deployments. During the next rotation, the application experiences 45 seconds of downtime where database authentication fails. How would implementing a dual-user rotation strategy eliminate this downtime window?</summary>
 
-The downtime occurs because there is an unavoidable race condition: old pods still running during the rolling restart have the old password, but the database only accepts the new password. The dual-user rotation strategy eliminates this by maintaining two active database users. When rotation occurs, you change the password of the standby user, update Kubernetes to use the standby user, and trigger the rolling restart. Because the original user's password was never changed, the old pods continue to function perfectly while the new pods seamlessly connect using the newly rotated credentials.
+The downtime occurs because there is an unavoidable race condition: old pods still running during the rolling restart have the old password, but the database only accepts the new password. The dual-user rotation strategy eliminates this by maintaining two active database users. When rotation occurs, you change the password of the standby user, update Kubernetes to use the standby user, and trigger the rolling restart. Because the original user's password remains unchanged during the rollout, the old pods continue to function while the new pods connect using the newly rotated credentials.
 </details>
 
 ---
@@ -961,3 +961,22 @@ docker network rm db-lab
 ---
 
 **Next Module**: [Module 9.2: Managed Message Brokers & Event-Driven Kubernetes](../module-9.2-message-brokers/) -- Learn how to integrate SQS, Pub/Sub, and Service Bus with Kubernetes workloads, and use KEDA to autoscale consumers based on queue depth.
+
+## Sources
+
+- [docs.aws.amazon.com: USER VPC.WorkingWithRDSInstanceinaVPC.html](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_VPC.WorkingWithRDSInstanceinaVPC.html) — AWS documents that RDS instances in a VPC have private IPs and can be hidden from the public internet.
+- [docs.aws.amazon.com: rds secrets manager.html](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/rds-secrets-manager.html) — The RDS Secrets Manager documentation explicitly ties this CLI flag to automatic password generation and lifecycle management in Secrets Manager.
+- [github.com: external secrets](https://github.com/external-secrets/external-secrets) — The upstream project README explicitly states this core ESO behavior.
+- [docs.aws.amazon.com: tutorials rotation alternating.html](https://docs.aws.amazon.com/secretsmanager/latest/userguide/tutorials_rotation-alternating.html) — AWS explicitly recommends alternating-users rotation when high availability is required.
+- [github.com: Reloader](https://github.com/stakater/Reloader) — The upstream README documents automatic rollout behavior on Secret and ConfigMap updates.
+- [argo-cd.readthedocs.io: sync waves](https://argo-cd.readthedocs.io/en/latest/user-guide/sync-waves/) — Argo CD's sync phases documentation explicitly defines `PreSync` as executing prior to manifest application.
+- [docs.aws.amazon.com: Concepts.MultiAZ.html](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZ.html) — AWS explicitly distinguishes single-standby Multi-AZ DB instances from Multi-AZ DB clusters that can serve reads.
+- [cloud.google.com: cross region replicas](https://cloud.google.com/sql/docs/postgres/replication/cross-region-replicas) — Google Cloud documents cross-region replicas as a Cloud SQL feature for migration and DR.
+- [learn.microsoft.com: concepts read replicas geo](https://learn.microsoft.com/en-us/azure/postgresql/flexible-server/concepts-read-replicas-geo) — Microsoft documents geo-replication as cross-region replica support for Flexible Server.
+- [aws.amazon.com: optimizing data transfer costs when using aws network load balancer](https://aws.amazon.com/blogs/networking-and-content-delivery/optimizing-data-transfer-costs-when-using-aws-network-load-balancer/) — An official AWS networking post states the current inter-zone charge as $0.01 per GB in each direction.
+- [cloud.google.com: pricing](https://cloud.google.com/vpc/pricing) — Google's VPC pricing page lists same-region inter-zone VM traffic at $0.01 per GiB and states Cloud SQL same-region pricing follows VM-to-VM rates.
+- [azure.microsoft.com: bandwidth](https://azure.microsoft.com/en-us/pricing/details/bandwidth) — Azure's bandwidth pricing FAQ says data transfer between Azure services in the same region is not charged.
+- [kubernetes.io: storage classes](https://kubernetes.io/docs/concepts/storage/storage-classes/) — The Kubernetes StorageClass documentation directly defines both the default and the purpose of `WaitForFirstConsumer`.
+- [docs.aws.amazon.com: reboot db instance.html](https://docs.aws.amazon.com/cli/v1/reference/rds/reboot-db-instance.html) — The AWS CLI command reference explicitly documents the `--force-failover` option.
+- [Service | Kubernetes](https://kubernetes.io/docs/concepts/services-networking/service/) — Explains `ExternalName`, headless Services, and the DNS behavior the module relies on for stable database hostnames.
+- [Learn about using private IP | Cloud SQL](https://cloud.google.com/sql/docs/sqlserver/private-ip) — Clarifies Cloud SQL private IP connectivity and helps separate private services access from Private Service Connect.

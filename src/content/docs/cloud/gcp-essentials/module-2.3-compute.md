@@ -19,9 +19,9 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In December 2022, a fast-growing e-commerce company ran their annual holiday sale on Google Cloud. Their architecture was simple: a fleet of Compute Engine VMs behind an HTTP(S) load balancer, with a Cloud SQL database in the backend. At 9:01 AM on Black Friday, traffic spiked to 15x normal levels. The operations team had provisioned what they thought was enough capacity---24 VMs running `n1-standard-8` instances. Within minutes, all 24 VMs were at 100% CPU. The team scrambled to manually add more VMs, but each new VM took 3-4 minutes to boot, install dependencies, and register with the load balancer. By the time they had scaled to 60 VMs, they had lost an estimated $1.8 million in abandoned carts. The post-incident review revealed two failures: first, they were using individual VMs instead of Managed Instance Groups with autoscaling. Second, they were using an older machine family (`n1`) when the `n2` family offered 20% better price-performance. The CEO's summary was blunt: "We paid more for machines that were slower, and we could not scale them automatically."
+Teams that run fixed pools of Compute Engine VMs without autoscaling can be overwhelmed by sudden traffic spikes, turning slow boot times and manual scaling into lost revenue.
 
-This incident captures why Compute Engine is more than "just VMs." Choosing the right machine family, configuring instance templates, using Managed Instance Groups with autoscaling, and setting up global load balancing are the difference between an architecture that handles traffic spikes gracefully and one that collapses under load. Compute Engine is the foundational compute service in GCP---even GKE nodes, Cloud SQL instances, and Dataflow workers run on Compute Engine VMs under the hood.
+This incident captures why Compute Engine is more than "just VMs." Choosing the right machine family, configuring instance templates, using Managed Instance Groups with autoscaling, and setting up global load balancing are the difference between an architecture that handles traffic spikes gracefully and one that collapses under load. Compute Engine is a foundational GCP compute service, and understanding it helps you reason about how many Google Cloud workloads are executed.
 
 In this module, you will learn how to select the right machine family for your workload, leverage preemptible and Spot VMs for massive cost savings, build golden images with custom images, configure Managed Instance Groups for automatic scaling and self-healing, and tie everything together with Cloud Load Balancing.
 
@@ -29,7 +29,7 @@ In this module, you will learn how to select the right machine family for your w
 
 ## Machine Families: Choosing the Right Hardware
 
-GCP offers four machine families, each optimized for different workload characteristics. Selecting the wrong family is one of the most common ways to overspend.
+Compute Engine offers several machine families; this module focuses on four common categories for learning purposes. Selecting the wrong family is one of the most common ways to overspend.
 
 ### The Four Families
 
@@ -43,14 +43,14 @@ flowchart TD
     end
 ```
 
-### General Purpose: The Workhorse
+### [General Purpose: The Workhorse](https://cloud.google.com/compute/docs/general-purpose-machines)
 
 | Series | CPU | vCPU:Memory Ratio | Best For | Notes |
 | :--- | :--- | :--- | :--- | :--- |
 | **E2** | Intel/AMD (automatic) | 1:4 (0.25 to 32 vCPUs) | Cost-sensitive, dev/test | Cheapest, shared-core options (e2-micro: 0.25 vCPU) |
 | **N2** | Intel Cascade Lake/Ice Lake | 1:4 (2 to 128 vCPUs) | General production | Good balance, use CUDs for savings (no SUDs) |
-| **N2D** | AMD EPYC | 1:4 (2 to 224 vCPUs) | Same as N2, prefer AMD | Often 10-15% cheaper than N2 |
-| **T2D** | AMD EPYC | 1:4 (1 to 60 vCPUs) | Scale-out workloads | Best per-thread performance |
+| **N2D** | AMD EPYC | 1:4 (series-specific limits) | General production workloads | Compare current N2D and N2 pricing in your region |
+| **T2D** | AMD EPYC | 1:4 | Scale-out workloads | Evaluate against current workload benchmarks |
 | **N1** | Intel Skylake/older | 1:3.75 | Legacy (avoid for new) | Still supported but outdated |
 
 ```bash
@@ -95,8 +95,8 @@ gcloud compute instances create high-mem-vm \
 ```
 
 Rules for custom machine types:
-- vCPUs must be 1, or an even number between 2 and 224 (varies by series).
-- Memory must be between 0.9 GB and 8 GB per vCPU (or up to 24 GB per vCPU with extended memory).
+- Allowed vCPU counts depend on the machine series; check the current custom-machine-type limits for the series you selected.
+- Allowed memory ranges depend on the machine series, and extended-memory limits are defined per series rather than by one universal GB-per-vCPU rule.
 - Extended memory costs more per GB than standard memory.
 
 ### Shared-Core Machines
@@ -105,8 +105,8 @@ For lightweight workloads that do not need a full vCPU, E2 offers shared-core op
 
 | Type | vCPUs | Memory | Use Case | Cost (approx vs e2-medium) |
 | :--- | :--- | :--- | :--- | :--- |
-| `e2-micro` | 0.25 shared | 1 GB | Micro-services, tiny APIs | ~25% of e2-medium |
-| `e2-small` | 0.5 shared | 2 GB | Low-traffic web, dev | ~50% of e2-medium |
+| `e2-micro` | 0.25 shared | 1 GB | Micro-services, tiny APIs | Lower-cost than `e2-medium` |
+| `e2-small` | 0.5 shared | 2 GB | Low-traffic web, dev | Lower-cost than `e2-medium` |
 | `e2-medium` | 1 shared | 4 GB | Moderate web, Jenkins agents | Baseline |
 
 ---
@@ -124,7 +124,7 @@ GCP offers three pricing tiers for the same hardware:
 | **Spot** | 60-91% | None (no 24h limit) | Can be preempted anytime | Batch, CI/CD, fault-tolerant |
 | **Preemptible (legacy)** | 60-91% | 24 hours max | Preempted at 24h, or earlier | Use Spot instead (superset) |
 
-**Spot VMs** replaced Preemptible VMs as the recommended ephemeral option. They offer the same discount but without the 24-hour maximum lifetime. Both can be preempted at any time with a 30-second warning.
+[**Spot VMs** replaced Preemptible VMs as the recommended ephemeral option. They offer the same discount but without the 24-hour maximum lifetime. Both can be preempted at any time with a 30-second warning.](https://cloud.google.com/compute/docs/instances/preemptible)
 
 ```bash
 # Create a Spot VM
@@ -176,10 +176,10 @@ For steady-state production workloads, CUDs offer significant savings without an
 
 | Commitment | Duration | Discount |
 | :--- | :--- | :--- |
-| **Resource-based** | 1 year | ~28% |
-| **Resource-based** | 3 years | ~52% |
-| **Spend-based** | 1 year | 25% (more flexible) |
-| **Spend-based** | 3 years | 52% |
+| **Resource-based** | 1 year | Varies by eligible resource and current pricing model |
+| **Resource-based** | 3 years | Varies by eligible resource and current pricing model |
+| **Spend-based** | 1 year | Varies by billing account model and eligible spend |
+| **Spend-based** | 3 years | Varies by billing account model and eligible spend |
 
 ```bash
 # Purchase a committed use discount (resource-based)
@@ -193,7 +193,7 @@ gcloud compute commitments create my-commitment \
 gcloud compute commitments list --region=us-central1
 ```
 
-Sustained Use Discounts (SUDs) apply automatically---no commitment required. If a VM runs for more than 25% of the month, GCP automatically applies increasing discounts. By the end of the month, you effectively get a ~20% discount for VMs that ran the entire time.
+Sustained Use Discounts (SUDs) apply automatically to eligible machine families---no commitment required. After 25% of monthly use, Google Cloud applies incremental discounts, and the maximum discount depends on the machine series and resource type.
 
 > **Pause and predict**: You are designing a video rendering pipeline. If a rendering job is interrupted, it must start over from the beginning. Some jobs take up to 36 hours. Should you use Spot VMs to save costs here?
 
@@ -237,7 +237,7 @@ gcloud compute instances delete image-builder --zone=us-central1-a --quiet
 
 ### Image Families
 
-Image families are like a "latest" pointer for your custom images. When you create a new image in a family, it automatically becomes the default.
+[Image families are like a "latest" pointer for your custom images. When you create a new image in a family, it automatically becomes the default.](https://cloud.google.com/compute/docs/images/deprecate-custom)
 
 ```bash
 # Create new version in the same family
@@ -269,7 +269,7 @@ gcloud compute images deprecate my-app-v1-1 \
 
 ### Instance Templates
 
-An instance template is a blueprint that defines the machine type, image, disks, network, and other settings for a VM. Templates are **immutable**---to change a setting, you create a new template.
+An instance template is a blueprint that defines the machine type, image, disks, network, and other settings for a VM. [Templates are **immutable**---to change a setting, you create a new template.](https://cloud.google.com/compute/docs/instance-templates)
 
 ```bash
 # Create an instance template
@@ -308,7 +308,7 @@ gcloud compute instance-templates create web-template-v2 \
 
 ### Managed Instance Groups (MIGs)
 
-A MIG is a group of identical VMs created from an instance template. MIGs provide autoscaling, self-healing, rolling updates, and load balancer integration.
+A MIG is a group of identical VMs created from an instance template. [MIGs provide autoscaling, self-healing, rolling updates, and load balancer integration.](https://cloud.google.com/compute/docs/instance-groups)
 
 ```bash
 # Create a regional MIG (recommended: spans all zones in a region)
@@ -520,11 +520,11 @@ gcloud compute instance-groups managed set-named-ports web-mig-eu \
 
 | Disk Type | IOPS (Read) | Throughput | Use Case | Cost |
 | :--- | :--- | :--- | :--- | :--- |
-| **pd-standard** | 0.75 per GB | 12 MB/s per GB | Bulk storage, logs | Lowest |
-| **pd-balanced** | 6 per GB | 28 MB/s per GB | General purpose (default) | Medium |
-| **pd-ssd** | 30 per GB | 48 MB/s per GB | Databases, high I/O | Higher |
+| **pd-standard** | 0.75 per GiB | 0.12 MiB/s per GiB | Bulk storage, logs | Lowest |
+| **pd-balanced** | 6 per GiB | 0.28 MiB/s per GiB | General purpose | Medium |
+| **pd-ssd** | 30 per GiB | 0.48 MiB/s per GiB | Databases, high I/O | Higher |
 | **pd-extreme** | Configurable | Configurable | SAP HANA, Oracle DB | Highest |
-| **local-ssd** | 900K total | 9.4 GB/s total | Temp storage, caches | Included with VM |
+| **local-ssd** | Varies by machine type and disk count | Varies by machine type and disk count | Temp storage, caches | Depends on the selected VM shape |
 
 ```bash
 # Create a VM with an additional SSD data disk
@@ -554,7 +554,7 @@ gcloud compute resource-policies create snapshot-schedule daily-snapshot \
 
 Historically, accessing a Linux VM involved generating an SSH key pair and pasting the public key into the project or instance metadata. This approach does not scale well: when an employee leaves, you must hunt down and remove their keys across all instances. 
 
-OS Login solves this by linking SSH access to IAM (Identity and Access Management). Instead of managing individual SSH keys, you assign IAM roles (`roles/compute.osLogin` or `roles/compute.osAdminLogin`) to users or groups.
+[OS Login solves this by linking SSH access to IAM (Identity and Access Management). Instead of managing individual SSH keys, you assign IAM roles (`roles/compute.osLogin` or `roles/compute.osAdminLogin`) to users or groups.](https://cloud.google.com/compute/docs/oslogin/set-up-oslogin)
 
 ```bash
 # Enable OS Login at the project level
@@ -567,19 +567,19 @@ gcloud projects add-iam-policy-binding my-project \
   --role="roles/compute.osLogin"
 ```
 
-When a user connects using `gcloud compute ssh`, GCP automatically generates a short-lived SSH key, pushes it to their OS Login profile, and allows them to log in. The moment their IAM permissions are revoked, their access to all VMs is instantly cut off. For VMs that do not have external IPs, you combine OS Login with Identity-Aware Proxy (IAP) TCP forwarding to securely tunnel SSH traffic without exposing ports to the internet.
+When a user connects using `gcloud compute ssh`, GCP automatically generates a short-lived SSH key, pushes it to their OS Login profile, and allows them to log in. When IAM access is removed, future OS Login SSH connections are denied across VMs that use OS Login. For VMs that do not have external IPs, you combine OS Login with [Identity-Aware Proxy (IAP) TCP forwarding](https://cloud.google.com/iap/docs/using-tcp-forwarding) to securely tunnel SSH traffic without exposing ports to the internet.
 
 ---
 
 ## Did You Know?
 
-1. **GCP's global load balancer uses Anycast routing**, meaning a single IP address is advertised from over 100 Google edge locations worldwide. When a user in Tokyo connects to your load balancer IP, they are routed to the nearest Google edge, which then forwards the request to the closest healthy backend. This happens at the network layer---no DNS-based routing tricks needed.
+1. [**GCP's global load balancer uses Anycast routing**, meaning a single IP address is advertised from over 100 Google edge locations worldwide. When a user in Tokyo connects to your load balancer IP, they are routed to the nearest Google edge, which then forwards the request to the closest healthy backend.](https://cloud.google.com/load-balancing/docs/locations) This happens at the network layer---no DNS-based routing tricks needed.
 
-2. **Spot VMs can save up to 91% compared to on-demand pricing**. The actual discount varies by machine type and region. For a batch processing job running `n2-standard-16` instances, the difference between on-demand ($0.7769/hr) and Spot ($0.07-0.23/hr) can mean the difference between a $5,000 monthly bill and a $500 one.
+2. [**Spot VMs can save up to 91% compared to on-demand pricing**](https://cloud.google.com/compute/docs/instances/spot). The actual discount varies by machine type and region. For a batch processing job running `n2-standard-16` instances, the gap between on-demand and Spot pricing can materially reduce the monthly bill, but the exact savings depend on region, machine type, and current Spot prices.
 
-3. **Live migration is a GCP superpower that most users never notice**. When Google needs to perform host maintenance, your VMs are transparently migrated to another physical host with no reboot and typically less than a second of degraded performance. This is enabled by default on all standard VMs. Preemptible/Spot VMs do not support live migration---they are terminated instead.
+3. **Live migration is a GCP superpower that most users never notice**. [When Google needs to perform host maintenance, your VMs are transparently migrated to another physical host with no reboot and typically less than a second of degraded performance.](https://cloud.google.com/compute/docs/instances/live-migration-process) [This is enabled by default on all standard VMs. Preemptible/Spot VMs do not support live migration---they are terminated instead.](https://cloud.google.com/compute/docs/instances/setting-vm-host-options)
 
-4. **You can create a VM with up to 416 vCPUs and 12 TB of memory** using the M3 machine family. These ultra-high-memory machines are designed for SAP HANA, large in-memory databases, and genomics workloads. At full price, an `m3-megamem-128` costs over $21 per hour---which is still cheaper than buying equivalent on-premises hardware when you factor in a 3-year amortization.
+4. **You can create a VM with up to 416 vCPUs and 12 TB of memory** using the M3 machine family. These ultra-high-memory machines are designed for SAP HANA, large in-memory databases, and genomics workloads. These ultra-high-memory machines are expensive on an hourly basis, but they can still be attractive when you need short-term capacity without buying hardware.
 
 ---
 
@@ -588,13 +588,13 @@ When a user connects using `gcloud compute ssh`, GCP automatically generates a s
 | Mistake | Why It Happens | How to Fix It |
 | :--- | :--- | :--- |
 | Using N1 machines for new workloads | N1 appears first in old tutorials | Use N2, N2D, or E2---they offer better price-performance |
-| Not using Managed Instance Groups | Individual VMs seem simpler initially | Always use MIGs for production; they provide autoscaling and self-healing |
+| Not using Managed Instance Groups | Individual VMs seem simpler initially | Use MIGs for most production VM workloads; they provide autoscaling and self-healing |
 | Setting autoscaler min to 1 | Want to minimize cost | Min should be 2+ for high availability across zones |
 | Not configuring health checks | Assumed MIG "just knows" when VMs are unhealthy | Create HTTP health checks with appropriate thresholds |
 | Using external IPs on every VM | Easier to SSH directly | Use IAP tunneling; VMs should not have external IPs unless they serve public traffic |
 | Ignoring Sustained Use Discounts | Assuming CUDs are the only option | SUDs apply automatically; check billing reports to see your effective discount |
 | Choosing pd-standard for databases | It is the cheapest disk type | Use pd-ssd for any workload with latency requirements; pd-standard IOPS scales with disk size |
-| Not setting shutdown scripts on Spot VMs | Assuming preemption never happens | Always implement graceful shutdown to save state and deregister from services |
+| Not setting shutdown scripts on Spot VMs | Assuming preemption never happens | Implement graceful shutdown so Spot VMs can save state and deregister from services when interrupted |
 
 ---
 
@@ -609,7 +609,7 @@ Preemptible VMs have a hard limitation: GCP will always terminate them after exa
 <details>
 <summary>2. During a high-traffic event, one of the three VMs in your Managed Instance Group (MIG) runs out of memory and starts returning 502 Bad Gateway errors. The MIG is configured with an HTTP health check requiring 3 consecutive failures. Describe the exact sequence of events the MIG and load balancer will trigger to resolve this.</summary>
 
-As soon as the VM fails the health check three consecutive times, the load balancer instantly stops routing new user traffic to that specific VM to prevent further errors. Concurrently, the MIG's self-healing mechanism detects the unhealthy state and forcefully deletes the unresponsive VM. The MIG then automatically provisions a brand new VM using the exact specifications defined in the attached instance template. Once the newly created VM boots up and successfully passes its own health checks, the load balancer resumes sending it user traffic, restoring the group to full capacity without manual intervention.
+As soon as the VM fails the health check three consecutive times, the load balancer stops routing new user traffic to that specific VM to prevent further errors. Concurrently, the MIG's self-healing mechanism detects the unhealthy state and forcefully deletes the unresponsive VM. The MIG then automatically provisions a brand new VM using the exact specifications defined in the attached instance template. Once the newly created VM boots up and successfully passes its own health checks, the load balancer resumes sending it user traffic, restoring the group to full capacity without manual intervention.
 </details>
 
 <details>
@@ -639,7 +639,7 @@ You shouldn't worry because standard Compute Engine VMs benefit from a feature c
 <details>
 <summary>7. A developer who recently left the company claims they still have SSH access to several production VMs because they manually added their public SSH key to the `~/.ssh/authorized_keys` file on those machines. How could your organization have prevented this by using OS Login?</summary>
 
-When OS Login is enabled at the project level, Compute Engine completely bypasses local SSH key files like `~/.ssh/authorized_keys` and exclusively relies on IAM policies to authorize access. With OS Login, a user's ability to SSH into a VM is directly tied to their Google Cloud identity and IAM roles (like `roles/compute.osLogin`). The moment the departed developer's Google Workspace account is suspended or their IAM role is revoked, their SSH access is instantly cut off across all VMs in the project. This eliminates the operational nightmare of hunting down and deleting rogue public keys scattered across individual instances.
+When OS Login is enabled at the project level, Compute Engine completely bypasses local SSH key files like `~/.ssh/authorized_keys` and exclusively relies on IAM policies to authorize access. With OS Login, a user's ability to SSH into a VM is directly tied to their Google Cloud identity and IAM roles (like `roles/compute.osLogin`). Once the departed developer's Google Workspace account is suspended or their IAM role is revoked, their SSH access is typically cut off across all VMs in the project. This eliminates the operational nightmare of hunting down and deleting rogue public keys scattered across individual instances.
 </details>
 
 ---
@@ -927,3 +927,19 @@ echo "Cleanup complete."
 ## Next Module
 
 Next up: **[Module 2.4: Cloud Storage (GCS)](../module-2.4-gcs/)** --- Master storage classes, lifecycle management, versioning, signed URLs, and the gsutil/gcloud commands you will use every day.
+
+## Sources
+
+- [cloud.google.com: general purpose machines](https://cloud.google.com/compute/docs/general-purpose-machines) — Google Cloud's general-purpose machine-family documentation is the primary source for these series characteristics.
+- [cloud.google.com: pricing](https://cloud.google.com/compute/pricing) — General lesson point for an illustrative rewrite.
+- [cloud.google.com: preemptible](https://cloud.google.com/compute/docs/instances/preemptible) — The preemptible VM documentation directly covers the recommendation to use Spot VMs, the 24-hour limit, and the preemption shutdown period.
+- [cloud.google.com: deprecate custom](https://cloud.google.com/compute/docs/images/deprecate-custom) — The custom-image deprecation documentation explicitly states that image families point to the most recent active image.
+- [cloud.google.com: instance templates](https://cloud.google.com/compute/docs/instance-templates) — The instance template documentation directly states that templates cannot be updated after creation.
+- [cloud.google.com: instance groups](https://cloud.google.com/compute/docs/instance-groups) — The MIG overview page lists these core managed-instance-group capabilities.
+- [cloud.google.com: locations](https://cloud.google.com/load-balancing/docs/locations) — The load-balancing locations documentation directly describes the single-IP anycast model, 100+ locations, and routing behavior.
+- [cloud.google.com: set up oslogin](https://cloud.google.com/compute/docs/oslogin/set-up-oslogin) — The OS Login setup documentation directly covers the required IAM roles and the disabling of metadata-based SSH keys.
+- [cloud.google.com: using tcp forwarding](https://cloud.google.com/iap/docs/using-tcp-forwarding) — The IAP TCP forwarding documentation directly states that you can SSH to Linux instances without external IP addresses through IAP.
+- [cloud.google.com: spot](https://cloud.google.com/compute/docs/instances/spot) — The Spot VM documentation explicitly states discounts of up to 91% for many resources.
+- [cloud.google.com: live migration process](https://cloud.google.com/compute/docs/instances/live-migration-process) — The live migration process documentation directly states that disruption is typically much less than one second.
+- [cloud.google.com: setting vm host options](https://cloud.google.com/compute/docs/instances/setting-vm-host-options) — The host maintenance policy documentation is the primary source for default maintenance behavior.
+- [Application Load Balancer overview](https://cloud.google.com/load-balancing/docs/application-load-balancer) — This gives the current product model for Google Cloud application load balancers and their global and regional modes.

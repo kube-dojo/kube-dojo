@@ -60,7 +60,7 @@ xychart-beta
 - **Below**: serverless wins
 - **Above**: K8s wins (especially with spot instances)
 
-The exact crossover depends on execution time, memory, and provider pricing. But the general shape is always the same: serverless is cheaper at low volume, Kubernetes is cheaper at scale.
+The exact crossover depends on execution time, memory, and provider pricing. But the general shape is usually the same: serverless is cheaper at low volume, Kubernetes is cheaper at scale.
 
 > **Stop and think**: If a service handles 5 million requests per month but each request takes 10 milliseconds and requires very little memory, would it still strictly follow the "Kubernetes wins above 2M requests" rule? Why might serverless still be cheaper here?
 
@@ -464,7 +464,7 @@ Cold starts are the primary drawback of serverless. Here are practical mitigatio
 | Strategy | How | Latency Reduction |
 |----------|-----|-------------------|
 | **Provisioned concurrency** (Lambda) | Pre-warm N instances | Eliminates cold start for N concurrent requests |
-| **min-scale: 1** (Knative) | Keep one pod always running | First request is always warm |
+| **min-scale: 1** (Knative) | Keep one pod running | First request is usually warm |
 | **Warm-up endpoints** | Health check that loads dependencies | Reduces initialization overhead |
 | **Smaller images** | Alpine/distroless base images | Faster pull and startup |
 | **SnapStart** (Lambda Java) | Snapshot after init, restore on invocation | 90% reduction for JVM cold starts |
@@ -540,7 +540,7 @@ graph TD
 <details>
 <summary>1. You are the lead architect for a retail company. The marketing team wants to launch a flash sale service that will receive near zero traffic for 29 days a month, but on one day it will receive 500,000 requests over a 4-hour period. Your infrastructure team already manages a large EKS cluster. Should you deploy this service as a standard Kubernetes Deployment or an AWS Lambda function?</summary>
 
-You should deploy this service as an AWS Lambda function (or similar serverless offering). Even though your team already manages Kubernetes, this extreme spiky traffic pattern with long idle periods is the perfect use case for serverless. If deployed on Kubernetes, you would either pay for idle capacity for 29 days or risk the cluster auto-scaler not provisioning nodes fast enough to handle the sudden 4-hour spike. Lambda scales instantly to meet the burst and scales to zero when the sale ends, meaning you only pay for the exact compute used during those 4 hours.
+You should deploy this service as an AWS Lambda function (or similar serverless offering). Even though your team already manages Kubernetes, this extreme spiky traffic pattern with long idle periods is the perfect use case for serverless. If deployed on Kubernetes, you would either pay for idle capacity for 29 days or risk the cluster auto-scaler not provisioning nodes fast enough to handle the sudden 4-hour spike. Lambda scales quickly to meet the burst and scales to zero when the sale ends, meaning you only pay for the exact compute used during those 4 hours.
 </details>
 
 <details>
@@ -564,7 +564,7 @@ You should use a queue-triggered asynchronous pattern rather than having the Kub
 <details>
 <summary>5. A startup wants to use Kubernetes for their new platform but has no dedicated operations team. They want to avoid managing node pools, OS upgrades, and capacity planning. They are debating between GKE Autopilot and EKS Fargate. If they choose GKE Autopilot, how will their experience differ from using standard EKS with Fargate profiles?</summary>
 
-With GKE Autopilot, the entire cluster is managed as a serverless container platform by default, meaning they never have to configure node pools, and even cluster-wide workloads like DaemonSets and GPU workloads are supported transparently. It provides a full, standard Kubernetes experience without the node management overhead. In contrast, EKS Fargate is a selective compute engine applied alongside a standard cluster. While Fargate handles the node-less execution for specific pods matching a profile, the team is still responsible for managing the EKS control plane add-ons and CoreDNS. Furthermore, they would be restricted from using DaemonSets for those Fargate pods.
+With GKE Autopilot, the entire cluster is managed as a serverless container platform by default, meaning they usually do not have to configure node pools, and even cluster-wide workloads like DaemonSets and GPU workloads are supported with much of the underlying infrastructure handled for them. It provides a full, standard Kubernetes experience without the node management overhead. In contrast, EKS Fargate is a selective compute engine applied alongside a standard cluster. While Fargate handles the node-less execution for specific pods matching a profile, the team is still responsible for managing the EKS control plane add-ons and CoreDNS. Furthermore, they would be restricted from using DaemonSets for those Fargate pods.
 </details>
 
 <details>
@@ -805,3 +805,9 @@ kind delete cluster --name knative-lab
 ---
 
 **Next Module**: [Module 9.4: Object Storage Patterns (S3 / GCS / Blob)](../module-9.4-object-storage/) -- Learn how to access cloud object storage from Kubernetes pods using CSI drivers, pre-signed URLs, and cross-region replication patterns.
+
+## Sources
+
+- [AWS Lambda asynchronous invocation](https://docs.aws.amazon.com/lambda/latest/dg/invocation-async.html) — Covers queueing behavior, async invocation semantics, and error-handling context for Kubernetes-to-Lambda handoff patterns.
+- [Knative Serving repository](https://github.com/knative/serving) — Good upstream entry point for Knative Serving concepts such as scale-to-zero, revisions, and request-driven compute.
+- [Google Kubernetes Engine pricing](https://cloud.google.com/kubernetes-engine/pricing) — Useful for understanding where Autopilot pricing follows Pod requests and where hardware-specific cases use different billing.

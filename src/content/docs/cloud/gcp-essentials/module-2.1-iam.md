@@ -21,7 +21,7 @@ After completing this module, you will be able to:
 
 In September 2020, a mid-sized fintech company discovered that their entire Google Cloud production environment had been compromised. The root cause was not a sophisticated exploit or a zero-day vulnerability. A developer had created a service account with Project Owner permissions "temporarily" to debug an integration issue with Cloud Storage. That service account key was committed to a private GitHub repository. When the repository was briefly made public during an open-source release, automated scanners harvested the key within minutes. Because the service account had Owner-level access to the production project, the attacker was able to exfiltrate customer financial records, spin up cryptocurrency mining instances across multiple regions, and delete audit logs. The total cost exceeded $2.3 million in direct damages, not including the regulatory fines that followed.
 
-This incident reveals the fundamental truth about Google Cloud Platform security: **the resource hierarchy is your blast radius, and IAM is the control plane for everything**. Unlike traditional infrastructure where network firewalls form the primary defense, in GCP every single action---creating a VM, reading a storage object, deploying a Cloud Run service---flows through IAM. If your IAM posture is weak, every other security measure becomes irrelevant. An attacker with the right IAM permissions can bypass VPC firewalls, read encrypted data, and delete entire projects with a single API call.
+This incident reveals the fundamental truth about Google Cloud Platform security: **the resource hierarchy is your blast radius, and IAM is the control plane for everything**. Unlike traditional infrastructure where network firewalls form the primary defense, in GCP almost every action---creating a VM, reading a storage object, deploying a Cloud Run service---is governed by IAM. If your IAM posture is weak, every other security measure becomes irrelevant. An attacker with the right IAM permissions can bypass VPC firewalls, read encrypted data, and delete entire projects with a single API call.
 
 In this module, you will learn how GCP organizes resources into a hierarchy (Organization, Folders, and Projects), how IAM policies are inherited through that hierarchy, and how to design access control that follows the principle of least privilege. You will understand the critical differences between basic roles, predefined roles, and custom roles. Most importantly, you will learn how to handle service accounts correctly---because misconfigured service accounts remain the number one attack vector in cloud breaches.
 
@@ -80,7 +80,7 @@ graph TD
 > **Pause and predict**: If you move a Project from the "Engineering" folder to the "Finance" folder, what happens to the IAM policies applied to the Project?
 > <details>
 > <summary>Answer</summary>
-> The project will immediately lose all permissions inherited from the "Engineering" folder and instantly inherit all permissions applied to the "Finance" folder. Any IAM policies applied directly to the Project itself will remain unchanged. This dynamic inheritance is why moving projects across folders is a high-risk operation.
+> The project will stop inheriting permissions from the "Engineering" folder and begin inheriting permissions from the "Finance" folder after IAM propagation completes. Any IAM policies applied directly to the Project itself will remain unchanged. This dynamic inheritance is why moving projects across folders is a high-risk operation.
 > </details>
 
 ### Policy Inheritance: The Cascade Effect
@@ -152,7 +152,7 @@ A principal in GCP is any identity that can be authenticated and authorized. GCP
 | **allAuthenticatedUsers** | `allAuthenticatedUsers` | Any Google account (dangerous) |
 | **allUsers** | `allUsers` | Anyone on the internet (very dangerous) |
 
-**Best Practice**: Always use Google Groups for human access. Granting roles to individual users creates an audit nightmare and makes offboarding error-prone. When an engineer leaves, you remove them from the group. You do not need to hunt through dozens of IAM policies across projects.
+**Best Practice**: Use Google Groups for human access in most cases. Granting roles to individual users creates an audit nightmare and makes offboarding error-prone. When an engineer leaves, you remove them from the group. You do not need to hunt through dozens of IAM policies across projects.
 
 ### The Three Types of Roles
 
@@ -164,7 +164,7 @@ These are the broadest roles in GCP. They existed before the modern IAM system a
 
 | Role | Permissions | When to Use |
 | :--- | :--- | :--- |
-| `roles/viewer` | Read-only access to all resources | Never in production (too broad) |
+| `roles/viewer` | Read-only access to all resources | Rarely in production; prefer narrower predefined roles |
 | `roles/editor` | Read-write access to most resources | Never in production (can modify everything) |
 | `roles/owner` | Full control including IAM and billing | Only for initial setup, then remove |
 
@@ -297,7 +297,7 @@ Service accounts are the most critical---and most frequently misconfigured---asp
 | **Default** | GCP (auto) | `PROJECT_NUMBER-compute@developer.gserviceaccount.com` | You (but auto-created) |
 | **Google-managed** | GCP | `service-PROJECT_NUMBER@compute-system.iam.gserviceaccount.com` | Google (do not modify) |
 
-**War Story**: The default Compute Engine service account (`PROJECT_NUMBER-compute@developer.gserviceaccount.com`) is automatically granted the `roles/editor` role on the project. This means that every VM you create without specifying a service account gets Editor access to your entire project. This is the single most common privilege escalation vector in GCP. Always create dedicated service accounts with minimal permissions.
+**War Story**: The default Compute Engine service account (`PROJECT_NUMBER-compute@developer.gserviceaccount.com`) is automatically granted the `roles/editor` role on the project. This means that every VM you create without specifying a service account gets Editor access to your entire project. This is the single most common privilege escalation vector in GCP. Create dedicated service accounts with minimal permissions whenever possible.
 
 ```bash
 # Create a dedicated service account
@@ -519,7 +519,7 @@ The output will clearly state whether access is `GRANTED` or `DENIED` and, cruci
 
 ## Did You Know?
 
-1. **GCP has over 11,000 individual IAM permissions** spread across hundreds of services. The `roles/editor` basic role grants access to roughly 6,000 of them. This is why predefined roles with 5-20 permissions are always the better choice.
+1. **GCP has over 11,000 individual IAM permissions** spread across hundreds of services. The `roles/editor` basic role grants access to roughly 6,000 of them. This is why narrower predefined or custom roles are usually the better choice.
 
 2. **Service account keys never expire by default**. Unlike AWS access keys (which have no built-in expiration either), GCP does not enforce rotation. An abandoned key from 2019 is still valid today unless someone explicitly deletes it. Google recommends setting an Organization Policy to disable key creation entirely (`constraints/iam.disableServiceAccountKeyCreation`).
 
@@ -538,7 +538,7 @@ The output will clearly state whether access is `GRANTED` or `DENIED` and, cruci
 | Using the default Compute Engine SA | It is automatic; you don't have to do anything | Always create dedicated service accounts per workload |
 | Creating service account keys | External tools "require" a JSON key file | Use Workload Identity Federation or impersonation instead |
 | Granting `allUsers` or `allAuthenticatedUsers` | Quick fix when auth is "not working" | Debug the actual auth issue; these grants expose data publicly |
-| Not using Google Groups | Adding individual users is faster initially | Always create groups; they simplify audits and offboarding |
+| Not using Google Groups | Adding individual users is faster initially | Prefer creating groups; they simplify audits and offboarding |
 | Ignoring IAM Recommender suggestions | Teams do not know the Recommender exists | Schedule monthly reviews of IAM Recommender output |
 | Forgetting about inherited permissions | The hierarchy is invisible in the console by default | Use `gcloud asset search-all-iam-policies` to see the full picture |
 
@@ -573,7 +573,7 @@ First, you should check the Cloud Audit Logs for the specific `403` error event 
 <details>
 <summary>5. Scenario: A developer manually created a VM to run an internal script without explicitly specifying a service account. Two days later, a security scanner alerts that the VM has full read-write access to every resource in the project. Why did this happen?</summary>
 
-When a Compute Engine VM is created without specifying a service account, GCP automatically assigns it the default Compute Engine service account. This default service account is inherently dangerous because it is automatically granted the legacy `roles/editor` role on the project when the Compute API is first enabled. Because the `roles/editor` role grants sweeping read-write access to almost all GCP services, the VM effectively inherited broad administrative power over the entire project. This design violates the principle of least privilege and serves as a common vector for privilege escalation. To prevent this, you should always enforce the use of dedicated, least-privilege service accounts for every VM.
+When a Compute Engine VM is created without specifying a service account, GCP automatically assigns it the default Compute Engine service account. This default service account is inherently dangerous because it is automatically granted the legacy `roles/editor` role on the project when the Compute API is first enabled. Because the `roles/editor` role grants sweeping read-write access to almost all GCP services, the VM effectively inherited broad administrative power over the entire project. This design violates the principle of least privilege and serves as a common vector for privilege escalation. To prevent this, you should enforce the use of dedicated, least-privilege service accounts for every VM whenever practical.
 </details>
 
 ---
@@ -857,3 +857,9 @@ echo "Cleanup complete. Projects scheduled for deletion (30-day recovery window)
 ## Next Module
 
 Next up: **[Module 2.2: VPC Networking](../module-2.2-vpc/)** --- Learn how GCP's global VPC model differs from other clouds, configure firewall rules using service account targets, and build a Shared VPC connecting multiple projects through a single network.
+
+## Sources
+
+- [IAM Overview](https://cloud.google.com/iam/docs/overview) — Primary reference for how permissions, roles, principals, and policy inheritance work in Google Cloud.
+- [Workload Identity Federation for Deployment Pipelines](https://cloud.google.com/iam/docs/workload-identity-federation-with-deployment-pipelines) — Directly covers the GitHub Actions and external-CI use cases this module teaches.
+- [Troubleshoot IAM Policies](https://cloud.google.com/iam/docs/troubleshoot-policies) — Best primary reference for how Policy Troubleshooter explains allow, deny, and inherited access decisions.

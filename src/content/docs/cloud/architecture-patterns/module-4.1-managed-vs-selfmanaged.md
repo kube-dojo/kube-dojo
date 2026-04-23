@@ -27,7 +27,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-March 2022. A mid-sized fintech startup in Berlin named ValuKredit was expanding rapidly. The platform team had been running self-managed Kubernetes on bare-metal servers in a colocation facility for three years. They were exceptionally proud of their architecture. They boasted custom-tuned etcd clusters, hand-rolled automated certificate rotation, and bespoke multi-dimensional monitoring. The tight-knit team of six engineers knew every single corner and quirk of their intricate infrastructure.
+March 2022. A mid-sized fintech startup in Berlin named ValuKredit was expanding rapidly. The platform team had been running self-managed Kubernetes on bare-metal servers in a colocation facility for three years. They were exceptionally proud of their architecture. They boasted custom-tuned etcd clusters, hand-rolled automated certificate rotation, and bespoke multi-dimensional monitoring. The tight-knit team of six engineers knew nearly every corner and quirk of their intricate infrastructure.
 
 Then, their lead infrastructure engineer resigned abruptly. Two weeks later, a second senior engineer departed for a major technology firm. The remaining four engineers had never performed a Kubernetes version upgrade without those two individuals directing the operation. When a critical CVE hit the kube-apiserver in April, the depleted team simply froze. They lacked the operational confidence to patch the control plane safely. For eleven agonizing days, their production cluster ran a publicly disclosed, highly weaponized vulnerability because nobody understood the upgrade procedure well enough to execute it without risking a total outage. The subsequent postmortem estimated their risk exposure at three point four million dollars in potential breach liability. Six months later, they abandoned their custom setup and migrated entirely to GKE. Their remaining engineers finally returned to shipping product features instead of babysitting etcd databases.
 
@@ -480,7 +480,7 @@ Before signing any contracts or provisioning any infrastructure, look your team 
 
 - **GKE was the very first managed Kubernetes service**, officially launched in 2015—just a single year after Kubernetes itself was open-sourced by Google. Google had already been orchestrating massive container workloads internally via Borg since 2003, giving them a monumental head start that is still evident in GKE's rapid feature velocity today.
 - **The EKS control plane physically executes on EC2 instances inside a completely locked-down, AWS-owned account.** To bridge the network, AWS seamlessly injects Elastic Network Interfaces (ENIs) from their account directly into your VPC. This hidden architecture is the primary reason EKS clusters silently consume IP addresses in your subnets—a frequent source of unexpected IP exhaustion in tightly planned networks.
-- **AKS is the only major managed Kubernetes service that provides a genuinely free tier with absolutely no time limits.** The significant caveat: the free tier provides zero SLA. If your control plane fails, Azure's default response is to suggest upgrading to the Standard tier. Running mission-critical production workloads on a free-tier AKS cluster is professional negligence.
+- **AKS is one of the few major managed Kubernetes services that offers a genuinely free tier without a built-in expiration window.** The significant caveat: the free tier provides zero SLA. If your control plane fails, Azure's default response is to suggest upgrading to the Standard tier. Running mission-critical production workloads on a free-tier AKS cluster is professional negligence.
 - **etcd, the highly sensitive database underlying all Kubernetes clusters, was originally created by CoreOS in 2013**—long before Kubernetes itself existed. It utilizes the complex Raft consensus algorithm and rigorously requires a majority quorum (two out of three nodes, or three out of five) to accept any writes. Losing quorum means your entire cluster instantaneously becomes read-only.
 
 ---
@@ -810,3 +810,10 @@ Migrate to Amazon EKS over a 6-week period using parallel clusters with gradual 
 ## Next Module
 
 [Module 4.2: Multi-Cluster and Multi-Region Architectures](../module-4.2-multi-cluster/) -- Now that you fully grasp the managed versus self-managed dynamic and have right-sized your control plane architecture, we will drastically expand the blast radius. In the next module, you will learn to orchestrate advanced architectures that securely span discrete failure domains, cross geographical regions, and navigate the complexities of unified multi-cloud deployments.
+
+## Sources
+
+- [Kubernetes Version Skew Policy](https://kubernetes.io/releases/version-skew-policy) — Explains the supported version window and the control-plane-to-kubelet compatibility rules that drive upgrade planning.
+- [Amazon EKS VPC and Subnet Considerations](https://docs.aws.amazon.com/eks/latest/best-practices/subnets.html) — Shows how EKS control-plane networking works and why ENIs and VPC-native pod IPs matter for subnet design.
+- [GKE Release Channels](https://cloud.google.com/kubernetes-engine/docs/concepts/release-channels) — Clarifies how Rapid, Regular, Stable, and auto-upgrade behavior affect managed-cluster version lifecycle decisions.
+- [AKS Free, Standard, and Premium Pricing Tiers](https://learn.microsoft.com/en-us/azure/aks/free-standard-pricing-tiers) — Defines what Azure actually manages in each AKS tier and where SLA-backed production guidance begins.

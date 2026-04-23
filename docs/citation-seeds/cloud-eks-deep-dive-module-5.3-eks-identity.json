@@ -1,0 +1,400 @@
+{
+  "module_key": "cloud/eks-deep-dive/module-5.3-eks-identity",
+  "module_path": "src/content/docs/cloud/eks-deep-dive/module-5.3-eks-identity.md",
+  "research_run_id": "2026-04-23T02:57:35+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 3,
+  "section_pool_ref": null,
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "A 2022 healthcare SaaS company on EKS discovered every pod had full access to S3 buckets containing patient health records.",
+      "claim_class": "war_story",
+      "span_hint": "section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "In 2022, a healthcare SaaS company running on EKS discovered that every pod in their cluster had full access to their S3 buckets containing patient health records.",
+      "suggested_rewrite": "An EKS cluster that relies on a broad node IAM role can expose every pod on that node to sensitive S3 data.",
+      "lesson_point_url": null,
+      "rationale": "This is a specific real-world incident with named industry context and sensitive-data detail but no attributable source."
+    },
+    {
+      "claim_id": "C002",
+      "claim_text": "The misconfiguration was discovered during a compliance audit rather than during development.",
+      "claim_class": "war_story",
+      "span_hint": "section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The security team discovered this during a compliance audit, not during development.",
+      "suggested_rewrite": "This kind of misconfiguration is often discovered late, during security reviews or incident response, rather than during initial development.",
+      "lesson_point_url": null,
+      "rationale": "This is another uncited event-specific detail from the same anecdote."
+    },
+    {
+      "claim_id": "C003",
+      "claim_text": "Remediation required rewriting IAM policies for 60 microservices over three months.",
+      "claim_class": "war_story",
+      "span_hint": "section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The remediation involved rewriting IAM policies for 60 microservices and took three months.",
+      "suggested_rewrite": "Remediation can require a broad IAM cleanup across many services.",
+      "lesson_point_url": null,
+      "rationale": "The precise service count and duration are uncited quantitative details from an unattributed anecdote."
+    },
+    {
+      "claim_id": "C004",
+      "claim_text": "Without pod-level identity, pods can inherit node IAM permissions through IMDS, expanding compromise impact beyond the intended workload.",
+      "claim_class": "security_claim",
+      "span_hint": "section: The Problem: Node-Level IAM Is Dangerous",
+      "disposition": "supported",
+      "source_ids": [
+        "S002",
+        "S008"
+      ],
+      "proposed_url": "https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "AWS documents that if IMDS is not restricted, pods can access the node IAM role and may gain credentials associated with roles on the same node."
+    },
+    {
+      "claim_id": "C006",
+      "claim_text": "IRSA uses an EKS-exposed OIDC provider, a role bound to a Kubernetes service account, and SDK web-identity credentials.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: IRSA: IAM Roles for Service Accounts",
+      "disposition": "supported",
+      "source_ids": [
+        "S001",
+        "S003"
+      ],
+      "proposed_url": "https://docs.aws.amazon.com/eks/latest/eksctl/iamserviceaccounts.html",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "AWS and eksctl docs explicitly describe IRSA as OIDC-based and show the injected `AWS_ROLE_ARN` and `AWS_WEB_IDENTITY_TOKEN_FILE` flow."
+    },
+    {
+      "claim_id": "C007",
+      "claim_text": "IRSA roles are cluster-specific because they reference a cluster-specific IAM OIDC provider and service account annotation.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: IRSA Pain Points",
+      "disposition": "supported",
+      "source_ids": [
+        "S003",
+        "S008"
+      ],
+      "proposed_url": "https://docs.aws.amazon.com/eks/latest/eksctl/iamserviceaccounts.html",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "AWS docs say IAM roles must reference the IAM OIDC provider specific to a given cluster, while best-practices docs contrast Pod Identity as not requiring per-cluster IDP setup."
+    },
+    {
+      "claim_id": "C008",
+      "claim_text": "IRSA always requires manual thumbprint updates when certificates rotate.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: IRSA Pain Points",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S013"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "3. **Thumbprint rotation**: The OIDC provider's TLS certificate thumbprint must be updated when certificates rotate",
+      "suggested_rewrite": "3. **Thumbprint handling**: If you manually configure or pin an OIDC thumbprint, certificate changes can require updating it; if you omit the thumbprint at creation, IAM can retrieve it for you.",
+      "lesson_point_url": null,
+      "rationale": "AWS IAM docs say supplying a thumbprint is optional for CLI/API creation and IAM can retrieve it automatically, so the absolute wording is too strong."
+    },
+    {
+      "claim_id": "C009",
+      "claim_text": "IRSA cross-account access requires OIDC provider federation in the target account.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: IRSA Pain Points",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S009"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "5. **Cross-account complexity**: Setting up IRSA across accounts requires OIDC provider federation in the target account",
+      "suggested_rewrite": "5. **Cross-account complexity**: IRSA cross-account access can use either target-account OIDC federation or chained `AssumeRole` operations, both of which add setup complexity.",
+      "lesson_point_url": null,
+      "rationale": "AWS documents two IRSA cross-account patterns, not only target-account OIDC federation."
+    },
+    {
+      "claim_id": "C010",
+      "claim_text": "EKS Pod Identity is an EKS-native approach managed through EKS APIs and it does not require an OIDC provider.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: EKS Pod Identity: The Modern Approach",
+      "disposition": "supported",
+      "source_ids": [
+        "S004",
+        "S005"
+      ],
+      "proposed_url": "https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "AWS launch and user-guide pages state that Pod Identity simplifies configuration through EKS APIs and does not use OIDC identity providers."
+    },
+    {
+      "claim_id": "C011",
+      "claim_text": "Pod Identity trust policies use the `pods.eks.amazonaws.com` service principal and can be reused across clusters without per-cluster trust-policy edits.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Setting Up Pod Identity",
+      "disposition": "supported",
+      "source_ids": [
+        "S005",
+        "S006"
+      ],
+      "proposed_url": "https://docs.aws.amazon.com/eks/latest/userguide/pod-id-role.html",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "AWS docs show the required trust principal and explicitly describe the reuse benefit across multiple clusters."
+    },
+    {
+      "claim_id": "C012",
+      "claim_text": "The comparison table states Pod Identity is supported on Kubernetes 1.24+.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: IRSA vs Pod Identity: Complete Comparison",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S005"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| **Kubernetes version** | 1.14+ | 1.24+ |",
+      "suggested_rewrite": "| **Kubernetes version** | EKS versions that meet the documented IRSA requirements | Current EKS versions that meet the documented Pod Identity platform/version requirements |",
+      "lesson_point_url": null,
+      "rationale": "Current AWS docs describe Pod Identity support in terms of documented cluster/platform prerequisites rather than a simple `1.24+` rule."
+    },
+    {
+      "claim_id": "C013",
+      "claim_text": "AWS recommends EKS Pod Identity over IRSA for most EKS workloads unless there is a specific IRSA use case.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: When to Still Use IRSA",
+      "disposition": "supported",
+      "source_ids": [
+        "S008"
+      ],
+      "proposed_url": "https://docs.aws.amazon.com/eks/latest/best-practices/identity-and-access-management.html",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "AWS best-practices guidance explicitly recommends Pod Identity unless you have specific use cases for IRSA."
+    },
+    {
+      "claim_id": "C014",
+      "claim_text": "IRSA is still necessary for EKS clusters below Kubernetes 1.24.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: When to Still Use IRSA",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S005"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "- EKS clusters running Kubernetes versions below 1.24",
+      "suggested_rewrite": "- EKS environments that do not meet the current EKS Pod Identity platform/version prerequisites",
+      "lesson_point_url": null,
+      "rationale": "The fixed `below 1.24` threshold is not how the current EKS Pod Identity documentation defines support."
+    },
+    {
+      "claim_id": "C016",
+      "claim_text": "EKS Pod Identity supports cross-account access through role chaining.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Cross-Account Access",
+      "disposition": "supported",
+      "source_ids": [
+        "S010"
+      ],
+      "proposed_url": "https://docs.aws.amazon.com/eks/latest/userguide/pod-id-assign-target-role.html",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "AWS now documents Pod Identity cross-account access explicitly as role chaining with a Pod Identity role and a target IAM role."
+    },
+    {
+      "claim_id": "C017",
+      "claim_text": "Projected IRSA service-account tokens rotate when older than 80% of TTL or after 24 hours by default.",
+      "claim_class": "statistic",
+      "span_hint": "section: Troubleshooting STS Errors / ExpiredTokenException",
+      "disposition": "supported",
+      "source_ids": [
+        "S011"
+      ],
+      "proposed_url": "https://docs.aws.amazon.com/eks/latest/userguide/pod-configuration.html",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The EKS service-account configuration docs give the default refresh behavior and the 24-hour value."
+    },
+    {
+      "claim_id": "C018",
+      "claim_text": "If both IRSA and Pod Identity are configured for the same service account, Pod Identity automatically takes precedence.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Migration: IRSA to Pod Identity",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S007",
+        "S014"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "If both IRSA annotation and Pod Identity association exist for the same service account, Pod Identity takes precedence.",
+      "suggested_rewrite": "If you create a Pod Identity association before removing older credentials, workloads may continue using whichever credential source appears earlier in the SDK credential chain until you remove the older configuration.",
+      "lesson_point_url": null,
+      "rationale": "AWS docs say credentials earlier in the provider chain continue to be used, so an unconditional precedence claim is too strong."
+    },
+    {
+      "claim_id": "C020",
+      "claim_text": "The Pod Identity Agent runs as a DaemonSet on cluster nodes and uses the link-local address `169.254.170.23` on ports 80 and 2703.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Did You Know? item 2",
+      "disposition": "supported",
+      "source_ids": [
+        "S005"
+      ],
+      "proposed_url": "https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The EKS Pod Identity user guide gives the DaemonSet requirement and the specific link-local address and ports."
+    },
+    {
+      "claim_id": "C021",
+      "claim_text": "Before IRSA, `kiam` and `kube2iam` were the only pod-IAM options and iptables race conditions could cause pods to receive the wrong role.",
+      "claim_class": "security_claim",
+      "span_hint": "section: Did You Know? item 3",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S001"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "3. Before IRSA existed (2017-2019), the community tool `kiam` and later `kube2iam` were the only options for pod-level IAM. They worked by intercepting metadata requests using iptables rules and a node-level daemon. These tools were notoriously fragile -- iptables race conditions could cause pods to receive the wrong role's credentials. IRSA eliminated this entire class of bugs by using projected service account tokens instead of metadata interception.",
+      "suggested_rewrite": "3. Before IRSA, teams often used tools such as `kiam` or `kube2iam` that intercepted instance-metadata requests at the node layer; IRSA replaced that pattern with projected service account tokens and `AssumeRoleWithWebIdentity`.",
+      "lesson_point_url": null,
+      "rationale": "AWS documents the historical existence and interception approach of these tools, but the exclusivity and race-condition assertions are too specific for the available primary sources."
+    },
+    {
+      "claim_id": "C022",
+      "claim_text": "Deleting a Pod Identity association leaves existing credentials valid for typically about an hour and does not immediately revoke access.",
+      "claim_class": "security_claim",
+      "span_hint": "section: Did You Know? item 4",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S012"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "4. When you delete a Pod Identity association, existing pods keep their current credentials until those credentials expire (typically within an hour). New credential requests will fail immediately. This gives you a grace period during migrations, but it also means that removing an association does not instantly revoke access -- you must also restart the pods if immediate revocation is required.",
+      "suggested_rewrite": "4. When you delete a Pod Identity association, previously issued temporary credentials can remain valid until session expiry, so removing an association does not instantly revoke access. If you need immediate revocation, also terminate or restart the affected pods and revoke the IAM session.",
+      "lesson_point_url": null,
+      "rationale": "AWS CLI docs support the session-expiry caveat but do not support the hard `typically within an hour` timing claim."
+    },
+    {
+      "claim_id": "C023",
+      "claim_text": "Pod Identity trust policies require both `sts:AssumeRole` and `sts:TagSession`.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Common Mistakes",
+      "disposition": "supported",
+      "source_ids": [
+        "S006"
+      ],
+      "proposed_url": "https://docs.aws.amazon.com/eks/latest/userguide/pod-id-role.html",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "AWS's required trust-policy example for Pod Identity includes both actions and explains the role of `TagSession`."
+    },
+    {
+      "claim_id": "C024",
+      "claim_text": "The SDK-version guidance in the Common Mistakes table gives current minimum versions such as Boto3 1.24+ for Pod Identity.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Common Mistakes",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S014"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| **Using old AWS SDK that does not support IRSA/Pod Identity** | Running applications with SDK versions from before 2019 that do not understand web identity tokens. | Update to AWS SDK v2 (Go 1.17+), Boto3 1.24+, Java SDK v2.x, or Node.js SDK v3. All modern SDKs auto-detect both IRSA and Pod Identity. |",
+      "suggested_rewrite": "| **Using unsupported AWS SDK versions** | Older SDKs may not understand the credential providers used by IRSA or Pod Identity. | Update to SDK versions that AWS documents as supporting IRSA or Pod Identity; current Pod Identity minimums are listed in the EKS user guide. |",
+      "lesson_point_url": null,
+      "rationale": "AWS's current Pod Identity compatibility page lists higher minimum versions, including Boto3 1.34.41."
+    },
+    {
+      "claim_id": "C025",
+      "claim_text": "Pod Identity does not work on Fargate because it depends on a node-level DaemonSet agent, so IRSA is the viable EKS option there.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Common Mistakes",
+      "disposition": "supported",
+      "source_ids": [
+        "S005"
+      ],
+      "proposed_url": "https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "AWS docs say Pod Identity requires the agent DaemonSet and explicitly state that Fargate pods are not supported."
+    },
+    {
+      "claim_id": "C026",
+      "claim_text": "AWS automatically manages thumbprints for EKS OIDC providers.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Common Mistakes",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S013"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| **OIDC thumbprint not updated after certificate rotation** | The OIDC provider's TLS certificate changes and the thumbprint becomes stale. | AWS now automatically manages the thumbprint for EKS OIDC providers. If you created the provider manually, update the thumbprint using the AWS CLI. |",
+      "suggested_rewrite": "| **OIDC thumbprint handling misunderstood** | Manually supplied thumbprints can become stale if the provider certificate chain changes. | When you create an IAM OIDC provider by CLI or API, supplying a thumbprint is optional; if you manually manage thumbprints, review and update them when required. |",
+      "lesson_point_url": null,
+      "rationale": "The IAM documentation says thumbprints are optional at creation and can be retrieved by IAM, but it does not support the blanket claim that AWS now manages them for all EKS OIDC providers."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html",
+      "title": "Learn how EKS Pod Identity grants pods access to AWS services",
+      "tier": "vendor",
+      "why_relevant": "This is the main AWS user-guide page for Pod Identity architecture, limitations, and setup."
+    },
+    {
+      "url": "https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html",
+      "title": "IAM roles for service accounts",
+      "tier": "vendor",
+      "why_relevant": "This is the canonical AWS user-guide page for IRSA behavior, benefits, and security considerations."
+    },
+    {
+      "url": "https://docs.aws.amazon.com/eks/latest/best-practices/identity-and-access-management.html",
+      "title": "Amazon EKS IAM best practices",
+      "tier": "vendor",
+      "why_relevant": "This page contains AWS's current recommendation on choosing Pod Identity versus IRSA and operational guidance on quotas, IMDS, and migration concerns."
+    }
+  ],
+  "notes": "Source map: S001=https://aws.amazon.com/blogs/opensource/introducing-fine-grained-iam-roles-service-accounts/; S002=https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html; S003=https://docs.aws.amazon.com/eks/latest/eksctl/iamserviceaccounts.html; S004=https://aws.amazon.com/about-aws/whats-new/2023/11/amazon-eks-pod-identity/; S005=https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html; S006=https://docs.aws.amazon.com/eks/latest/userguide/pod-id-role.html; S007=https://docs.aws.amazon.com/eks/latest/userguide/pod-id-how-it-works.html; S008=https://docs.aws.amazon.com/eks/latest/best-practices/identity-and-access-management.html; S009=https://docs.aws.amazon.com/eks/latest/userguide/cross-account-access.html; S010=https://docs.aws.amazon.com/eks/latest/userguide/pod-id-assign-target-role.html; S011=https://docs.aws.amazon.com/eks/latest/userguide/pod-configuration.html; S012=https://docs.aws.amazon.com/cli/latest/reference/eks/delete-pod-identity-association.html; S013=https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_create_oidc_verify-thumbprint.html; S014=https://docs.aws.amazon.com/eks/latest/userguide/pod-id-minimum-sdk.html. Code blocks, quiz answers, diagrams, and exercise steps were intentionally excluded except where a table row itself contained a factual product/version claim.",
+  "_schema_issues": [],
+  "rejected_urls": []
+}

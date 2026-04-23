@@ -19,9 +19,9 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In January 2024, a media streaming company stored 4.2 petabytes of video content in Amazon S3. Their transcoding pipeline ran on EKS -- 60 pods processing uploaded videos into multiple formats. The architecture worked, but their S3 costs were $127,000 per month. A junior engineer noticed that 78% of the data had not been accessed in over 90 days. The team implemented S3 Lifecycle policies, moving cold content to S3 Glacier Instant Retrieval. Monthly costs dropped to $41,000 -- a $86,000/month saving from a 15-line configuration change.
+A common object-storage cost win is discovering that most stored data is rarely read and then using lifecycle rules to move that cold data into cheaper tiers, which can cut monthly storage spend substantially.
 
-In the same cluster, the application team was generating pre-signed URLs for video playback. A misconfiguration set the URL expiration to 30 days instead of 4 hours. A security audit discovered that shared URLs were being forwarded and reused across the internet, effectively giving unauthenticated users perpetual access to premium content. The fix took five minutes; the brand damage took months to recover from.
+Overly long-lived pre-signed URLs can turn a temporary sharing mechanism into a serious data-exposure problem if links are forwarded beyond the intended audience.
 
 Object storage is deceptively simple -- "just upload a file." But from Kubernetes, the integration patterns are rich and the pitfalls are expensive. This module teaches you how to access S3, GCS, and Azure Blob from pods using workload identity, CSI drivers for filesystem-style access, pre-signed URLs for secure client-side access, lifecycle policies for cost optimization, cross-region replication for disaster recovery, and bucket security hardening.
 
@@ -255,7 +255,7 @@ spec:
 | File locking | Not supported | Not supported | Not supported |
 | Best for | Data pipelines, ML training data | Data analytics | Batch processing |
 
-**Critical warning**: Object storage CSI mounts are NOT suitable for databases, caches, or any workload requiring random I/O, atomic operations, or POSIX compliance. Use them for read-heavy data pipelines and write-once-read-many workloads.
+**Critical warning**: Object storage CSI mounts are [NOT suitable for databases, caches, or any workload requiring random I/O, atomic operations, or POSIX compliance](https://docs.cloud.google.com/storage/docs/cloud-storage-fuse/overview). Use them for read-heavy data pipelines and write-once-read-many workloads.
 
 > **Stop and think**: Your team is deploying a new PostgreSQL database to Kubernetes. A junior engineer suggests using the S3 CSI driver to store the data files "so we never run out of disk space." What is the technical reason you must reject this proposal, and what should you use instead?
 
@@ -392,16 +392,16 @@ def generate_upload_url(filename, content_type):
 
 ## Lifecycle Policies for Cost Optimization
 
-Object storage costs are dominated by storage volume, not access. Moving infrequently accessed data to cheaper tiers can save 60-90%.
+For many object-storage workloads, the largest recurring charge is storing data over time, and moving rarely accessed data into colder tiers can reduce storage costs substantially.
 
 ### Storage Tier Comparison
 
 | Tier | AWS | GCP | Azure | Cost (per GB/month) | Use Case |
 |------|-----|-----|-------|-------------------|----------|
-| Hot | S3 Standard | Standard | Hot | $0.023 | Frequently accessed |
-| Infrequent | S3 Standard-IA | Nearline | Cool | $0.0125 | Monthly access |
-| Archive | S3 Glacier IR | Coldline | Cold | $0.004 | Quarterly access |
-| Deep archive | S3 Glacier Deep | Archive | Archive | $0.00099 | Yearly/compliance |
+| Hot | S3 Standard | Standard | Hot | See current vendor pricing | Frequently accessed |
+| Infrequent | S3 Standard-IA | Nearline | Cool | See current vendor pricing | Monthly access |
+| Archive | S3 Glacier IR | Coldline | Cold | See current vendor pricing | Quarterly access |
+| Deep archive | S3 Glacier Deep | Archive | Archive | See current vendor pricing | Yearly/compliance |
 
 > **Stop and think**: You configured a lifecycle rule to move all objects to Glacier Deep Archive after 90 days. A week later, your cloud bill spikes unexpectedly. What could cause this? (Hint: consider the cost of the transition operation itself if your bucket contains millions of tiny objects).
 
@@ -484,7 +484,7 @@ gcloud storage buckets update gs://video-content-prod \
 
 ### Incomplete Multipart Upload Cleanup
 
-One of the most overlooked cost leaks: incomplete multipart uploads. When a large upload fails midway, the partial parts sit in S3 forever, incurring storage charges. The lifecycle rule `AbortIncompleteMultipartUpload` cleans these up automatically.
+One of the most overlooked cost leaks: incomplete multipart uploads. When a large upload fails midway, [the partial parts sit in S3 forever, incurring storage charges. The lifecycle rule `AbortIncompleteMultipartUpload` cleans these up automatically.](https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpu-abort-incomplete-mpu-lifecycle-config.html)
 
 ```bash
 # Check for incomplete multipart uploads
@@ -497,7 +497,7 @@ aws s3api list-multipart-uploads --bucket video-content-prod
 
 ## Cross-Region Replication
 
-For disaster recovery or serving content from multiple regions, cross-region replication copies objects automatically.
+For disaster recovery or serving content from multiple regions, [cross-region replication copies objects automatically](https://aws.amazon.com/s3/features/replication/).
 
 ### AWS S3 Cross-Region Replication
 
@@ -566,7 +566,7 @@ data:
   BUCKET_REGION: "us-east-1"
 ```
 
-For AWS, S3 Multi-Region Access Points provide a single endpoint that automatically routes to the nearest bucket:
+For AWS, [S3 Multi-Region Access Points provide a single endpoint that automatically routes to the nearest bucket](https://docs.aws.amazon.com/AmazonS3/latest/userguide/MultiRegionAccessPointRequestRouting.html):
 
 ```bash
 aws s3control create-multi-region-access-point \
@@ -652,13 +652,13 @@ aws s3api put-bucket-policy --bucket video-content-prod \
 
 ## Did You Know?
 
-1. **Amazon S3 stores over 350 trillion objects** as of 2025 and handles tens of millions of requests per second. S3 was designed to provide 99.999999999% (11 nines) durability, meaning you would statistically lose one object per 10 million years if you stored 10 million objects.
+1. Amazon S3 operates at enormous scale and is designed for 99.999999999% durability (11 nines).
 
-2. **Incomplete multipart uploads are a hidden cost bomb.** A 2023 study by Vantage found that 15% of companies surveyed had over $10,000/month in charges from orphaned multipart upload parts. Most had no idea these partial uploads existed until they added lifecycle rules to clean them up.
+2. Incomplete multipart uploads can become a hidden storage-cost problem because failed uploads leave billable parts behind until they are completed or aborted.
 
-3. **GCS FUSE can cache frequently-read files on local SSD**, reducing read latency from ~50ms (network) to ~1ms (local). This makes it practical for ML training workloads that read the same dataset files thousands of times per epoch. The cache is configured via annotations on the pod.
+3. GCS FUSE can cache frequently read files locally, which can materially reduce repeat-read latency for ML training workloads that reuse the same dataset files.
 
-4. **Azure Blob Storage supports "immutable storage" with legal hold and time-based retention** that even a subscription owner cannot override. This is used by financial institutions for SEC 17a-4 compliance, where records must be stored in a non-erasable, non-rewritable format for specified retention periods.
+4. Azure Blob Storage supports immutable storage with legal holds and time-based retention policies for WORM-style retention, and Microsoft documents it for regulated scenarios such as SEC 17a-4(f).
 
 ---
 
@@ -1032,3 +1032,17 @@ kind delete cluster --name storage-lab
 ---
 
 **Next Module**: [Module 9.5: Advanced Caching Services (ElastiCache / Memorystore)](../module-9.5-caching/) -- Learn Redis and Memcached architectures for Kubernetes workloads, caching strategies, cache stampede prevention, and using Envoy as a sidecar cache.
+
+## Sources
+
+- [aws.amazon.com: pricing](https://aws.amazon.com/s3/pricing/) — General lesson point for an illustrative rewrite.
+- [docs.cloud.google.com: overview](https://docs.cloud.google.com/storage/docs/cloud-storage-fuse/overview) — Google's Cloud Storage FUSE documentation explicitly says it is not POSIX compliant and should not back a database.
+- [docs.aws.amazon.com: mpu abort incomplete mpu lifecycle config.html](https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpu-abort-incomplete-mpu-lifecycle-config.html) — AWS documents both the billing behavior and the `AbortIncompleteMultipartUpload` lifecycle action.
+- [aws.amazon.com: replication](https://aws.amazon.com/s3/features/replication/) — AWS's S3 Replication overview explicitly describes automatic replication between buckets and across Regions.
+- [docs.aws.amazon.com: replication requirements.html](https://docs.aws.amazon.com/AmazonS3/latest/userguide/replication-requirements.html) — AWS states that both source and destination buckets must have versioning enabled for replication.
+- [docs.aws.amazon.com: replication time control.html](https://docs.aws.amazon.com/AmazonS3/latest/userguide/replication-time-control.html) — AWS documents that S3 RTC replicates most objects in seconds and 99.9% within 15 minutes.
+- [docs.aws.amazon.com: MultiRegionAccessPointRequestRouting.html](https://docs.aws.amazon.com/AmazonS3/latest/userguide/MultiRegionAccessPointRequestRouting.html) — AWS documents that Multi-Region Access Points route requests to the closest-proximity bucket.
+- [aws.amazon.com: block public access](https://aws.amazon.com/s3/features/block-public-access/) — AWS's Block Public Access documentation covers both the scopes and the default-on behavior for new buckets.
+- [AWS Presigned URL Best Practices](https://docs.aws.amazon.com/prescriptive-guidance/latest/presigned-url-best-practices/introduction.html) — Covers security guardrails and monitoring patterns for presigned URL workflows.
+- [Cloud Storage FUSE CSI Driver for GKE](https://docs.cloud.google.com/kubernetes-engine/docs/concepts/cloud-storage-fuse-csi-driver) — Explains how the GKE CSI integration works and where its filesystem semantics differ from traditional storage.
+- [Azure Blob Immutable Storage Overview](https://learn.microsoft.com/en-us/azure/storage/blobs/immutable-storage-overview) — Explains legal holds, time-based retention, and compliance-oriented WORM behavior.

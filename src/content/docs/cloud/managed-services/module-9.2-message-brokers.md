@@ -19,9 +19,9 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In March 2023, a logistics company processing 2 million package-tracking events per day ran RabbitMQ as a StatefulSet inside their GKE cluster. The system worked flawlessly for eight months. Then Black Friday arrived. Event volume spiked to 11 million per day. RabbitMQ's memory alarm triggered, blocking all publishers. The three-node cluster entered a split-brain state during a simultaneous node reschedule. Queue mirroring fell behind, and 340,000 tracking events were lost. Customers could not track packages for six hours. The company's SLA penalties totaled $1.2 million.
+Large traffic spikes can expose operational limits in a self-hosted broker cluster, including backpressure, node-failure recovery problems, and message-loss risk during disruptions.
 
-The postmortem conclusion was blunt: "We were operating a distributed messaging system that required deep RabbitMQ expertise we did not have. We should have used a managed service." They migrated to Amazon SQS within two weeks. SQS does not have memory alarms, split-brain scenarios, or queue mirroring to configure. It scales to any volume without intervention.
+The operational lesson is that self-hosting a distributed broker requires expertise many teams do not have. If you do not need broker-specific features, a managed queueing service can remove whole classes of broker-cluster failure modes.
 
 This module teaches you how to integrate managed message brokers -- SQS/SNS, Google Pub/Sub, and Azure Service Bus -- with Kubernetes workloads. You will learn how to use KEDA to autoscale consumers based on queue depth, handle dead-letter queues, design for exactly-once versus at-least-once delivery, and manage consumer groups across multiple Kubernetes Deployments.
 
@@ -78,12 +78,12 @@ def process_payment(message):
 | Feature | AWS SQS/SNS | Google Pub/Sub | Azure Service Bus |
 |---------|-------------|----------------|-------------------|
 | Queue model | SQS = queue, SNS = topic | Topic + Subscription | Queue or Topic + Subscription |
-| Max message size | 256 KB (SQS), 256 KB (SNS) | 10 MB | 256 KB (Standard), 100 MB (Premium) |
-| Retention | 1 min - 14 days | 7 days (configurable to 31) | Up to 14 days |
-| Ordering | FIFO queues (strict per group) | Ordering keys | Sessions (strict per session) |
-| Throughput | Nearly unlimited (Standard) | Unlimited | Depends on tier (Premium: 1000+ msg/s per unit) |
-| Dead-letter | Built-in (maxReceiveCount) | Built-in (maxDeliveryAttempts) | Built-in (maxDeliveryCount) |
-| Price per million | ~$0.40 (Standard) | ~$0.40 | ~$0.05 (Basic), varies by tier |
+| Max message size | [256 KB (SQS), 256 KB (SNS)](https://docs.aws.amazon.com/sns/latest/dg/example_sns_PublishLargeMessage_section.html) | [10 MB](https://cloud.google.com/pubsub/quotas) | [256 KB (Standard), 100 MB (Premium)](https://learn.microsoft.com/en-us/azure/service-bus-messaging/service-bus-quotas) |
+| Retention | 1 min - 14 days | 7 days by default; topic retention up to 31 days | Tier- and entity-dependent; do not assume a universal 14-day cap |
+| Ordering | [FIFO queues (strict per group)](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/FIFO-queues-understanding-logic.html) | [Ordering keys](https://cloud.google.com/pubsub/docs/ordering) | [Sessions (strict per session)](https://learn.microsoft.com/en-us/azure/service-bus-messaging/message-sessions) |
+| Throughput | Auto-scales for high request volume | High throughput, subject to quotas and configuration | Depends on tier and workload characteristics |
+| Dead-letter | [Built-in (maxReceiveCount)](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html) | [Built-in (maxDeliveryAttempts)](https://cloud.google.com/pubsub/docs/dead-letter-topics) | [Built-in (maxDeliveryCount)](https://learn.microsoft.com/en-us/azure/service-bus-messaging/service-bus-dead-letter-queues) |
+| Price model | Per-request pricing; region and queue type matter | Throughput and storage pricing based on bytes and retention | Tier- and operation-based pricing |
 
 ### Managed vs. Self-Hosted Brokers
 
@@ -228,7 +228,7 @@ spec:
 
 ### IAM for Queue Access (IRSA / Workload Identity)
 
-Pods should never use static credentials to access message brokers. Use cloud-native workload identity.
+Pods should avoid using static credentials to access message brokers whenever cloud-native workload identity is available. Use cloud-native workload identity.
 
 ```yaml
 # AWS: IRSA ServiceAccount
@@ -372,7 +372,7 @@ spec:
 
 ### Scale-to-Zero Considerations
 
-KEDA can scale to zero (`minReplicaCount: 0`), which saves costs when queues are empty. But there is a latency cost: when the first message arrives, KEDA must detect it (on the next polling interval), create a pod, wait for the image pull, and wait for container startup. This can take 30-90 seconds.
+KEDA can scale to zero (`minReplicaCount: 0`), which saves costs when queues are empty. But there is a latency cost: when the first message arrives, KEDA must detect it, scale the workload up, and wait for the application to become ready before processing begins.
 
 **Use scale-to-zero when:**
 - Processing is not latency-sensitive (batch jobs, analytics)
@@ -385,13 +385,13 @@ KEDA can scale to zero (`minReplicaCount: 0`), which saves costs when queues are
 - The queue always has some baseline traffic
 
 > **Stop and think**: You configure a KEDA ScaledObject for a latency-sensitive fraud detection API queue with `minReplicaCount: 0`. During a low-traffic night, the queue empties and pods scale to zero. Suddenly, a high-priority transaction is flagged for review and enters the queue. What is the customer's experience for this specific transaction?
-> *Answer*: The transaction will likely experience a 30-90 second delay. KEDA must first poll the queue, detect the message, scale the Deployment from 0 to 1, and Kubernetes must schedule the pod, pull the image, and start the application before the message is processed. For latency-sensitive paths, always keep `minReplicaCount: 1`.
+> *Answer*: The transaction will likely experience noticeable cold-start delay. KEDA must first detect the message, scale the Deployment from 0 to 1, and Kubernetes must start the application before the message is processed. For latency-sensitive paths, usually keep `minReplicaCount: 1`.
 
 ---
 
 ## Dead-Letter Queues (DLQs)
 
-A DLQ captures messages that fail processing repeatedly. Without a DLQ, poison messages -- messages that always fail -- block the queue forever as they are received, fail, become visible again, and repeat.
+A DLQ captures messages that fail processing repeatedly. Without a DLQ, poison messages -- messages that repeatedly fail -- can block queue progress as they are received, fail, become visible again, and repeat.
 
 ### DLQ Architecture
 
@@ -448,7 +448,7 @@ aws sqs start-message-move-task \
 ```
 
 > **Stop and think**: A bug in your order-processing code causes 5,000 valid orders to fail and drop into the DLQ over a weekend. On Monday, you deploy a hotfix to the `order-processor` Deployment. If you simply use a script to immediately move all 5,000 messages from the DLQ back into the main `order-processing` queue at once, what risk do you introduce to your backend systems?
-> *Answer*: Pushing 5,000 messages back into the main queue instantly could trigger KEDA to rapidly scale up your consumer pods to their maximum limit. This sudden "thundering herd" of concurrent consumers could overwhelm downstream systems, like exhausting the connections on your relational database or hitting rate limits on third-party APIs. When redriving large DLQs, always throttle the redrive rate or temporarily lower the HPA max replicas to protect downstream dependencies.
+> *Answer*: Pushing 5,000 messages back into the main queue instantly could trigger KEDA to rapidly scale up your consumer pods to their maximum limit. This sudden "thundering herd" of concurrent consumers could overwhelm downstream systems, like exhausting the connections on your relational database or hitting rate limits on third-party APIs. When redriving large DLQs, usually throttle the redrive rate or temporarily lower the HPA max replicas to protect downstream dependencies.
 
 ---
 
@@ -474,7 +474,7 @@ graph TD
     Q2 --> P6[Pod<br>analytics]
 ```
 
-Each service gets its own subscription/queue. Messages fan out to all subscriptions, and within each subscription, competing consumers share the load.
+[Each service gets its own subscription/queue](https://cloud.google.com/pubsub/docs/subscription-overview). Messages fan out to all subscriptions, and within each subscription, competing consumers share the load.
 
 ```yaml
 # Producer publishes to SNS topic from within a pod
@@ -532,7 +532,7 @@ sequenceDiagram
 
 ### Setting the Right Timeout
 
-The visibility timeout must be longer than your maximum processing time. But not too long -- if a consumer crashes, the message is stuck invisible until the timeout expires.
+[The visibility timeout must be longer than your maximum processing time.](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html) But not too long -- if a consumer crashes, the message is stuck invisible until the timeout expires.
 
 ```python
 # Good pattern: extend visibility during long processing
@@ -579,13 +579,13 @@ while True:
 
 ## Did You Know?
 
-1. **Amazon SQS was one of the first AWS services ever launched** -- it went live in July 2004, two years before EC2 and S3. It has been processing messages for over 20 years and is one of the most battle-tested distributed systems in existence.
+1. **Amazon SQS is one of AWS's earliest services** -- it has been around since the early days of AWS and remains widely used for decoupled messaging workloads.
 
-2. **Google Pub/Sub can handle over 500 million messages per second** across its global infrastructure. When YouTube processes upload events, comment notifications, and recommendation updates, Pub/Sub is the backbone carrying those events between services.
+2. **Google Pub/Sub is designed for very high-scale messaging** across Google's infrastructure and is used for event-driven communication patterns where producers and consumers need to stay decoupled.
 
-3. **KEDA has over 60 built-in scalers** as of 2025 -- not just cloud queues but also Kafka, RabbitMQ, PostgreSQL query results, Prometheus metrics, Cron schedules, and even GitHub runner queues. It has become the de facto standard for event-driven autoscaling in Kubernetes.
+3. **KEDA supports many event sources beyond cloud queues** -- message brokers, databases, metrics backends, schedules, and CI/CD systems can all drive autoscaling.
 
-4. **The "visibility timeout" concept in SQS was inspired by the "lease" pattern** in distributed systems, where a resource is temporarily granted to a consumer with an expiration. This same pattern appears in Kubernetes itself -- node leases, leader election leases, and etcd TTLs all use the same fundamental idea.
+4. **SQS visibility timeouts and distributed-system leases solve a similar coordination problem** -- a worker gets temporary exclusive access to a unit of work, and that access expires if it does not finish in time.
 
 ---
 
@@ -596,10 +596,10 @@ while True:
 | Setting visibility timeout shorter than processing time | Estimated processing time was optimistic | Measure P99 processing time and add 50% buffer; implement dynamic extension |
 | Not implementing idempotency in consumers | "At-least-once means delivered once, right?" | Use idempotency keys (message dedup ID or database unique constraints) |
 | Scaling KEDA on CPU instead of queue depth | HPA defaults are CPU-based | Use KEDA ScaledObject with queue-specific triggers |
-| Missing dead-letter queue configuration | DLQ feels like an edge case during development | Always create a DLQ and a monitoring/alerting consumer for it |
-| Using SQS Standard when FIFO is needed | Standard is the default and cheaper | Use FIFO queues with MessageGroupId for ordering-sensitive workloads |
+| Missing dead-letter queue configuration | DLQ feels like an edge case during development | Usually create a DLQ and a monitoring/alerting consumer for it |
+| Using SQS Standard when FIFO is needed | Standard is the default and cheaper | [Use FIFO queues with MessageGroupId for ordering-sensitive workloads](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/using-messagegroupid-property.html) |
 | Processing messages in the readiness probe thread | Trying to block traffic during processing | Keep health probes on a separate HTTP server from message processing |
-| Not setting `WaitTimeSeconds` (long polling) | Default is short polling (returns immediately) | Always set `WaitTimeSeconds: 20` for SQS to reduce empty responses and cost |
+| Not setting `WaitTimeSeconds` (long polling) | Default is short polling (returns immediately) | Usually set `WaitTimeSeconds: 20` for SQS to reduce empty responses and cost |
 | Deleting messages before processing completes | "Optimistic" deletion to avoid duplicates | Only delete/ack after successful processing and any downstream writes |
 
 ---
@@ -609,7 +609,7 @@ while True:
 <details>
 <summary>1. Your team is designing a payment processing service on Kubernetes that consumes messages from a broker. An engineer argues that the broker must be configured for "exactly-once" delivery so customers aren't double-charged. Why is relying on "at-least-once" delivery with an application-level idempotency key a safer and more resilient architectural choice?</summary>
 
-Exactly-once delivery requires complex coordination between the broker and the consumer, often introducing significant latency and fragility. In a Kubernetes environment, pods can crash, lose network connectivity, or be rescheduled at any moment, meaning network failures will inevitably disrupt exactly-once handshakes. At-least-once delivery ensures the message is guaranteed to arrive, keeping the broker fast and simple. By designing your application to be idempotent (e.g., checking a database for a processed transaction ID before charging), you guarantee correct outcomes even if the broker delivers the message multiple times or a pod restarts mid-process.
+Exactly-once delivery requires complex coordination between the broker and the consumer, often introducing significant latency and fragility. In a Kubernetes environment, pods can crash, lose network connectivity, or be rescheduled at any moment, meaning network failures will inevitably disrupt exactly-once handshakes. At-least-once delivery is designed to maximize the chance that a message is delivered, keeping the broker fast and simple. By designing your application to be idempotent (e.g., checking a database for a processed transaction ID before charging), you guarantee correct outcomes even if the broker delivers the message multiple times or a pod restarts mid-process.
 </details>
 
 <details>
@@ -633,7 +633,7 @@ If all 10 pods listen to a single SQS queue, they will act as competing consumer
 <details>
 <summary>5. A healthcare application uses KEDA to scale a patient alert processing service. The developers set `minReplicaCount: 0` to save compute costs at night when alerts are rare. When a critical heart-rate alert arrives at 3 AM, why might the response time be unacceptably slow?</summary>
 
-Because the service is scaled to zero, there are no running pods available to immediately process the incoming 3 AM alert. KEDA must first detect the message during its polling cycle, which introduces a slight delay. Then, it triggers a scale-up, requiring Kubernetes to schedule a new pod, pull the container image, and wait for the application to initialize and pass readiness probes. This cold-start sequence can take anywhere from 30 to 90 seconds, adding massive latency to a critical healthcare alert. For latency-sensitive workloads, always keep at least one replica running.
+Because the service is scaled to zero, there are no running pods available to immediately process the incoming 3 AM alert. KEDA must first detect the message during its polling cycle, which introduces a slight delay. Then, it triggers a scale-up, requiring Kubernetes to schedule a new pod, pull the container image, and wait for the application to initialize and pass readiness probes. This cold-start sequence can take anywhere from 30 to 90 seconds, adding massive latency to a critical healthcare alert. For latency-sensitive workloads, usually keep at least one replica running.
 </details>
 
 <details>
@@ -944,3 +944,20 @@ kind delete cluster --name event-lab
 ---
 
 **Next Module**: [Module 9.3: Serverless Interoperability (Lambda / Cloud Functions / Knative)](../module-9.3-serverless/) -- Learn when to use serverless alongside Kubernetes, how to trigger cloud functions from K8s events, and how Knative brings the serverless model directly into your cluster.
+
+## Sources
+
+- [docs.aws.amazon.com: example sns PublishLargeMessage section.html](https://docs.aws.amazon.com/sns/latest/dg/example_sns_PublishLargeMessage_section.html) — AWS documentation explicitly states that 256 KB is the maximum message size in both SNS and SQS.
+- [cloud.google.com: quotas](https://cloud.google.com/pubsub/quotas) — Google Cloud's quotas page directly lists a 10 MB message size limit for Pub/Sub.
+- [learn.microsoft.com: service bus quotas](https://learn.microsoft.com/en-us/azure/service-bus-messaging/service-bus-quotas) — Microsoft's Service Bus quotas page directly documents the tier-specific message-size limits.
+- [cloud.google.com: ordering](https://cloud.google.com/pubsub/docs/ordering) — Google Cloud's ordering documentation directly explains ordered delivery via ordering keys.
+- [learn.microsoft.com: message sessions](https://learn.microsoft.com/en-us/azure/service-bus-messaging/message-sessions) — Microsoft documents sessions as the way to achieve FIFO processing in Service Bus.
+- [docs.aws.amazon.com: FIFO queues understanding logic.html](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/FIFO-queues-understanding-logic.html) — AWS explicitly documents per-message-group strict ordering behavior for FIFO queues.
+- [docs.aws.amazon.com: sqs dead letter queues.html](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html) — AWS's DLQ documentation directly describes redrive policy and `maxReceiveCount`.
+- [cloud.google.com: dead letter topics](https://cloud.google.com/pubsub/docs/dead-letter-topics) — Google Cloud's dead-letter topic documentation directly describes `max_delivery_attempts` behavior.
+- [learn.microsoft.com: service bus dead letter queues](https://learn.microsoft.com/en-us/azure/service-bus-messaging/service-bus-dead-letter-queues) — Microsoft documents Service Bus DLQs and the role of maximum delivery count before dead-lettering.
+- [cloud.google.com: subscription overview](https://cloud.google.com/pubsub/docs/subscription-overview) — Google Cloud's subscription overview directly explains that subscriptions are independent streams from a topic and each receives the topic's messages.
+- [docs.aws.amazon.com: sqs visibility timeout.html](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html) — AWS's visibility-timeout documentation directly describes this redelivery behavior and the need to size or extend timeouts appropriately.
+- [docs.aws.amazon.com: using messagegroupid property.html](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/using-messagegroupid-property.html) — AWS directly documents that strict ordering requires FIFO queues and that `MessageGroupId` defines ordered groups.
+- [Azure Service Bus queues, topics, and subscriptions](https://learn.microsoft.com/en-us/azure/service-bus-messaging/service-bus-queues-topics-subscriptions) — It gives the cleanest vendor overview of queue vs pub/sub semantics in Azure Service Bus.
+- [KEDA upstream repository](https://github.com/kedacore/keda) — Use this as the allowlisted starting point for KEDA concepts while the primary docs host remains off-list.

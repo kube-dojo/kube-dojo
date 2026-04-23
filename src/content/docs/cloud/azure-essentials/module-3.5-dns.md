@@ -19,7 +19,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In October 2021, a global logistics company migrated their customer-facing portal from on-premises to Azure. They deployed the application across East US and West Europe regions for redundancy. On launch day, everything worked---until the East US deployment experienced a database connection pool exhaustion at peak hours. Instead of seamlessly routing users to the healthy West Europe deployment, all users saw errors. The problem was simple: they had configured Azure DNS with A records pointing directly to the East US public IP. There was no traffic routing layer to detect the failure and redirect traffic. Adding Azure Traffic Manager with health probes took 15 minutes to configure, but the 3-hour outage had already cost them their biggest customer---a shipping company that processed 40,000 packages per day through the portal. That single customer represented $2.4 million in annual revenue.
+A multi-region application can still fail hard if DNS points directly to one regional IP and there is no traffic-routing layer to detect failures and steer new users to a healthy region.
 
 DNS is the invisible infrastructure that underpins every internet interaction. When it works, nobody thinks about it. When it fails, nothing works. In Azure, DNS is not just about resolving names to IP addresses---it is a critical component of high availability, traffic routing, and hybrid cloud architecture. Azure DNS handles public-facing domain resolution, Private DNS Zones handle name resolution within your virtual networks, and Traffic Manager uses DNS-based routing to distribute traffic across regions and endpoints.
 
@@ -29,11 +29,11 @@ In this module, you will learn how Azure DNS zones work for both public and priv
 
 ## Azure DNS: Public Zones
 
-Azure DNS allows you to host your DNS zones on Azure's global anycast network of name servers. When you host your zone in Azure DNS, your DNS records are served from Microsoft's worldwide network of DNS servers, providing low latency and high availability.
+Azure DNS allows you to host your DNS zones on [Azure's global anycast network of name servers](https://learn.microsoft.com/en-us/azure/dns/dns-faq). When you host your zone in Azure DNS, your DNS records are served from Microsoft's worldwide network of DNS servers, providing low latency and high availability.
 
 ### How DNS Zones Work
 
-A DNS zone is a container for all the DNS records for a specific domain. When you create a zone for `example.com` in Azure DNS, Azure assigns four name servers (in the format `ns1-XX.azure-dns.com`, `ns2-XX.azure-dns.net`, `ns3-XX.azure-dns.org`, `ns4-XX.azure-dns.info`).
+A DNS zone is a container for all the DNS records for a specific domain. When you create a zone for `example.com` in Azure DNS, [Azure assigns four name servers](https://learn.microsoft.com/en-us/azure/dns/dns-delegate-domain-azure-dns) (in the format `ns1-XX.azure-dns.com`, `ns2-XX.azure-dns.net`, `ns3-XX.azure-dns.org`, `ns4-XX.azure-dns.info`).
 
 ```bash
 # Create a DNS zone
@@ -48,7 +48,7 @@ az network dns zone show \
   --query nameServers -o tsv
 ```
 
-After creating the zone, you must update your domain registrar's NS records to point to the Azure name servers. Until you do this, DNS queries for your domain will not reach Azure.
+After creating the zone, you must [update your domain registrar's NS records to point to the Azure name servers](https://learn.microsoft.com/en-us/azure/dns/dns-delegate-domain-azure-dns). Until you do this, DNS queries for your domain will not reach Azure.
 
 ### Common Record Types
 
@@ -97,7 +97,7 @@ az network dns record-set list \
 
 ### Alias Records
 
-Azure DNS supports **alias records**, which point directly to an Azure resource (like a Load Balancer, Traffic Manager profile, or CDN endpoint) instead of an IP address. The key advantage: when the resource's IP changes, the DNS record updates automatically.
+Azure DNS supports **alias records**, which [point directly to an Azure resource](https://learn.microsoft.com/en-us/azure/dns/dns-alias) (like a Load Balancer, Traffic Manager profile, or CDN endpoint) instead of an IP address. The key advantage: when the resource's IP changes, the DNS record updates automatically.
 
 ```bash
 # Create an alias record pointing to a Load Balancer public IP
@@ -129,7 +129,7 @@ flowchart TD
 
 ## Azure Private DNS Zones
 
-Private DNS Zones provide name resolution within your Virtual Networks without exposing records to the public internet. This is essential for internal service discovery---your web servers need to find your database by name (`db.internal.example.com`), not by memorizing IP addresses that change when you redeploy.
+Private DNS Zones [provide name resolution within your Virtual Networks without exposing records to the public internet](https://learn.microsoft.com/en-us/azure/dns/private-dns-privatednszone). This is essential for internal service discovery---your web servers need to find your database by name (`db.internal.example.com`), not by memorizing IP addresses that change when you redeploy.
 
 ### How Private DNS Zones Work
 
@@ -183,7 +183,7 @@ az network private-dns record-set list \
   --zone-name internal.example.com -o table
 ```
 
-**Auto-registration** is a powerful feature: when enabled on a VNet link, every VM created in that VNet automatically gets a DNS record in the private zone. When the VM is deleted, the record is automatically removed. This eliminates the need to manually manage internal DNS records.
+**Auto-registration** is a powerful feature: when enabled on a VNet link, [every VM created in that VNet automatically gets a DNS record in the private zone. When the VM is deleted, the record is automatically removed](https://learn.microsoft.com/en-us/azure/dns/private-dns-autoregistration). This eliminates the need to manually manage internal DNS records.
 
 > **Pause and predict**: You have a Private DNS Zone linked to a VNet with auto-registration enabled. You deploy a VM named `database-primary`. Later, an administrator logs into the VM's guest OS (Windows or Linux) and manually changes its IP address. What happens to the DNS record in the Private DNS Zone, and why?
 
@@ -225,13 +225,13 @@ az network private-endpoint dns-zone-group create \
   --zone-name blob
 ```
 
-After this setup, when a VM in hub-vnet resolves `yourstorage.blob.core.windows.net`, the response is the private IP of the private endpoint (e.g., 10.0.5.4) instead of the public IP. Traffic stays entirely within Azure's backbone.
+After this setup, when a VM in hub-vnet resolves `yourstorage.blob.core.windows.net`, [the response is the private IP of the private endpoint (e.g., 10.0.5.4) instead of the public IP](https://learn.microsoft.com/en-us/azure/private-link/private-endpoint-dns). [Traffic stays entirely within Azure's backbone](https://learn.microsoft.com/en-us/azure/private-link/private-link-overview).
 
 ---
 
 ## Azure Traffic Manager: DNS-Based Global Load Balancing
 
-Traffic Manager is a DNS-based traffic routing service that distributes traffic across global endpoints. It works at the DNS layer (Layer 7 of DNS, technically)---when a client resolves your domain, Traffic Manager returns the IP of the most appropriate endpoint based on the routing method you configure.
+[Traffic Manager is a DNS-based traffic routing service that distributes traffic across global endpoints](https://learn.microsoft.com/en-us/azure/traffic-manager/traffic-manager-overview). It works at the DNS layer (Layer 7 of DNS, technically)---when a client resolves your domain, Traffic Manager returns the IP of the most appropriate endpoint based on the routing method you configure.
 
 ### How Traffic Manager Works
 
@@ -248,9 +248,9 @@ sequenceDiagram
     Note over Client,EUS: Traffic Manager is NOT in the data path
 ```
 
-**Critical insight**: Traffic Manager is **not** a proxy or a load balancer. It only participates in the DNS resolution step. After that, the client connects directly to the endpoint. This means Traffic Manager cannot see HTTP headers, cannot terminate SSL, and cannot cache content. For those features, you need Azure Front Door.
+**Critical insight**: Traffic Manager is **not** a proxy or a load balancer. It only participates in the DNS resolution step. After that, [the client connects directly to the endpoint](https://learn.microsoft.com/en-us/azure/traffic-manager/traffic-manager-how-it-works). This means Traffic Manager cannot see HTTP headers, cannot terminate SSL, and cannot cache content. For those features, you need Azure Front Door.
 
-### Routing Methods
+### [Routing Methods](https://learn.microsoft.com/en-us/azure/traffic-manager/traffic-manager-routing-methods)
 
 | Method | How It Routes | Best For |
 | :--- | :--- | :--- |
@@ -342,13 +342,13 @@ az network traffic-manager endpoint create \
   --weight 10
 ```
 
-**War Story**: A retail company used Traffic Manager with Performance routing for their global storefront. During a product launch, their East US deployment became overloaded. Traffic Manager's health probes detected the degradation and automatically started routing new DNS queries to West Europe. The failover happened transparently---customers experienced a brief increase in latency (transatlantic vs same-region) but zero downtime. The engineering team had 45 minutes of breathing room to scale up East US before most users even noticed the region switch.
+**Scenario**: With DNS-based regional failover, new DNS queries can be steered toward a healthier region when probes detect an endpoint problem, which can reduce downtime while the primary region recovers.
 
 ---
 
 ## Azure Front Door: The Modern Alternative
 
-Azure Front Door is a global, scalable entry point for web applications. Unlike Traffic Manager (DNS only), Front Door operates at Layer 7 (HTTP/HTTPS) and sits in the data path. It acts as a reverse proxy, providing SSL termination, caching, WAF, and intelligent routing.
+Azure Front Door is a global, scalable entry point for web applications. Unlike Traffic Manager (DNS only), Front Door operates at Layer 7 (HTTP/HTTPS) and sits in the data path. It acts as a reverse proxy, [providing SSL termination, caching, WAF, and intelligent routing](https://learn.microsoft.com/en-us/azure/networking/load-balancer-content-delivery/load-balancing-content-delivery-overview).
 
 ```mermaid
 flowchart TD
@@ -377,8 +377,8 @@ flowchart TD
 | **Session affinity** | No (DNS round-robin) | Yes (cookie-based) |
 | **Health probes** | TCP, HTTP, HTTPS | HTTP, HTTPS (with custom headers) |
 | **Protocol support** | Any (TCP/UDP/HTTP) | HTTP/HTTPS only |
-| **Cost** | ~$0.36/million queries | ~$35/month + per-request |
-| **Failover speed** | DNS TTL dependent (30-300s) | Near-instant (<30s) |
+| **Cost** | Lower-cost DNS-based pricing; see current Azure pricing | Higher base fees plus request and data charges; see current Azure pricing |
+| **Failover speed** | Depends on DNS caching and health-check settings | Typically faster application-layer failover with active health probes |
 
 ```bash
 # Create an Azure Front Door profile (Standard tier)
@@ -450,13 +450,13 @@ Use **Azure Front Door** when:
 
 ## Did You Know?
 
-1. **Azure DNS hosts over 100 million DNS zones** as of 2024, making it one of the largest authoritative DNS providers in the world. Azure DNS uses anycast networking, meaning queries are automatically routed to the closest DNS server. The result is typical query latency under 20 milliseconds from anywhere on the planet.
+1. **Azure DNS is a large-scale authoritative DNS service** that uses anycast networking so queries are answered by nearby DNS servers, which improves performance and availability.
 
-2. **Traffic Manager health probes come from specific well-known IP ranges** published by Microsoft. If your backend has IP-based firewall rules, you must whitelist these IPs or your health probes will fail and Traffic Manager will mark your endpoint as degraded. The IP ranges are published in the Azure IP Ranges JSON file, under the `AzureTrafficManager` service tag.
+2. **[Traffic Manager health probes come from specific well-known IP ranges](https://learn.microsoft.com/en-us/azure/traffic-manager/traffic-manager-monitoring)** published by Microsoft. If your backend has IP-based firewall rules, you must whitelist these IPs or your health probes will fail and Traffic Manager will mark your endpoint as degraded. The IP ranges are published in the Azure IP Ranges JSON file, under the `AzureTrafficManager` service tag.
 
-3. **Azure Front Door has over 192 edge locations (Points of Presence)** across 109 metro areas worldwide as of 2025. When a user in Tokyo accesses your app through Front Door, the TLS handshake terminates at a Tokyo PoP. This reduces the round-trip time for the SSL negotiation from ~200ms (to a US backend) to ~5ms (to a local PoP). The PoP then maintains a persistent, optimized connection to your origin backend.
+3. **Azure Front Door has over [192 edge locations (Points of Presence)](https://learn.microsoft.com/en-us/azure/frontdoor/edge-locations-by-region)** across 109 metro areas worldwide as of 2025. When a user in Tokyo accesses your app through Front Door, the TLS handshake terminates at a Tokyo PoP. This can substantially reduce TLS setup latency for users by terminating TLS at a nearby edge location instead of at a distant origin. The PoP then maintains a persistent, optimized connection to your origin backend.
 
-4. **Private DNS Zone auto-registration has a limit of one registration-enabled link per VNet.** A VNet can be linked to multiple Private DNS Zones for resolution, but only one zone can have auto-registration enabled. This prevents conflicts where multiple zones try to register the same VM name. If you need records in multiple zones, use one zone for auto-registration and manually create records in the others.
+4. **Private DNS Zone auto-registration has a limit of one registration-enabled link per VNet.** A VNet can be linked to multiple Private DNS Zones for resolution, but [only one zone can have auto-registration enabled](https://learn.microsoft.com/en-us/azure/dns/private-dns-autoregistration). This prevents conflicts where multiple zones try to register the same VM name. If you need records in multiple zones, use one zone for auto-registration and manually create records in the others.
 
 ---
 
@@ -465,12 +465,12 @@ Use **Azure Front Door** when:
 | Mistake | Why It Happens | How to Fix It |
 | :--- | :--- | :--- |
 | Forgetting to update NS records at the domain registrar after creating an Azure DNS zone | Azure creates the zone and records, but has no authority over the domain until NS records are delegated | After creating the zone, copy the four Azure NS records and update them at your domain registrar. Verify with `nslookup -type=NS example.com`. |
-| Setting Traffic Manager TTL too high (300s default) | Higher TTL reduces DNS query costs | For failover scenarios, set TTL to 10-30 seconds. High TTL means clients cache stale IPs and do not fail over for minutes after an endpoint goes down. |
+| [Setting Traffic Manager TTL too high (300s default)](https://learn.microsoft.com/en-us/azure/traffic-manager/traffic-manager-performance-considerations) | Higher TTL reduces DNS query costs | For failover scenarios, set TTL to 10-30 seconds. High TTL means clients cache stale IPs and do not fail over for minutes after an endpoint goes down. |
 | Using Traffic Manager when Front Door is more appropriate | Traffic Manager is simpler and cheaper to set up | If you need SSL termination, WAF, caching, or sub-second failover, Front Door is worth the extra cost. Traffic Manager's failover speed is limited by DNS TTL. |
-| Not linking Private DNS Zones to all VNets that need resolution | Only the initial VNet is linked during creation | Every VNet that needs to resolve private DNS names must be explicitly linked to the zone. Forgetting a spoke VNet means VMs in that spoke cannot resolve internal names. |
-| Using CNAME records at the zone apex (e.g., example.com) | RFC 1034 prohibits CNAME at the zone apex, but teams need it for services like Front Door | Use Azure DNS alias records instead. Alias records can point to Azure resources at the zone apex without violating the RFC. |
-| Not configuring health probes on Traffic Manager endpoints | Endpoints default to "Enabled" which means Traffic Manager assumes they are healthy | Always configure health probes with a meaningful path (like /health) that checks actual application readiness, not just that the server is responding. |
-| Ignoring the DNS propagation delay when making changes | DNS changes appear instant in the portal | Changes propagate to the Azure DNS servers within 60 seconds, but clients and intermediate DNS resolvers may cache the old record for up to the TTL duration. Plan maintenance windows accordingly. |
+| Not linking Private DNS Zones to all VNets that need resolution | Only the initial VNet is linked during creation | [Every VNet that needs to resolve private DNS names must be explicitly linked to the zone.](https://learn.microsoft.com/en-us/azure/dns/private-dns-privatednszone) Forgetting a spoke VNet means VMs in that spoke cannot resolve internal names. |
+| Using CNAME records at the zone apex (e.g., example.com) | [RFC 1034 prohibits CNAME at the zone apex](https://www.rfc-editor.org/rfc/rfc1034.html), but teams need it for services like Front Door | Use Azure DNS alias records instead. [Alias records can point to Azure resources at the zone apex](https://learn.microsoft.com/en-us/azure/dns/dns-alias) without violating the RFC. |
+| Not using a meaningful Traffic Manager health check | A generic or misconfigured probe can stay green even when the application is unhealthy | Configure HTTP/HTTPS monitoring with a path like /health that validates real application readiness. |
+| Ignoring the DNS propagation delay when making changes | DNS changes appear instant in the portal | [Changes propagate to the Azure DNS servers within 60 seconds](https://learn.microsoft.com/en-us/azure/dns/dns-faq), but clients and intermediate DNS resolvers may cache the old record for up to the TTL duration. Plan maintenance windows accordingly. |
 | Creating separate private DNS zones per VNet instead of shared zones | Teams independently create zones with the same name | Use centralized Private DNS Zones linked to all VNets. If each team creates their own `internal.company.com` zone, records are fragmented and inconsistent. |
 
 ---
@@ -510,7 +510,7 @@ The missing component is the integration between the Private Endpoint and an Azu
 <details>
 <summary>6. <strong>Scenario</strong>: A gaming company uses Traffic Manager with Performance routing to connect players to the lowest-latency game server. After a server in Tokyo goes offline, players in Japan complain they cannot connect for several minutes, even though a backup server in Seoul is available. You investigate and find the profile has a TTL of 300 seconds. What two specific configuration changes must you make to guarantee failover happens in under 60 seconds?</summary>
 
-First, you must reduce the DNS TTL from 300 seconds to a much lower value, such as 10 or 30 seconds, so client machines and ISP resolvers expire the stale IP address faster. Second, you must optimize the endpoint monitoring settings by reducing the probe interval (e.g., from 30 seconds to 10 seconds) and potentially lowering the tolerated number of failures (e.g., from 3 to 2). By combining a short TTL with aggressive health probing, Traffic Manager detects the Tokyo server failure faster and clients query for the new Seoul IP address almost immediately. This ensures that the total time for failure detection and cache expiration remains strictly under one minute to minimize disruption.
+First, you must reduce the DNS TTL from 300 seconds to a much lower value, such as 10 or 30 seconds, so client machines and ISP resolvers expire the stale IP address faster. Second, you must optimize the endpoint monitoring settings by reducing the probe interval (e.g., from 30 seconds to 10 seconds) and potentially lowering the tolerated number of failures (e.g., from 3 to 2). By combining a short TTL with aggressive health probing, Traffic Manager detects the Tokyo server failure faster and clients usually query for the new Seoul IP address within tens of seconds. This ensures that the total time for failure detection and cache expiration remains strictly under one minute to minimize disruption.
 </details>
 
 ---
@@ -728,3 +728,23 @@ az group delete --name "$RG" --yes --no-wait
 ## Next Module
 
 [Module 3.6: Azure Container Registry (ACR)](../module-3.6-acr/) --- Learn how to store, manage, and secure your container images with Azure Container Registry, including authentication, ACR Tasks for automated builds, and geo-replication.
+
+## Sources
+
+- [learn.microsoft.com: dns faq](https://learn.microsoft.com/en-us/azure/dns/dns-faq) — The Azure DNS FAQ directly states that Azure DNS uses Anycast on Azure's global DNS name server network for fast performance and high availability.
+- [learn.microsoft.com: dns delegate domain azure dns](https://learn.microsoft.com/en-us/azure/dns/dns-delegate-domain-azure-dns) — Microsoft's delegation tutorial shows Azure DNS assigning four nameservers with exactly these suffixes.
+- [learn.microsoft.com: dns alias](https://learn.microsoft.com/en-us/azure/dns/dns-alias) — The Azure DNS alias-record overview says alias records reference Azure resources and update dynamically during DNS resolution.
+- [learn.microsoft.com: private dns privatednszone](https://learn.microsoft.com/en-us/azure/dns/private-dns-privatednszone) — The Private DNS zone overview directly states that private-zone records are not resolvable from the Internet and work only from linked VNets.
+- [learn.microsoft.com: private dns autoregistration](https://learn.microsoft.com/en-us/azure/dns/private-dns-autoregistration) — Microsoft's autoregistration doc explicitly describes automatic creation and removal of VM A records.
+- [learn.microsoft.com: private endpoint dns](https://learn.microsoft.com/en-us/azure/private-link/private-endpoint-dns) — The private-endpoint DNS guidance says public DNS resolution is overridden with a private DNS zone so the FQDN resolves to the private endpoint IP.
+- [learn.microsoft.com: private link overview](https://learn.microsoft.com/en-us/azure/private-link/private-link-overview) — The Azure Private Link overview directly states that traffic travels over the Microsoft backbone network and public exposure is unnecessary.
+- [learn.microsoft.com: traffic manager overview](https://learn.microsoft.com/en-us/azure/traffic-manager/traffic-manager-overview) — The Traffic Manager overview directly describes the service as DNS-based routing for public-facing endpoints.
+- [learn.microsoft.com: traffic manager how it works](https://learn.microsoft.com/en-us/azure/traffic-manager/traffic-manager-how-it-works) — Microsoft's how-it-works page explicitly says clients connect directly and Traffic Manager is not a proxy or gateway.
+- [learn.microsoft.com: traffic manager routing methods](https://learn.microsoft.com/en-us/azure/traffic-manager/traffic-manager-routing-methods) — The Traffic Manager routing-methods documentation lists these six supported methods and their intended behaviors.
+- [learn.microsoft.com: load balancing content delivery overview](https://learn.microsoft.com/en-us/azure/networking/load-balancer-content-delivery/load-balancing-content-delivery-overview) — Microsoft's load-balancing overview describes Front Door as a Layer 7 application delivery network with SSL offload, path routing, caching, and WAF-related security.
+- [learn.microsoft.com: understanding pricing](https://learn.microsoft.com/en-us/azure/frontdoor/understanding-pricing) — General lesson point for an illustrative rewrite.
+- [learn.microsoft.com: traffic manager monitoring](https://learn.microsoft.com/en-us/azure/traffic-manager/traffic-manager-monitoring) — The endpoint-monitoring doc directly states that firewalls must allow Traffic Manager IPs and recommends the AzureTrafficManager service tag.
+- [learn.microsoft.com: edge locations by region](https://learn.microsoft.com/en-us/azure/frontdoor/edge-locations-by-region) — The current Microsoft Learn edge-location page explicitly gives these counts.
+- [learn.microsoft.com: traffic manager performance considerations](https://learn.microsoft.com/en-us/azure/traffic-manager/traffic-manager-performance-considerations) — Microsoft's performance-considerations doc states the default TTL is 300 seconds and that longer caching delays traffic redirection away from failed endpoints.
+- [rfc-editor.org: rfc1034.html](https://www.rfc-editor.org/rfc/rfc1034.html) — RFC 1034 states that if a CNAME is present at a node, no other data should be present.
+- [Azure Front Door Overview](https://learn.microsoft.com/en-us/azure/frontdoor/front-door-overview) — Best official overview of Front Door capabilities, edge network, SSL offload, caching, and security positioning.

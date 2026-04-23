@@ -19,7 +19,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In November 2020, a SaaS company running their entire production workload on a single Azure VM in the East US region experienced an outage that lasted 9 hours. The VM's host server had a hardware failure. Because the company had not configured Availability Zones, had no VM Scale Set, and had no load balancer, their application was completely offline. Their customers, many of whom are running end-of-month financial reports, could not access the platform. The post-incident review revealed that the monthly cost to run their single D4s_v3 VM was $140. Adding a second VM in a different Availability Zone behind a Standard Load Balancer would have added $165/month. A $165/month insurance policy could have prevented a $420,000 revenue loss and a wave of customer churn.
+A production workload running on a single Azure VM without zone redundancy, load balancing, or horizontal failover can go fully offline during an infrastructure failure, and the cost of basic high availability is often far lower than the cost of a prolonged outage.
 
 Virtual machines remain the workhorse of cloud computing. Even in a world of containers, serverless functions, and managed services, VMs are the foundation that most of those higher-level services are built on. Understanding VM sizes, high availability constructs, disk types, and auto-scaling is fundamental to running reliable workloads on Azure. When you need full control over the operating system, when you are running software that cannot be containerized, or when you need specific hardware (like GPUs or high-memory instances), VMs are the answer.
 
@@ -29,7 +29,7 @@ In this module, you will learn how to choose the right VM size for your workload
 
 ## Choosing the Right VM Size
 
-Azure offers hundreds of VM sizes, organized into families based on the workload type they are optimized for. Choosing the right VM size is one of the most impactful decisions you will make---oversizing wastes money, undersizing causes performance problems.
+Azure offers many VM sizes, organized into families based on the workload type they are optimized for. Choosing the right VM size is one of the most impactful decisions you will make---oversizing wastes money, undersizing causes performance problems.
 
 ### VM Size Families
 
@@ -80,7 +80,7 @@ az vm list-vm-resize-options -g myRG -n myVM -o table
 
 ### The B-Series: Burstable VMs
 
-The B-series deserves special attention because it is the most cost-effective option for workloads that do not need sustained CPU. B-series VMs accumulate CPU credits when idle and spend them during bursts.
+The B-series deserves special attention because it is the most cost-effective option for workloads that do not need sustained CPU. [B-series VMs accumulate CPU credits when idle and spend them during bursts.](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/general-purpose/b-family)
 
 ```mermaid
 stateDiagram-v2
@@ -95,9 +95,9 @@ stateDiagram-v2
     Throttled --> Idle_Below_Baseline: Workload decreases (credits accumulate)
 ```
 
-A Standard_B2s (2 vCPUs, 4 GB RAM) costs about $30/month, while an equivalent Standard_D2s_v5 costs about $70/month. For a dev/test VM that sits idle 80% of the time, B-series saves you 57%.
+For a lightly used dev/test VM, a burstable B-series instance can cost materially less than a comparable D-series VM, which is why B-series is often attractive for workloads that spend much of their time idle.
 
-**War Story**: A team running 15 CI/CD build agents on D4s_v5 instances (4 vCPUs, 16 GB, ~$140/month each) was spending $2,100/month. They analyzed their build patterns and found that agents were busy only 25% of the time, with builds coming in bursts. Switching to B4ms instances (same specs, burstable) at ~$67/month each cut their compute bill to $1,005/month---a 52% reduction with no performance impact on build times.
+**Example pattern**: For workloads like build agents that spend much of their time idle and then burst briefly, moving from fixed-performance VMs to burstable VMs can reduce compute spend substantially if the credit model fits the workload.
 
 > **Pause and predict**: You're designing an application that processes large batch jobs nightly. These jobs run for 2-3 hours and require significant CPU, but the VMs are idle for the remaining 21 hours. Would B-series VMs be a good fit? Why or why not?
 
@@ -109,7 +109,7 @@ Azure provides two mechanisms to protect your VMs from infrastructure failures. 
 
 ### Availability Zones (AZs)
 
-An Availability Zone is a physically separate location within an Azure region. Each zone has independent power, cooling, and networking. If a fire destroys Zone 1, Zones 2 and 3 continue operating. Azure guarantees a **99.99% SLA** for VMs deployed across two or more zones.
+[An Availability Zone is a physically separate location within an Azure region. Each zone has independent power, cooling, and networking.](https://learn.microsoft.com/en-us/azure/reliability/availability-zones-overview) If a fire destroys Zone 1, Zones 2 and 3 continue operating. Azure guarantees a [**99.99% SLA**](https://azure.microsoft.com/en-us/explore/global-infrastructure/availability-zones/) for VMs deployed across two or more zones.
 
 ```mermaid
 graph LR
@@ -126,7 +126,7 @@ graph LR
 
 ### Availability Sets
 
-An Availability Set distributes VMs across **Fault Domains** (separate physical racks) and **Update Domains** (groups that Azure reboots sequentially during maintenance). Availability Sets provide a **99.95% SLA**.
+[An Availability Set distributes VMs across **Fault Domains** (separate physical racks) and **Update Domains** (groups that Azure reboots sequentially during maintenance).](https://learn.microsoft.com/en-us/azure/virtual-machines/availability-set-overview) Availability Sets provide a [**99.95% SLA**](https://learn.microsoft.com/en-us/azure/virtual-machines/availability).
 
 ```mermaid
 graph TD
@@ -234,7 +234,7 @@ az vm show -g myRG -n db-vm \
 
 ### Disk Encryption
 
-Azure encrypts all Managed Disks at rest by default using platform-managed keys (PMK). For additional control, you can use:
+[Azure encrypts all Managed Disks at rest by default using platform-managed keys (PMK). For additional control, you can use:](https://learn.microsoft.com/en-us/azure/virtual-machines/disk-encryption-overview)
 
 - **Customer-managed keys (CMK)**: You manage the encryption key in Azure Key Vault
 - **Azure Disk Encryption (ADE)**: Uses BitLocker (Windows) or DM-Crypt (Linux) for OS-level encryption
@@ -339,7 +339,7 @@ az vm extension list -g myRG --vm-name web-vm -o table
 
 ## VM Scale Sets (VMSS): Horizontal Auto-Scaling
 
-A VM Scale Set is a group of identical, load-balanced VMs that can automatically scale in and out based on demand or a schedule. Think of it as a fleet of VMs managed as a single resource.
+[A VM Scale Set is a group of identical, load-balanced VMs that can automatically scale in and out based on demand or a schedule.](https://learn.microsoft.com/en-us/azure/virtual-machines/availability) Think of it as a fleet of VMs managed as a single resource.
 
 ### VMSS Architecture
 
@@ -391,7 +391,7 @@ VMSS has two orchestration modes:
 
 For complex applications or hardened environments, you'll often need to deploy VMs from a custom image rather than a marketplace image. This allows you to pre-install software, apply specific configurations, or include security baselines. Custom images can be created from existing VMs or built using tools like Azure Image Builder or Packer, and then stored in a Managed Image resource or a Shared Image Gallery.
 
-A **Shared Image Gallery (SIG)** (now Azure Compute Gallery) is recommended for managing custom images. It provides versioning, global replication, and access control for your images.
+A **Shared Image Gallery (SIG)** (now Azure Compute Gallery) is recommended for managing custom images. [It provides versioning, global replication, and access control for your images.](https://learn.microsoft.com/en-us/azure/virtual-machines/azure-compute-gallery)
 
 ```bash
 # Example: Deploy a VMSS using a custom image from a Shared Image Gallery
@@ -466,7 +466,7 @@ az monitor autoscale show -g myRG -n web-autoscale -o json
 
 ## Azure Load Balancer: Distributing Traffic
 
-Azure Load Balancer operates at Layer 4 (TCP/UDP) and distributes incoming traffic across healthy VM instances. There are two SKUs:
+[Azure Load Balancer operates at Layer 4 (TCP/UDP) and distributes incoming traffic across healthy VM instances.](https://learn.microsoft.com/en-us/azure/reliability/reliability-load-balancer) There are two SKUs:
 
 | Feature | Basic (being retired) | Standard |
 | :--- | :--- | :--- |
@@ -535,7 +535,7 @@ Managing cloud costs is as critical as managing performance and availability. Az
 
 ### Azure Spot VMs
 
-Azure Spot Virtual Machines allow you to utilize unused Azure compute capacity at a significant discount (up to 90% off pay-as-you-go prices). The trade-off is that Azure can evict Spot VMs at any time if it needs the capacity back.
+[Azure Spot Virtual Machines allow you to utilize unused Azure compute capacity at a significant discount (up to 90% off pay-as-you-go prices). The trade-off is that Azure can evict Spot VMs at any time if it needs the capacity back.](https://learn.microsoft.com/en-us/azure/architecture/guide/spot/spot-eviction)
 
 **Use Cases**:
 - **Batch processing**: Jobs that can be interrupted and restarted.
@@ -544,7 +544,7 @@ Azure Spot Virtual Machines allow you to utilize unused Azure compute capacity a
 - **VM Scale Sets**: Ideal for Spot VMs, as the scale set can automatically replace evicted instances or balance workload.
 
 **Key Considerations**:
-- **Eviction policy**: You can choose to deallocate the VM or hibernate (for Windows VMs) upon eviction.
+- **Eviction policy**: You can choose to deallocate or delete the VM when Azure evicts it.
 - **Price caps**: You can set a maximum price you're willing to pay, but it's often more effective to let Azure choose the current Spot price for higher availability.
 - **VM size and region**: Spot availability and pricing vary by VM size and region.
 
@@ -566,7 +566,7 @@ az vm create \
 
 ### Azure Reserved Virtual Machine Instances (RIs)
 
-Azure Reserved Instances allow you to commit to a specific VM size and region for a one-year or three-year term in exchange for a significant discount (up to 72% compared to pay-as-you-go). When you purchase a reservation, it applies to any qualifying VM in that region, regardless of the specific VM running.
+[Azure Reserved Instances allow you to commit to a specific VM size and region for a one-year or three-year term in exchange for a significant discount (up to 72% compared to pay-as-you-go). When you purchase a reservation, it applies to any qualifying VM in that region, regardless of the specific VM running.](https://learn.microsoft.com/en-us/azure/cost-management-billing/reservations/save-compute-costs-reservations)
 
 **Use Cases**:
 - **Steady-state workloads**: Applications with predictable, continuous usage (e.g., production databases, always-on web servers).
@@ -585,13 +585,13 @@ Azure Reserved Instances allow you to commit to a specific VM size and region fo
 
 ## Did You Know?
 
-1.  **Azure VMs have a "host maintenance" event roughly every 4-6 weeks** where Azure needs to update the physical host. For most VM sizes, Azure uses memory-preserving maintenance that pauses the VM for less than 30 seconds. But for some GPU and high-performance VM sizes, a full reboot is required. You can subscribe to Scheduled Events via the Instance Metadata Service to get 15 minutes of advance warning before maintenance begins.
+1.  **Azure periodically performs host maintenance**. Many VM-impacting maintenance events are brief, and Scheduled Events can provide advance notice for many maintenance scenarios, but some VM families or update types can still require a reboot.
 
-2.  **The Standard_B1ls VM (1 vCPU, 0.5 GB RAM) costs approximately $3.80 per month** and is the cheapest VM Azure offers. It is surprisingly useful for lightweight workloads like a bastion host, a DNS forwarder, or a small cron job runner. Many teams overlook it because 0.5 GB seems too small, but for a process that uses 100 MB of RAM, it is more than enough.
+2.  **The Standard_B1ls is a very small, low-cost VM** that can still be useful for lightweight workloads like a bastion-style host, a small relay service, or a simple scheduled task runner.
 
-3.  **VM Scale Sets in Flexible orchestration mode can mix different VM sizes in the same scale set** since late 2023. This means you can have a baseline of Standard_D4s_v5 instances and burst with Standard_D4as_v5 (AMD) instances if Intel capacity is constrained. This is particularly useful during regional capacity shortages where a single VM size might not be available.
+3.  **VM Scale Sets in Flexible orchestration mode can use instance mix to combine multiple VM sizes in one scale set**. This can improve provisioning success and cost flexibility when capacity is constrained.
 
-4.  **When you stop (deallocate) a VM, you stop paying for compute but continue paying for the OS disk and any data disks.** A 128 GB Premium SSD costs about $19/month whether the VM is running or not. Teams that "save money" by stopping 50 VMs every night still pay $950/month for the disks. To truly eliminate disk costs, you need to delete the disks and recreate the VMs from images or snapshots.
+4.  [**When you stop (deallocate) a VM, you stop paying for compute but continue paying for the OS disk and any data disks.**](https://learn.microsoft.com/en-us/azure/virtual-machines/states-billing) Even when compute is off, attached disks can still add up to a meaningful monthly bill across many stopped VMs. To truly eliminate disk costs, you need to delete the disks and recreate the VMs from images or snapshots.
 
 ---
 
@@ -603,7 +603,7 @@ Azure Reserved Instances allow you to commit to a specific VM size and region fo
 | Choosing a VM size based only on vCPU count | Developers assume "4 vCPUs = 4 vCPUs" regardless of family | Different families have different CPU architectures, clock speeds, and memory ratios. Benchmark your workload on candidate sizes before committing. |
 | Using Standard HDD for production workloads | It is the cheapest option and "seems fast enough in testing" | Standard HDD has only 500 IOPS max. Under production load, disk I/O becomes the bottleneck. Use Premium SSD minimum for production. |
 | Not configuring a health probe on the load balancer | The default TCP probe on the backend port "seems to work" | Use an HTTP health probe that checks your application's /health endpoint. A TCP probe only verifies the port is open, not that your app is healthy. |
-| Forgetting to create an NSG when using Standard Load Balancer | Basic LB allows traffic by default, so teams assume Standard does too | Standard LB blocks all traffic unless an NSG explicitly allows it. Always create an NSG that permits traffic on the load balancer's frontend port. |
+| Forgetting to create an NSG when using Standard Load Balancer | Basic LB allows traffic by default, so teams assume Standard does too | Standard LB blocks all traffic unless an NSG explicitly allows it. Ensure an NSG permits traffic on the load balancer's frontend port when using Standard Load Balancer. |
 | Scaling up (bigger VM) instead of scaling out (more VMs) | Scaling up is simpler and requires no architecture changes | Scaling up hits a ceiling and creates a single point of failure. Design for horizontal scaling with VMSS from the start. |
 | Using cloud-init for complex configuration that takes 15+ minutes | Cloud-init runs on first boot and there is no timeout feedback | For complex configurations, build a custom VM image with Packer or Azure Image Builder. Use cloud-init only for lightweight, last-mile configuration. |
 | Not tagging VMs with cost allocation metadata | It seems like busywork during initial deployment | Without tags, you cannot attribute costs to teams or projects. Enforce tagging with Azure Policy. At minimum, tag with environment, team, and project. |
@@ -888,3 +888,20 @@ az group delete --name "$RG" --yes --no-wait
 ## Next Module
 
 [Module 3.4: Azure Blob Storage & Data Lake](../module-3.4-blob/) --- Learn how Azure stores unstructured data at massive scale, from hot-tier serving to cold archival, with SAS tokens and identity-based access control.
+
+## Sources
+
+- [learn.microsoft.com: b family](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/general-purpose/b-family) — Microsoft's B-family documentation directly describes the CPU credit model and throttling behavior.
+- [learn.microsoft.com: availability zones overview](https://learn.microsoft.com/en-us/azure/reliability/availability-zones-overview) — Microsoft's availability-zones overview directly states these isolation properties.
+- [azure.microsoft.com: availability zones](https://azure.microsoft.com/en-us/explore/global-infrastructure/availability-zones/) — Microsoft Azure's availability-zones page explicitly markets the 99.99% VM uptime SLA.
+- [learn.microsoft.com: availability set overview](https://learn.microsoft.com/en-us/azure/virtual-machines/availability-set-overview) — The availability-set overview directly defines fault domains, update domains, and their maintenance behavior.
+- [learn.microsoft.com: availability](https://learn.microsoft.com/en-us/azure/virtual-machines/availability) — Microsoft's availability-options page explicitly ties availability sets to the 99.95% Azure SLA.
+- [learn.microsoft.com: disk encryption overview](https://learn.microsoft.com/en-us/azure/virtual-machines/disk-encryption-overview) — Microsoft's managed-disk encryption overview directly documents default encryption-at-rest and the available encryption models.
+- [learn.microsoft.com: virtual machine scale sets orchestration modes](https://learn.microsoft.com/en-us/azure/virtual-machine-scale-sets/virtual-machine-scale-sets-orchestration-modes) — Microsoft's orchestration-modes documentation explicitly calls Flexible the recommended mode and describes mixed VM-type support.
+- [learn.microsoft.com: azure compute gallery](https://learn.microsoft.com/en-us/azure/virtual-machines/azure-compute-gallery) — The Azure Compute Gallery overview directly lists versioning, regional replication, and sharing capabilities.
+- [learn.microsoft.com: reliability load balancer](https://learn.microsoft.com/en-us/azure/reliability/reliability-load-balancer) — Microsoft's reliability guidance directly defines Azure Load Balancer as a Layer 4 TCP/UDP service.
+- [learn.microsoft.com: spot eviction](https://learn.microsoft.com/en-us/azure/architecture/guide/spot/spot-eviction) — Microsoft's Spot VM architecture guidance explicitly states the up-to-90% discount and eviction risk.
+- [learn.microsoft.com: save compute costs reservations](https://learn.microsoft.com/en-us/azure/cost-management-billing/reservations/save-compute-costs-reservations) — Microsoft's reservations documentation directly states the up-to-72% savings, one- and three-year terms, and automatic application to matching resources.
+- [learn.microsoft.com: states billing](https://learn.microsoft.com/en-us/azure/virtual-machines/states-billing) — Microsoft's billing-state documentation explicitly says deallocated VMs stop compute billing while resources like disks continue to incur charges.
+- [Azure Managed Disk Types](https://learn.microsoft.com/en-us/azure/virtual-machines/disks-types) — Authoritative reference for current disk classes, performance envelopes, and workload-fit guidance.
+- [Azure Spot Virtual Machines](https://learn.microsoft.com/en-us/azure/virtual-machines/spot-vms) — Canonical product documentation for Spot VM eviction behavior, notice timing, and operational tradeoffs.

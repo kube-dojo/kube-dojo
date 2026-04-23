@@ -19,7 +19,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In March 2021, a security researcher discovered that a misconfigured Azure Active Directory application in a Fortune 500 company exposed the email inboxes and SharePoint files of over 16,000 employees. The application had been registered years earlier by a contractor who had long since left the company. Nobody revoked the app's permissions because nobody knew it existed. The application's client secret had been committed to a public GitHub repository, and an attacker had been quietly reading executive emails for months before the breach was discovered. The estimated cost of the incident, including regulatory fines, legal fees, and lost business, exceeded $30 million.
+Misconfigured identity applications and forgotten credentials can expose large amounts of sensitive data for long periods if no one is inventorying app registrations, reviewing permissions, and rotating or eliminating secrets.
 
 This story illustrates a critical truth about Azure: **identity is not just security---it is the foundation of everything**. Every action in Azure, from creating a virtual machine to reading a blob in storage, flows through the identity layer. Unlike traditional on-premises environments where you might rely on network segmentation and firewall rules as your primary defense, Azure's control plane is entirely identity-driven. If an attacker compromises a service principal with Contributor access to your subscription, no amount of network security groups will prevent them from deleting your databases.
 
@@ -33,7 +33,7 @@ Before you create a single resource in Azure, you need to understand the identit
 
 ### What Entra ID Is (and What It Is Not)
 
-Entra ID is **not** the same as on-premises Active Directory Domain Services (AD DS). This is one of the most persistent misconceptions in the Azure world. AD DS uses Kerberos and LDAP for authentication, organizes objects into Organizational Units (OUs) with Group Policy Objects (GPOs), and requires domain controllers running on Windows Server. Entra ID uses OAuth 2.0, OpenID Connect, and SAML for authentication, has a flat structure (no OUs, no GPOs), and is a fully managed cloud service.
+Entra ID is **not** the same as on-premises Active Directory Domain Services (AD DS). This is one of the most persistent misconceptions in the Azure world. [AD DS uses Kerberos and LDAP for authentication, organizes objects into Organizational Units (OUs) with Group Policy Objects (GPOs), and requires domain controllers running on Windows Server. Entra ID uses OAuth 2.0, OpenID Connect, and SAML for authentication, has a flat structure (no OUs, no GPOs), and is a fully managed cloud service.](https://learn.microsoft.com/en-us/entra/fundamentals/compare)
 
 | On-Premises AD DS | Microsoft Entra ID |
 | :--- | :--- |
@@ -45,7 +45,7 @@ Entra ID is **not** the same as on-premises Active Directory Domain Services (AD
 | On-prem network required | Internet-accessible |
 | Supports LDAP queries | Supports Microsoft Graph API |
 
-If your organization has on-premises AD DS and wants to use the same identities in Azure, you use **Entra Connect** (formerly Azure AD Connect) to synchronize identities. This hybrid setup is extremely common in enterprises.
+If your organization has on-premises AD DS and wants to use the same identities in Azure, you [use **Entra Connect** (formerly Azure AD Connect) to synchronize identities](https://learn.microsoft.com/en-us/entra/identity/hybrid/connect/whatis-azure-ad-connect). This hybrid setup is extremely common in enterprises.
 
 ### The Tenant: Your Identity Boundary
 
@@ -87,12 +87,12 @@ flowchart TD
     DevSub --> SandboxRG
 ```
 
-*Inheritance flows DOWN: Policy assigned at MG: Production → applies to ALL subscriptions, resource groups, and resources beneath it.*
+*[Inheritance flows DOWN: Policy assigned at MG: Production → applies to ALL subscriptions, resource groups, and resources beneath it.](https://learn.microsoft.com/en-us/azure/governance/management-groups/overview)*
 
 | Level | Purpose | Key Facts |
 | :--- | :--- | :--- |
-| **Management Group** | Organize subscriptions into governance hierarchies | Up to 6 levels deep (excluding root). Max 10,000 MGs per tenant. |
-| **Subscription** | Billing boundary and access control boundary | Each subscription trusts exactly one Entra ID tenant. Max ~500 resource groups per sub (soft limit). |
+| **Management Group** | Organize subscriptions into governance hierarchies | [Up to 6 levels deep (excluding root). Max 10,000 MGs per tenant.](https://learn.microsoft.com/en-us/azure/governance/management-groups/overview) |
+| **Subscription** | Billing boundary and access control boundary | [Each subscription trusts exactly one Entra ID tenant.](https://learn.microsoft.com/en-us/azure/cost-management-billing/understand/understand-billing-tenant-relationship) Max ~500 resource groups per sub (soft limit). |
 | **Resource Group** | Logical container for related resources | Resources can only exist in one RG. Deleting RG deletes ALL resources inside. |
 | **Resource** | The actual thing (VM, database, storage account) | Inherits RBAC and policy from all levels above. |
 
@@ -149,7 +149,7 @@ Groups simplify access management. Instead of assigning roles to individual user
 - **Security groups**: Used for managing access to resources. This is what you'll use 90% of the time.
 - **Microsoft 365 groups**: Used for collaboration (shared mailbox, SharePoint site, Teams channel). Also usable for RBAC, but carry extra baggage.
 
-Groups can have **assigned membership** (manually add/remove members) or **dynamic membership** (members are automatically added/removed based on user attributes like department or job title). Dynamic groups require Entra ID P1 or P2 licensing.
+Groups can have **assigned membership** (manually add/remove members) or **dynamic membership** (members are automatically added/removed based on user attributes like department or job title). [Dynamic groups require Entra ID P1 or P2 licensing.](https://learn.microsoft.com/en-us/entra/identity/users/groups-dynamic-membership)
 
 ```bash
 # Create a security group
@@ -171,7 +171,7 @@ az ad group member list --group "Platform Engineers" --query '[].displayName' -o
 A **service principal** is the identity that an application uses to authenticate with Entra ID. But there is a subtle two-step process that confuses many people:
 
 1. **App Registration**: A global definition of your application. Think of it as the blueprint. It lives in your home tenant and defines what permissions the app needs, what redirect URIs it uses, and what credentials it has.
-2. **Service Principal (Enterprise Application)**: A local instance of the app in a specific tenant. Think of it as an installation of the blueprint. When you grant an app access to resources, you are granting access to the service principal, not the app registration.
+2. **Service Principal (Enterprise Application)**: [A local instance of the app in a specific tenant. Think of it as an installation of the blueprint. When you grant an app access to resources, you are granting access to the service principal, not the app registration.](https://learn.microsoft.com/en-us/entra/identity-platform/app-objects-and-service-principals)
 
 ```mermaid
 flowchart TD
@@ -200,17 +200,17 @@ az ad app federated-credential create --id "$APP_ID" --parameters '{
 }'
 ```
 
-**War Story**: A fintech startup stored a service principal's client secret in a `.env` file that was accidentally committed to a public repository. Automated scanners picked it up within 14 minutes. The service principal had Contributor access to their production subscription. By the time the team noticed, the attacker had created 38 cryptocurrency mining VMs across three regions, racking up $12,000 in compute charges before the subscription's spending limit kicked in. The fix? Managed Identities for Azure workloads and OIDC federation for CI/CD pipelines. Zero secrets to leak.
+**War Story**: Exposed client secrets in public repositories can be discovered quickly, and a high-privilege service principal can be abused for costly or destructive activity. The safer pattern is to avoid long-lived secrets by using Managed Identities for Azure workloads and federated workload identity for CI/CD.
 
 ### Managed Identities: The Gold Standard
 
-A **Managed Identity** is a special type of service principal that Azure manages for you. You never see or handle credentials---Azure automatically provisions, rotates, and revokes the tokens behind the scenes. This is the single most important identity concept for application developers on Azure.
+A **Managed Identity** is [a special type of service principal that Azure manages for you](https://learn.microsoft.com/en-us/entra/identity-platform/app-objects-and-service-principals). You typically do not need to see or handle credentials---Azure automatically provisions, rotates, and revokes the tokens behind the scenes. This is the single most important identity concept for application developers on Azure.
 
 There are two types:
 
 | Feature | System-Assigned | User-Assigned |
 | :--- | :--- | :--- |
-| **Lifecycle** | Tied to the resource (delete VM = delete identity) | Independent (persists until you delete it) |
+| **Lifecycle** | [Tied to the resource (delete VM = delete identity) | Independent (persists until you delete it)](https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/overview) |
 | **Sharing** | One-to-one (each resource gets its own) | One-to-many (multiple resources share one) |
 | **Creation** | Enable on the resource | Create separately, then assign to resources |
 | **Naming** | Named after the resource | You choose the name |
@@ -251,7 +251,7 @@ secret = client.get_secret("database-connection-string")
 print(f"Secret value: {secret.value}")
 ```
 
-The `DefaultAzureCredential` class tries multiple authentication methods in order: environment variables, Managed Identity, Azure CLI, Visual Studio Code, and others. In production on Azure, it finds the Managed Identity automatically. On your laptop, it falls back to your Azure CLI login. This makes the same code work everywhere without changes.
+The `DefaultAzureCredential` class tries several credential types, and the exact chain depends on SDK version and configuration. In Azure, Managed Identity is one built-in option; on a developer machine, local credentials such as Azure CLI can be used instead.
 
 ---
 
@@ -293,7 +293,7 @@ flowchart LR
 
 *KEY INSIGHT: Global Administrator does NOT automatically have Azure RBAC access. They must "elevate" themselves first.*
 
-This is a critical detail: a **Global Administrator** in Entra ID does **not** automatically have Owner or Contributor access to Azure subscriptions. They can *elevate* themselves to get User Access Administrator at the root scope, but it is not automatic. Conversely, an **Owner** on an Azure subscription cannot create or manage Entra ID users.
+This is a critical detail: [a **Global Administrator** in Entra ID does **not** automatically have Owner or Contributor access to Azure subscriptions. They can *elevate* themselves to get User Access Administrator at the root scope, but it is not automatic.](https://learn.microsoft.com/en-us/azure/role-based-access-control/elevate-access-global-admin) Conversely, an **Owner** on an Azure subscription cannot create or manage Entra ID users.
 
 > **Stop and think**: A new security engineer is granted the 'Global Administrator' role in Entra ID. When they log into the Azure portal, they cannot see any Virtual Machines or Storage Accounts. Why?
 > *Answer: Global Administrator is a directory role that grants control over Entra ID (users, groups, policies), not an Azure RBAC role. The engineer has no default access to Azure resources. They must explicitly elevate their access to gain the User Access Administrator role at the root scope before they can grant themselves permissions to view or manage Azure resources.*
@@ -349,7 +349,7 @@ az role assignment create \
 az role definition list --custom-role-only true -o table
 ```
 
-An important distinction: **Actions** vs **DataActions**. Actions control *management plane* operations (creating, deleting, configuring resources). DataActions control *data plane* operations (reading blobs in storage, sending messages to a queue). The role `Storage Blob Data Reader` uses DataActions, not Actions, because it grants access to the data inside storage, not to the storage account management operations.
+An important distinction: **Actions** vs **DataActions**. [Actions control *management plane* operations (creating, deleting, configuring resources). DataActions control *data plane* operations (reading blobs in storage, sending messages to a queue). The role `Storage Blob Data Reader` uses DataActions, not Actions](https://learn.microsoft.com/en-us/azure/role-based-access-control/role-definitions), because it grants access to the data inside storage, not to the storage account management operations.
 
 ---
 
@@ -372,7 +372,7 @@ Common Conditional Access patterns:
 3. **Require compliant devices for accessing sensitive applications**
 4. **Force re-authentication every 4 hours for Azure portal access**
 
-Conditional Access requires at least Entra ID P1 licensing. You can view and manage policies through the Azure portal or Microsoft Graph API:
+[Conditional Access requires at least Entra ID P1 licensing.](https://learn.microsoft.com/en-us/entra/identity/conditional-access/overview) You can view and manage policies through the Azure portal or Microsoft Graph API:
 
 ```bash
 # List Conditional Access policies via Graph API
@@ -385,11 +385,11 @@ az rest --method GET \
 
 ## Privileged Identity Management (PIM) & Access Reviews
 
-Even with least privilege and Conditional Access, standing access is a massive security risk. Standing access means a user has a highly privileged role (like Owner or Global Administrator) 24/7, even when they are sleeping or on vacation. If their account is compromised, the attacker instantly gets those privileges.
+Even with least privilege and Conditional Access, standing access is a massive security risk. Standing access means a user has a highly privileged role (like Owner or Global Administrator) 24/7, even when they are sleeping or on vacation. If their account is compromised, the attacker can quickly use those privileges.
 
 Microsoft Entra Privileged Identity Management (PIM) solves this by providing **Just-In-Time (JIT) access**. 
 
-With PIM, users are made *eligible* for a role rather than being permanently assigned to it. When they need to perform a privileged task, they must *activate* the role. 
+[With PIM, users are made *eligible* for a role rather than being permanently assigned to it. When they need to perform a privileged task, they must *activate* the role. ](https://learn.microsoft.com/en-us/azure/role-based-access-control/pim-integration)
 
 The activation process can require:
 - **Time-bounding**: The role automatically expires after a set period (e.g., 2 hours).
@@ -404,21 +404,21 @@ The activation process can require:
 
 Over time, users accumulate permissions they no longer need—often from changing teams or temporary projects. **Access Reviews** automate the cleanup of these stale permissions.
 
-You can configure Access Reviews to periodically (e.g., quarterly) ask users, managers, or resource owners to attest whether specific access is still required. If the reviewer says "no" or fails to respond within the timeframe, Entra ID can automatically revoke the access. This is essential for compliance standards like SOC2 and ISO 27001.
+You can configure [Access Reviews to periodically (e.g., quarterly) ask users, managers, or resource owners to attest whether specific access is still required. If the reviewer says "no" or fails to respond within the timeframe, Entra ID can automatically revoke the access.](https://learn.microsoft.com/en-us/azure/active-directory/governance/deploy-access-reviews) This can support periodic access-governance evidence and least-privilege review processes.
 
-*Note: Both PIM and Access Reviews require Entra ID P2 or Microsoft Entra ID Governance licensing.*
+*Note: PIM and Access Reviews are premium governance features, so check the current Microsoft Entra licensing requirements for your exact scenarios before rollout.*
 
 ---
 
 ## Did You Know?
 
-1. **Microsoft Entra ID was renamed from Azure Active Directory in July 2023**, but the CLI commands still use `az ad` (not `az entra`), the PowerShell module is still `AzureAD`, and many API endpoints still reference `azure-active-directory`. This naming mismatch will persist for years because changing API surfaces would break millions of integrations worldwide.
+1. **[Microsoft Entra ID was renamed from Azure Active Directory in July 2023](https://learn.microsoft.com/en-us/entra/fundamentals/new-name)**, but [the CLI commands still use `az ad` (not `az entra`)](https://learn.microsoft.com/en-us/cli/azure/ad?view=azure-cli-lts), the PowerShell module is still `AzureAD`, and many API endpoints still reference `azure-active-directory`. This naming mismatch is likely to remain because Microsoft keeps existing tooling and API surfaces stable for backward compatibility.
 
-2. **A single Entra ID tenant can contain up to 50,000 app registrations and 300,000 service principals** (as of 2025 limits). Large enterprises with extensive Microsoft 365 usage often approach the service principal limit because every Microsoft first-party app, third-party SaaS integration, and internal tool creates one.
+2. **Microsoft Entra tenants are subject to directory object quotas, and applications and service principals count toward those tenant-wide limits.** In large environments, service principals can accumulate quickly because first-party apps, SaaS integrations, and internal tools all create directory objects.
 
-3. **Managed Identities use the same token endpoint as any OIDC identity**, specifically the Azure Instance Metadata Service (IMDS) at `169.254.169.254`. When your code calls `DefaultAzureCredential()`, it makes an HTTP request to `http://169.254.169.254/metadata/identity/oauth2/token`. This link-local address is only accessible from within the Azure resource---it is unreachable from the internet, which is what makes Managed Identities secure by design.
+3. **On Azure compute resources that use managed identities, client libraries can obtain tokens from a local metadata endpoint that is reachable only from within the resource.** This design avoids exposing long-lived secrets over the public internet.
 
-4. **Azure RBAC evaluates role assignments in under 5 milliseconds per API call**, but propagation of a new role assignment can take up to 10 minutes. This delay catches people during deployments---you assign a role and immediately try to use it, and it fails. Always build in a wait or retry mechanism when programmatically assigning roles.
+4. **New Azure RBAC role assignments can take several minutes to take effect.** This delay catches people during deployments---you assign a role and immediately try to use it, and it fails. Build in a wait or retry mechanism when programmatically assigning roles that need to work right away.
 
 ---
 
@@ -429,11 +429,11 @@ You can configure Access Reviews to periodically (e.g., quarterly) ask users, ma
 | Using client secrets for service principals in production workloads on Azure | It's the "easy" way shown in many tutorials | Use Managed Identities for Azure-hosted workloads. Use OIDC federated credentials for external CI/CD. |
 | Granting Owner at subscription scope "just to get things working" | Contributor seems insufficient during initial setup | Identify the specific actions needed and use a narrower built-in role or create a custom role. |
 | Confusing Entra ID roles with Azure RBAC roles | The naming is genuinely confusing, and both appear in the portal | Remember: Entra ID roles = directory operations. RBAC roles = resource operations. Check which scope you need. |
-| Not using groups for role assignments | It seems faster to assign roles directly to users | Always assign RBAC roles to groups, then manage group membership. This scales and is auditable. |
+| Not using groups for role assignments | It seems faster to assign roles directly to users | Prefer assigning RBAC roles to groups, then manage group membership. This scales and is auditable. |
 | Leaving orphaned service principal secrets active | Teams create secrets for one-off tasks and forget them | Set short expiration dates. Audit with `az ad app credential list`. Use workload identity federation. |
 | Setting system-assigned identity when user-assigned is more appropriate | System-assigned is the default in most tutorials | If multiple resources need the same identity/permissions, use user-assigned. It simplifies role management. |
 | Not restricting the AssignableScopes of custom roles | Developers copy examples that use subscription scope | Scope custom roles to the narrowest possible scope (resource group when possible). |
-| Skipping Conditional Access for break-glass accounts | Emergency accounts seem like they should bypass everything | Create Conditional Access policies for break-glass accounts that require MFA but allow access from any location. Monitor these accounts with alerts. |
+| Skipping Conditional Access for break-glass accounts | Emergency accounts seem like they should bypass everything | Exclude emergency access accounts from routine Conditional Access policies to avoid lockout, and monitor them closely with alerts and regular review. |
 
 ---
 
@@ -713,3 +713,20 @@ az role definition delete --name "Storage Blob Lister"
 ## Next Module
 
 [Module 3.2: Virtual Networks (VNet)](../module-3.2-vnet/) --- Learn how Azure networking works, from VNets and subnets to NSGs, peering, and the hub-and-spoke architecture that every enterprise uses.
+
+## Sources
+
+- [learn.microsoft.com: compare](https://learn.microsoft.com/en-us/entra/fundamentals/compare) — Microsoft's comparison page explicitly contrasts Active Directory concepts such as LDAP, Kerberos/NTLM, domains, OUs, and Group Policy with Microsoft Entra ID capabilities.
+- [learn.microsoft.com: whatis azure ad connect](https://learn.microsoft.com/en-us/entra/identity/hybrid/connect/whatis-azure-ad-connect) — The Microsoft Entra Connect overview states that synchronization creates a common identity across on-premises and cloud environments.
+- [learn.microsoft.com: overview](https://learn.microsoft.com/en-us/azure/governance/management-groups/overview) — The Azure management groups overview says governance conditions and inherited access cascade through nested scopes.
+- [learn.microsoft.com: understand billing tenant relationship](https://learn.microsoft.com/en-us/azure/cost-management-billing/understand/understand-billing-tenant-relationship) — Microsoft's billing and tenant relationship documentation states that every subscription has a 1:1 trust relationship with a Microsoft Entra tenant.
+- [learn.microsoft.com: groups dynamic membership](https://learn.microsoft.com/en-us/entra/identity/users/groups-dynamic-membership) — The dynamic membership documentation lists Microsoft Entra ID P1 licensing requirements for dynamic groups.
+- [learn.microsoft.com: app objects and service principals](https://learn.microsoft.com/en-us/entra/identity-platform/app-objects-and-service-principals) — Microsoft's identity platform documentation describes the application object as the global definition and the service principal as the local tenant representation.
+- [learn.microsoft.com: overview](https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/overview) — The managed identities overview compares system-assigned and user-assigned identities by creation, lifecycle, and whether they can be shared.
+- [learn.microsoft.com: elevate access global admin](https://learn.microsoft.com/en-us/azure/role-based-access-control/elevate-access-global-admin) — Microsoft's elevate-access documentation explicitly states that Entra and Azure resource permissions are secured independently and describes the root-scope elevation behavior.
+- [learn.microsoft.com: role definitions](https://learn.microsoft.com/en-us/azure/role-based-access-control/role-definitions) — Azure RBAC role-definition documentation explains the control-plane versus data-plane split and uses storage blob roles as examples.
+- [learn.microsoft.com: overview](https://learn.microsoft.com/en-us/entra/identity/conditional-access/overview) — The Conditional Access overview includes a license requirements section stating that Conditional Access requires Microsoft Entra ID P1.
+- [learn.microsoft.com: pim integration](https://learn.microsoft.com/en-us/azure/role-based-access-control/pim-integration) — The Azure RBAC and PIM integration docs describe eligible assignments, JIT access, MFA, justification, and approval requirements.
+- [learn.microsoft.com: deploy access reviews](https://learn.microsoft.com/en-us/azure/active-directory/governance/deploy-access-reviews) — Microsoft's access reviews deployment guidance documents recurring reviews and auto-apply removal behavior.
+- [learn.microsoft.com: new name](https://learn.microsoft.com/en-us/entra/fundamentals/new-name) — The official rename guidance states the July 2023 announcement and that existing login URLs, APIs, and PowerShell cmdlets stayed the same.
+- [learn.microsoft.com: ad](https://learn.microsoft.com/en-us/cli/azure/ad?view=azure-cli-lts) — The Azure CLI reference page still documents the az ad command group for Microsoft Entra entities.

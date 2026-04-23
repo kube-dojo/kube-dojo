@@ -566,7 +566,7 @@ spec:
 | Partition tables by date | 70-90% on queries | BigQuery: partition by `_PARTITIONDATE`; Redshift: DISTKEY/SORTKEY |
 | Use Parquet/ORC instead of CSV/JSON | 60-80% on storage + queries | Columnar formats compress better and skip irrelevant columns |
 | Spot instances for batch processing | 60-80% on compute | EKS spot node groups, GKE preemptible/spot pools |
-| Schedule Redshift pause/resume | 100% when idle | `aws redshift-serverless update-workgroup --base-capacity 0` during off-hours |
+| Schedule Redshift pause/resume | Up to 100% of compute when idle | `aws redshift-serverless update-workgroup --base-capacity 0` during off-hours |
 | BigQuery flat-rate (Editions) | 30-50% at scale | Predictable cost for >$10K/month spend |
 | Materialized views | 50-80% on repeated queries | Pre-compute common aggregations |
 
@@ -590,9 +590,9 @@ spec:
 |---------|---------------|---------------|
 | Running ETL with streaming inserts instead of batch loads | Streaming API seems simpler | Use COPY/LOAD for batch; streaming only for real-time requirements |
 | Not partitioning warehouse tables | "We will optimize later" | Partition by date/region at table creation; retrofitting is expensive |
-| Using CSV format for data pipeline files | Universal compatibility | Use Parquet or ORC; they are smaller, faster, and schema-aware |
+| Using CSV format for data pipeline files | Broad compatibility | Use Parquet or ORC; they are smaller, faster, and schema-aware |
 | Running analytics on production database | "Just a quick query" | ETL to a warehouse; production databases should not serve analytics |
-| Not setting maximum_bytes_billed on BigQuery queries | Trust that queries will be efficient | Always set a byte limit; a `SELECT *` on a 50 TB table costs $250 |
+| Not setting maximum_bytes_billed on BigQuery queries | Trust that queries will be efficient | Set a byte limit for analyst-facing queries; a `SELECT *` on a 50 TB table costs $250 |
 | Running Airflow workers 24/7 with CeleryExecutor | Default Helm chart configuration | Use KubernetesExecutor; pay only for compute when tasks actually run |
 | Not using spot instances for batch analytics | Concern about interruption | Airflow retries handle spot interruptions; 60-80% savings is worth it |
 | Granting broad warehouse access to ETL service accounts | Convenient during initial setup | Follow least privilege; ETL writes to staging tables, separate role promotes to production |
@@ -604,7 +604,7 @@ spec:
 <details>
 <summary>1. Scenario: Your team runs a daily ETL pipeline that takes 4 hours to complete. The pipeline consists of 50 tasks with wildly different resource requirements (some need 32GB RAM, others need 512MB). You are currently deciding between Airflow's CeleryExecutor and KubernetesExecutor. Why would the KubernetesExecutor be the more cost-effective and operationally sound choice for this specific workload?</summary>
 
-The KubernetesExecutor spins up a dedicated pod for each individual task with its specific resource requests, and then terminates the pod when the task finishes. In this scenario, tasks needing 32GB RAM will only consume that memory for the duration of the task, rather than requiring permanent heavy worker nodes. With the CeleryExecutor, you would need always-on worker nodes scaled to handle the peak 32GB requirement, resulting in massive wasted compute during the 20 hours a day the pipeline is idle. The KubernetesExecutor ensures you pay exclusively for the exact compute used during the 4-hour window, providing perfect resource isolation for varying task sizes.
+The KubernetesExecutor spins up a dedicated pod for each individual task with its specific resource requests, and then terminates the pod when the task finishes. In this scenario, tasks needing 32GB RAM will only consume that memory for the duration of the task, rather than requiring permanent heavy worker nodes. With the CeleryExecutor, you would typically need worker nodes available to handle the peak 32GB requirement, resulting in substantial wasted compute during the 20 hours a day the pipeline is idle. The KubernetesExecutor ensures you pay exclusively for the exact compute used during the 4-hour window, providing perfect resource isolation for varying task sizes.
 </details>
 
 <details>
@@ -634,7 +634,7 @@ Analytics queries typically involve complex aggregations, large table scans, and
 <details>
 <summary>6. Scenario: You are managing a BigQuery environment for a team of 50 analysts. Despite your training sessions on writing efficient queries, you regularly receive surprise monthly bills because analysts accidentally run unoptimized cross joins or full table scans on multi-petabyte datasets. Without restricting their ability to query the data, how can you implement a technical guardrail to prevent these catastrophic query costs?</summary>
 
-You must enforce cost controls by setting a `maximum_bytes_billed` limit on the project, per user, or within the specific query job configurations. When an analyst submits a query, BigQuery calculates the amount of data it will scan before execution begins. If the scan size exceeds the configured quota (e.g., a 1 TB limit per query), BigQuery immediately rejects and aborts the query without charging you a single cent. This technical guardrail acts as a circuit breaker, forcing analysts to rewrite their queries to use partitions or limit the scope before they can successfully execute, entirely preventing runaway costs.
+You must enforce cost controls by setting a `maximum_bytes_billed` limit on the project, per user, or within the specific query job configurations. When an analyst submits a query, BigQuery calculates the amount of data it will scan before execution begins. If the scan size exceeds the configured quota (e.g., a 1 TB limit per query), BigQuery rejects and aborts the query before execution, typically without query charges. This technical guardrail acts as a circuit breaker, forcing analysts to rewrite their queries to use partitions or limit the scope before they can successfully execute, entirely preventing runaway costs.
 </details>
 
 ---
@@ -1024,3 +1024,9 @@ kind delete cluster --name analytics-lab
 ---
 
 **Next**: Return to the [Managed Services README]() for the complete module index and learning path recommendations.
+
+## Sources
+
+- [BigQuery Overview](https://cloud.google.com/bigquery/docs/introduction) — Grounds the module's BigQuery architecture claims in current vendor documentation.
+- [Airflow KubernetesExecutor](https://airflow.apache.org/docs/apache-airflow/2.2.4/executor/kubernetes.html) — Covers the executor behavior behind the module's Airflow-on-Kubernetes claims.
+- [Amazon Redshift Data API](https://docs.aws.amazon.com/redshift/latest/mgmt/data-api.html) — Supports the module's Redshift-from-Kubernetes pattern for connectionless SQL execution.

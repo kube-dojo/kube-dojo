@@ -536,7 +536,7 @@ kubectl exec app-with-secrets -- cat /var/secrets/db-password
 
 2. **Binary Authorization attestations are immutable and tied to the exact image digest (SHA-256), not the tag.** If someone pushes a new image with the tag `v1.0` (overwriting the old one), the attestation on the original image becomes invalid for the new image because the digest changed. This prevents a supply chain attack where an attacker replaces a trusted image with a malicious one while keeping the same tag. Always deploy by digest in production: `image: us-central1-docker.pkg.dev/proj/repo/app@sha256:abc123...`
 
-3. **Confidential GKE Nodes encrypt each node's memory with a unique key that changes on every boot.** The key is generated inside the AMD Secure Processor and never leaves the CPU. Google's hypervisor, host OS, and other VMs on the same physical host cannot read the node's memory. The performance overhead is typically 2-6% for most workloads because the encryption happens in the CPU's memory controller at hardware speed, not in software.
+3. **Confidential GKE Nodes encrypt each node's memory with a unique key that changes on every boot.** The key is generated inside the AMD Secure Processor and is designed not to leave the CPU. Google's hypervisor, host OS, and other VMs on the same physical host cannot read the node's memory. The performance overhead is typically 2-6% for most workloads because the encryption happens in the CPU's memory controller at hardware speed, not in software.
 
 4. **The GKE metadata server that enables Workload Identity intercepts all traffic to 169.254.169.254** (the standard cloud metadata endpoint) from pods. When a pod with Workload Identity configured requests an access token, the GKE metadata server contacts Google's Security Token Service (STS) to exchange the Kubernetes ServiceAccount token for a short-lived GCP access token scoped to the mapped GCP service account. These tokens expire after 1 hour and are automatically refreshed. Pods without Workload Identity receive a "permission denied" response instead of the node's credentials.
 
@@ -969,3 +969,11 @@ echo "Cleanup complete."
 ## Next Module
 
 Next up: **[Module 6.4: GKE Storage](../module-6.4-gke-storage/)** --- Master Persistent Disk CSI drivers, regional PD failover, Filestore for shared NFS, Cloud Storage FUSE for object storage access, and Backup for GKE to protect your stateful workloads.
+
+## Sources
+
+- [Workload Identity Federation for GKE](https://docs.cloud.google.com/kubernetes-engine/docs/concepts/workload-identity) — Primary concept doc for metadata flow, STS exchange, token lifetime, and identity design.
+- [Binary Authorization Overview](https://docs.cloud.google.com/binary-authorization/docs/overview) — Primary reference for attestations, deployment enforcement, and audit-log behavior.
+- [Shielded GKE Nodes](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/shielded-gke-nodes) — Canonical GKE guide for node identity and integrity protections.
+- [Kubernetes Security Posture Scanning](https://docs.cloud.google.com/kubernetes-engine/docs/concepts/about-configuration-scanning) — Best source for what GKE posture scanning actually checks in current releases.
+- [Secret Manager Add-on for GKE](https://docs.cloud.google.com/secret-manager/docs/secret-manager-managed-csi-component) — Primary doc for mounting externally managed secrets into Pods and for rotation support.

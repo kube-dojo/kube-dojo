@@ -638,7 +638,7 @@ Active-Active is NOT 2x. It's 2-3x due to:
 
 3. **The "read-your-own-writes" consistency problem** was formally defined by Doug Terry et al. at Microsoft Research in 1994. Thirty years later, it remains one of the most common bugs in distributed systems. Amazon's DynamoDB, Google's Spanner, and Azure's Cosmos DB all offer "session consistency" modes that guarantee read-your-own-writes, but only if the client maintains session affinity.
 
-4. **Cross-region data transfer between AWS regions costs $0.02/GB**, but between AWS and GCP or Azure it costs $0.09/GB (standard internet egress rates). This 4.5x cost difference is one reason why multi-cloud active-active is significantly more expensive than multi-region active-active within a single cloud. Google's "cross-cloud interconnect" and AWS's "site-to-site VPN" reduce this somewhat, but never to intra-cloud rates.
+4. **Cross-region data transfer between AWS regions costs $0.02/GB**, but between AWS and GCP or Azure it costs $0.09/GB (standard internet egress rates). This 4.5x cost difference is one reason why multi-cloud active-active is significantly more expensive than multi-region active-active within a single cloud. Google's "cross-cloud interconnect" and AWS's "site-to-site VPN" reduce this somewhat, but typically not to intra-cloud rates.
 
 ---
 
@@ -662,13 +662,13 @@ Active-Active is NOT 2x. It's 2-3x due to:
 <details>
 <summary>1. Your team wants to expand your primary application from `us-east-1` to `eu-west-1` to serve European customers better. A junior engineer suggests just deploying the exact same stateless manifests and pointing a Route53 weighted record at both. Why will this approach likely cause a massive incident if user databases are involved?</summary>
 
-Stateless services alone are insufficient because the underlying data stores (like databases) do not automatically synchronize writes globally. If you route writes to both regions without explicitly designing for multi-master replication, you will instantly create data conflicts and split-brain scenarios. Furthermore, replication lag between regions means a read in one region won't immediately see a write from another region. You must explicitly choose a strategy like single-writer or geo-sharding to manage this distributed state, otherwise user data will be corrupted or lost.
+Stateless services alone are insufficient because the underlying data stores (like databases) do not automatically synchronize writes globally. If you route writes to both regions without explicitly designing for multi-master replication, you can quickly create data conflicts and split-brain scenarios. Furthermore, replication lag between regions means a read in one region won't immediately see a write from another region. You must explicitly choose a strategy like single-writer or geo-sharding to manage this distributed state, otherwise user data will be corrupted or lost.
 </details>
 
 <details>
 <summary>2. You are designing the backend for a global ride-sharing application. Drivers and riders interact continuously, but almost entirely within their own cities. European riders never match with US drivers. Which multi-region data strategy should you choose for the active rides database, and why?</summary>
 
-Geo-sharding is the ideal choice here because the data naturally partitions by geography, meaning European users only interact with European data, and US users with US data. By explicitly sharding writes to the region where the entities reside, you completely avoid cross-region write latency and cross-region write conflicts. Single-writer would force all European rides to incur transatlantic latency on every single status update or location ping, severely degrading the real-time matching experience. Geo-sharding ensures optimal latency for the majority of operations while safely keeping the systems logically isolated.
+Geo-sharding is the ideal choice here because the data naturally partitions by geography, meaning European users only interact with European data, and US users with US data. By explicitly sharding writes to the region where the entities reside, you completely avoid cross-region write latency and cross-region write conflicts. Single-writer would force most European rides to incur transatlantic latency on most status updates or location pings, severely degrading the real-time matching experience. Geo-sharding ensures optimal latency for the majority of operations while safely keeping the systems logically isolated.
 </details>
 
 <details>
@@ -722,9 +722,9 @@ For each TravelBook service, determine the active-active strategy.
 | Search API | 99% read | Eventual (stale results OK for seconds) | Active-active, regional search index |
 | Booking Engine | 20% write | Strong (can't double-book) | Single-writer (us-east-1), proxied writes from EU |
 | User Profiles | 95% read | Session (read-your-own-writes) | Single-writer + read replicas + RYOW cache |
-| Payment Service | 100% write | Strong + idempotent | Single-writer (us-east-1), idempotency keys |
+| Payment Service | Mostly write | Strong + idempotent | Single-writer (us-east-1), idempotency keys |
 | Notification Service | 90% write | Eventual (delayed delivery OK) | Regional queues, deduplicated delivery |
-| Image/CDN Service | 100% read | Eventual (cached at edge) | CloudFront/CDN, origin in both regions |
+| Image/CDN Service | Mostly read | Eventual (cached at edge) | CloudFront/CDN, origin in both regions |
 | Review System | 80% read | Eventual (new reviews appear within seconds) | Single-writer + async replication |
 
 Key decisions:
@@ -1012,3 +1012,9 @@ Break-even analysis:
 ## Next Module
 
 [Module 8.7: Stateful Workload Migration & Data Gravity](../module-8.7-stateful-migration/) -- You know how to run workloads across regions. Now learn how to move them. Database migrations, the Strangler Fig pattern, CSI snapshots, and the art of zero-downtime migration for stateful workloads.
+
+## Sources
+
+- [Amazon Route 53 Latency-Based Routing](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/routing-policy-latency.html) — Direct vendor documentation for one of the routing patterns the module discusses.
+- [Promoting a Read Replica to Be a Standalone DB Instance](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_ReadRepl.Promote.html) — Grounds the failover discussion around asynchronous replicas, promotion timing, and recovery tradeoffs.
+- [Azure Cosmos DB Consistency Levels](https://learn.microsoft.com/en-us/azure/cosmos-db/consistency-levels) — A clear primary source for session consistency and read-your-writes behavior in a real multi-region database product.

@@ -562,7 +562,7 @@ gcloud compute networks peerings create peer-b-to-a \
 | Using network tags instead of service accounts for firewalling | Tags are simpler to set up initially | Migrate to SA-based firewall rules; they are IAM-controlled and typo-resistant |
 | Not enabling Private Google Access | Engineers do not realize private VMs cannot reach Google APIs | Enable it on every subnet: `--enable-private-ip-google-access` |
 | Overlapping CIDR ranges between VPCs | No central IP address management | Use an IPAM tool or spreadsheet; plan ranges before creating subnets |
-| Creating overly broad firewall rules (0.0.0.0/0) | "Debug" rules that never get removed | Use IAP for SSH instead of opening port 22 to the world; set expiration reminders |
+| Creating overly broad firewall rules (0.0.0.0/0) | "Debug" rules that linger and are not removed promptly | Use IAP for SSH instead of opening port 22 to the world; set expiration reminders |
 | Forgetting that VPC peering is not transitive | Assumption from AWS Transit Gateway experience | Use Shared VPC for intra-org, or deploy a Network Connectivity Center hub for transit routing |
 | Not configuring Cloud NAT logging | Engineers do not know NAT logging exists | Enable it with `--enable-logging` for debugging connection issues |
 | Granting `roles/compute.networkUser` at project level | Seems simpler than per-subnet conditions | Use IAM conditions to restrict network user role to specific subnets |
@@ -889,3 +889,10 @@ echo "Cleanup complete."
 ## Next Module
 
 Next up: **[Module 2.3: Compute Engine](../module-2.3-compute/)** --- Learn machine families, preemptible and Spot VMs, instance templates, managed instance groups, and how to build a globally load-balanced application across two regions.
+
+## Sources
+
+- [VPC networks](https://docs.cloud.google.com/vpc/docs/vpc) — Primary reference for global VPC behavior, subnet scope, and auto versus custom mode.
+- [VPC firewall rules](https://docs.cloud.google.com/firewall/docs/firewalls) — Covers firewall rule scope, implied rules, priorities, tags, and service-account filtering.
+- [Cloud NAT overview](https://docs.cloud.google.com/nat/docs/overview) — Explains Cloud NAT architecture, outbound-only behavior, availability model, and scaling properties.
+- [Shared VPC](https://docs.cloud.google.com/vpc/docs/shared-vpc) — Best primary doc for host-project and service-project roles, subnet delegation, and centralized networking.

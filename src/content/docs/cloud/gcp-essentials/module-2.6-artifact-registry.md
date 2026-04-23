@@ -19,7 +19,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In November 2021, the `ua-parser-js` npm package---downloaded over 7 million times per week---was compromised. An attacker gained access to the maintainer's npm account and published three malicious versions that installed cryptocurrency miners on Linux and Windows systems, and also stole passwords from infected machines. Any CI/CD pipeline that ran `npm install` during the window when the malicious versions were available pulled compromised code directly into production builds. Companies that pulled packages directly from the public npm registry had no defense. Companies that used a private registry with upstream caching had a critical advantage: the malicious versions were never cached because their pipelines pulled from the cached (clean) versions already stored in the private registry.
+In November 2021, the `ua-parser-js` npm package---downloaded over 7 million times per week---was compromised. An attacker gained access to the maintainer's npm account and published three malicious versions that installed cryptocurrency miners on Linux and Windows systems, and also stole passwords from infected machines. Any CI/CD pipeline that ran `npm install` during the window when the malicious versions were available pulled compromised code directly into production builds. Companies that pulled packages directly from the public npm registry had no defense. Companies that used a private registry with upstream caching had a critical advantage: in many cases, the malicious versions were not cached because their pipelines pulled the cached (clean) versions already stored in the private registry.
 
 This incident represents a growing threat: **supply chain attacks targeting public package registries**. Whether you are pulling container images from Docker Hub, npm packages from the npm registry, or Python packages from PyPI, you are trusting code written by strangers. Artifact Registry is GCP's managed solution for storing, managing, and securing software artifacts. It replaces the older Container Registry (GCR) and extends beyond Docker images to support npm, Maven, Python, Go, and OS packages.
 
@@ -483,7 +483,7 @@ The first likely cause is that the developer has not configured Docker to authen
 <details>
 <summary>6. Your company uses a virtual repository to consolidate access. It is configured with an internal standard repository at priority 100, and a remote repository caching Docker Hub at priority 200. A developer accidentally names their internal helper script `ubuntu` and publishes it as a container image to the internal repository. When a CI pipeline runs `docker pull <virtual-repo-url>/ubuntu:latest`, what exactly happens and what security benefit does this priority configuration provide?</summary>
 
-When the `docker pull` command is executed, the virtual repository evaluates its upstreams in priority order, starting with the lowest number. It checks the internal standard repository (priority 100) first, finds the internally published `ubuntu:latest` image, and returns it immediately without ever querying the remote repository (priority 200). This priority configuration provides a critical security benefit by preventing dependency confusion attacks. If an attacker publishes a malicious package to a public registry with the exact same name as an internal package, the virtual repository will always prioritize and serve the safe internal version, neutralizing the attack.
+When the `docker pull` command is executed, the virtual repository evaluates its upstreams in priority order, starting with the lowest number. It checks the internal standard repository (priority 100) first, finds the internally published `ubuntu:latest` image, and returns it immediately without ever querying the remote repository (priority 200). This priority configuration provides a critical security benefit by preventing dependency confusion attacks. If an attacker publishes a malicious package to a public registry with the exact same name as an internal package, the virtual repository will prioritize and serve the internal version first in the normal case, which helps mitigate this attack.
 </details>
 
 ---
@@ -685,3 +685,9 @@ echo "Cleanup complete."
 ## Next Module
 
 Next up: **[Module 2.7: Cloud Run (Serverless Containers)](../module-2.7-cloud-run/)** --- Deploy stateless containers without managing infrastructure, master revisions and traffic splitting for blue/green deployments, and connect Cloud Run to your VPC for private backend access.
+
+## Sources
+
+- [Artifact Registry Overview](https://cloud.google.com/artifact-registry/docs/overview) — Gives the product-level model for repositories, access control, and integrations.
+- [Remote Repository Overview](https://cloud.google.com/artifact-registry/docs/repositories/remote-overview) — Explains how upstream caching works and what guarantees remote repositories do and do not provide.
+- [Container Scanning Overview](https://cloud.google.com/artifact-analysis/docs/container-scanning-overview) — Covers automatic scanning, on-demand scanning, and how vulnerability findings are produced for Artifact Registry images.

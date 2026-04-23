@@ -30,11 +30,11 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In 2019, a global ride-sharing decacorn faced a catastrophic scaling wall. They were processing GPS telemetry data from over 50,000 drivers concurrently. Every single second, each driver's smartphone transmitted a location update. That amounted to 50,000 events per second, characterized by massive, unpredictable spikes during rush hours, storms, or special events, and plummeting to near-zero traffic in the dead of night. To handle this influx, they initially provisioned a massive fleet of 200 EC2 instances, relying on auto-scaling groups to fluctuate capacity based on CPU utilization metrics. 
+In 2019, a global ride-sharing decacorn faced a catastrophic scaling wall. They were processing GPS telemetry data from over 50,000 drivers concurrently. About once per second, each driver's smartphone transmitted a location update. That amounted to 50,000 events per second, characterized by massive, unpredictable spikes during rush hours, storms, or special events, and plummeting to near-zero traffic in the dead of night. To handle this influx, they initially provisioned a massive fleet of 200 EC2 instances, relying on auto-scaling groups to fluctuate capacity based on CPU utilization metrics. 
 
 The fundamental problem was the velocity of scaling. EC2 auto-scaling was perpetually three to four minutes behind the actual load curve. When a sudden rush hour surge hit, requests queued up across the network, and the ingested location data became inherently stale. For riders, this meant highly inaccurate ETAs and app interfaces where drivers appeared to jump entire blocks at a time. During off-peak hours, the company was hemorrhaging capital, paying thousands of dollars for powerful instances that sat practically idle. The financial impact was millions of dollars wasted annually on over-provisioned idle compute, coupled with an unquantifiable loss of customer trust due to degraded application performance during peak demand.
 
-They engineered a complete paradigm shift by replacing their cumbersome server-based ingestion layer with AWS Lambda functions triggered directly by Amazon Kinesis data streams. Each incoming batch of GPS events instantly triggered a precise Lambda invocation. During rush hour, AWS automatically spun up tens of thousands of concurrent Lambda execution environments in a matter of milliseconds. At 3 AM, the infrastructure footprint dynamically shrank to near zero. Scaling became instantaneous and perfectly matched to the actual load curve. Their infrastructure compute bill plummeted by 62% because they eradicated idle resources entirely. AWS Lambda, launched in 2014, fundamentally altered cloud engineering by proving that engineering teams should focus exclusively on writing business logic while the cloud provider manages provisioning, scaling, patching, and high availability. In this module, you will master the mechanics of Lambda, advanced event-driven orchestration, and the structural strategies necessary to build highly resilient, production-grade serverless pipelines.
+They engineered a complete paradigm shift by replacing their cumbersome server-based ingestion layer with AWS Lambda functions triggered directly by Amazon Kinesis data streams. Each incoming batch of GPS events quickly triggered a corresponding Lambda invocation. During rush hour, AWS automatically spun up tens of thousands of concurrent Lambda execution environments in a matter of milliseconds. At 3 AM, the infrastructure footprint dynamically shrank to near zero. Scaling became instantaneous and perfectly matched to the actual load curve. Their infrastructure compute bill plummeted by 62% because they eradicated idle resources entirely. AWS Lambda, launched in 2014, fundamentally altered cloud engineering by proving that engineering teams should focus exclusively on writing business logic while the cloud provider manages provisioning, scaling, patching, and high availability. In this module, you will master the mechanics of Lambda, advanced event-driven orchestration, and the structural strategies necessary to build highly resilient, production-grade serverless pipelines.
 
 ---
 
@@ -580,7 +580,7 @@ Lambda excels as the connective tissue in event-driven systems. Mastering these 
 
 ### Pattern 1: S3 Event Processing Pipeline
 
-This foundational pattern is utilized universally for asynchronous file processing, image manipulation, and data ingestion.
+This foundational pattern is widely utilized for asynchronous file processing, image manipulation, and data ingestion.
 
 ```mermaid
 graph LR
@@ -712,9 +712,9 @@ While AWS Lambda represents a massive leap in cloud capabilities, it is not a pa
 ## Did You Know?
 
 1. AWS Lambda was initially unveiled at the AWS re:Invent conference in 2014, and at launch, it solely supported the Node.js runtime environment. The canonical launch demonstration featured a function dynamically resizing images uploaded to an S3 bucket. Tim Wagner, widely considered the architect of Lambda, later revealed that the most difficult engineering hurdle was not executing the isolated code, but rather engineering a radically new billing metering infrastructure capable of charging customers accurately in one-millisecond increments.
-2. Every single AWS Lambda function executes within the heavily fortified confines of a Firecracker microVM. Firecracker is an open-source virtualization technology constructed specifically for the Lambda service, and it concurrently powers AWS Fargate. Each microVM ensures hardware-level security isolation between individual tenants while booting securely in under 125 milliseconds.
+2. AWS Lambda functions typically execute within the heavily fortified confines of a Firecracker microVM. Firecracker is an open-source virtualization technology constructed specifically for the Lambda service, and it concurrently powers AWS Fargate. Each microVM ensures hardware-level security isolation between individual tenants while booting securely in under 125 milliseconds.
 3. The theoretical maximum concurrency threshold across all Lambda functions within a single AWS region defaults to 1,000 executions, but AWS routinely authorizes limit increases exceeding 100,000 for massive enterprise accounts. Streaming giants like Netflix operate hundreds of thousands of concurrent Lambda executions during global peak hours to handle video encoding, data validation, and highly automated infrastructure remediation.
-4. Lambda@Edge and CloudFront Functions let you run code at 450+ edge locations worldwide, executing within single-digit milliseconds of the end user. Lambda@Edge supports robust runtimes including Node.js and Python with up to a five-second execution window, whereas CloudFront Functions leverage a highly restricted JavaScript environment to achieve execution times universally under one millisecond. These edge capabilities are heavily utilized for complex request manipulation, sophisticated A/B testing, and instantaneous dynamic routing without ever traversing the internet back to the origin server.
+4. Lambda@Edge and CloudFront Functions let you run code at 450+ edge locations worldwide, executing within single-digit milliseconds of the end user. Lambda@Edge supports robust runtimes including Node.js and Python with up to a five-second execution window, whereas CloudFront Functions leverage a highly restricted JavaScript environment to achieve execution times that are typically under one millisecond. These edge capabilities are heavily utilized for complex request manipulation, sophisticated A/B testing, and instantaneous dynamic routing without ever traversing the internet back to the origin server.
 
 ---
 
@@ -1192,3 +1192,9 @@ echo "Cleanup complete"
 ## Next Module
 
 Next up: **[Module 1.9: Secrets Manager](../module-1.9-secrets/)** — Learn to definitively manage sensitive configuration data, including enterprise database credentials, third-party API keys, and TLS certificates, securely with automatic rotation, cross-account sharing capabilities, and native integration directly with AWS Lambda, ECS, and EKS workloads.
+
+## Sources
+
+- [Lambda Execution Environment Lifecycle](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtime-environment.html#cold-start-latency) — Explains Init, Invoke, static initialization, and cold-start behavior in the primary Lambda runtime model.
+- [Lambda Quotas](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html) — Authoritative reference for current Lambda execution, packaging, storage, and concurrency limits.
+- [Choosing Standard vs. Express Step Functions Workflows](https://docs.aws.amazon.com/step-functions/latest/dg/choosing-workflow-type.html) — Clarifies duration, execution semantics, history retention, and pricing differences for Step Functions orchestration.

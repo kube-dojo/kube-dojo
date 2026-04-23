@@ -62,7 +62,7 @@ graph TD
     Repo3 --> Img6[Image: sha256:pqr678... | tag: 1.25-custom]
 ```
 
-**Registry**: One per AWS account per region. The URL format is always `{account_id}.dkr.ecr.{region}.amazonaws.com`. You cannot change this URL.
+**Registry**: One per AWS account per region. For private ECR registries in standard AWS regions, the URL format is `{account_id}.dkr.ecr.{region}.amazonaws.com`. You cannot change this URL.
 
 **Repository**: A collection of related container images, like a Git repository for code. Naming convention matters -- use a slash-separated hierarchy like `team/service` or `app/component`.
 
@@ -670,7 +670,7 @@ This is a subtle but important behavior in ECR. Lifecycle policies operate on th
 <details>
 <summary>4. During a major traffic spike, your EKS cluster scales up rapidly, launching 50 new pods at once. The pods fail to start, and the Kubernetes events show 'Too Many Requests' errors from Docker Hub while trying to pull a public Nginx base image. How would implementing an ECR pull-through cache prevent this outage?</summary>
 
-Docker Hub imposes strict rate limits on image pulls based on the IP address or authenticated user (e.g., 100 pulls per 6 hours for anonymous users). When 50 pods attempt to pull the Nginx image simultaneously from Docker Hub, you instantly exhaust your limit, causing the pulls to be throttled and the pods to fail. An ECR pull-through cache acts as a local proxy; the first pull goes to Docker Hub and caches the image in your ECR registry. All subsequent pod scaling events pull from the local ECR cache, which is not subject to Docker Hub rate limits, thereby ensuring reliable and fast container startups.
+Docker Hub imposes strict rate limits on image pulls based on the IP address or authenticated user (e.g., 100 pulls per 6 hours for anonymous users). When 50 pods attempt to pull the Nginx image simultaneously from Docker Hub, you can quickly exhaust your limit, causing the pulls to be throttled and the pods to fail. An ECR pull-through cache acts as a local proxy; the first pull goes to Docker Hub and caches the image in your ECR registry. All subsequent pod scaling events pull from the local ECR cache, which is not subject to Docker Hub rate limits, thereby ensuring reliable and fast container startups.
 </details>
 
 <details>
@@ -990,3 +990,9 @@ echo "Cleanup complete"
 ## Next Module
 
 Next up: **[Module 1.7: Elastic Container Service (ECS) & Fargate](../module-1.7-ecs-fargate/)** -- Now that you can store container images, it is time to run them. You will learn to deploy containers on AWS using ECS with both EC2 and Fargate launch types, integrate with load balancers, and debug running containers with ECS Exec.
+
+## Sources
+
+- [Amazon ECR private registry](https://docs.aws.amazon.com/AmazonECR/latest/userguide/Registries.html) — Covers the core registry model, private registry URI format, and account-and-Region basics.
+- [Scan images for software vulnerabilities in Amazon ECR](https://docs.aws.amazon.com/AmazonECR/latest/userguide/image-scanning.html) — Explains the current Basic versus Enhanced scanning model and where Amazon Inspector fits.
+- [Amazon ECR interface VPC endpoints (AWS PrivateLink)](https://docs.aws.amazon.com/AmazonECR/latest/userguide/vpc-endpoints.html) — Documents the endpoint combination needed to pull private images without internet egress.

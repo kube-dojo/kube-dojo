@@ -1,0 +1,370 @@
+{
+  "module_key": "cloud/gcp-essentials/module-2.2-vpc",
+  "module_path": "src/content/docs/cloud/gcp-essentials/module-2.2-vpc.md",
+  "research_run_id": "2026-04-23T04:38:44+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 3,
+  "section_pool_ref": null,
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "A logistics company on GCP had a cascading outage in March 2021 that took down order tracking for 14 hours.",
+      "claim_class": "war_story",
+      "span_hint": "section: Why This Module Matters, paragraph 1 sentence 1",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "In March 2021, a logistics company running on GCP experienced a cascading outage that took down their entire order-tracking system for 14 hours.",
+      "suggested_rewrite": "A firewall misconfiguration can cascade into a prolonged outage if it blocks traffic that critical systems depend on.",
+      "lesson_point_url": null,
+      "rationale": "This is a precise unattributed incident claim with a date, company profile, and duration."
+    },
+    {
+      "claim_id": "C002",
+      "claim_text": "A typo in a tag-based firewall rule silently dropped monitoring traffic because GCP firewall rules are deny-by-default.",
+      "claim_class": "war_story",
+      "span_hint": "section: Why This Module Matters, paragraph 1 sentences 2-3",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "An engineer had added a new firewall rule using network tags to allow traffic from their monitoring system to a set of backend VMs. The tag name had a typo---`monitoring-target` instead of `monitor-target`---and because GCP firewall rules are deny-by-default, the monitoring traffic was silently dropped.",
+      "suggested_rewrite": "A tag-based firewall rule can fail silently if the expected network tag is misspelled, and GCP's default-deny ingress behavior can block the intended traffic until someone inspects the rule and the instance tags.",
+      "lesson_point_url": null,
+      "rationale": "The specific incident details are unsourced, but the operational lesson can be preserved by removing the fabricated anecdote."
+    },
+    {
+      "claim_id": "C003",
+      "claim_text": "An overly broad debug rule exposed 34 production VMs on port 8080 because they still carried a debug tag.",
+      "claim_class": "war_story",
+      "span_hint": "section: Why This Module Matters, paragraph 1 sentence 4",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Meanwhile, a second engineer had created an overly broad \"debug\" firewall rule allowing all ingress from `0.0.0.0/0` on port 8080 to any VM with the tag `debug`, not realizing that 34 production VMs still carried that tag from a previous troubleshooting session.",
+      "suggested_rewrite": "An overly broad debug firewall rule can unintentionally expose production systems if old network tags remain attached to instances after troubleshooting.",
+      "lesson_point_url": null,
+      "rationale": "This is an unsourced war story with fake-precise operational details."
+    },
+    {
+      "claim_id": "C004",
+      "claim_text": "Automated scanners found the exposed endpoints within hours, and the incident cost over $800,000 and required a full security audit.",
+      "claim_class": "war_story",
+      "span_hint": "section: Why This Module Matters, paragraph 1 sentences 5-6",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Within hours, automated scanners found the exposed endpoints and began probing for vulnerabilities. The incident cost the company over $800,000 in lost revenue and required a full security audit.",
+      "suggested_rewrite": "Exposed internet-facing endpoints are quickly discovered by automated scanning, and cleaning up that kind of exposure can trigger major operational and security follow-up work.",
+      "lesson_point_url": null,
+      "rationale": "The timing, cost, and aftermath are precise real-world specifics without an attributable source."
+    },
+    {
+      "claim_id": "C005",
+      "claim_text": "In Google Cloud, a VPC network is a global resource and its subnets are regional resources connected within the same VPC.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Global VPCs vs Regional Subnets, opening paragraph and comparison table",
+      "disposition": "supported",
+      "source_ids": [
+        "S001"
+      ],
+      "proposed_url": "https://docs.cloud.google.com/vpc/docs/vpc",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The VPC networks documentation explicitly says VPCs are global resources and subnets are regional resources."
+    },
+    {
+      "claim_id": "C006",
+      "claim_text": "In AWS, a VPC spans Availability Zones within one Region, and each subnet must reside entirely within a single Availability Zone.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Global VPCs vs Regional Subnets, opening paragraph and comparison table",
+      "disposition": "supported",
+      "source_ids": [
+        "S002"
+      ],
+      "proposed_url": "https://docs.aws.amazon.com/vpc/latest/userguide/vpc-subnet-basics.html",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "AWS VPC documentation directly describes VPC scope as regional and subnets as single-AZ resources."
+    },
+    {
+      "claim_id": "C008",
+      "claim_text": "Auto mode creates one subnet per region from the 10.128.0.0/9 space, while custom mode creates no subnets automatically.",
+      "claim_class": "statistic",
+      "span_hint": "section: VPC Types: Auto Mode vs Custom Mode, intro and table",
+      "disposition": "supported",
+      "source_ids": [
+        "S004"
+      ],
+      "proposed_url": "https://docs.cloud.google.com/vpc/docs/vpc",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Google Cloud's VPC documentation directly states these auto-mode and custom-mode behaviors and the predefined CIDR block."
+    },
+    {
+      "claim_id": "C009",
+      "claim_text": "In practice you should always use Custom Mode.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: VPC Types: Auto Mode vs Custom Mode, opening sentence",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "GCP offers two VPC modes, but in practice you should always use Custom Mode.",
+      "suggested_rewrite": "GCP offers two VPC modes, but for production environments custom mode is usually the better choice because you control subnet creation and IP ranges.",
+      "lesson_point_url": null,
+      "rationale": "The absolute recommendation is stronger than the cited product docs support."
+    },
+    {
+      "claim_id": "C010",
+      "claim_text": "Auto mode creates a /20 subnet in every GCP region, currently over 40 regions, and every GCP Well-Architected Review starts by telling teams to delete the default VPC.",
+      "claim_class": "statistic",
+      "span_hint": "section: VPC Types: Auto Mode vs Custom Mode, war story paragraph",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "**War Story**: The auto-mode VPC creates a subnet with a `/20` range in every GCP region (currently over 40 regions). That consumes a massive amount of IP space from the `10.128.0.0/9` range, and these subnets often conflict with on-premises networks. Every GCP Well-Architected Review starts with \"delete the default VPC and create a custom one.\"",
+      "suggested_rewrite": "**Practice Note**: Auto mode creates one predefined subnet per region from the `10.128.0.0/9` space. In production, custom-mode VPCs are usually preferable because you control which subnets exist and how their CIDR ranges align with on-premises or multi-cloud networks.",
+      "lesson_point_url": null,
+      "rationale": "This mixes supportable product behavior with unstable region counts and an unciteable sweeping claim about every review."
+    },
+    {
+      "claim_id": "C011",
+      "claim_text": "VMs without external IPs cannot reach Google APIs and services unless Private Google Access is enabled on their subnet.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Private Google Access",
+      "disposition": "supported",
+      "source_ids": [
+        "S005"
+      ],
+      "proposed_url": "https://docs.cloud.google.com/vpc/docs/private-google-access",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Private Google Access documentation states this behavior explicitly."
+    },
+    {
+      "claim_id": "C012",
+      "claim_text": "GCP firewall rules are global to the VPC, stateful, and use priority values from 0 to 65535 where lower numbers have higher priority.",
+      "claim_class": "statistic",
+      "span_hint": "section: Firewall Rules: Tags vs Service Accounts, opening paragraph and rule anatomy",
+      "disposition": "supported",
+      "source_ids": [
+        "S006"
+      ],
+      "proposed_url": "https://docs.cloud.google.com/firewall/docs/firewalls",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Google Cloud firewall documentation directly covers scope, statefulness, and priority range."
+    },
+    {
+      "claim_id": "C015",
+      "claim_text": "Attaching a service account to a resource requires iam.serviceAccounts.actAs.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Service Account-Based Firewall Rules, numbered list item 2",
+      "disposition": "supported",
+      "source_ids": [
+        "S009"
+      ],
+      "proposed_url": "https://docs.cloud.google.com/iam/docs/attach-service-accounts",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The IAM documentation explicitly says attaching a service account requires the Service Account User role or iam.serviceAccounts.actAs."
+    },
+    {
+      "claim_id": "C016",
+      "claim_text": "Network tags do not work cross-project, while service accounts do with Shared VPC.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Comparison: Tags vs Service Accounts for Firewalling, table row Cross-project",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| **Cross-project** | No | Yes (with Shared VPC) |",
+      "suggested_rewrite": "| **Cross-project / Shared VPC** | Network-scoped behavior can be harder to reason about across projects | Yes (host or service project service accounts can be used in Shared VPC) |",
+      "lesson_point_url": null,
+      "rationale": "The claim that tags are simply 'No' for cross-project use is too absolute and risks being inaccurate in Shared VPC contexts."
+    },
+    {
+      "claim_id": "C017",
+      "claim_text": "Google recommends service-account-based firewalling for all new deployments and tags only for legacy workloads.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Comparison: Tags vs Service Accounts for Firewalling, table row Recommended by Google",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| **Recommended by Google** | Legacy workloads only | Yes, for all new deployments |",
+      "suggested_rewrite": "| **Recommended pattern** | Use when tag-based targeting fits your operational model | Prefer when you want stricter IAM-controlled targeting |",
+      "lesson_point_url": null,
+      "rationale": "The row states a strong vendor recommendation that is broader than the cited docs explicitly support."
+    },
+    {
+      "claim_id": "C019",
+      "claim_text": "Cloud NAT lets resources without external IP addresses make outbound connections but does not permit unsolicited inbound connections.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Cloud NAT: Giving Private VMs Internet Access, opening paragraph",
+      "disposition": "supported",
+      "source_ids": [
+        "S011"
+      ],
+      "proposed_url": "https://docs.cloud.google.com/nat/docs/overview",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Cloud NAT overview states both outbound behavior and the lack of unsolicited inbound connectivity."
+    },
+    {
+      "claim_id": "C020",
+      "claim_text": "Public Cloud NAT is configured on a Cloud Router, and the Cloud Router is part of the control plane even though Public NAT does not use BGP.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Setting Up Cloud NAT, opening sentence",
+      "disposition": "supported",
+      "source_ids": [
+        "S012"
+      ],
+      "proposed_url": "https://cloud.google.com/nat/docs/public-nat",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Public NAT documentation explicitly says the gateway is associated with a Cloud Router and that Public NAT does not use BGP."
+    },
+    {
+      "claim_id": "C021",
+      "claim_text": "The default minimum ports per VM for Cloud NAT is 64 when static port allocation is used.",
+      "claim_class": "statistic",
+      "span_hint": "section: Cloud NAT Options, table row min-ports-per-vm",
+      "disposition": "supported",
+      "source_ids": [
+        "S013"
+      ],
+      "proposed_url": "https://docs.cloud.google.com/nat/docs/ports-and-addresses",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Cloud NAT ports documentation explicitly gives the default minimum ports per VM."
+    },
+    {
+      "claim_id": "C023",
+      "claim_text": "In Shared VPC, a host project owns the network and service projects use its subnets; roles/compute.networkUser can be granted on the whole host project or on selected subnets.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Shared VPC: Multi-Project Networking; section: Shared VPC Permissions",
+      "disposition": "supported",
+      "source_ids": [
+        "S015"
+      ],
+      "proposed_url": "https://docs.cloud.google.com/vpc/docs/shared-vpc",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Shared VPC documentation directly defines host and service projects and explains project-level versus subnet-level networkUser grants."
+    },
+    {
+      "claim_id": "C024",
+      "claim_text": "VPC Network Peering connects separate VPCs with internal IP connectivity but does not provide transitive routing.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: VPC Peering",
+      "disposition": "supported",
+      "source_ids": [
+        "S016"
+      ],
+      "proposed_url": "https://docs.cloud.google.com/vpc/docs/vpc-peering",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The VPC Network Peering documentation explicitly states the non-transitive limitation."
+    },
+    {
+      "claim_id": "C026",
+      "claim_text": "A single GCP VPC spans all 40+ regions and same-VPC inter-region traffic uses internal IPs at no additional cost beyond standard inter-region pricing.",
+      "claim_class": "statistic",
+      "span_hint": "section: Did You Know, item 2",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "**A single GCP VPC can span all 40+ regions without any peering or gateway**. VMs in Tokyo and Sao Paulo on the same VPC can communicate using internal IPs at no additional cost beyond the standard inter-region network pricing. This is fundamentally different from AWS, where each VPC is confined to a single region.",
+      "suggested_rewrite": "**A single GCP VPC can span all current Google Cloud regions without peering or gateways**. Instances in different regions on the same VPC can communicate using internal IPs. This differs from AWS, where a VPC is scoped to a single Region.",
+      "lesson_point_url": null,
+      "rationale": "The exact region count is temporally unstable and the pricing phrasing is more specific than necessary for the lesson."
+    },
+    {
+      "claim_id": "C027",
+      "claim_text": "Cloud NAT is a distributed software-defined managed service, does not rely on proxy VMs, does not depend on a single physical gateway, and can automatically scale NAT IP usage.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Did You Know, item 3",
+      "disposition": "supported",
+      "source_ids": [
+        "S018"
+      ],
+      "proposed_url": "https://docs.cloud.google.com/nat/docs/overview",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Cloud NAT overview explicitly describes it as distributed, software-defined, VM-less, and scalable."
+    },
+    {
+      "claim_id": "C028",
+      "claim_text": "Shared VPC supports up to 1,000 service projects per host project, and that limit increase changed large-enterprise design patterns.",
+      "claim_class": "statistic",
+      "span_hint": "section: Did You Know, item 4",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "**Shared VPC supports up to 1,000 service projects per host project**. Before this limit was increased, large enterprises would hit the ceiling and need to create multiple host projects with complex peering. If you are designing for scale, Shared VPC is almost always preferred over VPC peering for intra-organization networking.",
+      "suggested_rewrite": "**Shared VPC is designed to scale across many service projects in one host-project networking model**. For intra-organization networking, it is often easier to centralize policy with Shared VPC than to manage many independently peered VPCs.",
+      "lesson_point_url": null,
+      "rationale": "The exact quota is not cleanly backed by an allowlisted public doc page here, and the historical design-pattern claim is unattributed."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://docs.cloud.google.com/vpc/docs/vpc",
+      "title": "VPC networks",
+      "tier": "vendor",
+      "why_relevant": "Primary reference for global VPC behavior, subnet scope, and auto versus custom mode."
+    },
+    {
+      "url": "https://docs.cloud.google.com/firewall/docs/firewalls",
+      "title": "VPC firewall rules",
+      "tier": "vendor",
+      "why_relevant": "Covers firewall rule scope, implied rules, priorities, tags, and service-account filtering."
+    },
+    {
+      "url": "https://docs.cloud.google.com/nat/docs/overview",
+      "title": "Cloud NAT overview",
+      "tier": "vendor",
+      "why_relevant": "Explains Cloud NAT architecture, outbound-only behavior, availability model, and scaling properties."
+    },
+    {
+      "url": "https://docs.cloud.google.com/vpc/docs/shared-vpc",
+      "title": "Shared VPC",
+      "tier": "vendor",
+      "why_relevant": "Best primary doc for host-project and service-project roles, subnet delegation, and centralized networking."
+    }
+  ],
+  "notes": "No shared citation pool was assumed, so each supported claim uses its primary source in proposed_url and source_ids are local identifiers only.",
+  "_schema_issues": [],
+  "rejected_urls": []
+}

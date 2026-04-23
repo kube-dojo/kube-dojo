@@ -19,7 +19,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In December 2021, a Series C fintech startup running 340 microservices on Amazon EKS experienced a cascading failure that took down their entire payment processing platform for nearly four hours. The root cause was not a bug in their code. It was not a misconfigured Kubernetes manifest. The engineering team had deployed their EKS cluster with a public API server endpoint and no private endpoint. When a regional AWS API throttling event occurred, their worker nodes -- running in private subnets -- could not reach the Kubernetes API server through the NAT Gateway because the NAT Gateway itself was overwhelmed by unrelated outbound traffic from a data pipeline that had gone haywire. Nodes lost contact with the control plane, pods were evicted, and the entire fleet entered a crash loop. A private endpoint configuration would have kept node-to-control-plane traffic entirely within the VPC, completely bypassing the NAT Gateway and the public internet.
+A cluster that relies only on the public API endpoint can create an unnecessary dependency on NAT or other external network paths for node-to-control-plane communication. Enabling the private endpoint keeps that traffic inside the VPC and reduces that failure mode.
 
 This story illustrates a fundamental truth about EKS: the control plane is managed by AWS, but how you connect to it, how your nodes register with it, and how you authenticate to it are entirely your responsibility. Getting these architectural decisions wrong does not just create inconveniences -- it creates single points of failure that can take down production workloads for hours.
 
@@ -33,7 +33,7 @@ When you create an EKS cluster, AWS provisions a highly available Kubernetes con
 
 ### What AWS Manages For You
 
-The EKS control plane consists of at least two API server instances and three etcd nodes, spread across three Availability Zones in the AWS-owned account. You do not pay for this infrastructure directly -- it is included in the $0.10/hour cluster fee.
+The EKS control plane consists of [at least two API server instances and three etcd nodes, spread across three Availability Zones](https://docs.aws.amazon.com/eks/latest/userguide/eks-architecture.html) in the AWS-owned account. You do not pay for this infrastructure directly -- it is included in the $0.10/hour cluster fee.
 
 ```mermaid
 flowchart TD
@@ -62,7 +62,7 @@ flowchart TD
 
 ### Cross-Account ENIs: The Bridge
 
-The most important architectural detail in EKS is the **cross-account Elastic Network Interface (ENI)**. When you create an EKS cluster, AWS places ENIs from the managed control plane account into the subnets you specify in your VPC. These ENIs are how the control plane communicates with your worker nodes.
+The most important architectural detail in EKS is the **cross-account Elastic Network Interface (ENI)**. When you create an EKS cluster, [AWS places ENIs from the managed control plane account into the subnets you specify in your VPC. These ENIs are how the control plane communicates with your worker nodes.](https://docs.aws.amazon.com/eks/latest/userguide/network-reqs.html)
 
 This has critical implications:
 
@@ -81,7 +81,7 @@ aws ec2 describe-network-interfaces \
 
 ### The Cluster Security Group
 
-EKS automatically creates a **cluster security group** that is attached to both the cross-account ENIs and your managed node groups. This security group allows unrestricted communication between the control plane and your nodes. You can find it in the cluster details:
+EKS automatically creates a **cluster security group** that is [attached to both the cross-account ENIs and your managed node groups. This security group allows unrestricted communication between the control plane and your nodes](https://docs.aws.amazon.com/eks/latest/userguide/sec-group-reqs.html). You can find it in the cluster details:
 
 ```bash
 # Retrieve the cluster security group
@@ -102,7 +102,7 @@ The single most consequential architectural decision you make when creating an E
 
 ### Public Endpoint Only (Default)
 
-When you create an EKS cluster, the default configuration exposes a public endpoint. The API server gets a public DNS name (e.g., `https://ABCDEF1234.gr7.us-east-1.eks.amazonaws.com`) that resolves to public IP addresses.
+When you create an EKS cluster, [the default configuration exposes a public endpoint](https://docs.aws.amazon.com/eks/latest/userguide/cluster-endpoint.html). The API server gets a public DNS name (e.g., `https://ABCDEF1234.gr7.us-east-1.eks.amazonaws.com`) that resolves to public IP addresses.
 
 ```mermaid
 flowchart TD
@@ -131,7 +131,7 @@ flowchart TD
     NAT -- "via Internet" --> PubEndpoint
 ```
 
-**The problem**: Your worker nodes in private subnets must traverse the NAT Gateway and the public internet to reach the API server. This adds latency, costs money (NAT data processing fees), and creates a dependency on the NAT Gateway. If your NAT Gateway is overwhelmed or fails, your nodes lose contact with the control plane.
+**The problem**: Your worker nodes in private subnets must reach the API server through the public endpoint, which sends that traffic out of the VPC. This adds latency, costs money (NAT data processing fees), and creates a dependency on the NAT Gateway. If your NAT Gateway is overwhelmed or fails, your nodes lose contact with the control plane.
 
 You can restrict the public endpoint using CIDR allowlists:
 
@@ -169,7 +169,7 @@ flowchart TD
 
 **Advantages**: Node-to-control-plane traffic stays entirely within the VPC. No NAT Gateway dependency for Kubernetes operations. No public attack surface.
 
-**Challenge**: You cannot run `kubectl` from your laptop unless you are connected to the VPC via VPN, Direct Connect, or a bastion host. CI/CD pipelines must also run inside the VPC or have network connectivity to it.
+**Challenge**: [You cannot run `kubectl` from your laptop unless you are connected to the VPC via VPN, Direct Connect, or a bastion host](https://docs.aws.amazon.com/eks/latest/userguide/cluster-endpoint.html). CI/CD pipelines must also run inside the VPC or have network connectivity to it.
 
 ```bash
 aws eks update-cluster-config --name my-cluster \
@@ -180,7 +180,7 @@ aws eks update-cluster-config --name my-cluster \
 
 ### Public + Private (Recommended for Production)
 
-The best-practice configuration enables both endpoints. Nodes use the private endpoint (traffic stays in VPC), while developers and CI/CD pipelines can use the public endpoint (optionally restricted by CIDR).
+[The best-practice configuration enables both endpoints](https://docs.aws.amazon.com/eks/latest/best-practices/subnets.html). Nodes use the private endpoint (traffic stays in VPC), while developers and CI/CD pipelines can use the public endpoint (optionally restricted by CIDR).
 
 ```mermaid
 flowchart TD
@@ -221,7 +221,7 @@ aws eks update-cluster-config --name my-cluster \
 | Private only | Node -> ENI -> API (VPC internal) | VPN/bastion only | Highest | No |
 | Public + Private | Node -> ENI -> API (VPC internal) | Anywhere (CIDR restrict) | High | No |
 
-*War Story: The fintech failure described in the opening was exactly the "public only" pattern. When they switched to public + private with CIDR restrictions, their node fleet became completely independent of NAT Gateway health for control plane communication. The same data pipeline explosion that previously caused a four-hour outage became a non-event the next time it happened -- nodes never noticed because they were talking to the control plane through the private ENIs.*
+*War Story: The fintech failure described in the opening was exactly the "public only" pattern. When they switched to public + private with CIDR restrictions, their node fleet became completely independent of NAT Gateway health for control plane communication. The same data pipeline explosion that previously caused a four-hour outage became a non-event the next time it happened -- nodes were unaffected from a control plane communication perspective because they were talking to the control plane through the private ENIs.*
 
 > **Pause and predict**: A developer using a laptop connected to the corporate VPN (which has a route to the VPC) tries to run `kubectl get pods` on an EKS cluster configured with a "Private Only" endpoint. Will the command succeed? Why or why not?
 
@@ -233,7 +233,7 @@ EKS gives you three fundamentally different ways to run your workloads. Each map
 
 ### Managed Node Groups
 
-Managed Node Groups (MNGs) are the default and most common choice. AWS manages the EC2 instances lifecycle -- provisioning, AMI updates, draining, and termination -- while you control the instance type, scaling parameters, and labels.
+Managed Node Groups (MNGs) are the default and most common choice. [AWS manages the EC2 instances lifecycle -- provisioning, AMI updates, draining, and termination](https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html) -- while you control the instance type, scaling parameters, and labels.
 
 ```bash
 # Create a managed node group
@@ -252,7 +252,7 @@ aws eks create-nodegroup \
 Key features of MNGs:
 
 - **Graceful updates**: When you update the AMI or instance type, MNGs cordon and drain nodes one by one, respecting PodDisruptionBudgets
-- **Multiple instance types**: Specify a list and MNGs will use the cheapest available (critical for Spot)
+- **Multiple instance types**: Specify multiple instance types to widen available capacity pools; On-Demand groups use the order you provide, and Spot groups use AWS allocation strategies such as price-capacity-optimized.
 - **Automatic scaling**: Integrates with Cluster Autoscaler or Karpenter
 - **Launch templates**: Customize with user data, additional security groups, or custom AMIs via launch templates
 
@@ -295,9 +295,9 @@ Fargate characteristics:
 
 - **No nodes to manage**: No patching, no AMI updates, no SSH access
 - **Per-pod isolation**: Each pod runs in its own Firecracker microVM
-- **Cold start**: Pods take 30-90 seconds longer to start compared to node-based scheduling
-- **Limitations**: No DaemonSets, no privileged containers, no GPUs, no persistent local storage
-- **Cost**: Typically 20-40% more expensive than equivalent EC2 for sustained workloads, but eliminates operational overhead
+- **Cold start**: Pods on Fargate generally take noticeably longer to become ready than pods scheduled onto already-running EC2 nodes
+- **Limitations**: [No DaemonSets, no privileged containers, no GPUs](https://docs.aws.amazon.com/eks/latest/userguide/fargate.html), no persistent local storage
+- **Cost**: Cost depends on workload shape and operational trade-offs; Fargate can reduce node-management overhead but is not universally the cheapest option
 
 ### Compute Decision Matrix
 
@@ -320,7 +320,7 @@ Most production clusters use a hybrid approach: Managed Node Groups for the core
 
 ## EKS Add-ons: Managed Component Lifecycle
 
-Every Kubernetes cluster needs certain components to function: a CNI plugin for networking, a DNS service for service discovery, and a kube-proxy for Service routing. EKS Add-ons provide a managed way to install, configure, and update these components.
+Every Kubernetes cluster needs certain components to function: [a CNI plugin for networking, a DNS service for service discovery, and a kube-proxy for Service routing](https://docs.aws.amazon.com/eks/latest/userguide/eks-add-ons.html). EKS Add-ons provide a managed way to install, configure, and update these components.
 
 ### Why Add-ons Matter
 
@@ -384,7 +384,7 @@ The `--resolve-conflicts` flag is important:
 
 - `NONE`: Fail if your custom configuration conflicts with the add-on defaults
 - `OVERWRITE`: Replace any custom configuration with add-on defaults
-- `PRESERVE`: Keep your custom configuration and only update what the add-on manages
+- [`PRESERVE`: Keep your custom configuration and only update what the add-on manages](https://docs.aws.amazon.com/eks/latest/userguide/updating-an-add-on.html)
 
 For production, always use `PRESERVE` unless you specifically want to reset to defaults.
 
@@ -398,7 +398,7 @@ How do humans and services authenticate to an EKS cluster? This is one of the mo
 
 ### The Legacy System: aws-auth ConfigMap
 
-For years, EKS used a ConfigMap called `aws-auth` in the `kube-system` namespace to map AWS IAM principals (users, roles) to Kubernetes RBAC identities. This was always a fragile arrangement.
+For years, EKS used a ConfigMap called `aws-auth` in the `kube-system` namespace to map AWS IAM principals (users, roles) to Kubernetes RBAC identities. This was generally a fragile arrangement.
 
 ```yaml
 # The legacy aws-auth ConfigMap
@@ -427,17 +427,17 @@ data:
 
 Problems with `aws-auth`:
 
-1. **Single point of failure**: One YAML syntax error in this ConfigMap locks everyone out of the cluster (except the cluster creator)
+1. **Single point of failure**: One YAML syntax error in this ConfigMap [locks everyone out of the cluster (except the cluster creator)](https://docs.aws.amazon.com/eks/latest/userguide/auth-configmap.html)
 2. **No audit trail**: Changes to a ConfigMap are not logged in AWS CloudTrail
 3. **Race conditions**: Multiple engineers editing simultaneously can overwrite each other's changes
 4. **No API management**: You cannot manage it through the AWS API -- only through `kubectl`
 5. **Easy to break**: A misplaced space in YAML can corrupt the entire mapping
 
-*War Story: A platform team lost cluster access for six hours after a junior engineer ran `kubectl edit configmap aws-auth -n kube-system` and accidentally deleted the `mapRoles` section entirely. All nodes lost their RBAC bindings and began reporting `Unauthorized`. The only recovery path was to use the cluster creator's IAM credentials (which had been rotated months ago) to restore the ConfigMap. They implemented GitOps for the aws-auth ConfigMap the next day, but the real fix was migrating to Access Entries.*
+Directly editing `aws-auth` is risky: a bad change can break IAM-to-RBAC mappings and leave teams scrambling to recover access. Moving to access entries reduces that operational risk.
 
 ### The Modern System: EKS Access Entries
 
-Introduced in late 2023, EKS Access Entries move authentication configuration out of a fragile ConfigMap and into the EKS API itself. This means you manage access using AWS API calls, with CloudTrail logging, IAM policy guardrails, and no risk of YAML-induced lockouts.
+[Introduced in late 2023, EKS Access Entries](https://aws.amazon.com/about-aws/whats-new/2023/12/amazon-eks-controls-iam-cluster-access-management/) move authentication configuration out of a fragile ConfigMap and into the EKS API itself. This means you manage access using AWS API calls, with CloudTrail logging, IAM policy guardrails, and no risk of YAML-induced lockouts.
 
 ```bash
 # Create an access entry for an IAM role
@@ -456,7 +456,7 @@ aws eks associate-access-policy \
 
 ### Access Policy Types
 
-EKS provides several predefined access policies that map to common Kubernetes RBAC configurations:
+EKS provides [several predefined access policies](https://docs.aws.amazon.com/eks/latest/userguide/access-policies.html) that map to common Kubernetes RBAC configurations:
 
 | Access Policy | Equivalent RBAC | Scope |
 | :--- | :--- | :--- |
@@ -514,21 +514,21 @@ aws eks update-cluster-config --name my-cluster \
 kubectl delete configmap aws-auth -n kube-system
 ```
 
-> **Important**: You cannot go backwards. Once you switch from `API_AND_CONFIG_MAP` to `API`, you cannot re-enable the ConfigMap. Test thoroughly in the transitional mode before making the final switch.
+> **Important**: [You cannot go backwards. Once you switch from `API_AND_CONFIG_MAP` to `API`, you cannot re-enable the ConfigMap.](https://docs.aws.amazon.com/eks/latest/userguide/setting-up-access-entries.html) Test thoroughly in the transitional mode before making the final switch.
 
-> **Stop and think**: Your team is in the `API_AND_CONFIG_MAP` transitional mode. A developer deletes the `aws-auth` ConfigMap prematurely to "clean up." Can the team still access the cluster? What determines their access?
+> **Stop and think**: Your team is in the [`API_AND_CONFIG_MAP` transitional mode](https://docs.aws.amazon.com/eks/latest/userguide/migrating-access-entries.html). A developer deletes the `aws-auth` ConfigMap prematurely to "clean up." Can the team still access the cluster? What determines their access?
 
 ---
 
 ## Did You Know?
 
-1. The EKS control plane runs in an AWS-owned account, not yours. The $0.10/hour cluster fee covers at least two API server instances and three etcd nodes spread across three Availability Zones. AWS auto-scales the control plane based on the number of nodes and API request rate -- you never need to "right-size" the control plane. A cluster with 5 nodes and one with 5,000 nodes both cost $0.10/hour for the control plane itself.
+1. The EKS control plane runs in an AWS-owned account, not yours. [The $0.10/hour cluster fee](https://aws.amazon.com/eks/pricing/) covers at least two API server instances and three etcd nodes spread across three Availability Zones. AWS auto-scales the control plane based on the number of nodes and API request rate -- you generally do not need to "right-size" the control plane yourself. A cluster with 5 nodes and one with 5,000 nodes both cost $0.10/hour for the control plane itself.
 
-2. The cross-account ENIs that EKS places in your VPC use IP addresses from your subnet CIDR range. Each ENI consumes one IP address per subnet. If you create a cluster with 2 subnets, you lose 2 IPs to control plane ENIs. In tightly sized subnets (like a `/28` with only 11 usable IPs), this can matter. AWS recommends subnets with at least a `/24` (251 usable IPs) for EKS.
+2. The cross-account ENIs that EKS places in your VPC use IP addresses from your subnet CIDR range. Each ENI consumes one IP address per subnet. If you create a cluster with 2 subnets, you lose 2 IPs to control plane ENIs. In tightly sized subnets (like a `/28` with only 11 usable IPs), this can matter. AWS requires each cluster subnet to have at least six free IP addresses and recommends at least 16; plan larger subnets when your node and Pod density require them.
 
-3. When you enable the private endpoint, EKS creates a Route 53 private hosted zone associated with your VPC. The cluster's DNS name (e.g., `ABCDEF1234.gr7.us-east-1.eks.amazonaws.com`) resolves to the private ENI IP addresses when queried from within the VPC, and to the public IP addresses when queried from the internet. This split-horizon DNS is automatic and invisible to most users.
+3. When you enable the private endpoint, [EKS creates a Route 53 private hosted zone associated with your VPC](https://docs.aws.amazon.com/eks/latest/userguide/cluster-endpoint.html). The cluster's DNS name (e.g., `ABCDEF1234.gr7.us-east-1.eks.amazonaws.com`) resolves to the private ENI IP addresses when queried from within the VPC, and to the public IP addresses when queried from the internet. This split-horizon DNS is automatic and invisible to most users.
 
-4. The original `aws-auth` ConfigMap was created as a "temporary" solution in 2018 when EKS launched. It took AWS over five years to replace it with Access Entries. During those five years, the `aws-auth` ConfigMap became the single most common cause of EKS cluster lockouts, with AWS Support handling thousands of recovery tickets per quarter. The lesson: temporary solutions in infrastructure have a habit of becoming permanent.
+4. The `aws-auth` ConfigMap shipped with early EKS releases and remained the primary IAM-to-RBAC integration mechanism until AWS introduced access entries in December 2023. The lesson: temporary solutions in infrastructure have a habit of becoming permanent.
 
 ---
 
@@ -538,11 +538,11 @@ kubectl delete configmap aws-auth -n kube-system
 | :--- | :--- | :--- |
 | **Public endpoint only with no CIDR restriction** | It is the default configuration and "just works" for getting started. | Enable the private endpoint and add CIDR allowlists to the public endpoint. At minimum, restrict to your corporate IP ranges. |
 | **Deleting or modifying cross-account ENIs** | Engineers see unfamiliar ENIs in their VPC and clean them up. | Tag-based policies to prevent deletion. Educate the team that ENIs tagged `kubernetes.io/cluster/<name>` are critical infrastructure. |
-| **Editing aws-auth ConfigMap without backup** | Quick changes under pressure. One typo and the entire cluster is inaccessible. | Migrate to Access Entries. If still using aws-auth, always `kubectl get configmap aws-auth -n kube-system -o yaml > aws-auth-backup.yaml` before editing. |
+| **Editing aws-auth ConfigMap without backup** | Quick changes under pressure. One typo and the entire cluster is inaccessible. | Migrate to Access Entries. If still using aws-auth, make a backup such as `kubectl get configmap aws-auth -n kube-system -o yaml > aws-auth-backup.yaml` before editing. |
 | **Using a single node group for all workloads** | Simplicity bias. One size fits all seems easier to manage. | Create purpose-specific node groups: general (m-type), memory-optimized (r-type), compute (c-type). Use node selectors and taints to route pods correctly. |
 | **Fargate for DaemonSet-dependent workloads** | Not understanding Fargate limitations before choosing it. | Check if your workloads need DaemonSets (logging agents, monitoring, service mesh sidecars). If yes, use MNGs or self-managed nodes for those workloads. |
-| **Not setting up the EKS Pod Identity agent** | Assuming IRSA is sufficient, not knowing the newer option exists. | Install the `eks-pod-identity-agent` add-on. Pod Identity is simpler to configure and eliminates OIDC provider management. See Module 5.3 for the full migration. |
-| **Forgetting to update add-ons after cluster upgrade** | Upgrading the Kubernetes version but leaving add-ons on old versions. | After every cluster version upgrade, check and update all add-ons to compatible versions. Incompatible add-on versions can cause networking or DNS failures. |
+| **Not setting up the EKS Pod Identity agent** | Assuming IRSA is sufficient, not knowing the newer option exists. | Install the `eks-pod-identity-agent` add-on. [Pod Identity is simpler to configure and eliminates OIDC provider management.](https://docs.aws.amazon.com/eks/latest/best-practices/identity-and-access-management.html) See Module 5.3 for the full migration. |
+| **Forgetting to update add-ons after cluster upgrade** | Upgrading the Kubernetes version but leaving add-ons on old versions. | [After every cluster version upgrade, check and update all add-ons to compatible versions.](https://docs.aws.amazon.com/eks/latest/userguide/updating-an-add-on.html) Incompatible add-on versions can cause networking or DNS failures. |
 | **Cluster subnets too small** | Using `/28` or `/27` subnets for EKS without accounting for ENI consumption. | Use at least `/24` subnets for EKS clusters. Account for cross-account ENIs, pod IPs (VPC CNI), and node IPs. |
 
 ---
@@ -576,7 +576,7 @@ Deleting these cross-account ENIs immediately severs the network connection betw
 <details>
 <summary>Question 5: After successfully upgrading your production EKS cluster's control plane from Kubernetes v1.34 to v1.35, the application teams report that their newly scheduled pods are crashing with `CrashLoopBackOff`. Upon inspection, you find that the pods are unable to resolve internal service names. What is the most likely cause of this specific failure?</summary>
 
-The most likely cause is that the CoreDNS add-on was not updated after the cluster control plane upgrade. When you upgrade the Kubernetes version of an EKS cluster, managed add-ons like CoreDNS, VPC CNI, and kube-proxy are not automatically upgraded alongside the control plane. If the running CoreDNS version becomes deprecated or strictly incompatible with the new Kubernetes API version, DNS resolution within the cluster can fail or silently degrade. To resolve this issue, you must immediately update the CoreDNS add-on to a version explicitly tested and compatible with Kubernetes 1.35. As a best practice, always review and update all EKS add-ons to their compatible versions immediately following any cluster version upgrade.
+The most likely cause is that the CoreDNS add-on was not updated after the cluster control plane upgrade. When you upgrade the Kubernetes version of an EKS cluster, managed add-ons like CoreDNS, VPC CNI, and kube-proxy are not automatically upgraded alongside the control plane. If the running CoreDNS version becomes deprecated or strictly incompatible with the new Kubernetes API version, DNS resolution within the cluster can fail or silently degrade. To resolve this issue, you should promptly update the CoreDNS add-on to a version explicitly tested and compatible with Kubernetes 1.35. As a best practice, review and update EKS add-ons to their compatible versions soon after any cluster version upgrade.
 </details>
 
 <details>
@@ -1013,3 +1013,22 @@ aws iam delete-role --role-name EKS-Cluster-Role
 ## Next Module
 
 With the EKS architecture foundation in place, it is time to dive deep into how pods get their IP addresses and how traffic flows. Head to [Module 5.2: EKS Networking Deep Dive (VPC CNI)](../module-5.2-eks-networking/) to master prefix delegation, IP exhaustion solutions, and the AWS Load Balancer Controller.
+
+## Sources
+
+- [docs.aws.amazon.com: eks architecture.html](https://docs.aws.amazon.com/eks/latest/userguide/eks-architecture.html) — AWS documents this exact control-plane layout in the EKS architecture guide.
+- [aws.amazon.com: pricing](https://aws.amazon.com/eks/pricing/) — AWS pricing currently lists standard Kubernetes version support at $0.10 per cluster per hour.
+- [docs.aws.amazon.com: network reqs.html](https://docs.aws.amazon.com/eks/latest/userguide/network-reqs.html) — AWS explicitly documents the 2-4 interfaces and their communication role.
+- [docs.aws.amazon.com: sec group reqs.html](https://docs.aws.amazon.com/eks/latest/userguide/sec-group-reqs.html) — The EKS security group requirements page states these associations and default rules directly.
+- [docs.aws.amazon.com: cluster endpoint.html](https://docs.aws.amazon.com/eks/latest/userguide/cluster-endpoint.html) — AWS documents public endpoint access as the default and describes the public-only traffic path.
+- [docs.aws.amazon.com: subnets.html](https://docs.aws.amazon.com/eks/latest/best-practices/subnets.html) — The EKS subnet best-practices guide recommends public-and-private mode with restricted public CIDRs.
+- [docs.aws.amazon.com: managed node groups.html](https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html) — AWS documents automated lifecycle management, draining behavior, and PDB handling for managed node groups.
+- [docs.aws.amazon.com: fargate.html](https://docs.aws.amazon.com/eks/latest/userguide/fargate.html) — AWS documents per-pod VM isolation and these specific Fargate limitations.
+- [docs.aws.amazon.com: updating an add on.html](https://docs.aws.amazon.com/eks/latest/userguide/updating-an-add-on.html) — AWS says add-ons are not auto-updated and that compatibility should be verified before updating.
+- [docs.aws.amazon.com: eks add ons.html](https://docs.aws.amazon.com/eks/latest/userguide/eks-add-ons.html) — AWS documents the default self-managed add-ons and the broader curated add-on catalog separately.
+- [docs.aws.amazon.com: auth configmap.html](https://docs.aws.amazon.com/eks/latest/userguide/auth-configmap.html) — The aws-auth documentation states both the deprecation and the hidden cluster-creator access behavior.
+- [aws.amazon.com: amazon eks controls iam cluster access management](https://aws.amazon.com/about-aws/whats-new/2023/12/amazon-eks-controls-iam-cluster-access-management/) — AWS's launch announcement gives the date and describes the API-based access-management feature.
+- [docs.aws.amazon.com: access policies.html](https://docs.aws.amazon.com/eks/latest/userguide/access-policies.html) — The access-policies guide lists these predefined EKS access-policy names.
+- [docs.aws.amazon.com: migrating access entries.html](https://docs.aws.amazon.com/eks/latest/userguide/migrating-access-entries.html) — AWS states this precedence rule explicitly in the migration guide.
+- [docs.aws.amazon.com: setting up access entries.html](https://docs.aws.amazon.com/eks/latest/userguide/setting-up-access-entries.html) — AWS documents this one-way authentication-mode restriction directly.
+- [docs.aws.amazon.com: identity and access management.html](https://docs.aws.amazon.com/eks/latest/best-practices/identity-and-access-management.html) — AWS best-practices documentation describes Pod Identity as an agent-based feature that removes per-cluster OIDC setup.

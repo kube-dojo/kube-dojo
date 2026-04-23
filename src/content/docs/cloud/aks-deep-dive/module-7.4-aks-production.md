@@ -137,7 +137,7 @@ graph TD
     end
 ```
 
-When performance matters for Linux-based workloads, you should always prefer NFS over SMB to avoid the authentication and protocol overhead associated with Windows file sharing.
+When performance matters for Linux-based workloads, you should usually prefer NFS over SMB to reduce the authentication and protocol overhead often associated with Windows file sharing.
 
 ```yaml
 # StorageClass for Azure Files NFS (Premium tier)
@@ -192,7 +192,7 @@ reclaimPolicy: Retain
 volumeBindingMode: WaitForFirstConsumer
 ```
 
-**Warning**: Shared Disks do not natively provide a managed filesystem. The application itself must coordinate concurrent block-level access. If you merely mount a shared disk using `ext4` or `xfs` from multiple Linux nodes, the kernel's in-memory caching will immediately corrupt your data. 
+**Warning**: Shared Disks do not natively provide a managed filesystem. The application itself must coordinate concurrent block-level access. If you merely mount a shared disk using `ext4` or `xfs` from multiple Linux nodes, you risk data corruption because the kernel's in-memory caching is not coordinated across nodes. 
 
 ### The Storage Decision Matrix
 
@@ -240,7 +240,7 @@ k get pods -n kube-system -l component=ama-logs
 
 ### What Container Insights Collects
 
-Once the AMA is deployed, it immediately begins scraping extensive data streams:
+Once the AMA is deployed, it begins scraping extensive data streams shortly afterward:
 - **Node metrics**: Deep hardware utilization metrics like disk I/O, network throughput, and CPU load.
 - **Pod metrics**: Actual resource consumption contrasted against Kubernetes requested boundaries.
 - **Container logs**: Every line of `stdout` and `stderr` emitted by the container runtime.
@@ -258,7 +258,7 @@ az monitor log-analytics query \
 
 > **Pause and predict**: You just deployed Container Insights on a busy cluster and your Log Analytics bill spiked by $500 in one day. What is the most likely culprit, and what configuration component will fix it?
 
-Container Insights can become a massive billing liability if left in its default configuration. By default, it captures every single line of text from every container's standard output. If your ingress controllers or core system pods are extremely verbose, Log Analytics will ingest gigabytes of data every hour. To manage this, you must apply a custom ConfigMap to instruct the agent to drop high-noise logs.
+Container Insights can become a massive billing liability if left in its default configuration. By default, it captures standard output from all containers, including very verbose ones. If your ingress controllers or core system pods are extremely verbose, Log Analytics will ingest gigabytes of data every hour. To manage this, you must apply a custom ConfigMap to instruct the agent to drop high-noise logs.
 
 ```yaml
 # Save as container-insights-config.yaml
@@ -432,7 +432,7 @@ spec:
 
 ## KEDA: Event-Driven Autoscaling
 
-The standard Kubernetes Horizontal Pod Autoscaler (HPA) works brilliantly for web servers reacting to CPU load. However, it fails catastrophically for asynchronous or event-driven workers. If your messaging queue instantly receives a burst of 10,000 tasks, your consumer pods might process them very efficiently, keeping CPU usage extremely low. Because the CPU usage never spikes, the standard HPA will stubbornly refuse to scale out, resulting in a monumental processing backlog. 
+The standard Kubernetes Horizontal Pod Autoscaler (HPA) works brilliantly for web servers reacting to CPU load. However, it fails catastrophically for asynchronous or event-driven workers. If your messaging queue instantly receives a burst of 10,000 tasks, your consumer pods might process them very efficiently, keeping CPU usage extremely low. Because the CPU usage may stay relatively flat, the standard HPA may fail to scale out in time, resulting in a monumental processing backlog. 
 
 KEDA (Kubernetes Event-Driven Autoscaling) intercepts the metrics pipeline. It provides over 60 custom scalers that allow your deployments to scale dynamically based on external business metrics rather than lagging infrastructure indicators.
 
@@ -490,7 +490,7 @@ spec:
         name: servicebus-auth
 ```
 
-In this example, KEDA ensures there is 1 pod running for every 10 messages. A massive queue will instantly trigger a massive scale-out event. Even better, when the queue is entirely drained, KEDA will scale the deployment to 0, completely removing compute costs during idle periods. 
+In this example, KEDA ensures there is 1 pod running for every 10 messages. A massive queue will quickly trigger a massive scale-out event. Even better, when the queue is entirely drained, KEDA will scale the deployment to 0, completely removing compute costs during idle periods. 
 
 ### KEDA Authentication with Workload Identity
 
@@ -630,7 +630,7 @@ spec:
 
 > **Stop and think**: If your entire web frontend is running on a Spot node pool and Azure experiences a sudden surge in demand for that VM size in your region, what happens to your application? How should you architect a production deployment to utilize Spot savings without risking downtime?
 
-Never run primary database tiers or essential API gateways entirely on Spot hardware. The optimal approach is running your baseline required replicas on standard On-Demand instances, and using KEDA to burst onto Spot VMs specifically to process sudden traffic spikes. 
+Avoid running primary database tiers or essential API gateways entirely on Spot hardware. The optimal approach is running your baseline required replicas on standard On-Demand instances, and using KEDA to burst onto Spot VMs specifically to process sudden traffic spikes. 
 
 ### Workload Right-Sizing
 
@@ -669,8 +669,8 @@ resources:
 | Sending all container logs to Log Analytics without filtering | Default Container Insights config collects everything | Use the ConfigMap to exclude noisy namespaces (kube-system, monitoring) and disable env_var collection |
 | Setting KEDA minReplicaCount to 0 for latency-sensitive services | Attracted by cost savings of scale-to-zero | Only scale to zero for batch/queue consumers. Latency-sensitive services need minReplicaCount >= 1 to avoid cold start delays |
 | Not configuring PodDisruptionBudgets for KEDA-scaled workloads | PDBs seem unnecessary for "elastic" workloads | KEDA scales pods, but node upgrades drain them. Without PDBs, all replicas can be evicted simultaneously during cluster upgrades |
-| Mounting Azure Files SMB when NFS would perform better | SMB is the default and works on both Windows and Linux | For Linux-only workloads needing high throughput, always use NFS with the `nconnect` mount option |
-| Creating Grafana dashboards without alert rules | "We will check the dashboards when something is wrong" | If nobody is watching the dashboard when the incident starts, it has zero value. Always pair dashboards with alert rules |
+| Mounting Azure Files SMB when NFS would perform better | SMB is the default and works on both Windows and Linux | For Linux-only workloads needing high throughput, prefer NFS with the `nconnect` mount option in most cases |
+| Creating Grafana dashboards without alert rules | "We will check the dashboards when something is wrong" | If nobody is watching the dashboard when the incident starts, it has zero value. Pair dashboards with alert rules for production-critical signals |
 | Ignoring disk I/O metrics in observability setup | CPU and memory are the default metrics; disk I/O requires explicit configuration | Add disk IOPS, throughput, and latency to your monitoring ConfigMap and Grafana dashboards |
 
 ---
@@ -696,7 +696,7 @@ The data scientists should switch their StorageClass to use Azure Files with the
 </details>
 
 <details>
-<summary>4. Scenario: An e-commerce backend uses standard HPA (CPU/Memory) to scale its order processing workers. During a flash sale, 10,000 orders hit the Azure Service Bus queue in seconds. The workers process them so quickly that their CPU never exceeds 40%, so the HPA never scales them up, resulting in a 2-hour processing backlog. How would KEDA fundamentally change how this scaling decision is made?</summary>
+<summary>4. Scenario: An e-commerce backend uses standard HPA (CPU/Memory) to scale its order processing workers. During a flash sale, 10,000 orders hit the Azure Service Bus queue in seconds. The workers process them so efficiently that their CPU stays below the HPA threshold, so the HPA does not scale them up fast enough, resulting in a 2-hour processing backlog. How would KEDA fundamentally change how this scaling decision is made?</summary>
 
 The standard HPA is entirely blind to external business metrics like queue depth, relying solely on lagging infrastructure metrics like CPU utilization which may not correlate with the actual backlog. KEDA replaces this paradigm by connecting directly to the Azure Service Bus API and reading the exact number of pending messages waiting to be processed. Instead of waiting for CPU to spike, KEDA can be configured to instantly provision one worker pod for every 50 messages in the queue. This event-driven approach ensures the deployment scales out preemptively the moment the queue begins to fill, processing the 10,000 orders in minutes rather than hours, and then safely scaling back down to zero when the queue is empty.
 </details>
@@ -704,13 +704,13 @@ The standard HPA is entirely blind to external business metrics like queue depth
 <details>
 <summary>5. Scenario: You configure KEDA to scale a consumer deployment to 100 replicas based on queue depth, but your AKS cluster currently only has 3 nodes which can fit 30 pods total. Walk through the exact sequence of events that occurs between KEDA and the Cluster Autoscaler when 1,000 messages suddenly arrive in the queue.</summary>
 
-When the messages arrive, the KEDA operator detects the queue depth and immediately updates the deployment's target replica count to 100. The Kubernetes scheduler successfully places 30 pods on the existing 3 nodes, but the remaining 70 pods transition into a `Pending` state due to insufficient CPU or memory resources on the cluster. The Cluster Autoscaler constantly watches for `Pending` pods; upon detecting them, it calculates how many new nodes are required and makes an API call to Azure to expand the Virtual Machine Scale Set. Once the new VMs boot up and join the AKS cluster as Ready nodes, the scheduler automatically places the remaining 70 pods onto them, allowing all 100 consumers to process the queue in parallel.
+When the messages arrive, the KEDA operator detects the queue depth and quickly updates the deployment's target replica count to 100. The Kubernetes scheduler successfully places 30 pods on the existing 3 nodes, but the remaining 70 pods transition into a `Pending` state due to insufficient CPU or memory resources on the cluster. The Cluster Autoscaler constantly watches for `Pending` pods; upon detecting them, it calculates how many new nodes are required and makes an API call to Azure to expand the Virtual Machine Scale Set. Once the new VMs boot up and join the AKS cluster as Ready nodes, the scheduler automatically places the remaining 70 pods onto them, allowing all 100 consumers to process the queue in parallel.
 </details>
 
 <details>
 <summary>6. Scenario: A junior engineer enables Container Insights on a production cluster with default settings to troubleshoot a specific microservice. A week later, the Azure Log Analytics bill arrives at $2,000. Why did this happen by default, and what specific configuration changes in the `container-azm-ms-agentconfig` ConfigMap are required to stop the bleeding while still monitoring the application?</summary>
 
-By default, the Azure Monitor Agent deployed by Container Insights captures every single line of standard output (stdout) and standard error (stderr) from every container in the cluster, including incredibly noisy system components. This massive ingestion volume is billed per gigabyte by Log Analytics, leading to the rapid cost spike. To fix this, the engineer must deploy a custom ConfigMap named `container-azm-ms-agentconfig` in the `kube-system` namespace. In this configuration, they need to explicitly add `kube-system` and other high-volume namespaces to the `exclude_namespaces` array for stdout and stderr, and disable environment variable collection (`env_var.enabled = false`), ensuring only relevant application logs are ingested and billed.
+By default, the Azure Monitor Agent deployed by Container Insights captures stdout and stderr from containers across the cluster, including incredibly noisy system components. This massive ingestion volume is billed per gigabyte by Log Analytics, leading to the rapid cost spike. To fix this, the engineer must deploy a custom ConfigMap named `container-azm-ms-agentconfig` in the `kube-system` namespace. In this configuration, they need to explicitly add `kube-system` and other high-volume namespaces to the `exclude_namespaces` array for stdout and stderr, and disable environment variable collection (`env_var.enabled = false`), ensuring only relevant application logs are ingested and billed.
 </details>
 
 <details>
@@ -1115,3 +1115,9 @@ echo "az group delete --name rg-aks-prod --yes --no-wait"
 This is the final module in the AKS Deep Dive series. You now have the knowledge to architect, secure, network, observe, and scale production AKS clusters using industry-standard features from Kubernetes v1.35. 
 
 For further learning, explore the [Platform Engineering Track](/platform/) to deepen your understanding of continuous deployment configurations, advanced SRE resilience strategies, and cutting-edge DevSecOps pipelines that continue to build on this powerful infrastructure foundation.
+
+## Sources
+
+- [Azure Disk CSI Driver on AKS](https://learn.microsoft.com/en-us/Azure/aks/azure-disk-csi) — Authoritative reference for AKS disk provisioning, topology-aware binding, and Azure Disk CSI behavior.
+- [Monitor AKS](https://learn.microsoft.com/en-us/azure/aks/monitor-aks) — Microsoft's overview for AKS observability, including Container insights, managed Prometheus, and Managed Grafana.
+- [KEDA on AKS](https://learn.microsoft.com/en-us/azure/aks/keda-about) — Explains what the AKS KEDA add-on supports and when to use event-driven autoscaling instead of basic HPA patterns.

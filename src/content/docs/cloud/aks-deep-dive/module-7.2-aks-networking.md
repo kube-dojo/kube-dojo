@@ -69,7 +69,7 @@ Kubenet is exceptionally conservative with IP addresses. A 100-node cluster runn
 
 ### Azure CNI: Direct VNet Integration
 
-Azure CNI represents the opposite end of the spectrum from Kubenet. In this model, the Kubernetes cluster networking is completely flattened into the Azure Virtual Network. Every single pod is assigned a first-class, routable IP address directly from the Azure VNet subnet.
+Azure CNI represents the opposite end of the spectrum from Kubenet. In this model, the Kubernetes cluster networking is completely flattened into the Azure Virtual Network. In this model, pods are typically assigned first-class, routable IP addresses directly from an Azure VNet subnet.
 
 To continue our previous analogy, Azure CNI is like a sprawling suburban neighborhood where every single house (pod) gets its own unique, globally recognized street address. They do not share a building address; they exist independently on the city map. This eliminates the need for local bridges and UDRs entirely.
 
@@ -96,7 +96,7 @@ graph TD
     end
 ```
 
-The defining characteristic—and the greatest danger—of standard Azure CNI is its voracious appetite for IP addresses. By default, when a node spins up, Azure CNI pre-allocates an IP address for the maximum number of pods that node might theoretically host (defined by the `--max-pods` parameter, which defaults to 30 but is often set higher). If you deploy a 20-node cluster, Azure immediately reserves 600 IP addresses just for potential pods, plus 20 for the nodes, regardless of whether you actually deploy any workloads. In enterprise environments where IP space is tightly controlled by networking teams, this often leads to immediate deployment failure.
+The defining characteristic—and the greatest danger—of standard Azure CNI is its voracious appetite for IP addresses. By default, when a node spins up, Azure CNI pre-allocates an IP address for the maximum number of pods that node might theoretically host (defined by the `--max-pods` parameter, which defaults to 30 but is often set higher). If you deploy a 20-node cluster, Azure can reserve 600 IP addresses just for potential pods, plus 20 for the nodes, even if you have not deployed any workloads yet. In enterprise environments where IP space is tightly controlled by networking teams, this often leads to immediate deployment failure.
 
 To address this severe limitation, Microsoft introduced **Azure CNI with dynamic IP allocation**. This modern variant preserves the direct VNet routing capability but changes the allocation behavior. Instead of pre-allocating large blocks of IPs at node startup, it dynamically assigns IPs to pods only as they are actively scheduled. Furthermore, it allows you to specify a dedicated, separate subnet just for pods, physically decoupling node IP exhaustion from pod IP exhaustion.
 
@@ -182,7 +182,7 @@ graph TD
     end
 ```
 
-Beyond raw performance, the eBPF dataplane grants Cilium unprecedented visibility into network flows, allowing for advanced observability, transparent encryption, and Layer 7 network policies that are simply impossible with standard `iptables`.
+Beyond raw performance, the eBPF dataplane grants Cilium unprecedented visibility into network flows, allowing for advanced observability, transparent encryption, and Layer 7 network policies that are not practical with standard `iptables` alone.
 
 ```bash
 # Create an AKS cluster with CNI Powered by Cilium
@@ -221,7 +221,7 @@ Network Policies implement zero-trust segmentation. They act as distributed fire
 
 ### Azure Network Policy Manager (Azure NPM)
 
-Azure NPM is Microsoft's native implementation of the standard Kubernetes NetworkPolicy API. On Linux nodes, it orchestrates `iptables` rules to enforce policies. It is straightforward, universally compatible with basic API definitions, and suitable for simple segmentation requirements. However, it only operates at Layer 3 (IP addresses) and Layer 4 (Ports/Protocols).
+Azure NPM is Microsoft's native implementation of the standard Kubernetes NetworkPolicy API. On Linux nodes, it orchestrates `iptables` rules to enforce policies. It is straightforward, generally compatible with basic API definitions, and suitable for simple segmentation requirements. However, it only operates at Layer 3 (IP addresses) and Layer 4 (Ports/Protocols).
 
 ```yaml
 # Block all ingress to pods in the database namespace
@@ -589,7 +589,7 @@ Using Azure Firewall allows your security operations center (SOC) to implement s
 <details>
 <summary>1. Your company is deploying a new microservices application to AKS. The networking team has allocated a small /24 subnet (254 IPs) for the cluster. The application requires 150 pods across 5 nodes, but also needs to be accessed by legacy Azure VMs on a peered VNet. Which CNI model (Azure CNI or CNI Overlay) should you choose, and what trade-offs must you manage?</summary>
 
-You must choose CNI Overlay because Azure CNI would exhaust the /24 subnet immediately. With Azure CNI's default pre-allocation, 5 nodes would reserve 150 IPs just for pods, leaving little room for node IPs, upgrades, or scaling. CNI Overlay solves this by assigning pod IPs from a private, non-routable address space, consuming only 5 VNet IPs for the nodes. However, the trade-off is that the legacy Azure VMs cannot route directly to the pod IPs; you must expose the application using an internal LoadBalancer Service or an Ingress Controller to bridge the VNet and the overlay network.
+You would usually choose CNI Overlay because Azure CNI would quickly exhaust or severely constrain the /24 subnet. With Azure CNI's default pre-allocation, 5 nodes would reserve 150 IPs just for pods, leaving little room for node IPs, upgrades, or scaling. CNI Overlay solves this by assigning pod IPs from a private, non-routable address space, consuming only 5 VNet IPs for the nodes. However, the trade-off is that the legacy Azure VMs cannot route directly to the pod IPs; you must expose the application using an internal LoadBalancer Service or an Ingress Controller to bridge the VNet and the overlay network.
 </details>
 
 <details>
@@ -601,7 +601,7 @@ The claim is correct because Cilium entirely replaces the traditional kube-proxy
 <details>
 <summary>3. A compliance auditor requires that your payment processing pods only communicate with the external payment gateway at `api.stripe.com`, but the gateway's IP addresses change dynamically due to their CDN. Why would standard Kubernetes NetworkPolicies fail this audit, and how do Cilium L7 policies solve it?</summary>
 
-Standard Kubernetes NetworkPolicies operate strictly at Layer 3 and Layer 4, meaning they can only filter traffic based on static IP CIDR blocks and ports. Because Stripe's IPs change dynamically, maintaining an accurate IP allowlist in a standard NetworkPolicy is operationally impossible and would lead to blocked legitimate traffic or overly permissive rules. Cilium L7 policies solve this by intercepting and evaluating DNS queries at the application layer. When a pod requests `api.stripe.com`, Cilium resolves the domain, dynamically allows the outbound connection to the returned IPs, and enforces that the traffic uses the correct protocol (like HTTPS), fully satisfying the compliance requirement.
+Standard Kubernetes NetworkPolicies operate strictly at Layer 3 and Layer 4, meaning they can only filter traffic based on static IP CIDR blocks and ports. Because Stripe's IPs change dynamically, maintaining an accurate IP allowlist in a standard NetworkPolicy is operationally impractical and would lead to blocked legitimate traffic or overly permissive rules. Cilium L7 policies solve this by intercepting and evaluating DNS queries at the application layer. When a pod requests `api.stripe.com`, Cilium resolves the domain, dynamically allows the outbound connection to the returned IPs, and enforces that the traffic uses the correct protocol (like HTTPS), fully satisfying the compliance requirement.
 </details>
 
 <details>
@@ -625,7 +625,7 @@ The default Azure Load Balancer dynamically assigns outbound traffic to a pool o
 <details>
 <summary>7. Six months after deploying a production AKS cluster using Azure NPM, your security team demands you implement DNS-based egress filtering using Cilium Network Policies. You attempt to update the cluster configuration via the Azure CLI to switch the network policy engine to Cilium, but the command is rejected. Why does Azure prevent this change, and what is the required path forward?</summary>
 
-Azure prevents this change because the network policy engine is deeply and irreversibly embedded into the cluster's core networking dataplane at creation time. Azure NPM relies on iptables rules and native OS constructs, whereas Cilium requires completely replacing the kube-proxy component and injecting eBPF programs directly into the Linux kernel. Attempting to rip out one foundational networking stack and hot-swap it with another on a live cluster would cause catastrophic network failure and complete loss of pod-to-pod connectivity. The only supported path forward is a blue-green migration: you must build an entirely new AKS cluster with Cilium enabled from day one, and then carefully migrate your workloads over to the new environment.
+Azure prevents this change because the network policy engine is deeply and irreversibly embedded into the cluster's core networking dataplane at creation time. Azure NPM relies on iptables rules and native OS constructs, whereas Cilium requires completely replacing the kube-proxy component and injecting eBPF programs directly into the Linux kernel. Attempting to rip out one foundational networking stack and hot-swap it with another on a live cluster would cause catastrophic network failure and complete loss of pod-to-pod connectivity. The supported path forward is to perform a blue-green-style migration: you must build a new AKS cluster with Cilium enabled from the start, and then carefully migrate your workloads over to the new environment.
 </details>
 
 ## Hands-On Exercise: CNI Powered by Cilium with L7 Egress Domain Filtering
@@ -995,3 +995,9 @@ kubectl exec -n kube-system -l k8s-app=cilium -- cilium monitor --type policy-ve
 ## Next Module
 
 [Module 7.3: AKS Workload Identity & Security](../module-7.3-aks-identity/) — Learn how to eliminate hardcoded credentials entirely using Entra Workload Identity, federated identity credentials, and the Secrets Store CSI Driver with Azure Key Vault integration.
+
+## Sources
+
+- [Overview of Azure CNI Overlay networking in AKS](https://learn.microsoft.com/en-us/azure/aks/concepts-network-azure-cni-overlay) — Best current Microsoft reference for overlay architecture, scale limits, and the kubenet comparison.
+- [Configure Azure CNI Powered by Cilium in AKS](https://learn.microsoft.com/en-us/azure/aks/azure-cni-powered-by-cilium) — Documents current Cilium support boundaries, kube-proxy behavior, and AKS-specific limitations.
+- [Create a private AKS cluster](https://learn.microsoft.com/en-us/azure/aks/private-clusters) — Covers Private Link, private DNS behavior, and operational constraints for private control-plane access.

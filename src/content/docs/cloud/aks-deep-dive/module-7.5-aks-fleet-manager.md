@@ -12,6 +12,263 @@ Enter **Azure Kubernetes Fleet Manager (Fleet)**.
 
 Fleet provides a centralized control plane to manage multiple AKS clusters (and Azure Arc-enabled Kubernetes clusters) as a single, cohesive entity. It solves the "n-cluster problem" by introducing fleet-level workload placement, coordinated multi-cluster upgrades, and unified governance.
 
+<!-- v4:generated type=no_exercise model=codex turn=1 -->
+## Hands-On Exercise
+
+
+Goal: Build a two-cluster AKS Fleet, propagate an application from the Fleet hub to both member clusters, observe reconciliation after drift, and define a staged multi-cluster upgrade strategy.
+
+- [ ] Set the lab variables and install the Fleet CLI extension.
+
+  ```bash
+  export SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+  export GROUP=rg-aks-fleet-lab
+  export FLEET=aks-fleet-lab
+  export CLUSTER_EAST=aks-fleet-east
+  export CLUSTER_WEST=aks-fleet-west
+  export EAST_MEMBER=member-east
+  export WEST_MEMBER=member-west
+  export EAST_LOCATION=eastus
+  export WEST_LOCATION=westus2
+  export STRATEGY=safe-rollout
+
+  az account set --subscription "${SUBSCRIPTION_ID}"
+  az extension add --name fleet
+  az extension update --name fleet
+  ```
+
+  Verification:
+
+  ```bash
+  az account show --query "{subscription:id,user:user.name}" -o table
+  az extension show --name fleet --query version -o tsv
+  ```
+
+- [ ] Create a resource group and deploy two AKS clusters in different regions.
+
+  ```bash
+  az group create --name "${GROUP}" --location "${EAST_LOCATION}"
+
+  az aks create \
+    --resource-group "${GROUP}" \
+    --name "${CLUSTER_EAST}" \
+    --location "${EAST_LOCATION}" \
+    --node-count 1 \
+    --generate-ssh-keys
+
+  az aks create \
+    --resource-group "${GROUP}" \
+    --name "${CLUSTER_WEST}" \
+    --location "${WEST_LOCATION}" \
+    --node-count 1 \
+    --generate-ssh-keys
+  ```
+
+  Verification:
+
+  ```bash
+  az aks list --resource-group "${GROUP}" --query "[].{name:name,location:location,power:powerState.code}" -o table
+  ```
+
+- [ ] Create a Fleet hub and join both AKS clusters as Fleet members with separate update groups.
+
+  ```bash
+  az fleet create \
+    --resource-group "${GROUP}" \
+    --name "${FLEET}" \
+    --location "${EAST_LOCATION}" \
+    --enable-hub
+
+  export EAST_ID=$(az aks show --resource-group "${GROUP}" --name "${CLUSTER_EAST}" --query id -o tsv)
+  export WEST_ID=$(az aks show --resource-group "${GROUP}" --name "${CLUSTER_WEST}" --query id -o tsv)
+
+  az fleet member create \
+    --resource-group "${GROUP}" \
+    --fleet-name "${FLEET}" \
+    --name "${EAST_MEMBER}" \
+    --member-cluster-id "${EAST_ID}" \
+    --update-group stage1
+
+  az fleet member create \
+    --resource-group "${GROUP}" \
+    --fleet-name "${FLEET}" \
+    --name "${WEST_MEMBER}" \
+    --member-cluster-id "${WEST_ID}" \
+    --update-group stage2
+  ```
+
+  Verification:
+
+  ```bash
+  az fleet member list --resource-group "${GROUP}" --fleet-name "${FLEET}" -o table
+  ```
+
+- [ ] Authorize hub-cluster access and pull kubeconfig contexts for the hub and both members.
+
+  ```bash
+  export FLEET_ID="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${GROUP}/providers/Microsoft.ContainerService/fleets/${FLEET}"
+  export IDENTITY=$(az ad signed-in-user show --query id -o tsv)
+
+  az role assignment create \
+    --role "Azure Kubernetes Fleet Manager RBAC Cluster Admin" \
+    --assignee "${IDENTITY}" \
+    --scope "${FLEET_ID}"
+
+  az fleet get-credentials --resource-group "${GROUP}" --name "${FLEET}" --context "${FLEET}-hub" --overwrite-existing
+  az fleet get-credentials --resource-group "${GROUP}" --name "${FLEET}" --member "${EAST_MEMBER}" --context "${EAST_MEMBER}-ctx" --overwrite-existing
+  az fleet get-credentials --resource-group "${GROUP}" --name "${FLEET}" --member "${WEST_MEMBER}" --context "${WEST_MEMBER}-ctx" --overwrite-existing
+  ```
+
+  Verification:
+
+  ```bash
+  kubectl --context "${FLEET}-hub" get memberclusters
+  kubectl --context "${FLEET}-hub" get memberclusters -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.metadata.labels.fleet\.azure\.com/location}{"\n"}{end}'
+  ```
+
+- [ ] Deploy a sample namespace and application to the Fleet hub cluster.
+
+  ```bash
+  cat <<'EOF' | kubectl --context "${FLEET}-hub" apply -f -
+  apiVersion: v1
+  kind: Namespace
+  metadata:
+    name: fleet-demo
+  ---
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: web
+    namespace: fleet-demo
+  spec:
+    replicas: 1
+    selector:
+      matchLabels:
+        app: web
+    template:
+      metadata:
+        labels:
+          app: web
+      spec:
+        containers:
+        - name: web
+          image: mcr.microsoft.com/oss/nginx/nginx:1.25.5
+          ports:
+          - containerPort: 80
+  ---
+  apiVersion: v1
+  kind: Service
+  metadata:
+    name: web
+    namespace: fleet-demo
+  spec:
+    selector:
+      app: web
+    ports:
+    - port: 80
+      targetPort: 80
+  EOF
+  ```
+
+  Verification:
+
+  ```bash
+  kubectl --context "${FLEET}-hub" -n fleet-demo get deploy,svc,pods
+  ```
+
+- [ ] Create a `ClusterResourcePlacement` that propagates the namespace and its child resources to all Fleet members.
+
+  ```bash
+  cat <<'EOF' | kubectl --context "${FLEET}-hub" apply -f -
+  apiVersion: placement.kubernetes-fleet.io/v1
+  kind: ClusterResourcePlacement
+  metadata:
+    name: fleet-demo-all
+  spec:
+    resourceSelectors:
+    - group: ""
+      version: v1
+      kind: Namespace
+      name: fleet-demo
+    policy:
+      placementType: PickAll
+  EOF
+  ```
+
+  Verification:
+
+  ```bash
+  kubectl --context "${FLEET}-hub" get clusterresourceplacement fleet-demo-all
+  kubectl --context "${FLEET}-hub" describe clusterresourceplacement fleet-demo-all
+  ```
+
+- [ ] Confirm the workload exists on both member clusters, then create drift on one member and watch Fleet reconcile it.
+
+  ```bash
+  kubectl --context "${EAST_MEMBER}-ctx" -n fleet-demo get deploy,svc,pods
+  kubectl --context "${WEST_MEMBER}-ctx" -n fleet-demo get deploy,svc,pods
+
+  kubectl --context "${WEST_MEMBER}-ctx" -n fleet-demo delete deployment web
+  sleep 20
+  kubectl --context "${WEST_MEMBER}-ctx" -n fleet-demo get deployment web
+  ```
+
+  Verification:
+
+  ```bash
+  kubectl --context "${WEST_MEMBER}-ctx" -n fleet-demo get pods
+  kubectl --context "${FLEET}-hub" describe clusterresourceplacement fleet-demo-all
+  ```
+
+- [ ] Define a staged Fleet update strategy so one member upgrades before the other.
+
+  ```bash
+  cat <<'EOF' > example-stages.json
+  {
+    "stages": [
+      {
+        "name": "stage-1-canary",
+        "groups": [
+          {
+            "name": "stage1"
+          }
+        ],
+        "afterStageWaitInSeconds": 900
+      },
+      {
+        "name": "stage-2-production",
+        "groups": [
+          {
+            "name": "stage2"
+          }
+        ]
+      }
+    ]
+  }
+  EOF
+
+  az fleet updatestrategy create \
+    --resource-group "${GROUP}" \
+    --fleet-name "${FLEET}" \
+    --name "${STRATEGY}" \
+    --stages example-stages.json
+  ```
+
+  Verification:
+
+  ```bash
+  az fleet updatestrategy show --resource-group "${GROUP}" --fleet-name "${FLEET}" --name "${STRATEGY}" -o yaml
+  az aks get-upgrades --resource-group "${GROUP}" --name "${CLUSTER_EAST}" -o table
+  ```
+
+Success criteria:
+- The Fleet hub shows both member clusters as joined.
+- `fleet-demo-all` reports as scheduled and applied from the hub.
+- The `fleet-demo` namespace and `web` workload exist on both member clusters.
+- Deleting the deployment from one member cluster results in Fleet recreating it.
+- The Fleet update strategy exists and shows two ordered stages mapped to different update groups.
+
+<!-- /v4:generated -->
 ## When to Adopt Fleet Manager
 
 Before diving into the mechanics, it is crucial to understand *when* you actually need Fleet Manager. Multi-cluster architectures introduce complexity; you should not adopt them prematurely.

@@ -23,11 +23,11 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-January 2023. A Series B startup in the healthcare space, operating a fast-growing telemedicine platform, faced a critical engineering decision. A developer needed their Kubernetes pod to read patient records from an S3 bucket to generate daily analytics reports. The fastest path to enable this functionality? Create a standard IAM user, generate an access key, paste it into a Kubernetes Secret, and mount it directly into the pod. The entire process took five minutes. The feature shipped to production on a Friday afternoon, seemingly without issue.
+A team under delivery pressure might take the fast path: create an IAM user, store the access key in a Kubernetes Secret, and mount it into a pod. That approach can get a feature running quickly, but it also embeds a long-lived cloud credential directly into the workload.
 
-On Monday morning, the security team's automated scanner flagged something alarming. The access key had been committed to a private GitHub repository inside a Helm values file. GitHub's native secret scanning caught it. But here is the real problem: the IAM user had `AmazonS3FullAccess` attached to it. The permissions were not scoped to the single patient analytics bucket; they granted full read and write access to every single bucket in the entire AWS account. Furthermore, the key had no expiration date, meaning it was a perpetual backdoor into the company's most sensitive data. 
+If a static access key ends up in source control and carries broad permissions, it can expose far more cloud data than the workload actually needs, especially when the credential does not expire on its own. 
 
-The security team immediately revoked the key, which consequently broke the pod, which in turn broke the patient data pipeline, which delayed critical lab results for hundreds of patients. The incident postmortem revealed a systemic failure: over twenty other services in the same cluster used the exact same pattern of long-lived IAM access keys stored as Kubernetes Secrets. Many of those keys had been rotated zero times in over a year. The financial impact was immediate: a required compliance audit costing upwards of ninety thousand dollars, massive engineering toil for remediation, and a mandatory breach notification process.
+Revoking an embedded access key can break dependent workloads, and a review often reveals that the same static-secret pattern has spread to many services. Cleanup then turns into a costly security and operations exercise.
 
 This is the exact problem that cloud IAM integration solves. Instead of passing static secrets around -- creating them, storing them, rotating them, and praying nobody commits them to version control -- you pass identity. The pod mathematically proves "I am the payment processor" and the cloud provider verifies the claim, returning short-lived credentials good for the next fifteen minutes. No long-lived keys. No secrets to rotate. No credentials to leak. In this module, running on modern Kubernetes v1.35+, you will learn exactly how this works, from the OpenID Connect mechanics underneath to the practical implementation on each major cloud provider.
 
@@ -57,7 +57,7 @@ graph TD
     L --> M[Full S3 access, full DynamoDB access, etc.]
 ```
 
-To understand the anti-pattern fully, examine the following configuration. This is what you should aggressively hunt down and eliminate in your clusters. Notice how the secret data is merely base64-encoded, offering no cryptographic protection at rest within the pod.
+To understand the anti-pattern fully, examine the following configuration. This is what you should aggressively hunt down and eliminate in your clusters. Notice how the secret data is merely [base64-encoded](https://kubernetes.io/docs/concepts/configuration/secret/), offering no cryptographic protection at rest within the pod.
 
 ```yaml
 # DO NOT DO THIS -- the anti-pattern
@@ -93,7 +93,7 @@ spec:
           # If this pod is compromised, so is the key
 ```
 
-In the configuration above, the pod mounts the credentials directly into its environment. If the application is vulnerable to remote code execution or even a simple directory traversal attack, the attacker instantly acquires permanent cloud access. 
+In the configuration above, the pod mounts the credentials directly into its environment. If the application is vulnerable to remote code execution or even a simple directory traversal attack, the attacker can quickly obtain long-lived cloud access. 
 
 ## The Evolution to Federated Identity
 
@@ -112,7 +112,7 @@ graph TD
 ```
 
 This architecture brings powerful security properties:
-- **Ephemeral Credentials**: Tokens are valid for a short window (typically fifteen to sixty minutes). If intercepted after expiration, they are mathematically useless.
+- **Ephemeral Credentials**: Tokens are valid for a short window and expire automatically. If intercepted after expiration, they are mathematically useless.
 - **Scoped Permissions**: Each pod receives access tailored explicitly to its role, severely limiting the blast radius of a compromise.
 - **Stateless Operation**: No secrets exist in the cluster state or etcd. There is nothing to steal at rest.
 - **Audience Restriction**: The token specifies exactly which cloud provider it is intended for, preventing replay attacks across different infrastructure boundaries.
@@ -126,7 +126,7 @@ The mechanism underneath this seamless authentication is OpenID Connect (OIDC) t
 
 ### Step 1: The Cluster Publishes Its Public Keys
 
-Every Kubernetes cluster operates a Service Account Token Issuer. This issuer maintains a secure key pair. The private key signs the tokens, while the public key is hosted at a publicly accessible OIDC discovery endpoint. The cloud provider uses this endpoint to fetch the public key and verify incoming tokens.
+Every Kubernetes cluster operates a Service Account Token Issuer. This issuer maintains a secure key pair. The private key signs the tokens, while the public key is hosted at a [publicly accessible OIDC discovery endpoint](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html). The cloud provider uses this endpoint to fetch the public key and verify incoming tokens.
 
 ```bash
 # Every EKS cluster has an OIDC issuer URL
@@ -153,7 +153,7 @@ When you examine the JWKS (JSON Web Key Set) endpoint, you will find the precise
 
 ### Step 2: Kubernetes Injects a Signed Token into the Pod
 
-When a pod is scheduled, the kubelet provisions its volume mounts. If the pod uses a ServiceAccount associated with a cloud identity, Kubernetes projects a highly specific JSON Web Token (JWT) into the pod's filesystem. This JWT is cryptographically signed by the cluster's private key.
+When a pod is scheduled, the kubelet provisions its volume mounts. If the pod uses a ServiceAccount associated with a cloud identity, [Kubernetes projects a highly specific JSON Web Token (JWT) into the pod's filesystem](https://kubernetes.io/docs/reference/access-authn-authz/service-accounts-admin/). This JWT is cryptographically signed by the cluster's private key.
 
 ```yaml
 # The ServiceAccount references an IAM role
@@ -201,7 +201,7 @@ cat /var/run/secrets/eks.amazonaws.com/serviceaccount/token | jwt decode -
 
 ### Step 3: The Pod Exchanges the Token for Cloud Credentials
 
-The cloud provider SDKs (such as boto3 for AWS) are inherently aware of these projected tokens. When the application attempts to initialize a client for a service like S3, the SDK discovers the token file, reads the OIDC identity, and invokes the Security Token Service (STS) to request an exchange.
+The cloud provider SDKs (such as boto3 for AWS) are inherently aware of these projected tokens. When the application attempts to initialize a client for a service like S3, [the SDK discovers the token file, reads the OIDC identity, and invokes the Security Token Service (STS) to request an exchange](https://docs.aws.amazon.com/eks/latest/eksctl/iamserviceaccounts.html).
 
 ```mermaid
 sequenceDiagram
@@ -220,7 +220,7 @@ sequenceDiagram
 
 ### Step 4: IAM Trust Policy Controls Which Pods Get Which Roles
 
-The final layer of security resides in the cloud provider's IAM trust policy. The cloud provider will not blindly issue credentials to any valid token; the token's specific claims must match the conditions defined on the role.
+The final layer of security resides in the cloud provider's IAM trust policy. The cloud provider will not blindly issue credentials to any valid token; [the token's specific claims must match the conditions defined on the role](https://docs.aws.amazon.com/eks/latest/userguide/associate-service-account-role.html).
 
 ```json
 {
@@ -400,7 +400,7 @@ aws eks create-pod-identity-association \
 
 ## Implementation: GCP (Workload Identity)
 
-Google Cloud Platform relies on Workload Identity, which maps Kubernetes ServiceAccounts directly to Google Cloud Service Accounts (GSA). The architecture intercepts metadata server calls to inject the correct identity tokens.
+Google Cloud Platform relies on Workload Identity, which maps Kubernetes ServiceAccounts directly to Google Cloud Service Accounts (GSA). The architecture [intercepts metadata server calls](https://cloud.google.com/kubernetes-engine/docs/concepts/workload-identity) to inject the correct identity tokens.
 
 ```bash
 # Step 1: Enable Workload Identity on the cluster (if not already)
@@ -425,7 +425,7 @@ gcloud iam service-accounts add-iam-policy-binding \
   --member "serviceAccount:my-project.svc.id.goog[production/data-processor]"
 ```
 
-The Kubernetes ServiceAccount configuration in GCP relies on the specific `iam.gke.io` annotation to forge the link between the cluster entity and the GSA.
+The Kubernetes ServiceAccount configuration in GCP relies on [the specific `iam.gke.io` annotation](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity?hl=en) to forge the link between the cluster entity and the GSA.
 
 ```yaml
 # Step 5: Annotate the Kubernetes ServiceAccount
@@ -440,7 +440,7 @@ metadata:
 
 ## Implementation: Azure (Workload Identity)
 
-Microsoft Azure utilizes Azure AD Workload Identity, integrating Kubernetes OIDC with Azure Active Directory federated credentials. This replaces the deprecated AAD Pod Identity project.
+Microsoft Azure utilizes Azure AD Workload Identity, integrating Kubernetes OIDC with Azure Active Directory federated credentials. This [replaces the deprecated AAD Pod Identity project](https://learn.microsoft.com/en-us/azure/aks/use-azure-ad-pod-identity).
 
 ```bash
 # Step 1: Enable Workload Identity on the cluster
@@ -482,7 +482,7 @@ az role assignment create \
   --scope "/subscriptions/.../resourceGroups/.../providers/Microsoft.Storage/storageAccounts/patientdata"
 ```
 
-In AKS, you apply the client ID directly to the ServiceAccount and label it appropriately so the mutating admission webhook injects the necessary environment variables into the pod.
+In AKS, you apply the client ID directly to the ServiceAccount and label it appropriately so [the mutating admission webhook injects the necessary environment variables into the pod](https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview).
 
 ```yaml
 apiVersion: v1
@@ -498,7 +498,7 @@ metadata:
 
 ## Auditing Cloud API Calls Back to Pods
 
-One of the most powerful and often overlooked benefits of federated identity is forensic auditability. Every cloud API call made by a pod is meticulously logged with the assumed role's session name. Crucially, the session name dynamically incorporates the pod's identity claims.
+One of the most powerful and often overlooked benefits of federated identity is forensic auditability. Cloud audit logs record the assumed role used by a workload, and some platforms can attach extra session context that helps correlate activity back to Kubernetes identities.
 
 ```bash
 # AWS CloudTrail: Find all S3 calls made by the data-processor pod
@@ -528,7 +528,7 @@ aws cloudtrail lookup-events \
 # }
 ```
 
-This logging framework provides a completely unbroken audit trail: you know precisely which pod, using which ServiceAccount, mapped to which IAM role, touched which cloud resource, at what precise millisecond. Compare this forensic depth to the archaic static key approach, where the audit log cryptically shows "IAM user data-processor-user" with zero context regarding which cluster, namespace, or pod actually initiated the request.
+Combining cloud audit logs with Kubernetes audit and event data can give you a detailed investigation trail from workload identity to cloud API activity. Compare this forensic depth to the archaic static key approach, where the audit log cryptically shows "IAM user data-processor-user" with zero context regarding which cluster, namespace, or pod actually initiated the request.
 
 ### Cross-Referencing with Kubernetes Audit Logs
 
@@ -619,14 +619,14 @@ Even with ephemeral, short-lived tokens, an attacker compromising a pod could po
 }
 ```
 
-The `aws:SourceVpc` (or equivalent IP-based condition) strictly mandates that the role can only be assumed if the API call originates from your specific internal VPC infrastructure. If an attacker exfiltrates the token to a remote coffee shop network, the cloud provider will summarily reject the token exchange request, neutralizing the threat.
+Additional network-based conditions can narrow where temporary credentials are usable, but you need to validate the exact AWS condition keys and request paths that apply in your environment.
 
 ## Did You Know?
 
-- **Kubernetes ServiceAccount tokens were originally non-expiring JWTs stored as Secrets.** Before Kubernetes 1.22, every ServiceAccount automatically got a permanent token stored in a Secret object. These tokens never expired and were mounted into every pod by default. The shift to projected, time-bound tokens in v1.22+ was one of the most critical security improvements in Kubernetes history, yet many legacy clusters still dangerously retain non-expiring tokens.
-- **AWS processes over 500 million `AssumeRoleWithWebIdentity` calls per day** from EKS clusters alone. This API is the busiest STS endpoint globally. Each call involves verifying the JWT signature against the cluster's OIDC public keys, checking the trust policy, and issuing temporary credentials, accomplishing the entire cryptographic handshake in under 100 milliseconds.
+- **Older Kubernetes releases relied on long-lived ServiceAccount token Secrets.** Modern clusters use projected, time-bound tokens obtained through the TokenRequest flow instead, which reduces the operational risk of permanently mounted credentials.
+- **AWS STS web identity federation is heavily used by EKS workloads.** Each request requires token validation before temporary credentials are issued.
 - **The "confused deputy problem" was first described in a 1988 paper** by Norm Hardy. He used the example of a system compiler that could write to any file because it ran with elevated privileges. A malicious user tricked the compiler into overwriting the system's billing file instead of the intended output file. The same architectural flaw exists today when high-privilege services act on behalf of low-privilege callers.
-- **Google's Workload Identity Federation supports 100+ external identity providers**, extending far beyond GKE. You can federate identity from AWS, Azure, GitHub Actions, GitLab CI, and any strictly OIDC-compliant provider. This capability means a GitHub Actions workflow can securely assume a GCP service account without relying on any stored secrets.
+- **Google's Workload Identity Federation supports many external identity providers**, including AWS, Azure, GitHub Actions, GitLab CI, and OIDC- or SAML-compatible providers. That means external automation can authenticate to Google Cloud without relying on long-lived service account keys.
 
 ## Common Mistakes
 
@@ -635,11 +635,11 @@ The `aws:SourceVpc` (or equivalent IP-based condition) strictly mandates that th
 | Using the default ServiceAccount | Pods use "default" SA unless explicitly configured | Always create and assign dedicated ServiceAccounts. Set `automountServiceAccountToken: false` on the default SA |
 | Overly broad IAM policies | Developer uses managed policy like `AmazonS3FullAccess` for convenience | Write custom policies scoped to specific resources (bucket ARN, table name) |
 | Not restricting trust policy audience | Trust policy missing `aud` condition | Always include audience condition (`sts.amazonaws.com` for AWS) to prevent token reuse |
-| Forgetting to test token refresh | Works initially but breaks after token expiry (1hr or 24hr) | Run long-lived load tests to verify the SDK refreshes tokens automatically |
+| Forgetting to test token refresh | Works initially but breaks after token expiry | Run long-lived load tests to verify the SDK refreshes tokens automatically |
 | One IAM role for entire namespace | "All services in production share one role" | One role per ServiceAccount. Blast radius of a compromise is one service, not the whole namespace |
 | Not auditing AssumeRole calls | CloudTrail configured but nobody reviews it | Set up alerts for unexpected AssumeRoleWithWebIdentity calls (wrong source IP, unusual time) |
 | Leaving legacy token Secrets | Old non-expiring SA token Secrets still exist in cluster | Audit and delete Secrets of type `kubernetes.io/service-account-token`. Use projected tokens only |
-| Skipping IP condition on trust policy | Trusting any source that presents a valid token | Add `aws:SourceIp` or `aws:SourceVpc` condition to restrict where roles can be assumed from |
+| Skipping IP condition on trust policy | Trusting any source that presents a valid token | Add documented trust-policy conditions that match the STS request context you actually use, and test them before relying on them in production |
 
 ## Quiz
 
@@ -670,7 +670,7 @@ Yes, the attacker will successfully get AWS credentials in this scenario. The to
 <details>
 <summary>5. To save time, a platform engineer creates a single `ProdClusterRole` in AWS with access to S3, DynamoDB, and SQS. They map this role to every ServiceAccount in the `production` namespace. Months later, a vulnerability in the image resizing service is exploited. Explain the blast radius of this breach and how the incident response team will struggle to investigate it using CloudTrail.</summary>
 
-The blast radius of this breach is massive because the compromised image resizing service now has full access to S3, DynamoDB, and SQS, even if it only legitimately needed S3. The attacker can use the shared role to laterally move and exfiltrate data from databases or manipulate message queues that have nothing to do with image processing. Furthermore, incident response will be a nightmare because CloudTrail logs will show the exact same `ProdClusterRole` session name for every single cloud API call across the entire namespace. The security team will be unable to definitively distinguish which actions were performed by the compromised pod versus legitimate traffic from other services, delaying containment efforts and root cause analysis.
+The blast radius of this breach is massive because the compromised image resizing service now has full access to S3, DynamoDB, and SQS, even if it only legitimately needed S3. The attacker can use the shared role to laterally move and exfiltrate data from databases or manipulate message queues that have nothing to do with image processing. Furthermore, incident response will be much harder because CloudTrail logs will often show the same `ProdClusterRole` identity across many cloud API calls from the namespace. The security team will be unable to definitively distinguish which actions were performed by the compromised pod versus legitimate traffic from other services, delaying containment efforts and root cause analysis.
 </details>
 
 <details>
@@ -1009,3 +1009,15 @@ aws cloudtrail lookup-events \
 ## Next Module
 
 [Module 4.4: Cloud-Native Networking and VPC Topologies](../module-4.4-vpc-topologies/) -- Identity establishes *who* is allowed to access your sensitive resources. Networking dictates exactly *how* that raw traffic flows between those distinct entities. We will systematically design sophisticated VPC architectures that ensure your Kubernetes clusters remain highly connected, intrinsically secure, and deeply protected from the pervasive threat of IP exhaustion.
+
+## Sources
+
+- [kubernetes.io: secret](https://kubernetes.io/docs/concepts/configuration/secret/) — The Kubernetes Secrets documentation explicitly distinguishes Secret storage from simple base64 encoding and recommends stronger handling for sensitive data.
+- [docs.aws.amazon.com: iam roles for service accounts.html](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html) — The EKS IRSA documentation states that each cluster has a public OIDC discovery endpoint with signing keys for projected service account tokens.
+- [kubernetes.io: service accounts admin](https://kubernetes.io/docs/reference/access-authn-authz/service-accounts-admin/) — The Kubernetes service account administration docs describe bound projected tokens, TokenRequest, default lifetimes, and pod-scoped claims.
+- [docs.aws.amazon.com: iamserviceaccounts.html](https://docs.aws.amazon.com/eks/latest/eksctl/iamserviceaccounts.html) — The eksctl IRSA guide documents injection of `AWS_ROLE_ARN` and `AWS_WEB_IDENTITY_TOKEN_FILE` and notes that recent SDKs use them.
+- [docs.aws.amazon.com: associate service account role.html](https://docs.aws.amazon.com/eks/latest/userguide/associate-service-account-role.html) — The EKS IRSA documentation shows trust policy examples with `sub` and `aud` conditions and explains their least-privilege role.
+- [cloud.google.com: workload identity](https://cloud.google.com/kubernetes-engine/docs/concepts/workload-identity) — Google's GKE Workload Identity documentation describes the GKE metadata server and its interception of metadata requests.
+- [cloud.google.com: workload identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity?hl=en) — The GKE how-to guide documents both the `roles/iam.workloadIdentityUser` binding and the `iam.gke.io/gcp-service-account` annotation.
+- [learn.microsoft.com: use azure ad pod identity](https://learn.microsoft.com/en-us/azure/aks/use-azure-ad-pod-identity) — The AKS pod-managed identity documentation recommends Microsoft Entra Workload ID and states the older model was deprecated.
+- [learn.microsoft.com: workload identity overview](https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview) — The AKS workload identity overview documents the `azure.workload.identity/client-id` annotation, required `use: true` label, and webhook mutation behavior.

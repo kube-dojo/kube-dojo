@@ -25,13 +25,13 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-**Q1 2024. A Series C startup. $8 million annual cloud spend.**
+A fast-growing company with a large cloud bill.
 
-The CFO called an all-hands meeting. Cloud costs had grown 340% year-over-year while revenue grew 180%. The engineering team had no visibility into which teams, services, or features drove the cost. The finance team's cloud bill showed 12,000 line items per month. When the VP of Engineering was asked "how much does the recommendation engine cost?", the honest answer was "we have no idea."
+Leadership realized cloud spend was growing faster than expected, but the organization still lacked workload-level cost visibility and could not answer basic ownership questions from provider billing alone.
 
-Three months of forensic analysis revealed: 38% of EC2 instances were running at under 10% CPU utilization. The company was paying on-demand prices for workloads that ran 24/7 (perfect candidates for reserved instances or savings plans). Twenty-six EBS volumes were orphaned -- detached from any instance but still accruing charges. A development EKS cluster that was "temporary" had been running for 14 months. And the biggest surprise: cross-AZ data transfer for their Kubernetes pods cost $14,000 per month -- a line item nobody had ever noticed because it was buried in the EC2 data transfer category.
+Detailed cost reviews often uncover underutilized compute, steady workloads still billed at on-demand rates, orphaned storage, long-lived temporary environments, and overlooked network-transfer charges.
 
-After implementing the techniques in this module -- right-sizing, committed use discounts, Kubecost for allocation, VPA for resource optimization, and spot instances for non-critical workloads -- they reduced cloud spend by 42% ($3.36 million annually) without changing a single line of application code.
+Applying right-sizing, commitment discounts, workload-level cost allocation, and carefully chosen interruptible capacity can materially reduce cloud spend without requiring application rewrites.
 
 ---
 
@@ -295,7 +295,7 @@ kubectl get vpa recommendation-engine-vpa -n ml-platform -o yaml
 #         memory: 4Gi
 ```
 
-**A Note on VPA Auto-Update:** For workloads with unpredictable or bursty traffic, do not use VPA in `Auto` mode. It will aggressively scale down CPU requests during quiet periods, which causes severe CPU throttling when traffic suddenly spikes. Instead, use VPA in recommendation mode to find a safe baseline, and use HPA to scale out horizontally when load increases.
+**A Note on VPA Auto-Update:** For bursty or unpredictable workloads, review VPA recommendations carefully before applying them automatically, and pair right-sizing with HPA when you need elastic horizontal scaling.
 
 ### HPA for Cost-Efficient Scaling
 
@@ -411,9 +411,9 @@ gcloud billing accounts describe BILLING_ACCOUNT_ID --format=json
 
 ## Pillar 4: Spot Instance Lifecycle
 
-Spot instances (AWS) / Preemptible VMs (GCP) / Spot VMs (Azure) offer 60-90% discounts but can be interrupted with short notice. Kubernetes makes them practical by handling rescheduling automatically.
+Interruptible capacity on the major clouds can be substantially cheaper than on-demand pricing, but the exact discount and interruption behavior vary by provider, region, and instance type.
 
-**Spot Instance Golden Rules:** Because cloud providers only give a 2-minute warning before reclaiming a Spot node, they are entirely unsuitable for legacy monoliths, stateful applications relying on local disk, or single-replica deployments. Spot instances should only run stateless, fault-tolerant workloads that can gracefully shut down within 120 seconds and have multiple replicas distributed across nodes.
+**Spot Instance Golden Rules:** Because eviction notice windows are short and provider-specific, use Spot only for workloads that tolerate interruption, recover cleanly on other nodes, and do not depend on a single local-stateful replica.
 
 ### Spot-Friendly Node Groups
 
@@ -578,7 +578,7 @@ kubecostProductConfigs:
 
 ### Cloud Provider Anomaly Remediation
 
-For cloud-native resources, you can use AWS Budgets or GCP Budgets to trigger automated remediation (like shutting down a runaway dev environment) when a threshold is breached.
+For cloud-native resources, you can use [AWS Budgets](https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/budgets-controls.html) or [GCP Budgets](https://cloud.google.com/billing/docs/how-to/budgets) to trigger automated remediation (like shutting down a runaway dev environment) when a threshold is breached.
 
 ```yaml
 # AWS Budget with an automated SNS action
@@ -624,13 +624,13 @@ Orphaned resources are cloud resources that are no longer attached to any active
 
 | Resource | How It Gets Orphaned | Monthly Cost (typical) |
 |---|---|---|
-| Unattached EBS volumes | PVC deleted, PV not reclaimed | $8-$80 per volume |
-| Unused Elastic IPs | Service deleted, EIP not released | $3.65 each |
-| Old EBS snapshots | Backup policy with no expiry | $0.05/GB |
-| Idle load balancers | Service deleted, LB remains | $16-$25 each |
+| Unattached EBS volumes | PVC deleted, PV not reclaimed | Recurring storage charges that scale with size and volume type |
+| Unused Elastic IPs | Service deleted, EIP not released | Ongoing hourly public IPv4 charges until released |
+| Old EBS snapshots | Backup policy with no expiry | Recurring snapshot storage charges until deleted or archived |
+| Idle load balancers | Service deleted, LB remains | Ongoing hourly and usage-based charges until deleted |
 | Stopped EC2 instances | "Paused" but never terminated | EBS costs continue |
-| Orphaned NAT Gateways | VPC deleted, NAT GW remains | $32 each |
-| Unused RDS snapshots | Manual snapshots accumulated | $0.095/GB |
+| Orphaned NAT Gateways | VPC deleted, NAT GW remains | Ongoing hourly and data-processing charges until deleted |
+| Unused RDS snapshots | Manual snapshots accumulated | Recurring snapshot storage charges until deleted |
 
 ### Automated Cleanup
 
@@ -713,13 +713,13 @@ spec:
 
 ## Did You Know?
 
-1. **Kubernetes clusters typically run at 30-50% resource utilization** according to data from Kubecost across thousands of clusters. This means 50-70% of compute spend is wasted on idle resources. The primary cause is over-provisioned resource requests: developers set CPU and memory requests based on worst-case scenarios and never revisit them. VPA in recommendation mode can identify right-sizing opportunities without any risk.
+1. **Many Kubernetes environments run below their provisioned capacity.** Over-provisioned resource requests are a common source of waste, and recommendation tooling can help identify safer right-sizing opportunities before you change live workloads.
 
-2. **AWS Spot instances have been interrupted less than 5% of the time** for the most popular instance types (m5.xlarge, m6i.xlarge) in US regions, based on the AWS Spot Instance Advisor. The interruption rate varies dramatically by instance type and region: r5.8xlarge in ap-southeast-1 might see 15-20% interruption rate, while m7i.xlarge in us-east-1 sees under 3%. Diversifying across instance types and AZs is the key to reliable Spot usage.
+2. **AWS publishes rolling interruption-frequency data for Spot capacity.** Interruption rates vary by instance type and region, so check current Spot Advisor data and diversify across instance pools and Availability Zones instead of relying on fixed example percentages.
 
-3. **Cross-AZ data transfer is one of the top 5 cost categories** for most Kubernetes deployments on AWS. A company running 20 microservices with 100 pods across 3 AZs can easily spend $2,000-$5,000/month on cross-AZ traffic alone. GCP made cross-zone traffic free in 2022. AWS has not followed suit, making topology-aware routing a significant cost optimization lever for AWS-based Kubernetes deployments.
+3. **Cross-zone or cross-AZ network traffic can become a meaningful Kubernetes cost driver.** Provider pricing differs, so verify your platform's current network charges before treating topology-aware routing as a cost-optimization lever.
 
-4. **OpenCost became a CNCF Sandbox project in 2022** and reached Incubation status in 2024. It was originally developed by Kubecost as the open-source core of their commercial product. The CNCF adoption signaled that Kubernetes cost management was becoming a first-class concern alongside security and observability. OpenCost's cost allocation API is now integrated into several commercial FinOps platforms.
+4. [**OpenCost became a CNCF Sandbox project in 2022** and reached Incubation status in 2024](https://www.cncf.io/projects/opencost/). [It was originally developed by Kubecost as the open-source core of their commercial product](https://github.com/opencost/opencost). The CNCF adoption signaled that Kubernetes cost management was becoming a first-class concern alongside security and observability. OpenCost's APIs and data model are increasingly used across the Kubernetes cost-management ecosystem.
 
 ---
 
@@ -728,9 +728,9 @@ spec:
 | Mistake | Why It Happens | How to Fix It |
 |---|---|---|
 | Setting resource requests to match limits | "Same value means guaranteed QoS" | Requests should reflect typical usage, limits reflect peak. VPA recommendations help find the right values. Over-requesting wastes money. |
-| Buying Savings Plans based on current usage | "We're using $10K/month now, commit to $10K" | Usage fluctuates. Commit to 60-70% of your average usage. The rest stays on-demand for flexibility. Over-commitment is worse than no commitment. |
-| Running dev/staging clusters 24/7 | "Someone might need them on weekends" | Implement auto-shutdown for non-production clusters. Scale to zero outside business hours. A $3,000/month staging cluster running only business hours costs $900. |
-| Not diversifying Spot instance types | "We need m7i.xlarge specifically" | Spot pools with a single instance type have higher interruption rates. Specify 4-6 compatible instance types. Karpenter handles this automatically. |
+| Buying Savings Plans based on current usage | "We're using $10K/month now, commit to $10K" | Usage fluctuates. Commit conservatively to stable baseline usage and validate it with provider recommendation tools before buying long-term commitments. |
+| Running dev/staging clusters 24/7 | "Someone might need them on weekends" | Implement auto-shutdown for non-production clusters and scale down idle capacity outside working hours to cut spend substantially. |
+| Not diversifying Spot instance types | "We need m7i.xlarge specifically" | Single-type Spot pools are more fragile. Use multiple compatible instance types, and let provisioning tools such as Karpenter manage that diversity where appropriate. |
 | Ignoring namespace-level resource quotas | "Trust developers to be reasonable" | Without quotas, one team can consume the entire cluster. Set ResourceQuotas per namespace based on team budgets. |
 | No cost alerts or budgets | "We check the bill monthly" | By the time you see the monthly bill, the damage is done. Set budget alerts at 50%, 80%, and 100% thresholds for each account. |
 | Deleting Spot nodes during business hours | "Karpenter consolidated idle nodes" | Configure consolidation windows to avoid Spot node replacement during peak hours. Use `disruption.consolidateAfter` to delay. |
@@ -1020,3 +1020,20 @@ kind delete cluster --name cost-lab
 ## Next Module
 
 [Module 8.9: Large-Scale Observability & Telemetry](../module-8.9-observability-scale/) -- You can see where the money goes. Now learn how to see where the problems are. Multi-cluster Prometheus with Thanos, OpenTelemetry at scale, and the art of monitoring Kubernetes without drowning in data.
+
+## Sources
+
+- [cncf.io: opencost](https://www.cncf.io/projects/opencost/) — The CNCF project page directly states the acceptance and incubation dates.
+- [github.com: opencost](https://github.com/opencost/opencost) — The OpenCost repository states both its Kubecost origin and that it is a free, open-source distribution.
+- [docs.aws.amazon.com: budgets controls.html](https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/budgets-controls.html) — AWS Budgets documentation explicitly describes automatic budget actions at thresholds.
+- [cloud.google.com: budgets](https://cloud.google.com/billing/docs/how-to/budgets) — Google Cloud Billing documentation directly says budgets can automate cost control responses using programmatic notifications.
+- [github.com: aws node termination handler](https://github.com/aws/aws-node-termination-handler) — The upstream README directly documents Spot interruption detection and cordon/drain behavior.
+- [docs.aws.amazon.com: ebs delete ebs volumes.html](https://docs.aws.amazon.com/prescriptive-guidance/latest/optimize-costs-microsoft-workloads/ebs-delete-ebs-volumes.html) — General lesson point for an illustrative rewrite.
+- [aws.amazon.com: pricing](https://aws.amazon.com/vpc/pricing/) — General lesson point for an illustrative rewrite.
+- [docs.aws.amazon.com: ebs snapshots.html](https://docs.aws.amazon.com/ebs/latest/userguide/ebs-snapshots.html) — General lesson point for an illustrative rewrite.
+- [aws.amazon.com: pricing](https://aws.amazon.com/elasticloadbalancing/pricing//) — General lesson point for an illustrative rewrite.
+- [aws.amazon.com: backup](https://aws.amazon.com/rds/features/backup/) — General lesson point for an illustrative rewrite.
+- [docs.aws.amazon.com: get savings plans purchase recommendation.html](https://docs.aws.amazon.com/cli/latest/reference/ce/get-savings-plans-purchase-recommendation.html) — General lesson point for an illustrative rewrite.
+- [aws.amazon.com: pricing](https://aws.amazon.com/ec2/pricing/) — General lesson point for an illustrative rewrite.
+- [aws.amazon.com: applying spot to spot consolidation best practices with karpenter](https://aws.amazon.com/blogs/compute/applying-spot-to-spot-consolidation-best-practices-with-karpenter/) — General lesson point for an illustrative rewrite.
+- [Topology Aware Routing](https://kubernetes.io/docs/concepts/services-networking/topology-aware-routing/) — Explains how Kubernetes prefers same-zone traffic, which is relevant when network-transfer pricing matters.

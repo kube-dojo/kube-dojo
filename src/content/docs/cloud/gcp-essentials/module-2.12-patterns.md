@@ -571,7 +571,7 @@ For architects operating across multiple cloud providers, understanding equivale
 
 1. **Google's own internal infrastructure uses a project factory pattern** that has created over 4 million projects internally. The external Cloud Foundation Toolkit is inspired by the same principles Google uses to manage its own cloud environment at scale.
 2. **Identity-Aware Proxy handles over 500 million authentication decisions per day** across all GCP customers. It uses the same BeyondCorp infrastructure that Google built to eliminate VPNs for its own 150,000+ employees. Google employees access all internal tools through IAP without any VPN.
-3. **GKE Autopilot bills per pod, not per node**. This means you never pay for unused node capacity. A pod requesting 0.5 vCPU and 1 GB RAM is billed for exactly that, even if the underlying node has 32 vCPUs. This can save 30-50% compared to Standard mode for workloads with variable resource requirements.
+3. **GKE Autopilot bills per pod, not per node**. This means you typically do not pay for unused node capacity. A pod requesting 0.5 vCPU and 1 GB RAM is billed for exactly that, even if the underlying node has 32 vCPUs. This can save 30-50% compared to Standard mode for workloads with variable resource requirements.
 4. **The GCP Cloud Foundation Toolkit Terraform modules have been downloaded over 20 million times** and are used by thousands of enterprises to set up their landing zones. Google Cloud Professional Services uses these same modules when helping customers design their GCP environments.
 
 ---
@@ -887,3 +887,9 @@ Congratulations on completing the **GCP DevOps Essentials** track! You now have 
 - **[Platform Engineering Track](/platform/)** --- Learn advanced SRE, GitOps, DevSecOps, and MLOps practices that power modern infrastructure.
 
 The patterns in this module are foundational starting points. Every organization's landing zone is entirely unique, heavily shaped by their specific compliance requirements, engineering team structures, and distinct workload characteristics. The overarching key principle remains the same: **build the foundation right, and everything built on top of it automatically inherits that correctness.**
+
+## Sources
+
+- [terraform-example-foundation](https://github.com/terraform-google-modules/terraform-example-foundation) — Google's reference example for composing Cloud Foundation Toolkit modules into a governed cloud foundation.
+- [Shared VPC Overview](https://cloud.google.com/vpc/docs/shared-vpc) — Explains the host-project and service-project model that underpins the module's networking guidance.
+- [Identity-Aware Proxy Documentation](https://cloud.google.com/iap/docs) — Primary reference for IAP-secured web apps, TCP forwarding, and context-aware zero-trust access patterns.

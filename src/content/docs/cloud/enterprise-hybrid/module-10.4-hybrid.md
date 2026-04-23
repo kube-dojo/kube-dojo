@@ -714,7 +714,7 @@ Several approaches can significantly improve this process. First, you should dep
 <details>
 <summary>Question 2: Your network engineering team is allocating IP ranges for a new hybrid cloud expansion. They suggest reusing the 10.244.0.0/16 range for pods in both the on-premises and AWS EKS clusters, arguing that the clusters are separate. Why will this cause a major outage when you deploy a multi-cluster service mesh?</summary>
 
-In a single-cloud or fully isolated deployment, pod CIDRs only need to be routable within their local VPC or cluster network. However, in a hybrid architecture with a multi-cluster service mesh, traffic must be routed directly between pods across the transit gateway or VPN. If both the on-premises and cloud clusters use the exact same 10.244.0.0/16 pod CIDR, the underlying network routers will experience a conflict and cannot determine the correct destination for packets. Cross-cluster service calls, database connections initiated from pods, and centralized monitoring scrapes will all instantly fail. To prevent this, you must implement centralized IPAM that assigns unique, non-overlapping CIDR ranges to every cluster's pod and service networks.
+In a single-cloud or fully isolated deployment, pod CIDRs only need to be routable within their local VPC or cluster network. However, in a hybrid architecture with a multi-cluster service mesh, traffic must be routed directly between pods across the transit gateway or VPN. If both the on-premises and cloud clusters use the exact same 10.244.0.0/16 pod CIDR, the underlying network routers will experience a conflict and cannot determine the correct destination for packets. Cross-cluster service calls, database connections initiated from pods, and centralized monitoring scrapes will typically fail once traffic hits that overlapping CIDR conflict. To prevent this, you must implement centralized IPAM that assigns unique, non-overlapping CIDR ranges to every cluster's pod and service networks.
 </details>
 
 <details>
@@ -1068,3 +1068,10 @@ rm /tmp/onprem-cluster.yaml /tmp/cloud-cluster.yaml /tmp/hybrid-inventory.sh
 ## Next Module
 
 With hybrid connectivity firmly established, it is time to manage multiple clusters at scale using advanced administrative controls. Head to [Module 10.5: Multi-Cloud Fleet Management (Azure Arc / GKE Fleet)](../module-10.5-fleet-management/) to learn how powerful tooling permits unified oversight, fleet policy deployments, and unified lifecycle tracking across disparate cloud boundaries.
+
+## Sources
+
+- [AWS Site-to-Site VPN Tunnel Options](https://docs.aws.amazon.com/vpn/latest/s2svpn/VPNTunnels.html) — Useful for grounding tunnel behavior, bandwidth limits, and operational options discussed in the connectivity section.
+- [How AWS Transit Gateway Works](https://docs.aws.amazon.com/vpc/latest/tgw/transit-gateway-centralized-router.html) — Explains route propagation, attachment behavior, and the overlapping-CIDR constraints behind hybrid transit design.
+- [What Is Azure Arc-enabled Kubernetes?](https://learn.microsoft.com/en-us/azure/azure-arc/kubernetes/overview) — Covers what Azure Arc actually provides for attached clusters, including policy, monitoring, and GitOps capabilities.
+- [GKE Deployment Options](https://docs.cloud.google.com/kubernetes-engine/enterprise/docs/deployment-options) — Shows how Google maps GKE enterprise features across Google Cloud, on-prem, and attached-cluster environments.

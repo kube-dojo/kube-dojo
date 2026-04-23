@@ -417,7 +417,7 @@ aws ecs create-service \
 
 Let us break down the service configuration:
 
-**`assignPublicIp: DISABLED`**: Tasks in private subnets. They reach ECR through a VPC endpoint or NAT Gateway. This is the production pattern -- never expose tasks directly to the internet.
+**`assignPublicIp: DISABLED`**: Tasks in private subnets. They reach ECR through a VPC endpoint or NAT Gateway. This is the production pattern -- in most cases, do not expose tasks directly to the internet.
 
 **`maximumPercent: 200, minimumHealthyPercent: 100`**: During deployments, ECS can launch up to 200% of desired count (6 tasks if desired is 3) while keeping 100% healthy. This means zero-downtime rolling deployments.
 
@@ -654,7 +654,7 @@ flowchart TB
 
 ### Blue/Green with CodeDeploy
 
-For production services where you want the ability to instantly roll back:
+For production services where you want the ability to quickly roll back:
 
 ```bash
 # Create a service with CODE_DEPLOY deployment controller
@@ -751,7 +751,7 @@ This configuration guarantees 2 tasks on regular Fargate (`base: 2`) and distrib
 | Using public subnets with public IPs for Fargate tasks | Seems simpler than setting up NAT Gateway or VPC endpoints | Use private subnets with either a NAT Gateway or VPC endpoints for ECR/S3/CloudWatch. Public IPs on tasks are a security risk |
 | No health check in task definition | ALB health check seems sufficient | The task definition health check determines if ECS should restart the container. The ALB health check determines if the ALB routes traffic. Both are needed for reliable operation |
 | Hardcoding container image tags as `latest` | Convenient during development | Use explicit version tags. With `latest`, you cannot tell what is running, cannot reproduce issues, and rollbacks do not actually roll back to the previous code |
-| Not setting `linuxParameters.initProcessEnabled` | It is an obscure setting buried in the task definition | Without an init process (PID 1 signal handling), your container may not handle SIGTERM gracefully during deployments, leading to dropped connections. Always enable it |
+| Not setting `linuxParameters.initProcessEnabled` | It is an obscure setting buried in the task definition | Without an init process (PID 1 signal handling), your container may not handle SIGTERM gracefully during deployments, leading to dropped connections. Usually enable it |
 | Setting scale-in cooldown too low | Teams want aggressive scaling in both directions | Aggressive scale-in causes flapping during variable traffic. Set scale-out cooldown to 30-60s and scale-in cooldown to 300-600s |
 | Not using Fargate Spot for non-critical workloads | Teams default to regular Fargate for everything | Use a capacity provider strategy with a `base` of regular Fargate and additional capacity on Spot. Saves 50-70% on dev/staging and batch workloads |
 
@@ -1218,3 +1218,10 @@ echo "Cleanup complete"
 ## Next Module
 
 Next up: **[Module 1.8: AWS Lambda & Serverless Patterns](../module-1.8-lambda/)** -- Move beyond always-on containers to event-driven computing. You will learn Lambda's execution model, triggers, cold starts, Step Functions for orchestration, and build an S3-triggered image processing pipeline.
+
+## Sources
+
+- [AWS Fargate for Amazon ECS](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/AWS_Fargate.html) — Authoritative overview of Fargate capabilities, Spot behavior, platform versions, and load balancing requirements.
+- [Amazon ECS Task Networking Options for Fargate](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/fargate-task-networking.html) — Covers ENIs, private IPs, public IP assignment, NAT gateways, and VPC endpoint patterns.
+- [Monitor Amazon ECS Containers with ECS Exec](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-exec.html) — Explains ECS Exec architecture, prerequisites, IAM implications, logging, and operational limits.
+- [CodeDeploy Blue/Green Deployments for Amazon ECS](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/deployment-type-bluegreen.html) — Details the ECS blue/green model, target-group requirements, listener setup, and deployment behavior.

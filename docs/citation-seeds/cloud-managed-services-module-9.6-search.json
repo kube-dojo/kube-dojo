@@ -1,0 +1,346 @@
+{
+  "module_key": "cloud/managed-services/module-9.6-search",
+  "module_path": "src/content/docs/cloud/managed-services/module-9.6-search.md",
+  "research_run_id": "2026-04-23T06:52:51+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 3,
+  "section_pool_ref": null,
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "Unsourced August 2023 SaaS war story with 200 microservices, 12 TB/day, i3.2xlarge nodes, $22,000/month, 30% engineer time, and a 4-hour outage during a 7.x->8.x upgrade.",
+      "claim_class": "war_story",
+      "span_hint": "section: Why This Module Matters, paragraph 1",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "In August 2023, a SaaS company running 200 microservices on EKS generated 12 TB of logs per day. They ran a self-managed Elasticsearch cluster on Kubernetes -- 9 data nodes, 3 master nodes, each on i3.2xlarge instances with local NVMe storage. Total monthly cost: $22,000 for compute alone. The cluster required a dedicated engineer spending roughly 30% of their time on shard rebalancing, index lifecycle management, JVM tuning, and version upgrades. When they attempted an upgrade from Elasticsearch 7.x to 8.x, a mapping incompatibility brought down the cluster for 4 hours. During those 4 hours, the security team could not search logs to investigate an active incident.",
+      "suggested_rewrite": "At scale, self-managing Elasticsearch or OpenSearch for Kubernetes logging can consume substantial infrastructure and engineering time, and upgrade mistakes can temporarily disrupt incident response when log search is unavailable.",
+      "lesson_point_url": null,
+      "rationale": "This is a precise named-entity operational anecdote with no attributable source, so the false specifics need to be removed."
+    },
+    {
+      "claim_id": "C002",
+      "claim_text": "Unsourced migration outcome claim: three-week move to Amazon OpenSearch Service, engineer time dropping from 30% to 5%, and zero unplanned outages for 14 months.",
+      "claim_class": "war_story",
+      "span_hint": "section: Why This Module Matters, paragraph 2",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "They migrated to Amazon OpenSearch Service (managed). The migration took three weeks. The managed service handles node replacement, automated snapshots, encryption, and version upgrades. The same engineer now spends 5% of their time on search operations. More importantly, the cluster has not had a single unplanned outage in 14 months. The lesson: running a distributed search cluster on Kubernetes is technically possible, but the operational overhead is enormous. Managed search services let you focus on what matters -- getting insights from your data.",
+      "suggested_rewrite": "Many teams move logging workloads to managed search services to reduce routine cluster maintenance, use built-in operational features, and lower the risk of upgrade- or node-related outages.",
+      "lesson_point_url": null,
+      "rationale": "The specific migration duration, staffing percentage, and outage-free period are uncited outcomes from the same unsourced anecdote."
+    },
+    {
+      "claim_id": "C003",
+      "claim_text": "Kafka buffering prevents data loss when OpenSearch is slow or unavailable.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Buffering with Kafka for Resilience, intro sentence",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "For high-volume clusters, buffer logs through Kafka to prevent data loss when OpenSearch is slow or unavailable:",
+      "suggested_rewrite": "For high-volume clusters, buffer logs through Kafka to absorb downstream slowdowns and reduce the risk of log loss when OpenSearch is slow or unavailable:",
+      "lesson_point_url": null,
+      "rationale": "Preventing data loss is too strong as a blanket guarantee because the outcome depends on buffering and retry configuration."
+    },
+    {
+      "claim_id": "C004",
+      "claim_text": "A 200-pod cluster can generate 50 GB/day of logs, leading to 1.5 TB after a month.",
+      "claim_class": "statistic",
+      "span_hint": "section: Index Lifecycle Management (ILM/ISM), opening paragraph",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "A single day of logs for a 200-pod cluster can be 50 GB. After a month, you have 1.5 TB of indices, most of which nobody searches.",
+      "suggested_rewrite": "A single day of Kubernetes logs can consume a large amount of storage, and retention multiplies that footprint quickly if you do not age data out.",
+      "lesson_point_url": null,
+      "rationale": "These are illustrative volume numbers presented as facts without a source."
+    },
+    {
+      "claim_id": "C005",
+      "claim_text": "Document-level security can restrict which documents a user sees, and field-level security can include or exclude fields from search hits.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Fine-Grained Access Control, paragraph after role example",
+      "disposition": "supported",
+      "source_ids": [
+        "S001"
+      ],
+      "proposed_url": "https://docs.aws.amazon.com/opensearch-service/latest/developerguide/fgac.html",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "AWS documents DLS and FLS directly, including that DLS limits matching documents and FLS controls which fields are visible."
+    },
+    {
+      "claim_id": "C006",
+      "claim_text": "A practical shard-size target is roughly 10-50 GB per shard, with AWS guidance differentiating search-heavy and log-analytics workloads.",
+      "claim_class": "statistic",
+      "span_hint": "section: Sharding and Replication Strategy, Shard Sizing Rules table row 1",
+      "disposition": "supported",
+      "source_ids": [
+        "S002"
+      ],
+      "proposed_url": "https://docs.aws.amazon.com/opensearch-service/latest/developerguide/bp-sharding.html",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "AWS guidance explicitly gives 10-30 GiB for search-latency-sensitive workloads and 30-50 GiB for write-heavy log analytics."
+    },
+    {
+      "claim_id": "C007",
+      "claim_text": "Max 20 shards per GB of JVM heap.",
+      "claim_class": "statistic",
+      "span_hint": "section: Sharding and Replication Strategy, Shard Sizing Rules table row 2, guideline cell",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Max 20 per GB of JVM heap",
+      "suggested_rewrite": "Use your platform's current shard-per-node guidance instead of a fixed shards-per-GB rule",
+      "lesson_point_url": null,
+      "rationale": "This hard number does not line up with current AWS guidance and should not be taught as a stable universal rule."
+    },
+    {
+      "claim_id": "C008",
+      "claim_text": "1000 shards on a node with 32 GB heap is the practical max.",
+      "claim_class": "statistic",
+      "span_hint": "section: Sharding and Replication Strategy, Shard Sizing Rules table row 2, reason cell",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "1000 shards on a node with 32 GB heap is the practical max",
+      "suggested_rewrite": "Validate shard budgets against your service's documented per-node limits rather than a single heap-size example",
+      "lesson_point_url": null,
+      "rationale": "The 32 GB example is not a stable cross-version rule and current service limits are documented differently."
+    },
+    {
+      "claim_id": "C009",
+      "claim_text": "Clusters should be monitored and alerted above 10,000 total shards.",
+      "claim_class": "statistic",
+      "span_hint": "section: Sharding and Replication Strategy, Shard Sizing Rules table row 4, guideline cell",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Monitor and alert above 10,000",
+      "suggested_rewrite": "Monitor total shard count and alert before you approach your service's documented per-node shard ceilings",
+      "lesson_point_url": null,
+      "rationale": "A single cluster-wide 10,000 threshold is topology-dependent and not a universal platform limit."
+    },
+    {
+      "claim_id": "C010",
+      "claim_text": "Filter context avoids relevance scoring and frequently used filters are cached, which is why it is preferable for exact-match operational queries.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Query Optimization, Query Performance Tips table row 1",
+      "disposition": "needs_allowlist_expansion",
+      "source_ids": [
+        "S003"
+      ],
+      "proposed_url": "https://www.elastic.co/docs/reference/query-languages/query-dsl/query-filter-context",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Elastic's query/filter reference states that filters do not compute relevance scores and that frequently used filters are cached, but elastic.co is off-allowlist."
+    },
+    {
+      "claim_id": "C011",
+      "claim_text": "Exact-match operational queries should target keyword or other term-level fields rather than text fields, because text is analyzed.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Query Optimization, Query Performance Tips table row 3",
+      "disposition": "needs_allowlist_expansion",
+      "source_ids": [
+        "S004"
+      ],
+      "proposed_url": "https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl-term-query.html",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Elastic's term-query docs explicitly warn against using term queries on text fields because text is analyzed, but the host is off-allowlist."
+    },
+    {
+      "claim_id": "C012",
+      "claim_text": "Search returns 10 hits by default, and large result windows increase per-shard memory and CPU work.",
+      "claim_class": "statistic",
+      "span_hint": "section: Query Optimization, Query Performance Tips table row 4",
+      "disposition": "needs_allowlist_expansion",
+      "source_ids": [
+        "S005"
+      ],
+      "proposed_url": "https://www.elastic.co/docs/reference/elasticsearch/rest-apis/paginate-search-results",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Elastic's pagination docs directly state the default of 10 hits and describe the memory/CPU cost of large pages, but the host is off-allowlist."
+    },
+    {
+      "claim_id": "C013",
+      "claim_text": "OpenSearch originated as a 2021 fork from Elasticsearch 7.10.2/Kibana 7.10.2 after Elastic changed the licensing for newer releases.",
+      "claim_class": "incident",
+      "span_hint": "section: Did You Know, item 1",
+      "disposition": "supported",
+      "source_ids": [
+        "S006"
+      ],
+      "proposed_url": "https://aws.amazon.com/blogs/aws/amazon-elasticsearch-service-is-now-amazon-opensearch-service-and-supports-opensearch-10/",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "AWS's launch post directly states the 7.10.2 lineage and the licensing-triggered fork context."
+    },
+    {
+      "claim_id": "C014",
+      "claim_text": "OpenSearch/Amazon OpenSearch Service includes features such as anomaly detection and observability or trace-analytics capabilities.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Did You Know, item 1",
+      "disposition": "supported",
+      "source_ids": [
+        "S007"
+      ],
+      "proposed_url": "https://aws.amazon.com/blogs/aws/amazon-elasticsearch-service-is-now-amazon-opensearch-service-and-supports-opensearch-10/",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "AWS's OpenSearch announcement enumerates anomaly detection and trace analytics among OpenSearch features."
+    },
+    {
+      "claim_id": "C015",
+      "claim_text": "A shard is a self-contained Lucene index, so shard count and size directly affect performance and coordination overhead.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Did You Know, item 2",
+      "disposition": "needs_allowlist_expansion",
+      "source_ids": [
+        "S008"
+      ],
+      "proposed_url": "https://www.elastic.co/docs/manage-data/data-store/index-basics",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Elastic's index fundamentals page directly states that each shard is a Lucene index and that shard number and size affect performance, but elastic.co is off-allowlist."
+    },
+    {
+      "claim_id": "C016",
+      "claim_text": "Force-merge reduces index size by 40-60% and speeds queries.",
+      "claim_class": "statistic",
+      "span_hint": "section: Did You Know, item 3",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "**The `force_merge` operation during the warm phase can reduce index size by 40-60%** because it compacts multiple Lucene segments into one. This also speeds up queries because there are fewer segments to search. But force merge is CPU-intensive and should only run on warm/cold indices that are no longer receiving writes.",
+      "suggested_rewrite": "**The `force_merge` operation during the warm phase can reclaim space and reduce segment overhead** because it compacts multiple Lucene segments into fewer larger ones. It can help some read-heavy queries, but it is CPU-intensive and should only run on indices that are no longer receiving writes.",
+      "lesson_point_url": null,
+      "rationale": "The precise 40-60% size-reduction figure is unsupported and too specific to leave in place."
+    },
+    {
+      "claim_id": "C017",
+      "claim_text": "Document Level Security adds 5-15% overhead per query.",
+      "claim_class": "statistic",
+      "span_hint": "section: Did You Know, item 4",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "**Document Level Security in OpenSearch evaluates a filter query on every search request**, which adds 5-15% overhead per query. For high-traffic dashboards, pre-filter by creating separate index aliases per team with built-in filters, which eliminates the per-query DLS evaluation.",
+      "suggested_rewrite": "**Document Level Security in OpenSearch applies an access-control filter during searches**. On busy dashboards it can add measurable overhead, so test alternative tenancy patterns if query latency becomes a bottleneck.",
+      "lesson_point_url": null,
+      "rationale": "The 5-15% figure is not backed by an authoritative source in the allowlisted set."
+    },
+    {
+      "claim_id": "C018",
+      "claim_text": "Without a buffer, OpenSearch backpressure causes Fluent Bit to drop logs.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Common Mistakes, table row 'Not buffering through Kafka for high-volume clusters'",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Without a buffer, OpenSearch backpressure causes Fluent Bit to drop logs",
+      "suggested_rewrite": "Without a durable buffer, downstream backpressure can delay ingestion and may eventually lead to log loss if the collector exhausts its available memory or storage buffers",
+      "lesson_point_url": null,
+      "rationale": "Direct log loss is configuration-dependent, so the blanket statement is too strong without a source and conditions."
+    },
+    {
+      "claim_id": "C019",
+      "claim_text": "AWS guidance ties sustained high JVM memory pressure to GC pause risk and uses keeping usage below 80% as a rule of thumb.",
+      "claim_class": "statistic",
+      "span_hint": "section: Common Mistakes, table row 'Ignoring JVM heap pressure on managed clusters'",
+      "disposition": "supported",
+      "source_ids": [
+        "S009"
+      ],
+      "proposed_url": "https://docs.aws.amazon.com/opensearch-service/latest/developerguide/handling-errors.html",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "AWS troubleshooting guidance explicitly connects high JVM memory pressure to GC problems and says to keep usage below 80% as a rule of thumb."
+    },
+    {
+      "claim_id": "C020",
+      "claim_text": "Force-merge should be used only on read-only indices because writes and updates continue creating new segments.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Common Mistakes, table row 'Running force_merge on hot indices'",
+      "disposition": "needs_allowlist_expansion",
+      "source_ids": [
+        "S010"
+      ],
+      "proposed_url": "https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-indices-forcemerge",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Elastic's force-merge API docs directly recommend force-merging only read-only indices and explain why, but the host is off-allowlist."
+    },
+    {
+      "claim_id": "C021",
+      "claim_text": "Default dynamic mapping maps strings to `text`.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Common Mistakes, table row 'Using `text` type for fields that need exact matching'",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Default dynamic mapping maps strings to `text`",
+      "suggested_rewrite": "Default mappings do not always produce the exact field types you want for operational filters and aggregations",
+      "lesson_point_url": null,
+      "rationale": "This overstates default mapping behavior and should be rewritten more generally unless a specific engine/version source is supplied."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://docs.aws.amazon.com/opensearch-service/latest/developerguide/ism.html",
+      "title": "Index State Management in Amazon OpenSearch Service",
+      "tier": "vendor",
+      "why_relevant": "Primary AWS guide for lifecycle policies, rollover, and automated retention."
+    },
+    {
+      "url": "https://docs.aws.amazon.com/opensearch-service/latest/developerguide/fgac.html",
+      "title": "Fine-grained access control in Amazon OpenSearch Service",
+      "tier": "vendor",
+      "why_relevant": "Covers document-level security, field-level security, roles, and mappings for shared clusters."
+    },
+    {
+      "url": "https://docs.aws.amazon.com/opensearch-service/latest/developerguide/bp-sharding.html",
+      "title": "Choosing the number of shards",
+      "tier": "vendor",
+      "why_relevant": "Provides AWS shard-sizing guidance and sizing tradeoffs directly relevant to logging workloads."
+    }
+  ],
+  "notes": "Quiz items, exercises, code blocks, and Mermaid diagrams were intentionally excluded per pipeline rules. Table rows were seeded only where they make load-bearing numeric or platform-behavior claims.",
+  "_schema_issues": [],
+  "rejected_urls": []
+}

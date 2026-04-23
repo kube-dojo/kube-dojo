@@ -19,7 +19,7 @@ After completing this module, you will be able to:
 
 In August 2012, Knight Capital Group, one of the largest market makers in the United States equities market, deployed a new version of their high-frequency trading software. The deployment process involved a technician manually logging into eight separate load-balanced servers to copy the new compiled code and restart the service. The technician successfully updated seven of the servers but inexplicably missed the eighth server. When the market opened, the outdated code on the eighth server began executing a dormant, highly aggressive test algorithm against live market data. Because the deployment process lacked an automated deployment pipeline, there was no uniform rollout, no automated verification, and no quick rollback mechanism. In exactly 45 minutes, Knight Capital Group lost $460 million---effectively bankrupting the company and forcing an emergency acquisition just to cover the clearing house obligations. 
 
-While the Knight Capital incident occurred before the modern cloud era, the fundamental lesson remains universally critical: relying on human intervention for software delivery is an unacceptable business risk. Manual deployments are inherently fragile, subject to fatigue, oversight, and inconsistent execution. As your infrastructure scales from a single monolithic application to dozens or hundreds of microservices deployed across multiple regions, the operational overhead of manual building, testing, and deploying becomes mathematically impossible to sustain. You need a system that treats your deployment process with the exact same rigor, reproducibility, and immutability as the source code itself. 
+While the Knight Capital incident occurred before the modern cloud era, the fundamental lesson remains broadly relevant: relying heavily on human intervention for software delivery creates a serious business risk. Manual deployments are inherently fragile, subject to fatigue, oversight, and inconsistent execution. As your infrastructure scales from a single monolithic application to dozens or hundreds of microservices deployed across multiple regions, the operational overhead of manual building, testing, and deploying usually becomes impractical to sustain. You need a system that treats your deployment process with the exact same rigor, reproducibility, and immutability as the source code itself. 
 
 Continuous Integration and Continuous Delivery (CI/CD) is the engineering discipline that solves this existential threat. In the Google Cloud ecosystem, **Cloud Build** and **Cloud Deploy** represent the state-of-the-art managed toolchain for implementing these practices. Cloud Build operates as a serverless execution engine, pulling your code, running it through a gauntlet of automated tests, and packaging it into immutable container images. Cloud Deploy then takes the baton, orchestrating the progressive delivery of those images across your environments (Dev, Staging, Production) with built-in safety nets like canary deployments, traffic shifting, and one-click rollbacks. Mastering these tools is not merely an operational optimization; it is the absolute prerequisite for operating cloud-native applications safely at scale.
 
@@ -176,7 +176,7 @@ gcloud builds submit --config=cloudbuild.yaml \
 
 ### Google-Provided Builders
 
-Google maintains a highly optimized repository of standard builder images containing the most common toolchains required for software development. Because these images are cached directly on the Cloud Build worker nodes, pulling them incurs virtually zero network latency, ensuring your pipeline starts executing your code almost instantly.
+Google maintains a highly optimized repository of standard builder images containing the most common toolchains required for software development. Because these images are often cached on the Cloud Build worker nodes, pulling them usually incurs very little network latency, helping your pipeline start executing your code quickly.
 
 | Builder | Image | Use |
 | :--- | :--- | :--- |
@@ -334,7 +334,7 @@ Notice the progressive safety checks woven into this pipeline. If the unit tests
 
 As your application grows, running rigorous test suites, complex linting rules, and heavy Docker builds sequentially will inevitably slow down your feedback loop. Developer velocity is directly correlated to pipeline speed. Fortunately, Cloud Build natively supports Directed Acyclic Graph (DAG) execution, allowing independent steps to execute in parallel.
 
-By utilizing the `id` field to uniquely identify a step, and the `waitFor` array to declare dependencies, you can instruct the execution engine to orchestrate complex concurrent workflows. If a step defines `waitFor: ['-']`, it instructs Cloud Build to completely detach that step from the sequential order and execute it immediately upon pipeline initialization.
+By utilizing the `id` field to uniquely identify a step, and the `waitFor` array to declare dependencies, you can instruct the execution engine to orchestrate complex concurrent workflows. If a step defines `waitFor: ['-']`, it instructs Cloud Build to detach that step from the sequential order and schedule it as soon as the build starts.
 
 ```yaml
 steps:
@@ -623,13 +623,13 @@ gcloud deploy targets rollback prod \
   --region=us-central1
 ```
 
-Cloud Deploy's true value proposition materializes during an incident. The `gcloud deploy targets rollback` command entirely bypasses the need to locate previous source code commits, revert git history, or rerun a lengthy pipeline build. It immediately re-applies the known-good container image artifacts from the previous successful release back onto the targeted environment, stabilizing production in seconds rather than minutes.
+Cloud Deploy's true value proposition materializes during an incident. The `gcloud deploy targets rollback` command entirely bypasses the need to locate previous source code commits, revert git history, or rerun a lengthy pipeline build. It can quickly re-apply the known-good container image artifacts from the previous successful release back onto the targeted environment, often stabilizing production in seconds rather than minutes.
 
 ## Secrets in Cloud Build
 
 Modern applications invariably interact with external dependencies—requiring API keys, private NPM tokens, database passwords, or third-party service credentials during the build or deployment phase. A catastrophic anti-pattern is attempting to inject these credentials using raw substitution variables or storing them as plaintext within the `cloudbuild.yaml` document. Cloud Build substitutions are thoroughly logged and visible in plain text throughout the build history and GCP console interface.
 
-The only acceptable architecture for secret management involves a tight integration with Google Cloud Secret Manager. 
+The recommended architecture for secret management involves a tight integration with Google Cloud Secret Manager. 
 
 ```yaml
 # Accessing secrets from Secret Manager in Cloud Build
@@ -704,13 +704,13 @@ The risk lies in the violation of the principle of least privilege due to the de
 <details>
 <summary>5. Your team currently deploys to GKE by adding a final step in `cloudbuild.yaml` that runs `kubectl apply`. The CTO now requires that all deployments to production must be manually approved by the QA team, and there must be an automated way to roll back traffic if errors spike. Why is your current `kubectl` step insufficient, and how does Cloud Deploy solve this?</summary>
 
-A simple `kubectl apply` or `gcloud run deploy` step inside Cloud Build is a "fire-and-forget" imperative command that lacks lifecycle management, approval gates, and environment awareness. Once Cloud Build executes the command, its job is done. Cloud Deploy, on the other hand, is a declarative continuous delivery (CD) platform that separates the deployment logic from the build process. It allows you to define a Delivery Pipeline with specific targets (dev, staging, prod). When Cloud Build finishes, it creates a "Release" in Cloud Deploy. Cloud Deploy then natively enforces `requireApproval: true` on the production target, pausing the rollout until QA clicks approve. Furthermore, it tracks the history of all releases, providing a native "Rollback" button that instantly restores the previous working state without needing to rerun a build pipeline.
+A simple `kubectl apply` or `gcloud run deploy` step inside Cloud Build is a "fire-and-forget" imperative command that lacks lifecycle management, approval gates, and environment awareness. Once Cloud Build executes the command, its job is done. Cloud Deploy, on the other hand, is a declarative continuous delivery (CD) platform that separates the deployment logic from the build process. It allows you to define a Delivery Pipeline with specific targets (dev, staging, prod). When Cloud Build finishes, it creates a "Release" in Cloud Deploy. Cloud Deploy then natively enforces `requireApproval: true` on the production target, pausing the rollout until QA clicks approve. Furthermore, it tracks the history of all releases, providing a native "Rollback" button that can quickly restore the previous working state without needing to rerun a build pipeline.
 </details>
 
 <details>
 <summary>6. Your build pipeline needs to download a proprietary library from a third-party registry, which requires a private API token. A developer suggests simply adding the token as a substitution variable when triggering the build (`--substitutions=_API_TOKEN=xyz`). Why is this a severe security vulnerability, and what is the proper GCP-native way to handle this token?</summary>
 
-Passing secrets as substitution variables is highly insecure because substitutions are stored in plain text and are fully visible in the Cloud Build UI, the build history logs, and the API responses for anyone with basic viewer access to the project. The proper, GCP-native approach is to store the API token in Google Secret Manager. In your `cloudbuild.yaml`, you define an `availableSecrets` block pointing to the specific Secret Manager version. You then inject it into the specific step using `secretEnv`. This securely pulls the secret at runtime directly into the container's environment variables, ensuring the token is never logged, persisted in the build configuration, or exposed to unauthorized users viewing the build history.
+Passing secrets as substitution variables is highly insecure because substitutions are stored in plain text and are fully visible in the Cloud Build UI, the build history logs, and the API responses for anyone with basic viewer access to the project. The proper, GCP-native approach is to store the API token in Google Secret Manager. In your `cloudbuild.yaml`, you define an `availableSecrets` block pointing to the specific Secret Manager version. You then inject it into the specific step using `secretEnv`. This securely pulls the secret at runtime directly into the container's environment variables, reducing the chance that the token is logged, persisted in the build configuration, or exposed to unauthorized users viewing the build history.
 </details>
 
 ## Hands-On Exercise: Build and Deploy Pipeline
@@ -1016,3 +1016,9 @@ echo "Cleanup complete."
 ## Next Module
 
 Now that you have established a reliable and immutable pathway for releasing code into production, you need an architectural blueprint to securely organize those applications at scale. Next up: **[Module 2.12: GCP Architectural Patterns](../module-2.12-patterns/)** --- Learn how to construct sophisticated project vending machines, design secure landing zones, configure Identity-Aware Proxy for zero-trust access, and survey Anthos and GKE for massive-scale container orchestration.
+
+## Sources
+
+- [Cloud Build Overview](https://cloud.google.com/build/docs/overview) — Covers the core execution model, build steps, pools, and security concepts behind Cloud Build.
+- [Cloud Deploy Overview](https://cloud.google.com/deploy/docs/overview) — Explains delivery pipelines, targets, releases, promotions, approvals, and rollouts.
+- [Use Secrets from Secret Manager](https://cloud.google.com/build/docs/securing-builds/use-secrets) — Shows the supported pattern for handling build-time secrets safely in Cloud Build.

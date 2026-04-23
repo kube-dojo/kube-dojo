@@ -29,23 +29,23 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In 2018, a well-known travel booking platform deployed a database migration to production on a Friday afternoon. The deployment was manual -- an engineer ran a script on a bastion host, copy-pasting commands from a wiki page that had not been updated in four months. The script applied schema changes in the wrong order, corrupting a foreign key relationship that silently broke booking confirmations. For 11 hours over the weekend, customers completed bookings and received confirmation emails, but no actual reservations were created. The company had to manually reconcile 23,000 phantom bookings, issue refunds, and rebook customers at higher prices. The estimated cost exceeded $6 million, not counting the permanent loss of trust from affected travelers.
+Manual production deployments and unreviewed database migrations can cause severe customer-facing failures, data inconsistencies, and expensive cleanup work. CI/CD pipelines reduce that risk by making deployments repeatable, testable, and easier to roll back.
 
 A CI/CD pipeline would have caught this in minutes, not hours. Automated tests would have validated the migration against a staging database. A blue/green deployment would have allowed instant rollback when health checks failed. Code review enforced by the pipeline would have flagged the outdated migration script. And nobody would have needed to SSH into production on a Friday.
 
-In this module, you will learn the AWS Code Suite -- CodeBuild for building and testing code, CodeDeploy for deployment strategies, and CodePipeline for orchestrating the full workflow. You will also learn how to connect GitHub and GitLab repositories to AWS using OIDC federation, which is the modern, secure alternative to storing long-lived access keys.
+In this module, you will learn the AWS Code Suite -- CodeBuild for building and testing code, CodeDeploy for deployment strategies, and CodePipeline for orchestrating the full workflow. You will also learn how to connect GitHub and GitLab repositories to AWS using [OIDC federation, which is the modern, secure alternative to storing long-lived access keys](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_oidc.html).
 
 ---
 
 ## Did You Know?
 
-- **AWS CodePipeline was one of the first fully managed CI/CD services** in any cloud, launching in July 2015. Before that, most AWS teams ran Jenkins on EC2 instances -- a pattern that still exists but is increasingly replaced by managed alternatives.
+- **AWS CodePipeline became generally available in July 2015.** Before AWS-native managed CI/CD services were widely used, many teams ran tools such as Jenkins on EC2 instances.
 
-- **CodeBuild runs on managed compute** that scales to zero when idle. Unlike Jenkins, where you pay for the build server 24/7, CodeBuild charges only for build minutes. A typical small team spends $5-15/month on CodeBuild versus $50-150/month for an always-on Jenkins instance.
+- **CodeBuild runs on managed compute** and charges for build usage rather than requiring you to keep a dedicated build server running. In a small setup, that can be much cheaper than operating an always-on Jenkins host, depending on build volume and infrastructure choices.
 
-- **OIDC federation for GitHub Actions** eliminates the need for IAM access keys entirely. GitHub's OIDC provider issues short-lived tokens (valid for about 15 minutes) that AWS trusts directly. This pattern, documented by AWS in 2021, has become the standard for GitHub-to-AWS authentication.
+- **OIDC federation for GitHub Actions** avoids storing long-lived IAM access keys in GitHub. GitHub Actions can request short-lived identity tokens, and AWS can trust those tokens to issue temporary credentials for a tightly scoped IAM role.
 
-- **Blue/green deployments on ECS** require AWS CodeDeploy — there is no native ECS blue/green deployment controller. The ECS Deployment Circuit Breaker (introduced 2020) provides automated rollbacks for rolling updates only. CodeDeploy remains the only option for blue/green with traffic shifting controls (linear, canary, all-at-once) and automatic rollback on CloudWatch alarm triggers.
+- **Blue/green deployments on ECS** can be implemented with CodeDeploy, while the ECS deployment circuit breaker handles rollback for rolling deployments. AWS has also added newer ECS-native deployment strategies, so check the current ECS deployment documentation before choosing an approach.
 
 ---
 
@@ -134,13 +134,13 @@ cache:
 
 Let's break down the important parts:
 
-**Phases** execute in order: `install` -> `pre_build` -> `build` -> `post_build`. If any command in a phase fails (non-zero exit code), the build fails and subsequent phases are skipped (except `post_build`, which runs even on failure if you set `on-failure: CONTINUE`).
+**Phases** execute in order: `install` -> `pre_build` -> `build` -> `post_build`. If a command fails, that phase fails, so later steps that must not run after a failure should be guarded explicitly.
 
-**Environment variables** can come from three sources: inline values, SSM Parameter Store, and Secrets Manager. CodeBuild resolves them before the build starts.
+**Environment variables** can come from three sources: [inline values, SSM Parameter Store, and Secrets Manager](https://docs.aws.amazon.com/codebuild/latest/APIReference/API_EnvironmentVariable.html). CodeBuild resolves them before the build starts.
 
-**Artifacts** are files preserved after the build completes. The `imagedefinitions.json` file is a special format that ECS deployments use to know which container image to pull.
+**Artifacts** are files preserved after the build completes. [The `imagedefinitions.json` file is a special format that ECS deployments use to know which container image to pull](https://docs.aws.amazon.com/codepipeline/latest/userguide/file-reference.html).
 
-**Cache** speeds up subsequent builds by preserving directories like pip's download cache or Docker layers.
+**Cache** speeds up subsequent builds by [preserving directories like pip's download cache or Docker layers](https://docs.aws.amazon.com/codebuild/latest/userguide/build-caching.html).
 
 > **Stop and think**: The buildspec.yml example caches `/root/.cache/pip/**/*` and `/var/lib/docker/**/*`. While caching significantly accelerates build times, what architectural or security risks might emerge if your CI pipeline relies on a stale Docker layer cache for months without invalidation, particularly regarding base OS dependencies?
 
@@ -220,16 +220,16 @@ aws codebuild create-project \
   --service-role "arn:aws:iam::${ACCOUNT_ID}:role/codebuild-myapp-role"
 ```
 
-The `privilegedMode: true` flag is required when building Docker images inside CodeBuild. Without it, the Docker daemon cannot start.
+The [`privilegedMode: true` flag is required when building Docker images inside CodeBuild](https://docs.aws.amazon.com/codebuild/latest/userguide/create-project.html). Without it, the Docker daemon cannot start.
 
 ### Build Compute Types
 
 | Compute Type | vCPU | Memory | Cost/min (US East) |
 |-------------|------|--------|-------------------|
-| BUILD_GENERAL1_SMALL | 3 | 3 GB | $0.005 |
-| BUILD_GENERAL1_MEDIUM | 7 | 15 GB | $0.010 |
-| BUILD_GENERAL1_LARGE | 15 | 72 GB | $0.020 |
-| BUILD_GENERAL1_2XLARGE | 72 | 145 GB | $0.040 |
+| BUILD_GENERAL1_SMALL | 2 | 4 GiB | See current AWS pricing |
+| BUILD_GENERAL1_MEDIUM | 4 | 8 GiB | See current AWS pricing |
+| BUILD_GENERAL1_LARGE | 8 | 16 GiB | See current AWS pricing |
+| BUILD_GENERAL1_2XLARGE | 72 | 144 GiB | See current AWS pricing |
 
 Most application builds work fine on SMALL. Use MEDIUM or LARGE for heavy compilation (C++, Rust) or large test suites.
 
@@ -237,7 +237,7 @@ Most application builds work fine on SMALL. Use MEDIUM or LARGE for heavy compil
 
 ## CodeDeploy: Deployment Strategies
 
-CodeDeploy handles the how of getting new code onto your compute targets. It supports EC2 instances, on-premises servers, Lambda functions, and ECS services -- each with different deployment strategies.
+CodeDeploy handles the how of getting new code onto your compute targets. [It supports EC2 instances, on-premises servers, Lambda functions, and ECS services](https://docs.aws.amazon.com/codedeploy/latest/userguide/welcome.html) -- each with different deployment strategies.
 
 ### Deployment Types for ECS
 
@@ -294,7 +294,7 @@ Hooks:
   - AfterAllowTraffic: "LambdaFunctionToRunSmokeTests"
 ```
 
-Each hook references a Lambda function that CodeDeploy invokes at that point in the deployment. If any hook function returns failure, CodeDeploy rolls back automatically.
+Each hook references a Lambda function that CodeDeploy invokes at that point in the deployment. If a hook function reports failure, the deployment fails, and CodeDeploy rolls back automatically only when automatic rollback is enabled for the deployment or deployment group.
 
 > **Pause and predict**: In a CodeDeploy Blue/Green deployment, traffic is shifted to the new Green environment. If a `BeforeAllowTraffic` lifecycle hook Lambda function fails or times out due to a missing IAM permission, how will CodeDeploy handle the active ALB listener rules, and will any customer traffic be routed to the Green tasks?
 
@@ -494,7 +494,7 @@ aws codepipeline create-pipeline --cli-input-json file:///tmp/pipeline.json
 
 ### Source Providers: CodeStar Connections vs Webhooks
 
-The modern way to connect GitHub to CodePipeline is through **CodeStar Connections** (also called CodeConnections). This replaces the older OAuth token and webhook approach:
+The modern way to connect GitHub to CodePipeline is through [**CodeStar Connections** (also called CodeConnections)](https://docs.aws.amazon.com/codepipeline/latest/userguide/update-github-action-connections.html). This replaces the older OAuth token and webhook approach:
 
 ```bash
 # Create a connection (must be completed in the AWS Console)
@@ -676,7 +676,7 @@ jobs:
             --force-new-deployment
 ```
 
-The critical trust policy condition is `StringLike` on the `sub` claim. This restricts which repository and branch can assume the role. Without it, any GitHub repository could assume your role.
+The critical trust policy condition is `StringLike` on the `sub` claim. [This restricts which repository and branch can assume the role.](https://github.com/aws-actions/configure-aws-credentials) Without it, any GitHub repository could assume your role.
 
 | Condition Pattern | What It Allows |
 |-------------------|----------------|
@@ -727,7 +727,7 @@ There is no single right answer. Many teams use a hybrid: GitHub Actions for CI 
 <details>
 <summary>1. Your team wants to deploy a new microservice. You need the ability to roll back instantly if error rates spike. Should you use the CodePipeline ECS deploy action or the CodeDeployToECS deploy action?</summary>
 
-The **ECS deploy action** performs a standard rolling update, which replaces tasks gradually but does not provide an instant, traffic-shifting rollback mechanism if errors occur. In your scenario, you should use the **CodeDeployToECS action**, which provisions a completely new set of "green" tasks and shifts traffic away from the "blue" tasks at the ALB level. This strategy gives you the ability to monitor error rates during the shift and instantly route 100% of traffic back to the blue tasks if a spike occurs. Furthermore, CodeDeploy integrates directly with CloudWatch Alarms to automate this rollback, completely removing human reaction time from the incident response. Using the standard ECS action would require a full re-deployment to roll back, causing prolonged downtime.
+The **ECS deploy action** performs a standard rolling update, which replaces tasks gradually but does not provide an instant, traffic-shifting rollback mechanism if errors occur. In your scenario, you should use the **CodeDeployToECS action**, which provisions a completely new set of "green" tasks and shifts traffic away from the "blue" tasks at the ALB level. This strategy gives you the ability to monitor error rates during the shift and quickly route traffic back to the blue tasks if a spike occurs. Furthermore, CodeDeploy integrates directly with CloudWatch Alarms to automate this rollback, completely removing human reaction time from the incident response. Using the standard ECS action would require a full re-deployment to roll back, causing prolonged downtime.
 </details>
 
 <details>
@@ -739,7 +739,7 @@ With OIDC federation, GitHub's identity provider issues a short-lived JSON Web T
 <details>
 <summary>3. During a critical hotfix, your CodeBuild logs show that the unit tests in the `build` phase failed. However, the `post_build` phase still attempted to push an image to ECR, causing confusion. Why did the pipeline attempt to push the image despite test failures, and how can you prevent this?</summary>
 
-By design, CodeBuild executes the `post_build` phase regardless of whether the `build` phase succeeded or failed. Because your `build` phase failed, the Docker image was never successfully constructed, but the `post_build` commands still attempted to execute the `docker push` operation. This behavior ensures that cleanup tasks or failure notifications can always run, but it can lead to confusing logs if you assume execution stops immediately upon failure. To prevent this, you must explicitly check the `$CODEBUILD_BUILD_SUCCEEDING` environment variable at the beginning of the `post_build` phase and conditionally skip the push command if the value is `0`. Alternatively, the push command can be moved to the end of the `build` phase, which does halt on failure.
+By design, CodeBuild executes the `post_build` phase regardless of whether the `build` phase succeeded or failed. Because your `build` phase failed, the Docker image may not have been successfully constructed, but the `post_build` commands still attempted to execute the `docker push` operation. This behavior ensures that cleanup tasks or failure notifications can always run, but it can lead to confusing logs if you assume execution stops immediately upon failure. To prevent this, you must explicitly check the `$CODEBUILD_BUILD_SUCCEEDING` environment variable at the beginning of the `post_build` phase and conditionally skip the push command if the value is `0`. Alternatively, the push command can be moved to the end of the `build` phase, which does halt on failure.
 </details>
 
 <details>
@@ -1099,3 +1099,17 @@ aws ecr delete-repository --repository-name cicd-lab --force
 ## Next Module
 
 Continue to [Module 1.12: Infrastructure as Code on AWS](../module-1.12-cloudformation/) -- where you will learn to define all of the infrastructure you have been creating manually as declarative templates. Every resource from this CI/CD pipeline -- the IAM roles, CodeBuild project, pipeline definition, and ECS cluster -- can be managed as code.
+
+## Sources
+
+- [docs.aws.amazon.com: id roles providers oidc.html](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_oidc.html) — AWS IAM documentation directly recommends OIDC federation instead of storing long-term credentials in external applications.
+- [aws.amazon.com: pricing](https://aws.amazon.com/codebuild/pricing/) — General lesson point for an illustrative rewrite.
+- [docs.aws.amazon.com: API EnvironmentVariable.html](https://docs.aws.amazon.com/codebuild/latest/APIReference/API_EnvironmentVariable.html) — The CodeBuild API reference directly documents PLAINTEXT, PARAMETER_STORE, and SECRETS_MANAGER environment variable types.
+- [docs.aws.amazon.com: file reference.html](https://docs.aws.amazon.com/codepipeline/latest/userguide/file-reference.html) — AWS CodePipeline documentation directly describes imagedefinitions.json as the input for ECS standard deployment actions.
+- [docs.aws.amazon.com: build caching.html](https://docs.aws.amazon.com/codebuild/latest/userguide/build-caching.html) — AWS documentation explicitly states that caching stores reusable build components and saves build time across builds.
+- [docs.aws.amazon.com: create project.html](https://docs.aws.amazon.com/codebuild/latest/userguide/create-project.html) — The CodeBuild project documentation states that privileged mode must be enabled for builds that need Docker daemon access.
+- [docs.aws.amazon.com: welcome.html](https://docs.aws.amazon.com/codedeploy/latest/userguide/welcome.html) — The CodeDeploy overview page directly lists these supported deployment targets.
+- [docs.aws.amazon.com: update github action connections.html](https://docs.aws.amazon.com/codepipeline/latest/userguide/update-github-action-connections.html) — AWS explicitly documents the GitHub App action as recommended and the OAuth app action as not recommended.
+- [github.com: configure aws credentials](https://github.com/aws-actions/configure-aws-credentials) — The official aws-actions repository shows the AWS trust-policy pattern that restricts the token.actions.githubusercontent.com sub claim to a specific repo and branch.
+- [AWS CodeBuild buildspec reference](https://docs.aws.amazon.com/codebuild/latest/userguide/build-spec-ref.html) — Authoritative reference for phases, artifacts, caching syntax, reports, and buildspec behavior.
+- [Amazon ECS blue/green deployments](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/deployment-type-blue-green.html) — Current ECS deployment guidance, including modern blue/green terminology and lifecycle behavior.

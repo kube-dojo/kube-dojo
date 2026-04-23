@@ -31,7 +31,7 @@ In December 2022, a developer at a mid-sized fintech company committed a databas
 
 This was entirely preventable. AWS provides purpose-built services for storing, rotating, and injecting secrets into your applications. The developer could have stored that connection string in AWS Secrets Manager, configured automatic rotation every 30 days, and had the application retrieve it at runtime. No credential ever touches source code. No password stays valid long enough to be useful if leaked.
 
-In this module, you will learn how AWS approaches secrets management across the stack -- from the low-level encryption primitives in KMS, to the two competing secret-storage services (SSM Parameter Store and Secrets Manager), to the practical patterns for injecting secrets into EC2 instances, ECS tasks, and Lambda functions. By the end, you will never again be tempted to put a password in an environment variable file or a Docker image.
+In this module, you will learn how AWS approaches secrets management across the stack -- from the low-level encryption primitives in KMS, to the two competing secret-storage services (SSM Parameter Store and Secrets Manager), to the practical patterns for injecting secrets into EC2 instances, ECS tasks, and Lambda functions. By the end, you should be much less tempted to put a password in an environment variable file or a Docker image.
 
 ---
 
@@ -39,7 +39,7 @@ In this module, you will learn how AWS approaches secrets management across the 
 
 - **AWS Secrets Manager rotates over 100 million secrets per month** across its customer base. The service launched in April 2018 specifically because AWS saw how many customers were storing credentials in plaintext in S3 buckets, EC2 user data, and environment variables.
 
-- **KMS processes over 1 trillion API calls per year**, making it one of the most-called AWS services. Every time you read an encrypted SSM parameter or retrieve a Secrets Manager secret, KMS is involved behind the scenes -- you just never see it.
+- **KMS processes over 1 trillion API calls per year**, making it one of the most-called AWS services. When you read an encrypted SSM parameter or retrieve a Secrets Manager secret, KMS is typically involved behind the scenes -- you usually do not see it directly.
 
 - **SSM Parameter Store's free tier supports up to 10,000 parameters per account per region**, while Secrets Manager charges $0.40 per secret per month. This cost difference drives many teams to use Parameter Store for non-rotating configuration and Secrets Manager only for credentials that need automatic rotation.
 
@@ -309,7 +309,7 @@ flowchart LR
     end
 ```
 
-This two-phase approach means your application never sees a moment where the old password is invalid but the new one is not yet available.
+This two-phase approach is designed so your application does not usually see a moment where the old password is invalid but the new one is not yet available.
 
 ### Automatic Rotation
 
@@ -341,7 +341,7 @@ flowchart TD
     A --> B --> C --> D
 ```
 
-If any step fails, the rotation rolls back and the existing AWSCURRENT credentials remain valid. Your application never breaks.
+If any step fails, the rotation rolls back and the existing AWSCURRENT credentials remain valid. Your application should not break.
 
 > **Stop and think**: During a database credential rotation via Secrets Manager, what happens if the `testSecret` step fails because the newly generated password does not meet the database's internal complexity requirements? How does this affect the application currently using the database?
 
@@ -607,7 +607,7 @@ You should use SSM Parameter Store for all 50 configuration values to minimize i
 <details>
 <summary>5. A critical batch processing job runs for four hours every night. Halfway through the job, Secrets Manager triggers an automatic rotation of the database credentials. Will the batch job's active database connection drop?</summary>
 
-The batch job's existing database connections will not be affected by the rotation and will not drop. Secrets Manager rotation changes the password stored in AWS and updates the password in the database, but connections that are already established and authenticated remain perfectly valid. The only risk occurs if the batch job drops its connection and attempts to open a new one using a cached, outdated password. To handle this gracefully, AWS retains the old password under the `AWSPREVIOUS` label, ensuring that applications have a buffer period to fetch the new credentials upon encountering an authentication failure.
+The batch job's existing database connections will not be affected by the rotation and will not drop. Secrets Manager rotation changes the password stored in AWS and updates the password in the database, but connections that are already established and authenticated remain perfectly valid. A primary risk occurs if the batch job drops its connection and attempts to open a new one using a cached, outdated password. To handle this gracefully, AWS retains the old password under the `AWSPREVIOUS` label, ensuring that applications have a buffer period to fetch the new credentials upon encountering an authentication failure.
 </details>
 
 <details>
@@ -884,3 +884,9 @@ aws ecs delete-cluster --cluster-name secrets-lab
 ## Next Module
 
 Continue to [Module 1.10: CloudWatch & Observability](../module-1.10-cloudwatch/) -- where you will learn to monitor everything you have built so far. Secrets management tells you *what* your application needs; observability tells you *how* it is behaving.
+
+## Sources
+
+- [Secret encryption and decryption in AWS Secrets Manager](https://docs.aws.amazon.com/secretsmanager/latest/userguide/security-encryption.html) — Explains the envelope-encryption model that underpins how Secrets Manager protects secret values.
+- [AWS Systems Manager Parameter Store](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html) — Covers parameter types, hierarchy, SecureString behavior, and core Parameter Store use cases.
+- [Pass Secrets Manager secrets through Amazon ECS environment variables](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/secrets-envvar-secrets-manager.html) — Documents the exact ECS secret-injection behavior and ARN syntax used in the module’s compute examples.

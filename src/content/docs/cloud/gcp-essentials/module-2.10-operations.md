@@ -652,7 +652,7 @@ This alert is currently firing on a "cause" (high CPU) rather than a "symptom" (
 <details>
 <summary>5. A developer complains that their microservice is intermittently taking 4 seconds to respond instead of the usual 50ms. The service calls three other downstream GCP services and a Cloud SQL database. They ask you to check the CPU metrics on the Cloud Run instances to find the problem. Which GCP observability tool should you recommend they use instead, and why?</summary>
 
-You should recommend using Cloud Trace rather than simply looking at CPU metrics. High latency in a distributed system is often caused by network waits, database locks, or slow downstream API calls, none of which will show up as high CPU utilization. Cloud Trace tracks a single request as it propagates through all the microservices and the database, creating a visual waterfall diagram of spans. This will immediately show exactly which downstream service or specific database query is responsible for the 4-second delay, drastically reducing the time to resolution.
+You should recommend using Cloud Trace rather than simply looking at CPU metrics. High latency in a distributed system is often caused by network waits, database locks, or slow downstream API calls, none of which will show up as high CPU utilization. Cloud Trace tracks a single request as it propagates through all the microservices and the database, creating a visual waterfall diagram of spans. This will usually show which downstream service or database operation is contributing to the 4-second delay, drastically reducing the time to resolution.
 </details>
 
 <details>
@@ -946,3 +946,10 @@ echo "Cleanup complete."
 ## Next Module
 
 Next up: **[Module 2.11: Cloud Build & CI/CD](../module-2.11-cloud-build/)** --- Learn how to define build pipelines with `cloudbuild.yaml`, use built-in and custom builders, set up triggers from GitHub and GitLab, and orchestrate deployments with Cloud Deploy.
+
+## Sources
+
+- [Route Log Entries](https://cloud.google.com/logging/docs/routing/overview) — Best primary reference for the Log Router, sinks, exclusions, and routing behavior.
+- [Log-Based Metrics Overview](https://cloud.google.com/logging/docs/logs-based-metrics) — Explains counter and distribution metrics, alerting integration, and non-retroactive behavior.
+- [Metrics Scopes Overview](https://cloud.google.com/monitoring/settings) — Covers scoping projects, multi-project monitoring, and centralized dashboards and alerts.
+- [Create Public Uptime Checks](https://cloud.google.com/monitoring/uptime-checks) — Authoritative guide for checker locations, regional behavior, and uptime-check configuration.

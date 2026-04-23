@@ -633,7 +633,7 @@ spec:
 | Using `text` type for fields that need exact matching | Default dynamic mapping maps strings to `text` | Create explicit mappings with `keyword` type for namespace, pod name, level |
 | Setting too many primary shards | "More shards = more parallelism" | Follow the 10-50 GB per shard rule; over-sharding wastes resources |
 | Not buffering through Kafka for high-volume clusters | Direct ingestion seems simpler | Without a buffer, OpenSearch backpressure causes Fluent Bit to drop logs |
-| Searching across all indices when only recent data is needed | Using wildcard `k8s-logs-*` without time filter | Always include a time range in queries; OpenSearch skips non-matching indices |
+| Searching across all indices when only recent data is needed | Using wildcard `k8s-logs-*` without time filter | Usually include a time range in queries when focusing on recent data; OpenSearch can skip non-matching indices |
 | Running force_merge on hot indices | Trying to optimize active indices | Only force_merge on read-only warm/cold indices; active indices will create new segments |
 | Ignoring JVM heap pressure on managed clusters | "Managed means I do not need to worry" | Monitor JVMMemoryPressure; above 80% causes GC pauses and slow queries |
 
@@ -861,3 +861,9 @@ kind delete cluster --name search-lab
 ---
 
 **Next Module**: [Module 9.7: Streaming Data Pipelines (MSK / Confluent / Dataflow)](../module-9.7-streaming/) -- Learn how to build streaming data pipelines with managed Kafka, compare managed vs in-cluster Strimzi, and process real-time events from Kubernetes workloads.
+
+## Sources
+
+- [Index State Management in Amazon OpenSearch Service](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/ism.html) — Primary AWS guide for lifecycle policies, rollover, and automated retention.
+- [Fine-grained access control in Amazon OpenSearch Service](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/fgac.html) — Covers document-level security, field-level security, roles, and mappings for shared clusters.
+- [Choosing the number of shards](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/bp-sharding.html) — Provides AWS shard-sizing guidance and sizing tradeoffs directly relevant to logging workloads.

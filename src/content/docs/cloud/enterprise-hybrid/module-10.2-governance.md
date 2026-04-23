@@ -20,7 +20,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In 2019, Capital One experienced a data breach that exposed over 106 million customer records. The root cause involved a misconfigured Web Application Firewall (WAF) that allowed Server-Side Request Forgery (SSRF). However, the blast radius was massive specifically because the IAM role assigned to the WAF had overly permissive S3 access. An AWS Service Control Policy (SCP) limiting cross-account access, or a Kubernetes admission controller restricting access to the cloud metadata service, could have stopped the attack in its tracks. The breach resulted in an $80 million regulatory fine, a $190 million class-action settlement, and catastrophic reputational damage.
+In 2019, Capital One experienced a data breach that exposed over 106 million customer records. The root cause involved a misconfigured Web Application Firewall (WAF) that allowed Server-Side Request Forgery (SSRF). However, the blast radius was massive specifically because the IAM role assigned to the WAF had overly permissive S3 access. Tighter IAM guardrails and workload controls around metadata access can reduce the blast radius of SSRF-style cloud breaches. The breach resulted in an $80 million regulatory fine, a $190 million class-action settlement, and catastrophic reputational damage.
 
 This incident highlights a pattern that is alarmingly common across the industry: the cloud governance team and the Kubernetes platform team operating in completely separate, isolated silos. The cloud architecture team might not understand Kubernetes admission control intricacies, while the Kubernetes cluster administrators might lack visibility into overarching organizational SCPs. When these critical governance layers do not align, massive security gaps emerge. An attacker only needs one misconfigured ingress path or one overly permissive service account to compromise the entire system.
 
@@ -122,7 +122,7 @@ SCPs are the top-level preventive control mechanism in AWS Organizations. They d
 }
 ```
 
-There are several critical gotchas with AWS SCPs that trip up many platform teams. First, SCPs do not actually grant any permissions; they only restrict them. An SCP that explicitly allows `s3:*` does not give anyone S3 access -- it merely removes the restriction, leaving IAM to decide. Second, SCPs do not apply to the central management account of the organization, a common blindspot that requires separate governance. Third, SCPs are evaluated with an implicit deny posture; if an action is not explicitly allowed somewhere in the SCP hierarchy, it is automatically denied.
+There are several critical gotchas with AWS SCPs that trip up many platform teams. First, [SCPs do not actually grant any permissions; they only restrict them.](https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps.html) An SCP that explicitly allows `s3:*` does not give anyone S3 access -- it merely removes the restriction, leaving IAM to decide. Second, SCPs do not apply to the central management account of the organization, a common blindspot that requires separate governance. Third, SCPs are evaluated with an implicit deny posture; if an action is not explicitly allowed somewhere in the SCP hierarchy, it is automatically denied.
 
 ### Azure Policy
 
@@ -165,7 +165,7 @@ Azure Policy takes a conceptually different approach. Instead of a simple allow/
 }
 ```
 
-The various Azure Policy effects allow for nuanced governance architectures:
+[The various Azure Policy effects allow for nuanced governance architectures](https://learn.microsoft.com/en-us/azure/governance/policy/concepts/effect-basics):
 
 | Effect | Behavior | Use Case |
 | :--- | :--- | :--- |
@@ -176,7 +176,7 @@ The various Azure Policy effects allow for nuanced governance architectures:
 | `Disabled` | Policy exists but is not enforced | Testing or temporary exception |
 | `DenyAction` | Block specific actions on existing resources | Prevent deletion of critical resources |
 
-The `DeployIfNotExists` effect is exceptionally powerful for managing Kubernetes fleets at scale. You can design a policy that automatically installs the Azure Policy extension for AKS (which runs OPA Gatekeeper inside the cluster transparently) whenever a new AKS cluster is provisioned:
+The `DeployIfNotExists` effect is exceptionally powerful for managing Kubernetes fleets at scale. You can design a policy that [automatically installs the Azure Policy extension for AKS (which runs OPA Gatekeeper inside the cluster transparently)](https://learn.microsoft.com/en-us/azure/governance/policy/concepts/policy-for-kubernetes) whenever a new AKS cluster is provisioned:
 
 ```json
 {
@@ -272,7 +272,7 @@ Cloud provider policies forcefully stop at the cloud API boundary. Once a functi
 
 ### Kyverno
 
-Kyverno is a policy engine designed specifically for Kubernetes. It uses Kubernetes-native YAML to define comprehensive policies. The philosophy is straightforward: if you can write a standard Kubernetes manifest, you already possess the foundational knowledge to write a Kyverno policy. This represents its primary operational advantage, as the learning curve is minimal for teams already deeply fluent in YAML logic.
+[Kyverno is a policy engine designed specifically for Kubernetes.](https://github.com/kyverno/kyverno) It uses Kubernetes-native YAML to define comprehensive policies. The philosophy is straightforward: if you can write a standard Kubernetes manifest, you already possess the foundational knowledge to write a Kyverno policy. This represents its primary operational advantage, as the learning curve is minimal for teams already deeply fluent in YAML logic.
 
 ```yaml
 # Kyverno: Deny containers running as root
@@ -371,7 +371,7 @@ spec:
 
 ### OPA Gatekeeper
 
-Gatekeeper utilizes Rego, a highly robust, purpose-built policy language derived from the Open Policy Agent (OPA) project. Rego is considerably more powerful than YAML pattern matching but intrinsically demands a steeper learning curve. Gatekeeper structurally separates the policy logic, known as the ConstraintTemplate, from the dynamic configuration, known as the Constraint.
+Gatekeeper utilizes Rego, a highly robust, purpose-built policy language derived from the Open Policy Agent (OPA) project. Rego is considerably more powerful than YAML pattern matching but intrinsically demands a steeper learning curve. [Gatekeeper structurally separates the policy logic, known as the ConstraintTemplate, from the dynamic configuration, known as the Constraint.](https://github.com/open-policy-agent/gatekeeper)
 
 ```yaml
 # Gatekeeper: ConstraintTemplate (the logic)
@@ -436,13 +436,13 @@ The choice between Kyverno and Gatekeeper often comes down to organizational mat
 | **Policy language** | Kubernetes-native YAML | Rego (purpose-built) |
 | **Learning curve** | Low (YAML knowledge sufficient) | High (Rego is a new language) |
 | **Validation** | Yes | Yes |
-| **Mutation** | Yes (native) | Yes (external data, more complex) |
+| **Mutation** | Yes | Yes (via Gatekeeper mutator CRDs) |
 | **Generation** | Yes (create resources from policies) | No |
 | **Image verification** | Yes (cosign, Notary) | Via external data |
 | **Background scanning** | Yes (audit existing resources) | Yes (audit existing resources) |
 | **Policy exceptions** | PolicyException resource | Config constraint match exclusions |
 | **Multi-tenancy** | Namespace-scoped policies | Namespace-scoped constraints |
-| **CNCF status** | Incubating | Graduated (via OPA) |
+| **CNCF status** | Graduated | Part of the OPA ecosystem; OPA is a CNCF graduated project |
 | **Best for** | Teams wanting simplicity and mutation/generation | Teams needing complex logic or already using OPA |
 
 ---
@@ -585,7 +585,7 @@ SCRIPT
 
 ### Shift-Left: Catching Policy Violations Before Deployment
 
-The absolute most effective governance strategy dynamically catches violations as early as procedurally possible -- ideally before the offending code ever leaves the developer's local workstation. This practice is universally known as shifting security left.
+The absolute most effective governance strategy dynamically catches violations as early as procedurally possible -- ideally before the offending code ever leaves the developer's local workstation. This practice is commonly known as shifting security left.
 
 ```mermaid
 flowchart LR
@@ -637,9 +637,9 @@ conftest test deployment.yaml \
 
 ## Did You Know?
 
-1. AWS SCPs were originally strictly limited to a mere 2,048 characters when they were first launched in 2017. Enterprise customers consistently hit this severe limit so frequently that AWS officially increased it to 5,120 characters in 2019. Even at 5,120 characters, complex organizations regularly collide with the ceiling and must strategically split single logical policies across multiple SCP documents.
-2. OPA (Open Policy Agent) systematically evaluates over 10 billion policy decisions per day across its massive production deployments globally. The Rego language was engineered specifically because existing, simpler policy languages could not adequately express the complex cross-resource relationships absolutely required for modern, cloud-scale authorization.
-3. Kyverno was initially created by Nirmata specifically because OPA Gatekeeper's complex Rego language represented a formidable barrier to adoption for standard Kubernetes platform teams. In a comprehensive 2024 CNCF survey, 58% of organizations running Kubernetes policy engines chose Kyverno, explicitly citing "we already know YAML" as their primary operational motivation.
+1. AWS Organizations currently enforces a 5,120-character maximum size for each SCP document, so large organizations often need to split broad guardrails across multiple policies.
+2. OPA is a general-purpose policy engine used for authorization and policy enforcement across Kubernetes, CI/CD, APIs, and other systems, with Rego as its policy language.
+3. Kyverno was originally created by Nirmata and became popular with Kubernetes teams because it lets them define many policies using Kubernetes-native resources and familiar tooling.
 4. The formalized concept of "Policy as Code" was prominently championed by HashiCorp's Sentinel toolsuite in 2017, but the underlying practice heavily dates back to SELinux mandatory access control policies pioneered in the early 2000s. The major architectural innovation was adopting standard software engineering methodologies directly into governance.
 
 ---
@@ -649,12 +649,12 @@ conftest test deployment.yaml \
 | Mistake | Why It Happens | How to Fix It |
 | :--- | :--- | :--- |
 | **Cloud policies and K8s policies designed in silos** | Different teams own each layer. Cloud team does not understand K8s. Platform team does not understand SCPs. | Create a unified governance council. Map every compliance requirement across both layers. Use the mapping table approach from this module. |
-| **Audit-only policies that never become enforced** | Teams set policies to "audit" mode for testing and never flip to "enforce" because they fear breaking things. | Set a timeline: 30 days audit, then enforce. Use CI/CD policy validation (shift-left) to catch violations before they hit the cluster. |
+| **Audit-only policies that stay in audit mode indefinitely** | Teams set policies to "audit" mode for testing and then delay flipping to "enforce" because they fear breaking things. | Set a timeline: 30 days audit, then enforce. Use CI/CD policy validation (shift-left) to catch violations before they hit the cluster. |
 | **Exception without expiry** | Rushed exception granted to unblock a release. No one tracks the cleanup. | Every exception must have a ticket number, an owner, and an expiry date. Automate expiry checking with a CronJob or CI pipeline. |
-| **Over-relying on cloud policies, ignoring K8s** | "Our SCPs are comprehensive, we do not need Kyverno." But SCPs cannot see inside a Kubernetes cluster. | Cloud policies protect cloud resources. K8s policies protect workloads. You need both. A public LoadBalancer can bypass cloud firewall rules entirely. |
+| **Over-relying on cloud policies, ignoring K8s** | "Our SCPs are comprehensive, we do not need Kyverno." But SCPs cannot see inside a Kubernetes cluster. | Cloud policies protect cloud resources. K8s policies protect workloads. You need both. A Kubernetes Service of type `LoadBalancer` can expose workloads externally, so cloud-account guardrails alone are not sufficient without Kubernetes-level policy. |
 | **Writing Rego when YAML would suffice** | Engineering team defaults to Gatekeeper because "OPA is the standard." But their policies are simple pattern matching. | Evaluate both Kyverno and Gatekeeper honestly. If your policies are mostly "require label X" or "deny privilege Y," Kyverno is simpler. Use Gatekeeper when you need cross-resource logic. |
 | **Not testing policies before deployment** | Policy deployed directly to production cluster. A mutation policy with a typo adds invalid annotations to every pod. Cluster-wide outage. | Always test policies in a staging cluster first. Use `kyverno apply` or `gator test` in CI. Run in audit mode before enforce mode. |
-| **SCP character limit workarounds using wildcards** | SCP too long, so engineer replaces specific actions with `*` wildcards. This makes the policy either too permissive or too restrictive. | Split complex SCPs into multiple policies. Use condition keys instead of action lists where possible. AWS allows up to 5 SCPs per OU. |
+| **SCP character limit workarounds using wildcards** | SCP too long, so engineer replaces specific actions with `*` wildcards. This makes the policy either too permissive or too restrictive. | Split complex SCPs into multiple policies. Use condition keys instead of action lists where possible. [AWS allows up to 5 SCPs per OU.](https://docs.aws.amazon.com/en_en/organizations/latest/userguide/orgs_reference_limits.html) |
 | **Forgetting the management account** | SCPs do not apply to the management account. Critical governance gaps exist there. | Use the management account only for Organizations management. Move all workloads to member accounts. Apply detective controls (Config rules, GuardDuty) to the management account separately. |
 
 ---
@@ -1227,3 +1227,10 @@ rm -rf /tmp/governance-lab /tmp/governance-report.sh
 ## Next Module
 
 Now that you profoundly understand how to mandate rigid governance seamlessly across both cloud accounts and Kubernetes clusters, it is vital to intricately connect these robust policies directly to major compliance frameworks. Head to [Module 10.3: Continuous Compliance & CSPM](../module-10.3-compliance/) to learn how to explicitly map your internal rules to comprehensive SOC2, PCI-DSS, and HIPAA controls, aggressively automate evidence collection, and structurally integrate Trivy and Falco seamlessly with enterprise cloud security hubs.
+
+## Sources
+
+- [AWS Organizations Service Control Policies](https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps.html) — Authoritative reference for SCP behavior, scope, and evaluation.
+- [Understand Azure Policy for Kubernetes Clusters](https://learn.microsoft.com/en-us/azure/governance/policy/concepts/policy-for-kubernetes) — Explains how Azure Policy governs AKS and how it integrates with Gatekeeper-based enforcement.
+- [Google Cloud Organization Policy Constraints](https://cloud.google.com/resource-manager/docs/organization-policy/org-policy-constraints) — Covers built-in constraints and the governance model used across folders, projects, and organizations.
+- [Kyverno Official Repository](https://github.com/kyverno/kyverno) — Provides the upstream project overview for Kyverno's policy model and core capabilities.
