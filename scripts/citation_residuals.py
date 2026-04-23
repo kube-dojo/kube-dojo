@@ -34,6 +34,7 @@ from citation_backfill import dispatch_gemini, parse_agent_response  # noqa: E40
 HUMAN_REVIEW_DIR = REPO_ROOT / ".pipeline" / "v3" / "human-review"
 DEFAULT_MAX_CANDIDATES = 3
 MIN_SIGNAL_ANCHORS_REQUIRED = 1
+HEAD_CHECK_TIMEOUT_SECONDS = 5.0
 
 
 # ---- IO ------------------------------------------------------------------
@@ -177,14 +178,106 @@ def build_candidate_prompt(finding: dict[str, Any]) -> str:
     )
 
 
+def head_check(
+    url: str,
+    *,
+    timeout: float = HEAD_CHECK_TIMEOUT_SECONDS,
+) -> bool:
+    """Return True if ``url`` resolves to a live 2xx/3xx response.
+
+    Escalation ladder:
+        1. HEAD — cheapest probe.
+        2. On 405 Method Not Allowed, zero-byte range GET.
+        3. On Range-specific rejection (403 / 416 / 501 — WAFs that
+           reject Range but would serve a normal GET), plain GET.
+
+    Expected transport failures (DNS, connection reset, timeout,
+    malformed URL) return False. Unexpected exceptions bubble up so
+    coding regressions don't silently convert into "dead URL" drops
+    (#357 Codex review, nit #2).
+
+    This is the deterministic gate for URL-existence hallucinations.
+    See GH #356 Part 1.
+    """
+    import http.client
+    import socket
+    import urllib.error
+    import urllib.request
+
+    _transport_errors: tuple[type[BaseException], ...] = (
+        urllib.error.URLError,
+        http.client.HTTPException,
+        socket.timeout,
+        socket.gaierror,
+        ConnectionError,
+        TimeoutError,
+    )
+
+    def _try(method: str, extra_headers: dict[str, str] | None = None) -> int | None:
+        req = urllib.request.Request(
+            url,
+            method=method,
+            headers={
+                "User-Agent": fetch_citation.DEFAULT_UA,
+                "Accept": fetch_citation.DEFAULT_ACCEPT,
+                **(extra_headers or {}),
+            },
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return int(resp.status)
+        except urllib.error.HTTPError as exc:
+            return int(exc.code)
+        except _transport_errors:
+            return None
+
+    status = _try("HEAD")
+    if status is None:
+        return False
+    if 200 <= status < 400:
+        return True
+    if status == 405:
+        # Server rejects HEAD but may accept a range-limited GET.
+        range_status = _try("GET", extra_headers={"Range": "bytes=0-0"})
+        if range_status is not None and 200 <= range_status < 400:
+            return True
+        # WAFs/CDNs sometimes reject Range with 403 / 416 / 501 where
+        # a plain GET would return 200. Fall through to a final GET
+        # as the last escalation step (#357 Codex review, nit #1).
+        if range_status in (403, 416, 501):
+            get_status = _try("GET")
+            if get_status is None:
+                return False
+            return 200 <= get_status < 400
+        return False
+    return False
+
+
 def request_candidates(
     finding: dict[str, Any],
     *,
     dispatcher=dispatch_gemini,
+    allowlist_tier=fetch_citation.allowlist_tier,
+    head_checker=None,
 ) -> list[dict[str, Any]]:
     """Ask the LLM for candidate URLs. Returns a list of dicts with
     ``url``, ``tier``, ``why``. Empty list on any failure (the caller
-    marks the finding unresolvable)."""
+    marks the finding unresolvable).
+
+    Pre-filters hallucinations deterministically:
+      1. URL must be on ``docs/citation-trusted-domains.yaml`` allowlist.
+         LLMs reliably suggest off-allowlist URLs despite the prompt's
+         hard constraint — this filter is advisory's enforcement.
+      2. URL must respond to HEAD (or range-GET fallback) with a 2xx/3xx.
+         Eliminates the "LLM confidently fabricated a 404 URL" class
+         before downstream fetch + anchor work.
+
+    Both filters are injectable for testing. ``head_checker`` defaults
+    to the module-level ``head_check`` but is resolved at call time so
+    tests can swap it in via parameter.
+    """
+    if head_checker is None:
+        head_checker = head_check
     prompt = build_candidate_prompt(finding)
     ok, raw = dispatcher(prompt)
     if not ok:
@@ -202,6 +295,10 @@ def request_candidates(
             continue
         url = str(c.get("url") or "").strip()
         if not url.startswith(("http://", "https://")):
+            continue
+        if not allowlist_tier(url):
+            continue
+        if not head_checker(url):
             continue
         valid.append(
             {
@@ -379,6 +476,7 @@ def resolve_module(
     fetcher=fetch_citation.fetch,
     cached_text_path=fetch_citation.cached_text_path,
     allowlist_tier=fetch_citation.allowlist_tier,
+    head_checker=None,
 ) -> dict[str, Any]:
     """Resolve all `needs_citation` findings for one module.
 
@@ -427,7 +525,12 @@ def resolve_module(
     }
 
     for finding in needs_citation:
-        candidates = request_candidates(finding, dispatcher=dispatcher)
+        candidates = request_candidates(
+            finding,
+            dispatcher=dispatcher,
+            allowlist_tier=allowlist_tier,
+            head_checker=head_checker,
+        )
         if not candidates:
             finding_record = dict(finding)
             finding_record["unresolvable_reason"] = "no_candidates_returned"
