@@ -14,8 +14,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 import local_api
 from pipeline_common.review_audit import append_review_audit
 from pipeline_v2.control_plane import ControlPlane
+from pipeline_v2.cli import _build_status_report
 from pipeline_v2.review_worker import (
-    CHECK_PRE_MODEL,
     DEEP_CHECK_IDS,
     REVIEW_FALLBACK_MODEL,
     REVIEW_MODEL,
@@ -290,8 +290,12 @@ def test_review_usage_limit_falls_back_to_gpt_5_4(tmp_path):
 
 
 def test_review_worker_enforces_review_outcomes(tmp_path):
+    # (status, responses, enqueued_phase_or_None, verdict, failed_check)
+    # GH #354: APPROVE no longer enqueues a `check_pre` job — that job
+    # had no worker, leaving every APPROVE stuck in `pending_review`.
+    # `check_passed` is now the terminal event; no follow-up phase.
     cases = [
-        ("approved", [_simple_response("PRES"), _simple_response("NO_EMOJI"), _simple_response("K8S_API"), _deep_response()], "check_pre", "APPROVE", None),
+        ("approved", [_simple_response("PRES"), _simple_response("NO_EMOJI"), _simple_response("K8S_API"), _deep_response()], None, "APPROVE", None),
         ("rejected", [_simple_response("PRES", passed=False), _simple_response("NO_EMOJI"), _simple_response("K8S_API"), _deep_response()], "patch", "REJECT", "PRES"),
         ("rejected", [_simple_response("PRES"), _simple_response("NO_EMOJI"), _simple_response("K8S_API"), _deep_response(fact_evidence="unverified: could not confirm Kubernetes 1.99 claim")], "patch", "REJECT", "FACT_CHECK"),
     ]
@@ -307,17 +311,28 @@ def test_review_worker_enforces_review_outcomes(tmp_path):
         ):
             outcome = worker.run_once()
         assert outcome.status == status
-        payload = json.loads(control_plane.iter_events("check_passed" if phase == "check_pre" else "check_failed")[-1]["payload_json"])
+        event_type = "check_passed" if status == "approved" else "check_failed"
+        payload = json.loads(control_plane.iter_events(event_type)[-1]["payload_json"])
         assert payload["verdict"] == verdict
         if failed_check:
             assert payload["failed_checks"][0]["id"] == failed_check
         if failed_check == "FACT_CHECK":
             assert json.loads(control_plane.iter_events("fact_check_unverified")[-1]["payload_json"])["unverified_claims"][0]["id"] == "FACT_CHECK"
-        queued = _fetch_rows(control_plane.db_path, "SELECT phase, model, queue_state FROM jobs WHERE phase = ?", (phase,))
-        assert len(queued) == 1
-        assert queued[0]["queue_state"] == "pending"
-        if phase == "check_pre":
-            assert queued[0]["model"] == CHECK_PRE_MODEL
+        if phase is None:
+            # GH #354: APPROVE enqueues no follow-up phase job.
+            check_pre_rows = _fetch_rows(control_plane.db_path, "SELECT phase FROM jobs WHERE phase = 'check_pre'")
+            assert check_pre_rows == []
+            # And the user-visible symptom is fixed: the reducer resolves
+            # the approved module to `done`, not `pending_review` (Codex
+            # review nit — assert the actual regression, not just the
+            # missing row).
+            report = _build_status_report(control_plane.db_path)
+            assert report["counts"]["done"] == 1
+            assert report["counts"]["pending_review"] == 0
+        else:
+            queued = _fetch_rows(control_plane.db_path, "SELECT phase, model, queue_state FROM jobs WHERE phase = ?", (phase,))
+            assert len(queued) == 1
+            assert queued[0]["queue_state"] == "pending"
         review = local_api.build_module_reviews(case_root, str(module_path.relative_to(case_root)).removesuffix(".md"))
         assert review is not None
         assert review["fact_check_status"] == ("unverified" if failed_check == "FACT_CHECK" else "verified")

@@ -16,7 +16,6 @@ from .preflight import PreflightFinding, run_preflight
 REVIEW_MODEL = "gpt-5.3-codex-spark"
 REVIEW_FALLBACK_MODEL = "gpt-5.4"
 PATCH_MODEL = "gpt-5.4"
-CHECK_PRE_MODEL = "deterministic"
 SIMPLE_CHECK_IDS = ("PRES", "NO_EMOJI", "K8S_API")
 DEEP_CHECK_IDS = ("COV", "DEPTH", "WHY", "FACT_CHECK")
 REVIEW_MODEL_ESTIMATED_USD = 0.0050
@@ -170,12 +169,15 @@ class ReviewWorker:
                     lease_id=lease.lease_id,
                     payload=event_payload,
                 )
-                self.control_plane.enqueue(
-                    lease.module_key,
-                    phase="check_pre",
-                    model=CHECK_PRE_MODEL,
-                    priority=lease.job_id,
-                )
+                # Historically this enqueued a separate `check_pre` phase
+                # job, but no worker processed them — every APPROVE left an
+                # orphan job that kept the module in `pending_review`
+                # forever (GH #354). Preflight already ran for this module
+                # at the top of this function (line 73); since the review
+                # phase doesn't mutate the file, re-running preflight after
+                # APPROVE would just reconfirm what the top-of-function
+                # preflight already verified. The `check_passed` event
+                # above is the terminal signal; no further phase needed.
                 status = "approved"
             audit_feedback = review_result["feedback"]
             if unverified_fact_claims:
