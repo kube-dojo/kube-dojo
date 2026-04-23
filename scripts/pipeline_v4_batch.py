@@ -38,6 +38,7 @@ import argparse
 import datetime as dt
 import json
 import os
+import re
 import sqlite3
 import sys
 import threading
@@ -85,7 +86,10 @@ CREATE INDEX IF NOT EXISTS idx_v4_batch_expires ON v4_batch_leases(expires_at);
 OUTCOME_SKIPPED_LOCKED = "skipped_locked"
 OUTCOME_ERROR = "error"
 OUTCOME_CLEAN = "clean"
-SOURCES_HEADER_PATTERN = "\n## Sources\n"
+# ATX H2 named "Sources", anchored to start-of-line, trailing whitespace OK.
+# Mirrors the convention used in other repo checkers; tolerates
+# `## Sources  \n` and EOF-without-final-newline per Codex #359 review.
+SOURCES_HEADER_RE = re.compile(r"^##\s+Sources\s*$", re.MULTILINE)
 
 _INIT_LOCK = threading.Lock()
 _INITIALIZED_DBS: set[str] = set()
@@ -349,10 +353,12 @@ def audit_missing_sources(
             violations.append(module_key)
             continue
         text = module_path.read_text(encoding="utf-8")
-        # Match a ## Sources header at start-of-line (not inside a code
-        # block or inline prose). Anchoring on a leading newline catches
-        # both mid-file and end-of-file cases.
-        if SOURCES_HEADER_PATTERN not in text and not text.startswith("## Sources\n"):
+        # MULTILINE regex against an ATX H2 named "Sources" with optional
+        # trailing whitespace. Start-of-line anchor avoids false-positives
+        # from the string appearing mid-prose; trailing \s* tolerates the
+        # `## Sources  ` (trailing spaces) and EOF-without-newline cases
+        # Codex flagged on PR #359.
+        if not SOURCES_HEADER_RE.search(text):
             violations.append(module_key)
     return violations
 
@@ -554,7 +560,15 @@ def main(argv: list[str] | None = None) -> int:
     # `outcome=clean` but missing a `## Sources` section is the
     # regression class we hit in PR #350. Surface it loudly so the
     # operator sees it before running another bulk batch.
-    if not args.dry_run:
+    #
+    # Skip the audit for:
+    #   - `--dry-run`: no module edits occurred, violations would be spurious.
+    #   - `--skip-citation`: pipeline_v4 explicitly skips Stage 4
+    #     (citation_v3) and can still return outcome=clean when the
+    #     module lifts from no-quiz / no-exercise work alone. A missing
+    #     Sources section is the operator's choice in that mode, not a
+    #     regression. See Codex #359 review, must-fix #1.
+    if not args.dry_run and not args.skip_citation:
         violations = audit_missing_sources(summary.get("results") or [])
         if violations:
             print(

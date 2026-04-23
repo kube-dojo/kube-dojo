@@ -554,3 +554,71 @@ def test_cli_dry_run_skips_missing_sources_audit(
 
     monkeypatch.setattr(pipeline_v4_batch, "run_batch", _fake_run_batch)
     assert pipeline_v4_batch.main(["--limit", "1", "--dry-run"]) == 0
+
+
+def test_cli_skip_citation_skips_missing_sources_audit(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Codex #359 review, must-fix #1: pipeline_v4 run with
+    --skip-citation explicitly bypasses Stage 4 and can still return
+    outcome=clean. The audit must not flag those modules — a missing
+    ## Sources is the operator's choice in that mode, not a regression."""
+    _patch_db(monkeypatch, tmp_path)
+    monkeypatch.setattr(pipeline_v4_batch, "REPO_ROOT", tmp_path)
+
+    def _fake_run_batch(**kwargs):
+        return {
+            "processed": 1,
+            "by_outcome": {"clean": 1},
+            "results": [
+                {
+                    "module_key": "demo/module-skipped-citation",
+                    "outcome": pipeline_v4_batch.OUTCOME_CLEAN,
+                }
+            ],
+        }
+
+    monkeypatch.setattr(pipeline_v4_batch, "run_batch", _fake_run_batch)
+    assert pipeline_v4_batch.main(["--limit", "1", "--skip-citation"]) == 0
+
+
+def test_audit_accepts_sources_header_with_trailing_whitespace(
+    tmp_path: Path,
+) -> None:
+    """Codex #359 review, must-fix #2: '## Sources  ' with trailing
+    spaces is a valid ATX H2 and must not be flagged."""
+    _write_module_351(
+        tmp_path,
+        "ai/demo/trailing-ws",
+        "# Title\n\nBody.\n\n## Sources  \n\n- [x](https://ex) — note\n",
+    )
+    results = [
+        {
+            "module_key": "ai/demo/trailing-ws",
+            "outcome": pipeline_v4_batch.OUTCOME_CLEAN,
+        }
+    ]
+    assert (
+        pipeline_v4_batch.audit_missing_sources(results, repo_root=tmp_path) == []
+    )
+
+
+def test_audit_accepts_sources_header_at_eof_without_trailing_newline(
+    tmp_path: Path,
+) -> None:
+    """Codex #359 review, must-fix #2: '## Sources' at EOF without a
+    final newline is a valid ATX H2 and must not be flagged."""
+    _write_module_351(
+        tmp_path,
+        "ai/demo/eof-sources",
+        "# Title\n\nBody.\n\n## Sources",
+    )
+    results = [
+        {
+            "module_key": "ai/demo/eof-sources",
+            "outcome": pipeline_v4_batch.OUTCOME_CLEAN,
+        }
+    ]
+    assert (
+        pipeline_v4_batch.audit_missing_sources(results, repo_root=tmp_path) == []
+    )
