@@ -195,3 +195,109 @@ def test_main_uses_worker_id_when_provided(
     assert row is not None
     # Lock still present (completed, not evicted). Holder was the named id.
     assert row[0] == "named-worker-42"
+
+
+def test_main_locks_on_canonical_module_key_not_filename_stem(
+    tmp_db: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression for Codex PR #363 review finding.
+
+    Queue filenames are slash-flattened (e.g.
+    `ai-ml-engineering-advanced-genai-module-1.1-fine-tuning-llms.json`)
+    but the canonical module_key inside the JSON keeps slashes
+    (`ai-ml-engineering/advanced-genai/module-1.1-fine-tuning-llms`).
+    The lock must be keyed on the canonical value so other writers
+    using the canonical key coordinate properly. Locking on the stem
+    would cause false non-coordination.
+    """
+    review_dir = tmp_path / "human-review"
+    review_dir.mkdir(parents=True)
+    flattened_filename = "track-topic-module-1"
+    canonical_key = "track/topic/module-1"
+    (review_dir / f"{flattened_filename}.json").write_text(
+        json.dumps(
+            {
+                "module_key": canonical_key,
+                "queued_findings": {
+                    "needs_citation": [{"line": 1, "signals": ["year_reference"]}]
+                },
+                "resolved_findings": [],
+                "unresolvable_findings": [],
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+    monkeypatch.setattr(citation_residuals, "HUMAN_REVIEW_DIR", review_dir)
+    monkeypatch.setattr(citation_residuals, "resolve_module", _fake_resolve)
+
+    rc = citation_residuals.main(
+        ["resolve", "--all", "--worker-id", "resolver-01"]
+    )
+    assert rc == 0
+    import sqlite3
+
+    conn = sqlite3.connect(tmp_db)
+    # Lock row uses the canonical (slashed) key, NOT the stem.
+    row_canonical = conn.execute(
+        "SELECT holder, outcome FROM module_write_locks WHERE module_key = ?",
+        (canonical_key,),
+    ).fetchone()
+    row_stem = conn.execute(
+        "SELECT holder FROM module_write_locks WHERE module_key = ?",
+        (flattened_filename,),
+    ).fetchone()
+    conn.close()
+    assert row_canonical is not None, (
+        "lock was not recorded under the canonical module_key — "
+        "concurrent writers using the canonical key would not "
+        "coordinate with this resolver"
+    )
+    assert row_canonical[0] == "resolver-01"
+    assert row_canonical[1] == "ok"
+    assert row_stem is None, (
+        "lock was incorrectly recorded under the flattened stem"
+    )
+
+
+def test_main_falls_back_to_stem_when_module_key_missing(
+    tmp_db: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Legacy queue files without a `module_key` field fall back to
+    using the filename stem. Preserves behavior for pre-canonical-key
+    files that might still exist in an operator's local pipeline state.
+    """
+    review_dir = tmp_path / "human-review"
+    review_dir.mkdir(parents=True)
+    (review_dir / "legacy-mod.json").write_text(
+        json.dumps(
+            {
+                # No "module_key" field.
+                "queued_findings": {
+                    "needs_citation": [{"line": 1, "signals": ["year_reference"]}]
+                },
+                "resolved_findings": [],
+                "unresolvable_findings": [],
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+    monkeypatch.setattr(citation_residuals, "HUMAN_REVIEW_DIR", review_dir)
+    monkeypatch.setattr(citation_residuals, "resolve_module", _fake_resolve)
+
+    rc = citation_residuals.main(["resolve", "--all"])
+    assert rc == 0
+    import sqlite3
+
+    conn = sqlite3.connect(tmp_db)
+    row = conn.execute(
+        "SELECT module_key FROM module_write_locks"
+    ).fetchone()
+    conn.close()
+    assert row is not None
+    assert row[0] == "legacy-mod"

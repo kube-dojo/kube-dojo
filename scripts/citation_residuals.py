@@ -901,17 +901,29 @@ def main(argv: list[str] | None = None) -> int:
         use_lock = not (args.dry_run or args.no_lock)
         for qp in useful_targets:
             t0 = time.time()
-            module_key = qp.stem
+            # Lock on the CANONICAL module key (e.g. "ai/foo/module-1.1"),
+            # not the flattened queue filename (e.g. "ai-foo-module-1.1").
+            # Queue filenames are slash-flattened slugs, but other writers
+            # (pipeline_v4, future callers of the shared primitive) will
+            # use the real module_key for their locks. Keying on the stem
+            # would miss those writers and could alias two distinct real
+            # keys whose slugs happen to collide. Falls back to stem only
+            # if the JSON is missing the field (legacy files).
+            try:
+                _queue_data = load_queue_file(qp)
+                canonical_key = _queue_data.get("module_key") or qp.stem
+            except Exception:  # noqa: BLE001
+                canonical_key = qp.stem
             if use_lock:
                 conflict = module_lock.acquire_module_lock(
-                    module_key,
+                    canonical_key,
                     holder=worker_id,
                     lease_seconds=args.lease_seconds,
                 )
                 if conflict is not None:
                     totals["skipped_locked"] += 1
                     print(
-                        f"{module_key}: SKIPPED — locked by "
+                        f"{canonical_key}: SKIPPED — locked by "
                         f"{conflict.holder!r} until epoch "
                         f"{conflict.expires_at}"
                     )
@@ -926,13 +938,13 @@ def main(argv: list[str] | None = None) -> int:
                     # crash. An abandoned lock would auto-expire after
                     # lease_seconds but we can be precise here.
                     module_lock.release_module_lock(
-                        module_key, holder=worker_id
+                        canonical_key, holder=worker_id
                     )
                 raise
             else:
                 if use_lock:
                     module_lock.complete_module_lock(
-                        module_key, holder=worker_id, outcome=outcome
+                        canonical_key, holder=worker_id, outcome=outcome
                     )
             totals["considered"] += stats["considered"]
             totals["resolved"] += stats["resolved"]
