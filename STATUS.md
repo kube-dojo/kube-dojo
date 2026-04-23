@@ -2,7 +2,36 @@
 
 > **Read this first every session. Update before ending.**
 
-## Active Work (2026-04-21, session 11 — pipeline_v4 built end-to-end, tech debt cleared, dogfood validated)
+## Active Work (2026-04-23 — batch-c cloud citation backfill merged, dispatch auto-fallback landed)
+
+**Today's merges:**
+
+- **PR #349** (`3d8ede2e`) — `fix(dispatch): auto-fallback from API-key to OAuth on Gemini 429`. Auto-flips to OAuth on first rate-limit (independent quota, no backoff); `KUBEDOJO_GEMINI_SUBSCRIPTION=1` preserved as force-subscription opt-out. Codex caught a `max_retries=1` edge case — addressed in `eb8d622c` with 2 regression tests. 10/10 tests pass.
+- **PR #350** (`59d62bbd`) — `content(cloud): v4 batch-c — 78 modules citation backfill 1.5 → 5.0`. Overnight `pipeline_v4_batch --track cloud --workers 2` ran 9h40m, 78 modules all cleared rubric at score 5.0 (14 clean, 64 with citation residuals queued). Codex review found real gaps; `84f56a38` addresses: missing `## Sources` in module-2.7-cloud-run + module-7.5-aks-fleet-manager; GKE Autopilot quiz teaching obsolete defaults; AKS identity quiz putting label on SA instead of pod; stale Kafka `/10/` URL.
+
+**Impact on #180 rubric bar:** critical-quality (<2.0) count dropped **562 → 485**. Cloud Advanced Ops no longer appears in the briefing's top-5 critical list. Remaining critical concentrates in AI/ML Ai Native Development, Cloud Architecture Patterns, K8S Capa, K8S Cba.
+
+**Review-protocol data point:** Gemini flash 3 APPROVED PR #350 while Codex caught 3 real content issues in sampled-same modules. **Codex was notably more rigorous on this content batch.** For bulk content review, prefer Codex as the gating reviewer; Gemini is lighter/faster but missed the specific quiz inconsistencies.
+
+**Pipeline gaps surfaced — worth tracking as future improvements (not filed yet):**
+1. `citation_v3` silently left 2 of 78 modules with no `## Sources` at all (`module-2.7-cloud-run`, `module-7.5-aks-fleet-manager`). Possible systemic trigger worth investigating before next bulk run — audit for "module touched but no sources added" as a post-batch CI check.
+2. Gate A overstatement softener updates main prose but doesn't always update quiz answers citing the same claim, producing module-internal contradictions. Observed on 2 of 5 Codex-sampled modules (6.1 Autopilot defaults, 7.3 AKS identity label).
+3. Zombie `node gemini` grandchildren survive `killpg` on dispatch timeout (PPID reparents to init) — #253 was closed as fixed 2026-04-16 but the fix is incomplete. Not filed; real but low-urgency since batch-c produced zero zombies after auto-fallback landed.
+
+**Gotchas updated this session:**
+- `KUBEDOJO_GEMINI_SUBSCRIPTION=1` currently errors with `"you must specify the GEMINI_API_KEY environment variable"` — OAuth creds in `~/.gemini/oauth_creds.json` appear to not be picked up by the CLI today (may need interactive `gemini` re-auth). Fall back to explicit API key + `--model gemini-3-flash-preview` for reviews when `gemini-3.1-pro-preview` is at capacity.
+- `gemini-3-flash-preview` reliably works via API key today; `gemini-3.1-pro-preview` hitting `No capacity available` most of the afternoon.
+- `gemini-2.5-flash` is explicitly off-limits as a fallback — user rejected; quality tier too low (see memory `feedback_gemini_models.md`).
+
+**Next session starts here:**
+1. If restarting batches, smoke-check gemini CLI first: `echo OK | gemini -m gemini-3-flash-preview -y` (via API-key path). The new auto-fallback in `dispatch.py` handles rate-limit flips automatically — no env var needed.
+2. Batch-c's scope was `--track cloud` only. Remaining critical-quality concentrations per post-merge briefing: AI/ML Ai Native Dev, Cloud Architecture Patterns (odd — confirm not cleared yet), K8S Capa, K8S Cba.
+3. The 64 `residuals_filed` modules from batch-c have citation-triage findings queued in `.pipeline/v3/human-review/`. Issues #341 / #343 / #344 track the auto-resolver epic — that's the scalable path before running more bulk batches.
+4. 2 stale pid files per briefing — `scripts/cleanup_pids.py` or similar.
+
+---
+
+## Prior: Session 11 (2026-04-21) — pipeline_v4 built end-to-end, tech debt cleared, dogfood validated
 
 Session 10 handoff: [`docs/sessions/2026-04-21-session-10-handoff.md`](./docs/sessions/2026-04-21-session-10-handoff.md).
 Session 11 handoff: [`docs/sessions/2026-04-21-session-11-handoff.md`](./docs/sessions/2026-04-21-session-11-handoff.md).
