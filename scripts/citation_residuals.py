@@ -30,12 +30,19 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import fetch_citation  # noqa: E402
 from citation_backfill import dispatch_gemini, parse_agent_response  # noqa: E402
+from pipeline_common import module_lock  # noqa: E402
 
 HUMAN_REVIEW_DIR = REPO_ROOT / ".pipeline" / "v3" / "human-review"
 DEFAULT_MAX_CANDIDATES = 3
 MIN_SIGNAL_ANCHORS_REQUIRED = 1
 HEAD_CHECK_TIMEOUT_SECONDS = 5.0
 MIN_QUOTE_MATCH_LENGTH = 12
+# Default lease is generous — a single module can take several minutes
+# when the LLM dispatch stalls or the network is slow; a tight TTL would
+# let another worker steal the lock mid-run and clobber writes. A stuck
+# run can always be released manually via sweep_expired_locks after the
+# operator is sure the holding process is dead.
+DEFAULT_LOCK_LEASE_SECONDS = 1800
 
 
 # ---- IO ------------------------------------------------------------------
@@ -814,6 +821,34 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Propose resolutions but do not write to modules or queue JSON",
     )
+    p_resolve.add_argument(
+        "--worker-id",
+        default=None,
+        help=(
+            "Identifier recorded on the per-module write lock. Defaults "
+            "to '<pid>@<hostname>'. Use a stable value (e.g. 'resolver-01') "
+            "when running parallel batches so operators can see who "
+            "holds what."
+        ),
+    )
+    p_resolve.add_argument(
+        "--lease-seconds",
+        type=int,
+        default=DEFAULT_LOCK_LEASE_SECONDS,
+        help=(
+            "Lock TTL. An abandoned run's lock is considered stealable "
+            f"after this many seconds (default {DEFAULT_LOCK_LEASE_SECONDS})."
+        ),
+    )
+    p_resolve.add_argument(
+        "--no-lock",
+        action="store_true",
+        help=(
+            "Skip per-module write locking. Only use for --dry-run or "
+            "in tests; concurrent runs without the lock can clobber "
+            "each other's writes to the same module."
+        ),
+    )
 
     args = parser.parse_args(argv)
 
@@ -853,10 +888,52 @@ def main(argv: list[str] | None = None) -> int:
             print("No residuals with needs_citation findings.")
             return 0
 
-        totals = {"considered": 0, "resolved": 0, "unresolvable": 0, "modules_edited": 0}
+        totals = {
+            "considered": 0,
+            "resolved": 0,
+            "unresolvable": 0,
+            "modules_edited": 0,
+            "skipped_locked": 0,
+        }
+        worker_id = args.worker_id or module_lock.default_holder()
+        # --dry-run does not mutate files; lock not required. --no-lock is
+        # an explicit operator opt-out (use only in tests).
+        use_lock = not (args.dry_run or args.no_lock)
         for qp in useful_targets:
             t0 = time.time()
-            stats = resolve_module(qp, dry_run=args.dry_run)
+            module_key = qp.stem
+            if use_lock:
+                conflict = module_lock.acquire_module_lock(
+                    module_key,
+                    holder=worker_id,
+                    lease_seconds=args.lease_seconds,
+                )
+                if conflict is not None:
+                    totals["skipped_locked"] += 1
+                    print(
+                        f"{module_key}: SKIPPED — locked by "
+                        f"{conflict.holder!r} until epoch "
+                        f"{conflict.expires_at}"
+                    )
+                    continue
+            outcome = "ok"
+            try:
+                stats = resolve_module(qp, dry_run=args.dry_run)
+            except BaseException:
+                outcome = "error"
+                if use_lock:
+                    # Release so a follow-up run is not blocked on our
+                    # crash. An abandoned lock would auto-expire after
+                    # lease_seconds but we can be precise here.
+                    module_lock.release_module_lock(
+                        module_key, holder=worker_id
+                    )
+                raise
+            else:
+                if use_lock:
+                    module_lock.complete_module_lock(
+                        module_key, holder=worker_id, outcome=outcome
+                    )
             totals["considered"] += stats["considered"]
             totals["resolved"] += stats["resolved"]
             totals["unresolvable"] += stats["unresolvable"]
@@ -875,7 +952,8 @@ def main(argv: list[str] | None = None) -> int:
             f"TOTAL: considered={totals['considered']} "
             f"resolved={totals['resolved']} "
             f"unresolvable={totals['unresolvable']} "
-            f"modules_edited={totals['modules_edited']}"
+            f"modules_edited={totals['modules_edited']} "
+            f"skipped_locked={totals['skipped_locked']}"
         )
         if totals["considered"]:
             rate = totals["resolved"] / totals["considered"] * 100
