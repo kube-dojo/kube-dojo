@@ -464,13 +464,39 @@ def test_quote_present_rejects_too_short_quote() -> None:
     ) is False
 
 
-def test_quote_present_tolerates_missing_tail() -> None:
-    """LLM transcription often drops or alters a trailing phrase.
-    The prefix-match fallback tolerates that."""
+def test_quote_present_tolerates_minor_internal_drift() -> None:
+    """The start-AND-end-window fallback tolerates LLM drift in the
+    middle of the quote as long as both bookends match on the page."""
     assert citation_residuals.quote_present_in_text(
         "Amazon scrapped its AI recruiting tool after discovering bias against women",
-        "Amazon scrapped its AI recruiting tool after finding serious issues.",
+        "Amazon scrapped its AI recruiting tool after engineers saw bias against women in training data.",
     ) is True
+
+
+def test_quote_present_rejects_end_changed() -> None:
+    """#360 Codex review, must-fix #2: the old prefix-only fallback
+    accepted end-changed quotes. Now both ends must match."""
+    assert citation_residuals.quote_present_in_text(
+        "Amazon scrapped its AI recruiting tool after discovering bias against women",
+        "Amazon scrapped its AI recruiting tool after finding serious issues in testing.",
+    ) is False
+
+
+def test_quote_present_rejects_generic_lead_in_with_different_subject() -> None:
+    """#360 Codex review, must-fix #2 (concrete adversarial example):
+    a boilerplate lead-in like 'According to the article...' cannot
+    carry a match when the claim-specific tail differs."""
+    quote = (
+        "According to the article published on the company's website earlier "
+        "this year, Amazon scrapped its AI"
+    )
+    body_with_kubernetes_instead = (
+        "According to the article published on the company's website earlier "
+        "this year, Kubernetes changed its default scheduler."
+    )
+    assert citation_residuals.quote_present_in_text(
+        quote, body_with_kubernetes_instead
+    ) is False
 
 
 def test_quote_present_rejects_unrelated_text() -> None:
@@ -575,6 +601,47 @@ def test_validate_candidate_prefers_anchor_when_both_signals_present(
     assert result["ok"] is True
     assert result["verified_via"] == "anchors"
     assert "2018" in result["anchors_matched"]
+    assert result["quote_matched"] is True
+
+
+def test_validate_candidate_rejects_anchor_mismatch_even_when_quote_matches(
+    tmp_path: Path,
+) -> None:
+    """#360 Codex review, must-fix #1: when a finding has deterministic
+    anchors, those anchors are authoritative. A matching
+    expected_quote cannot override anchor mismatch — that's the exact
+    failure mode Codex identified (claim says 2018, page says 2017,
+    but generic quote 'Amazon scrapped its AI tool' is on the page
+    anyway). Must reject, not accept."""
+    finding = {
+        "excerpt": "In 2018 Amazon scrapped its AI tool.",
+        "signals": ["year_reference", "named_incident"],
+    }
+    candidate = {
+        "url": "https://en.wikipedia.org/wiki/Wrong_year_page",
+        "expected_quote": "Amazon scrapped its AI tool",
+    }
+
+    text_file = tmp_path / "body.txt"
+    # Page supports the quote but uses 2017 — the claim-specific year
+    # mismatches. Must reject.
+    text_file.write_text(
+        "In 2017 Amazon scrapped its AI tool after bias concerns.",
+        encoding="utf-8",
+    )
+
+    result = citation_residuals.validate_candidate(
+        candidate,
+        finding,
+        fetcher=lambda u: {"status": 200, "final_url": u, "allowlist_tier": "general"},
+        cached_text_path=lambda _u: text_file,
+        allowlist_tier=lambda _u: "general",
+    )
+    assert result["ok"] is False
+    assert result["reason"] == "no_anchor_match"
+    assert result["anchors_expected"] == ["2018"]
+    assert result["anchors_matched"] == []
+    # Quote DID match on the page — but anchors are authoritative.
     assert result["quote_matched"] is True
 
 

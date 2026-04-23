@@ -328,14 +328,19 @@ def normalize_quote(text: str) -> str:
 
 
 def quote_present_in_text(quote: str, body: str) -> bool:
-    """Check whether ``quote`` (or a long-enough prefix) is a substring
-    of ``body`` after whitespace + case normalization.
+    """Check whether ``quote`` is present in ``body`` after whitespace +
+    case normalization.
 
-    Accepts matches of at least ``MIN_QUOTE_MATCH_LENGTH`` characters
-    so minor LLM transcription drift (trailing phrase, missing word)
-    doesn't reject an otherwise-correct citation. Returns False when
-    the quote is too short to be meaningful — that's the LLM hedging,
-    not evidence.
+    Primary path: the full normalized quote must be a substring of the
+    body. Drift-tolerance fallback: BOTH a start window AND an end
+    window (each ≥ ``MIN_QUOTE_MATCH_LENGTH`` chars, word-boundary-
+    aligned) must appear in the body in order. This rejects generic
+    lead-ins like "According to the article..." where only the prefix
+    matches but the claim-specific tail differs (#360 Codex review,
+    must-fix #2).
+
+    Returns False when the normalized quote is too short to be
+    meaningful — that's the LLM hedging, not evidence.
     """
     norm_quote = normalize_quote(quote)
     if len(norm_quote) < MIN_QUOTE_MATCH_LENGTH:
@@ -343,14 +348,44 @@ def quote_present_in_text(quote: str, body: str) -> bool:
     norm_body = normalize_quote(body)
     if norm_quote in norm_body:
         return True
-    # Tolerate LLM drift on the tail: accept if the first
-    # MIN_QUOTE_MATCH_LENGTH-char prefix matches, rounded up to a word
-    # boundary so we don't mid-word match accidentally.
-    prefix = norm_quote[:max(MIN_QUOTE_MATCH_LENGTH, len(norm_quote) // 2)]
-    prefix = prefix.rsplit(" ", 1)[0] if " " in prefix else prefix
-    if len(prefix) >= MIN_QUOTE_MATCH_LENGTH and prefix in norm_body:
-        return True
-    return False
+    # Drift-tolerance fallback: require the quote's start AND end
+    # windows to both appear in the body, in order. The quote must be
+    # roughly 2× MIN + small gap so the start and end windows don't
+    # overlap.
+    if len(norm_quote) < 2 * MIN_QUOTE_MATCH_LENGTH + 4:
+        return False
+    start_window = _trim_to_trailing_word_boundary(
+        norm_quote[: MIN_QUOTE_MATCH_LENGTH + 4]
+    )
+    end_window = _trim_to_leading_word_boundary(
+        norm_quote[-(MIN_QUOTE_MATCH_LENGTH + 4):]
+    )
+    if (
+        len(start_window) < MIN_QUOTE_MATCH_LENGTH
+        or len(end_window) < MIN_QUOTE_MATCH_LENGTH
+    ):
+        return False
+    start_idx = norm_body.find(start_window)
+    if start_idx < 0:
+        return False
+    return end_window in norm_body[start_idx + len(start_window):]
+
+
+def _trim_to_trailing_word_boundary(text: str) -> str:
+    """Drop a trailing partial word so a window ends on a clean
+    whitespace boundary. Returns the original string when no space
+    exists to trim against."""
+    if " " not in text:
+        return text
+    return text.rsplit(" ", 1)[0]
+
+
+def _trim_to_leading_word_boundary(text: str) -> str:
+    """Mirror of _trim_to_trailing_word_boundary for the start of a
+    window: drop a leading partial word."""
+    if " " not in text:
+        return text
+    return text.split(" ", 1)[1]
 
 
 # ---- validation ----------------------------------------------------------
@@ -423,9 +458,23 @@ def validate_candidate(
     matched_anchors = anchors_present_in_text(anchors, body) if has_anchors else []
     quote_matched = quote_present_in_text(expected_quote, body) if has_quote else False
 
-    # Accept if the finding had anchors AND enough of them matched, OR
-    # the LLM committed to a quote AND that quote is on the page.
+    # When anchors exist, they are authoritative: a claim containing
+    # "2018" must land on a page that says "2018". A matching
+    # expected_quote cannot override an anchor mismatch, because a
+    # generic quote can appear on pages that don't match the
+    # claim-specific value (#360 Codex review, must-fix #1). The
+    # quote-only acceptance path is therefore limited to anchorless
+    # findings.
     anchors_ok = has_anchors and len(matched_anchors) >= MIN_SIGNAL_ANCHORS_REQUIRED
+    if has_anchors and not anchors_ok:
+        return {
+            "ok": False,
+            "url": url,
+            "reason": "no_anchor_match",
+            "anchors_expected": anchors,
+            "anchors_matched": matched_anchors,
+            "quote_matched": quote_matched,
+        }
     if anchors_ok or quote_matched:
         return {
             "ok": True,
@@ -438,20 +487,12 @@ def validate_candidate(
             "page_bytes": meta.get("bytes", 0),
         }
 
-    # Nothing matched: explain why.
-    if has_quote and not quote_matched:
-        return {
-            "ok": False,
-            "url": url,
-            "reason": "quote_not_in_page",
-            "expected_quote": expected_quote,
-        }
+    # Anchorless and quote didn't match.
     return {
         "ok": False,
         "url": url,
-        "reason": "no_anchor_match",
-        "anchors_expected": anchors,
-        "anchors_matched": matched_anchors,
+        "reason": "quote_not_in_page",
+        "expected_quote": expected_quote,
     }
 
 
