@@ -506,3 +506,13 @@ Success criteria:
 - Traffic can be shifted between revisions and rolled back to the previous version.
 
 <!-- /v4:generated -->
+
+## Sources
+
+- [Cloud Run overview](https://cloud.google.com/run/docs/overview/what-is-cloud-run) — Google Cloud's introduction to Cloud Run covers its Knative foundation, revisions, and the services / jobs model referenced throughout this module.
+- [Cloud Run: About instance autoscaling](https://cloud.google.com/run/docs/about-instance-autoscaling) — Authoritative reference for the concurrency-driven autoscaling model, scale-to-zero behavior, and cold-start trade-offs.
+- [Cloud Run: Manage traffic](https://cloud.google.com/run/docs/managing/traffic) — Describes the revision-based traffic splitting and gradual-rollout commands used in the canary deployment section.
+- [Connecting to a VPC network from serverless environments](https://cloud.google.com/vpc/docs/serverless-vpc-access) — Primary reference for Serverless VPC Access connectors, the mechanism Cloud Run uses to reach internal databases and private APIs.
+- [Cloud Run pricing](https://cloud.google.com/run/pricing) — Canonical source for request-based billing, CPU allocation (request vs always-on), and the scale-to-zero cost model compared against GKE.
+- [Knative Serving: Concepts](https://knative.dev/docs/serving/) — Upstream Knative documentation for Service / Revision / Route / Configuration primitives that underpin Cloud Run's API surface.
+

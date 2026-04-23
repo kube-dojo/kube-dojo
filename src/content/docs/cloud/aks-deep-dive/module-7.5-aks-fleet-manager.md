@@ -490,3 +490,12 @@ How will the Fleet Manager Update Run behave in this situation?
 
 Azure Kubernetes Fleet Manager's update orchestration is designed for safety. If a cluster upgrade fails within a stage, the default behavior of the Update Run is to halt. It will not automatically proceed to the next stage (Production). This is the primary value proposition of stages: preventing a bad upgrade or systemic issue from cascading to your most critical environments. An administrator must investigate the failure on the specific staging cluster, resolve the issue (e.g., fix the pod disruption budgets or daemonset blocking the drain), and then resume the Update Run. Fleet Manager does not currently perform automatic cluster-level rollbacks of Kubernetes versions (Answer A), nor does it forcefully delete user workloads to bypass drain failures (Answer D).
 </details>
+
+## Sources
+
+- [Azure Kubernetes Fleet Manager overview](https://learn.microsoft.com/en-us/azure/kubernetes-fleet/overview) — Microsoft's canonical reference for the Fleet hub + member-cluster model, supported topologies, and the "n-cluster problem" this module frames.
+- [Orchestrate cluster updates across clusters with Azure Kubernetes Fleet Manager](https://learn.microsoft.com/en-us/azure/kubernetes-fleet/update-orchestration) — Authoritative source for `FleetUpdateStrategy`, staged Update Runs, and the halt-on-failure behavior referenced in Scenario 2.
+- [Propagate resources from a Fleet Manager hub cluster to member clusters](https://learn.microsoft.com/en-us/azure/kubernetes-fleet/resource-propagation) — Describes `ClusterResourcePlacement` semantics and how the hub reconciles workload placement to members.
+- [Multi-cluster load balancing with Azure Kubernetes Fleet Manager](https://learn.microsoft.com/en-us/azure/kubernetes-fleet/concepts-load-balancing) — Reference for multi-cluster service discovery and cross-cluster traffic policies.
+- [Fleet Manager and GitOps (Flux/ArgoCD) coexistence](https://learn.microsoft.com/en-us/azure/azure-arc/kubernetes/conceptual-gitops-flux2) — Context for the Scenario 1 conflict between Fleet-driven placement and a cluster-local GitOps controller reconciling to a different source of truth.
+- [Kubernetes 1.35 release notes](https://kubernetes.io/releases/) — Upstream release cadence referenced in the v1.34 → v1.35 fleet upgrade example.

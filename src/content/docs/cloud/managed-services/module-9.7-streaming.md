@@ -1011,11 +1011,10 @@ kind delete cluster --name kafka-lab
 
 - [aws.amazon.com: amazon msk kraft mode apache kafka clusters](https://aws.amazon.com/about-aws/whats-new/2024/05/amazon-msk-kraft-mode-apache-kafka-clusters/) — AWS's launch announcement directly states that Amazon MSK began supporting KRaft mode for new clusters on May 29, 2024.
 - [learn.microsoft.com: azure event hubs apache kafka overview](https://learn.microsoft.com/en-us/azure/event-hubs/azure-event-hubs-apache-kafka-overview) — Microsoft Learn explicitly documents Azure Event Hubs' Kafka endpoint and Kafka-protocol compatibility.
-- [kafka.apache.org: introduction](https://kafka.apache.org/10/getting-started/introduction/) — Apache Kafka's introduction explains that partitions are exclusively assigned within a consumer group and that there cannot be more active consumer instances than partitions.
+- [kafka.apache.org: introduction](https://kafka.apache.org/intro) — Apache Kafka's introduction explains that partitions are exclusively assigned within a consumer group and that there cannot be more active consumer instances than partitions.
 - [kafka.apache.org: design](https://kafka.apache.org/41/design/design/) — Kafka's design documentation directly describes transactions, idempotence, and offset updates as the basis for exactly-once processing.
 - [docs.cloud.google.com: overview](https://docs.cloud.google.com/dataflow/docs/overview) — Google Cloud's Dataflow overview directly describes Dataflow as a managed service for unified stream and batch processing.
 - [docs.aws.amazon.com: serverless.html](https://docs.aws.amazon.com/msk/latest/developerguide/serverless.html) — The MSK Serverless developer guide explicitly says the service automatically provisions and scales capacity.
 - [aws.amazon.com: pricing](https://aws.amazon.com/msk/pricing/) — AWS pricing documentation directly lists partition-hour and per-GB pricing dimensions for MSK Serverless.
 - [kafka.apache.org: topic configs](https://kafka.apache.org/41/configuration/topic-configs/) — Apache Kafka topic configuration docs explicitly describe replication factor 3 plus `min.insync.replicas=2` with `acks=all` as a typical stronger-durability scenario.
 - [kafka.apache.org: config streams](https://kafka.apache.org/42/streams/developer-guide/config-streams/) — Kafka's Streams configuration guide explicitly notes that `acks=all` has been the default since the 3.0 release.
-- [Apache Kafka Introduction](https://kafka.apache.org/intro/) — Good refresher on partitions, consumer groups, ordering, and deployment models.
