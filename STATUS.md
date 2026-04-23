@@ -23,18 +23,20 @@ Reframe: the resolver is doing its job. It refused to polish fabrications (exact
 
 The 3-module pilot set was also selection-biased: these were phase-1 flunks. A fresh 10-module sample from the 64 batch-c residuals would give a real resolve-rate distribution.
 
-### PR #363 — per-module write lock (IN RE-REVIEW)
-
-Branch: `feat/343-resolver-concurrency-lock` @ `bb131700`
-URL: https://github.com/kube-dojo/kube-dojo.github.io/pull/363
+### PR #363 — per-module write lock (MERGED `10d73c41`)
 
 Unblocks phase-2 bulk by adding a DB-backed advisory lock so two resolvers can't clobber the same module. New `scripts/pipeline_common/module_lock.py` primitive (acquire / complete / release / sweep / context manager), wired into `citation_residuals.py resolve` with new flags `--worker-id`, `--lease-seconds`, `--no-lock`. 63/63 tests including a threaded stress test. Ruff clean.
 
-Codex first-round review caught a real must-fix: I was keying the lock on `qp.stem` (flattened filename) but the canonical `module_key` contains slashes — other writers using the canonical form wouldn't coordinate. Fixed at `bb131700`: lock now keys on `data["module_key"]` with stem fallback for legacy files. Added regression test using production-shaped fixture (filename `track-topic-module-1.json` + JSON key `track/topic/module-1`).
+Codex first-round NEEDS CHANGES caught one must-fix: lock was keyed on `qp.stem` (flattened filename) but the canonical `module_key` contains slashes — other writers using the canonical form wouldn't coordinate. Fixed at `bb131700`: lock now keys on `data["module_key"]` with stem fallback for legacy files. Added regression test using production-shaped fixture.
 
-**Re-review dispatched, awaiting response.** Task ID `pr-363-rereview`, bridge message ≥ 2711. Next session: `scripts/ab inbox show claude` → if APPROVE, `gh pr merge 363 --merge --delete-branch` and clean up worktree `.worktrees/citation-residuals-lock`. If NEEDS CHANGES, fix + re-dispatch.
+Codex re-review APPROVE with substantive answers to all 5 open review questions:
+1. **Holder identity** (`pid@hostname`): adequate for two-shell-on-one-host model. No UUID nonce needed unless this becomes a long-lived daemon.
+2. **Lock contention UX**: `--fail-on-locked` is reasonable for CI but not blocking. Default skip-and-log is fine.
+3. **TTL = 1800s**: right default without heartbeat. Shortening would cause false steals.
+4. **Partial-write crash**: real cross-file atomicity gap but not blocker for this PR — `save_queue_file()` is atomic for JSON only; module markdown written first, queue state second. Follow-up: add error outcome / recovery marker.
+5. **Schema race**: no race. `_ensure_schema()` serialized in-process, `CREATE TABLE IF NOT EXISTS` benign cross-process, `BEGIN IMMEDIATE` + holder-guarded ops are the right boundary.
 
-My 5 open review questions from the first round (holder identity, contention UX, TTL default, partial-write crash, schema race) were not answered in round 1 — restated in the re-review prompt.
+Worktree `.worktrees/citation-residuals-lock` cleaned up, branch deleted both local and remote.
 
 ### Residuals audit — in-flight, HEADLESS Codex
 
@@ -65,13 +67,12 @@ Next session action: either `git -C .worktrees/pilot-n diff` to resume the work 
 | #344 input data | no categorized list | audit in-flight → will produce Categories A/B/C/D counts + per-module breakdown |
 | `--pilot-n N` | postmortem followup | WIP in worktree (unfinished) |
 
-### Cold-start for next session (UPDATED)
+### Cold-start for next session (UPDATED after #363 merge)
 
-1. **Check #363 re-review** — `scripts/ab inbox show claude` → read the latest response on task `pr-363-rereview`. If APPROVE → merge. If NEEDS CHANGES → fix at `.worktrees/citation-residuals-lock`, push, re-dispatch.
-2. **Read the residuals audit** — `ls .worktrees/residuals-audit/docs/residuals-audit-2026-04-24.md`. If present: read the summary counts, extract Category C findings (hallucinated facts) into a new issue for #344 content-fix scope. Consider promoting the audit doc to `docs/` via a follow-up PR.
-3. **Decide on pilot-n WIP** — finish or abandon per above.
-4. **Phase-2 bulk prep** (only after #363 merges):
-   - Fresh-sample pilot on 10 untouched batch-c residuals modules (expected real distribution, not the selection-biased 3).
+1. **Read the residuals audit** — `ls .worktrees/residuals-audit/docs/residuals-audit-2026-04-24.md`. If present: read the summary counts, extract Category C findings (hallucinated facts) into a new issue for #344 content-fix scope. Consider promoting the audit doc to `docs/` via a follow-up PR. Also check `scripts/ab read <latest-id-on-task audit-residuals-classification>` for Codex's summary reply with headline counts.
+2. **Decide on pilot-n WIP** — finish or abandon per above. `.worktrees/pilot-n` on branch `feat/343-pilot-n-flag` has one uncommitted edit adding the arg; loop wiring is the remaining work. Must rebase onto main now that #363 landed (citation_residuals.py has moved).
+3. **Phase-2 bulk prep**:
+   - Fresh-sample pilot on 10 untouched batch-c residuals modules using `citation_residuals.py resolve --all --worker-id pilot-2 --limit-modules 10` (once pilot-n lands) or with explicit module_key args — new lock from #363 now safely coordinates concurrent runs.
    - If ≥60% resolve on Category A findings, run bulk at `--workers 3` (hard cap per `feedback_batch_worker_cap.md`).
 
 ---
